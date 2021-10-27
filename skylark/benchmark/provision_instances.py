@@ -40,7 +40,6 @@ all_ec2_regions = list(
     )
 )
 
-
 def do_parallel(func, args_list, n=6):
     """Run list of jobs in parallel with tqdm progress bar"""
     results = []

@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import tempfile
+from pathlib import Path, PurePath
 
 import argparse
 import boto3
@@ -11,21 +12,23 @@ from loguru import logger
 import paramiko
 import threading
 
+from skylark.utils import Timer, do_parallel
+
 class Server:
     """Abstract server class to support basic SSH operations"""
     ns = threading.local()
 
-    def __init__(self, region_tag, instance_id, ip, command_log_file=None):
-        self.region_tag = region_tag
-        self.instance_id = instance_id
-        self.ip = ip
-        
-        # command log stores all commands with stdout and stderr
+    def __init__(self, command_log_file=None):
         self.command_log_file = command_log_file
         self.command_log = []
+        if self.command_log_file:
+            with open(self.command_log_file, "w") as f:
+                f.write("")
+            with open(self.command_log_file + "_cmdonly", "w") as f:
+                f.write("")
 
     def __repr__(self):
-        return f"Server({self.region}, {self.instance_id}, {self.ip})"
+        return f"Server()"
     
     def get_ssh_client_impl(self):
         raise NotImplementedError()
@@ -64,7 +67,7 @@ class Server:
         self.flush_command_log()
     
     @property
-    def public_ip(self):
+    def dig_public_ip(self):
         return self.run_command("dig +short myip.opendns.com @resolver1.opendns.com")[0].strip()
     
     def flush_command_log(self):
@@ -74,22 +77,29 @@ class Server:
                     f.write(json.dumps(log_item) + "\n")
             with open(self.command_log_file + "_cmdonly", "a") as f:
                 for log_item in self.command_log:
-                    f.write(log_item.get('command') + "\n")
+                    command, runtime = log_item.get('command'), log_item.get('runtime', None)
+                    formatted_runtime = f"{runtime:>2.2f}s" if runtime is not None else " " * 5
+                    f.write(f"{formatted_runtime}\t{command}\n")
             self.command_log = []
+    
+    def add_command_log(self, command, runtime=None, **kwargs):
+        self.command_log.append(dict(command=command, runtime=runtime, **kwargs))
+        if len(self.command_log) > 5:
+            self.flush_command_log()
     
     def log_comment(self, comment):
         """Log comment in command log"""
-        self.command_log.append(dict(command=f"# {comment}"))
+        self.add_command_log(command=f"# {comment}")
 
     ### SSH interface (run commands, copy files, etc.)
 
     def run_command(self, command):
         """time command and run it"""
         client = self.ssh_client
-        start_time = time.time()
-        _, stdout, stderr = client.exec_command(command)
-        results = (stdout.read().decode("utf-8"), stderr.read().decode("utf-8"))
-        self.command_log.append(dict(command=command, stdout=results[0], stderr=results[1], runtime=time.time() - start_time))
+        with Timer() as t:
+            _, stdout, stderr = client.exec_command(command)
+            results = (stdout.read().decode("utf-8"), stderr.read().decode("utf-8"))
+        self.add_command_log(command=command, stdout=results[0], stderr=results[1], runtime=t.elapsed)
         return results
 
 
@@ -97,52 +107,64 @@ class Server:
         """Copy local file to remote file."""
         client = self.ssh_client
         sftp = client.open_sftp()
-        start = time.time()
-        sftp.put(local_file, remote_file)
-        self.command_log.append(dict(command=f"<copy_file> {local_file} {remote_file}", runtime=time.time() - start))
+        with Timer() as t:
+            sftp.put(local_file, remote_file)
+        self.add_command_log(command=f"<copy_file> {local_file} {remote_file}", runtime=t.elapsed)
         sftp.close()
 
-    def sync_directory(self, local_dir, remote_dir, delete_remote=False):
+    def sync_directory(self, local_dir, remote_dir, delete_remote=False, ignore_globs=[]):
         """Copy local directory to remote directory. If remote directory exists, delete if delete_remote else raise exception."""
+
+        local_path = Path(local_dir)
+        remote_path = PurePath(remote_dir)
+        ignored_paths = [Path(local_dir).glob(pattern) for pattern in ignore_globs]
+        ignored_paths = set([path.relative_to(local_dir) for path_list in ignored_paths for path in path_list])
+
+        def copy_file(sftp, local_file: Path, remote_file: Path):
+            with Timer() as t:
+                sftp.put(str(local_file), str(remote_file))
+            self.add_command_log(command=f"<copy_file> {local_file} {remote_file}", runtime=t.elapsed)
+        
         client = self.ssh_client
-        start = time.time()
-        remote_exists = self.run_command(f"test -d {remote_dir} | echo $?")[0].strip() == "0"
-        if remote_exists:
+        sftp = client.open_sftp()
+        with Timer() as t:
             if delete_remote:
                 self.run_command(f"rm -rf {remote_dir}")
-            else:
-                raise Exception(f"Remote directory {remote_dir} already exists")
-
-        def put_dir(sftp, local_dir, remote_dir):
-            sftp.mkdir(remote_dir, os.stat(local_dir).st_mode)
-            for local_file in os.listdir(local_dir):
-                local_path = os.path.join(local_dir, local_file)
-                remote_path = os.path.join(remote_dir, local_file)
-                if os.path.isdir(local_path):
-                    self.run_command(f"mkdir -p {remote_path}")
-                    self.flush_command_log()
-                    put_dir(sftp, local_path, remote_path)
-                else:
-                    self.copy_file(local_path, remote_path)
+            self.run_command(f"mkdir -p {remote_dir}")
         
+            # make all directories
+            recursive_dir_list = [x.relative_to(local_dir) for x in Path(local_dir).glob("**/*/") if x.is_dir()]
+            recursive_dir_list = [x for x in recursive_dir_list if x not in ignored_paths]
+            do_parallel(lambda x: self.run_command(f"mkdir -p {remote_dir}/{x}"), recursive_dir_list)
 
-        sftp = client.open_sftp()
-        put_dir(sftp, local_dir, remote_dir)
+            # copy all files
+            file_list = [x.relative_to(local_dir) for x in Path(local_dir).glob("**/*") if x.is_file()]
+            file_list = [x for x in file_list if x not in ignored_paths]
+            do_parallel(lambda x: copy_file(sftp, local_path / x, remote_path / x), file_list, progress_bar=True, n=1)
         sftp.close()
-        self.command_log.append(dict(command=f"<sync_directory> {local_dir} {remote_dir}", runtime=time.time() - start))
-    
+        self.add_command_log(command=f"<sync_directory> {local_dir} {remote_dir}", runtime=t.elapsed)
 
 class AWSServer(Server):
     """AWS Server class to support basic SSH operations"""
-    def __init__(self, region_tag, instance_id, ip, command_log_file=None):
-        super().__init__(region_tag, instance_id, ip, command_log_file=command_log_file)
+    def __init__(self, region_tag, instance_id, command_log_file=None):
+        super().__init__(command_log_file=command_log_file)
+        self.region_tag = region_tag
+        assert region_tag.split(":")[0] == "aws"
         self.aws_region = region_tag.split(":")[1]
+        self.instance_id = instance_id
         self.local_keyfile = self.make_keyfile()
     
     def __repr__(self):
-        return f"AWSServer({self.aws_region}, {self.instance_id}, {self.ip})"
+        return f"AWSServer('{self.region_tag}', '{self.instance_id}', '{self.public_ip}')"
     
     ### Instance state
+
+    @property
+    def public_ip(self):
+        # get public IP with boto3
+        ec2 = self.get_boto3_resource("ec2")
+        instance = ec2.Instance(self.instance_id)
+        return instance.public_ip_address
 
     def terminate_instance_impl(self):
         ec2 = self.get_boto3_resource("ec2")
@@ -154,7 +176,6 @@ class AWSServer(Server):
         ec2 = self.get_boto3_resource("ec2")
         instance = ec2.Instance(self.instance_id)
         instance.wait_until_running()
-        logger.info(f"({self.aws_region}) Instance {self.instance_id} ready")
     
     ### AWS helper methods
 
@@ -196,63 +217,5 @@ class AWSServer(Server):
     def get_ssh_client_impl(self):
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(self.ip, username="ubuntu", key_filename=self.local_keyfile)
+        client.connect(self.public_ip, username="ubuntu", key_filename=self.local_keyfile)
         return client
-
-
-# unit test server
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--ip", required=True)
-    parser.add_argument("--region", required=True)
-    parser.add_argument("--instance-id", required=True)
-    parser.add_argument("--command-log", default=None)
-    args = parser.parse_args()
-    
-    server = AWSServer(args.region, args.instance_id, args.ip, command_log_file=args.command_log)
-    server.wait_for_ready()
-
-    # test run_command
-    logger.info("Test: run_command")
-    server.log_comment("Test: run_command")
-    assert server.run_command("echo hello")[0] == "hello\n"
-    
-    # test file copy
-    logger.info("Test: copy_file")
-    server.log_comment("Test: copy_file")
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpfile = os.path.join(tmpdir, "test.txt")
-        with open(tmpfile, "w") as f:
-            f.write("hello world")
-        server.copy_file(tmpfile, "/tmp/test.txt")
-        assert open(tmpfile).read() == server.run_command("cat /tmp/test.txt")[0]
-    
-    # test sync_directory
-    logger.info("Test: sync_directory")
-    server.log_comment("Test: sync_directory")
-    remote_tmpdir = "/tmp/test_sync_directory" 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        with open(os.path.join(tmpdir, "test1.txt"), "w") as f:
-            f.write("hello world")
-        with open(os.path.join(tmpdir, "test2.txt"), "w") as f:
-            f.write("hello world")
-        
-        server.sync_directory(tmpdir, "/tmp/test_sync_directory", delete_remote=True)
-        server.flush_command_log()
-
-        assert open(os.path.join(tmpdir, "test1.txt")).read() == server.run_command(f"cat {remote_tmpdir}/test1.txt")[0]
-        assert open(os.path.join(tmpdir, "test2.txt")).read() == server.run_command(f"cat {remote_tmpdir}/test2.txt")[0]
-        assert server.run_command(f"ls {remote_tmpdir}")[0].strip().split() == ["test1.txt", "test2.txt"]
-        server.run_command(f"rm -rf {remote_tmpdir}")
-
-    # test copy source directory
-    logger.info("Test: sync_directory source")
-    server.log_comment("Test: sync_directory source")
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # get script dir's parent dir
-        source_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-        server.sync_directory(source_dir, "/tmp/test_copy_source", delete_remote=True)
-
-    # clean up
-    server.close_server()
-    logger.info("All tests passed")

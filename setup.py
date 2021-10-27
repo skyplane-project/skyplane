@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(
-    name='skydata',
+    name='skylark',
     version='0.1',
     packages=["skydata"],
     python_requires=">=3.8",
