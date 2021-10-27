@@ -1,0 +1,19 @@
+{"command": "# Test: run_command"}
+{"command": "echo hello", "stdout": "hello\n", "stderr": "", "runtime": 0.5276942253112793}
+{"command": "# Test: copy_file"}
+{"command": "<copy_file> /var/folders/zr/7smzy9k16nl2l04dlyb0_h1h0000gn/T/tmperthm0mr/test.txt /tmp/test.txt", "runtime": 0.3063380718231201}
+{"command": "cat /tmp/test.txt", "stdout": "hello world", "stderr": "", "runtime": 0.2327871322631836}
+{"command": "# Test: sync_directory"}
+{"command": "test -d /tmp/test_sync_directory | echo $?", "stdout": "0\n", "stderr": "", "runtime": 0.22890424728393555}
+{"command": "rm -rf /tmp/test_sync_directory", "stdout": "", "stderr": "", "runtime": 0.2746291160583496}
+{"command": "<copy_file> /var/folders/zr/7smzy9k16nl2l04dlyb0_h1h0000gn/T/tmpgyswas8n/test1.txt /tmp/test_sync_directory/test1.txt", "runtime": 0.31282997131347656}
+{"command": "<copy_file> /var/folders/zr/7smzy9k16nl2l04dlyb0_h1h0000gn/T/tmpgyswas8n/test2.txt /tmp/test_sync_directory/test2.txt", "runtime": 0.3047020435333252}
+{"command": "<sync_directory> /var/folders/zr/7smzy9k16nl2l04dlyb0_h1h0000gn/T/tmpgyswas8n /tmp/test_sync_directory", "runtime": 2.1337499618530273}
+{"command": "cat /tmp/test_sync_directory/test1.txt", "stdout": "hello world", "stderr": "", "runtime": 0.43552684783935547}
+{"command": "cat /tmp/test_sync_directory/test2.txt", "stdout": "hello world", "stderr": "", "runtime": 0.27297401428222656}
+{"command": "ls /tmp/test_sync_directory", "stdout": "test1.txt\ntest2.txt\n", "stderr": "", "runtime": 0.2355949878692627}
+{"command": "rm -rf /tmp/test_sync_directory", "stdout": "", "stderr": "", "runtime": 0.23070788383483887}
+{"command": "# Test: sync_directory source"}
+{"command": "test -d /tmp/test_copy_source | echo $?", "stdout": "0\n", "stderr": "", "runtime": 0.2721681594848633}
+{"command": "rm -rf /tmp/test_copy_source", "stdout": "", "stderr": "", "runtime": 0.24917006492614746}
+{"command": "mkdir -p /tmp/test_copy_source/skydata", "stdout": "", "stderr": "", "runtime": 0.1771531105041504}
