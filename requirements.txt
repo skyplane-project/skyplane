@@ -1,0 +1,4 @@
+loguru
+boto3
+paramiko
+tqdm
