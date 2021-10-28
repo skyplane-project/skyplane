@@ -21,25 +21,6 @@ import paramiko
 from tqdm import tqdm
 
 
-all_ec2_regions = list(
-    set(
-        ["us-east-1", "us-east-2", "us-west-1", "us-west-2", "eu-central-1", "sa-east-1", "eu-west-2"]
-        + [
-            "us-east-1",
-            "us-east-2",
-            "us-west-1",
-            "us-west-2",
-            "ap-northeast-1",
-            "ap-northeast-2",
-            "ap-southeast-1",
-            "ap-southeast-2",
-            "eu-central-1",
-            "eu-west-1",
-            "eu-west-2",
-        ]
-    )
-)
-
 def do_parallel(func, args_list, n=6):
     """Run list of jobs in parallel with tqdm progress bar"""
     results = []

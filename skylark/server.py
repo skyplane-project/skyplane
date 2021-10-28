@@ -165,6 +165,23 @@ class AWSServer(Server):
         ec2 = self.get_boto3_resource("ec2")
         instance = ec2.Instance(self.instance_id)
         return instance.public_ip_address
+    
+    @property
+    def instance_class(self):
+        ec2 = self.get_boto3_resource("ec2")
+        instance = ec2.Instance(self.instance_id)
+        return instance.instance_type
+    
+    @property
+    def instance_name(self):
+        ec2 = self.get_boto3_resource("ec2")
+        instance = ec2.Instance(self.instance_id)
+        ec2_tags = instance.tags
+        return [tag["Value"] for tag in ec2_tags if tag["Key"] == "Name"][0]
+    
+    @property
+    def region(self):
+        return self.region_tag
 
     def terminate_instance_impl(self):
         ec2 = self.get_boto3_resource("ec2")
