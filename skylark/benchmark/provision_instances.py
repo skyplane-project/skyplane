@@ -7,17 +7,17 @@ SSH into each instance, download a setup script (script argument) and run it on 
 """
 
 import argparse
-import os
 import json
-import sys
-from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import time
+import os
 import pickle
+import sys
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 import boto3
-from loguru import logger
 import paramiko
+from loguru import logger
 from tqdm import tqdm
 
 
@@ -78,7 +78,9 @@ def get_ubuntu_ami_id(region):
         sys.exit(1)
     else:
         # Sort the images by date and return the last one
-        image_list = sorted(response["Images"], key=lambda x: x["CreationDate"], reverse=True)
+        image_list = sorted(
+            response["Images"], key=lambda x: x["CreationDate"], reverse=True
+        )
         return (region, image_list[0]["ImageId"])
 
 
@@ -88,21 +90,31 @@ def provision_instance_wrapper(args):
     instance_name = "{}-{}".format(instance_prefix, region)
     running_instances = list(
         ec2.instances.filter(
-            Filters=[{"Name": "tag:Name", "Values": [instance_name]}, {"Name": "instance-state-name", "Values": ["running", "pending"]}]
+            Filters=[
+                {"Name": "tag:Name", "Values": [instance_name]},
+                {"Name": "instance-state-name", "Values": ["running", "pending"]},
+            ]
         )
     )
     if use_existing and len(running_instances) > 0:
         return region, running_instances[0].id
     else:
         ec2 = boto3.resource("ec2", region_name=region)
-        ec2.instances.filter(Filters=[{"Name": "tag:Name", "Values": [instance_name]}]).terminate()
+        ec2.instances.filter(
+            Filters=[{"Name": "tag:Name", "Values": [instance_name]}]
+        ).terminate()
         instance = ec2.create_instances(
             ImageId=ami_id,
             InstanceType=instance_class,
             MinCount=1,
             MaxCount=1,
             KeyName=region,
-            TagSpecifications=[{"ResourceType": "instance", "Tags": [{"Key": "Name", "Value": instance_name}]}],
+            TagSpecifications=[
+                {
+                    "ResourceType": "instance",
+                    "Tags": [{"Key": "Name", "Value": instance_name}],
+                }
+            ],
         )
         return region, instance[0].id
 
@@ -112,7 +124,9 @@ def run_script(args):
     ec2 = boto3.resource("ec2", region_name=region)
     instance = ec2.Instance(instance_id)
     instance.wait_until_running()
-    logger.debug(f"({region}) Instance {instance_id} is running at IP {instance.public_ip_address}")
+    logger.debug(
+        f"({region}) Instance {instance_id} is running at IP {instance.public_ip_address}"
+    )
 
     # ssh into IP with paramiko
     key_file = os.path.expanduser(f"~/.ssh/{region}.pem")
@@ -130,7 +144,9 @@ def run_script(args):
 
     # run script
     _, _, _ = client.exec_command(f"chmod +x ~/scripts/{os.path.basename(script_path)}")
-    _, stdout, stderr = client.exec_command(f"~/scripts/{os.path.basename(script_path)}")
+    _, stdout, stderr = client.exec_command(
+        f"~/scripts/{os.path.basename(script_path)}"
+    )
     results = (stdout.read().decode("utf-8"), stderr.read().decode("utf-8"))
     client.close()
     return region, results
@@ -138,7 +154,9 @@ def run_script(args):
 
 def main():
     parser = argparse.ArgumentParser(description="Provision EC2 instances")
-    parser.add_argument("--instance_class", type=str, default="i3en.large", help="Instance class")
+    parser.add_argument(
+        "--instance_class", type=str, default="i3en.large", help="Instance class"
+    )
     parser.add_argument(
         "--region_list",
         type=str,
@@ -158,14 +176,40 @@ def main():
         ],
         help="List of regions to provision instances",
     )
-    parser.add_argument("--script", type=str, default=None, help="Script to run on each instance (URL), optional")
-    parser.add_argument("--instance_prefix", type=str, default="aws-skydata", help="Prefix to name instances")
-    parser.add_argument("--use_existing", action="store_true", help="Use existing instances with the same name")
+    parser.add_argument(
+        "--script",
+        type=str,
+        default=None,
+        help="Script to run on each instance (URL), optional",
+    )
+    parser.add_argument(
+        "--instance_prefix",
+        type=str,
+        default="aws-skydata",
+        help="Prefix to name instances",
+    )
+    parser.add_argument(
+        "--use_existing",
+        action="store_true",
+        help="Use existing instances with the same name",
+    )
     parser.add_argument("--stop_all", action="store_true", help="Stop all instances")
-    parser.add_argument("--bench_latency", action="store_true", help="Throughput benchmark")
-    parser.add_argument("--bench_throughput", action="store_true", help="Throughput benchmark")
-    parser.add_argument("--iperf_connection_list", type=int, nargs="+", default=[128], help="List of connections to test")
-    parser.add_argument('--iperf3_runtime', type=int, default=4, help="Runtime for iperf3 in seconds")
+    parser.add_argument(
+        "--bench_latency", action="store_true", help="Throughput benchmark"
+    )
+    parser.add_argument(
+        "--bench_throughput", action="store_true", help="Throughput benchmark"
+    )
+    parser.add_argument(
+        "--iperf_connection_list",
+        type=int,
+        nargs="+",
+        default=[128],
+        help="List of connections to test",
+    )
+    parser.add_argument(
+        "--iperf3_runtime", type=int, default=4, help="Runtime for iperf3 in seconds"
+    )
     args = parser.parse_args()
     logger.info(f"Arguments: {args}")
 
@@ -181,10 +225,16 @@ def main():
             stopped_instances = ec2.instances.filter(
                 Filters=[
                     {"Name": "tag:Name", "Values": [instance_name]},
-                    {"Name": "instance-state-name", "Values": ["running", "pending", "stopping", "stopped"]},
+                    {
+                        "Name": "instance-state-name",
+                        "Values": ["running", "pending", "stopping", "stopped"],
+                    },
                 ]
             ).terminate()
-            logger.info(f"({region}) Stopped {len(stopped_instances)} instances, {stopped_instances}")
+            logger.info(
+                f"({region}) Stopped {len(stopped_instances)} instances, {stopped_instances}"
+            )
+
         do_parallel(stop_instances, all_ec2_regions)
         sys.exit(0)
 
@@ -202,14 +252,20 @@ def main():
     # update default security group rules to allow all traffic from all IPs
     for region in args.region_list:
         ec2 = boto3.resource("ec2", region_name=region)
-        default_sg_id = [i for i in ec2.security_groups.filter(GroupNames=["default"]).all()][0].id
+        default_sg_id = [
+            i for i in ec2.security_groups.filter(GroupNames=["default"]).all()
+        ][0].id
         default_sg = ec2.SecurityGroup(default_sg_id)
         # if allow all rule doesn't exist, add it
         if not any(
-            rule["IpProtocol"] == "-1" and len(rule["IpRanges"]) > 0 and rule["IpRanges"][0]["CidrIp"] == "0.0.0.0/0"
-            for rule in default_sg.ip_permissions
+                rule["IpProtocol"] == "-1"
+                and len(rule["IpRanges"]) > 0
+                and rule["IpRanges"][0]["CidrIp"] == "0.0.0.0/0"
+                        for rule in default_sg.ip_permissions
         ):
-            default_sg.authorize_ingress(IpProtocol="-1", FromPort=0, ToPort=65535, CidrIp="0.0.0.0/0")
+            default_sg.authorize_ingress(
+                IpProtocol="-1", FromPort=0, ToPort=65535, CidrIp="0.0.0.0/0"
+            )
             logger.info(
                 f"({region}) Updated default security group {default_sg_id} (name = {default_sg.group_name}) to allow all traffic from all IPs"
             )
@@ -222,7 +278,16 @@ def main():
     instance_ids = dict(
         do_parallel(
             provision_instance_wrapper,
-            [(region, ami_id, args.instance_class, args.instance_prefix, args.use_existing) for region, ami_id in ami_list.items()],
+            [
+                (
+                    region,
+                    ami_id,
+                    args.instance_class,
+                    args.instance_prefix,
+                    args.use_existing,
+                )
+                for region, ami_id in ami_list.items()
+            ],
         )
     )
     logger.info(f"Instance IDs: {instance_ids}")
@@ -231,7 +296,15 @@ def main():
     if args.script is not None:
         logger.info("Waiting for instances to boot")
         time.sleep(5)
-        setup_results = dict(do_parallel(run_script, [(region, instance_id, args.script) for region, instance_id in instance_ids.items()]))
+        setup_results = dict(
+            do_parallel(
+                run_script,
+                [
+                    (region, instance_id, args.script)
+                    for region, instance_id in instance_ids.items()
+                ],
+            )
+        )
         for region, results in setup_results.items():
             with (log_dir / f"{instance_ids[region]}.stdout.log").open("w") as f:
                 f.write(results[0])
@@ -252,7 +325,9 @@ def main():
         for region, instance_id in instance_ids.items():
             ec2 = boto3.resource("ec2", region_name=region)
             instance = ec2.Instance(instance_id)
-            logger.info(f"({region}) Instance {instance_id} is running at IP {instance.public_ip_address}")
+            logger.info(
+                f"({region}) Instance {instance_id} is running at IP {instance.public_ip_address}"
+            )
 
             # ssh into IP with paramiko
             key_file = os.path.expanduser(f"~/.ssh/{region}.pem")
@@ -274,7 +349,9 @@ def main():
                     f"({region} -> {dest_region}) {instance_id} -> {dest_instance_id} latency: {latency_pairs[(region, dest_region)]}"
                 )
                 (data_dir / "logs" / "latency").mkdir(exist_ok=True, parents=True)
-                with (data_dir / "logs" / "latency" / f"{region}-{dest_region}.log").open("w") as f:
+                with (
+                        data_dir / "logs" / "latency" / f"{region}-{dest_region}.log"
+                ).open("w") as f:
                     f.write(stdout_parsed)
                 pbar.update(1)
             client.close()
@@ -305,17 +382,21 @@ def main():
             key = paramiko.RSAKey.from_private_key_file(key_file)
             client.connect(ip, username="ubuntu", pkey=key)
             logger.info(f"({region}) Connected to {ip}")
-            
+
             _, stdout, stderr = client.exec_command(f"iperf3 -s -D")
             stdout_parsed = stdout.read().decode("utf-8").strip()
             stderr_parsed = stderr.read().decode("utf-8").strip()
             client.close()
-            
+
             logger.info(f"{region} server started")
             (log_dir / "throughput_log").mkdir(exist_ok=True, parents=True)
-            with (log_dir / "throughput_log" / f"{region}_server.stdout.log").open("w") as f:
+            with (log_dir / "throughput_log" / f"{region}_server.stdout.log").open(
+                    "w"
+            ) as f:
                 f.write(stdout_parsed)
-            with (log_dir / "throughput_log" / f"{region}_server.stderr.log").open("w") as f:
+            with (log_dir / "throughput_log" / f"{region}_server.stderr.log").open(
+                    "w"
+            ) as f:
                 f.write(stderr_parsed)
 
         def kill_iperf_server(region):
@@ -337,11 +418,15 @@ def main():
 
             logger.info(f"{region} server killed")
             (log_dir / "throughput_log").mkdir(exist_ok=True, parents=True)
-            with (log_dir / "throughput_log" / f"{region}_server_kill.stdout.log").open("w") as f:
+            with (log_dir / "throughput_log" / f"{region}_server_kill.stdout.log").open(
+                    "w"
+            ) as f:
                 f.write(stdout_parsed)
-            with (log_dir / "throughput_log" / f"{region}_server_kill.stderr.log").open("w") as f:
+            with (log_dir / "throughput_log" / f"{region}_server_kill.stderr.log").open(
+                    "w"
+            ) as f:
                 f.write(stderr_parsed)
-        
+
         def start_iperf_client(config):
             region, dest_region, num_threads_list = config
             instance_id = instance_ids[region]
@@ -360,19 +445,31 @@ def main():
 
             results = {}
             for num_threads in num_threads_list:
-                _, stdout, stderr = client.exec_command(f"iperf3 -J -t {args.iperf3_runtime} -P {num_threads} -c {dest_ip}")
+                _, stdout, stderr = client.exec_command(
+                    f"iperf3 -J -t {args.iperf3_runtime} -P {num_threads} -c {dest_ip}"
+                )
                 stdout_parsed = stdout.read().decode("utf-8").strip()
                 stderr_parsed = stderr.read().decode("utf-8").strip()
                 client.close()
 
                 result = json.loads(stdout_parsed)
                 throughput = result["end"]["sum_sent"]["bits_per_second"]
-                logger.info(f"({dest_region} -> {region}) {instance_id} -> {instance_id} throughput: {throughput}")
+                logger.info(
+                    f"({dest_region} -> {region}) {instance_id} -> {instance_id} throughput: {throughput}"
+                )
                 results[num_threads] = result
                 (log_dir / "throughput_log").mkdir(exist_ok=True, parents=True)
-                with (log_dir / "throughput_log" / f"{dest_region}-{region}-{num_threads}.stdout.log").open("w") as f:
+                with (
+                        log_dir
+                        / "throughput_log"
+                        / f"{dest_region}-{region}-{num_threads}.stdout.log"
+                ).open("w") as f:
                     f.write(stdout_parsed)
-                with (log_dir / "throughput_log" / f"{dest_region}-{region}-{num_threads}.stderr.log").open("w") as f:
+                with (
+                        log_dir
+                        / "throughput_log"
+                        / f"{dest_region}-{region}-{num_threads}.stderr.log"
+                ).open("w") as f:
                     f.write(stderr_parsed)
             return config, results
 
@@ -380,9 +477,13 @@ def main():
         throughput_pairs = dict()
         pbar = tqdm(total=len(instance_ids) * len(instance_ids))
         configs = [(s, d) for s in instance_ids.keys() for d in instance_ids.keys()]
-        parallel_config_groups = split_list(configs)  # list of disjoint configurations that can run in parallel
+        parallel_config_groups = split_list(
+            configs
+        )  # list of disjoint configurations that can run in parallel
         for config_group in parallel_config_groups:
-            logger.info(f"Running {len(config_group)} configs in parallel, {config_group}")
+            logger.info(
+                f"Running {len(config_group)} configs in parallel, {config_group}"
+            )
         exit(1)
         # start iperf servers
         do_parallel(start_iperf_server, instance_ids.keys())
@@ -390,7 +491,9 @@ def main():
 
         # start iperf clients
         for parallel_config_group in parallel_config_groups:
-            configs = [(s, d, args.iperf_connection_list) for s, d in parallel_config_group]
+            configs = [
+                (s, d, args.iperf_connection_list) for s, d in parallel_config_group
+            ]
             results = do_parallel(start_iperf_client, configs)
             for config, result in results:
                 region, dest_region, num_threads_list = config
