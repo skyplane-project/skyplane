@@ -3,7 +3,7 @@ from setuptools import setup
 setup(
     name='skylark',
     version='0.1',
-    packages=["skydata"],
+    packages=["skylark"],
     python_requires=">=3.8",
     install_requires=[
         "click",
@@ -15,5 +15,5 @@ setup(
         "numpy",
         "pandas",
     ],
-    extras_require={"test": ["pytest", "ipython", "jupyter_console"]}
+    extras_require={"test": ["black", "pytest", "ipython", "jupyter_console"]}
 )

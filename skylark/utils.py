@@ -1,6 +1,8 @@
 import time
-from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from tqdm import tqdm
+
 
 class Timer:
     def __init__(self):
@@ -17,6 +19,7 @@ class Timer:
     def elapsed(self):
         return self.end - self.start
 
+
 def do_parallel(func, args_list, n=6, progress_bar=False):
     """Run list of jobs in parallel with tqdm progress bar"""
     results = []
@@ -32,12 +35,20 @@ def do_parallel(func, args_list, n=6, progress_bar=False):
         pbar.close()
     return results
 
+
 def common_excludes(
-    ignore_dirs=['.git', '__pycache__', '.ipynb_checkpoints', 'nb', 'data', '*.egg-info'],
-    ignore_recursive_dirs = ['__pycache__'],
-    ignore_exts=['pyc', 'pyo', 'swp']
+    ignore_dirs=[
+        ".git",
+        "__pycache__",
+        ".ipynb_checkpoints",
+        "nb",
+        "data",
+        "*.egg-info",
+    ],
+    ignore_recursive_dirs=["__pycache__"],
+    ignore_exts=["pyc", "pyo", "swp"],
 ):
-    ignore_full_path = [str(p) for p in ignore_dirs] + [f'{p}/**' for p in ignore_dirs] + [f'{p}/**/*' for p in ignore_dirs]
-    ignore_full_path += [f'**/{p}' for p in ignore_recursive_dirs] + [f'**/{p}/*' for p in ignore_recursive_dirs]
-    ignore_exts = [f'*.{e}' for e in ignore_exts]
+    ignore_full_path = [str(p) for p in ignore_dirs] + [f"{p}/**" for p in ignore_dirs] + [f"{p}/**/*" for p in ignore_dirs]
+    ignore_full_path += [f"**/{p}" for p in ignore_recursive_dirs] + [f"**/{p}/*" for p in ignore_recursive_dirs]
+    ignore_exts = [f"*.{e}" for e in ignore_exts]
     return ignore_full_path + ignore_exts
