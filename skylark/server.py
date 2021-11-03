@@ -67,9 +67,7 @@ class Server:
 
     @property
     def dig_public_ip(self):
-        return self.run_command("dig +short myip.opendns.com @resolver1.opendns.com")[
-            0
-        ].strip()
+        return self.run_command("dig +short myip.opendns.com @resolver1.opendns.com")[0].strip()
 
     def flush_command_log(self):
         if self.command_log_file and len(self.command_log) > 0:
@@ -78,12 +76,8 @@ class Server:
                     f.write(json.dumps(log_item) + "\n")
             with open(self.command_log_file + "_cmdonly", "a") as f:
                 for log_item in self.command_log:
-                    command, runtime = log_item.get("command"), log_item.get(
-                        "runtime", None
-                    )
-                    formatted_runtime = (
-                        f"{runtime:>2.2f}s" if runtime is not None else " " * 5
-                    )
+                    command, runtime = log_item.get("command"), log_item.get("runtime", None)
+                    formatted_runtime = f"{runtime:>2.2f}s" if runtime is not None else " " * 5
                     f.write(f"{formatted_runtime}\t{command}\n")
             self.command_log = []
 
@@ -104,9 +98,7 @@ class Server:
         with Timer() as t:
             _, stdout, stderr = client.exec_command(command)
             results = (stdout.read().decode("utf-8"), stderr.read().decode("utf-8"))
-        self.add_command_log(
-            command=command, stdout=results[0], stderr=results[1], runtime=t.elapsed
-        )
+        self.add_command_log(command=command, stdout=results[0], stderr=results[1], runtime=t.elapsed)
         return results
 
     def copy_file(self, local_file, remote_file):
@@ -115,33 +107,21 @@ class Server:
         sftp = client.open_sftp()
         with Timer() as t:
             sftp.put(local_file, remote_file)
-        self.add_command_log(
-            command=f"<copy_file> {local_file} {remote_file}", runtime=t.elapsed
-        )
+        self.add_command_log(command=f"<copy_file> {local_file} {remote_file}", runtime=t.elapsed)
         sftp.close()
 
-    def sync_directory(
-            self, local_dir, remote_dir, delete_remote=False, ignore_globs=[]
-    ):
+    def sync_directory(self, local_dir, remote_dir, delete_remote=False, ignore_globs=[]):
         """Copy local directory to remote directory. If remote directory exists, delete if delete_remote else raise exception."""
 
         local_path = Path(local_dir)
         remote_path = PurePath(remote_dir)
         ignored_paths = [Path(local_dir).glob(pattern) for pattern in ignore_globs]
-        ignored_paths = set(
-            [
-                path.relative_to(local_dir)
-                for path_list in ignored_paths
-                for path in path_list
-            ]
-        )
+        ignored_paths = set([path.relative_to(local_dir) for path_list in ignored_paths for path in path_list])
 
         def copy_file(sftp, local_file: Path, remote_file: Path):
             with Timer() as t:
                 sftp.put(str(local_file), str(remote_file))
-            self.add_command_log(
-                command=f"<copy_file> {local_file} {remote_file}", runtime=t.elapsed
-            )
+            self.add_command_log(command=f"<copy_file> {local_file} {remote_file}", runtime=t.elapsed)
 
         client = self.ssh_client
         sftp = client.open_sftp()
@@ -151,25 +131,15 @@ class Server:
             self.run_command(f"mkdir -p {remote_dir}")
 
             # make all directories
-            recursive_dir_list = [
-                x.relative_to(local_dir)
-                for x in Path(local_dir).glob("**/*/")
-                if x.is_dir()
-            ]
-            recursive_dir_list = [
-                x for x in recursive_dir_list if x not in ignored_paths
-            ]
+            recursive_dir_list = [x.relative_to(local_dir) for x in Path(local_dir).glob("**/*/") if x.is_dir()]
+            recursive_dir_list = [x for x in recursive_dir_list if x not in ignored_paths]
             do_parallel(
                 lambda x: self.run_command(f"mkdir -p {remote_dir}/{x}"),
                 recursive_dir_list,
             )
 
             # copy all files
-            file_list = [
-                x.relative_to(local_dir)
-                for x in Path(local_dir).glob("**/*")
-                if x.is_file()
-            ]
+            file_list = [x.relative_to(local_dir) for x in Path(local_dir).glob("**/*") if x.is_file()]
             file_list = [x for x in file_list if x not in ignored_paths]
             do_parallel(
                 lambda x: copy_file(sftp, local_path / x, remote_path / x),
@@ -178,9 +148,7 @@ class Server:
                 n=1,
             )
         sftp.close()
-        self.add_command_log(
-            command=f"<sync_directory> {local_dir} {remote_dir}", runtime=t.elapsed
-        )
+        self.add_command_log(command=f"<sync_directory> {local_dir} {remote_dir}", runtime=t.elapsed)
 
 
 class AWSServer(Server):
@@ -234,11 +202,8 @@ class AWSServer(Server):
 
     def __repr__(self):
         str_repr = f"AWSServer("
-        str_repr += f"instance_id={self.instance_id}, "
-        str_repr += f"instance_name={self.instance_name}, "
-        str_repr += f"instance_state={self.instance_state}, "
-        str_repr += f"instance_class={self.instance_class}, "
-        str_repr += f"public_ip={self.public_ip}"
+        str_repr += f"{self.region_tag}, "
+        str_repr += f"{self.instance_id}"
         str_repr += f")"
         return str_repr
 
@@ -257,7 +222,7 @@ class AWSServer(Server):
 
     def get_boto3_resource(self, service_name):
         """Get boto3 resource (cache in threadlocal)"""
-        ns_key = f"boto3_{service_name}"
+        ns_key = f"boto3_{service_name}_{self.aws_region}"
         if not hasattr(self.ns, ns_key):
             setattr(
                 self.ns,
@@ -271,56 +236,34 @@ class AWSServer(Server):
         ec2 = self.get_boto3_resource("ec2")
         if not os.path.exists(local_key_file):
             if click.confirm(
-                    f"Local key file {local_key_file} does not exist. Create it?",
-                    default=False,
+                f"Local key file {local_key_file} does not exist. Create it?",
+                default=False,
             ):
                 key_pair = ec2.create_key_pair(KeyName=self.aws_region)
                 with open(local_key_file, "w") as f:
                     f.write(key_pair.key_material)
                 os.chmod(local_key_file, 0o600)
-                logger.info(
-                    f"({self.aws_region}) Created keypair and saved to {local_key_file}"
-                )
+                logger.info(f"({self.aws_region}) Created keypair and saved to {local_key_file}")
             else:
-                raise Exception(
-                    f"Keypair for {self.aws_region} not found and user declined to create it"
-                )
+                raise Exception(f"Keypair for {self.aws_region} not found and user declined to create it")
         return local_key_file
 
-    def add_ip_to_security_group(
-            self, security_group_id: str = None, ip="0.0.0.0/0", from_port=0, to_port=65535
-    ):
+    def add_ip_to_security_group(self, security_group_id: str = None, ip="0.0.0.0/0", from_port=0, to_port=65535):
         """Add IP to security group. If security group ID is None, use default."""
         ec2 = self.get_boto3_resource("ec2")
         if security_group_id is None:
-            security_group_id = [
-                i for i in ec2.security_groups.filter(GroupNames=["default"]).all()
-            ][0].id
+            security_group_id = [i for i in ec2.security_groups.filter(GroupNames=["default"]).all()][0].id
         sg = ec2.SecurityGroup(security_group_id)
-        matches_ip = (
-            lambda rule: len(rule["IpRanges"]) > 0
-                         and rule["IpRanges"][0]["CidrIp"] == ip
-        )
-        matches_ports = (
-            lambda rule: rule["FromPort"] <= from_port and rule["ToPort"] >= to_port
-        )
-        if not any(
-                rule["IpProtocol"] == "-1" and matches_ip(rule) and matches_ports(rule)
-                        for rule in sg.ip_permissions
-        ):
-            sg.authorize_ingress(
-                IpProtocol="-1", FromPort=from_port, ToPort=to_port, CidrIp=ip
-            )
-            logger.info(
-                f"({self.aws_region}) Added IP {ip} to security group {security_group_id}"
-            )
+        matches_ip = lambda rule: len(rule["IpRanges"]) > 0 and rule["IpRanges"][0]["CidrIp"] == ip
+        matches_ports = lambda rule: rule["FromPort"] <= from_port and rule["ToPort"] >= to_port
+        if not any(rule["IpProtocol"] == "-1" and matches_ip(rule) and matches_ports(rule) for rule in sg.ip_permissions):
+            sg.authorize_ingress(IpProtocol="-1", FromPort=from_port, ToPort=to_port, CidrIp=ip)
+            logger.info(f"({self.aws_region}) Added IP {ip} to security group {security_group_id}")
 
     ### SSH interface (run commands, copy files, etc.)
 
     def get_ssh_client_impl(self):
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(
-            self.public_ip, username="ubuntu", key_filename=self.local_keyfile
-        )
+        client.connect(self.public_ip, username="ubuntu", key_filename=self.local_keyfile)
         return client

@@ -1,6 +1,8 @@
 import threading
+from functools import lru_cache
 from typing import Dict, List
 
+from loguru import logger
 import boto3
 
 from skylark.server import AWSServer, Server
@@ -12,17 +14,16 @@ class CloudProvider:
     ns = threading.local()
 
     def __init__(self):
-        instance_list = self.get_instance_list()
         self.instance_prefix = "skylark"
 
     @property
     def region_list(self):
         raise NotImplementedError
 
-    def get_instance_list(self) -> Dict[str, List[Server]]:
+    def get_instance_list(self, region) -> List[Server]:
         raise NotImplementedError
 
-    def provision_instance(self) -> Server:
+    def provision_instance(self, **kwargs) -> Server:
         raise NotImplementedError
 
 
@@ -66,9 +67,7 @@ class AWSCloudProvider(CloudProvider):
             raise Exception("No AMI found for region {}".format(region))
         else:
             # Sort the images by date and return the last one
-            image_list = sorted(
-                response["Images"], key=lambda x: x["CreationDate"], reverse=True
-            )
+            image_list = sorted(response["Images"], key=lambda x: x["CreationDate"], reverse=True)
             return image_list[0]["ImageId"]
 
     @property
@@ -89,46 +88,44 @@ class AWSCloudProvider(CloudProvider):
         ]
         return regions
 
-    def get_instance_list(self) -> Dict[str, List[AWSServer]]:
-        instance_ids = {}
-        for region in self.region_list:
-            ec2 = self.get_boto3_resource("ec2", region)
-            instances = ec2.instances.filter(
-                Filters=[
-                    {
-                        "Name": "instance-state-name",
-                        "Values": ["running", "stopped", "stopping"],
-                    }
-                ]
-            )
-            instance_ids[region] = [i.id for i in instances]
-        return {
-            r: [AWSServer(f"aws:{r}", i) for i in ids]
-            for r, ids in instance_ids.items()
-        }
+    @lru_cache(maxsize=None)
+    def get_instance_list(self, region) -> List[AWSServer]:
+        ec2 = self.get_boto3_resource("ec2", region)
+        instances = ec2.instances.filter(
+            Filters=[
+                {
+                    "Name": "instance-state-name",
+                    "Values": ["pending", "running", "stopped", "stopping"],
+                }
+            ]
+        )
+        instance_ids = [i.id for i in instances]
+        instances = [AWSServer(f"aws:{region}", i) for i in instance_ids]
+        return instances
 
-    def get_matching_instances(
-            self, region=None, instance_type=None, state=None, tags={"skylark": "true"}
-    ):
+    def get_matching_instances(self, region=None, instance_type=None, state=None, tags={"skylark": "true"}):
+        if isinstance(region, str):
+            region = [region]
+        elif region is None:
+            region = self.region_list
+
         matching_instances = []
-        for region, instances in self.get_instance_list().items():
+        for r in region:
+            instances = self.get_instance_list(r)
             for instance in instances:
-                if not (region is None or region == instance.region):
-                    continue
-                if not (
-                        instance_type is None or instance_type == instance.instance_class
-                ):
+                # logger.debug(f"Instance {instance}")
+                # logger.debug(f"Checking instance {instance.instance_id}, {instance.instance_name}")
+                if not (instance_type is None or instance_type == instance.instance_class):
                     continue
                 if not (state is None or state == instance.instance_state):
                     continue
+                # logger.debug(f"Instance tags = {instance.tags}")
                 if not all(instance.tags.get(k, "") == v for k, v in tags.items()):
                     continue
                 matching_instances.append(instance)
         return matching_instances
 
-    def provision_instance(
-            self, region, ami_id, instance_class, name, other_tags={"skylark": "true"}
-    ) -> AWSServer:
+    def provision_instance(self, region, ami_id, instance_class, name, tags={"skylark": "true"}) -> AWSServer:
         ec2 = boto3.resource("ec2", region_name=region)
         instance = ec2.create_instances(
             ImageId=ami_id,
@@ -139,8 +136,7 @@ class AWSCloudProvider(CloudProvider):
             TagSpecifications=[
                 {
                     "ResourceType": "instance",
-                    "Tags": [{"Key": "Name", "Value": name}]
-                            + [{"Key": k, "Value": v} for k, v in other_tags.items()],
+                    "Tags": [{"Key": "Name", "Value": name}] + [{"Key": k, "Value": v} for k, v in tags.items()],
                 }
             ],
         )
@@ -149,20 +145,15 @@ class AWSCloudProvider(CloudProvider):
 
 if __name__ == "__main__":
     aws = AWSCloudProvider()
-    running_instances = aws.get_matching_instances(
-        state="running", tags={"skylark": "true"}
-    )
-    print(running_instances)
 
-    # for region in aws.region_list:
-    #     ami = aws.get_ubuntu_ami_id(region)
-    #     aws.provision_instance(region, ami, "i3en.large", "skylark-test")
-
-    grouped_by_region = {
-        r: [i for i in instances if i.region == r]
-        for r, instances in aws.get_instance_list().items()
-    }
-    for region, instances in grouped_by_region.items():
-        print(f"{region}")
-        for instance in instances:
-            print(f"  {instance}")
+    grouped_by_region = {}
+    for region in aws.region_list:
+        grouped_by_region[region] = aws.get_matching_instances(region=region)
+        if len(grouped_by_region[region]) == 0:
+            logger.info(f"No instances found in {region}, provisioning")
+            ami = aws.get_ubuntu_ami_id(region)
+            server = aws.provision_instance(region, ami, "i3en.large", f"skylark-{region}")
+            logger.debug(f"Provisioned {server}")
+            grouped_by_region[region].append(server)
+        else:
+            logger.info(f"Found {len(grouped_by_region[region])} instances in {region}")

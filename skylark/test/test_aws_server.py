@@ -49,14 +49,8 @@ if __name__ == "__main__":
         server.sync_directory(tmpdir, "/tmp/test_sync_directory", delete_remote=True)
         server.flush_command_log()
 
-        assert (
-                open(os.path.join(tmpdir, "test1.txt")).read()
-                == server.run_command(f"cat {remote_tmpdir}/test1.txt")[0]
-        )
-        assert (
-                open(os.path.join(tmpdir, "test2.txt")).read()
-                == server.run_command(f"cat {remote_tmpdir}/test2.txt")[0]
-        )
+        assert open(os.path.join(tmpdir, "test1.txt")).read() == server.run_command(f"cat {remote_tmpdir}/test1.txt")[0]
+        assert open(os.path.join(tmpdir, "test2.txt")).read() == server.run_command(f"cat {remote_tmpdir}/test2.txt")[0]
         assert server.run_command(f"ls {remote_tmpdir}")[0].strip().split() == [
             "test1.txt",
             "test2.txt",
