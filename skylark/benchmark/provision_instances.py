@@ -239,10 +239,13 @@ def main():
         default_sg = ec2.SecurityGroup(default_sg_id)
         # if allow all rule doesn't exist, add it
         if not any(
-            rule["IpProtocol"] == "-1" and len(rule["IpRanges"]) > 0 and rule["IpRanges"][0]["CidrIp"] == "0.0.0.0/0" for rule in default_sg.ip_permissions
+            rule["IpProtocol"] == "-1" and len(rule["IpRanges"]) > 0 and rule["IpRanges"][0]["CidrIp"] == "0.0.0.0/0"
+            for rule in default_sg.ip_permissions
         ):
             default_sg.authorize_ingress(IpProtocol="-1", FromPort=0, ToPort=65535, CidrIp="0.0.0.0/0")
-            logger.info(f"({region}) Updated default security group {default_sg_id} (name = {default_sg.group_name}) to allow all traffic from all IPs")
+            logger.info(
+                f"({region}) Updated default security group {default_sg_id} (name = {default_sg.group_name}) to allow all traffic from all IPs"
+            )
 
     # Get the list of AMIs for each region, use multithreading pool
     ami_list = dict(do_parallel(get_ubuntu_ami_id, args.region_list))
@@ -314,7 +317,9 @@ def main():
                 _, stdout, stderr = client.exec_command(f"ping -c 16 {dest_ip}")
                 stdout_parsed = stdout.read().decode("utf-8").strip()
                 latency_pairs[(region, dest_region)] = stdout_parsed.split("\n")[-1]
-                logger.info(f"({region} -> {dest_region}) {instance_id} -> {dest_instance_id} latency: {latency_pairs[(region, dest_region)]}")
+                logger.info(
+                    f"({region} -> {dest_region}) {instance_id} -> {dest_instance_id} latency: {latency_pairs[(region, dest_region)]}"
+                )
                 (data_dir / "logs" / "latency").mkdir(exist_ok=True, parents=True)
                 with (data_dir / "logs" / "latency" / f"{region}-{dest_region}.log").open("w") as f:
                     f.write(stdout_parsed)

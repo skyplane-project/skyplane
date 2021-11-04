@@ -6,14 +6,16 @@ setup(
     packages=["skylark"],
     python_requires=">=3.8",
     install_requires=[
-        "click",
-        "tqdm",
-        "loguru",
         "boto3",
-        "paramiko",
+        "click",
+        "google-cloud-compute",
+        "google-api-python-client",
+        "loguru",
         "matplotlib",
         "numpy",
         "pandas",
+        "paramiko",
+        "tqdm",
     ],
     extras_require={"test": ["black", "pytest", "ipython", "jupyter_console"]}
 )

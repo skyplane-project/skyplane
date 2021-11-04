@@ -5,7 +5,7 @@ import tempfile
 from loguru import logger
 
 from skylark import skylark_root
-from skylark.server import AWSServer
+from skylark.compute.aws.aws_server import AWSServer
 from skylark.utils import common_excludes
 
 if __name__ == "__main__":
