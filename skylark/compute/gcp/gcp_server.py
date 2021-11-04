@@ -15,14 +15,14 @@ DEFAULT_GCP_PUBLIC_KEY_PATH = os.path.expanduser("~/.ssh/google_compute_engine.p
 
 
 class GCPServer(Server):
-    def __init__(self, region_tag, gcp_project, instance_name, ssh_pub_key=DEFAULT_GCP_PUBLIC_KEY_PATH, command_log_file=None):
+    def __init__(self, region_tag, gcp_project, instance_name, ssh_private_key=DEFAULT_GCP_PRIVATE_KEY_PATH, command_log_file=None):
         super().__init__(command_log_file=command_log_file)
         self.region_tag = region_tag
         assert region_tag.split(":")[0] == "gcp", f"Region name doesn't match pattern gcp:<region> {region_tag}"
         self.gcp_region = region_tag.split(":")[1]
         self.gcp_project = gcp_project
         self.gcp_instance_name = instance_name
-        self.ssh_key_path = ssh_pub_key
+        self.ssh_private_key = os.path.expanduser(ssh_private_key)
 
     @classmethod
     def get_gcp_client(cls, service_name="compute", version="v1"):
@@ -113,7 +113,7 @@ class GCPServer(Server):
         if not os.path.exists(ssh_private_key):
             logger.info(f"Creating SSH key at {ssh_private_key}")
             key = paramiko.RSAKey.generate(4096)
-            key.write_private_key_file(ssh_private_key)
+            key.write_private_key_file(ssh_private_key, password=None)
             with open(ssh_public_key, "w") as f:
                 f.write(f"ssh-rsa {key.get_base64()} {os.environ['USER']}@{socket.gethostname()}")
 
@@ -124,14 +124,15 @@ class GCPServer(Server):
         instance_class,
         name=None,
         premium_network=False,
-        ssh_pub_key=DEFAULT_GCP_PUBLIC_KEY_PATH,
+        ssh_private_key=DEFAULT_GCP_PRIVATE_KEY_PATH,
+        ssh_public_key=DEFAULT_GCP_PUBLIC_KEY_PATH,
         tags={"skylark": "true"},
     ) -> "GCPServer":
         assert not region.startswith("gcp:"), "Region should be GCP region"
         if name is None:
             name = f"skylark-{str(uuid.uuid4()).replace('-', '')}"
         compute = GCPServer.get_gcp_client("compute", "v1")
-        with open(os.path.expanduser(ssh_pub_key)) as f:
+        with open(os.path.expanduser(ssh_public_key)) as f:
             pub_key = f.read()
         req_body = {
             "name": name,
@@ -159,11 +160,13 @@ class GCPServer(Server):
             "metadata": {"items": [{"key": "ssh-keys", "value": f"{pub_key}\n"}]},
         }
         compute.instances().insert(project=gcp_project, zone=region, body=req_body).execute()
-        return GCPServer(f"gcp:{region}", gcp_project, name, ssh_pub_key=ssh_pub_key)
+        return GCPServer(f"gcp:{region}", gcp_project, name, ssh_private_key=ssh_private_key)
 
     def get_ssh_client_impl(self):
         """Return paramiko client that connects to this instance."""
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh_client.connect(hostname=self.public_ip, username="ubuntu", key_filename=self.ssh_key_path)
+        pkey = paramiko.RSAKey.from_private_key_file(self.ssh_private_key, password=None)
+        uname = os.environ["USER"]  # ideally, create VM with username ubuntu
+        ssh_client.connect(hostname=self.public_ip, username=uname, pkey=pkey)
         return ssh_client
