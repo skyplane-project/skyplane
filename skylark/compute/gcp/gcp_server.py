@@ -8,7 +8,6 @@ from loguru import logger
 import paramiko
 
 from skylark.compute.server import Server, ServerState
-from skylark import skylark_root
 
 DEFAULT_GCP_PRIVATE_KEY_PATH = os.path.expanduser("~/.ssh/google_compute_engine")
 DEFAULT_GCP_PUBLIC_KEY_PATH = os.path.expanduser("~/.ssh/google_compute_engine.pub")
@@ -31,13 +30,14 @@ class GCPServer(Server):
             setattr(cls.ns, ns_key, googleapiclient.discovery.build("compute", "v1"))
         return getattr(cls.ns, ns_key)
 
-    def gcp_instances(self):
-        compute = self.get_gcp_client()
-        return compute.instances().list(project=self.gcp_project, zone=self.gcp_region).execute()
+    @staticmethod
+    def gcp_instances(gcp_project, gcp_region):
+        compute = GCPServer.get_gcp_client()
+        return compute.instances().list(project=gcp_project, zone=gcp_region).execute()
 
     @lru_cache
     def get_gcp_instance(self):
-        instances = self.gcp_instances()
+        instances = self.gcp_instances(self.gcp_project, self.gcp_region)
         for i in instances["items"]:
             if i["name"] == self.gcp_instance_name:
                 return i

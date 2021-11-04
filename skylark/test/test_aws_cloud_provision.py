@@ -1,6 +1,6 @@
 from loguru import logger
 
-from skylark.compute.aws.aws_cloud_providers import AWSCloudProvider
+from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 
 if __name__ == "__main__":
     aws = AWSCloudProvider()
