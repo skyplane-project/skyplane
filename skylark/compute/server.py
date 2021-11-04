@@ -1,15 +1,47 @@
 import json
-import os
 import threading
-from functools import lru_cache
+import time
+from enum import Enum
 from pathlib import Path, PurePath
 
-import boto3
-import click
-import paramiko
-from loguru import logger
-
 from skylark.utils import Timer, do_parallel
+
+
+class ServerState(Enum):
+    PENDING = 0
+    RUNNING = 1
+    SUSPENDED = 2
+    TERMINATED = 3
+    UNKNOWN = 4
+
+    def __str__(self):
+        return self.name.lower()
+
+    @staticmethod
+    def from_gcp_state(gcp_state):
+        mapping = {
+            "PROVISIONING": ServerState.PENDING,
+            "STAGING": ServerState.PENDING,
+            "RUNNING": ServerState.RUNNING,
+            "REPAIRING": ServerState.RUNNING,
+            "SUSPENDING": ServerState.SUSPENDED,
+            "SUSPENDED": ServerState.SUSPENDED,
+            "STOPPING": ServerState.TERMINATED,
+            "TERMINATED": ServerState.TERMINATED,
+        }
+        return mapping[gcp_state]
+
+    @staticmethod
+    def from_aws_state(aws_state):
+        mapping = {
+            "pending": ServerState.PENDING,
+            "running": ServerState.RUNNING,
+            "shutting-down": ServerState.TERMINATED,
+            "terminated": ServerState.TERMINATED,
+            "stopping": ServerState.SUSPENDED,
+            "stopped": ServerState.SUSPENDED,
+        }
+        return mapping[aws_state]
 
 
 class Server:
@@ -39,25 +71,45 @@ class Server:
             self.ns.client = self.get_ssh_client_impl()
         return self.ns.client
 
-    ### Instance state
+    @property
+    def instance_state(self) -> ServerState:
+        raise NotImplementedError()
+
+    @property
+    def public_ip(self):
+        raise NotImplementedError()
+
+    @property
+    def instance_class(self):
+        raise NotImplementedError()
+
+    @property
+    def region(self):
+        raise NotImplementedError()
+
+    @property
+    def instance_name(self):
+        raise NotImplementedError()
+
+    @property
+    def tags(self):
+        raise NotImplementedError()
 
     def terminate_instance_impl(self):
         raise NotImplementedError()
 
     def terminate_instance(self):
         """Terminate instance"""
-        client = self.ssh_client
-        _, _, _ = client.exec_command(f"sudo shutdown -h now")
-        client.close()
         self.close_server()
         self.terminate_instance_impl()
 
-    def wait_for_ready_impl(self):
-        raise NotImplementedError()
-
-    def wait_for_ready(self):
-        """Wait for instance to be ready"""
-        self.wait_for_ready_impl()
+    def wait_for_ready(self, timeout=30) -> bool:
+        start_time = time.time()
+        while (time.time() - start_time) < timeout:
+            if self.instance_state == ServerState.RUNNING:
+                return True
+            time.sleep(1)
+        return False
 
     def close_server(self):
         if hasattr(self.ns, "client"):
@@ -89,8 +141,6 @@ class Server:
     def log_comment(self, comment):
         """Log comment in command log"""
         self.add_command_log(command=f"# {comment}")
-
-    ### SSH interface (run commands, copy files, etc.)
 
     def run_command(self, command):
         """time command and run it"""
@@ -150,120 +200,6 @@ class Server:
         sftp.close()
         self.add_command_log(command=f"<sync_directory> {local_dir} {remote_dir}", runtime=t.elapsed)
 
-
-class AWSServer(Server):
-    """AWS Server class to support basic SSH operations"""
-
-    def __init__(self, region_tag, instance_id, command_log_file=None):
-        super().__init__(command_log_file=command_log_file)
-        self.region_tag = region_tag
-        assert region_tag.split(":")[0] == "aws"
-        self.aws_region = region_tag.split(":")[1]
-        self.instance_id = instance_id
-        self.local_keyfile = self.make_keyfile()
-
-    ### Instance state
-
-    @property
-    def public_ip(self):
-        ec2 = self.get_boto3_resource("ec2")
-        instance = ec2.Instance(self.instance_id)
-        return instance.public_ip_address
-
-    @property
-    @lru_cache(maxsize=1)
-    def instance_class(self):
-        ec2 = self.get_boto3_resource("ec2")
-        instance = ec2.Instance(self.instance_id)
-        return instance.instance_type
-
-    @property
-    @lru_cache(maxsize=1)
-    def tags(self):
-        ec2 = self.get_boto3_resource("ec2")
-        instance = ec2.Instance(self.instance_id)
-        return {tag["Key"]: tag["Value"] for tag in instance.tags}
-
-    @property
-    @lru_cache(maxsize=1)
-    def instance_name(self):
-        return self.tags.get("Name", None)
-
-    @property
-    @lru_cache(maxsize=1)
-    def region(self):
-        return self.region_tag.split(":")[1]
-
-    @property
-    def instance_state(self):
-        ec2 = self.get_boto3_resource("ec2")
-        instance = ec2.Instance(self.instance_id)
-        return instance.state["Name"]
-
-    def __repr__(self):
-        str_repr = f"AWSServer("
-        str_repr += f"{self.region_tag}, "
-        str_repr += f"{self.instance_id}"
-        str_repr += f")"
-        return str_repr
-
-    def terminate_instance_impl(self):
-        ec2 = self.get_boto3_resource("ec2")
-        ec2.instances.filter(InstanceIds=[self.instance_id]).terminate()
-        logger.info(f"({self.aws_region}) Terminated instance {self.instance_id}")
-
-    def wait_for_ready_impl(self):
-        """Wait for instance to be ready"""
-        ec2 = self.get_boto3_resource("ec2")
-        instance = ec2.Instance(self.instance_id)
-        instance.wait_until_running()
-
-    ### AWS helper methods
-
-    def get_boto3_resource(self, service_name):
-        """Get boto3 resource (cache in threadlocal)"""
-        ns_key = f"boto3_{service_name}_{self.aws_region}"
-        if not hasattr(self.ns, ns_key):
-            setattr(
-                self.ns,
-                ns_key,
-                boto3.resource(service_name, region_name=self.aws_region),
-            )
-        return getattr(self.ns, ns_key)
-
-    def make_keyfile(self):
-        local_key_file = os.path.expanduser(f"~/.ssh/{self.aws_region}.pem")
-        ec2 = self.get_boto3_resource("ec2")
-        if not os.path.exists(local_key_file):
-            if click.confirm(
-                f"Local key file {local_key_file} does not exist. Create it?",
-                default=False,
-            ):
-                key_pair = ec2.create_key_pair(KeyName=self.aws_region)
-                with open(local_key_file, "w") as f:
-                    f.write(key_pair.key_material)
-                os.chmod(local_key_file, 0o600)
-                logger.info(f"({self.aws_region}) Created keypair and saved to {local_key_file}")
-            else:
-                raise Exception(f"Keypair for {self.aws_region} not found and user declined to create it")
-        return local_key_file
-
-    def add_ip_to_security_group(self, security_group_id: str = None, ip="0.0.0.0/0", from_port=0, to_port=65535):
-        """Add IP to security group. If security group ID is None, use default."""
-        ec2 = self.get_boto3_resource("ec2")
-        if security_group_id is None:
-            security_group_id = [i for i in ec2.security_groups.filter(GroupNames=["default"]).all()][0].id
-        sg = ec2.SecurityGroup(security_group_id)
-        matches_ip = lambda rule: len(rule["IpRanges"]) > 0 and rule["IpRanges"][0]["CidrIp"] == ip
-        matches_ports = lambda rule: rule["FromPort"] <= from_port and rule["ToPort"] >= to_port
-        if not any(rule["IpProtocol"] == "-1" and matches_ip(rule) and matches_ports(rule) for rule in sg.ip_permissions):
-            sg.authorize_ingress(IpProtocol="-1", FromPort=from_port, ToPort=to_port, CidrIp=ip)
-            logger.info(f"({self.aws_region}) Added IP {ip} to security group {security_group_id}")
-
-    ### SSH interface (run commands, copy files, etc.)
-
-    def get_ssh_client_impl(self):
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(self.public_ip, username="ubuntu", key_filename=self.local_keyfile)
-        return client
+    @staticmethod
+    def provision_instance(region, instance_class, name, tags={"skylark": "true"}) -> "Server":
+        raise NotImplementedError()
