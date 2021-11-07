@@ -1,6 +1,7 @@
 import json
 import threading
 import time
+import uuid
 from enum import Enum
 from pathlib import Path, PurePath
 
@@ -88,6 +89,10 @@ class Server:
         raise NotImplementedError()
 
     @property
+    def region_tag(self):
+        raise NotImplementedError()
+
+    @property
     def instance_name(self):
         raise NotImplementedError()
 
@@ -106,9 +111,13 @@ class Server:
     def wait_for_ready(self, timeout=30) -> bool:
         start_time = time.time()
         while (time.time() - start_time) < timeout:
-            if self.instance_state == ServerState.RUNNING:
-                return True
-            time.sleep(1)
+            try:
+                if self.instance_state == ServerState.RUNNING:
+                    return True
+                time.sleep(1)
+            except Exception as e:
+                print(f"Error waiting for server to be ready: {e}")
+                continue
         return False
 
     def close_server(self):
@@ -159,6 +168,14 @@ class Server:
             sftp.put(local_file, remote_file)
         self.add_command_log(command=f"<copy_file> {local_file} {remote_file}", runtime=t.elapsed)
         sftp.close()
+
+    def copy_and_run_script(self, local_file):
+        """Copy local file to remote file and run command."""
+        tmp_dest_file = Path("/tmp") / f"{uuid.uuid4()}_{Path(local_file).name}"
+        self.copy_file(local_file, str(tmp_dest_file))
+        self.run_command(f"chmod +x {tmp_dest_file}")
+        stdout, stderr = self.run_command(f"{tmp_dest_file}")
+        return stdout, stderr
 
     def sync_directory(self, local_dir, remote_dir, delete_remote=False, ignore_globs=[]):
         """Copy local directory to remote directory. If remote directory exists, delete if delete_remote else raise exception."""

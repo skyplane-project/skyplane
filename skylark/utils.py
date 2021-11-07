@@ -20,7 +20,7 @@ class Timer:
         return self.end - self.start
 
 
-def do_parallel(func, args_list, n=6, progress_bar=False):
+def do_parallel(func, args_list, n=8, progress_bar=False):
     """Run list of jobs in parallel with tqdm progress bar"""
     results = []
     pbar = tqdm(total=len(args_list), leave=False) if progress_bar else None
@@ -30,7 +30,7 @@ def do_parallel(func, args_list, n=6, progress_bar=False):
             if pbar:
                 pbar.set_description(str(args))
                 pbar.update()
-            results.append(future.result())
+            results.append((args, future.result()))
     if pbar:
         pbar.close()
     return results
