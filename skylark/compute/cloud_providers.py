@@ -20,7 +20,7 @@ class CloudProvider:
         if isinstance(region, str):
             region = [region]
         elif region is None:
-            region = self.region_list
+            region = self.region_list()
 
         matching_instances = []
         for r in region:

@@ -50,7 +50,8 @@ class Server:
 
     ns = threading.local()
 
-    def __init__(self, command_log_file=None):
+    def __init__(self, region_tag, command_log_file=None):
+        self.region_tag = region_tag
         self.command_log_file = command_log_file
         self.command_log = []
         if self.command_log_file:
@@ -86,10 +87,6 @@ class Server:
 
     @property
     def region(self):
-        raise NotImplementedError()
-
-    @property
-    def region_tag(self):
         raise NotImplementedError()
 
     @property
@@ -216,7 +213,3 @@ class Server:
             )
         sftp.close()
         self.add_command_log(command=f"<sync_directory> {local_dir} {remote_dir}", runtime=t.elapsed)
-
-    @staticmethod
-    def provision_instance(region, instance_class, name, tags={"skylark": "true"}) -> "Server":
-        raise NotImplementedError()
