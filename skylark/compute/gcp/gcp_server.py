@@ -2,7 +2,6 @@ import os
 from functools import lru_cache
 
 import googleapiclient.discovery
-from loguru import logger
 import paramiko
 
 from skylark.compute.server import Server, ServerState
@@ -13,10 +12,9 @@ DEFAULT_GCP_PUBLIC_KEY_PATH = os.path.expanduser("~/.ssh/google_compute_engine.p
 
 class GCPServer(Server):
     def __init__(self, region_tag, gcp_project, instance_name, ssh_private_key=DEFAULT_GCP_PRIVATE_KEY_PATH, command_log_file=None):
-        super().__init__(command_log_file=command_log_file)
-        self.region_tag = region_tag
-        assert region_tag.split(":")[0] == "gcp", f"Region name doesn't match pattern gcp:<region> {region_tag}"
-        self.gcp_region = region_tag.split(":")[1]
+        super().__init__(region_tag, command_log_file=command_log_file)
+        assert self.region.split(":")[0] == "gcp", f"Region name doesn't match pattern gcp:<region> {self.region_tag}"
+        self.gcp_region = self.region_tag.split(":")[1]
         self.gcp_project = gcp_project
         self.gcp_instance_name = instance_name
         self.ssh_private_key = os.path.expanduser(ssh_private_key)
