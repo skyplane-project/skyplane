@@ -1,23 +1,22 @@
 import threading
-from typing import List
+from typing import List, Union
 
-from skylark.compute.server import Server
+from skylark.compute.server import Server, ServerState
 
 
 class CloudProvider:
     ns = threading.local()
 
-    def __init__(self):
-        self.instance_prefix = "skylark"
-
-    @property
+    @staticmethod
     def region_list(self):
         raise NotImplementedError
 
     def get_instance_list(self, region) -> List[Server]:
         raise NotImplementedError
 
-    def get_matching_instances(self, region=None, instance_type=None, state=None, tags={"skylark": "true"}):
+    def get_matching_instances(
+        self, region=None, instance_type=None, state: Union[ServerState, List[ServerState]] = None, tags={"skylark": "true"}
+    ):
         if isinstance(region, str):
             region = [region]
         elif region is None:
@@ -29,7 +28,9 @@ class CloudProvider:
             for instance in instances:
                 if not (instance_type is None or instance_type == instance.instance_class):
                     continue
-                if not (state is None or state == instance.instance_state):
+                if not (
+                    state is None or (isinstance(state, list) and instance.instance_state in state) or instance.instance_state == state
+                ):
                     continue
                 if not all(instance.tags.get(k, "") == v for k, v in tags.items()):
                     continue

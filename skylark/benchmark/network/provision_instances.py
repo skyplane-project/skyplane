@@ -218,6 +218,7 @@ def main():
             ).terminate()
             logger.info(f"({region}) Stopped {len(stopped_instances)} instances, {stopped_instances}")
 
+        # noinspection PyUnresolvedReferences
         do_parallel(stop_instances, all_ec2_regions)
         sys.exit(0)
 

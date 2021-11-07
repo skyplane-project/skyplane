@@ -56,18 +56,6 @@ class AWSServer(Server):
             logger.info(f"({self.aws_region}) Created keypair and saved to {local_key_file}")
         return local_key_file
 
-    def add_ip_to_security_group(self, security_group_id: str = None, ip="0.0.0.0/0", from_port=0, to_port=65535):
-        """Add IP to security group. If security group ID is None, use default."""
-        ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
-        if security_group_id is None:
-            security_group_id = [i for i in ec2.security_groups.filter(GroupNames=["default"]).all()][0].id
-        sg = ec2.SecurityGroup(security_group_id)
-        matches_ip = lambda rule: len(rule["IpRanges"]) > 0 and rule["IpRanges"][0]["CidrIp"] == ip
-        matches_ports = lambda rule: rule["FromPort"] <= from_port and rule["ToPort"] >= to_port
-        if not any(rule["IpProtocol"] == "-1" and matches_ip(rule) and matches_ports(rule) for rule in sg.ip_permissions):
-            sg.authorize_ingress(IpProtocol="-1", FromPort=from_port, ToPort=to_port, CidrIp=ip)
-            logger.info(f"({self.aws_region}) Added IP {ip} to security group {security_group_id}")
-
     ### Instance state
 
     @property
@@ -126,49 +114,3 @@ class AWSServer(Server):
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         client.connect(self.public_ip, username="ubuntu", key_filename=self.local_keyfile)
         return client
-
-    @staticmethod
-    def get_ubuntu_ami_id(region):
-        client = AWSServer.get_boto3_client("ec2", region)
-        response = client.describe_images(
-            Filters=[
-                {
-                    "Name": "name",
-                    "Values": [
-                        "ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-*",
-                    ],
-                },
-                {
-                    "Name": "owner-id",
-                    "Values": [
-                        "099720109477",
-                    ],
-                },
-            ]
-        )
-        if len(response["Images"]) == 0:
-            raise Exception("No AMI found for region {}".format(region))
-        else:
-            # Sort the images by date and return the last one
-            image_list = sorted(response["Images"], key=lambda x: x["CreationDate"], reverse=True)
-            return image_list[0]["ImageId"]
-
-    @staticmethod
-    def provision_instance(region, instance_class, name, ami_id=None, tags={"skylark": "true"}) -> "AWSServer":
-        if ami_id is None:
-            ami_id = AWSServer.get_ubuntu_ami_id(region)
-        ec2 = AWSServer.get_boto3_resource("ec2", region)
-        instance = ec2.create_instances(
-            ImageId=ami_id,
-            InstanceType=instance_class,
-            MinCount=1,
-            MaxCount=1,
-            KeyName=region,
-            TagSpecifications=[
-                {
-                    "ResourceType": "instance",
-                    "Tags": [{"Key": "Name", "Value": name}] + [{"Key": k, "Value": v} for k, v in tags.items()],
-                }
-            ],
-        )
-        return AWSServer(f"aws:{region}", instance[0].id)

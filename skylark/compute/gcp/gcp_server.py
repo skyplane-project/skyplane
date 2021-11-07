@@ -1,7 +1,5 @@
 import os
-import socket
 from functools import lru_cache
-import uuid
 
 import googleapiclient.discovery
 from loguru import logger
@@ -38,10 +36,11 @@ class GCPServer(Server):
     @lru_cache
     def get_gcp_instance(self):
         instances = self.gcp_instances(self.gcp_project, self.gcp_region)
-        for i in instances["items"]:
-            if i["name"] == self.gcp_instance_name:
-                return i
-        raise ValueError(f"No instance found with name {self.gcp_instance_name}")
+        if "items" in instances:
+            for i in instances["items"]:
+                if i["name"] == self.gcp_instance_name:
+                    return i
+        raise ValueError(f"No instance found with name {self.gcp_instance_name}, {instances}")
 
     def get_instance_property(self, prop):
         return self.get_gcp_instance()[prop]
@@ -84,83 +83,6 @@ class GCPServer(Server):
     def terminate_instance_impl(self):
         compute = self.get_gcp_client()
         compute.instances().delete(project=self.gcp_project, zone=self.gcp_region, instance=self.instance_name).execute()
-
-    @staticmethod
-    def configure_default_firewall(gcp_project):
-        """Configure default firewall to allow access from all ports from all IPs (if not exists)."""
-        compute = GCPServer.get_gcp_client()
-        try:
-            current_firewall = compute.firewalls().get(project=gcp_project, firewall="default").execute()
-        except googleapiclient.errors.HttpError as e:
-            if e.resp.status == 404:
-                current_firewall = None
-            else:
-                raise e
-        fw_body = {
-            "name": "default",
-            "allowed": [{"IPProtocol": "tcp", "ports": ["1-65535"]}, {"IPProtocol": "udp", "ports": ["1-65535"]}, {"IPProtocol": "icmp"}],
-            "description": "Allow all traffic from all IPs",
-            "sourceRanges": ["0.0.0.0/0"],
-        }
-        if current_firewall is None:
-            compute.firewalls().insert(project=gcp_project, body=fw_body).execute()
-        else:
-            compute.firewalls().update(project=gcp_project, firewall="default", body=fw_body).execute()
-
-    @staticmethod
-    def create_ssh_key(ssh_private_key=DEFAULT_GCP_PRIVATE_KEY_PATH, ssh_public_key=DEFAULT_GCP_PUBLIC_KEY_PATH):
-        ssh_private_key = os.path.expanduser(ssh_private_key)
-        if not os.path.exists(ssh_private_key):
-            logger.info(f"Creating SSH key at {ssh_private_key}")
-            key = paramiko.RSAKey.generate(4096)
-            key.write_private_key_file(ssh_private_key, password=None)
-            with open(ssh_public_key, "w") as f:
-                f.write(f"ssh-rsa {key.get_base64()} {os.environ['USER']}@{socket.gethostname()}")
-
-    @staticmethod
-    def provision_instance(
-        region,
-        gcp_project,
-        instance_class,
-        name=None,
-        premium_network=False,
-        ssh_private_key=DEFAULT_GCP_PRIVATE_KEY_PATH,
-        ssh_public_key=DEFAULT_GCP_PUBLIC_KEY_PATH,
-        tags={"skylark": "true"},
-    ) -> "GCPServer":
-        assert not region.startswith("gcp:"), "Region should be GCP region"
-        if name is None:
-            name = f"skylark-{str(uuid.uuid4()).replace('-', '')}"
-        compute = GCPServer.get_gcp_client("compute", "v1")
-        with open(os.path.expanduser(ssh_public_key)) as f:
-            pub_key = f.read()
-        req_body = {
-            "name": name,
-            "machineType": f"zones/{region}/machineTypes/{instance_class}",
-            "labels": tags,
-            "disks": [
-                {
-                    "boot": True,
-                    "autoDelete": True,
-                    "initializeParams": {
-                        "sourceImage": "projects/ubuntu-os-cloud/global/images/family/ubuntu-1804-lts",
-                        "diskType": f"zones/{region}/diskTypes/pd-standard",
-                        "diskSizeGb": "100",
-                    },
-                }
-            ],
-            "networkInterfaces": [
-                {
-                    "network": "global/networks/default",
-                    "accessConfigs": [{"name": "External NAT", "type": "ONE_TO_ONE_NAT"}],
-                    "networkTier": "PREMIUM" if premium_network else "STANDARD",
-                }
-            ],
-            "serviceAccounts": [{"email": "default", "scopes": ["https://www.googleapis.com/auth/cloud-platform"]}],
-            "metadata": {"items": [{"key": "ssh-keys", "value": f"{pub_key}\n"}]},
-        }
-        compute.instances().insert(project=gcp_project, zone=region, body=req_body).execute()
-        return GCPServer(f"gcp:{region}", gcp_project, name, ssh_private_key=ssh_private_key)
 
     def get_ssh_client_impl(self):
         """Return paramiko client that connects to this instance."""
