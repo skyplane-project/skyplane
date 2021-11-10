@@ -14,8 +14,30 @@ from skylark.utils import do_parallel
 def refresh_instance_list(provider: CloudProvider, region_list=[None], instance_filter=None) -> Dict[str, List[Server]]:
     if instance_filter is None:
         instance_filter = {"tags": {"skylark": "true"}}
-    results = do_parallel(lambda region: provider.get_matching_instances(region, **instance_filter), region_list, progress_bar=True, desc=f"refresh {provider.name}")
+    results = do_parallel(
+        lambda region: provider.get_matching_instances(region, **instance_filter),
+        region_list,
+        progress_bar=True,
+        desc=f"refresh {provider.name}",
+    )
     return {r: ilist for r, ilist in results if ilist}
+
+
+def split_list(l):
+    pairs = set(l)
+    groups = []
+    elems_in_last_group = set()
+    while pairs:
+        group = []
+        for x, y in pairs:
+            if x not in elems_in_last_group and y not in elems_in_last_group:
+                group.append((x, y))
+                elems_in_last_group.add(x)
+                elems_in_last_group.add(y)
+        groups.append(group)
+        elems_in_last_group = set()
+        pairs -= set(group)
+    return groups
 
 
 def provision(
@@ -26,6 +48,7 @@ def provision(
     aws_instance_class: str,
     gcp_instance_class: str,
     setup_script: object = None,
+    log_dir: str = None,
 ) -> Tuple[Dict[str, List[AWSServer]], Dict[str, List[GCPServer]]]:
     """Provision list of instances in AWS and GCP in each specified region."""
     aws_instance_filter = {
@@ -70,7 +93,9 @@ def provision(
         gcp_instances = refresh_instance_list(gcp, gcp_regions_to_provision, gcp_instance_filter)
 
     all_instances = [i for ilist in aws_instances.values() for i in ilist]
-    all_instances = [i for ilist in gcp_instances.values() for i in ilist]
+    all_instances += [i for ilist in gcp_instances.values() for i in ilist]
+    for i in all_instances:
+        i.init_log_files(log_dir)
 
     # run setup script on each instance (use do_parallel)
     if setup_script:

@@ -1,4 +1,5 @@
 import argparse
+from datetime import datetime
 import json
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -7,7 +8,7 @@ from loguru import logger
 from tqdm import tqdm
 
 from skylark import skylark_root
-from skylark.benchmark.utils import provision
+from skylark.benchmark.utils import provision, split_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
@@ -33,12 +34,12 @@ def parse_args():
 
 
 def main(args):
-    data_dir = Path(__file__).parent.parent / "data"
-    log_dir = data_dir / "logs"
+    data_dir = skylark_root / "data"
+    log_dir = data_dir / "logs" / "throughput" / datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_dir.mkdir(exist_ok=True, parents=True)
 
-    gcp_private_key = str(skylark_root / "data" / "keys" / "gcp-cert.pem")
-    gcp_public_key = str(skylark_root / "data" / "keys" / "gcp-cert.pub")
+    gcp_private_key = str(data_dir / "keys" / "gcp-cert.pem")
+    gcp_public_key = str(data_dir / "keys" / "gcp-cert.pub")
 
     aws = AWSCloudProvider()
     gcp = GCPCloudProvider(args.gcp_project, gcp_private_key, gcp_public_key)
@@ -52,30 +53,53 @@ def main(args):
         aws_instance_class=args.aws_instance_class,
         gcp_instance_class=args.gcp_instance_class,
         setup_script=args.setup_script,
+        log_dir=str(log_dir),
     )
     instance_list: List[Server] = [i for ilist in aws_instances.values() for i in ilist]
     instance_list.extend([i for ilist in gcp_instances.values() for i in ilist])
 
-    # compute pairwise latency by running ping
-    def compute_latency(arg_pair: Tuple[Server, Server]) -> str:
+    def setup(instance: Server):
+        instance.run_command("sudo apt-get update")
+        instance.run_command("sudo apt-get install -y iperf3")
+        instance.run_command("pkill iperf3")
+        instance.run_command("iperf3 -s -D")
+
+    do_parallel(setup, instance_list, progress_bar=True, n=24, desc="Setup")
+
+    # start iperf3 clients on each pair of instances
+    def start_iperf3_client(arg_pair: Tuple[Server, Server]):
         instance_src, instance_dst = arg_pair
         src_ip, dst_ip = instance_src.public_ip, instance_dst.public_ip
-        stdout, stderr = instance_src.run_command(f"ping -c 10 {dst_ip}")
-        latency_result = stdout.strip().split("\n")[-1]
-        tqdm.write(f"Latency from {instance_src.region_tag} to {instance_dst.region_tag} is {latency_result}")
-        return latency_result
+        stdout, stderr = instance_src.run_command(f"iperf3 -J -t {args.iperf3_runtime} -P 128 -c {dst_ip}")
+        try:
+            result = json.loads(stdout)
+        except json.JSONDecodeError:
+            logger.error(f"({instance_src.region_tag} -> {instance_dst.region_tag}) iperf3 client failed: {stdout} {stderr}")
+            return None
+        throughput = result["end"]["sum_sent"]["bits_per_second"]
+        tqdm.write(f"({instance_src.region_tag} -> {instance_dst.region_tag}) is {throughput}")
+        return throughput
 
+    instance_list = [i for _, ilist in aws_instances.items() for i in ilist] + [i for _, ilist in gcp_instances.items() for i in ilist]
     instance_pairs = [(i1, i2) for i1 in instance_list for i2 in instance_list if i1 != i2]
-    latency_results = do_parallel(compute_latency, instance_pairs, progress_bar=True, n=24)
+    groups = split_list(instance_pairs)
 
-    # save results
-    latency_results_dict = {}
-    for (i1, i2), r in latency_results:
-        if i1 not in latency_results_dict:
-            latency_results_dict[i1.region_tag] = {}
-        latency_results_dict[i1.region_tag][i2.region_tag] = r
-    with open(str(data_dir / "latency.json"), "w") as f:
-        json.dump(latency_results_dict, f)
+    throughput_results = []
+    for group_idx, group in enumerate(groups):
+        pair_str = ", ".join([f"{i1.region_tag}->{i2.region_tag}" for i1, i2 in group])
+        results = do_parallel(
+            start_iperf3_client,
+            group,
+            progress_bar=True,
+            desc=f"Parallel eval group {group_idx}",
+            n=24,
+        )
+        for pair, result in results:
+            src, dst = pair[0].region_tag, pair[1].region_tag
+            throughput_results.append(dict(src=src, dst=dst, throughput=result))
+
+    with open(str(data_dir / "throughput.json"), "w") as f:
+        json.dump(throughput_results, f)
 
 
 if __name__ == "__main__":

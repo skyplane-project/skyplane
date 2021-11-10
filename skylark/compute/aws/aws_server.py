@@ -11,12 +11,15 @@ from skylark.compute.server import Server, ServerState
 class AWSServer(Server):
     """AWS Server class to support basic SSH operations"""
 
-    def __init__(self, region_tag, instance_id, command_log_file=None):
-        super().__init__(region_tag, command_log_file=command_log_file)
+    def __init__(self, region_tag, instance_id, log_dir=None):
+        super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "aws"
         self.aws_region = self.region_tag.split(":")[1]
         self.instance_id = instance_id
         self.local_keyfile = self.make_keyfile()
+
+    def uuid(self):
+        return f"{self.region_tag}:{self.instance_id}"
 
     @classmethod
     def get_boto3_resource(cls, service_name, aws_region):

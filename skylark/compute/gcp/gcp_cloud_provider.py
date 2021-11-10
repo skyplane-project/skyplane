@@ -53,7 +53,7 @@ class GCPCloudProvider(CloudProvider):
         if not private_key_path.exists():
             private_key_path.parent.mkdir(parents=True, exist_ok=True)
             key = paramiko.RSAKey.generate(4096)
-            key.write_private_key_file(self.private_key_path, password='skylark')
+            key.write_private_key_file(self.private_key_path, password="skylark")
             with open(self.public_key_path, "w") as f:
                 f.write(f"{key.get_name()} {key.get_base64()}\n")
 
@@ -77,11 +77,11 @@ class GCPCloudProvider(CloudProvider):
             compute.firewalls().insert(project=self.gcp_project, body=fw_body).execute()
         else:
             compute.firewalls().update(project=self.gcp_project, firewall="default", body=fw_body).execute()
-    
+
     def get_operation_state(self, zone, operation_name):
         compute = GCPServer.get_gcp_client()
         return compute.zoneOperations().get(project=self.gcp_project, zone=zone, operation=operation_name).execute()
-    
+
     def wait_for_operation_to_complete(self, zone, operation_name, timeout=120):
         time_intervals = [0.1] * 10 + [0.2] * 10 + [1.0] * int(timeout)  # backoff
         start = time.time()

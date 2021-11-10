@@ -31,12 +31,12 @@ def parse_args():
 
 
 def main(args):
-    data_dir = Path(__file__).parent.parent / "data"
+    data_dir = skylark_root / "data"
     log_dir = data_dir / "logs"
     log_dir.mkdir(exist_ok=True, parents=True)
 
-    gcp_private_key = str(skylark_root / "data" / "keys" / "gcp-cert.pem")
-    gcp_public_key = str(skylark_root / "data" / "keys" / "gcp-cert.pub")
+    gcp_private_key = str(data_dir / "keys" / "gcp-cert.pem")
+    gcp_public_key = str(data_dir / "keys" / "gcp-cert.pub")
 
     aws = AWSCloudProvider()
     gcp = GCPCloudProvider(args.gcp_project, gcp_private_key, gcp_public_key)
@@ -64,16 +64,17 @@ def main(args):
         return latency_result
 
     instance_pairs = [(i1, i2) for i1 in instance_list for i2 in instance_list if i1 != i2]
-    latency_results = do_parallel(compute_latency, instance_pairs, progress_bar=True, n=24)
+    latency_results = do_parallel(
+        compute_latency, instance_pairs, progress_bar=True, n=24, desc="Latency", arg_fmt=lambda x, y: f"{x.region_tag} to {y.region_tag}"
+    )
 
     # save results
-    latency_results_dict = {}
+    latency_results = []
     for (i1, i2), r in latency_results:
-        if i1 not in latency_results_dict:
-            latency_results_dict[i1.region_tag] = {}
-        latency_results_dict[i1.region_tag][i2.region_tag] = r
+        latency_results.append(dict(src=i1.region_tag, dst=i2.region_tag, latency=r))
+
     with open(str(data_dir / "latency.json"), "w") as f:
-        json.dump(latency_results_dict, f)
+        json.dump(latency_results, f)
 
 
 if __name__ == "__main__":
