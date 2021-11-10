@@ -2,6 +2,7 @@ import os
 from functools import lru_cache
 
 import googleapiclient.discovery
+from loguru import logger
 import paramiko
 
 from skylark.compute.server import Server, ServerState
@@ -13,7 +14,7 @@ DEFAULT_GCP_PUBLIC_KEY_PATH = os.path.expanduser("~/.ssh/google_compute_engine.p
 class GCPServer(Server):
     def __init__(self, region_tag, gcp_project, instance_name, ssh_private_key=DEFAULT_GCP_PRIVATE_KEY_PATH, command_log_file=None):
         super().__init__(region_tag, command_log_file=command_log_file)
-        assert self.region.split(":")[0] == "gcp", f"Region name doesn't match pattern gcp:<region> {self.region_tag}"
+        assert self.region_tag.split(":")[0] == "gcp", f"Region name doesn't match pattern gcp:<region> {self.region_tag}"
         self.gcp_region = self.region_tag.split(":")[1]
         self.gcp_project = gcp_project
         self.gcp_instance_name = instance_name
@@ -82,11 +83,10 @@ class GCPServer(Server):
         compute = self.get_gcp_client()
         compute.instances().delete(project=self.gcp_project, zone=self.gcp_region, instance=self.instance_name).execute()
 
-    def get_ssh_client_impl(self):
+    def get_ssh_client_impl(self, uname=os.environ.get("USER"), ssh_key_password="skylark"):
         """Return paramiko client that connects to this instance."""
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        pkey = paramiko.RSAKey.from_private_key_file(self.ssh_private_key, password=None)
-        uname = os.environ["USER"]  # ideally, create VM with username ubuntu
-        ssh_client.connect(hostname=self.public_ip, username=uname, pkey=pkey)
+        logger.debug(f"({self.region_tag}) ssh -i {self.ssh_private_key} {uname}@{self.public_ip}")
+        ssh_client.connect(hostname=self.public_ip, username=uname, key_filename=self.ssh_private_key, passphrase=ssh_key_password, look_for_keys=False)
         return ssh_client

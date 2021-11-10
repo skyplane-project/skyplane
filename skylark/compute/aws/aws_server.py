@@ -100,7 +100,6 @@ class AWSServer(Server):
     def terminate_instance_impl(self):
         ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
         ec2.instances.filter(InstanceIds=[self.instance_id]).terminate()
-        logger.info(f"({self.aws_region}) Terminated instance {self.instance_id}")
 
     def get_ssh_client_impl(self):
         client = paramiko.SSHClient()

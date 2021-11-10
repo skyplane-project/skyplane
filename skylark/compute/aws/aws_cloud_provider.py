@@ -12,6 +12,10 @@ class AWSCloudProvider(CloudProvider):
     def __init__(self):
         super().__init__()
 
+    @property
+    def name(self):
+        return "aws"
+
     @staticmethod
     def region_list():
         return [

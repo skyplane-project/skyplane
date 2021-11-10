@@ -1,7 +1,9 @@
 import os
 import socket
+import time
 from typing import List
 import uuid
+from pathlib import Path
 import googleapiclient
 from loguru import logger
 
@@ -18,14 +20,18 @@ class GCPCloudProvider(CloudProvider):
         self.private_key_path = os.path.expanduser(private_key_path)
         self.public_key_path = os.path.expanduser(public_key_path)
 
+    @property
+    def name(self):
+        return "gcp"
+
     @staticmethod
     def region_list():
         return [
             "us-central1-a",
             # "us-east1-b",
             # "us-east4-a",
-            # "us-west1-a",
-            "us-west2-a",
+            "us-west1-a",
+            # "us-west2-a",
             "southamerica-east1-a",
             "europe-north1-a",
             # "europe-west1-b",
@@ -43,12 +49,13 @@ class GCPCloudProvider(CloudProvider):
             return []
 
     def create_ssh_key(self):
-        if not os.path.exists(self.private_key_path):
-            logger.info(f"Creating SSH key at {self.private_key_path}")
+        private_key_path = Path(self.private_key_path)
+        if not private_key_path.exists():
+            private_key_path.parent.mkdir(parents=True, exist_ok=True)
             key = paramiko.RSAKey.generate(4096)
-            key.write_private_key_file(self.private_key_path, password=None)
+            key.write_private_key_file(self.private_key_path, password='skylark')
             with open(self.public_key_path, "w") as f:
-                f.write(f"ssh-rsa {key.get_base64()} {os.environ['USER']}@{socket.gethostname()}")
+                f.write(f"{key.get_name()} {key.get_base64()}\n")
 
     def configure_default_firewall(self, ip="0.0.0.0/0"):
         """Configure default firewall to allow access from all ports from all IPs (if not exists)."""
@@ -70,6 +77,22 @@ class GCPCloudProvider(CloudProvider):
             compute.firewalls().insert(project=self.gcp_project, body=fw_body).execute()
         else:
             compute.firewalls().update(project=self.gcp_project, firewall="default", body=fw_body).execute()
+    
+    def get_operation_state(self, zone, operation_name):
+        compute = GCPServer.get_gcp_client()
+        return compute.zoneOperations().get(project=self.gcp_project, zone=zone, operation=operation_name).execute()
+    
+    def wait_for_operation_to_complete(self, zone, operation_name, timeout=120):
+        time_intervals = [0.1] * 10 + [0.2] * 10 + [1.0] * int(timeout)  # backoff
+        start = time.time()
+        while time.time() - start < timeout:
+            operation_state = self.get_operation_state(zone, operation_name)
+            if operation_state["status"] == "DONE":
+                if "error" in operation_state:
+                    raise Exception(operation_state["error"])
+                else:
+                    return operation_state
+            time.sleep(time_intervals.pop(0))
 
     def provision_instance(
         self,
@@ -77,6 +100,7 @@ class GCPCloudProvider(CloudProvider):
         instance_class,
         name=None,
         premium_network=False,
+        uname=os.environ.get("USER"),
         tags={"skylark": "true"},
     ) -> "GCPServer":
         assert not region.startswith("gcp:"), "Region should be GCP region"
@@ -108,9 +132,10 @@ class GCPCloudProvider(CloudProvider):
                 }
             ],
             "serviceAccounts": [{"email": "default", "scopes": ["https://www.googleapis.com/auth/cloud-platform"]}],
-            "metadata": {"items": [{"key": "ssh-keys", "value": f"{pub_key}\n"}]},
+            "metadata": {"items": [{"key": "ssh-keys", "value": f"{uname}:{pub_key}\n"}]},
         }
-        compute.instances().insert(project=self.gcp_project, zone=region, body=req_body).execute()
+        result = compute.instances().insert(project=self.gcp_project, zone=region, body=req_body).execute()
+        self.wait_for_operation_to_complete(region, result["name"])
         server = GCPServer(f"gcp:{region}", self.gcp_project, name, ssh_private_key=self.private_key_path)
         server.wait_for_ready()
         return server

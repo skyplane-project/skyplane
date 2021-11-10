@@ -5,6 +5,8 @@ import uuid
 from enum import Enum
 from pathlib import Path, PurePath
 
+from loguru import logger
+
 from skylark.utils import Timer, do_parallel
 
 
@@ -105,16 +107,18 @@ class Server:
         self.close_server()
         self.terminate_instance_impl()
 
-    def wait_for_ready(self, timeout=30) -> bool:
+    def wait_for_ready(self, timeout=120) -> bool:
+        wait_intervals = [0.2] * 20 + [1.0] * int(timeout / 2) + [5.0] * int(timeout / 2)  # backoff
         start_time = time.time()
         while (time.time() - start_time) < timeout:
             try:
                 if self.instance_state == ServerState.RUNNING:
                     return True
-                time.sleep(1)
+                time.sleep(wait_intervals.pop(0))
             except Exception as e:
                 print(f"Error waiting for server to be ready: {e}")
                 continue
+        logger.warning(f"({self.region_tag}) Timeout waiting for server to be ready")
         return False
 
     def close_server(self):

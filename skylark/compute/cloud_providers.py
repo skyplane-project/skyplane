@@ -1,11 +1,17 @@
 import threading
 from typing import List, Union
 
+from loguru import logger
+
 from skylark.compute.server import Server, ServerState
 
 
 class CloudProvider:
     ns = threading.local()
+
+    @property
+    def name():
+        raise NotImplementedError
 
     @staticmethod
     def region_list(self):
