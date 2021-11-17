@@ -28,13 +28,13 @@ class GCPCloudProvider(CloudProvider):
     def region_list():
         return [
             "us-central1-a",
-            # "us-east1-b",
+            "us-east1-b",
             # "us-east4-a",
             "us-west1-a",
             # "us-west2-a",
             "southamerica-east1-a",
             "europe-north1-a",
-            # "europe-west1-b",
+            "europe-west1-b",
             "asia-east2-a",
         ]
 

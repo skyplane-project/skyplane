@@ -34,10 +34,10 @@ def do_parallel(func, args_list, n=8, progress_bar=False, leave_pbar=True, desc=
         future_list = [executor.submit(wrapped_fn, args) for args in args_list]
         for future in as_completed(future_list):
             args, result = future.result()
+            results.append((args, result))
             if pbar:
                 pbar.set_description(f"{desc} ({str(arg_fmt(args))})" if desc else str(arg_fmt(args)))
                 pbar.update()
-            results.append((args, result))
     if pbar:
         pbar.close()
     return results

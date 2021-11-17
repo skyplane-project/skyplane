@@ -1,8 +1,7 @@
 import argparse
 from datetime import datetime
 import json
-from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 from loguru import logger
 from tqdm import tqdm
@@ -70,33 +69,40 @@ def main(args):
     def start_iperf3_client(arg_pair: Tuple[Server, Server]):
         instance_src, instance_dst = arg_pair
         src_ip, dst_ip = instance_src.public_ip, instance_dst.public_ip
-        stdout, stderr = instance_src.run_command(f"iperf3 -J -t {args.iperf3_runtime} -P 128 -c {dst_ip}")
+        stdout, stderr = instance_src.run_command(f"iperf3 -J -t {args.iperf3_runtime} -P 32 -c {dst_ip}")
         try:
             result = json.loads(stdout)
         except json.JSONDecodeError:
             logger.error(f"({instance_src.region_tag} -> {instance_dst.region_tag}) iperf3 client failed: {stdout} {stderr}")
             return None
-        throughput = result["end"]["sum_sent"]["bits_per_second"]
-        tqdm.write(f"({instance_src.region_tag} -> {instance_dst.region_tag}) is {throughput}")
-        return throughput
+        throughput_sent = result["end"]["sum_sent"]["bits_per_second"]
+        throughput_received = result["end"]["sum_received"]["bits_per_second"]
+        tqdm.write(f"({instance_src.region_tag} -> {instance_dst.region_tag}) is {throughput_sent / 1e9:0.2f} Gbps")
+        instance_src.close_server()
+        instance_dst.close_server()
+        return throughput_sent, throughput_received
 
     instance_list = [i for _, ilist in aws_instances.items() for i in ilist] + [i for _, ilist in gcp_instances.items() for i in ilist]
+    for instance in instance_list:
+        instance.close_server()
     instance_pairs = [(i1, i2) for i1 in instance_list for i2 in instance_list if i1 != i2]
     groups = split_list(instance_pairs)
 
     throughput_results = []
-    for group_idx, group in enumerate(groups):
-        pair_str = ", ".join([f"{i1.region_tag}->{i2.region_tag}" for i1, i2 in group])
-        results = do_parallel(
-            start_iperf3_client,
-            group,
-            progress_bar=True,
-            desc=f"Parallel eval group {group_idx}",
-            n=24,
-        )
-        for pair, result in results:
-            src, dst = pair[0].region_tag, pair[1].region_tag
-            throughput_results.append(dict(src=src, dst=dst, throughput=result))
+    with tqdm(total=len(instance_pairs), desc="Total throughput evaluation") as pbar:
+        for group_idx, group in enumerate(groups):
+            results = do_parallel(
+                start_iperf3_client,
+                group,
+                progress_bar=True,
+                desc=f"Parallel eval group {group_idx}",
+                n=36,
+                arg_fmt=lambda x: f"{x[0].region_tag} to {x[1].region_tag}"
+            )
+            for pair, result in results:
+                pbar.update(1)
+                src, dst = pair[0].region_tag, pair[1].region_tag
+                throughput_results.append(dict(src=src, dst=dst, throughput_sent=result[0], throughput_received=result[1]))
 
     with open(str(data_dir / "throughput.json"), "w") as f:
         json.dump(throughput_results, f)

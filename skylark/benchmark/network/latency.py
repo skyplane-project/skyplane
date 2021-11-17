@@ -2,6 +2,7 @@ import argparse
 import json
 from pathlib import Path
 from typing import Dict, List, Tuple
+import re
 
 from loguru import logger
 from tqdm import tqdm
@@ -26,7 +27,7 @@ def parse_args():
     parser.add_argument("--use-premium-network", action="store_true", help="Use premium network")
     parser.add_argument("--gcp_project", type=str, default="bair-commons-307400", help="GCP project")
     parser.add_argument("--gcp_region_list", type=str, nargs="+", default=gcp_regions)
-    parser.add_argument("--setup_script", type=str, default="scripts/setup.sh", help="Setup script to run on each instance (URL), optional")
+    parser.add_argument("--setup_script", type=str, default=None, help="Setup script to run on each instance (URL), optional")
     return parser.parse_args()
 
 
@@ -65,16 +66,27 @@ def main(args):
 
     instance_pairs = [(i1, i2) for i1 in instance_list for i2 in instance_list if i1 != i2]
     latency_results = do_parallel(
-        compute_latency, instance_pairs, progress_bar=True, n=24, desc="Latency", arg_fmt=lambda x, y: f"{x.region_tag} to {y.region_tag}"
+        compute_latency, instance_pairs, progress_bar=True, n=24, desc="Latency", arg_fmt=lambda x: f"{x[0].region_tag} to {x[1].region_tag}"
     )
 
+    def parse_ping_result(string):
+        """make regex with named groups"""
+        try:
+            regex = r'rtt min/avg/max/mdev = (?P<min>\d+\.\d+)/(?P<avg>\d+\.\d+)/(?P<max>\d+\.\d+)/(?P<mdev>\d+\.\d+) ms'
+            m = re.search(regex, string)
+            return dict(min=float(m.group('min')), avg=float(m.group('avg')), max=float(m.group('max')), mdev=float(m.group('mdev')))
+        except:
+            return {}
+
     # save results
-    latency_results = []
+    latency_results_out = []
     for (i1, i2), r in latency_results:
-        latency_results.append(dict(src=i1.region_tag, dst=i2.region_tag, latency=r))
+        row = dict(src=i1.region_tag, dst=i2.region_tag, ping_str=r, **parse_ping_result(r))
+        logger.info(row)
+        latency_results_out.append(row)
 
     with open(str(data_dir / "latency.json"), "w") as f:
-        json.dump(latency_results, f)
+        json.dump(latency_results_out, f)
 
 
 if __name__ == "__main__":

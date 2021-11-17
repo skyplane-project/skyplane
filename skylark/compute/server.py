@@ -66,13 +66,9 @@ class Server:
     def init_log_files(self, log_dir):
         if log_dir:
             log_dir = Path(log_dir)
-            self.command_log_file = str(log_dir / f"{self.uuid()}_command_log.json")
-            self.stdout_log_file = str(log_dir / f"{self.uuid()}_stdout.log")
-            self.stderr_log_file = str(log_dir / f"{self.uuid()}_stderr.log")
+            self.command_log_file = str(log_dir / f"{self.uuid()}.jsonl")
         else:
             self.command_log_file = None
-            self.stdout_log_file = None
-            self.stderr_log_file = None
 
     def get_ssh_client_impl(self):
         raise NotImplementedError()
@@ -145,11 +141,6 @@ class Server:
             with open(self.command_log_file, "a") as f:
                 for log_item in self.command_log:
                     f.write(json.dumps(log_item) + "\n")
-            with open(self.command_log_file + "_cmdonly", "a") as f:
-                for log_item in self.command_log:
-                    command, runtime = log_item.get("command"), log_item.get("runtime", None)
-                    formatted_runtime = f"{runtime:>2.2f}s" if runtime is not None else " " * 5
-                    f.write(f"{formatted_runtime}\t{command}\n")
             self.command_log = []
 
     def add_command_log(self, command, runtime=None, **kwargs):
@@ -164,22 +155,8 @@ class Server:
         """time command and run it"""
         client = self.ssh_client
         with Timer() as t:
-            if self.stdout_log_file:
-                with open(self.stdout_log_file, "a") as f:
-                    f.write(f"\n$ {command}\n")
-            if self.stderr_log_file:
-                with open(self.stderr_log_file, "a") as f:
-                    f.write(f"\n$ {command}\n")
             _, stdout, stderr = client.exec_command(command)
             stdout, stderr = (stdout.read().decode("utf-8"), stderr.read().decode("utf-8"))
-            if self.stdout_log_file:
-                with open(self.stdout_log_file, "a") as f:
-                    f.write(stdout)
-                    f.write("\n")
-            if self.stderr_log_file:
-                with open(self.stderr_log_file, "a") as f:
-                    f.write(stderr)
-                    f.write("\n")
         self.add_command_log(command=command, stdout=stdout, stderr=stderr, runtime=t.elapsed)
         return stdout, stderr
 
