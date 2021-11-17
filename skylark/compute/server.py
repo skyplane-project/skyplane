@@ -5,6 +5,8 @@ import uuid
 from enum import Enum
 from pathlib import Path, PurePath
 
+from loguru import logger
+
 from skylark.utils import Timer, do_parallel
 
 
@@ -50,18 +52,23 @@ class Server:
 
     ns = threading.local()
 
-    def __init__(self, region_tag, command_log_file=None):
+    def __init__(self, region_tag, log_dir=None):
         self.region_tag = region_tag
-        self.command_log_file = command_log_file
         self.command_log = []
-        if self.command_log_file:
-            with open(self.command_log_file, "w") as f:
-                f.write("")
-            with open(self.command_log_file + "_cmdonly", "w") as f:
-                f.write("")
+        self.init_log_files(log_dir)
 
     def __repr__(self):
-        return f"Server()"
+        return f"Server({self.uuid()})"
+
+    def uuid(self):
+        raise NotImplementedError()
+
+    def init_log_files(self, log_dir):
+        if log_dir:
+            log_dir = Path(log_dir)
+            self.command_log_file = str(log_dir / f"{self.uuid()}.jsonl")
+        else:
+            self.command_log_file = None
 
     def get_ssh_client_impl(self):
         raise NotImplementedError()
@@ -105,16 +112,18 @@ class Server:
         self.close_server()
         self.terminate_instance_impl()
 
-    def wait_for_ready(self, timeout=30) -> bool:
+    def wait_for_ready(self, timeout=120) -> bool:
+        wait_intervals = [0.2] * 20 + [1.0] * int(timeout / 2) + [5.0] * int(timeout / 2)  # backoff
         start_time = time.time()
         while (time.time() - start_time) < timeout:
             try:
                 if self.instance_state == ServerState.RUNNING:
                     return True
-                time.sleep(1)
+                time.sleep(wait_intervals.pop(0))
             except Exception as e:
                 print(f"Error waiting for server to be ready: {e}")
                 continue
+        logger.warning(f"({self.region_tag}) Timeout waiting for server to be ready")
         return False
 
     def close_server(self):
@@ -132,17 +141,11 @@ class Server:
             with open(self.command_log_file, "a") as f:
                 for log_item in self.command_log:
                     f.write(json.dumps(log_item) + "\n")
-            with open(self.command_log_file + "_cmdonly", "a") as f:
-                for log_item in self.command_log:
-                    command, runtime = log_item.get("command"), log_item.get("runtime", None)
-                    formatted_runtime = f"{runtime:>2.2f}s" if runtime is not None else " " * 5
-                    f.write(f"{formatted_runtime}\t{command}\n")
             self.command_log = []
 
     def add_command_log(self, command, runtime=None, **kwargs):
         self.command_log.append(dict(command=command, runtime=runtime, **kwargs))
-        if len(self.command_log) > 5:
-            self.flush_command_log()
+        self.flush_command_log()
 
     def log_comment(self, comment):
         """Log comment in command log"""
@@ -153,9 +156,9 @@ class Server:
         client = self.ssh_client
         with Timer() as t:
             _, stdout, stderr = client.exec_command(command)
-            results = (stdout.read().decode("utf-8"), stderr.read().decode("utf-8"))
-        self.add_command_log(command=command, stdout=results[0], stderr=results[1], runtime=t.elapsed)
-        return results
+            stdout, stderr = (stdout.read().decode("utf-8"), stderr.read().decode("utf-8"))
+        self.add_command_log(command=command, stdout=stdout, stderr=stderr, runtime=t.elapsed)
+        return stdout, stderr
 
     def copy_file(self, local_file, remote_file):
         """Copy local file to remote file."""

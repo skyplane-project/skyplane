@@ -2,6 +2,7 @@ import argparse
 import json
 from pathlib import Path
 from typing import Dict, List, Tuple
+import re
 
 from loguru import logger
 from tqdm import tqdm
@@ -31,12 +32,12 @@ def parse_args():
 
 
 def main(args):
-    data_dir = Path(__file__).parent.parent / "data"
+    data_dir = skylark_root / "data"
     log_dir = data_dir / "logs"
     log_dir.mkdir(exist_ok=True, parents=True)
 
-    gcp_private_key = str(skylark_root / "data" / "keys" / "gcp.pem")
-    gcp_public_key = str(skylark_root / "data" / "keys" / "gcp.pub")
+    gcp_private_key = str(data_dir / "keys" / "gcp-cert.pem")
+    gcp_public_key = str(data_dir / "keys" / "gcp-cert.pub")
 
     aws = AWSCloudProvider()
     gcp = GCPCloudProvider(args.gcp_project, gcp_private_key, gcp_public_key)
@@ -49,7 +50,7 @@ def main(args):
         gcp_regions_to_provision=args.gcp_region_list,
         aws_instance_class=args.aws_instance_class,
         gcp_instance_class=args.gcp_instance_class,
-        setup_script=args.setup_script,
+        setup_script=str(Path(args.setup_script).resolve().absolute()) if args.setup_script else None,
     )
     instance_list: List[Server] = [i for ilist in aws_instances.values() for i in ilist]
     instance_list.extend([i for ilist in gcp_instances.values() for i in ilist])
@@ -64,16 +65,28 @@ def main(args):
         return latency_result
 
     instance_pairs = [(i1, i2) for i1 in instance_list for i2 in instance_list if i1 != i2]
-    latency_results = do_parallel(compute_latency, instance_pairs, progress_bar=True, n=24)
+    latency_results = do_parallel(
+        compute_latency, instance_pairs, progress_bar=True, n=24, desc="Latency", arg_fmt=lambda x: f"{x[0].region_tag} to {x[1].region_tag}"
+    )
+
+    def parse_ping_result(string):
+        """make regex with named groups"""
+        try:
+            regex = r'rtt min/avg/max/mdev = (?P<min>\d+\.\d+)/(?P<avg>\d+\.\d+)/(?P<max>\d+\.\d+)/(?P<mdev>\d+\.\d+) ms'
+            m = re.search(regex, string)
+            return dict(min=float(m.group('min')), avg=float(m.group('avg')), max=float(m.group('max')), mdev=float(m.group('mdev')))
+        except:
+            return {}
 
     # save results
-    latency_results_dict = {}
+    latency_results_out = []
     for (i1, i2), r in latency_results:
-        if i1 not in latency_results_dict:
-            latency_results_dict[i1.region_tag] = {}
-        latency_results_dict[i1.region_tag][i2.region_tag] = r
+        row = dict(src=i1.region_tag, dst=i2.region_tag, ping_str=r, **parse_ping_result(r))
+        logger.info(row)
+        latency_results_out.append(row)
+
     with open(str(data_dir / "latency.json"), "w") as f:
-        json.dump(latency_results_dict, f)
+        json.dump(latency_results_out, f)
 
 
 if __name__ == "__main__":
