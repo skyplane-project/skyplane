@@ -67,6 +67,7 @@ def provision(
     aws_instances = refresh_instance_list(aws, aws_regions_to_provision, aws_instance_filter)
 
     gcp.create_ssh_key()
+    gcp.configure_default_network()
     gcp.configure_default_firewall()
     gcp_instances = refresh_instance_list(gcp, gcp_regions_to_provision, gcp_instance_filter)
 

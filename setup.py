@@ -7,6 +7,8 @@ setup(
     python_requires=">=3.8",
     install_requires=[
         "boto3",
+        "cvxpy",
+        "cvxopt",
         "click",
         "google-cloud-compute",
         "google-api-python-client",

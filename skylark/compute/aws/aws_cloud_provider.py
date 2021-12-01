@@ -1,7 +1,6 @@
 from typing import List
 import uuid
 
-import boto3
 from loguru import logger
 
 from skylark.compute.aws.aws_server import AWSServer
@@ -34,7 +33,7 @@ class AWSCloudProvider(CloudProvider):
         ]
 
     def get_instance_list(self, region) -> List[AWSServer]:
-        ec2 = boto3.resource("ec2", region_name=region)
+        ec2 = AWSServer.get_boto3_resource("ec2", region)
         instances = ec2.instances.filter(
             Filters=[
                 {

@@ -57,6 +57,17 @@ class GCPCloudProvider(CloudProvider):
             with open(self.public_key_path, "w") as f:
                 f.write(f"{key.get_name()} {key.get_base64()}\n")
 
+    def configure_default_network(self):
+        compute = GCPServer.get_gcp_client()
+        try:
+            compute.networks().get(project=self.gcp_project, network="default").execute()
+        except googleapiclient.errors.HttpError as e:
+            if e.resp.status == 404:  # create network
+                op = compute.networks().insert(project=self.gcp_project, body={"name": "default", "subnetMode": "auto", "autoCreateSubnetworks": True}).execute()
+                self.wait_for_operation_to_complete("global", op["name"])
+            else:
+                raise e
+
     def configure_default_firewall(self, ip="0.0.0.0/0"):
         """Configure default firewall to allow access from all ports from all IPs (if not exists)."""
         compute = GCPServer.get_gcp_client()

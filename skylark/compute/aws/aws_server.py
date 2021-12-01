@@ -2,6 +2,7 @@ import os
 from functools import lru_cache
 
 import boto3
+from boto3 import session
 import paramiko
 from loguru import logger
 
@@ -22,15 +23,20 @@ class AWSServer(Server):
         return f"{self.region_tag}:{self.instance_id}"
 
     @classmethod
+    def get_boto3_session(cls, aws_region):
+        ns_key = f"boto3_session_{aws_region}"
+        if not hasattr(cls.ns, ns_key):
+            setattr(cls.ns, ns_key, boto3.Session(region_name=aws_region))
+        return getattr(cls.ns, ns_key)
+
+    @classmethod
     def get_boto3_resource(cls, service_name, aws_region):
         """Get boto3 resource (cache in threadlocal)"""
         ns_key = f"boto3_resource_{service_name}_{aws_region}"
         if not hasattr(cls.ns, ns_key):
-            setattr(
-                cls.ns,
-                ns_key,
-                boto3.resource(service_name, region_name=aws_region),
-            )
+            session = cls.get_boto3_session(aws_region)
+            resource = session.resource(service_name, region_name=aws_region)
+            setattr(cls.ns, ns_key, resource)
         return getattr(cls.ns, ns_key)
 
     @classmethod
@@ -38,11 +44,9 @@ class AWSServer(Server):
         """Get boto3 client (cache in threadlocal)"""
         ns_key = f"boto3_client_{service_name}_{aws_region}"
         if not hasattr(cls.ns, ns_key):
-            setattr(
-                cls.ns,
-                ns_key,
-                boto3.client(service_name, region_name=aws_region),
-            )
+            session = cls.get_boto3_session(aws_region)
+            client = session.client(service_name, region_name=aws_region)
+            setattr(cls.ns, ns_key, client)
         return getattr(cls.ns, ns_key)
 
     def make_keyfile(self):

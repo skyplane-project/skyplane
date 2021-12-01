@@ -29,6 +29,7 @@ def parse_args():
     parser.add_argument("--setup_script", type=str, default=None, help="Setup script to run on each instance (URL), optional")
     parser.add_argument("--iperf_connection_list", type=int, nargs="+", default=[128], help="List of connections to test")
     parser.add_argument("--iperf3_runtime", type=int, default=4, help="Runtime for iperf3 in seconds")
+    parser.add_argument("--iperf3_congestion", type=str, default="cubic", help="Congestion control algorithm for iperf3")
     return parser.parse_args()
 
 
@@ -69,7 +70,7 @@ def main(args):
     def start_iperf3_client(arg_pair: Tuple[Server, Server]):
         instance_src, instance_dst = arg_pair
         src_ip, dst_ip = instance_src.public_ip, instance_dst.public_ip
-        stdout, stderr = instance_src.run_command(f"iperf3 -J -t {args.iperf3_runtime} -P 32 -c {dst_ip}")
+        stdout, stderr = instance_src.run_command(f"iperf3 -J -C {args.iperf3_congestion} -t {args.iperf3_runtime} -P 32 -c {dst_ip}")
         try:
             result = json.loads(stdout)
         except json.JSONDecodeError:
@@ -80,7 +81,7 @@ def main(args):
         tqdm.write(f"({instance_src.region_tag} -> {instance_dst.region_tag}) is {throughput_sent / 1e9:0.2f} Gbps")
         instance_src.close_server()
         instance_dst.close_server()
-        return throughput_sent, throughput_received
+        return throughput_sent, throughput_received, result
 
     instance_list = [i for _, ilist in aws_instances.items() for i in ilist] + [i for _, ilist in gcp_instances.items() for i in ilist]
     for instance in instance_list:
@@ -102,9 +103,12 @@ def main(args):
             for pair, result in results:
                 pbar.update(1)
                 src, dst = pair[0].region_tag, pair[1].region_tag
-                throughput_results.append(dict(src=src, dst=dst, throughput_sent=result[0], throughput_received=result[1]))
+                throughput_results.append(dict(src=src, dst=dst, throughput_sent=result[0], throughput_received=result[1], raw_results=result[2]))
 
-    with open(str(data_dir / "throughput.json"), "w") as f:
+    throughput_dir = data_dir / "throughput"
+    throughput_dir.mkdir(exist_ok=True, parents=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    with open(str(throughput_dir / f"throughput_{timestamp}.json"), "w") as f:
         json.dump(throughput_results, f)
 
 
