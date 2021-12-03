@@ -62,7 +62,7 @@ class Server:
 
     def uuid(self):
         raise NotImplementedError()
-
+    
     def init_log_files(self, log_dir):
         if log_dir:
             log_dir = Path(log_dir)
@@ -102,6 +102,10 @@ class Server:
 
     @property
     def tags(self):
+        raise NotImplementedError()
+    
+    @property
+    def network_tier(self):
         raise NotImplementedError()
 
     def terminate_instance_impl(self):

@@ -15,10 +15,10 @@ def refresh_instance_list(provider: CloudProvider, region_list=[None], instance_
     if instance_filter is None:
         instance_filter = {"tags": {"skylark": "true"}}
     results = do_parallel(
-        lambda region: provider.get_matching_instances(region, **instance_filter),
+        lambda region: provider.get_matching_instances(region=region, **instance_filter),
         region_list,
         progress_bar=True,
-        desc=f"refresh {provider.name}",
+        # desc=f"refresh {provider.name}",
     )
     return {r: ilist for r, ilist in results if ilist}
 
@@ -47,6 +47,7 @@ def provision(
     gcp_regions_to_provision: List[str],
     aws_instance_class: str,
     gcp_instance_class: str,
+    gcp_use_premium_network: bool = True,
     setup_script: object = None,
     log_dir: str = None,
 ) -> Tuple[Dict[str, List[AWSServer]], Dict[str, List[GCPServer]]]:
@@ -60,6 +61,7 @@ def provision(
         "tags": {"skylark": "true"},
         "instance_type": gcp_instance_class,
         "state": [ServerState.PENDING, ServerState.RUNNING],
+        "network_tier": "PREMIUM" if gcp_use_premium_network else "STANDARD",
     }
 
     # setup
@@ -86,8 +88,8 @@ def provision(
         aws_instances = refresh_instance_list(aws, aws_regions_to_provision, aws_instance_filter)
     if missing_gcp_regions:
         logger.info(f"(gcp) provisioning missing regions: {missing_gcp_regions}")
-        gcp_provisioner = lambda r: gcp.provision_instance(r, gcp_instance_class)
-        results = do_parallel(gcp_provisioner, missing_gcp_regions, progress_bar=True, desc="provision gcp")
+        gcp_provisioner = lambda r: gcp.provision_instance(r, gcp_instance_class, premium_network=gcp_use_premium_network)
+        results = do_parallel(gcp_provisioner, missing_gcp_regions, progress_bar=True, desc=f"provision gcp (premium network = {gcp_use_premium_network})")
         for region, result in results:
             gcp_instances[region] = [result]
             logger.info(f"(gcp:{region}) provisioned {result}")
@@ -95,10 +97,10 @@ def provision(
 
     all_instances = [i for ilist in aws_instances.values() for i in ilist]
     all_instances += [i for ilist in gcp_instances.values() for i in ilist]
-    for i in all_instances:
-        i.init_log_files(log_dir)
 
     # run setup script on each instance (use do_parallel)
+    for i in all_instances:
+        i.init_log_files(log_dir)
     if setup_script:
         run_script = lambda i: i.copy_and_run_script(setup_script)
         do_parallel(run_script, all_instances, progress_bar=True, desc="setup script")
