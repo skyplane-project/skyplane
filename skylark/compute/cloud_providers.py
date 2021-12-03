@@ -22,7 +22,7 @@ class CloudProvider:
 
     def get_matching_instances(
         self, region=None, instance_type=None, state: Union[ServerState, List[ServerState]] = None, tags={"skylark": "true"}
-    ):
+    ) -> List[Server]:
         if isinstance(region, str):
             region = [region]
         elif region is None:

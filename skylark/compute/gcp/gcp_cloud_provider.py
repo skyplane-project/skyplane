@@ -1,7 +1,7 @@
 import os
 import socket
 import time
-from typing import List
+from typing import List, Union
 import uuid
 from pathlib import Path
 import googleapiclient
@@ -11,6 +11,7 @@ import paramiko
 
 from skylark.compute.gcp.gcp_server import GCPServer, DEFAULT_GCP_PRIVATE_KEY_PATH, DEFAULT_GCP_PUBLIC_KEY_PATH
 from skylark.compute.cloud_providers import CloudProvider
+from skylark.compute.server import Server, ServerState
 
 
 class GCPCloudProvider(CloudProvider):
@@ -47,6 +48,14 @@ class GCPCloudProvider(CloudProvider):
             return instance_list
         else:
             return []
+
+    def get_matching_instances(self, network_tier=None, **kwargs):
+        instances: List[Server] = super().get_matching_instances(**kwargs)
+        matching_instances = []
+        for instance in instances:
+            if network_tier is None or instance.network_tier == network_tier:
+                matching_instances.append(instance)
+        return matching_instances
 
     def create_ssh_key(self):
         private_key_path = Path(self.private_key_path)
@@ -85,13 +94,17 @@ class GCPCloudProvider(CloudProvider):
             "sourceRanges": [ip],
         }
         if current_firewall is None:
-            compute.firewalls().insert(project=self.gcp_project, body=fw_body).execute()
+            op = compute.firewalls().insert(project=self.gcp_project, body=fw_body).execute()
         else:
-            compute.firewalls().update(project=self.gcp_project, firewall="default", body=fw_body).execute()
+            op = compute.firewalls().update(project=self.gcp_project, firewall="default", body=fw_body).execute()
+        self.wait_for_operation_to_complete("global", op["name"])
 
     def get_operation_state(self, zone, operation_name):
         compute = GCPServer.get_gcp_client()
-        return compute.zoneOperations().get(project=self.gcp_project, zone=zone, operation=operation_name).execute()
+        if zone == "global":
+            return compute.globalOperations().get(project=self.gcp_project, operation=operation_name).execute()
+        else:
+            return compute.zoneOperations().get(project=self.gcp_project, zone=zone, operation=operation_name).execute()
 
     def wait_for_operation_to_complete(self, zone, operation_name, timeout=120):
         time_intervals = [0.1] * 10 + [0.2] * 10 + [1.0] * int(timeout)  # backoff
@@ -138,8 +151,7 @@ class GCPCloudProvider(CloudProvider):
             "networkInterfaces": [
                 {
                     "network": "global/networks/default",
-                    "accessConfigs": [{"name": "External NAT", "type": "ONE_TO_ONE_NAT"}],
-                    "networkTier": "PREMIUM" if premium_network else "STANDARD",
+                    "accessConfigs": [{"name": "External NAT", "type": "ONE_TO_ONE_NAT", "networkTier": "PREMIUM" if premium_network else "STANDARD",}],
                 }
             ],
             "serviceAccounts": [{"email": "default", "scopes": ["https://www.googleapis.com/auth/cloud-platform"]}],
