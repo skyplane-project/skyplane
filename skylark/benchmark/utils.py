@@ -89,7 +89,9 @@ def provision(
     if missing_gcp_regions:
         logger.info(f"(gcp) provisioning missing regions: {missing_gcp_regions}")
         gcp_provisioner = lambda r: gcp.provision_instance(r, gcp_instance_class, premium_network=gcp_use_premium_network)
-        results = do_parallel(gcp_provisioner, missing_gcp_regions, progress_bar=True, desc=f"provision gcp (premium network = {gcp_use_premium_network})")
+        results = do_parallel(
+            gcp_provisioner, missing_gcp_regions, progress_bar=True, desc=f"provision gcp (premium network = {gcp_use_premium_network})"
+        )
         for region, result in results:
             gcp_instances[region] = [result]
             logger.info(f"(gcp:{region}) provisioned {result}")

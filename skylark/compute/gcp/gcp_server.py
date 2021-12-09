@@ -73,7 +73,7 @@ class GCPServer(Server):
     def tags(self):
         """Get labels for instance."""
         return self.get_instance_property("labels")
-    
+
     @property
     def network_tier(self):
         interface = self.get_instance_property("networkInterfaces")[0]

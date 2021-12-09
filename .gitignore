@@ -32,3 +32,5 @@ MANIFEST
 nb/.ipynb_checkpoints/
 .idea/
 .vscode/
+
+.DS_Store

@@ -66,15 +66,20 @@ def main(args):
 
     instance_pairs = [(i1, i2) for i1 in instance_list for i2 in instance_list if i1 != i2]
     latency_results = do_parallel(
-        compute_latency, instance_pairs, progress_bar=True, n=24, desc="Latency", arg_fmt=lambda x: f"{x[0].region_tag} to {x[1].region_tag}"
+        compute_latency,
+        instance_pairs,
+        progress_bar=True,
+        n=24,
+        desc="Latency",
+        arg_fmt=lambda x: f"{x[0].region_tag} to {x[1].region_tag}",
     )
 
     def parse_ping_result(string):
         """make regex with named groups"""
         try:
-            regex = r'rtt min/avg/max/mdev = (?P<min>\d+\.\d+)/(?P<avg>\d+\.\d+)/(?P<max>\d+\.\d+)/(?P<mdev>\d+\.\d+) ms'
+            regex = r"rtt min/avg/max/mdev = (?P<min>\d+\.\d+)/(?P<avg>\d+\.\d+)/(?P<max>\d+\.\d+)/(?P<mdev>\d+\.\d+) ms"
             m = re.search(regex, string)
-            return dict(min=float(m.group('min')), avg=float(m.group('avg')), max=float(m.group('max')), mdev=float(m.group('mdev')))
+            return dict(min=float(m.group("min")), avg=float(m.group("avg")), max=float(m.group("max")), mdev=float(m.group("mdev")))
         except:
             return {}
 

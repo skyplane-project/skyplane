@@ -84,7 +84,7 @@ class AWSServer(Server):
     @lru_cache(maxsize=1)
     def instance_name(self):
         return self.tags.get("Name", None)
-    
+
     @property
     def network_tier(self):
         return "STANDARD"

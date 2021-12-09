@@ -72,7 +72,11 @@ class GCPCloudProvider(CloudProvider):
             compute.networks().get(project=self.gcp_project, network="default").execute()
         except googleapiclient.errors.HttpError as e:
             if e.resp.status == 404:  # create network
-                op = compute.networks().insert(project=self.gcp_project, body={"name": "default", "subnetMode": "auto", "autoCreateSubnetworks": True}).execute()
+                op = (
+                    compute.networks()
+                    .insert(project=self.gcp_project, body={"name": "default", "subnetMode": "auto", "autoCreateSubnetworks": True})
+                    .execute()
+                )
                 self.wait_for_operation_to_complete("global", op["name"])
             else:
                 raise e
@@ -151,7 +155,13 @@ class GCPCloudProvider(CloudProvider):
             "networkInterfaces": [
                 {
                     "network": "global/networks/default",
-                    "accessConfigs": [{"name": "External NAT", "type": "ONE_TO_ONE_NAT", "networkTier": "PREMIUM" if premium_network else "STANDARD",}],
+                    "accessConfigs": [
+                        {
+                            "name": "External NAT",
+                            "type": "ONE_TO_ONE_NAT",
+                            "networkTier": "PREMIUM" if premium_network else "STANDARD",
+                        }
+                    ],
                 }
             ],
             "serviceAccounts": [{"email": "default", "scopes": ["https://www.googleapis.com/auth/cloud-platform"]}],

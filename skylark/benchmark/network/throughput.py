@@ -95,7 +95,9 @@ def main(args):
             return None
         throughput_sent = result["end"]["sum_sent"]["bits_per_second"]
         throughput_received = result["end"]["sum_received"]["bits_per_second"]
-        tqdm.write(f"({instance_src.region_tag}:{instance_src.network_tier} -> {instance_dst.region_tag}:{instance_dst.network_tier}) is {throughput_sent / 1e9:0.2f} Gbps")
+        tqdm.write(
+            f"({instance_src.region_tag}:{instance_src.network_tier} -> {instance_dst.region_tag}:{instance_dst.network_tier}) is {throughput_sent / 1e9:0.2f} Gbps"
+        )
         instance_src.close_server()
         instance_dst.close_server()
         return throughput_sent, throughput_received, result
