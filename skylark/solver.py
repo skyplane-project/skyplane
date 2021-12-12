@@ -134,7 +134,15 @@ class ThroughputSolverILP(ThroughputSolver):
         prob.solve(solver=solver, verbose=solver_verbose)
         if prob.status == "optimal":
             solution = cp.pos(edge_flow_gigabits).value
-            return dict(src=src, dst=dst, gbyte_to_transfer=gbyte_to_transfer, solution=solution, cost=total_cost.value, throughput=total_throughput_out.value, feasible=True)
+            return dict(
+                src=src,
+                dst=dst,
+                gbyte_to_transfer=gbyte_to_transfer,
+                solution=solution,
+                cost=total_cost.value,
+                throughput=total_throughput_out.value,
+                feasible=True,
+            )
         else:
             return dict(feasible=None)
 
@@ -160,9 +168,7 @@ class ThroughputSolverILP(ThroughputSolver):
             regions = self.get_regions()
             # add title text containing src -> dst
             # add subtitle containing throughput and cost
-            g = gv.Digraph(
-                name="throughput_graph"
-            )
+            g = gv.Digraph(name="throughput_graph")
             g.attr(rankdir="LR")
             g.attr(label=f"{solution['src']} to {solution['dst']}\n{solution['throughput']:.2f} Gbps, ${solution['cost']:.4f}")
             g.attr(labelloc="t")
@@ -170,9 +176,14 @@ class ThroughputSolverILP(ThroughputSolver):
                 for j, dst in enumerate(regions):
                     if solution["solution"][i, j] > 0:
                         link_cost = self.get_path_cost(src, dst)
-                        g.edge(src.replace(":", "/"), dst.replace(":", "/"), label=f"{solution['solution'][i, j]:.2f} Gbps, ${link_cost:.2f}/GB")
+                        g.edge(
+                            src.replace(":", "/"),
+                            dst.replace(":", "/"),
+                            label=f"{solution['solution'][i, j]:.2f} Gbps, ${link_cost:.2f}/GB",
+                        )
 
             return g
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -33,28 +33,27 @@ class AWSCloudProvider(CloudProvider):
             # "eu-west-2",
             "sa-east-1",
         ]
-    
+
     @staticmethod
     def get_transfer_cost(src_key, dst_key):
-        transfer_df = pd.read_csv(skylark_root / "profiles" / "aws_transfer_costs.csv").set_index(['src', 'dst'])
-        
-        src_provider, src = src_key.split(':')
-        dst_provider, dst = dst_key.split(':')
-        
-        assert src_provider == 'aws'
-        if dst_provider == 'aws':
+        transfer_df = pd.read_csv(skylark_root / "profiles" / "aws_transfer_costs.csv").set_index(["src", "dst"])
+
+        src_provider, src = src_key.split(":")
+        dst_provider, dst = dst_key.split(":")
+
+        assert src_provider == "aws"
+        if dst_provider == "aws":
             if (src, dst) in transfer_df.index:
-                return transfer_df.loc[src, dst]['cost']
+                return transfer_df.loc[src, dst]["cost"]
             else:
                 logger.warning(f"No transfer cost found for {src_key} -> {dst_key}, using max of {src}")
                 src_rows = transfer_df.loc[src]
-                src_rows = src_rows[src_rows.index != 'internet']
-                return src_rows.max()['cost']
-        elif dst_provider == 'gcp':
-            return transfer_df.loc[src, 'internet']['cost']
+                src_rows = src_rows[src_rows.index != "internet"]
+                return src_rows.max()["cost"]
+        elif dst_provider == "gcp":
+            return transfer_df.loc[src, "internet"]["cost"]
         else:
             raise NotImplementedError
-            
 
     def get_instance_list(self, region) -> List[AWSServer]:
         ec2 = AWSServer.get_boto3_resource("ec2", region)
