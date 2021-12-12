@@ -3,10 +3,13 @@ import argparse
 from cvxpy.expressions import constants
 import pandas as pd
 import numpy as np
+import graphviz as gv
 import cvxpy as cp
 import matplotlib.pyplot as plt
 from loguru import logger
+
 from skylark import skylark_root
+from skylark.compute.cloud_providers import CloudProvider
 
 
 GBIT_PER_GBYTE = 8
@@ -25,14 +28,7 @@ class ThroughputSolver:
         return self.df.loc[(src, dst), "throughput_sent"]
 
     def get_path_cost(self, src, dst):
-        src_provider = src.split(":")[0]
-        dst_provider = dst.split(":")[0]
-        if src == dst:
-            return 0
-        elif src_provider == dst_provider:
-            return 0.02
-        else:
-            return 0.09
+        return CloudProvider.get_transfer_cost(src, dst)
 
     def get_regions(self):
         return list(sorted(set(list(self.df.index.levels[0].unique()) + list(self.df.index.levels[1].unique()))))
@@ -51,7 +47,9 @@ class ThroughputSolver:
         data_grid = np.zeros((len(regions), len(regions)))
         for i, src in enumerate(regions):
             for j, dst in enumerate(regions):
-                data_grid[i, j] = self.get_path_cost(src, dst)
+                cost = self.get_path_cost(src, dst)
+                assert cost is not None and cost >= 0, f"Cost for {src} -> {dst} is {cost}"
+                data_grid[i, j] = cost
         return data_grid
 
     def plot_throughput_grid(self, data_grid, title="Throughput (Gbps)"):
@@ -86,9 +84,6 @@ class ThroughputSolver:
 
 
 class ThroughputSolverILP(ThroughputSolver):
-    def get_path_cost(self, src, dst):
-        return 0.12 if src != dst else 0.0
-
     def solve(self, src, dst, required_throughput_gbits=None, cost_limit=None, gbyte_to_transfer=1.0, solver=cp.GLPK, solver_verbose=False):
         regions = self.get_regions()
         src_idx = regions.index(src)
@@ -139,7 +134,7 @@ class ThroughputSolverILP(ThroughputSolver):
         prob.solve(solver=solver, verbose=solver_verbose)
         if prob.status == "optimal":
             solution = cp.pos(edge_flow_gigabits).value
-            return dict(solution=solution, cost=total_cost.value, throughput=total_throughput_out.value, feasible=True)
+            return dict(src=src, dst=dst, gbyte_to_transfer=gbyte_to_transfer, solution=solution, cost=total_cost.value, throughput=total_throughput_out.value, feasible=True)
         else:
             return dict(feasible=None)
 
@@ -160,6 +155,24 @@ class ThroughputSolverILP(ThroughputSolver):
         else:
             logger.debug("No feasible solution")
 
+    def plot_graphviz(self, solution):
+        if solution["feasible"]:
+            regions = self.get_regions()
+            # add title text containing src -> dst
+            # add subtitle containing throughput and cost
+            g = gv.Digraph(
+                name="throughput_graph"
+            )
+            g.attr(rankdir="LR")
+            g.attr(label=f"{solution['src']} to {solution['dst']}\n{solution['throughput']:.2f} Gbps, ${solution['cost']:.4f}")
+            g.attr(labelloc="t")
+            for i, src in enumerate(regions):
+                for j, dst in enumerate(regions):
+                    if solution["solution"][i, j] > 0:
+                        link_cost = self.get_path_cost(src, dst)
+                        g.edge(src.replace(":", "/"), dst.replace(":", "/"), label=f"{solution['solution'][i, j]:.2f} Gbps, ${link_cost:.2f}/GB")
+
+            return g
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -180,3 +193,5 @@ if __name__ == "__main__":
         solver_verbose=False,
     )
     tput.print_solution(solution)
+    g = tput.plot_graphviz(solution)
+    g.render(filename="/tmp/throughput_graph.gv", view=True)

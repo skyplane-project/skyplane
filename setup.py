@@ -12,6 +12,7 @@ setup(
         "click",
         "google-cloud-compute",
         "google-api-python-client",
+        "graphviz",
         "loguru",
         "matplotlib",
         "numpy",
