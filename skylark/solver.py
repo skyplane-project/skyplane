@@ -43,6 +43,14 @@ class ThroughputSolver:
         data_grid = data_grid / 1e9
         return data_grid
 
+    def get_cost_grid(self):
+        regions = self.get_regions()
+        data_grid = np.zeros((len(regions), len(regions)))
+        for i, src in enumerate(regions):
+            for j, dst in enumerate(regions):
+                data_grid[i, j] = self.get_path_cost(src, dst)
+        return data_grid
+
     def plot_throughput_grid(self, data_grid, title="Throughput (Gbps)"):
         for i in range(data_grid.shape[0]):
             for j in range(data_grid.shape[1]):
@@ -73,62 +81,27 @@ class ThroughputSolver:
         ax.figure.colorbar(ax.images[0], ax=ax)
         return fig, ax
 
-    def max_two_hop_throughput(self):
-        regions = self.get_regions()
-        data_grid = np.zeros((len(regions), len(regions)))
-        for i, src in enumerate(regions):
-            for j, dst in enumerate(regions):
-                data_grid[i, j] = self.get_path_throughput(src, dst) if self.get_path_throughput(src, dst) is not None else 0
-                for inter in regions:
-                    tp_a = self.get_path_throughput(src, inter) if self.get_path_throughput(src, inter) is not None else 0
-                    tp_b = self.get_path_throughput(inter, dst) if self.get_path_throughput(inter, dst) is not None else 0
-                    tp = min(tp_a, tp_b)
-                    data_grid[i, j] = max(data_grid[i, j], tp)
-        data_grid = data_grid / 1e9
-        return data_grid
-
-    def max_three_hop_throughput(self):
-        regions = self.get_regions()
-        data_grid = np.zeros((len(regions), len(regions)))
-        for i, src in enumerate(regions):
-            for j, dst in enumerate(regions):
-                data_grid[i, j] = self.get_path_throughput(src, dst) if self.get_path_throughput(src, dst) is not None else 0
-                for inter_a in regions:
-                    tp_a = self.get_path_throughput(src, inter_a) if self.get_path_throughput(src, inter_a) is not None else 0
-                    for inter_b in regions:
-                        tp_b = self.get_path_throughput(inter_a, inter_b) if self.get_path_throughput(inter_a, inter_b) is not None else 0
-                        tp_c = self.get_path_throughput(inter_b, dst) if self.get_path_throughput(inter_b, dst) is not None else 0
-                        tp = min(tp_a, tp_b, tp_c)
-                        data_grid[i, j] = max(data_grid[i, j], tp)
-        data_grid = data_grid / 1e9
-        return data_grid
-
 
 class ThroughputSolverILP(ThroughputSolver):
     def get_path_cost(self, src, dst):
         return 0.12 if src != dst else 0.0
 
-    def get_cost_matrices(self):
-        regions = self.get_regions()
-        cost_matrix = np.zeros((len(regions), len(regions)))
-        capacity_matrix = np.zeros((len(regions), len(regions)))
-        for i, src in enumerate(regions):
-            for j, dst in enumerate(regions):
-                cost_matrix[i, j] = self.get_path_cost(src, dst)
-                capacity_matrix[i, j] = self.get_path_throughput(src, dst) if self.get_path_throughput(src, dst) is not None else 0.0
-        return cost_matrix, capacity_matrix / 1e9
-
-    def solve(self, src, dst, required_throughput=None, cost_limit=None, solver=cp.GLPK, solver_verbose=False):
+    def solve(self, src, dst, required_throughput=None, cost_limit=None, gbyte_to_transfer=1., solver=cp.GLPK, solver_verbose=False):
         regions = self.get_regions()
         src_idx = regions.index(src)
         dst_idx = regions.index(dst)
 
-        edge_cost, edge_capacity = self.get_cost_matrices()
-        edge_flow = cp.Variable((len(regions), len(regions)), boolean=False, name="edge_flow")
-        total_cost_matrix = cp.multiply(edge_cost, cp.pos(edge_flow))
-        total_cost = cp.sum(total_cost_matrix)
-        total_throughput_out = cp.sum(edge_flow[src_idx, :])
-        total_throughput_in = cp.sum(edge_flow[:, dst_idx])
+        # define constants and variables
+        edge_cost_per_gigabyte, edge_capacity_gigabits = self.get_cost_grid(), self.get_throughput_grid()
+        edge_flow_gigabits = cp.Variable((len(regions), len(regions)), boolean=False, name="edge_flow_gigabits")
+        total_throughput_out = cp.sum(edge_flow_gigabits[src_idx, :])
+        total_throughput_in = cp.sum(edge_flow_gigabits[:, dst_idx])
+
+        # calculate total cost
+        gigabits_per_gigabyte = 8
+        cost_per_second = cp.sum(cp.multiply(edge_cost_per_gigabyte, edge_flow_gigabits * gigabits_per_gigabyte))
+        transfer_runtime = cp.inv_pos(total_throughput_out) * (gigabits_per_gigabyte * gbyte_to_transfer)
+        total_cost = cost_per_second * transfer_runtime
 
         # constraints
         constraints = []
@@ -136,12 +109,12 @@ class ThroughputSolverILP(ThroughputSolver):
         for u in range(len(regions)):
             for v in range(len(regions)):
                 # capacity constraints
-                constraints.append(edge_flow[u, v] <= edge_capacity[u, v])
+                constraints.append(edge_flow_gigabits[u, v] <= edge_capacity_gigabits[u, v])
                 # skew symmetry
-                constraints.append(edge_flow[u, v] == -1 * edge_flow[v, u])
+                constraints.append(edge_flow_gigabits[u, v] == -1 * edge_flow_gigabits[v, u])
             # flow conservation
             if u != src_idx and u != dst_idx:
-                constraints.append(cp.sum(edge_flow[u, :]) == 0)
+                constraints.append(cp.sum(edge_flow_gigabits[u, :]) == 0)
 
         if required_throughput is not None and cost_limit is None:  # min cost
             logger.info("Solving for minimum cost")
@@ -158,10 +131,8 @@ class ThroughputSolverILP(ThroughputSolver):
         prob = cp.Problem(objective, constraints)
         prob.solve(solver=solver, verbose=solver_verbose)
         if prob.status == "optimal":
-            print(cp.pos(edge_flow).value)
-            print(total_cost_matrix.value)
             return dict(
-                solution=cp.pos(edge_flow).value, cost_per_gb=total_cost.value, throughput=total_throughput_out.value, feasible=True
+                solution=cp.pos(edge_flow_gigabits).value, cost=total_cost.value, throughput=total_throughput_out.value, feasible=True
             )
         else:
             return dict(feasible=None)
@@ -169,11 +140,11 @@ class ThroughputSolverILP(ThroughputSolver):
     def print_solution(self, solution):
         if solution["feasible"]:
             sol = solution["solution"]
-            cost = solution["cost_per_gb"]
+            cost = solution["cost"]
             throughput = solution["throughput"]
             regions = self.get_regions()
 
-            logger.debug(f"Total cost: ${cost:.4f}/GB")
+            logger.debug(f"Total cost: ${cost:.4f} per second")
             logger.debug(f"Total throughput: {throughput:.4f} Gbps")
             logger.debug("Flow matrix:")
             for i, src in enumerate(regions):
@@ -187,7 +158,7 @@ class ThroughputSolverILP(ThroughputSolver):
 if __name__ == "__main__":
     # argparse above arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cost_path", type=str, default=str(skylark_root / "data" / "throughput" / "df_throughput_agg_test.csv"))
+    parser.add_argument("--cost_path", type=str, default=str(skylark_root / "data" / "throughput" / "df_throughput_agg.csv"))
     parser.add_argument("--src", type=str, required=True)
     parser.add_argument("--dst", type=str, required=True)
     parser.add_argument("--cost_limit", type=float, default=None)
@@ -195,17 +166,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     tput = ThroughputSolverILP(args.cost_path)
-    edge_cost, edge_capacity = tput.get_cost_matrices()
-    print("Regions:")
-    print(tput.get_regions())
-    print("\nEdge cost:")
-    print(edge_cost)
-    print("\nEdge capacity:")
-    print(edge_capacity)
-    print()
-
+    logger.debug(f"Regions: {tput.get_regions()}")
     solution = tput.solve(
-        args.src, args.dst, required_throughput=args.min_throughput, cost_limit=args.cost_limit, solver=cp.GUROBI, solver_verbose=False
+        args.src, args.dst,
+        required_throughput=args.min_throughput,
+        cost_limit=args.cost_limit,
+        solver=cp.GUROBI,
+        solver_verbose=False
     )
     tput.print_solution(solution)
 
