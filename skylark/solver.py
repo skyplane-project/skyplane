@@ -9,6 +9,9 @@ from loguru import logger
 from skylark import skylark_root
 
 
+GBIT_PER_GBYTE = 8
+
+
 class ThroughputSolver:
     def __init__(self, df_path, default_throughput=0.0):
         self.df = pd.read_csv(df_path).drop(columns="Unnamed: 0").set_index(["src", "dst"])
@@ -86,22 +89,17 @@ class ThroughputSolverILP(ThroughputSolver):
     def get_path_cost(self, src, dst):
         return 0.12 if src != dst else 0.0
 
-    def solve(self, src, dst, required_throughput=None, cost_limit=None, gbyte_to_transfer=1., solver=cp.GLPK, solver_verbose=False):
+    def solve(self, src, dst, required_throughput_gbits=None, cost_limit=None, gbyte_to_transfer=1.0, solver=cp.GLPK, solver_verbose=False):
         regions = self.get_regions()
         src_idx = regions.index(src)
         dst_idx = regions.index(dst)
 
         # define constants and variables
         edge_cost_per_gigabyte, edge_capacity_gigabits = self.get_cost_grid(), self.get_throughput_grid()
+        edge_cost_per_gigabit = edge_cost_per_gigabyte / GBIT_PER_GBYTE
         edge_flow_gigabits = cp.Variable((len(regions), len(regions)), boolean=False, name="edge_flow_gigabits")
         total_throughput_out = cp.sum(edge_flow_gigabits[src_idx, :])
         total_throughput_in = cp.sum(edge_flow_gigabits[:, dst_idx])
-
-        # calculate total cost
-        gigabits_per_gigabyte = 8
-        cost_per_second = cp.sum(cp.multiply(edge_cost_per_gigabyte, edge_flow_gigabits * gigabits_per_gigabyte))
-        transfer_runtime = cp.inv_pos(total_throughput_out) * (gigabits_per_gigabyte * gbyte_to_transfer)
-        total_cost = cost_per_second * transfer_runtime
 
         # constraints
         constraints = []
@@ -116,24 +114,32 @@ class ThroughputSolverILP(ThroughputSolver):
             if u != src_idx and u != dst_idx:
                 constraints.append(cp.sum(edge_flow_gigabits[u, :]) == 0)
 
-        if required_throughput is not None and cost_limit is None:  # min cost
-            logger.info("Solving for minimum cost")
+        if required_throughput_gbits is not None and cost_limit is None:  # min cost
+            assert required_throughput_gbits > 0
+            cost_per_second = cp.sum(cp.multiply(edge_cost_per_gigabit, cp.pos(edge_flow_gigabits)))  # $/gbit * gbit/s = $/s
+            transfer_runtime = (GBIT_PER_GBYTE * gbyte_to_transfer) / required_throughput_gbits  # gbit / (gbit/s) = s
+            total_cost = cost_per_second * transfer_runtime
+
             objective = cp.Minimize(total_cost)
-            constraints.append(total_throughput_out >= required_throughput)
-            constraints.append(total_throughput_in >= required_throughput)
-        elif cost_limit is not None and required_throughput is None:  # max throughput
-            logger.info("Solving for maximum throughput")
-            objective = cp.Maximize(total_throughput_out)
-            constraints.append(total_cost <= cost_limit)
+            constraints.append(total_throughput_out == required_throughput_gbits)
+            constraints.append(total_throughput_in == required_throughput_gbits)
+        elif cost_limit is not None and required_throughput_gbits is None:  # max throughput
+            raise NotImplementedError("Max throughput not implemented")
+            # assert cost_limit > 0
+            # cost_per_second = cp.sum(cp.multiply(edge_cost_per_gigabit, cp.pos(edge_flow_gigabits)))  # $/gbit * gbit/s = $/s
+            # transfer_runtime = (GBIT_PER_GBYTE * gbyte_to_transfer) / cp.inv_pos(total_throughput_out)  # gbit / (gbit/s) = s
+            # total_cost = cost_per_second * transfer_runtime
+
+            # objective = cp.Maximize(total_throughput_out)
+            # constraints.append(total_cost <= cost_limit)
         else:  # min cost and max throughput
             raise NotImplementedError()
 
         prob = cp.Problem(objective, constraints)
         prob.solve(solver=solver, verbose=solver_verbose)
         if prob.status == "optimal":
-            return dict(
-                solution=cp.pos(edge_flow_gigabits).value, cost=total_cost.value, throughput=total_throughput_out.value, feasible=True
-            )
+            solution = cp.pos(edge_flow_gigabits).value
+            return dict(solution=solution, cost=total_cost.value, throughput=total_throughput_out.value, feasible=True)
         else:
             return dict(feasible=None)
 
@@ -144,8 +150,8 @@ class ThroughputSolverILP(ThroughputSolver):
             throughput = solution["throughput"]
             regions = self.get_regions()
 
-            logger.debug(f"Total cost: ${cost:.4f} per second")
-            logger.debug(f"Total throughput: {throughput:.4f} Gbps")
+            logger.debug(f"Total cost: ${cost:.4f}")
+            logger.debug(f"Total throughput: {throughput:.2f} Gbps")
             logger.debug("Flow matrix:")
             for i, src in enumerate(regions):
                 for j, dst in enumerate(regions):
@@ -156,50 +162,21 @@ class ThroughputSolverILP(ThroughputSolver):
 
 
 if __name__ == "__main__":
-    # argparse above arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cost_path", type=str, default=str(skylark_root / "data" / "throughput" / "df_throughput_agg.csv"))
+    parser.add_argument("--cost-path", type=str, default=str(skylark_root / "data" / "throughput" / "df_throughput_agg.csv"))
     parser.add_argument("--src", type=str, required=True)
     parser.add_argument("--dst", type=str, required=True)
-    parser.add_argument("--cost_limit", type=float, default=None)
-    parser.add_argument("--min_throughput", type=float, default=None)
+    parser.add_argument("--max-cost", type=float, default=None)
+    parser.add_argument("--min-throughput", type=float, default=None)
     args = parser.parse_args()
 
     tput = ThroughputSolverILP(args.cost_path)
-    logger.debug(f"Regions: {tput.get_regions()}")
     solution = tput.solve(
-        args.src, args.dst,
-        required_throughput=args.min_throughput,
-        cost_limit=args.cost_limit,
+        args.src,
+        args.dst,
+        required_throughput_gbits=args.min_throughput,
+        cost_limit=args.max_cost,
         solver=cp.GUROBI,
-        solver_verbose=False
+        solver_verbose=False,
     )
     tput.print_solution(solution)
-
-
-# def test_all_pairs_solver():
-#     tput = ThroughputSolver(skylark_root / 'data' / 'throughput' / 'df_throughput_agg.csv')
-#     def make_symmetric(mat):
-#         x, y = mat.shape
-#         for i in range(x):
-#             for j in range(y):
-#                 mat[i, j] = max(mat[i, j], mat[j, i])
-#         return mat
-
-#     wan = make_symmetric(tput.get_throughput_grid())
-#     two_hop = make_symmetric(tput.max_two_hop_throughput())
-#     for i in range(len(tput.get_regions())):
-#         wan[i, i] = 1.
-#         two_hop[i, i] = 0.
-#     speedup = two_hop / wan
-#     fig, ax = tput.plot_throughput_grid(speedup, title="Throughput speedup factor")
-#     fig.savefig(str(skylark_root / 'data' / 'throughput' / 'df_throughput_grid_speedup_1x.png'), bbox_inches='tight', dpi=300)
-
-#     wan = make_symmetric(tput.get_throughput_grid())
-#     three_hop = make_symmetric(tput.max_three_hop_throughput())
-#     for i in range(len(tput.get_regions())):
-#         wan[i, i] = 1.
-#         three_hop[i, i] = 0.
-#     speedup = three_hop / wan
-#     fig, ax = tput.plot_throughput_grid(speedup, title="Throughput speedup factor")
-#     fig.savefig(str(skylark_root / 'data' / 'throughput' / 'df_throughput_grid_speedup_2x.png'), bbox_inches='tight', dpi=300)
