@@ -40,7 +40,7 @@ class GCPCloudProvider(CloudProvider):
         ]
     
     @staticmethod
-    def get_transfer_cost(src_key, dst_key):
+    def get_transfer_cost(src_key, dst_key, premium_tier=True):
         src_provider, src = src_key.split(':')
         dst_provider, dst = dst_key.split(':')
         assert src_provider == 'gcp'
@@ -70,7 +70,32 @@ class GCPCloudProvider(CloudProvider):
                 return 0.15
             else:
                 return 0.08
-        elif dst_provider == 'aws':
+        elif dst_provider == 'aws' and premium_tier:
+            dst_continent, dst_region = dst.split('-', 1)
+            # singapore or tokyo or osaka
+            if src_continent == 'asia' and (src_region == 'southeast2' or src_region == 'northeast1' or src_region == 'northeast2'):
+                if dst == 'ap-southeast-2':  # australia
+                    return 0.19
+                else:
+                    return 0.14
+            # jakarta
+            elif (src_continent == 'asia' and src_region == 'southeast1') or (src_continent == 'australia'):
+                if dst == 'ap-southeast-2':
+                    return 0.19
+                else:
+                    return 0.19
+            # seoul
+            elif src_continent == 'asia' and src_region == 'northeast3':
+                if dst == 'ap-northeast-2':
+                    return 0.19
+                else:
+                    return 0.147
+            else:
+                if dst == 'ap-southeast-2':
+                    return 0.19
+                else:
+                    return 0.12
+        elif dst_provider == 'aws' and not premium_tier:
             if src_continent == 'us' or src_continent == 'europe' or src_continent == 'northamerica':
                 return 0.085
             elif src_continent == 'southamerica' or src_continent == 'australia':

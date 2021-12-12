@@ -7,6 +7,7 @@ setup(
     python_requires=">=3.8",
     install_requires=[
         "boto3",
+        # "cylp",
         "cvxpy",
         "cvxopt",
         "click",
