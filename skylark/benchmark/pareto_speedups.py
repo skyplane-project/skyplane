@@ -20,11 +20,17 @@ def benchmark(path, src, dst, min_throughput, gbyte_to_transfer=1):
     if solution["feasible"]:
         baseline_throughput = solver.get_path_throughput(src, dst) / 1e9
         baseline_cost = solver.get_path_cost(src, dst) * gbyte_to_transfer
-        return dict(src=src, dst=dst, min_throughput=min_throughput,
-            cost=solution["cost"], baseline_cost=baseline_cost,
-            throughput=solution["throughput"], baseline_throughput=baseline_throughput,
+        return dict(
+            src=src,
+            dst=dst,
+            min_throughput=min_throughput,
+            cost=solution["cost"],
+            baseline_cost=baseline_cost,
+            throughput=solution["throughput"],
+            baseline_throughput=baseline_throughput,
             throughput_speedup=solution["throughput"] / baseline_throughput,
-            cost_factor=solution["cost"] / baseline_cost)
+            cost_factor=solution["cost"] / baseline_cost,
+        )
     else:
         return None
 
