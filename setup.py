@@ -7,11 +7,13 @@ setup(
     python_requires=">=3.8",
     install_requires=[
         "boto3",
+        # "cylp",
         "cvxpy",
         "cvxopt",
         "click",
         "google-cloud-compute",
         "google-api-python-client",
+        "graphviz",
         "loguru",
         "matplotlib",
         "numpy",

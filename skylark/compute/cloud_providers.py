@@ -17,6 +17,22 @@ class CloudProvider:
     def region_list(self):
         raise NotImplementedError
 
+    @staticmethod
+    def get_transfer_cost(src_key, dst_key):
+        if src_key == dst_key:
+            return 0.0
+        src_provider, _ = src_key.split(":")
+        if src_provider == "aws":
+            from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
+
+            return AWSCloudProvider.get_transfer_cost(src_key, dst_key)
+        elif src_provider == "gcp":
+            from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
+
+            return GCPCloudProvider.get_transfer_cost(src_key, dst_key)
+        else:
+            raise NotImplementedError
+
     def get_instance_list(self, region) -> List[Server]:
         raise NotImplementedError
 
