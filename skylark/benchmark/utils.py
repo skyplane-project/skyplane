@@ -52,7 +52,7 @@ def provision(
     log_dir: str = None,
 ) -> Tuple[Dict[str, List[AWSServer]], Dict[str, List[GCPServer]]]:
     """Provision list of instances in AWS and GCP in each specified region."""
-    gcp_instances, all_instances = [], []
+    gcp_instances, all_instances = {}, {}
     if len(aws_regions_to_provision) > 0:
         logger.info(f"Provisioning AWS instances in {aws_regions_to_provision}")
         aws_instance_filter = {
@@ -106,6 +106,7 @@ def provision(
         i.init_log_files(log_dir)
         if setup_script:
             i.copy_and_run_script(setup_script)
+
     all_instances = [i for ilist in aws_instances.values() for i in ilist] + [i for ilist in gcp_instances.values() for i in ilist]
     do_parallel(init, all_instances, progress_bar=True, desc="init instances")
     return aws_instances, gcp_instances

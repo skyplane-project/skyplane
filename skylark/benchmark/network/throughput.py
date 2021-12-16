@@ -21,21 +21,29 @@ def parse_args():
     gcp_regions = GCPCloudProvider.region_list()
     parser = argparse.ArgumentParser(description="Provision EC2 instances")
     parser.add_argument("--aws_instance_class", type=str, default="i3en.large", help="Instance class")
-    parser.add_argument("--aws_region_list", type=str, nargs="+", default=aws_regions)
-    parser.add_argument("--gcp_instance_class", type=str, default="n1-highcpu-8", help="Instance class")
-    parser.add_argument("--test_standard_network", action="store_true", help="Test GCP standard network in addition to premium (default)")
+    parser.add_argument("--aws_region_list", type=str, nargs="*", default=aws_regions)
+
     parser.add_argument("--gcp_project", type=str, default="bair-commons-307400", help="GCP project")
-    parser.add_argument("--gcp_region_list", type=str, nargs="+", default=gcp_regions)
+    parser.add_argument("--gcp_instance_class", type=str, default="n1-highcpu-8", help="Instance class")
+    parser.add_argument("--gcp_region_list", type=str, nargs="*", default=gcp_regions)
+    parser.add_argument(
+        "--gcp_test_standard_network", action="store_true", help="Test GCP standard network in addition to premium (default)"
+    )
+
     parser.add_argument("--setup_script", type=str, default=None, help="Setup script to run on each instance (URL), optional")
     parser.add_argument("--iperf_connection_list", type=int, nargs="+", default=[128], help="List of connections to test")
     parser.add_argument("--iperf3_runtime", type=int, default=4, help="Runtime for iperf3 in seconds")
     parser.add_argument("--iperf3_congestion", type=str, default="cubic", help="Congestion control algorithm for iperf3")
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    # filter by valid regions
+    args.aws_region_list = [r for r in args.aws_region_list if r in aws_regions]
+    args.gcp_region_list = [r for r in args.gcp_region_list if r in gcp_regions]
+
+    return args
 
 
 def main(args):
-    logger.info(f"AWS regions: {args.aws_region_list}")
-    logger.info(f"GCP regions: {args.gcp_region_list}")
     data_dir = skylark_root / "data"
     log_dir = data_dir / "logs" / "throughput" / datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_dir.mkdir(exist_ok=True, parents=True)
@@ -58,7 +66,7 @@ def main(args):
     )
     instance_list: List[Server] = [i for ilist in aws_instances.values() for i in ilist]
     instance_list.extend([i for ilist in gcp_instances.values() for i in ilist])
-    if args.test_standard_network:
+    if args.gcp_test_standard_network:
         logger.info(f"Provisioning standard GCP instances")
         _, gcp_standard_instances = provision(
             aws=aws,
