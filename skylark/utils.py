@@ -23,7 +23,7 @@ class Timer:
 def do_parallel(func, args_list, n=8, progress_bar=False, leave_pbar=True, desc=None, arg_fmt=None):
     """Run list of jobs in parallel with tqdm progress bar"""
     if arg_fmt is None:
-        arg_fmt = lambda x: x
+        arg_fmt = lambda x: x.region_tag if hasattr(x, "region_tag") else x
 
     def wrapped_fn(args):
         return args, func(args)

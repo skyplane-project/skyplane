@@ -121,7 +121,7 @@ class AWSCloudProvider(CloudProvider):
             InstanceType=instance_class,
             MinCount=1,
             MaxCount=1,
-            KeyName=region,
+            KeyName=f"skylark-{region}",
             TagSpecifications=[
                 {
                     "ResourceType": "instance",

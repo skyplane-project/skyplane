@@ -48,11 +48,8 @@ def main(args):
     log_dir = data_dir / "logs" / "throughput" / datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_dir.mkdir(exist_ok=True, parents=True)
 
-    gcp_private_key = str(data_dir / "keys" / "gcp-cert.pem")
-    gcp_public_key = str(data_dir / "keys" / "gcp-cert.pub")
-
     aws = AWSCloudProvider()
-    gcp = GCPCloudProvider(args.gcp_project, gcp_private_key, gcp_public_key)
+    gcp = GCPCloudProvider(args.gcp_project)
     aws_instances, gcp_instances = provision(
         aws=aws,
         gcp=gcp,

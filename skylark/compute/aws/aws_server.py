@@ -1,23 +1,27 @@
 import os
 from functools import lru_cache
+from pathlib import Path
 
 import boto3
 from boto3 import session
 import paramiko
 from loguru import logger
+import questionary
 
 from skylark.compute.server import Server, ServerState
+from skylark import key_root
+from tqdm import tqdm
 
 
 class AWSServer(Server):
     """AWS Server class to support basic SSH operations"""
 
-    def __init__(self, region_tag, instance_id, log_dir=None):
+    def __init__(self, region_tag, instance_id, log_dir=None, key_root=key_root / "aws"):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "aws"
         self.aws_region = self.region_tag.split(":")[1]
         self.instance_id = instance_id
-        self.local_keyfile = self.make_keyfile()
+        self.local_keyfile = self.make_keyfile(key_root)
 
     def uuid(self):
         return f"{self.region_tag}:{self.instance_id}"
@@ -49,15 +53,23 @@ class AWSServer(Server):
             setattr(cls.ns, ns_key, client)
         return getattr(cls.ns, ns_key)
 
-    def make_keyfile(self):
-        local_key_file = os.path.expanduser(f"~/.ssh/{self.aws_region}.pem")
+    def make_keyfile(self, prefix):
+        prefix = Path(prefix)
+        key_name = f"skylark-{self.aws_region}"
+        local_key_file = prefix / f"{key_name}.pem"
         ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
-        if not os.path.exists(local_key_file):
-            key_pair = ec2.create_key_pair(KeyName=self.aws_region)
-            with open(local_key_file, "w") as f:
+        ec2_client = AWSServer.get_boto3_client("ec2", self.aws_region)
+        if not local_key_file.exists():
+            prefix.mkdir(parents=True, exist_ok=True)
+            # delete key pair from ec2 if it exists
+            keys_in_region = set(p["KeyName"] for p in ec2_client.describe_key_pairs()["KeyPairs"])
+            if key_name in keys_in_region:
+                logger.warning(f"Deleting key {key_name} in region {self.aws_region}")
+                ec2_client.delete_key_pair(KeyName=key_name)
+            key_pair = ec2.create_key_pair(KeyName=f"skylark-{self.aws_region}")
+            with local_key_file.open("w") as f:
                 f.write(key_pair.key_material)
             os.chmod(local_key_file, 0o600)
-            logger.info(f"({self.aws_region}) Created keypair and saved to {local_key_file}")
         return local_key_file
 
     @property
@@ -115,5 +127,5 @@ class AWSServer(Server):
     def get_ssh_client_impl(self):
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(self.public_ip, username="ubuntu", key_filename=self.local_keyfile)
+        client.connect(self.public_ip, username="ubuntu", key_filename=str(self.local_keyfile))
         return client
