@@ -52,58 +52,60 @@ def provision(
     log_dir: str = None,
 ) -> Tuple[Dict[str, List[AWSServer]], Dict[str, List[GCPServer]]]:
     """Provision list of instances in AWS and GCP in each specified region."""
-    aws_instance_filter = {
-        "tags": {"skylark": "true"},
-        "instance_type": aws_instance_class,
-        "state": [ServerState.PENDING, ServerState.RUNNING],
-    }
-    gcp_instance_filter = {
-        "tags": {"skylark": "true"},
-        "instance_type": gcp_instance_class,
-        "state": [ServerState.PENDING, ServerState.RUNNING],
-        "network_tier": "PREMIUM" if gcp_use_premium_network else "STANDARD",
-    }
-
-    # setup
-    do_parallel(aws.add_ip_to_security_group, aws_regions_to_provision, progress_bar=True, desc="add IP to aws security groups")
-    aws_instances = refresh_instance_list(aws, aws_regions_to_provision, aws_instance_filter)
-
-    gcp.create_ssh_key()
-    gcp.configure_default_network()
-    gcp.configure_default_firewall()
-    gcp_instances = refresh_instance_list(gcp, gcp_regions_to_provision, gcp_instance_filter)
-
-    # provision missing regions using do_parallel
-    missing_aws_regions = set(aws_regions_to_provision) - set(aws_instances.keys())
-    missing_gcp_regions = set(gcp_regions_to_provision) - set(gcp_instances.keys())
-    if missing_aws_regions:
-        logger.info(f"(aws) provisioning missing regions: {missing_aws_regions}")
-        aws_provisioner = lambda r: aws.provision_instance(r, aws_instance_class)
-        results = do_parallel(aws_provisioner, missing_aws_regions, progress_bar=True, desc="provision aws")
-        for region, result in results:
-            aws_instances[region] = [result]
-            logger.info(f"(aws:{region}) provisioned {result}, waiting for ready")
-            result.wait_for_ready()
-            logger.info(f"(aws:{region}) ready")
+    gcp_instances, all_instances = [], []
+    if len(aws_regions_to_provision) > 0:
+        logger.info(f"Provisioning AWS instances in {aws_regions_to_provision}")
+        aws_instance_filter = {
+            "tags": {"skylark": "true"},
+            "instance_type": aws_instance_class,
+            "state": [ServerState.PENDING, ServerState.RUNNING],
+        }
+        do_parallel(aws.add_ip_to_security_group, aws_regions_to_provision, progress_bar=True, desc="add IP to aws security groups")
         aws_instances = refresh_instance_list(aws, aws_regions_to_provision, aws_instance_filter)
-    if missing_gcp_regions:
-        logger.info(f"(gcp) provisioning missing regions: {missing_gcp_regions}")
-        gcp_provisioner = lambda r: gcp.provision_instance(r, gcp_instance_class, premium_network=gcp_use_premium_network)
-        results = do_parallel(
-            gcp_provisioner, missing_gcp_regions, progress_bar=True, desc=f"provision gcp (premium network = {gcp_use_premium_network})"
-        )
-        for region, result in results:
-            gcp_instances[region] = [result]
-            logger.info(f"(gcp:{region}) provisioned {result}")
+        missing_aws_regions = set(aws_regions_to_provision) - set(aws_instances.keys())
+        if missing_aws_regions:
+            logger.info(f"(aws) provisioning missing regions: {missing_aws_regions}")
+            aws_provisioner = lambda r: aws.provision_instance(r, aws_instance_class)
+            results = do_parallel(aws_provisioner, missing_aws_regions, progress_bar=True, desc="provision aws")
+            for region, result in results:
+                aws_instances[region] = [result]
+                logger.info(f"(aws:{region}) provisioned {result}, waiting for ready")
+                result.wait_for_ready()
+                logger.info(f"(aws:{region}) ready")
+            aws_instances = refresh_instance_list(aws, aws_regions_to_provision, aws_instance_filter)
+
+    if len(gcp_regions_to_provision) > 0:
+        logger.info(f"Provisioning GCP instances in {gcp_regions_to_provision}")
+        gcp_instance_filter = {
+            "tags": {"skylark": "true"},
+            "instance_type": gcp_instance_class,
+            "state": [ServerState.PENDING, ServerState.RUNNING],
+            "network_tier": "PREMIUM" if gcp_use_premium_network else "STANDARD",
+        }
+        gcp.create_ssh_key()
+        gcp.configure_default_network()
+        gcp.configure_default_firewall()
         gcp_instances = refresh_instance_list(gcp, gcp_regions_to_provision, gcp_instance_filter)
 
-    all_instances = [i for ilist in aws_instances.values() for i in ilist]
-    all_instances += [i for ilist in gcp_instances.values() for i in ilist]
+        # provision missing regions using do_parallel
+        missing_gcp_regions = set(gcp_regions_to_provision) - set(gcp_instances.keys())
+        if missing_gcp_regions:
+            logger.info(f"(gcp) provisioning missing regions: {missing_gcp_regions}")
+            gcp_provisioner = lambda r: gcp.provision_instance(r, gcp_instance_class, premium_network=gcp_use_premium_network)
+            results = do_parallel(
+                gcp_provisioner, missing_gcp_regions, progress_bar=True, desc=f"provision gcp (premium network = {gcp_use_premium_network})"
+            )
+            for region, result in results:
+                gcp_instances[region] = [result]
+                logger.info(f"(gcp:{region}) provisioned {result}")
+            gcp_instances = refresh_instance_list(gcp, gcp_regions_to_provision, gcp_instance_filter)
 
-    # run setup script on each instance (use do_parallel)
-    for i in all_instances:
+    # init log files
+    def init(i: Server):
+        i.wait_for_ready()
         i.init_log_files(log_dir)
-    if setup_script:
-        run_script = lambda i: i.copy_and_run_script(setup_script)
-        do_parallel(run_script, all_instances, progress_bar=True, desc="setup script")
+        if setup_script:
+            i.copy_and_run_script(setup_script)
+    all_instances = [i for ilist in aws_instances.values() for i in ilist] + [i for ilist in gcp_instances.values() for i in ilist]
+    do_parallel(init, all_instances, progress_bar=True, desc="init instances")
     return aws_instances, gcp_instances
