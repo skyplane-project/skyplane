@@ -122,7 +122,11 @@ class Server:
         while (time.time() - start_time) < timeout:
             try:
                 if self.instance_state == ServerState.RUNNING:
-                    return True
+                    try:
+                        self.run_command("true")
+                        return True
+                    except Exception as e:
+                        logger.warning(f"{self.instance_name} is not ready: {e}")
                 time.sleep(wait_intervals.pop(0))
             except Exception as e:
                 print(f"Error waiting for server to be ready: {e}")

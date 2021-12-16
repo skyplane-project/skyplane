@@ -7,19 +7,18 @@ import paramiko
 from tqdm import tqdm
 
 from skylark.compute.server import Server, ServerState
-
-DEFAULT_GCP_PRIVATE_KEY_PATH = os.path.expanduser("~/.ssh/google_compute_engine")
-DEFAULT_GCP_PUBLIC_KEY_PATH = os.path.expanduser("~/.ssh/google_compute_engine.pub")
+from skylark import key_root
 
 
 class GCPServer(Server):
-    def __init__(self, region_tag, gcp_project, instance_name, ssh_private_key=DEFAULT_GCP_PRIVATE_KEY_PATH, log_dir=None):
+    def __init__(self, region_tag, gcp_project, instance_name, key_root=key_root / "gcp", log_dir=None):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "gcp", f"Region name doesn't match pattern gcp:<region> {self.region_tag}"
         self.gcp_region = self.region_tag.split(":")[1]
         self.gcp_project = gcp_project
         self.gcp_instance_name = instance_name
-        self.ssh_private_key = os.path.expanduser(ssh_private_key)
+        key_root.mkdir(parents=True, exist_ok=True)
+        self.ssh_private_key = key_root / f"gcp.pem"
 
     def uuid(self):
         return f"{self.region_tag}:{self.gcp_instance_name}"
@@ -97,6 +96,10 @@ class GCPServer(Server):
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh_client.connect(
-            hostname=self.public_ip, username=uname, key_filename=self.ssh_private_key, passphrase=ssh_key_password, look_for_keys=False
+            hostname=self.public_ip,
+            username=uname,
+            key_filename=str(self.ssh_private_key),
+            passphrase=ssh_key_password,
+            look_for_keys=False,
         )
         return ssh_client

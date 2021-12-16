@@ -14,12 +14,7 @@ from skylark.utils import do_parallel
 def refresh_instance_list(provider: CloudProvider, region_list=[None], instance_filter=None) -> Dict[str, List[Server]]:
     if instance_filter is None:
         instance_filter = {"tags": {"skylark": "true"}}
-    results = do_parallel(
-        lambda region: provider.get_matching_instances(region=region, **instance_filter),
-        region_list,
-        progress_bar=True,
-        # desc=f"refresh {provider.name}",
-    )
+    results = do_parallel(lambda region: provider.get_matching_instances(region=region, **instance_filter), region_list, progress_bar=False)
     return {r: ilist for r, ilist in results if ilist}
 
 
@@ -69,9 +64,6 @@ def provision(
             results = do_parallel(aws_provisioner, missing_aws_regions, progress_bar=True, desc="provision aws")
             for region, result in results:
                 aws_instances[region] = [result]
-                logger.info(f"(aws:{region}) provisioned {result}, waiting for ready")
-                result.wait_for_ready()
-                logger.info(f"(aws:{region}) ready")
             aws_instances = refresh_instance_list(aws, aws_regions_to_provision, aws_instance_filter)
 
     if len(gcp_regions_to_provision) > 0:
@@ -86,8 +78,6 @@ def provision(
         gcp.configure_default_network()
         gcp.configure_default_firewall()
         gcp_instances = refresh_instance_list(gcp, gcp_regions_to_provision, gcp_instance_filter)
-
-        # provision missing regions using do_parallel
         missing_gcp_regions = set(gcp_regions_to_provision) - set(gcp_instances.keys())
         if missing_gcp_regions:
             logger.info(f"(gcp) provisioning missing regions: {missing_gcp_regions}")
@@ -97,7 +87,6 @@ def provision(
             )
             for region, result in results:
                 gcp_instances[region] = [result]
-                logger.info(f"(gcp:{region}) provisioned {result}")
             gcp_instances = refresh_instance_list(gcp, gcp_regions_to_provision, gcp_instance_filter)
 
     # init log files
@@ -108,5 +97,5 @@ def provision(
             i.copy_and_run_script(setup_script)
 
     all_instances = [i for ilist in aws_instances.values() for i in ilist] + [i for ilist in gcp_instances.values() for i in ilist]
-    do_parallel(init, all_instances, progress_bar=True, desc="init instances")
+    do_parallel(init, all_instances, progress_bar=True, desc="Provisioning init")
     return aws_instances, gcp_instances

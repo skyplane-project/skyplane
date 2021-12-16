@@ -9,17 +9,19 @@ from loguru import logger
 
 import paramiko
 
-from skylark.compute.gcp.gcp_server import GCPServer, DEFAULT_GCP_PRIVATE_KEY_PATH, DEFAULT_GCP_PUBLIC_KEY_PATH
+from skylark.compute.gcp.gcp_server import GCPServer
 from skylark.compute.cloud_providers import CloudProvider
-from skylark.compute.server import Server, ServerState
+from skylark.compute.server import Server
+from skylark import key_root
 
 
 class GCPCloudProvider(CloudProvider):
-    def __init__(self, gcp_project, private_key_path=DEFAULT_GCP_PRIVATE_KEY_PATH, public_key_path=DEFAULT_GCP_PUBLIC_KEY_PATH):
+    def __init__(self, gcp_project, key_root=key_root / "gcp"):
         super().__init__()
         self.gcp_project = gcp_project
-        self.private_key_path = os.path.expanduser(private_key_path)
-        self.public_key_path = os.path.expanduser(public_key_path)
+        key_root.mkdir(parents=True, exist_ok=True)
+        self.private_key_path = key_root / "gcp-cert.pem"
+        self.public_key_path = key_root / "gcp-cert.pub"
 
     @property
     def name(self):

@@ -20,6 +20,7 @@ setup(
         "pandas",
         "paramiko",
         "tqdm",
+        "questionary",
     ],
     extras_require={"test": ["black", "pytest", "ipython", "jupyter_console"]}
 )
