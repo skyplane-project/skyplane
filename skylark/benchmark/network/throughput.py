@@ -44,6 +44,8 @@ def parse_args():
 
 
 def main(args):
+    logger.info(f"AWS regions: {args.aws_region_list}")
+    logger.info(f"GCP regions: {args.gcp_region_list}")
     data_dir = skylark_root / "data"
     log_dir = data_dir / "logs" / "throughput" / datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_dir.mkdir(exist_ok=True, parents=True)
