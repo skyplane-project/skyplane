@@ -89,7 +89,9 @@ int main()
 						NET_BUF_SIZE, sendrecvflag,
 						(struct sockaddr*)&addr_con, &addrlen);
 
-		fp = fopen(net_buf, "r");
+    // Check if file open here by invoking skylark::FilFileSys.getFilePath(net_buf)
+    
+    fp = fopen(net_buf, "r");
 		printf("\nFile Name Received: %s\n", net_buf);
 		if (fp == NULL)
 			printf("\nFile open failed!\n");
