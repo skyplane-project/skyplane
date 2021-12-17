@@ -116,6 +116,7 @@ class AWSCloudProvider(CloudProvider):
         if ami_id is None:
             ami_id = self.get_ubuntu_ami_id(region)
         ec2 = AWSServer.get_boto3_resource("ec2", region)
+        AWSServer.make_keyfile(region)
         instance = ec2.create_instances(
             ImageId=ami_id,
             InstanceType=instance_class,
