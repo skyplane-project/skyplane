@@ -16,12 +16,12 @@ from tqdm import tqdm
 class AWSServer(Server):
     """AWS Server class to support basic SSH operations"""
 
-    def __init__(self, region_tag, instance_id, log_dir=None, key_root=key_root / "aws"):
+    def __init__(self, region_tag, instance_id, log_dir=None):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "aws"
         self.aws_region = self.region_tag.split(":")[1]
         self.instance_id = instance_id
-        self.local_keyfile = self.make_keyfile(key_root)
+        self.local_keyfile = self.make_keyfile(self.aws_region)
 
     def uuid(self):
         return f"{self.region_tag}:{self.instance_id}"
@@ -53,20 +53,21 @@ class AWSServer(Server):
             setattr(cls.ns, ns_key, client)
         return getattr(cls.ns, ns_key)
 
-    def make_keyfile(self, prefix):
+    @staticmethod
+    def make_keyfile(aws_region, prefix=key_root / "aws"):
         prefix = Path(prefix)
-        key_name = f"skylark-{self.aws_region}"
+        key_name = f"skylark-{aws_region}"
         local_key_file = prefix / f"{key_name}.pem"
-        ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
-        ec2_client = AWSServer.get_boto3_client("ec2", self.aws_region)
+        ec2 = AWSServer.get_boto3_resource("ec2", aws_region)
+        ec2_client = AWSServer.get_boto3_client("ec2", aws_region)
         if not local_key_file.exists():
             prefix.mkdir(parents=True, exist_ok=True)
             # delete key pair from ec2 if it exists
             keys_in_region = set(p["KeyName"] for p in ec2_client.describe_key_pairs()["KeyPairs"])
             if key_name in keys_in_region:
-                logger.warning(f"Deleting key {key_name} in region {self.aws_region}")
+                logger.warning(f"Deleting key {key_name} in region {aws_region}")
                 ec2_client.delete_key_pair(KeyName=key_name)
-            key_pair = ec2.create_key_pair(KeyName=f"skylark-{self.aws_region}")
+            key_pair = ec2.create_key_pair(KeyName=f"skylark-{aws_region}")
             with local_key_file.open("w") as f:
                 f.write(key_pair.key_material)
             os.chmod(local_key_file, 0o600)
