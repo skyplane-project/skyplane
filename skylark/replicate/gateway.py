@@ -101,6 +101,8 @@ def client(args):
     chunk_file_path.parent.mkdir(parents=True, exist_ok=True)
     chunk_file_size = os.path.getsize(chunk_file_path)
     with Timer() as t:
+        # send first 4 bytes containing file size
+        sock.send(chunk_file_size.to_bytes(4, byteorder='big'))
         with open(chunk_file_path, 'rb') as chunk_fd:
             sock.sendfile(chunk_fd)
         sock.close()
@@ -118,24 +120,28 @@ def server(args):
     signal.signal(signal.SIGINT, signal_handler)
 
     while True:
-        conn, addr = sock.accept()
-        logger.info(f'[{addr}] Connected')
-        Path(args.chunk_dir).mkdir(parents=True, exist_ok=True)
+        try:
+            conn, addr = sock.accept()
+            logger.info(f'[{addr}] Connected')
+            Path(args.chunk_dir).mkdir(parents=True, exist_ok=True)
 
-        with Timer() as t:
-            chunk_fd_system, chunk_id = tempfile.mkstemp(dir=args.chunk_dir)
-            with open(chunk_fd_system, 'wb') as chunk_fd:
-                while True:
-                    data = conn.recv(1024)
-                    if not data:
-                        break
-                    chunk_fd.write(data)
-            conn.close()
-        
-        chunk_file_path = Path(args.chunk_dir) / chunk_id
-        chunk_file_size = os.path.getsize(chunk_file_path)
+            with Timer() as t:
+                chunk_fd_system, chunk_id = tempfile.mkstemp(dir=args.chunk_dir)
+                # get file size from first 4 bytes
+                chunk_size = int.from_bytes(conn.recv(4), byteorder='big')
+                with open(chunk_fd_system, 'wb') as chunk_fd:
+                    sent = os.sendfile(chunk_fd_system, conn.fileno(), 0, chunk_size - 1)
+                conn.close()
+            
+            chunk_file_path = Path(args.chunk_dir) / chunk_id
+            chunk_file_size = os.path.getsize(chunk_file_path)
 
-        logger.info(f'[{chunk_id}] Received {chunk_file_size / 1e6:.1f}MB in {t.elapsed:.2} seconds at {chunk_file_size / t.elapsed / 1e9:.4f} Gbps')
+            logger.info(f'[{chunk_id}] Received {chunk_file_size / 1e6:.1f}MB in {t.elapsed:.2} seconds at {chunk_file_size / t.elapsed / 1e9:.4f} Gbps')
+            logger.debug(f'[{chunk_id}] header file size = {chunk_size}')
+            logger.debug(f'[{chunk_id}] received file size = {sent}')
+            logger.debug(f'[{chunk_id}] chunk file size = {chunk_file_size}')
+        except Exception as e:
+            logger.exception(e)
 
 if __name__ == '__main__':
     args = parse_args()
