@@ -16,8 +16,11 @@ int main(){
   freeReplyObject(reply);
   reply = redisCommand(c,"SET %s %s","foo","bar"); 
   freeReplyObject(reply); 
+  reply = redisCommand(c, "EXISTS %s", "foo");
+  printf("%lld \n", reply->integer);
+  freeReplyObject(reply);
   reply = redisCommand(c,"GET %s", "foo"); 
-  printf("%sn",reply->str); 
+  printf("%s \n",reply->str); 
   freeReplyObject(reply);
 	redisFree(c);
 }
