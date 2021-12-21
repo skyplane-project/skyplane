@@ -1,5 +1,6 @@
 from setuptools import setup
 
+
 setup(
     name='skylark',
     version='0.1',
@@ -7,20 +8,19 @@ setup(
     python_requires=">=3.8",
     install_requires=[
         "boto3",
-        # "cylp",
-        "cvxpy",
-        "cvxopt",
         "click",
-        "google-cloud-compute",
+        "cvxopt",
+        "cvxpy",
         "google-api-python-client",
+        "google-cloud-compute",
         "graphviz",
         "loguru",
         "matplotlib",
         "numpy",
         "pandas",
         "paramiko",
-        "tqdm",
         "questionary",
+        "tqdm",
     ],
     extras_require={"test": ["black", "pytest", "ipython", "jupyter_console"]}
 )
