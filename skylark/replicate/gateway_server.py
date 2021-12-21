@@ -35,7 +35,7 @@ def server_worker(port, chunk_dir, blk_size=32 * 1024 * 1024):
 
             chunk_file_size = chunk_path.stat().st_size
             logger.info(
-                f"[{chunk_idx}] Received {chunk_file_size / 1e6:.1f}MB in {t.elapsed:.2} seconds at {chunk_file_size / t.elapsed / 1e9:.4f} Gbps from {addr}"
+                f"[{chunk_idx}] Received {chunk_file_size / 1e6:.1f}MB in {t.elapsed:.2} seconds at {chunk_file_size * 8 / t.elapsed / 1e9:.4f} Gbps from {addr}"
             )
         except Exception as e:
             logger.error(e)
@@ -64,7 +64,7 @@ if __name__ == "__main__":
     parser.add_argument("--chunk_dir", default="/dev/shm/skylark/chunks_out", type=str)
     parser.add_argument("--port", default=8100, type=int)
     parser.add_argument("--num_connections", default=1, type=int)
-    parser.add_argument("--blk_size", default=1024 * 1024, type=int)
+    parser.add_argument("--blk_size", default=4096 * 16, type=int)
     args = parser.parse_args()
     Path(args.chunk_dir).mkdir(parents=True, exist_ok=True)
     server(args)
