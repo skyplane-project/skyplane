@@ -7,6 +7,7 @@ from tqdm import tqdm
 
 PathLike = Union[str, Path]
 
+
 class Timer:
     def __init__(self):
         self.start = time.time()
