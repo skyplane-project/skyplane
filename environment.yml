@@ -1,0 +1,22 @@
+name: skylark
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.9
+  - pip
+  - graphviz
+  - cvxpy
+  - numpy
+  - pip:
+    - google-cloud-compute
+    - google-api-python-client
+    - boto3
+    - click
+    - cvxopt
+    - pandas
+    - loguru
+    - matplotlib
+    - paramiko
+    - questionary
+    - tqdm

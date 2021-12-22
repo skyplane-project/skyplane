@@ -120,6 +120,7 @@ def main(args):
     out, err = dst_server.run_command("iperf3 -s -D")
     out, err = src_server.run_command("iperf3 -c {} -t 10".format(dst_server.public_ip))
     dst_server.run_command("sudo pkill iperf3")
+    print(out)
 
 if __name__ == "__main__":
     args = parse_args()
