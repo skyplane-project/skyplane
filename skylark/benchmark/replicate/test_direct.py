@@ -28,10 +28,11 @@ def parse_args():
     parser.add_argument("--gateway_docker_image", type=str, default="ghcr.io/parasj/skylark-docker:latest", help="Gateway docker image")
     return parser.parse_args()
 
+
 def setup(tup):
     server, docker_image = tup
     server.run_command("sudo apt-get update && sudo apt-get install -y iperf3")
-    docker_installed = 'Docker version' in server.run_command(f"sudo docker --version")[0]
+    docker_installed = "Docker version" in server.run_command(f"sudo docker --version")[0]
     if not docker_installed:
         logger.debug(f"[{server.region_tag}] Installing docker")
         server.run_command("curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh")
@@ -39,9 +40,10 @@ def setup(tup):
     assert "Hello from Docker!" in out
     server.run_command("sudo docker pull {}".format(docker_image))
 
+
 def parse_output(output):
     stdout, stderr = output
-    last_line = stdout.strip().split('\n')
+    last_line = stdout.strip().split("\n")
     if len(last_line) > 0:
         try:
             return json.loads(last_line[-1])
@@ -50,6 +52,7 @@ def parse_output(output):
     else:
         logger.error(f"No output from server, stderr = {stderr}")
         return None
+
 
 def main(args):
     data_dir = skylark_root / "data"
@@ -60,8 +63,8 @@ def main(args):
     gcp = GCPCloudProvider(args.gcp_project)
 
     # provision and setup servers
-    aws_regions = [r.split(':')[1] for r in [args.src_region, args.dst_region] if r.startswith("aws:")]
-    gcp_regions = [r.split(':')[1] for r in [args.src_region, args.dst_region] if r.startswith("gcp:")]
+    aws_regions = [r.split(":")[1] for r in [args.src_region, args.dst_region] if r.startswith("aws:")]
+    gcp_regions = [r.split(":")[1] for r in [args.src_region, args.dst_region] if r.startswith("gcp:")]
     aws_instances, gcp_instances = provision(
         aws=aws,
         gcp=gcp,
@@ -72,23 +75,28 @@ def main(args):
         gcp_use_premium_network=not args.gcp_test_standard_network,
         log_dir=str(log_dir),
     )
-    
+
     # select servers
-    src_cloud_region = args.src_region.split(':')[1]
+    src_cloud_region = args.src_region.split(":")[1]
     if args.src_region.startswith("aws:"):
         src_server = aws_instances[src_cloud_region][0]
     elif args.src_region.startswith("gcp:"):
         src_server = gcp_instances[src_cloud_region][0]
     else:
         raise ValueError(f"Unknown region {args.src_region}")
-    dst_cloud_region = args.dst_region.split(':')[1]
+    dst_cloud_region = args.dst_region.split(":")[1]
     if args.dst_region.startswith("aws:"):
         dst_server = aws_instances[dst_cloud_region][0]
     elif args.dst_region.startswith("gcp:"):
         dst_server = gcp_instances[dst_cloud_region][0]
     else:
         raise ValueError(f"Unknown region {args.dst_region}")
-    do_parallel(setup, [(src_server, args.gateway_docker_image), (dst_server, args.gateway_docker_image)], progress_bar=True, arg_fmt=lambda tup: tup[0].region_tag)
+    do_parallel(
+        setup,
+        [(src_server, args.gateway_docker_image), (dst_server, args.gateway_docker_image)],
+        progress_bar=True,
+        arg_fmt=lambda tup: tup[0].region_tag,
+    )
 
     # generate random 1GB file on src server in /dev/shm/skylark/chunks_in
     src_server.run_command("mkdir -p /dev/shm/skylark/chunks_in")
@@ -99,7 +107,7 @@ def main(args):
     src_server.run_command("sudo docker kill gateway_server")
     dst_server.run_command("sudo docker kill gateway_server")
 
-    # start gateway on dst server    
+    # start gateway on dst server
     dst_ip = dst_server.run_command("dig +short myip.opendns.com @resolver1.opendns.com")[0].strip()
     server_cmd = f"sudo docker run -d --rm --ipc=host --network=host --name=gateway_server {args.gateway_docker_image} /env/bin/python /pkg/skylark/replicate/gateway_server.py --port 3333 --num_connections 1"
     dst_server.run_command(server_cmd)
@@ -109,7 +117,7 @@ def main(args):
         if dst_server.run_command("sudo netstat -tulpn | grep 3333")[0].strip() != "":
             break
         time.sleep(1)
-    
+
     # benchmark src to dst copy
     client_cmd = f"sudo docker run --rm --ipc=host --network=host --name=gateway_client {args.gateway_docker_image} /env/bin/python /pkg/skylark/replicate/gateway_client.py --dst_host {dst_server.public_ip} --dst_port 3333 --chunk_id 1"
     dst_data = parse_output(src_server.run_command(client_cmd))
@@ -121,6 +129,7 @@ def main(args):
     out, err = src_server.run_command("iperf3 -c {} -t 10".format(dst_server.public_ip))
     dst_server.run_command("sudo pkill iperf3")
     print(out)
+
 
 if __name__ == "__main__":
     args = parse_args()

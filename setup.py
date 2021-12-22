@@ -7,6 +7,7 @@ setup(
     packages=["skylark"],
     python_requires=">=3.8",
     install_requires=[
+        "awscrt",
         "boto3",
         "click",
         "cvxopt",
