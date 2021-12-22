@@ -8,6 +8,7 @@ from loguru import logger
 
 from skylark.utils import Timer
 
+
 def check_reachable(host, port):
     """check reachability via port 22"""
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -37,7 +38,7 @@ def client(args):
         with open(chunk_file_path, "rb") as chunk_fd:
             sock.sendfile(chunk_fd)
         sock.close()
-    
+
     throughput_gbps = chunk_file_size * 8 / t.elapsed / 1e9
     logger.info(f"[{args.chunk_id}] Sent {chunk_file_size / 1e6:.1f}MB in {t.elapsed:.2} seconds at {throughput_gbps:.4f} Gbps")
     print(json.dumps({"chunk_id": args.chunk_id, "size_bytes": chunk_file_size, "runtime_s": t.elapsed, "speed_gbps": throughput_gbps}))
@@ -46,7 +47,7 @@ def client(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Skylark Gateway client")
     parser.add_argument("--chunk_dir", default="/dev/shm/skylark/chunks_in")
-    parser.add_argument("--dst_host", default='127.0.0.1')
+    parser.add_argument("--dst_host", default="127.0.0.1")
     parser.add_argument("--dst_port", default=8100, type=int)
     parser.add_argument("--chunk_id", default=None, type=str)
     args = parser.parse_args()
