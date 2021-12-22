@@ -76,9 +76,9 @@ class Server:
     @property
     def ssh_client(self):
         """Create SSH client and cache (one connection per thread using threadlocal)"""
-        if not hasattr(self.ns, "client"):
-            self.ns.client = self.get_ssh_client_impl()
-        return self.ns.client
+        if not hasattr(self, "client"):
+            self.client = self.get_ssh_client_impl()
+        return self.client
 
     @property
     def instance_state(self) -> ServerState:

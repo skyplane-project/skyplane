@@ -77,7 +77,8 @@ class AWSServer(Server):
     def public_ip(self):
         ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
         instance = ec2.Instance(self.instance_id)
-        return instance.public_ip_address
+        ip = instance.public_ip_address
+        return ip
 
     @property
     @lru_cache(maxsize=1)
