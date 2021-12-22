@@ -13,13 +13,14 @@ from skylark.utils import Timer
 def server_worker(port, chunk_dir, blk_size=32 * 1024 * 1024):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 1)
-    sock.bind(("", port))
+    sock.bind(("0.0.0.0", port))
     logger.info(f"Listening on port {port}")
     sock.listen(1)
 
     while True:
         try:
             conn, addr = sock.accept()
+            logger.info(f"Accepted connection from {addr}")
             Path(args.chunk_dir).mkdir(parents=True, exist_ok=True)
 
             with Timer() as t:
@@ -42,7 +43,7 @@ def server_worker(port, chunk_dir, blk_size=32 * 1024 * 1024):
 
 
 def server(args):
-    logger.info(f"Starting server on port {args.port}...{args.port + args.num_connections}")
+    logger.info(f"Starting server on port {args.port}...{args.port + args.num_connections - 1}")
     processes = []
     for i in range(args.num_connections):
         port = args.port + i
@@ -63,7 +64,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Skylark gateway server")
     parser.add_argument("--chunk_dir", default="/dev/shm/skylark/chunks_out", type=str)
     parser.add_argument("--port", default=8100, type=int)
-    parser.add_argument("--num_connections", default=1, type=int)
+    parser.add_argument("--num_connections", default=16, type=int)
     parser.add_argument("--blk_size", default=4096 * 16, type=int)
     args = parser.parse_args()
     Path(args.chunk_dir).mkdir(parents=True, exist_ok=True)
