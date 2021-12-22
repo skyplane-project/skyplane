@@ -41,7 +41,6 @@ class S3Interface:
         self.completed_uploads += 1
         self.pending_uploads -= 1
 
-
     def reset_stats(self):
         self.stats_download = ThroughputStatistics()
         self.stats_upload = ThroughputStatistics()
@@ -52,14 +51,14 @@ class S3Interface:
     def download_object(self, src_object_name, dst_file_path) -> Future:
         download_headers = HttpHeaders([("host", self.bucket_name + ".s3." + self.aws_region + ".amazonaws.com")])
         request = HttpRequest("GET", src_object_name, download_headers)
-        
+
         def _on_body_download(offset, chunk, **kwargs):
             if not os.path.exists(dst_file_path):
-                open(dst_file_path, 'a').close()
-            with open(dst_file_path, 'rb+') as f:
+                open(dst_file_path, "a").close()
+            with open(dst_file_path, "rb+") as f:
                 f.seek(offset)
                 f.write(chunk)
-        
+
         return self._s3_client.make_request(
             recv_filepath=dst_file_path,
             request=request,
