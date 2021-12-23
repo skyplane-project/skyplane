@@ -112,6 +112,7 @@ class GCPCloudProvider(CloudProvider):
         if "items" in gcp_instance_result:
             instance_list = []
             for i in gcp_instance_result["items"]:
+                print("KEY PATH", self.private_key_path)
                 instance_list.append(GCPServer(f"gcp:{region}", self.gcp_project, i["name"], ssh_private_key=self.private_key_path))
             return instance_list
         else:
