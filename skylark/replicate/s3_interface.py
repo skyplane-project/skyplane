@@ -12,6 +12,7 @@ from awscrt.auth import AwsCredentialsProvider
 from awscrt.http import HttpHeaders, HttpRequest
 
 from skylark.utils import Timer
+from skylark.compute.aws.aws_server import AWSServer
 
 
 class S3Interface:
@@ -41,14 +42,31 @@ class S3Interface:
         self.completed_uploads += 1
         self.pending_uploads -= 1
 
-    def reset_stats(self):
-        self.stats_download = ThroughputStatistics()
-        self.stats_upload = ThroughputStatistics()
+    def bucket_exists(self):
+        s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
+        return self.bucket_name in [b["Name"] for b in s3_client.list_buckets()["Buckets"]]
 
-    def get_stats(self):
-        return self.stats.bytes_peak(), self.stats.bytes_avg()
+    def create_bucket(self):
+        s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
+        if not self.bucket_exists():
+            if self.aws_region == "us-east-1":
+                s3_client.create_bucket(Bucket=self.bucket_name)
+            else:
+                s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": self.aws_region})
+        assert self.bucket_exists()
+
+    def list_objects(self, prefix="") -> list:
+        # todo: pagination
+        s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
+        paginator = s3_client.get_paginator("list_objects_v2")
+        page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix)
+        for page in page_iterator:
+            for obj in page.get("Contents", []):
+                yield obj
 
     def download_object(self, src_object_name, dst_file_path) -> Future:
+        src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
+        assert src_object_name.startswith("/")
         download_headers = HttpHeaders([("host", self.bucket_name + ".s3." + self.aws_region + ".amazonaws.com")])
         request = HttpRequest("GET", src_object_name, download_headers)
 
@@ -68,6 +86,8 @@ class S3Interface:
         ).finished_future
 
     def upload_object(self, src_file_path, dst_object_name, content_type="infer") -> Future:
+        src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
+        assert dst_object_name.startswith("/")
         content_len = os.path.getsize(src_file_path)
         if content_type == "infer":
             content_type = mimetypes.guess_type(src_file_path)[0] or "application/octet-stream"
