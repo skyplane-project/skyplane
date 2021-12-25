@@ -3,6 +3,8 @@ from typing import List
 
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
+from skylark.replicate.obj_store_interface import S3Interface
+from skylark.utils import do_parallel
 
 
 @dataclass
@@ -12,6 +14,14 @@ class ReplicationJob:
     dest_region: str
     dest_bucket: str
     objs: List[str]
+
+    def src_obj_sizes(self):
+        if self.source_region.split(":")[0] == "aws":
+            interface = S3Interface(self.source_region, self.source_bucket)
+            get_size = lambda o: interface.get_obj_size(o)
+        else:
+            raise NotImplementedError
+        return do_parallel(get_size, self.objs)
 
 
 class ReplicationTopology:
@@ -49,7 +59,9 @@ class ReplicationTopology:
         else:
             assert self.dest == path[-1]
 
+        path_id = len(self.paths)
         self.paths.append(path)
+        return path_id
 
     def get_direct_paths(self) -> List[List[str]]:
         return [p for p in self.paths if len(p) == 2]
@@ -58,7 +70,8 @@ class ReplicationTopology:
         return [p for p in self.paths if len(p) > 2]
 
 
-@dataclass
 class ReplicationPlan:
-    topology: ReplicationTopology
-    jobs: List[ReplicationJob]
+    def __init__(self, topology: ReplicationTopology, job: ReplicationJob):
+        self.topology = topology
+        self.job = job
+        self.obj_sizes = job.src_obj_sizes()
