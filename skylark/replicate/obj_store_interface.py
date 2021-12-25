@@ -15,7 +15,27 @@ from skylark.utils import Timer
 from skylark.compute.aws.aws_server import AWSServer
 
 
-class S3Interface:
+class ObjectStoreInterface:
+    def bucket_exists(self):
+        raise NotImplementedError
+
+    def create_bucket(self):
+        raise NotImplementedError
+
+    def list_objects(self, prefix=""):
+        raise NotImplementedError
+
+    def get_obj_size(self, obj_name):
+        raise NotImplementedError
+
+    def download_object(self, src_object_name, dst_file_path):
+        raise NotImplementedError
+
+    def upload_object(self, src_file_path, dst_object_name, content_type="infer"):
+        raise NotImplementedError
+
+
+class S3Interface(ObjectStoreInterface):
     def __init__(self, aws_region, bucket_name, use_tls=True):
         self.aws_region = aws_region
         self.bucket_name = bucket_name
@@ -63,6 +83,13 @@ class S3Interface:
         for page in page_iterator:
             for obj in page.get("Contents", []):
                 yield obj
+
+    def get_obj_metadata(self, obj_name):
+        s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
+        return s3_client.head_object(Bucket=self.bucket_name, Key=obj_name)
+
+    def get_obj_size(self, obj_name):
+        return self.get_obj_metadata(obj_name)["ContentLength"]
 
     def download_object(self, src_object_name, dst_file_path) -> Future:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
