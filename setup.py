@@ -12,6 +12,7 @@ setup(
         "click",
         "cvxopt",
         "cvxpy",
+        "flask",
         "google-api-python-client",
         "google-cloud-compute",
         "graphviz",
