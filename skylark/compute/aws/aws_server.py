@@ -92,8 +92,8 @@ class AWSServer(Server):
     def tags(self):
         ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
         instance = ec2.Instance(self.instance_id)
+        # returns empty dict if no tags 
         if instance.tags is None: 
-            print("No tags", self.instance_id)
             return {}
         return {tag["Key"]: tag["Value"] for tag in instance.tags}
 
