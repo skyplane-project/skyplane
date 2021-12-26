@@ -15,6 +15,7 @@ from skylark.compute.gcp.gcp_server import GCPServer
 from skylark.compute.server import Server
 from skylark.utils import do_parallel
 
+# traceroute parser from https://github.com/ckreibich/tracerouteparser.py
 from tracerouteparser import TracerouteParser
 
 def parse_args():
@@ -82,22 +83,13 @@ def main(args):
     def setup(instance: Server):
         instance.run_command("sudo apt-get update")
         instance.run_command("sudo apt-get install traceroute")
-        #instance.run_command("sudo apt-get install -y iperf3")
-        #instance.run_command("pkill iperf3")
-        #instance.run_command("iperf3 -s -D")
-        #if args.iperf3_congestion == "bbr":
-        #    instance.run_command("sudo sysctl -w net.ipv4.tcp_congestion_control=bbr")
-        #    instance.run_command("sudo sysctl -w net.core.default_qdisc=fq")
-        #    instance.run_command("sudo sysctl -w net.ipv4.tcp_available_congestion_control=bbr")
 
     do_parallel(setup, instance_list, progress_bar=True, n=24, desc="Setup")
 
-
-    # start iperf3 clients on each pair of instances
-    def start_iperf3_client(arg_pair: Tuple[Server, Server]):
+    # run traceroute on each pair of instances
+    def run_traceroute(arg_pair: Tuple[Server, Server]):
         instance_src, instance_dst = arg_pair
         src_ip, dst_ip = instance_src.public_ip, instance_dst.public_ip
-        #stdout, stderr = instance_src.run_command(f"iperf3 -J -C {args.iperf3_congestion} -t {args.iperf3_runtime} -P 32 -c {dst_ip}")
         logger.info(f"traceroute {instance_src.region_tag} -> {instance_dst.region_tag} ({dst_ip})")
         stdout, stderr = instance_src.run_command(f"traceroute {dst_ip}")
 
@@ -108,17 +100,6 @@ def main(args):
             result[idx] = []
             for probe in parser.hops[idx].probes: 
                 result[idx].append({"ipaddr": probe.ipaddr, "name": probe.name, "rtt": probe.rtt})
-
-
-        # TODO: parse results nicely
-        #try:
-        #    result = json.loads(stdout)
-        #except json.JSONDecodeError:
-        #    logger.error(f"({instance_src.region_tag} -> {instance_dst.region_tag}) iperf3 client failed: {stdout} {stderr}")
-        #    return None
-        #throughput_sent = result["end"]["sum_sent"]["bits_per_second"]
-        #throughput_received = result["end"]["sum_received"]["bits_per_second"]
-
         tqdm.write(
                 f"({instance_src.region_tag}:{instance_src.network_tier} -> {instance_dst.region_tag}:{instance_dst.network_tier}) hops: {len(result.keys())}"
         )
@@ -127,13 +108,13 @@ def main(args):
        
         return result
 
-    throughput_results = []
+    traceroute_results = []
     instance_pairs = [(i1, i2) for i1 in instance_list for i2 in instance_list if i1 != i2]
-    with tqdm(total=len(instance_pairs), desc="Total throughput evaluation") as pbar:
+    with tqdm(total=len(instance_pairs), desc="Total traceroute evaluation") as pbar:
         groups = split_list(instance_pairs)
         for group_idx, group in enumerate(groups):
             results = do_parallel(
-                start_iperf3_client,
+                run_traceroute,
                 group,
                 progress_bar=True,
                 desc=f"Parallel eval group {group_idx}",
@@ -151,10 +132,10 @@ def main(args):
                 result_rec["src_network_tier"] = pair[0].network_tier
                 result_rec["dst_network_tier"] = pair[1].network_tier
                 result_rec["result"] = result
-                throughput_results.append(result_rec)
+                traceroute_results.append(result_rec)
 
-    throughput_dir = data_dir / "traceroute" / "iperf3"
-    throughput_dir.mkdir(exist_ok=True, parents=True)
+    traceroute_dir = data_dir / "traceroute" / "iperf3"
+    traceroute_dir.mkdir(exist_ok=True, parents=True)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     with open(str(throughput_dir / f"traceroute_{timestamp}.json"), "w") as f:
         json.dump(throughput_results, f)
