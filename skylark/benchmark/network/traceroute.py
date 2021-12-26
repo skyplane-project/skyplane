@@ -44,7 +44,7 @@ def parse_args():
 
 def main(args):
     data_dir = skylark_root / "data"
-    log_dir = data_dir / "logs" / "throughput" / datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_dir = data_dir / "logs" / "traceroute" / datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_dir.mkdir(exist_ok=True, parents=True)
 
     aws = AWSCloudProvider()
@@ -133,8 +133,8 @@ def main(args):
     traceroute_dir = data_dir / "traceroute"
     traceroute_dir.mkdir(exist_ok=True, parents=True)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    with open(str(throughput_dir / f"traceroute_{timestamp}.json"), "w") as f:
-        json.dump(throughput_results, f)
+    with open(str(traceroute_dir / f"traceroute_{timestamp}.json"), "w") as f:
+        json.dump(traceroute_results, f)
 
 
 if __name__ == "__main__":
