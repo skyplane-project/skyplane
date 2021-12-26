@@ -204,9 +204,5 @@ traceroute to edgecastcdn.net (72.21.81.13), 30 hops max, 38 byte packets
     # Give it some data:
     trp.parse_data(tr_data)
 
-    # Built-up data structures as string. Should look effectively
-    # identical to the above input string.
-    #print trp
-
 if __name__ == '__main__':
     demo()

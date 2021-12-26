@@ -33,9 +33,6 @@ def parse_args():
     )
 
     parser.add_argument("--setup_script", type=str, default=None, help="Setup script to run on each instance (URL), optional")
-    parser.add_argument("--iperf_connection_list", type=int, nargs="+", default=[128], help="List of connections to test")
-    parser.add_argument("--iperf3_runtime", type=int, default=4, help="Runtime for iperf3 in seconds")
-    parser.add_argument("--iperf3_congestion", type=str, default="cubic", help="Congestion control algorithm for iperf3")
     args = parser.parse_args()
 
     # filter by valid regions
@@ -124,7 +121,6 @@ def main(args):
             for pair, result in results:
                 pbar.update(1)
                 result_rec = {}
-                result_rec["congestion"] = args.iperf3_congestion
                 result_rec["src"] = pair[0].region_tag
                 result_rec["dst"] = pair[1].region_tag
                 result_rec["src_instance_class"] = pair[0].instance_class
@@ -134,7 +130,7 @@ def main(args):
                 result_rec["result"] = result
                 traceroute_results.append(result_rec)
 
-    traceroute_dir = data_dir / "traceroute" / "iperf3"
+    traceroute_dir = data_dir / "traceroute"
     traceroute_dir.mkdir(exist_ok=True, parents=True)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     with open(str(throughput_dir / f"traceroute_{timestamp}.json"), "w") as f:
