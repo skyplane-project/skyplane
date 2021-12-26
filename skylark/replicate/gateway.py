@@ -1,19 +1,26 @@
 import argparse
 import hashlib
 import os
+import select
 import signal
+import shutil
+import tempfile
 import socket
 from contextlib import closing
 import sys
 
 from dataclasses import dataclass
-from multiprocessing import Process
+from multiprocessing import Process, Value, Manager
 from pathlib import Path
 from typing import List
 
+from flask import Flask, request, jsonify
 from loguru import logger
 
 from skylark.utils import Timer
+
+
+app = Flask("gateway")
 
 
 @dataclass
@@ -80,13 +87,6 @@ class ChunkHeader:
         assert sock.sendall(self.to_bytes()) == None
 
 
-def checksum_sha256(path: Path) -> str:
-    with open(path, "rb") as f:
-        hashstr = hashlib.sha256(f.read()).hexdigest()
-        assert len(hashstr) == 64
-        return hashstr
-
-
 class Gateway:
     """
     Runs an HTTP server on port 80 to control Gateway tasks.
@@ -100,14 +100,45 @@ class Gateway:
     def __init__(
         self,
         chunk_dir="/dev/shm/skylark/chunks",
+        server_num_connections=16,
         server_blk_size=4096 * 16,
     ):
         self.chunk_dir = Path(chunk_dir)
         self.chunk_dir.mkdir(parents=True, exist_ok=True)
+        self.server_num_connections = server_num_connections
         self.server_blk_size = server_blk_size
         self.server_processes = []
         self.server_ports = []
-    
+
+        # multiprocess coordination
+        self.manager = Manager()
+        self.chunks = self.manager.dict()  # Dict[int, Dict]
+
+    @staticmethod
+    def checksum_sha256(path: Path) -> str:
+        with open(path, "rb") as f:
+            hashstr = hashlib.sha256(f.read()).hexdigest()
+            assert len(hashstr) == 64
+            return hashstr
+
+    def register_chunk(self, chunk_id: int, source_chunk_path: Path):
+        """
+        Register a chunk with the gateway.
+
+        This is called by the GatewayClient when it receives a chunk from the
+        sender.
+        """
+        logger.debug(f"[gateway] Registering chunk {chunk_id}")
+        chunk_path = self.chunk_dir / f"{chunk_id}.chunk"
+        shutil.copyfile(source_chunk_path, chunk_path)
+        header = ChunkHeader(
+            chunk_id=chunk_id,
+            chunk_size_bytes=chunk_path.stat().st_size,
+            chunk_offset_bytes=0,
+            chunk_hash_sha256=self.checksum_sha256(chunk_path),
+        )
+        self.chunks[chunk_id] = self.manager.dict({"header": header, "file_path": str(chunk_path.resolve()), "is_complete": True})
+
     def send_chunks(self, chunk_ids: List[int], dst_host="127.0.0.1", dst_port=8100):
         """Send list of chunks to gateway server, pipelining small chunks together into a single socket stream."""
         with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
@@ -115,18 +146,18 @@ class Gateway:
             sock.connect((dst_host, dst_port))
             for idx, chunk_id in enumerate(chunk_ids):
                 logger.info(f"[client] Sending chunk {chunk_id} to {dst_host}:{dst_port}")
-                chunk_file_path = self.chunk_dir / chunk_id
+                chunk_file_path = self.chunk_dir / f"{chunk_id}.chunk"
                 header = ChunkHeader(
                     chunk_id=chunk_id,
                     chunk_size_bytes=chunk_file_path.stat().st_size,
                     chunk_offset_bytes=0,
-                    chunk_hash_sha256=checksum_sha256(chunk_file_path),
+                    chunk_hash_sha256=self.checksum_sha256(chunk_file_path),
                     end_of_stream=idx == len(chunk_ids) - 1,
                 )
                 sock.sendall(header.to_bytes())
                 with open(chunk_file_path, "rb") as fd:
                     sock.sendfile(fd)
-    
+
     def recv_chunks(self, sock_conn):
         conn, addr = sock_conn
         logger.info(f"[server] Connection from {addr}")
@@ -135,8 +166,15 @@ class Gateway:
         transfer_seconds = 0.0
         while True:
             chunk_header = ChunkHeader.from_socket(conn)
-            chunk_file_path = self.chunk_dir / chunk_header.chunk_id
-            logger.info(f"[server] Received chunk {chunk_header.chunk_id}")
+
+            # log metadata
+            chunk_file_path = self.chunk_dir / f"{chunk_header.chunk_id}.chunk"
+            self.chunks[chunk_header.chunk_id] = self.manager.dict()
+            self.chunks[chunk_header.chunk_id]["header"] = chunk_header
+            self.chunks[chunk_header.chunk_id]["file_path"] = str(chunk_file_path.resolve())
+            self.chunks[chunk_header.chunk_id]["is_complete"] = False
+
+            # recieve file
             with Timer() as t:
                 chunk_data_size = chunk_header.chunk_size_bytes
                 with chunk_file_path.open("wb") as f:
@@ -145,62 +183,101 @@ class Gateway:
                         f.write(data)
                         chunk_data_size -= len(data)
                         bytes_received += len(data)
+                    # check hash
+                    if self.checksum_sha256(chunk_file_path) != chunk_header.chunk_hash_sha256:
+                        raise ValueError(f"Received chunk {chunk_header.chunk_id} with invalid hash")
+
             transfer_seconds += t.elapsed
+            self.chunks[chunk_header.chunk_id]["is_complete"] = True
+            self.chunks[chunk_header.chunk_id]["stats.download_runtime_s"] = t.elapsed
 
             if chunk_header.end_of_stream:
-                gbps = bytes_received * 8 / 1e3 / transfer_seconds
-                logger.info(
-                    f"[server] Received {chunks_received} chunks, {bytes_received / 1e9:.2}GB in {transfer_seconds:.2}s at {gbps:.2}Gbps"
-                )
                 conn.close()
                 return chunks_received
 
     def get_free_port(self):
         with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
-            s.bind(('', 0))
+            s.bind(("", 0))
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             return s.getsockname()[1]
 
     def start_recv_server(self):
         """Start a server to receive chunks from a client."""
+
         def server_worker(port):
             with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 1)
                 sock.bind(("0.0.0.0", port))
                 port = sock.getsockname()[1]
-                exit_flag = False
-                logger.info(f"[server] Listening on port {port}")
+                exit_flag = Value("i", 0)
 
                 def signal_handler(signal, frame):
-                    exit_flag = True
+                    exit_flag.value = 1
 
                 signal.signal(signal.SIGINT, signal_handler)
 
-                sock.listen(1)
+                sock.listen()
+                sock.setblocking(False)
                 while True:
-                    self.recv_chunks(sock.accept())
-                    if exit_flag:
-                        break
-                logger.info(f"[server] Exiting server worker on port {port}")
-        
+                    if exit_flag.value == 1:
+                        logger.warning(f"[server:{port}] Exiting on signal")
+                        return
+                    # Wait for a connection with a timeout of 1 second w/ select
+                    readable, _, _ = select.select([sock], [], [], 1)
+                    if readable:
+                        conn, addr = sock.accept()
+                        chunks_received = self.recv_chunks(conn)
+                        conn.close()
+                        logger.info(f"[server] Received {len(chunks_received)} chunks")
+
         for i in range(self.server_num_connections):
-            port = self.get_free_port() 
+            port = self.get_free_port()
             p = Process(target=server_worker, args=(port,))
             self.server_processes.append(p)
             self.server_ports.append(port)
             p.start()
-        
-        logger.info(f"[server] Started {self.server_num_connections} servers, returning control to Skylark API")
+
+        logger.info(f"[server] Started {self.server_num_connections} servers (ports = {self.server_ports})")
 
     def stop_server(self):
         logger.warning(f"[server] Stopping {self.server_num_connections} servers")
         for p in self.server_processes:
-            logger.debug(f"[server] Signaling server on port {p.pid}")
             os.kill(p.pid, signal.SIGINT)
+        for p in self.server_processes:
             p.join(30)
             p.terminate()
             self.server_processes.remove(p)
         self.server_processes.clear()
+
+
+class GatewayMetadataServer:
+    def __init__(self, gateway: Gateway):
+        self.app = Flask("gateway_metadata_server")
+        self.gateway = gateway
+        self.register_routes()
+
+    def run(self, host="0.0.0.0", port=8080):
+        self.app.run(host=host, port=port)
+
+    def register_routes(self):
+        @self.app.route("/api/v1/server_ports", methods=["GET"])
+        def get_server_ports():
+            return jsonify({"server_ports": self.gateway.server_ports})
+
+        @self.app.route("/api/v1/chunks", methods=["GET"])
+        def get_chunks():
+            reply = {}
+            for chunk_id, chunk_data in self.gateway.chunks.items():
+                reply[chunk_id] = chunk_data.copy()
+            return jsonify(reply)
+
+        @self.app.route("/api/v1/chunks/<chunk_id>", methods=["GET"])
+        def get_chunk(chunk_id):
+            chunk_id = int(chunk_id)
+            if chunk_id in self.gateway.chunks:
+                return jsonify(dict(self.gateway.chunks[chunk_id]))
+            else:
+                return jsonify({"error": f"Chunk {chunk_id} not found"}), 404
 
 
 if __name__ == "__main__":
@@ -213,14 +290,27 @@ if __name__ == "__main__":
 
     gw = Gateway(
         chunk_dir=args.chunk_dir,
-        server_start_port=args.server_start_port,
         server_num_connections=args.server_num_connections,
         server_blk_size=args.server_blk_size,
     )
-    gw.start_recv_server()
-    
-    # set sigint handler
+    gw_metadata = GatewayMetadataServer(gw)
+
+    # set sigint handler to close server
     def signal_handler(signal, frame):
         gw.stop_server()
         sys.exit(0)
+
     signal.signal(signal.SIGINT, signal_handler)
+
+    gw.start_recv_server()
+
+    # generate 1GB of random data and upload to server[0] as chunk id 0
+    logger.debug("Generating random data")
+    with tempfile.NamedTemporaryFile(delete=False) as f:
+        fname = f.name
+        f.write(os.urandom(1024 * 1024))
+        f.flush()
+        logger.debug("Registering chunk 0")
+        gw.register_chunk(0, fname)
+
+    gw_metadata.run()

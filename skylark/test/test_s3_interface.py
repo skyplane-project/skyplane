@@ -1,0 +1,42 @@
+import os
+import tempfile
+import hashlib
+
+from skylark.replicate.obj_store_interface import S3Interface
+
+from skylark.utils import Timer
+
+
+def test_s3_interface():
+    s3_interface = S3Interface("us-east-1", "sky-us-east-1", True)
+    assert s3_interface.bucket_name == "sky-us-east-1"
+    assert s3_interface.aws_region == "us-east-1"
+    assert s3_interface.use_tls == True
+    assert s3_interface.s3_client.use_tls == True
+
+    # generate file and upload
+    obj_name = "/test.txt"
+    file_size_mb = 128
+    with tempfile.NamedTemporaryFile() as tmp:
+        fpath = tmp.name
+        with open(fpath, "wb") as f:
+            f.write(os.urandom(int(file_size_mb * 1e6)))
+        file_md5 = hashlib.md5(open(fpath, "rb").read()).hexdigest()
+
+        with Timer() as t:
+            upload_future = s3_interface.upload_object(fpath, obj_name)
+            upload_future.result()
+        assert s3_interface.get_obj_size(obj_name) == os.path.getsize(fpath)
+
+    # download object
+    with tempfile.NamedTemporaryFile() as tmp:
+        fpath = tmp.name
+        if os.path.exists(fpath):
+            os.remove(fpath)
+        with Timer() as t:
+            download_future = s3_interface.download_object(obj_name, fpath)
+            download_future.result()
+
+        # check md5
+        dl_file_md5 = hashlib.md5(open(fpath, "rb").read()).hexdigest()
+        assert dl_file_md5 == file_md5
