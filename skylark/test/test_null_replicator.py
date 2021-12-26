@@ -21,4 +21,4 @@ def check_pathset(paths, gcp_project, gateway_docker_image):
 
 
 def test_direct_path():
-    check_pathset([["aws:us-east-1", "aws:us-west-1"]], "skylark-333700", "ghcr.io/parasj/skylark-docker:latest")
+    check_pathset([["aws:us-east-1", "aws:us-west-1"]], "skylark-333700", "ghcr.io/parasj/skylark:latest")

@@ -13,7 +13,7 @@ class ReplicatorClient:
         self,
         topology: ReplicationTopology,
         gcp_project: str,
-        gateway_docker_image: str = "ghcr.io/parasj/skylark-docker:latest",
+        gateway_docker_image: str = "ghcr.io/parasj/skylark:latest",
         aws_instance_class: str = "m5.4xlarge",
         gcp_instance_class: str = "n2-standard-16",
         gcp_use_premium_network: bool = True,
