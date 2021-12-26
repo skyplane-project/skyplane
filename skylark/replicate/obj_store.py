@@ -12,9 +12,30 @@ from awscrt.auth import AwsCredentialsProvider
 from awscrt.http import HttpHeaders, HttpRequest
 
 from skylark.utils import Timer
+from skylark.compute.aws.aws_server import AWSServer
 
 
-class S3Interface:
+class ObjectStoreInterface:
+    def bucket_exists(self):
+        raise NotImplementedError
+
+    def create_bucket(self):
+        raise NotImplementedError
+
+    def list_objects(self, prefix=""):
+        raise NotImplementedError
+
+    def get_obj_size(self, obj_name):
+        raise NotImplementedError
+
+    def download_object(self, src_object_name, dst_file_path):
+        raise NotImplementedError
+
+    def upload_object(self, src_file_path, dst_object_name, content_type="infer"):
+        raise NotImplementedError
+
+
+class S3Interface(ObjectStoreInterface):
     def __init__(self, aws_region, bucket_name, use_tls=True):
         self.aws_region = aws_region
         self.bucket_name = bucket_name
@@ -41,14 +62,38 @@ class S3Interface:
         self.completed_uploads += 1
         self.pending_uploads -= 1
 
-    def reset_stats(self):
-        self.stats_download = ThroughputStatistics()
-        self.stats_upload = ThroughputStatistics()
+    def bucket_exists(self):
+        s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
+        return self.bucket_name in [b["Name"] for b in s3_client.list_buckets()["Buckets"]]
 
-    def get_stats(self):
-        return self.stats.bytes_peak(), self.stats.bytes_avg()
+    def create_bucket(self):
+        s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
+        if not self.bucket_exists():
+            if self.aws_region == "us-east-1":
+                s3_client.create_bucket(Bucket=self.bucket_name)
+            else:
+                s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": self.aws_region})
+        assert self.bucket_exists()
+
+    def list_objects(self, prefix="") -> list:
+        # todo: pagination
+        s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
+        paginator = s3_client.get_paginator("list_objects_v2")
+        page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix)
+        for page in page_iterator:
+            for obj in page.get("Contents", []):
+                yield obj
+
+    def get_obj_metadata(self, obj_name):
+        s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
+        return s3_client.head_object(Bucket=self.bucket_name, Key=obj_name)
+
+    def get_obj_size(self, obj_name):
+        return self.get_obj_metadata(obj_name)["ContentLength"]
 
     def download_object(self, src_object_name, dst_file_path) -> Future:
+        src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
+        assert src_object_name.startswith("/")
         download_headers = HttpHeaders([("host", self.bucket_name + ".s3." + self.aws_region + ".amazonaws.com")])
         request = HttpRequest("GET", src_object_name, download_headers)
 
@@ -68,6 +113,8 @@ class S3Interface:
         ).finished_future
 
     def upload_object(self, src_file_path, dst_object_name, content_type="infer") -> Future:
+        src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
+        assert dst_object_name.startswith("/")
         content_len = os.path.getsize(src_file_path)
         if content_type == "infer":
             content_type = mimetypes.guess_type(src_file_path)[0] or "application/octet-stream"
@@ -82,53 +129,3 @@ class S3Interface:
             type=S3RequestType.PUT_OBJECT,
             on_done=self._on_done_upload,
         ).finished_future
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="S3 Interface")
-    parser.add_argument("--region", type=str, default="us-east-1", help="AWS region")
-    parser.add_argument("--bucket", type=str, default="sky-us-east-1", help="S3 bucket name")
-    parser.add_argument("--obj-name", type=str, default="test.txt", help="S3 object name")
-    parser.add_argument("--use-tls", type=bool, default=True, help="Use TLS")
-    parser.add_argument("--file-size-mb", type=int, default=10, help="File size in MB")
-    args = parser.parse_args()
-
-    s3_interface = S3Interface(args.region, args.bucket, args.use_tls)
-    obj_name = "/" + args.obj_name
-
-    with tempfile.NamedTemporaryFile() as tmp:
-        fpath = tmp.name
-
-        with open(fpath, "wb") as f:
-            for i in tqdm(range(args.file_size_mb), leave=False, unit="MB", desc="Generate random file"):
-                f.write(os.urandom(1024 * 1024))
-        logger.debug(f"Generated random file {fpath}")
-        file_md5 = hashlib.md5(open(fpath, "rb").read()).hexdigest()
-        logger.debug(f"File md5: {file_md5}")
-
-        # upload
-        with Timer() as t:
-            upload_future = s3_interface.upload_object(fpath, obj_name)
-            ul_result = upload_future.result()
-        gbps = args.file_size_mb * 8 * 1e6 / t.elapsed / 1e9
-        logger.info(f"UL {fpath} -> s3://{args.region}/{args.bucket}{obj_name} in {t.elapsed:.2f}s (~{gbps:.2f}Gbps)")
-
-    # download object
-    with tempfile.NamedTemporaryFile() as tmp:
-        fpath = tmp.name
-        if os.path.exists(fpath):
-            os.remove(fpath)
-        with Timer() as t:
-            download_future = s3_interface.download_object(obj_name, fpath)
-            dl_result = download_future.result()
-        gbps = args.file_size_mb * 8 * 1e6 / t.elapsed / 1e9
-        logger.info(f"DL s3://{args.region}/{args.bucket}{obj_name} -> {fpath} in {t.elapsed:.2f}s (~{gbps:.2f}Gbps)")
-
-        # check md5
-        dl_file_md5 = hashlib.md5(open(fpath, "rb").read()).hexdigest()
-        if dl_file_md5 != file_md5:
-            logger.error(f"MD5 mismatch: uploaded {file_md5} != downloaded {dl_file_md5}")
-        else:
-            logger.info(f"MD5 match: uploaded {file_md5} == downloaded {dl_file_md5}")

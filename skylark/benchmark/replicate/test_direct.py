@@ -25,7 +25,7 @@ def parse_args():
     )
     parser.add_argument("--src_region", default="aws:us-east-1", choices=full_region_list, help="Source region")
     parser.add_argument("--dst_region", default="aws:us-east-2", choices=full_region_list, help="Destination region")
-    parser.add_argument("--gateway_docker_image", type=str, default="ghcr.io/parasj/skylark-docker:latest", help="Gateway docker image")
+    parser.add_argument("--gateway_docker_image", type=str, default="ghcr.io/parasj/skylark:latest", help="Gateway docker image")
     return parser.parse_args()
 
 

@@ -9,9 +9,9 @@ sudo docker build -t skylark .
 # du -sh ./dist/skylark.tar
 
 RANDOM_TAG=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)
-sudo docker tag skylark ghcr.io/parasj/skylark-docker:$RANDOM_TAG
-sudo docker push ghcr.io/parasj/skylark-docker:$RANDOM_TAG
-sudo docker tag skylark ghcr.io/parasj/skylark-docker:latest
-sudo docker push ghcr.io/parasj/skylark-docker:latest
-echo "Code stored in ghcr.io/parasj/skylark-docker:$RANDOM_TAG"
-export SKYLARK_DOCKER_IMAGE="ghcr.io/parasj/skylark-docker:$RANDOM_TAG"
+sudo docker tag skylark ghcr.io/parasj/skylark:$RANDOM_TAG
+sudo docker push ghcr.io/parasj/skylark:$RANDOM_TAG
+sudo docker tag skylark ghcr.io/parasj/skylark:latest
+sudo docker push ghcr.io/parasj/skylark:latest
+echo "Code stored in ghcr.io/parasj/skylark:$RANDOM_TAG"
+export SKYLARK_DOCKER_IMAGE="ghcr.io/parasj/skylark:$RANDOM_TAG"

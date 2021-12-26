@@ -81,6 +81,10 @@ class Server:
         return self.client
 
     @property
+    def provider(self) -> str:
+        return self.region_tag.split(":")[0]
+
+    @property
     def instance_state(self) -> ServerState:
         raise NotImplementedError()
 
@@ -116,7 +120,7 @@ class Server:
         self.close_server()
         self.terminate_instance_impl()
 
-    def wait_for_ready(self, timeout=120) -> bool:
+    def wait_for_ready(self, timeout=120, verbose=False) -> bool:
         wait_intervals = [0.2] * 20 + [1.0] * int(timeout / 2) + [5.0] * int(timeout / 2)  # backoff
         start_time = time.time()
         error = None
@@ -128,7 +132,8 @@ class Server:
                         logger.info(f"{self.instance_name} is ready!")
                         return True
                     except Exception as e:
-                        logger.warning(f"{self.instance_name} is not ready: {e}")
+                        if verbose:
+                            logger.warning(f"{self.instance_name} is not ready: {e}")
                 time.sleep(wait_intervals.pop(0))
             except Exception as e:
                 error = e
