@@ -3,14 +3,11 @@ from functools import lru_cache
 from pathlib import Path
 
 import boto3
-from boto3 import session
 import paramiko
 from loguru import logger
-import questionary
 
 from skylark.compute.server import Server, ServerState
 from skylark import key_root
-from tqdm import tqdm
 
 
 class AWSServer(Server):

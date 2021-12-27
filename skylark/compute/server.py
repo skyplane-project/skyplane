@@ -137,8 +137,6 @@ class Server:
             except Exception as e:
                 continue
         logger.warning(f"({self.region_tag}) Timeout waiting for server to be ready")
-        if e is not None:
-            logger.exception(e)
         return False
 
     def close_server(self):

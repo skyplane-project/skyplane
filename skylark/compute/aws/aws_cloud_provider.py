@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 import uuid
 
 from loguru import logger
@@ -55,7 +55,7 @@ class AWSCloudProvider(CloudProvider):
         else:
             raise NotImplementedError
 
-    def get_instance_list(self, region) -> List[AWSServer]:
+    def get_instance_list(self, region: str) -> List[AWSServer]:
         ec2 = AWSServer.get_boto3_resource("ec2", region)
         instances = ec2.instances.filter(
             Filters=[
@@ -69,7 +69,9 @@ class AWSCloudProvider(CloudProvider):
         instances = [AWSServer(f"aws:{region}", i) for i in instance_ids]
         return instances
 
-    def add_ip_to_security_group(self, aws_region, security_group_id: str = None, ip="0.0.0.0/0", from_port=0, to_port=65535):
+    def add_ip_to_security_group(
+        self, aws_region: str, security_group_id: Optional[str] = None, ip="0.0.0.0/0", from_port=0, to_port=65535
+    ):
         """Add IP to security group. If security group ID is None, use default."""
         ec2 = AWSServer.get_boto3_resource("ec2", aws_region)
         if security_group_id is None:
@@ -84,7 +86,7 @@ class AWSCloudProvider(CloudProvider):
             logger.info(f"({aws_region}) Added IP {ip} to security group {security_group_id}")
 
     @staticmethod
-    def get_ubuntu_ami_id(region):
+    def get_ubuntu_ami_id(region: str) -> str:
         client = AWSServer.get_boto3_client("ec2", region)
         response = client.describe_images(
             Filters=[
@@ -109,7 +111,9 @@ class AWSCloudProvider(CloudProvider):
             image_list = sorted(response["Images"], key=lambda x: x["CreationDate"], reverse=True)
             return image_list[0]["ImageId"]
 
-    def provision_instance(self, region, instance_class, name=None, ami_id=None, tags={"skylark": "true"}) -> AWSServer:
+    def provision_instance(
+        self, region: str, instance_class: str, name: Optional[str] = None, ami_id: Optional[str] = None, tags={"skylark": "true"}
+    ) -> AWSServer:
         assert not region.startswith("aws:"), "Region should be AWS region"
         if name is None:
             name = f"skylark-aws-{str(uuid.uuid4()).replace('-', '')}"
