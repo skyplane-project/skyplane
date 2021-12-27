@@ -1,5 +1,5 @@
 import threading
-from typing import List, Union
+from typing import List, Optional, Union
 
 from loguru import logger
 
@@ -14,7 +14,7 @@ class CloudProvider:
         raise NotImplementedError
 
     @staticmethod
-    def region_list(self):
+    def region_list():
         raise NotImplementedError
 
     @staticmethod
@@ -37,7 +37,11 @@ class CloudProvider:
         raise NotImplementedError
 
     def get_matching_instances(
-        self, region=None, instance_type=None, state: Union[ServerState, List[ServerState]] = None, tags={"skylark": "true"}
+        self,
+        region: Optional[str] = None,
+        instance_type: Optional[str] = None,
+        state: Optional[Union[ServerState, List[ServerState]]] = None,
+        tags={"skylark": "true"},
     ) -> List[Server]:
         if isinstance(region, str):
             region = [region]
