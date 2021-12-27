@@ -18,6 +18,7 @@ setup(
         "graphviz",
         "loguru",
         "matplotlib",
+        "ray",
         "numpy",
         "pandas",
         "paramiko",

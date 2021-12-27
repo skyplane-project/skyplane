@@ -6,7 +6,6 @@ from loguru import logger
 
 from skylark import skylark_root
 from skylark.compute.aws.aws_server import AWSServer
-from skylark.utils import common_excludes
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -63,12 +62,10 @@ if __name__ == "__main__":
     server.log_comment("Test: sync_directory source")
     with tempfile.TemporaryDirectory() as tmpdir:
         source_dir = skylark_root.resolve().absolute()
-        ignore_full_path = common_excludes()
         server.sync_directory(
             source_dir,
             "/tmp/test_copy_source/src",
             delete_remote=True,
-            ignore_globs=ignore_full_path,
         )
     server.flush_command_log()
 

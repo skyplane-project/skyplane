@@ -2,7 +2,7 @@ from typing import List
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server
-from skylark.replicate.replication_plan import ReplicationPlan, ReplicationTopology
+from skylark.replicate.replication_plan import ReplicationJob, ReplicationPlan, ReplicationTopology
 from skylark.utils import do_parallel
 
 from loguru import logger
@@ -38,7 +38,7 @@ class ReplicatorClient:
         self.gcp.configure_default_firewall()
         logger.debug("Initialized GCP and AWS clouds.")
 
-    def provision_gateway(self, region: str) -> Server:
+    def provision_gateway_instance(self, region: str) -> Server:
         # provision instance
         provider, subregion = region.split(":")
         if provider == "aws":
@@ -60,14 +60,18 @@ class ReplicatorClient:
         server.run_command("sudo docker pull {}".format(self.gateway_docker_image))
         return server
 
-    def deprovision_gateway(self, server: Server):
+    def deprovision_gateway_instance(self, server: Server):
         logger.warning(f"Deprovisioning gateway {server.instance_id}")
         server.terminate_instance()
 
     def provision_gateways(self):
         regions_to_provision = [r for path in self.topology.paths for r in path]
         results = do_parallel(
-            self.provision_gateway, regions_to_provision, n=len(regions_to_provision), progress_bar=True, desc="Provisioning gateways"
+            self.provision_gateway_instance,
+            regions_to_provision,
+            n=len(regions_to_provision),
+            progress_bar=True,
+            desc="Provisioning gateways",
         )
         instances_by_region = {
             r: [instance for instance_region, instance in results if instance_region == r] for r in set(regions_to_provision)
@@ -80,4 +84,13 @@ class ReplicatorClient:
 
     def deprovision_gateways(self):
         instances = [instance for path in self.bound_paths for instance in path]
-        do_parallel(self.deprovision_gateway, instances, n=len(instances), progress_bar=True, desc="Deprovisioning gateways")
+        do_parallel(self.deprovision_gateway_instance, instances, n=len(instances), progress_bar=True, desc="Deprovisioning gateways")
+
+    def run_replication_plan(self, job: ReplicationJob):
+        # todo support more than one gateway instance per region
+        assert len(self.topology.paths) == 1
+        # todo support more than one direct path
+        assert len(self.topology.paths[0]) == 2
+
+        src_instance = self.bound_paths[0][0]
+        dst_instance = self.bound_paths[0][1]

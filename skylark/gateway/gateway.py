@@ -1,7 +1,6 @@
 import hashlib
 import os
 import select
-import shutil
 import signal
 import socket
 from contextlib import closing
@@ -10,34 +9,17 @@ from pathlib import Path
 from typing import List, Tuple
 
 from loguru import logger
-from skylark.gateway.chunk_header import ChunkHeader
+from skylark.gateway.chunk_store import ChunkRequest, ChunkStore
+from skylark.gateway.wire_protocol_header import WireProtocolHeader
 from skylark.utils import Timer
 
 
 class Gateway:
-    """
-    Runs an HTTP server on port 80 to control Gateway tasks.
-
-    A Gateway controls replication on a single server. It accepts replication jobs
-    which are queued and load-balanced across senders (GatewayClients). It also starts
-    multiple copies of a GatewayServer in separate processes to accept incoming file
-    transfers.
-    """
-
-    def __init__(
-        self,
-        chunk_dir="/dev/shm/skylark/chunks",
-        server_blk_size=4096 * 16,
-    ):
-        self.chunk_dir = Path(chunk_dir)
-        self.chunk_dir.mkdir(parents=True, exist_ok=True)
+    def __init__(self, server_blk_size=4096 * 16):
+        self.chunk_store = ChunkStore()
         self.server_blk_size = server_blk_size
         self.server_processes = []
         self.server_ports = []
-
-        # multiprocess coordination
-        self.manager = Manager()
-        self.chunks = self.manager.dict()  # Dict[int, Dict]
 
     @staticmethod
     def checksum_sha256(path: Path) -> str:
@@ -45,79 +27,6 @@ class Gateway:
             hashstr = hashlib.sha256(f.read()).hexdigest()
             assert len(hashstr) == 64
             return hashstr
-
-    def register_chunk(self, chunk_id: int, source_chunk_path: Path):
-        """
-        Register a chunk with the gateway.
-
-        This is called by the GatewayClient when it receives a chunk from the
-        sender.
-        """
-        logger.debug(f"[gateway] Registering chunk {chunk_id}")
-        chunk_path = self.chunk_dir / f"{chunk_id}.chunk"
-        shutil.copyfile(source_chunk_path, chunk_path)
-        header = ChunkHeader(
-            chunk_id=chunk_id,
-            chunk_size_bytes=chunk_path.stat().st_size,
-            chunk_offset_bytes=0,
-            chunk_hash_sha256=self.checksum_sha256(chunk_path),
-        )
-        self.chunks[chunk_id] = self.manager.dict({"header": header, "file_path": str(chunk_path.resolve()), "is_complete": True})
-
-    def send_chunks(self, chunk_ids: List[int], dst_host="127.0.0.1", dst_port=8100):
-        """Send list of chunks to gateway server, pipelining small chunks together into a single socket stream."""
-        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 1)
-            sock.connect((dst_host, dst_port))
-            for idx, chunk_id in enumerate(chunk_ids):
-                logger.info(f"[client] Sending chunk {chunk_id} to {dst_host}:{dst_port}")
-                chunk_file_path = self.chunk_dir / f"{chunk_id}.chunk"
-                header = ChunkHeader(
-                    chunk_id=chunk_id,
-                    chunk_size_bytes=chunk_file_path.stat().st_size,
-                    chunk_offset_bytes=0,
-                    chunk_hash_sha256=self.checksum_sha256(chunk_file_path),
-                    end_of_stream=idx == len(chunk_ids) - 1,
-                )
-                sock.sendall(header.to_bytes())
-                with open(chunk_file_path, "rb") as fd:
-                    sock.sendfile(fd)
-
-    def recv_chunks(self, conn: socket.socket, addr: Tuple[str, int]):
-        logger.info(f"[server] Connection from {addr}")
-        chunks_received = []
-        bytes_received = 0.0
-        transfer_seconds = 0.0
-        while True:
-            chunk_header = ChunkHeader.from_socket(conn)
-
-            # log metadata
-            chunk_file_path = self.chunk_dir / f"{chunk_header.chunk_id}.chunk"
-            self.chunks[chunk_header.chunk_id] = self.manager.dict()
-            self.chunks[chunk_header.chunk_id]["header"] = chunk_header
-            self.chunks[chunk_header.chunk_id]["file_path"] = str(chunk_file_path.resolve())
-            self.chunks[chunk_header.chunk_id]["is_complete"] = False
-
-            # recieve file
-            with Timer() as t:
-                chunk_data_size = chunk_header.chunk_size_bytes
-                with chunk_file_path.open("wb") as f:
-                    while chunk_data_size > 0:
-                        data = conn.recv(min(chunk_data_size, self.server_blk_size))
-                        f.write(data)
-                        chunk_data_size -= len(data)
-                        bytes_received += len(data)
-                    # check hash
-                    if self.checksum_sha256(chunk_file_path) != chunk_header.chunk_hash_sha256:
-                        raise ValueError(f"Received chunk {chunk_header.chunk_id} with invalid hash")
-
-            transfer_seconds += t.elapsed
-            self.chunks[chunk_header.chunk_id]["is_complete"] = True
-            self.chunks[chunk_header.chunk_id]["stats.download_runtime_s"] = t.elapsed
-
-            if chunk_header.end_of_stream:
-                conn.close()
-                return chunks_received
 
     def get_free_port(self):
         with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
@@ -182,3 +91,43 @@ class Gateway:
             self.stop_server(port)
         assert len(self.server_ports) == 0
         assert len(self.server_processes) == 0
+
+    def send_chunks(self, chunk_ids: List[int], dst_host="127.0.0.1", dst_port=8100):
+        """Send list of chunks to gateway server, pipelining small chunks together into a single socket stream."""
+        # todo notify client of upcoming ChunkRequests
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 1)
+            sock.connect((dst_host, dst_port))
+            for idx, chunk_id in enumerate(chunk_ids):
+                logger.info(f"[client] Sending chunk {chunk_id} to {dst_host}:{dst_port}")
+                chunk = self.chunk_store.get_chunk(chunk_id)
+                self.chunk_store.start_upload(chunk_id)
+                chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
+                header = chunk.to_wire_header(end_of_stream=idx == len(chunk_ids) - 1)
+                sock.sendall(header.to_bytes())
+                with open(chunk_file_path, "rb") as fd:
+                    sock.sendfile(fd)
+                self.chunk_store.finish_upload(chunk_id)
+
+    def recv_chunks(self, conn: socket.socket, addr: Tuple[str, int]):
+        logger.info(f"[server] Connection from {addr}")
+        chunks_received = []
+        while True:
+            # receive header and write data to file
+            chunk_header = WireProtocolHeader.from_socket(conn)
+            self.chunk_store.start_download(chunk_header.chunk_id)
+            with Timer() as t:
+                chunk_data_size = chunk_header.chunk_len
+                chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_header.chunk_id)
+                with chunk_file_path.open("wb") as f:
+                    while chunk_data_size > 0:
+                        data = conn.recv(min(chunk_data_size, self.server_blk_size))
+                        f.write(data)
+                        chunk_data_size -= len(data)
+            # check hash, update status and close socket if transfer is complete
+            if self.checksum_sha256(chunk_file_path) != chunk_header.chunk_hash_sha256:
+                raise ValueError(f"Received chunk {chunk_header.chunk_id} with invalid hash")
+            self.chunk_store.finish_download(chunk_header.chunk_id, t.elapsed)
+            if chunk_header.end_of_stream:
+                conn.close()
+                return chunks_received

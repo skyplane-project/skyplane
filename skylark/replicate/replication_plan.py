@@ -3,7 +3,7 @@ from typing import List
 
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
-from skylark.replicate.obj_store_interface import S3Interface
+from skylark.replicate.obj_store import S3Interface
 from skylark.utils import do_parallel
 
 

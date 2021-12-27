@@ -10,7 +10,7 @@ from loguru import logger
 from tqdm import tqdm
 
 from skylark import skylark_root
-from skylark.solver import ThroughputSolverILP
+from skylark.replicate.solver import ThroughputSolverILP
 
 
 @ray.remote

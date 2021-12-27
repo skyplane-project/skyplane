@@ -6,12 +6,14 @@ class GatewayMetadataServer:
     def __init__(self, gateway: Gateway):
         self.app = Flask("gateway_metadata_server")
         self.gateway = gateway
-        self.register_routes()
+        self.register_server_routes()
+        self.register_chunk_routes()
+        self.register_request_routes()
 
     def run(self, host="0.0.0.0", port=8080):
         self.app.run(host=host, port=port)
 
-    def register_routes(self):
+    def register_server_routes(self):
         # list running gateway servers w/ ports
         @self.app.route("/api/v1/servers", methods=["GET"])
         def get_server_ports():
@@ -32,6 +34,7 @@ class GatewayMetadataServer:
             except ValueError as e:
                 return jsonify({"error": str(e)}), 400
 
+    def register_chunk_routes(self):
         # list chunks
         @self.app.route("/api/v1/chunks", methods=["GET"])
         def get_chunks():
@@ -47,3 +50,9 @@ class GatewayMetadataServer:
                 return jsonify(dict(self.gateway.chunks[chunk_id]))
             else:
                 return jsonify({"error": f"Chunk {chunk_id} not found"}), 404
+
+    def register_request_routes(self):
+        # list pending chunk requests
+        @self.app.route("/api/v1/chunk_requests", methods=["GET"])
+        def get_chunk_requests():
+            raise NotImplementedError()

@@ -1,6 +1,6 @@
 import argparse
 from skylark.replicate.replication_plan import ReplicationTopology
-from skylark.replicate.replicator import ReplicatorCoordinator
+from skylark.replicate.replicator_client import ReplicatorCoordinator
 
 
 def check_pathset(paths, gcp_project, gateway_docker_image):
