@@ -103,7 +103,7 @@ class Gateway:
             chunk_reqs.append(chunk_req)
         response = requests.post(f"http://{dst_host}:8080/api/v1/chunk_requests", json=[c.as_dict() for c in chunk_reqs])
         assert response.status_code == 200 and response.json() == {"status": "ok"}
-        
+
         # contact server to set up socket connection
         response = requests.post(f"http://{dst_host}:8080/api/v1/servers")
         assert response.status_code == 200
@@ -124,7 +124,7 @@ class Gateway:
                 self.chunk_store.finish_upload(chunk_id)
                 chunk_file_path.unlink()
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 0)  # send remaining packets
-        
+
         # close server
         response = requests.delete(f"http://{dst_host}:8080/api/v1/servers/{dst_port}")
         assert response.status_code == 200 and response.json() == {"status": "ok"}

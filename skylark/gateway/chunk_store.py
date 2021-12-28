@@ -20,10 +20,10 @@ class Chunk:
 
     def to_wire_header(self, end_of_stream: bool = False):
         return WireProtocolHeader(chunk_id=self.chunk_id, chunk_len=self.chunk_length_bytes, end_of_stream=end_of_stream)
-    
+
     def as_dict(self):
         return asdict(self)
-    
+
     @staticmethod
     def from_dict(d: Dict):
         return Chunk(**d)
@@ -42,14 +42,15 @@ class ChunkRequestHop:
     # if chunk_location_type == "dst_object_store":
     dst_object_store_provider: str = None
     dst_object_store_bucket: str = None
-    
+
     def as_dict(self):
         return asdict(self)
 
     @staticmethod
     def from_dict(dict: Dict):
         return ChunkRequestHop(**dict)
-        
+
+
 @dataclass
 class ChunkRequest:
     chunk: Chunk
@@ -61,13 +62,11 @@ class ChunkRequest:
         out["chunk"] = self.chunk.as_dict()
         out["path"] = [hop.as_dict() for hop in self.path]
         return out
-    
+
     @staticmethod
     def from_dict(in_dict: Dict):
-        return ChunkRequest(
-            chunk=Chunk.from_dict(in_dict["chunk"]),
-            path=[ChunkRequestHop.from_dict(hop) for hop in in_dict["path"]]
-        )
+        return ChunkRequest(chunk=Chunk.from_dict(in_dict["chunk"]), path=[ChunkRequestHop.from_dict(hop) for hop in in_dict["path"]])
+
 
 class ChunkState(Enum):
     REGISTERED = "registered"
@@ -92,7 +91,7 @@ class ChunkStore:
         self.manager = Manager()
         self.chunks: Dict[int, Chunk] = self.manager.dict()
         self.chunk_status: Dict[int, ChunkState] = self.manager.dict()
-        
+
         self.pending_chunk_requests: List[ChunkRequest] = self.manager.list()
         self.downloaded_chunk_requests: List[ChunkRequest] = self.manager.list()
         self.uploaded_chunk_requests: List[ChunkRequest] = self.manager.list()
@@ -153,7 +152,7 @@ class ChunkStore:
 
     def get_chunk_requests(self) -> List[ChunkRequest]:
         return self.pending_chunk_requests, self.downloaded_chunk_requests, self.uploaded_chunk_requests
-    
+
     def get_chunk_request(self, chunk_id: int) -> Optional[ChunkRequest]:
         for chunk_request in self.pending_chunk_requests:
             if chunk_request.chunk.chunk_id == chunk_id:
@@ -168,10 +167,10 @@ class ChunkStore:
 
     def add_chunk_request_pending(self, chunk_request: ChunkRequest):
         self.pending_chunk_requests.append(chunk_request)
-    
+
     def add_chunk_request_downloaded(self, chunk_request: ChunkRequest):
         self.downloaded_chunk_requests.append(chunk_request)
-    
+
     def add_chunk_request_uploaded(self, chunk_request: ChunkRequest):
         self.uploaded_chunk_requests.append(chunk_request)
 
@@ -179,7 +178,7 @@ class ChunkStore:
         assert chunk_request in self.pending_chunk_requests
         self.pending_chunk_requests.remove(chunk_request)
         self.downloaded_chunk_requests.append(chunk_request)
-    
+
     def mark_chunk_request_uploaded(self, chunk_request: ChunkRequest):
         assert chunk_request in self.downloaded_chunk_requests
         self.downloaded_chunk_requests.remove(chunk_request)

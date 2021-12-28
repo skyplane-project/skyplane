@@ -58,7 +58,7 @@ class GatewayMetadataServer:
         def get_all_chunk_requests():
             pending, downloaded, uploaded = self.gateway.get_chunk_requests()
             return jsonify({"pending": pending, "downloaded": downloaded, "uploaded": uploaded})
-        
+
         # lookup chunk request given chunk id
         @self.app.route("/api/v1/chunk_requests/<int:chunk_id>", methods=["GET"])
         def get_chunk_request(chunk_id: int):
