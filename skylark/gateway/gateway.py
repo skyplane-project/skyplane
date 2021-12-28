@@ -7,6 +7,7 @@ from contextlib import closing
 from multiprocessing import Manager, Process, Value
 from pathlib import Path
 from typing import List, Tuple
+import requests
 
 from loguru import logger
 from skylark.gateway.chunk_store import ChunkRequest, ChunkStore
@@ -37,7 +38,6 @@ class Gateway:
     def start_server(self):
         def server_worker(port):
             with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 1)
                 sock.bind(("0.0.0.0", port))
                 port = sock.getsockname()[1]
                 exit_flag = Value("i", 0)
@@ -92,13 +92,27 @@ class Gateway:
         assert len(self.server_ports) == 0
         assert len(self.server_processes) == 0
 
-    def send_chunks(self, chunk_ids: List[int], dst_host="127.0.0.1", dst_port=8100):
+    def send_chunks(self, chunk_ids: List[int], dst_host="127.0.0.1"):
         """Send list of chunks to gateway server, pipelining small chunks together into a single socket stream."""
-        # todo notify client of upcoming ChunkRequests
+        # notify server of upcoming ChunkRequests
+        # pop chunk_req.path[0] to remove self
+        chunk_reqs = []
+        for chunk_id in chunk_ids:
+            chunk_req = self.chunk_store.get_chunk_request(chunk_id)
+            chunk_req.path.pop(0)
+            chunk_reqs.append(chunk_req)
+        response = requests.post(f"http://{dst_host}:8080/api/v1/chunk_requests", json=[c.as_dict() for c in chunk_reqs])
+        assert response.status_code == 200 and response.json() == {"status": "ok"}
+
+        # contact server to set up socket connection
+        response = requests.post(f"http://{dst_host}:8080/api/v1/servers")
+        assert response.status_code == 200
+        dst_port = int(response.json()["server_port"])
+
         with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 1)
             sock.connect((dst_host, dst_port))
             for idx, chunk_id in enumerate(chunk_ids):
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 1)  # disable Nagle's algorithm
                 logger.info(f"[client] Sending chunk {chunk_id} to {dst_host}:{dst_port}")
                 chunk = self.chunk_store.get_chunk(chunk_id)
                 self.chunk_store.start_upload(chunk_id)
@@ -108,6 +122,16 @@ class Gateway:
                 with open(chunk_file_path, "rb") as fd:
                     sock.sendfile(fd)
                 self.chunk_store.finish_upload(chunk_id)
+                chunk_file_path.unlink()
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 0)  # send remaining packets
+
+        # close server
+        response = requests.delete(f"http://{dst_host}:8080/api/v1/servers/{dst_port}")
+        assert response.status_code == 200 and response.json() == {"status": "ok"}
+
+        # move chunk_reqs from downloaded to uploaded
+        for chunk_req in chunk_reqs:
+            self.chunk_store.mark_chunk_request_uploaded(chunk_req)
 
     def recv_chunks(self, conn: socket.socket, addr: Tuple[str, int]):
         logger.info(f"[server] Connection from {addr}")
@@ -128,6 +152,7 @@ class Gateway:
             if self.checksum_sha256(chunk_file_path) != chunk_header.chunk_hash_sha256:
                 raise ValueError(f"Received chunk {chunk_header.chunk_id} with invalid hash")
             self.chunk_store.finish_download(chunk_header.chunk_id, t.elapsed)
+            self.chunk_store.mark_chunk_request_downloaded(chunk_header.chunk_id)
             if chunk_header.end_of_stream:
                 conn.close()
                 return chunks_received

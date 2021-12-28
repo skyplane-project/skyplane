@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from enum import Enum
 from multiprocessing import Manager
 from pathlib import Path
@@ -11,6 +11,7 @@ from skylark.gateway.wire_protocol_header import WireProtocolHeader
 
 @dataclass
 class Chunk:
+    # todo merge with WireProtocolHeader
     key: str  # human readable path where object is stored
     chunk_id: int
     file_offset_bytes: int
@@ -19,6 +20,13 @@ class Chunk:
 
     def to_wire_header(self, end_of_stream: bool = False):
         return WireProtocolHeader(chunk_id=self.chunk_id, chunk_len=self.chunk_length_bytes, end_of_stream=end_of_stream)
+
+    def as_dict(self):
+        return asdict(self)
+
+    @staticmethod
+    def from_dict(d: Dict):
+        return Chunk(**d)
 
 
 @dataclass
@@ -35,12 +43,29 @@ class ChunkRequestHop:
     dst_object_store_provider: str = None
     dst_object_store_bucket: str = None
 
+    def as_dict(self):
+        return asdict(self)
+
+    @staticmethod
+    def from_dict(dict: Dict):
+        return ChunkRequestHop(**dict)
+
 
 @dataclass
 class ChunkRequest:
     chunk: Chunk
     path: List[ChunkRequestHop]
     # todo: flags for compression, encryption, etc.
+
+    def as_dict(self):
+        out = {}
+        out["chunk"] = self.chunk.as_dict()
+        out["path"] = [hop.as_dict() for hop in self.path]
+        return out
+
+    @staticmethod
+    def from_dict(in_dict: Dict):
+        return ChunkRequest(chunk=Chunk.from_dict(in_dict["chunk"]), path=[ChunkRequestHop.from_dict(hop) for hop in in_dict["path"]])
 
 
 class ChunkState(Enum):
@@ -66,8 +91,10 @@ class ChunkStore:
         self.manager = Manager()
         self.chunks: Dict[int, Chunk] = self.manager.dict()
         self.chunk_status: Dict[int, ChunkState] = self.manager.dict()
+
         self.pending_chunk_requests: List[ChunkRequest] = self.manager.list()
-        self.completed_chunk_requests: List[ChunkRequest] = self.manager.list()
+        self.downloaded_chunk_requests: List[ChunkRequest] = self.manager.list()
+        self.uploaded_chunk_requests: List[ChunkRequest] = self.manager.list()
 
     def get_chunk_file_path(self, chunk_id: int) -> Path:
         return self.chunk_dir / f"{chunk_id}.chunk"
@@ -122,3 +149,37 @@ class ChunkStore:
     def add_chunk(self, chunk: Chunk):
         self.chunks[chunk.chunk_id] = chunk
         self.set_chunk_status(chunk.chunk_id, "registered")
+
+    def get_chunk_requests(self) -> List[ChunkRequest]:
+        return self.pending_chunk_requests, self.downloaded_chunk_requests, self.uploaded_chunk_requests
+
+    def get_chunk_request(self, chunk_id: int) -> Optional[ChunkRequest]:
+        for chunk_request in self.pending_chunk_requests:
+            if chunk_request.chunk.chunk_id == chunk_id:
+                return chunk_request
+        for chunk_request in self.downloaded_chunk_requests:
+            if chunk_request.chunk.chunk_id == chunk_id:
+                return chunk_request
+        for chunk_request in self.uploaded_chunk_requests:
+            if chunk_request.chunk.chunk_id == chunk_id:
+                return chunk_request
+        return None
+
+    def add_chunk_request_pending(self, chunk_request: ChunkRequest):
+        self.pending_chunk_requests.append(chunk_request)
+
+    def add_chunk_request_downloaded(self, chunk_request: ChunkRequest):
+        self.downloaded_chunk_requests.append(chunk_request)
+
+    def add_chunk_request_uploaded(self, chunk_request: ChunkRequest):
+        self.uploaded_chunk_requests.append(chunk_request)
+
+    def mark_chunk_request_downloaded(self, chunk_request: ChunkRequest):
+        assert chunk_request in self.pending_chunk_requests
+        self.pending_chunk_requests.remove(chunk_request)
+        self.downloaded_chunk_requests.append(chunk_request)
+
+    def mark_chunk_request_uploaded(self, chunk_request: ChunkRequest):
+        assert chunk_request in self.downloaded_chunk_requests
+        self.downloaded_chunk_requests.remove(chunk_request)
+        self.uploaded_chunk_requests.append(chunk_request)
