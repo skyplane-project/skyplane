@@ -91,6 +91,7 @@ class S3Interface(ObjectStoreInterface):
     def get_obj_size(self, obj_name):
         return self.get_obj_metadata(obj_name)["ContentLength"]
 
+    # todo: implement range request for download
     def download_object(self, src_object_name, dst_file_path) -> Future:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         assert src_object_name.startswith("/")

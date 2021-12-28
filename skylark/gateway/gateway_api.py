@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request
+from skylark.gateway.chunk_store import ChunkRequest
 from skylark.gateway.gateway import Gateway
 
 
@@ -54,5 +55,27 @@ class GatewayMetadataServer:
     def register_request_routes(self):
         # list pending chunk requests
         @self.app.route("/api/v1/chunk_requests", methods=["GET"])
-        def get_chunk_requests():
-            raise NotImplementedError()
+        def get_all_chunk_requests():
+            pending, downloaded, uploaded = self.gateway.get_chunk_requests()
+            return jsonify({"pending": pending, "downloaded": downloaded, "uploaded": uploaded})
+        
+        # lookup chunk request given chunk id
+        @self.app.route("/api/v1/chunk_requests/<int:chunk_id>", methods=["GET"])
+        def get_chunk_request(chunk_id: int):
+            chunk_req = self.gateway.get_chunk_request(chunk_id)
+            if chunk_req is None:
+                return jsonify({"error": f"Chunk {chunk_id} not found"}), 404
+            else:
+                return jsonify(chunk_req)
+
+        # add a new chunk request to end of pending requests
+        # accepts either a single chunk request object or a list of chunk request objects
+        @self.app.route("/api/v1/chunk_requests", methods=["POST"])
+        def add_chunk_request():
+            if isinstance(request.json, dict):
+                self.gateway.add_chunk_request(ChunkRequest.from_dict(request.json))
+                return jsonify({"status": "ok"})
+            elif isinstance(request.json, list):
+                for chunk_req in request.json:
+                    self.gateway.add_chunk_request(ChunkRequest.from_dict(chunk_req))
+                return jsonify({"status": "ok"})

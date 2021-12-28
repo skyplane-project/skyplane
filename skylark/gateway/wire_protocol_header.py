@@ -17,7 +17,7 @@ class WireProtocolHeader:
     @staticmethod
     def length_bytes():
         # magic (8) + chunk_id (8) + chunk_len (8) + end_of_stream (1)
-        return 8 + 8 + 8 + 1 + 64
+        return 8 + 8 + 8 + 1
 
     @staticmethod
     def from_bytes(data: bytes):
