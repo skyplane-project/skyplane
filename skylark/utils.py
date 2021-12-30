@@ -24,10 +24,32 @@ class Timer:
         return self.end - self.start
 
 
+def wait_for(fn, timeout=60, interval=1, progress_bar=False, desc="Waiting"):
+    start = time.time()
+    if progress_bar:
+        pbar = tqdm(total=timeout, desc=desc)
+    while time.time() - start < timeout:
+        if fn():
+            return True
+        if progress_bar:
+            pbar.update(interval)
+        time.sleep(interval)
+    if progress_bar:
+        pbar.close()
+    raise Exception("Timeout")
+
+
 def do_parallel(func, args_list, n=8, progress_bar=False, leave_pbar=True, desc=None, arg_fmt=None):
     """Run list of jobs in parallel with tqdm progress bar"""
+    args_list = list(args_list)
+    if len(args_list) == 0:
+        return []
+
     if arg_fmt is None:
         arg_fmt = lambda x: x.region_tag if hasattr(x, "region_tag") else x
+
+    if n == -1:
+        n = len(args_list)
 
     def wrapped_fn(args):
         return args, func(args)

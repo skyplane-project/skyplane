@@ -24,6 +24,8 @@ class Gateway:
 
     @staticmethod
     def checksum_sha256(path: Path) -> str:
+        # todo reading the whole file into memory is not ideal, maybe load chunks or use the linux md5 command
+        # todo standardize paths in skylark to be either str or Path or PathLike
         with open(path, "rb") as f:
             hashstr = hashlib.sha256(f.read()).hexdigest()
             assert len(hashstr) == 64

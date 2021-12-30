@@ -20,5 +20,6 @@ ENV PATH /env/bin:$PATH
 
 # todo enable BBR by default
 
-COPY . /pkg
-RUN pip install /pkg
+WORKDIR /pkg
+COPY . .
+RUN pip install -e .

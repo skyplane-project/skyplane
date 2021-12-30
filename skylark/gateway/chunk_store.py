@@ -2,7 +2,7 @@ from dataclasses import dataclass, asdict
 from enum import Enum
 from multiprocessing import Manager
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from loguru import logger
 
@@ -31,16 +31,16 @@ class Chunk:
 
 @dataclass
 class ChunkRequestHop:
-    hop_cloud_provider: str
-    hop_cloud_region: str
+    hop_cloud_region: str  # format is provider:region
+    hop_ip_address: str
     chunk_location_type: str  # enum of {"src_object_store", "dst_object_store", "relay"}
 
     # if chunk_location_type == "src_object_store":
-    src_object_store_provider: str = None
+    src_object_store_region: str = None  # format is provider:region
     src_object_store_bucket: str = None
 
     # if chunk_location_type == "dst_object_store":
-    dst_object_store_provider: str = None
+    dst_object_store_region: str = None  # format is provider:region
     dst_object_store_bucket: str = None
 
     def as_dict(self):
@@ -55,7 +55,7 @@ class ChunkRequestHop:
 class ChunkRequest:
     chunk: Chunk
     path: List[ChunkRequestHop]
-    # todo: flags for compression, encryption, etc.
+    # todo: flags for compression, encryption, logging api, etc.
 
     def as_dict(self):
         out = {}
@@ -143,6 +143,9 @@ class ChunkStore:
     ###
     # Chunk management
     ###
+    def get_chunks(self):
+        return self.chunks.values()
+
     def get_chunk(self, chunk_id: int) -> Optional[Chunk]:
         return self.chunks[chunk_id] if chunk_id in self.chunks else None
 
@@ -150,8 +153,8 @@ class ChunkStore:
         self.chunks[chunk.chunk_id] = chunk
         self.set_chunk_status(chunk.chunk_id, "registered")
 
-    def get_chunk_requests(self) -> List[ChunkRequest]:
-        return self.pending_chunk_requests, self.downloaded_chunk_requests, self.uploaded_chunk_requests
+    def get_chunk_requests(self) -> Tuple[List[ChunkRequest], List[ChunkRequest], List[ChunkRequest]]:
+        return list(self.pending_chunk_requests), list(self.downloaded_chunk_requests), list(self.uploaded_chunk_requests)
 
     def get_chunk_request(self, chunk_id: int) -> Optional[ChunkRequest]:
         for chunk_request in self.pending_chunk_requests:

@@ -1,6 +1,7 @@
 from concurrent.futures import Future
 import mimetypes
 import os
+from typing import Generator, Iterator, List
 from loguru import logger
 import tempfile
 import hashlib
@@ -75,18 +76,22 @@ class S3Interface(ObjectStoreInterface):
                 s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": self.aws_region})
         assert self.bucket_exists()
 
-    def list_objects(self, prefix="") -> list:
+    def list_objects(self, prefix="") -> Iterator[str]:
         # todo: pagination
         s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
         paginator = s3_client.get_paginator("list_objects_v2")
         page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix)
         for page in page_iterator:
             for obj in page.get("Contents", []):
-                yield obj
+                yield obj["Key"]
+
+    def delete_objects(self, keys: List[str]):
+        s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
+        s3_client.delete_objects(Bucket=self.bucket_name, Delete={"Objects": [{"Key": k} for k in keys]})
 
     def get_obj_metadata(self, obj_name):
         s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
-        return s3_client.head_object(Bucket=self.bucket_name, Key=obj_name)
+        return s3_client.head_object(Bucket=self.bucket_name, Key=str(obj_name).lstrip("/"))
 
     def get_obj_size(self, obj_name):
         return self.get_obj_metadata(obj_name)["ContentLength"]
