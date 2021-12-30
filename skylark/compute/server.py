@@ -7,7 +7,7 @@ from pathlib import Path, PurePath
 
 from loguru import logger
 
-from skylark.utils import Timer, do_parallel
+from skylark.utils import PathLike, Timer, do_parallel
 
 
 class ServerState(Enum):
@@ -230,9 +230,11 @@ class Server:
         sftp.close()
         self.add_command_log(command=f"<sync_directory> {local_dir} {remote_dir}", runtime=t.elapsed)
 
-    def set_password_auth(self):
-        self.run_command("sudo echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config")
-        self.run_command("sudo echo 'PermitRootLogin without-password' >> /etc/ssh/sshd_config")
-        self.run_command("sudo echo 'PermitEmptyPasswords no' >> /etc/ssh/sshd_config")
-        self.run_command("echo 'skylark-ucb-riselab' | sudo passwd ubuntu --stdin")
-        self.run_command("sudo systemctl restart sshd")
+    def copy_public_key(self, pub_key_path: PathLike):
+        """Append public key to authorized_keys file on server."""
+        pub_key_path = Path(pub_key_path)
+        assert pub_key_path.suffix == ".pub", f"{pub_key_path} does not have .pub extension, are you sure it is a public key?"
+        pub_key = Path(pub_key_path).read_text()
+        self.run_command(f"mkdir -p ~/.ssh")
+        self.run_command(f"echo '{pub_key}' >> ~/.ssh/authorized_keys")
+        self.run_command("chmod 600 ~/.ssh/authorized_keys")

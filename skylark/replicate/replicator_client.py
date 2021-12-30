@@ -15,7 +15,7 @@ from skylark.compute.server import Server, ServerState
 from skylark.replicate.obj_store import S3Interface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationPlan, ReplicationTopology
 from skylark.gateway.chunk_store import Chunk, ChunkRequest, ChunkRequestHop
-from skylark.utils import do_parallel, wait_for
+from skylark.utils import PathLike, do_parallel, wait_for
 import requests
 
 from loguru import logger
@@ -82,7 +82,7 @@ class ReplicatorClient:
         logger.warning(f"Deprovisioning gateway {server.instance_id}")
         server.terminate_instance()
 
-    def provision_gateways(self, reuse_instances=False):
+    def provision_gateways(self, reuse_instances=False, authorize_ssh_pub_key: Optional[PathLike] = None):
         regions_to_provision = [r for path in self.topology.paths for r in path]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
         gcp_regions_to_provision = [r for r in regions_to_provision if r.startswith("gcp:")]
@@ -144,12 +144,17 @@ class ReplicatorClient:
             bound_paths.append([instances_by_region[r].pop() for r in path])
         self.bound_paths = bound_paths
 
+        # copy ssh key
+        if authorize_ssh_pub_key is not None:
+            for server in itertools.chain(*bound_paths):
+                server.copy_public_key(authorize_ssh_pub_key)
+
         # start gateway on each instance (kill any existing gateway)
         gateway_cmd = f"sudo docker run -d --rm --ipc=host --network=host --name=skylark_gateway {self.gateway_docker_image} /env/bin/python /pkg/skylark/gateway/gateway_daemon.py"
         for i in itertools.chain(*bound_paths):
             i.run_command("sudo docker kill $(docker ps -q)")
             i.run_command(gateway_cmd)
-        
+
         # wait for gateways to start (check status API)
         # GET http://ip:8080/api/v1/status
         # returns {"status": "ok"}
@@ -160,10 +165,11 @@ class ReplicatorClient:
             except Exception as e:
                 logger.error(f"Failed to check status of {instance.instance_id}, {e}")
                 return False
+
         instances = list(itertools.chain(*instances_by_region.values()))
         all_ready = lambda: all(map(is_ready, instances))
-        wait_for(all_ready, timeout=120, interval=1)
-        logger.debug("All gateways are ready")
+        wait_for(all_ready, timeout=120, interval=1, progress_bar=True, desc="Waiting for gateways to start")
+        logger.info("All gateways are ready")
 
     def deprovision_gateways(self):
         instances = [instance for path in self.bound_paths for instance in path]
@@ -235,17 +241,6 @@ class ReplicatorClient:
 
         # send ChunkRequests to each gateway instance
         def send_chunk_req(instance: Server, chunk_reqs: List[ChunkRequest]):
-            # API signature:
-            # # add a new chunk request to end of pending requests
-            # # accepts either a single chunk request object or a list of chunk request objects
-            # @self.app.route("/api/v1/chunk_requests", methods=["POST"])
-            # if isinstance(request.json, dict):
-            #     self.gateway.add_chunk_request(ChunkRequest.from_dict(request.json))
-            #     return jsonify({"status": "ok"})
-            # elif isinstance(request.json, list):
-            #     for chunk_req in request.json:
-            #         self.gateway.add_chunk_request(ChunkRequest.from_dict(chunk_req))
-            #     return jsonify({"status": "ok"})
             body = [c.as_dict() for c in chunk_reqs]
             reply = requests.post(f"http://{instance.public_ip}:8080/api/v1/chunk_requests", json=body)
             if reply.status_code != 200:
@@ -269,6 +264,7 @@ if __name__ == "__main__":
     parser.add_argument("--gateway-docker-image", default="ghcr.io/parasj/skylark:latest", help="Docker image for gateway instances")
     parser.add_argument("--aws-instance-class", default="m5.4xlarge", help="AWS instance class")
     parser.add_argument("--gcp-instance-class", default="n2-standard-16", help="GCP instance class")
+    parser.add_argument("--copy-ssh-key", default=None, help="SSH public key to add to server")
     # parser.add_argument("--gcp-use-premium-network", store_true=True, help="Use GCP premium network")
     args = parser.parse_args()
 
@@ -317,7 +313,7 @@ if __name__ == "__main__":
 
     # provision the gateway instances
     logger.info("Provisioning gateway instances")
-    rc.provision_gateways(reuse_instances=True)
+    rc.provision_gateways(reuse_instances=True, authorize_ssh_pub_key=args.copy_ssh_key)
 
     # run the replication job
     logger.info(f"Source gateway API endpoint: http://{rc.bound_paths[0][0].public_ip}:8080/api/v1")

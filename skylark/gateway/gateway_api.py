@@ -16,6 +16,7 @@ class GatewayMetadataServer:
     * GET /api/v1/chunk_requests/<int:chunk_id> - returns chunk request details
     * POST /api/v1/chunk_requests - adds a new chunk request to end of pending requests
     """
+
     def __init__(self, gateway: Gateway):
         self.app = Flask("gateway_metadata_server")
         self.gateway = gateway
@@ -107,5 +108,5 @@ class GatewayMetadataServer:
                 return jsonify({"status": "ok"})
             elif isinstance(request.json, list):
                 for chunk_req in request.json:
-                    self.gateway.gateway.chunk_store.add_chunk_request_pending(ChunkRequest.from_dict(chunk_req))
+                    self.gateway.chunk_store.add_chunk_request_pending(ChunkRequest.from_dict(chunk_req))
                 return jsonify({"status": "ok"})
