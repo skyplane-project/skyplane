@@ -154,7 +154,7 @@ class ChunkStore:
         self.set_chunk_status(chunk.chunk_id, "registered")
 
     def get_chunk_requests(self) -> Tuple[List[ChunkRequest], List[ChunkRequest], List[ChunkRequest]]:
-        return self.pending_chunk_requests, self.downloaded_chunk_requests, self.uploaded_chunk_requests
+        return list(self.pending_chunk_requests), list(self.downloaded_chunk_requests), list(self.uploaded_chunk_requests)
 
     def get_chunk_request(self, chunk_id: int) -> Optional[ChunkRequest]:
         for chunk_request in self.pending_chunk_requests:

@@ -3,17 +3,20 @@ channels:
   - defaults
   - conda-forge
 dependencies:
-  - python=3.9
-  - pip
-  - graphviz
   - cvxpy
+  - graphviz
   - numpy
+  - pip
+  - python=3.9
   - pip:
+    - awscrt
     - boto3
     - click
     - cvxopt
+    - flask
     - google-api-python-client
     - google-cloud-compute
+    - graphviz
     - loguru
     - matplotlib
     - pandas

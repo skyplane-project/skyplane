@@ -84,11 +84,29 @@ class GatewayMetadataServer:
                 return jsonify({"error": f"Chunk {chunk_id} not found"}), 404
 
     def register_request_routes(self):
-        # list pending chunk requests
+        # list all chunk requests
         @self.app.route("/api/v1/chunk_requests", methods=["GET"])
         def get_all_chunk_requests():
             pending, downloaded, uploaded = self.gateway.chunk_store.get_chunk_requests()
             return jsonify({"pending": pending, "downloaded": downloaded, "uploaded": uploaded})
+
+        # list pending chunk requests
+        @self.app.route("/api/v1/chunk_requests/pending", methods=["GET"])
+        def get_pending_chunk_requests():
+            pending = self.gateway.chunk_store.get_chunk_requests()[0]
+            return jsonify({"pending": pending})
+
+        # list downloaded chunk requests
+        @self.app.route("/api/v1/chunk_requests/downloaded", methods=["GET"])
+        def get_downloaded_chunk_requests():
+            downloaded = self.gateway.chunk_store.get_chunk_requests()[1]
+            return jsonify({"downloaded": downloaded})
+
+        # list uploaded chunk requests
+        @self.app.route("/api/v1/chunk_requests/uploaded", methods=["GET"])
+        def get_uploaded_chunk_requests():
+            uploaded = self.gateway.chunk_store.get_chunk_requests()[2]
+            return jsonify({"uploaded": uploaded})
 
         # lookup chunk request given chunk id
         @self.app.route("/api/v1/chunk_requests/<int:chunk_id>", methods=["GET"])
@@ -100,8 +118,7 @@ class GatewayMetadataServer:
                 return jsonify(chunk_req)
 
         # add a new chunk request to end of pending requests
-        # accepts either a single chunk request object or a list of chunk request objects
-        @self.app.route("/api/v1/chunk_requests", methods=["POST"])
+        @self.app.route("/api/v1/chunk_requests/pending", methods=["POST"])
         def add_chunk_request():
             if isinstance(request.json, dict):
                 self.gateway.chunk_store.add_chunk_request_pending(ChunkRequest.from_dict(request.json))
@@ -109,4 +126,26 @@ class GatewayMetadataServer:
             elif isinstance(request.json, list):
                 for chunk_req in request.json:
                     self.gateway.chunk_store.add_chunk_request_pending(ChunkRequest.from_dict(chunk_req))
+                return jsonify({"status": "ok"})
+
+        # add a new chunk request to end of downloaded requests
+        @self.app.route("/api/v1/chunk_requests/downloaded", methods=["POST"])
+        def add_downloaded_chunk_request():
+            if isinstance(request.json, dict):
+                self.gateway.chunk_store.add_chunk_request_downloaded(ChunkRequest.from_dict(request.json))
+                return jsonify({"status": "ok"})
+            elif isinstance(request.json, list):
+                for chunk_req in request.json:
+                    self.gateway.chunk_store.add_chunk_request_downloaded(ChunkRequest.from_dict(chunk_req))
+                return jsonify({"status": "ok"})
+
+        # add a new chunk request to end of uploaded requests
+        @self.app.route("/api/v1/chunk_requests/uploaded", methods=["POST"])
+        def add_uploaded_chunk_request():
+            if isinstance(request.json, dict):
+                self.gateway.chunk_store.add_chunk_request_uploaded(ChunkRequest.from_dict(request.json))
+                return jsonify({"status": "ok"})
+            elif isinstance(request.json, list):
+                for chunk_req in request.json:
+                    self.gateway.chunk_store.add_chunk_request_uploaded(ChunkRequest.from_dict(chunk_req))
                 return jsonify({"status": "ok"})
