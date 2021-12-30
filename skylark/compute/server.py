@@ -229,3 +229,10 @@ class Server:
             )
         sftp.close()
         self.add_command_log(command=f"<sync_directory> {local_dir} {remote_dir}", runtime=t.elapsed)
+
+    def set_password_auth(self):
+        self.run_command("sudo echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config")
+        self.run_command("sudo echo 'PermitRootLogin without-password' >> /etc/ssh/sshd_config")
+        self.run_command("sudo echo 'PermitEmptyPasswords no' >> /etc/ssh/sshd_config")
+        self.run_command("echo 'skylark-ucb-riselab' | sudo passwd ubuntu --stdin")
+        self.run_command("sudo systemctl restart sshd")

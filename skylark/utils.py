@@ -23,6 +23,13 @@ class Timer:
     def elapsed(self):
         return self.end - self.start
 
+def wait_for(fn, timeout=60, interval=1):
+    start = time.time()
+    while not fn():
+        if time.time() - start > timeout:
+            raise Exception("Timeout")
+    time.sleep(interval)
+    return True
 
 def do_parallel(func, args_list, n=8, progress_bar=False, leave_pbar=True, desc=None, arg_fmt=None):
     """Run list of jobs in parallel with tqdm progress bar"""

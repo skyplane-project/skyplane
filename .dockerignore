@@ -1,6 +1,9 @@
 data/
+dist/
 nb/
 Dockerfile
+.pytype/
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

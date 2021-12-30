@@ -4,15 +4,44 @@ from skylark.gateway.gateway import Gateway
 
 
 class GatewayMetadataServer:
+    """
+    API documentation:
+    * GET /api/v1/status - returns status of API
+    * GET /api/v1/servers - returns list of running servers
+    * POST /api/v1/servers - starts a new server
+    * DELETE /api/v1/servers/<int:port> - stops a server
+    * GET /api/v1/chunks - returns list of chunks
+    * GET /api/v1/chunks/<int:chunk_id> - returns chunk details
+    * GET /api/v1/chunk_requests - returns list of pending chunk requests
+    * GET /api/v1/chunk_requests/<int:chunk_id> - returns chunk request details
+    * POST /api/v1/chunk_requests - adds a new chunk request to end of pending requests
+    """
     def __init__(self, gateway: Gateway):
         self.app = Flask("gateway_metadata_server")
         self.gateway = gateway
+        self.register_global_routes()
         self.register_server_routes()
         self.register_chunk_routes()
         self.register_request_routes()
 
     def run(self, host="0.0.0.0", port=8080):
-        self.app.run(host=host, port=port)
+        self.app.run(host=host, port=port, debug=True)
+
+    def register_global_routes(self):
+        # index route returns API version
+        @self.app.route("/", methods=["GET"])
+        def get_index():
+            return jsonify({"version": "v1"})
+
+        # index for v1 api routes
+        @self.app.route("/api/v1", methods=["GET"])
+        def get_v1_index():
+            return jsonify({"version": "v1"})
+
+        # status route returns if API is up
+        @self.app.route("/api/v1/status", methods=["GET"])
+        def get_status():
+            return jsonify({"status": "ok"})
 
     def register_server_routes(self):
         # list running gateway servers w/ ports
@@ -40,7 +69,8 @@ class GatewayMetadataServer:
         @self.app.route("/api/v1/chunks", methods=["GET"])
         def get_chunks():
             reply = {}
-            for chunk_id, chunk_data in self.gateway.chunks.items():
+            for chunk_data in self.gateway.chunk_store.get_chunks():
+                chunk_id = chunk_data.chunk_id
                 reply[chunk_id] = chunk_data.copy()
             return jsonify(reply)
 
@@ -48,7 +78,7 @@ class GatewayMetadataServer:
         @self.app.route("/api/v1/chunks/<int:chunk_id>", methods=["GET"])
         def get_chunk(chunk_id: int):
             if chunk_id in self.gateway.chunks:
-                return jsonify(dict(self.gateway.chunks[chunk_id]))
+                return jsonify(dict(self.gateway.chunk_store.get_chunk(chunk_id)))
             else:
                 return jsonify({"error": f"Chunk {chunk_id} not found"}), 404
 
@@ -56,13 +86,13 @@ class GatewayMetadataServer:
         # list pending chunk requests
         @self.app.route("/api/v1/chunk_requests", methods=["GET"])
         def get_all_chunk_requests():
-            pending, downloaded, uploaded = self.gateway.get_chunk_requests()
+            pending, downloaded, uploaded = self.gateway.chunk_store.get_chunk_requests()
             return jsonify({"pending": pending, "downloaded": downloaded, "uploaded": uploaded})
 
         # lookup chunk request given chunk id
         @self.app.route("/api/v1/chunk_requests/<int:chunk_id>", methods=["GET"])
         def get_chunk_request(chunk_id: int):
-            chunk_req = self.gateway.get_chunk_request(chunk_id)
+            chunk_req = self.gateway.chunk_store.get_chunk_request(chunk_id)
             if chunk_req is None:
                 return jsonify({"error": f"Chunk {chunk_id} not found"}), 404
             else:
@@ -73,9 +103,9 @@ class GatewayMetadataServer:
         @self.app.route("/api/v1/chunk_requests", methods=["POST"])
         def add_chunk_request():
             if isinstance(request.json, dict):
-                self.gateway.add_chunk_request(ChunkRequest.from_dict(request.json))
+                self.gateway.chunk_store.add_chunk_request_pending(ChunkRequest.from_dict(request.json))
                 return jsonify({"status": "ok"})
             elif isinstance(request.json, list):
                 for chunk_req in request.json:
-                    self.gateway.add_chunk_request(ChunkRequest.from_dict(chunk_req))
+                    self.gateway.gateway.chunk_store.add_chunk_request_pending(ChunkRequest.from_dict(chunk_req))
                 return jsonify({"status": "ok"})

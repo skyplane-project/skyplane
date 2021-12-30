@@ -9,14 +9,15 @@ dependencies:
   - cvxpy
   - numpy
   - pip:
-    - google-cloud-compute
-    - google-api-python-client
     - boto3
     - click
     - cvxopt
-    - pandas
+    - google-api-python-client
+    - google-cloud-compute
     - loguru
     - matplotlib
+    - pandas
     - paramiko
     - questionary
+    - ray
     - tqdm
