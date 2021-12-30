@@ -92,7 +92,6 @@ class ReplicatorClient:
             try:
                 return requests.get(api_url).json().get("status") == "ok"
             except Exception as e:
-                logger.error(f"Failed to check status of {server.instance_id}, {e}")
                 return False
 
         wait_for(is_ready, timeout=60, interval=1)
@@ -281,6 +280,7 @@ if __name__ == "__main__":
     parser.add_argument("--gcp-instance-class", default="n2-standard-16", help="GCP instance class")
     parser.add_argument("--copy-ssh-key", default=None, help="SSH public key to add to server")
     parser.add_argument("--log-dir", default=None, help="Directory to write instance SSH logs to")
+    parser.add_argument("--skip-upload", action="store_true", help="Skip uploading objects to S3")
     # parser.add_argument("--gcp-use-premium-network", store_true=True, help="Use GCP premium network")
     args = parser.parse_args()
 
@@ -290,30 +290,30 @@ if __name__ == "__main__":
     s3_interface_src.create_bucket()
     s3_interface_dst.create_bucket()
 
-    # logger.info("Deleting all objects in source bucket")
-    # matching_src_keys = list(s3_interface_src.list_objects(prefix=args.key_prefix))
-    # matching_dst_keys = list(s3_interface_dst.list_objects(prefix=args.key_prefix))
-    # if matching_src_keys:
-    #     logger.warning(f"Deleting objects from source bucket: {matching_src_keys}")
-    #     s3_interface_src.delete_objects(matching_src_keys)
-    # if matching_dst_keys:
-    #     logger.warning(f"Deleting objects from destination bucket: {matching_dst_keys}")
-    #     s3_interface_dst.delete_objects(matching_dst_keys)
+    if not args.skip_upload:
+        matching_src_keys = list(s3_interface_src.list_objects(prefix=args.key_prefix))
+        matching_dst_keys = list(s3_interface_dst.list_objects(prefix=args.key_prefix))
+        if matching_src_keys:
+            logger.warning(f"Deleting objects from source bucket: {matching_src_keys}")
+            s3_interface_src.delete_objects(matching_src_keys)
+        if matching_dst_keys:
+            logger.warning(f"Deleting objects from destination bucket: {matching_dst_keys}")
+            s3_interface_dst.delete_objects(matching_dst_keys)
 
-    # # create test objects w/ random data
-    # logger.info("Creating test objects")
-    # obj_keys = []
-    # futures = []
-    # with tempfile.NamedTemporaryFile() as f:
-    #     f.write(os.urandom(int(1e6 * args.chunk_size_mb)))
-    #     f.seek(0)
-    #     for i in trange(args.n_chunks):
-    #         k = f"{args.key_prefix}/{i}"
-    #         futures.append(s3_interface_src.upload_object(f.name, k))
-    #         logger.info(f"Uploaded object {f.name} -> {k}")
-    #         obj_keys.append(k)
-    # concurrent.futures.wait(futures)
-    obj_keys = [f"{args.key_prefix}/{i}" for i in range(args.n_chunks)]
+        # create test objects w/ random data
+        logger.info("Creating test objects")
+        obj_keys = []
+        futures = []
+        with tempfile.NamedTemporaryFile() as f:
+            f.write(os.urandom(int(1e6 * args.chunk_size_mb)))
+            f.seek(0)
+            for i in trange(args.n_chunks):
+                k = f"{args.key_prefix}/{i}"
+                futures.append(s3_interface_src.upload_object(f.name, k))
+                obj_keys.append(k)
+        concurrent.futures.wait(futures)
+    else:
+        obj_keys = [f"{args.key_prefix}/{i}" for i in range(args.n_chunks)]
 
     # define the replication job and topology
     topo = ReplicationTopology(paths=[[args.src_region, args.dest_region]])
@@ -327,6 +327,7 @@ if __name__ == "__main__":
     )
 
     # provision the gateway instances
+    logger.info("Provisioning gateway instances")
     rc.provision_gateways(reuse_instances=True, log_dir=args.log_dir, authorize_ssh_pub_key=args.copy_ssh_key)
     rc.start_gateways()
 
@@ -337,8 +338,9 @@ if __name__ == "__main__":
     atexit.register(exit_handler)
 
     # run the replication job
-    logger.info(f"Source gateway API endpoint: http://{rc.bound_paths[0][0].public_ip}:8080/api/v1")
-    logger.info(f"Destination gateway API endpoint: http://{rc.bound_paths[0][1].public_ip}:8080/api/v1")
+    logger.debug(f"Source gateway API endpoint: http://{rc.bound_paths[0][0].public_ip}:8080/api/v1")
+    logger.debug(f"Destination gateway API endpoint: http://{rc.bound_paths[0][1].public_ip}:8080/api/v1")
+    logger.info("Launching replication job")
     job = ReplicationJob(
         source_region=args.src_region,
         source_bucket=src_bucket,
