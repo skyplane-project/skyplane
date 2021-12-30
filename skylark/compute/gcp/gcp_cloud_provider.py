@@ -1,18 +1,16 @@
 import os
-import socket
 import time
-from typing import List, Union
 import uuid
 from pathlib import Path
-import googleapiclient
-from loguru import logger
+from typing import List
 
+import googleapiclient
 import paramiko
 
-from skylark.compute.gcp.gcp_server import GCPServer
-from skylark.compute.cloud_providers import CloudProvider
-from skylark.compute.server import Server
 from skylark import key_root
+from skylark.compute.cloud_providers import CloudProvider
+from skylark.compute.gcp.gcp_server import GCPServer
+from skylark.compute.server import Server
 
 
 class GCPCloudProvider(CloudProvider):

@@ -6,8 +6,8 @@ import boto3
 import paramiko
 from loguru import logger
 
-from skylark.compute.server import Server, ServerState
 from skylark import key_root
+from skylark.compute.server import Server, ServerState
 
 
 class AWSServer(Server):

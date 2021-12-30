@@ -1,18 +1,13 @@
-from concurrent.futures import Future
 import mimetypes
 import os
-from typing import Generator, Iterator, List
-from loguru import logger
-import tempfile
-import hashlib
-from tqdm import tqdm
+from concurrent.futures import Future
+from typing import Iterator, List
 
-from awscrt.s3 import S3Client, S3RequestType, S3RequestTlsMode
-from awscrt.io import ClientBootstrap, DefaultHostResolver, EventLoopGroup
 from awscrt.auth import AwsCredentialsProvider
 from awscrt.http import HttpHeaders, HttpRequest
+from awscrt.io import ClientBootstrap, DefaultHostResolver, EventLoopGroup
+from awscrt.s3 import S3Client, S3RequestTlsMode, S3RequestType
 
-from skylark.utils import Timer
 from skylark.compute.aws.aws_server import AWSServer
 
 

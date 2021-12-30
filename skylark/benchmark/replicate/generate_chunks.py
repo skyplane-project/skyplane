@@ -5,15 +5,13 @@ python skylark/benchmark/replicate/generate_chunks.py --region us-east-1 --size_
 
 import argparse
 import os
-import random
-import time
 import tempfile
 
 from loguru import logger
-from tqdm import tqdm, trange
-
 from skylark.replicate.obj_store_interface import S3Interface
-from skylark.utils import do_parallel, Timer
+from tqdm import trange
+
+from skylark.utils import Timer, do_parallel
 
 
 def parse_args():

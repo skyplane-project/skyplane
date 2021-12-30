@@ -1,4 +1,3 @@
-import argparse
 from skylark.replicate.replication_plan import ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorCoordinator
 

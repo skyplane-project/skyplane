@@ -1,26 +1,17 @@
-import concurrent.futures
-import functools
 import itertools
-import atexit
-import os
-import signal
-import sys
-import tempfile
-import time
 from typing import List, Optional
 
 import requests
-from tqdm import tqdm
 from loguru import logger
+
 from skylark.benchmark.utils import refresh_instance_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server, ServerState
 from skylark.gateway.chunk_store import Chunk, ChunkRequest, ChunkRequestHop
 from skylark.replicate.obj_store import S3Interface
-from skylark.replicate.replication_plan import ReplicationJob, ReplicationPlan, ReplicationTopology
+from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.utils import PathLike, do_parallel, wait_for
-from tqdm import trange
 
 
 class ReplicatorClient:
@@ -97,11 +88,11 @@ class ReplicatorClient:
         wait_for(is_ready, timeout=60, interval=1)
 
     def kill_gateway_instance(self, server: Server):
-        logger.warning(f"Killing gateway container on {server.instance_id}")
+        logger.warning(f"Killing gateway container on {server.instance_name}")
         server.run_command("sudo docker kill $(sudo docker ps -q)")
 
     def deprovision_gateway_instance(self, server: Server):
-        logger.warning(f"Deprovisioning gateway {server.instance_id}")
+        logger.warning(f"Deprovisioning gateway {server.instance_name}")
         server.terminate_instance()
 
     def provision_gateways(
@@ -150,14 +141,15 @@ class ReplicatorClient:
         }
 
         # add existing instances
-        for r, ilist in current_aws_instances.items():
-            if f"aws:{r}" not in instances_by_region:
-                instances_by_region[f"aws:{r}"] = []
-            instances_by_region[f"aws:{r}"].extend(ilist)
-        for r, ilist in current_gcp_instances.items():
-            if f"gcp:{r}" not in instances_by_region:
-                instances_by_region[f"gcp:{r}"] = []
-            instances_by_region[f"gcp:{r}"].extend(ilist)
+        if reuse_instances:
+            for r, ilist in current_aws_instances.items():
+                if f"aws:{r}" not in instances_by_region:
+                    instances_by_region[f"aws:{r}"] = []
+                instances_by_region[f"aws:{r}"].extend(ilist)
+            for r, ilist in current_gcp_instances.items():
+                if f"gcp:{r}" not in instances_by_region:
+                    instances_by_region[f"gcp:{r}"] = []
+                instances_by_region[f"gcp:{r}"].extend(ilist)
 
         # setup instances
         def setup(server: Server):
@@ -258,107 +250,8 @@ class ReplicatorClient:
             body = [c.as_dict() for c in chunk_reqs]
             reply = requests.post(f"http://{instance.public_ip}:8080/api/v1/chunk_requests/pending", json=body)
             if reply.status_code != 200:
-                raise Exception(f"Failed to send chunk requests to gateway instance {instance.instance_id}: {reply.text}")
+                raise Exception(f"Failed to send chunk requests to gateway instance {instance.instance_name}: {reply.text}")
             return reply
 
         assert len(chunk_batches) == len(self.bound_paths)
         send_chunk_req(src_instance, chunk_batches[0])
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Run a replication job")
-    parser.add_argument("--src-region", default="aws:us-east-1", help="AWS region of source bucket")
-    parser.add_argument("--dest-region", default="aws:us-west-1", help="AWS region of destination bucket")
-    parser.add_argument("--key-prefix", default="/test/direct_replication", help="S3 key prefix for all objects")
-    parser.add_argument("--chunk-size-mb", default=128, type=int, help="Chunk size in MB")
-    parser.add_argument("--n-chunks", default=16, type=int, help="Number of chunks in bucket")
-    parser.add_argument("--gcp-project", default="skylark-333700", help="GCP project ID")
-    parser.add_argument("--gateway-docker-image", default="ghcr.io/parasj/skylark:main", help="Docker image for gateway instances")
-    parser.add_argument("--aws-instance-class", default="m5.4xlarge", help="AWS instance class")
-    parser.add_argument("--gcp-instance-class", default="n2-standard-16", help="GCP instance class")
-    parser.add_argument("--copy-ssh-key", default=None, help="SSH public key to add to server")
-    parser.add_argument("--log-dir", default=None, help="Directory to write instance SSH logs to")
-    parser.add_argument("--skip-upload", action="store_true", help="Skip uploading objects to S3")
-    # parser.add_argument("--gcp-use-premium-network", store_true=True, help="Use GCP premium network")
-    args = parser.parse_args()
-
-    src_bucket, dst_bucket = f"skylark-{args.src_region.split(':')[1]}", f"skylark-{args.dest_region.split(':')[1]}"
-    s3_interface_src = S3Interface(args.src_region.split(":")[1], src_bucket)
-    s3_interface_dst = S3Interface(args.dest_region.split(":")[1], dst_bucket)
-    s3_interface_src.create_bucket()
-    s3_interface_dst.create_bucket()
-
-    if not args.skip_upload:
-        matching_src_keys = list(s3_interface_src.list_objects(prefix=args.key_prefix))
-        matching_dst_keys = list(s3_interface_dst.list_objects(prefix=args.key_prefix))
-        if matching_src_keys:
-            logger.warning(f"Deleting objects from source bucket: {matching_src_keys}")
-            s3_interface_src.delete_objects(matching_src_keys)
-        if matching_dst_keys:
-            logger.warning(f"Deleting objects from destination bucket: {matching_dst_keys}")
-            s3_interface_dst.delete_objects(matching_dst_keys)
-
-        # create test objects w/ random data
-        logger.info("Creating test objects")
-        obj_keys = []
-        futures = []
-        with tempfile.NamedTemporaryFile() as f:
-            f.write(os.urandom(int(1e6 * args.chunk_size_mb)))
-            f.seek(0)
-            for i in trange(args.n_chunks):
-                k = f"{args.key_prefix}/{i}"
-                futures.append(s3_interface_src.upload_object(f.name, k))
-                obj_keys.append(k)
-        concurrent.futures.wait(futures)
-    else:
-        obj_keys = [f"{args.key_prefix}/{i}" for i in range(args.n_chunks)]
-
-    # define the replication job and topology
-    topo = ReplicationTopology(paths=[[args.src_region, args.dest_region]])
-    rc = ReplicatorClient(
-        topo,
-        gcp_project=args.gcp_project,
-        gateway_docker_image=args.gateway_docker_image,
-        aws_instance_class=args.aws_instance_class,
-        gcp_instance_class=args.gcp_instance_class,
-        # gcp_use_premium_network=args.gcp_use_premium_network,
-    )
-
-    # provision the gateway instances
-    logger.info("Provisioning gateway instances")
-    rc.provision_gateways(reuse_instances=True, log_dir=args.log_dir, authorize_ssh_pub_key=args.copy_ssh_key)
-    rc.start_gateways()
-
-    def exit_handler():
-        logger.warning("Exiting, closing gateways")
-        rc.kill_gateways()
-
-    atexit.register(exit_handler)
-
-    # run the replication job
-    logger.debug(f"Source gateway API endpoint: http://{rc.bound_paths[0][0].public_ip}:8080/api/v1")
-    logger.debug(f"Destination gateway API endpoint: http://{rc.bound_paths[0][1].public_ip}:8080/api/v1")
-    logger.info("Launching replication job")
-    job = ReplicationJob(
-        source_region=args.src_region,
-        source_bucket=src_bucket,
-        dest_region=args.dest_region,
-        dest_bucket=dst_bucket,
-        objs=obj_keys,
-    )
-    rc.run_replication_plan(job)
-
-    # monitor the replication job until it is complete
-    with tqdm(total=args.n_chunks * args.chunk_size_mb, unit="MB", desc="Replication progress") as pbar:
-        while True:
-            dst_objs = list(s3_interface_dst.list_objects(prefix=args.key_prefix))
-            pbar.update(len(dst_objs) * args.chunk_size_mb - pbar.n)
-            if len(dst_objs) == args.n_chunks:
-                break
-            time.sleep(0.5)
-
-    # deprovision the gateway instances
-    logger.info("Deprovisioning gateway instances")
-    rc.deprovision_gateways()

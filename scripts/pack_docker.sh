@@ -12,7 +12,7 @@ DOCKER_BUILDKIT=1 sudo docker build -t skylark .
 # sudo docker save skylark | pv > ./dist/skylark.tar
 # du -sh ./dist/skylark.tar
 
-RANDOM_TAG=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)
+RANDOM_TAG="local-$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)"
 DOCKER_URL="ghcr.io/parasj/skylark:$RANDOM_TAG"
 echo -e "${BGreen}Uploading docker image to $DOCKER_URL${NC}"
 sudo docker tag skylark $DOCKER_URL

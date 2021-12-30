@@ -1,16 +1,14 @@
 import argparse
 
-from cvxpy.expressions import constants
-import pandas as pd
-import numpy as np
-import graphviz as gv
 import cvxpy as cp
+import graphviz as gv
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 from loguru import logger
 
 from skylark import skylark_root
 from skylark.compute.cloud_providers import CloudProvider
-
 
 GBIT_PER_GBYTE = 8
 

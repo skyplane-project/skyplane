@@ -2,12 +2,10 @@ import os
 from functools import lru_cache
 
 import googleapiclient.discovery
-from loguru import logger
 import paramiko
-from tqdm import tqdm
 
-from skylark.compute.server import Server, ServerState
 from skylark import key_root
+from skylark.compute.server import Server, ServerState
 
 
 class GCPServer(Server):

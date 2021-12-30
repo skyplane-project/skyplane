@@ -1,4 +1,4 @@
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from enum import Enum
 from multiprocessing import Manager
 from pathlib import Path
@@ -55,6 +55,7 @@ class ChunkRequestHop:
 class ChunkRequest:
     chunk: Chunk
     path: List[ChunkRequestHop]
+
     # todo: flags for compression, encryption, logging api, etc.
 
     def as_dict(self):

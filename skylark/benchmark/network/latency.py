@@ -1,8 +1,8 @@
 import argparse
 import json
-from pathlib import Path
-from typing import Dict, List, Tuple
 import re
+from pathlib import Path
+from typing import List, Tuple
 
 from loguru import logger
 from tqdm import tqdm

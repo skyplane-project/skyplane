@@ -1,6 +1,6 @@
+import hashlib
 import os
 import tempfile
-import hashlib
 
 from skylark.replicate.obj_store_interface import S3Interface
 

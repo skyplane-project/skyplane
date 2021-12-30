@@ -1,5 +1,5 @@
-from dataclasses import dataclass
 import socket
+from dataclasses import dataclass
 
 
 @dataclass

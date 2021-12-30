@@ -1,7 +1,7 @@
 from loguru import logger
 
-from skylark.compute.gcp.gcp_server import GCPServer
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
+from skylark.compute.gcp.gcp_server import GCPServer
 
 if __name__ == "__main__":
     gcp_project = "bair-commons-307400"

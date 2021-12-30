@@ -1,8 +1,6 @@
 import threading
 from typing import List, Optional, Union
 
-from loguru import logger
-
 from skylark.compute.server import Server, ServerState
 
 
