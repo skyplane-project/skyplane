@@ -73,7 +73,7 @@ class ChunkRequest:
 class ChunkState(Enum):
     registered = auto()
     download_in_progress = auto()
-    ready_to_upload = auto()
+    downloaded = auto()
     upload_in_progress = auto()
     upload_complete = auto()
     failed = auto()
@@ -108,30 +108,35 @@ class ChunkStore:
         return self.chunk_status[chunk_id] if chunk_id in self.chunk_status else None
 
     def set_chunk_status(self, chunk_id: int, new_status: ChunkState):
+        logger.debug(f"Setting chunk {chunk_id} status to {new_status}")
         self.chunk_status[chunk_id] = new_status
 
     def start_download(self, chunk_id: int):
-        if self.get_chunk_status(chunk_id) == ChunkState.registered:
+        state = self.get_chunk_status(chunk_id)
+        if state in [ChunkState.registered, ChunkState.download_in_progress]:
             self.set_chunk_status(chunk_id, ChunkState.download_in_progress)
         else:
             raise ValueError(f"Invalid transition start_download from {self.get_chunk_status(chunk_id)}")
 
     def finish_download(self, chunk_id: int, runtime_s: Optional[float] = None):
         # todo log runtime to statistics store
-        if self.get_chunk_status(chunk_id) == ChunkState.download_in_progress:
-            self.set_chunk_status(chunk_id, ChunkState.ready_to_upload)
+        state = self.get_chunk_status(chunk_id)
+        if state in [ChunkState.download_in_progress, ChunkState.downloaded]:
+            self.set_chunk_status(chunk_id, ChunkState.downloaded)
         else:
             raise ValueError(f"Invalid transition finish_download from {self.get_chunk_status(chunk_id)}")
 
     def start_upload(self, chunk_id: int):
-        if self.get_chunk_status(chunk_id) == ChunkState.ready_to_upload:
+        state = self.get_chunk_status(chunk_id)
+        if state in [ChunkState.downloaded, ChunkState.upload_in_progress]:
             self.set_chunk_status(chunk_id, ChunkState.upload_in_progress)
         else:
             raise ValueError(f"Invalid transition start_upload from {self.get_chunk_status(chunk_id)}")
 
     def finish_upload(self, chunk_id: int, runtime_s: Optional[float] = None):
         # todo log runtime to statistics store
-        if self.get_chunk_status(chunk_id) == ChunkState.upload_in_progress:
+        state = self.get_chunk_status(chunk_id)
+        if state in [ChunkState.upload_in_progress, ChunkState.upload_complete]:
             self.set_chunk_status(chunk_id, ChunkState.upload_complete)
         else:
             raise ValueError(f"Invalid transition finish_upload from {self.get_chunk_status(chunk_id)}")
@@ -158,3 +163,12 @@ class ChunkStore:
         logger.debug(f"Adding chunk request {chunk_request.chunk.chunk_id}")
         self.set_chunk_status(chunk_request.chunk.chunk_id, state)
         self.chunk_requests[chunk_request.chunk.chunk_id] = chunk_request
+
+    def pop_chunk_request_path(self, chunk_id: int) -> Optional[ChunkRequestHop]:
+        if chunk_id in self.chunk_requests:
+            chunk_request = self.chunk_requests[chunk_id]
+            if len(chunk_request.path) > 0:
+                result = chunk_request.path.pop(0)
+                self.chunk_requests[chunk_id] = chunk_request
+                return result
+        return None

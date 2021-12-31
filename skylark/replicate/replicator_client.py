@@ -223,14 +223,14 @@ class ReplicatorClient:
             src_path = ChunkRequestHop(
                 hop_cloud_region=src_instance.region_tag,
                 hop_ip_address=src_instance.public_ip,
-                chunk_location_type="random-128MB",  # todo src_object_store
+                chunk_location_type="random_128MB",  # todo src_object_store
                 src_object_store_region=src_instance.region_tag,
                 src_object_store_bucket=job.source_bucket,
             )
             dst_path = ChunkRequestHop(
                 hop_cloud_region=dst_instance.region_tag,
                 hop_ip_address=dst_instance.public_ip,
-                chunk_location_type="dst_object_store",
+                chunk_location_type="save_local",  # dst_object_store
                 dst_object_store_region=dst_instance.region_tag,
                 dst_object_store_bucket=job.dest_bucket,
             )

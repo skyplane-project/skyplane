@@ -57,17 +57,26 @@ class GatewayDaemon:
         logger.info("Starting daemon loop")
         while not exit_flag.is_set():
             # queue object uploads and relays
-            for chunk_req in self.chunk_store.get_chunk_requests(ChunkState.ready_to_upload):
-                logger.info(f"Relaying chunk {chunk_req.chunk.chunk_id}")
+            for chunk_req in self.chunk_store.get_chunk_requests(ChunkState.downloaded):
                 if len(chunk_req.path) > 0:
                     current_hop = chunk_req.path[0]
                     if current_hop.chunk_location_type == "dst_object_store":
-                        logger.warning(f"NOT IMPLEMENTED: Queuing object store upload for chunk {chunk_req.chunk_id}")
-                    elif current_hop.chunk_location_type == "relay":
+                        logger.warning(f"NOT IMPLEMENTED: Queuing object store upload for chunk {chunk_req.chunk.chunk_id}")
+                        self.chunk_store.fail(chunk_req.chunk.chunk_id)
+                    elif (
+                        current_hop.chunk_location_type == "src_object_store"
+                        or current_hop.chunk_location_type == "relay"
+                        or current_hop.chunk_location_type.startswith("random_")
+                    ):
                         logger.info(f"Queuing chunk {chunk_req.chunk.chunk_id} for relay")
                         self.gateway_sender.queue_request(chunk_req)
                         self.chunk_store.start_upload(chunk_req.chunk.chunk_id)
+                    elif current_hop.chunk_location_type == "save_local":
+                        # do nothing, done
+                        pass
                     else:
+                        logger.error(f"Unknown chunk location type {current_hop.chunk_location_type}")
+                        self.chunk_store.fail(chunk_req.chunk.chunk_id)
                         raise ValueError(f"Unknown or incorrect chunk_location_type {current_hop.chunk_location_type}")
                 else:
                     logger.error(f"Ready to upload chunk {chunk_req.chunk_id} has no hops")
@@ -75,24 +84,31 @@ class GatewayDaemon:
             # queue object store downloads and relays (if space is available)
             # todo ensure space is available
             for chunk_req in self.chunk_store.get_chunk_requests(ChunkState.registered):
-                logger.info(f"Downloading chunk {chunk_req.chunk.chunk_id}")
                 if len(chunk_req.path) > 0:
                     current_hop = chunk_req.path[0]
                     if current_hop.chunk_location_type == "src_object_store":
-                        logger.warning(f"NOT IMPLEMENTED: Queuing object store download for chunk {chunk_req.chunk_id}")
-                    elif current_hop.chunk_location_type.startswith("random-"):
+                        logger.warning(f"NOT IMPLEMENTED: Queuing object store download for chunk {chunk_req.chunk.chunk_id}")
+                        self.chunk_store.fail(chunk_req.chunk.chunk_id)
+                    elif current_hop.chunk_location_type.startswith("random_"):
                         self.chunk_store.start_download(chunk_req.chunk.chunk_id)
-                        size_mb = re.search(r"random-(\d+)MB", current_hop.chunk_location_type).group(1)
+                        size_mb = re.search(r"random_(\d+)MB", current_hop.chunk_location_type).group(1)
                         logger.info(f"Generating {size_mb}MB random chunk {chunk_req.chunk.chunk_id}")
                         with self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).open("wb") as f:
-                            f.write(os.urandom(int(size_mb) * 1024 * 1024))
+                            f.write(os.urandom(int(size_mb * 1e6)))
+
+                        # update chunk size
+                        chunk_req.chunk.chunk_length_bytes = int(size_mb * 1e6)
+                        self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
                         self.chunk_store.finish_download(chunk_req.chunk.chunk_id)
+                    elif current_hop.chunk_location_type == "relay" or current_hop.chunk_location_type == "save_local":
+                        # do nothing, waiting for chunk to be be ready_to_upload
+                        continue
                     else:
+                        logger.error(f"Unknown chunk location type {current_hop.chunk_location_type}")
+                        self.chunk_store.fail(chunk_req.chunk.chunk_id)
                         raise ValueError(f"Unknown or incorrect chunk_location_type {current_hop.chunk_location_type}")
                 else:
                     logger.error(f"Registered chunk {chunk_req.chunk_id} has no hops")
-
-            time.sleep(0.5)
 
 
 if __name__ == "__main__":

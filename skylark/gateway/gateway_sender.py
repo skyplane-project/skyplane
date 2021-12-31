@@ -47,30 +47,34 @@ class GatewaySender:
     def worker_loop(self, id: int):
         while not self.exit_flags[id].is_set():
             # get up to pipeline_batch_size chunks from the queue
-            # todo should we block here to wait for more chunks?
-            chunks_to_send: List[ChunkRequest] = []
-            while len(chunks_to_send) < self.batch_size:
+            chunk_ids_to_send = []
+            while len(chunk_ids_to_send) < self.batch_size:
                 try:
-                    next_chunk_id = self.worker_queues[id].get_nowait()
-                    chunks_to_send.append(self.chunk_store.get_chunk_request(next_chunk_id))
+                    chunk_ids_to_send.append(self.worker_queues[id].get_nowait())
                 except queue.Empty:
                     break
 
             # check next hop is the same for all chunks in the batch
-            if chunks_to_send:
-                next_hop = chunks_to_send[0].path[0]
-                assert all(next_hop.hop_cloud_region == chunk.path[0].hop_cloud_region for chunk in chunks_to_send)
-                assert all(next_hop.hop_ip_address == chunk.path[0].hop_ip_address for chunk in chunks_to_send)
+            if chunk_ids_to_send:
+                logger.debug(f"worker {id} sending {len(chunk_ids_to_send)} chunks")
+                chunks = []
+                for idx in chunk_ids_to_send:
+                    self.chunk_store.pop_chunk_request_path(idx)
+                    chunks.append(self.chunk_store.get_chunk_request(idx))
+                next_hop = chunks[0].path[0]
+                assert all(next_hop.hop_cloud_region == chunk.path[0].hop_cloud_region for chunk in chunks)
+                assert all(next_hop.hop_ip_address == chunk.path[0].hop_ip_address for chunk in chunks)
 
                 # send chunks
-                chunk_ids = [req.chunk.chunk_id for req in chunks_to_send]
+                chunk_ids = [req.chunk.chunk_id for req in chunks]
                 self.send_chunks(chunk_ids, next_hop.hop_ip_address)
-            time.sleep(0.1)
+            time.sleep(0.1)  # short interval to batch requests
 
     def queue_request(self, chunk_request: ChunkRequest):
         # todo go beyond round robin routing? how to handle stragglers or variable-sized objects?
         with self.next_worker_id.get_lock():
             worker_id = self.next_worker_id.value
+            logger.debug(f"queuing chunk request {chunk_request.chunk.chunk_id} to worker {worker_id}")
             self.worker_queues[worker_id].put(chunk_request.chunk.chunk_id)
             self.next_worker_id.value = (worker_id + 1) % self.n_processes
 
@@ -78,11 +82,7 @@ class GatewaySender:
         """Send list of chunks to gateway server, pipelining small chunks together into a single socket stream."""
         # notify server of upcoming ChunkRequests
         # pop chunk_req.path[0] to remove self
-        chunk_reqs = []
-        for chunk_id in chunk_ids:
-            chunk_req = self.chunk_store.get_chunk_request(chunk_id)
-            chunk_req.path.pop(0)
-            chunk_reqs.append(chunk_req)
+        chunk_reqs = [self.chunk_store.get_chunk_request(chunk_id) for chunk_id in chunk_ids]
         response = requests.post(f"http://{dst_host}:8080/api/v1/chunk_requests", json=[c.as_dict() for c in chunk_reqs])
         assert response.status_code == 200 and response.json()["status"] == "ok"
 
@@ -100,7 +100,6 @@ class GatewaySender:
                 chunk = self.chunk_store.get_chunk_request(chunk_id).chunk
 
                 # send chunk header
-                self.chunk_store.start_upload(chunk_id)
                 chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
                 header = chunk.to_wire_header(end_of_stream=idx == len(chunk_ids) - 1)
                 sock.sendall(header.to_bytes())
@@ -109,6 +108,7 @@ class GatewaySender:
                 # send chunk data
                 assert chunk_file_path.exists(), f"chunk file {chunk_file_path} does not exist"
                 with open(chunk_file_path, "rb") as fd:
+                    logger.debug(f"[sender] Sending file")
                     bytes_sent = sock.sendfile(fd)
                     logger.debug(f"[sender] Sent chunk data {bytes_sent} bytes")
 
