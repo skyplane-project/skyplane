@@ -1,10 +1,15 @@
 import socket
 from dataclasses import dataclass
 
+from loguru import logger
+
 
 @dataclass
 class WireProtocolHeader:
     """Lightweight wire protocol header for chunk transfers along socket."""
+
+    # todo add protocol version
+    # todo merge with chunkrequest
 
     chunk_id: int  # unsigned long
     chunk_len: int  # unsigned long
@@ -21,7 +26,7 @@ class WireProtocolHeader:
 
     @staticmethod
     def from_bytes(data: bytes):
-        assert len(data) == WireProtocolHeader.length_bytes()
+        assert len(data) == WireProtocolHeader.length_bytes(), f"{len(data)} != {WireProtocolHeader.length_bytes()}"
         magic = int.from_bytes(data[:8], byteorder="big")
         if magic != WireProtocolHeader.magic_hex():
             raise ValueError("Invalid magic number")
@@ -36,12 +41,15 @@ class WireProtocolHeader:
         out_bytes += self.chunk_id.to_bytes(8, byteorder="big")
         out_bytes += self.chunk_len.to_bytes(8, byteorder="big")
         out_bytes += bytes([int(self.end_of_stream)])
-        assert len(out_bytes) == WireProtocolHeader.length_bytes()
+        assert len(out_bytes) == WireProtocolHeader.length_bytes(), f"{len(out_bytes)} != {WireProtocolHeader.length_bytes()}"
         return out_bytes
 
     @staticmethod
     def from_socket(sock: socket.socket):
-        header_bytes = sock.recv(WireProtocolHeader.length_bytes())
+        num_bytes = WireProtocolHeader.length_bytes()
+        logger.info(f"Reading {num_bytes} bytes from socket")
+        header_bytes = sock.recv(num_bytes)
+        assert len(header_bytes) == num_bytes, f"{len(header_bytes)} != {num_bytes}"
         return WireProtocolHeader.from_bytes(header_bytes)
 
     def to_socket(self, sock: socket.socket):

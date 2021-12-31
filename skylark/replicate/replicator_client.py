@@ -74,8 +74,13 @@ class ReplicatorClient:
                 logger.info(f"Deleting old container {container_id}")
                 server.run_command(f"sudo docker rm {container_id}")
 
-        gateway_cmd = f"sudo docker run -d --rm --ipc=host --network=host {self.gateway_docker_image} /env/bin/python /pkg/skylark/gateway/gateway_daemon.py"
-        server.run_command(gateway_cmd)
+        docker_run_flags = "-d --log-driver=local --ipc=host --network=host"
+        # todo add other launch flags for gateway daemon
+        gateway_daemon_cmd = "/env/bin/python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks"
+        docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {self.gateway_docker_image} {gateway_daemon_cmd}"
+        start_out, start_err = server.run_command(docker_launch_cmd)
+        assert not start_err, f"Error starting gateway: {start_err}"
+        container_id = start_out.strip()
 
         # wait for gateways to start (check status API)
         def is_ready():
@@ -85,7 +90,13 @@ class ReplicatorClient:
             except Exception as e:
                 return False
 
-        wait_for(is_ready, timeout=60, interval=1)
+        try:
+            wait_for(is_ready, timeout=10, interval=0.1)
+        except Exception as e:
+            logger.error(f"Gateway {server.instance_name} is not ready")
+            logs, err = server.run_command(f"sudo docker logs skylark_gateway --tail=100")
+            logger.error(f"Docker logs: {logs}\nerr: {err}")
+            raise e
 
     def kill_gateway_instance(self, server: Server):
         logger.warning(f"Killing gateway container on {server.instance_name}")
@@ -212,7 +223,7 @@ class ReplicatorClient:
             src_path = ChunkRequestHop(
                 hop_cloud_region=src_instance.region_tag,
                 hop_ip_address=src_instance.public_ip,
-                chunk_location_type="src_object_store",
+                chunk_location_type="random-128MB",  # todo src_object_store
                 src_object_store_region=src_instance.region_tag,
                 src_object_store_bucket=job.source_bucket,
             )
@@ -247,8 +258,9 @@ class ReplicatorClient:
 
         # send ChunkRequests to each gateway instance
         def send_chunk_req(instance: Server, chunk_reqs: List[ChunkRequest]):
+            logger.debug(f"Sending {len(chunk_reqs)} chunk requests to {instance.public_ip}")
             body = [c.as_dict() for c in chunk_reqs]
-            reply = requests.post(f"http://{instance.public_ip}:8080/api/v1/chunk_requests/pending", json=body)
+            reply = requests.post(f"http://{instance.public_ip}:8080/api/v1/chunk_requests", json=body)
             if reply.status_code != 200:
                 raise Exception(f"Failed to send chunk requests to gateway instance {instance.instance_name}: {reply.text}")
             return reply

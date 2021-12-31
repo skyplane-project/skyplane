@@ -7,6 +7,9 @@ from awscrt.auth import AwsCredentialsProvider
 from awscrt.http import HttpHeaders, HttpRequest
 from awscrt.io import ClientBootstrap, DefaultHostResolver, EventLoopGroup
 from awscrt.s3 import S3Client, S3RequestTlsMode, S3RequestType
+import boto3
+import botocore.exceptions
+
 
 from skylark.compute.aws.aws_server import AWSServer
 
@@ -29,6 +32,10 @@ class ObjectStoreInterface:
 
     def upload_object(self, src_file_path, dst_object_name, content_type="infer"):
         raise NotImplementedError
+
+
+class NoSuchObjectException(Exception):
+    pass
 
 
 class S3Interface(ObjectStoreInterface):
@@ -86,10 +93,20 @@ class S3Interface(ObjectStoreInterface):
 
     def get_obj_metadata(self, obj_name):
         s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
-        return s3_client.head_object(Bucket=self.bucket_name, Key=str(obj_name).lstrip("/"))
+        try:
+            return s3_client.head_object(Bucket=self.bucket_name, Key=str(obj_name).lstrip("/"))
+        except botocore.exceptions.ClientError as e:
+            raise NoSuchObjectException(f"Object {obj_name} does not exist, or you do not have permission to access it") from e
 
     def get_obj_size(self, obj_name):
         return self.get_obj_metadata(obj_name)["ContentLength"]
+
+    def exists(self, obj_name):
+        try:
+            self.get_obj_metadata(obj_name)
+            return True
+        except NoSuchObjectException:
+            return False
 
     # todo: implement range request for download
     def download_object(self, src_object_name, dst_file_path) -> Future:
