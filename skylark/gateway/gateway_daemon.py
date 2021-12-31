@@ -7,6 +7,7 @@ import signal
 from os import PathLike
 from pathlib import Path
 import sys
+import threading
 import time
 from typing import Optional
 
@@ -24,7 +25,6 @@ class GatewayDaemon:
             log_dir = Path(log_dir)
             log_dir.mkdir(exist_ok=True)
             logger.add(log_dir / "gateway_daemon.log", rotation="10 MB")
-            logger.add(sys.stderr, level="DEBUG" if debug else "INFO")
         self.chunk_store = ChunkStore(chunk_dir)
         self.gateway_reciever = GatewayReciever(chunk_store=self.chunk_store)
         self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, n_processes=outgoing_connections, batch_size=outgoing_batch_size)
@@ -92,14 +92,17 @@ class GatewayDaemon:
                     elif current_hop.chunk_location_type.startswith("random_"):
                         self.chunk_store.start_download(chunk_req.chunk.chunk_id)
                         size_mb = int(re.search(r"random_(\d+)MB", current_hop.chunk_location_type).group(1))
-                        logger.info(f"Generating {size_mb}MB random chunk {chunk_req.chunk.chunk_id}")
-                        with self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).open("wb") as f:
-                            f.write(os.urandom(int(size_mb * 1e6)))
 
-                        # update chunk size
-                        chunk_req.chunk.chunk_length_bytes = int(size_mb * 1e6)
-                        self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
-                        self.chunk_store.finish_download(chunk_req.chunk.chunk_id)
+                        def fn(chunk_req, size_mb):
+                            fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
+                            os.system(f"dd if=/dev/zero of={fpath} bs=1M count={size_mb}")
+
+                            # update chunk size
+                            chunk_req.chunk.chunk_length_bytes = int(size_mb * 1e6)
+                            self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
+                            self.chunk_store.finish_download(chunk_req.chunk.chunk_id)
+
+                        threading.Thread(target=fn, args=(chunk_req, size_mb)).start()
                     elif current_hop.chunk_location_type == "relay" or current_hop.chunk_location_type == "save_local":
                         # do nothing, waiting for chunk to be be ready_to_upload
                         continue

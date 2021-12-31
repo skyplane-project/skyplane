@@ -21,8 +21,12 @@ class GatewayReciever:
     def __init__(self, chunk_store: ChunkStore, server_blk_size=4096 * 16):
         self.chunk_store = chunk_store
         self.server_blk_size = server_blk_size
+
+        # shared state
+        self.manager = Manager()
         self.server_processes = []
         self.server_ports = []
+        self.held_ports = set()
 
     @staticmethod
     def checksum_sha256(path: PathLike) -> str:
@@ -34,10 +38,14 @@ class GatewayReciever:
             return hashstr
 
     def get_free_port(self):
-        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
-            s.bind(("", 0))
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            return s.getsockname()[1]
+        while True:
+            with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+                s.bind(("", 0))
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                port = s.getsockname()[1]
+            if port not in self.held_ports:
+                self.held_ports.add(port)
+                return port
 
     def start_server(self):
         # todo a good place to add backpressure?
@@ -92,6 +100,7 @@ class GatewayReciever:
             matched_process.terminate()
             self.server_processes.remove(matched_process)
             self.server_ports.remove(port)
+            self.held_ports.remove(port)
         logger.warning(f"[server] Stopped server (port = {port})")
         return port
 

@@ -103,11 +103,11 @@ def main(args):
     # monitor the replication job until it is complete
     with tqdm(total=args.n_chunks * args.chunk_size_mb, unit="MB", desc="Replication progress") as pbar:
         while True:
-            dst_objs = list(s3_interface_dst.list_objects(prefix=args.key_prefix))
-            pbar.update(len(dst_objs) * args.chunk_size_mb - pbar.n)
-            if len(dst_objs) == args.n_chunks:
+            dst_copied = int(rc.bound_paths[0][1].run_command(f"du -s /dev/shm/skylark/chunks")[0]) / 1e6
+            pbar.update(dst_copied - pbar.n)
+            if dst_copied == args.n_chunks * args.chunk_size_mb:
                 break
-            time.sleep(0.5)
+            time.sleep(0.25)
 
     # deprovision the gateway instances
     logger.info("Deprovisioning gateway instances")
