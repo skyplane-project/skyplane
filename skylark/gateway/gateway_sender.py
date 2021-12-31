@@ -118,7 +118,7 @@ class GatewaySender:
 
         # close server
         response = requests.delete(f"http://{dst_host}:8080/api/v1/servers/{dst_port}")
-        assert response.status_code == 200 and response.json() == {"status": "ok"}
+        assert response.status_code == 200 and response.json() == {"status": "ok"}, response.json()
 
         # move chunk_reqs from downloaded to uploaded
         for chunk_req in chunk_reqs:

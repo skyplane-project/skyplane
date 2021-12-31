@@ -39,27 +39,29 @@ def main(args):
     s3_interface_dst.create_bucket()
 
     if not args.skip_upload:
-        matching_src_keys = list(s3_interface_src.list_objects(prefix=args.key_prefix))
-        matching_dst_keys = list(s3_interface_dst.list_objects(prefix=args.key_prefix))
-        if matching_src_keys:
-            logger.warning(f"Deleting objects from source bucket: {matching_src_keys}")
-            s3_interface_src.delete_objects(matching_src_keys)
-        if matching_dst_keys:
-            logger.warning(f"Deleting objects from destination bucket: {matching_dst_keys}")
-            s3_interface_dst.delete_objects(matching_dst_keys)
+        # todo implement object store support
+        pass
+        # matching_src_keys = list(s3_interface_src.list_objects(prefix=args.key_prefix))
+        # matching_dst_keys = list(s3_interface_dst.list_objects(prefix=args.key_prefix))
+        # if matching_src_keys:
+        #     logger.warning(f"Deleting objects from source bucket: {matching_src_keys}")
+        #     s3_interface_src.delete_objects(matching_src_keys)
+        # if matching_dst_keys:
+        #     logger.warning(f"Deleting objects from destination bucket: {matching_dst_keys}")
+        #     s3_interface_dst.delete_objects(matching_dst_keys)
 
-        # create test objects w/ random data
-        logger.info("Creating test objects")
-        obj_keys = []
-        futures = []
-        with tempfile.NamedTemporaryFile() as f:
-            f.write(os.urandom(int(1e6 * args.chunk_size_mb)))
-            f.seek(0)
-            for i in trange(args.n_chunks):
-                k = f"{args.key_prefix}/{i}"
-                futures.append(s3_interface_src.upload_object(f.name, k))
-                obj_keys.append(k)
-        concurrent.futures.wait(futures)
+        # # create test objects w/ random data
+        # logger.info("Creating test objects")
+        # obj_keys = []
+        # futures = []
+        # with tempfile.NamedTemporaryFile() as f:
+        #     f.write(os.urandom(int(1e6 * args.chunk_size_mb)))
+        #     f.seek(0)
+        #     for i in trange(args.n_chunks):
+        #         k = f"{args.key_prefix}/{i}"
+        #         futures.append(s3_interface_src.upload_object(f.name, k))
+        #         obj_keys.append(k)
+        # concurrent.futures.wait(futures)
     else:
         obj_keys = [f"{args.key_prefix}/{i}" for i in range(args.n_chunks)]
 

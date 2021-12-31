@@ -76,7 +76,9 @@ class ReplicatorClient:
 
         docker_run_flags = "-d --log-driver=local --ipc=host --network=host"
         # todo add other launch flags for gateway daemon
-        gateway_daemon_cmd = "/env/bin/python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks"
+        gateway_daemon_cmd = (
+            "/env/bin/python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections 8"
+        )
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {self.gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = server.run_command(docker_launch_cmd)
         assert not start_err, f"Error starting gateway: {start_err}"
@@ -212,7 +214,8 @@ class ReplicatorClient:
         for idx, obj in enumerate(job.objs):
             # todo support multipart files
             # todo support multiple paths
-            file_size_bytes = src_obj_interface.get_obj_size(obj)
+            # file_size_bytes = src_obj_interface.get_obj_size(obj)
+            file_size_bytes = -1
             chunk = Chunk(
                 key=obj,
                 chunk_id=idx,

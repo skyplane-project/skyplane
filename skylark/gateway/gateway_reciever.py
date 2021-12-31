@@ -81,7 +81,7 @@ class GatewayReciever:
     def stop_server(self, port: int):
         matched_process = None
         for server_port, server_process in zip(self.server_ports, self.server_processes):
-            if port == port:
+            if server_port == port:
                 matched_process = server_process
                 break
         if matched_process is None:
@@ -124,7 +124,7 @@ class GatewayReciever:
             #     raise ValueError(f"Received chunk {chunk_header.chunk_id} with invalid hash")
             self.chunk_store.finish_download(chunk_header.chunk_id, t.elapsed)
             chunks_received.append(chunk_header.chunk_id)
-            logger.info(f"[server] Received chunk {chunk_header.chunk_id} ({chunk_received_size} bytes) in {t.elapsed:.2f}s")
+            logger.info(f"[server] Received chunk {chunk_header.chunk_id} ({chunk_received_size} bytes) in {t.elapsed:.2f} seconds")
             if chunk_header.end_of_stream:
                 logger.info(f"[server] Received end of stream, returning")
                 conn.close()
