@@ -91,7 +91,7 @@ class GatewayDaemon:
                         self.chunk_store.fail(chunk_req.chunk.chunk_id)
                     elif current_hop.chunk_location_type.startswith("random_"):
                         self.chunk_store.start_download(chunk_req.chunk.chunk_id)
-                        size_mb = re.search(r"random_(\d+)MB", current_hop.chunk_location_type).group(1)
+                        size_mb = int(re.search(r"random_(\d+)MB", current_hop.chunk_location_type).group(1))
                         logger.info(f"Generating {size_mb}MB random chunk {chunk_req.chunk.chunk_id}")
                         with self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).open("wb") as f:
                             f.write(os.urandom(int(size_mb * 1e6)))

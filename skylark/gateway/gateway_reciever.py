@@ -118,14 +118,13 @@ class GatewayReciever:
                         f.write(data)
                         chunk_data_size -= len(data)
                         chunk_received_size += len(data)
-                logger.info(f"[server] Received chunk {chunk_header.chunk_id} ({chunk_received_size} bytes) in {t.elapsed} seconds")
             # check hash, update status and close socket if transfer is complete
             # todo write checksums upon read from object store
             # if self.checksum_sha256(chunk_file_path) != chunk_header.chunk_hash_sha256:
             #     raise ValueError(f"Received chunk {chunk_header.chunk_id} with invalid hash")
             self.chunk_store.finish_download(chunk_header.chunk_id, t.elapsed)
             chunks_received.append(chunk_header.chunk_id)
-            logger.info(f"[server] Received chunk {chunk_header.chunk_id}")
+            logger.info(f"[server] Received chunk {chunk_header.chunk_id} ({chunk_received_size} bytes) in {t.elapsed:.2f}s")
             if chunk_header.end_of_stream:
                 logger.info(f"[server] Received end of stream, returning")
                 conn.close()
