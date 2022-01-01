@@ -80,8 +80,10 @@ class ChunkStore:
         else:
             return [req for i, req in self.chunk_requests.items() if self.get_chunk_state(i) == status]
 
-    def get_chunk_request(self, chunk_id: int) -> Optional[ChunkRequest]:
-        return self.chunk_requests[chunk_id] if chunk_id in self.chunk_requests else None
+    def get_chunk_request(self, chunk_id: int) -> ChunkRequest:
+        if chunk_id not in self.chunk_requests:
+            raise ValueError(f"ChunkRequest {chunk_id} not found")
+        return self.chunk_requests[chunk_id]
 
     def add_chunk_request(self, chunk_request: ChunkRequest, state=ChunkState.registered):
         logger.debug(f"Adding chunk request {chunk_request.chunk.chunk_id}")

@@ -81,8 +81,8 @@ def main(args):
     # atexit.register(exit_handler)
 
     # run the replication job
-    logger.debug(f"Source gateway API endpoint: http://{rc.bound_paths[0][0].public_ip}:8080/api/v1")
-    logger.debug(f"Destination gateway API endpoint: http://{rc.bound_paths[0][1].public_ip}:8080/api/v1")
+    logger.debug(f"Source gateway API endpoint: http://{rc.bound_paths[0][0].public_ip()}:8080/api/v1")
+    logger.debug(f"Destination gateway API endpoint: http://{rc.bound_paths[0][1].public_ip()}:8080/api/v1")
     logger.info("Launching replication job")
     job = ReplicationJob(
         source_region=args.src_region,

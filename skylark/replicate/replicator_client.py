@@ -91,7 +91,7 @@ class ReplicatorClient:
 
         # wait for gateways to start (check status API)
         def is_ready():
-            api_url = f"http://{server.public_ip}:8080/api/v1/status"
+            api_url = f"http://{server.public_ip()}:8080/api/v1/status"
             try:
                 return requests.get(api_url).json().get("status") == "ok"
             except Exception as e:
@@ -100,17 +100,17 @@ class ReplicatorClient:
         try:
             wait_for(is_ready, timeout=10, interval=0.1)
         except Exception as e:
-            logger.error(f"Gateway {server.instance_name} is not ready")
+            logger.error(f"Gateway {server.instance_name()} is not ready")
             logs, err = server.run_command(f"sudo docker logs skylark_gateway --tail=100")
             logger.error(f"Docker logs: {logs}\nerr: {err}")
             raise e
 
     def kill_gateway_instance(self, server: Server):
-        logger.warning(f"Killing gateway container on {server.instance_name}")
+        logger.warning(f"Killing gateway container on {server.instance_name()}")
         server.run_command("sudo docker kill $(sudo docker ps -q)")
 
     def deprovision_gateway_instance(self, server: Server):
-        logger.warning(f"Deprovisioning gateway {server.instance_name}")
+        logger.warning(f"Deprovisioning gateway {server.instance_name()}")
         server.terminate_instance()
 
     def provision_gateways(
@@ -229,14 +229,14 @@ class ReplicatorClient:
             )
             src_path = ChunkRequestHop(
                 hop_cloud_region=src_instance.region_tag,
-                hop_ip_address=src_instance.public_ip,
+                hop_ip_address=src_instance.public_ip(),
                 chunk_location_type="random_128MB",  # todo src_object_store
                 # src_object_store_region=src_instance.region_tag,
                 # src_object_store_bucket=job.source_bucket,
             )
             dst_path = ChunkRequestHop(
                 hop_cloud_region=dst_instance.region_tag,
-                hop_ip_address=dst_instance.public_ip,
+                hop_ip_address=dst_instance.public_ip(),
                 chunk_location_type="save_local",  # dst_object_store
                 # dst_object_store_region=dst_instance.region_tag,
                 # dst_object_store_bucket=job.dest_bucket,
@@ -265,11 +265,11 @@ class ReplicatorClient:
 
         # send ChunkRequests to each gateway instance
         def send_chunk_req(instance: Server, chunk_reqs: List[ChunkRequest]):
-            logger.debug(f"Sending {len(chunk_reqs)} chunk requests to {instance.public_ip}")
+            logger.debug(f"Sending {len(chunk_reqs)} chunk requests to {instance.public_ip()}")
             body = [c.as_dict() for c in chunk_reqs]
-            reply = requests.post(f"http://{instance.public_ip}:8080/api/v1/chunk_requests", json=body)
+            reply = requests.post(f"http://{instance.public_ip()}:8080/api/v1/chunk_requests", json=body)
             if reply.status_code != 200:
-                raise Exception(f"Failed to send chunk requests to gateway instance {instance.instance_name}: {reply.text}")
+                raise Exception(f"Failed to send chunk requests to gateway instance {instance.instance_name()}: {reply.text}")
             return reply
 
         assert len(chunk_batches) == len(self.bound_paths)

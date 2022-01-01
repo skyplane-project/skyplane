@@ -24,7 +24,7 @@ class GatewaySender:
         self.manager = Manager()
         self.next_worker_id = Value("i", 0)
         self.worker_queues: List[queue.Queue[int]] = [self.manager.Queue() for _ in range(self.n_processes)]
-        self.exit_flags: List[Event] = [Event() for _ in range(self.n_processes)]
+        self.exit_flags = [Event() for _ in range(self.n_processes)]
 
     def start_workers(self):
         for i in range(self.n_processes):
@@ -56,7 +56,8 @@ class GatewaySender:
                 chunks = []
                 for idx in chunk_ids_to_send:
                     self.chunk_store.pop_chunk_request_path(idx)
-                    chunks.append(self.chunk_store.get_chunk_request(idx))
+                    req = self.chunk_store.get_chunk_request(idx)
+                    chunks.append(req)
                 next_hop = chunks[0].path[0]
                 assert all(next_hop.hop_cloud_region == chunk.path[0].hop_cloud_region for chunk in chunks)
                 assert all(next_hop.hop_ip_address == chunk.path[0].hop_ip_address for chunk in chunks)

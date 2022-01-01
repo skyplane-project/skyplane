@@ -31,9 +31,9 @@ def make_random_file(out_fname, size_mb, batch_size_mb=4):
 
 
 def main(args):
-    bucket = f"skylark-{args.region}"
+    bucket = f"skylark-{args.region()}"
     key_pattern = lambda obj_id: f"/random/{args.size_mb}/{obj_id:05}"
-    s3_interface = S3Interface(args.region, bucket)
+    s3_interface = S3Interface(args.region(), bucket)
     s3_interface.create_bucket()
 
     def get_missing_objects():

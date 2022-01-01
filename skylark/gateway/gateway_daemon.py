@@ -96,7 +96,9 @@ class GatewayDaemon:
                         self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
                     elif current_hop.chunk_location_type.startswith("random_"):
                         self.chunk_store.state_start_download(chunk_req.chunk.chunk_id)
-                        size_mb = int(re.search(r"random_(\d+)MB", current_hop.chunk_location_type).group(1))
+                        size_mb_match = re.search(r"random_(\d+)MB", current_hop.chunk_location_type)
+                        assert size_mb_match is not None
+                        size_mb = int(size_mb_match.group(1))
 
                         def fn(chunk_req, size_mb):
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())

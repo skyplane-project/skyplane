@@ -70,42 +70,35 @@ class AWSServer(Server):
             os.chmod(local_key_file, 0o600)
         return local_key_file
 
-    @property
     def public_ip(self):
         ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
         instance = ec2.Instance(self.instance_id)
         ip = instance.public_ip_address
         return ip
 
-    @property
     @lru_cache(maxsize=1)
     def instance_class(self):
         ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
         instance = ec2.Instance(self.instance_id)
         return instance.instance_type
 
-    @property
     @lru_cache(maxsize=1)
     def tags(self):
         ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
         instance = ec2.Instance(self.instance_id)
-        return {tag["Key"]: tag["Value"] for tag in instance.tags}
+        return {tag["Key"]: tag["Value"] for tag in instance.tags()}
 
-    @property
     @lru_cache(maxsize=1)
     def instance_name(self):
         return self.tags.get("Name", None)
 
-    @property
     def network_tier(self):
         return "STANDARD"
 
-    @property
     @lru_cache(maxsize=1)
     def region(self):
         return self.aws_region
 
-    @property
     def instance_state(self):
         ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
         instance = ec2.Instance(self.instance_id)

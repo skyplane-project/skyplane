@@ -92,7 +92,7 @@ def main(args):
     def start_iperf3_client(arg_pair: Tuple[Server, Server]):
         instance_src, instance_dst = arg_pair
         stdout, stderr = instance_src.run_command(
-            f"iperf3 -J -C {args.iperf3_congestion} -t {args.iperf3_runtime} -P 32 -c {instance_dst.public_ip}"
+            f"iperf3 -J -C {args.iperf3_congestion} -t {args.iperf3_runtime} -P 32 -c {instance_dst.public_ip()}"
         )
         try:
             result = json.loads(stdout)
@@ -102,7 +102,7 @@ def main(args):
         throughput_sent = result["end"]["sum_sent"]["bits_per_second"]
         throughput_received = result["end"]["sum_received"]["bits_per_second"]
         tqdm.write(
-            f"({instance_src.region_tag}:{instance_src.network_tier} -> {instance_dst.region_tag}:{instance_dst.network_tier}) is {throughput_sent / 1e9:0.2f} Gbps"
+            f"({instance_src.region_tag}:{instance_src.network_tier()} -> {instance_dst.region_tag}:{instance_dst.network_tier()}) is {throughput_sent / 1e9:0.2f} Gbps"
         )
         instance_src.close_server()
         instance_dst.close_server()
@@ -119,7 +119,7 @@ def main(args):
                 progress_bar=True,
                 desc=f"Parallel eval group {group_idx}",
                 n=36,
-                arg_fmt=lambda x: f"{x[0].region_tag}:{x[0].network_tier} to {x[1].region_tag}:{x[1].network_tier}",
+                arg_fmt=lambda x: f"{x[0].region_tag}:{x[0].network_tier()} to {x[1].region_tag}:{x[1].network_tier()}",
             )
             for pair, result in results:
                 pbar.update(1)
@@ -127,10 +127,10 @@ def main(args):
                     "congestion": args.iperf3_congestion,
                     "src": pair[0].region_tag,
                     "dst": pair[1].region_tag,
-                    "src_instance_class": pair[0].instance_class,
-                    "dst_instance_class": pair[1].instance_class,
-                    "src_network_tier": pair[0].network_tier,
-                    "dst_network_tier": pair[1].network_tier,
+                    "src_instance_class": pair[0].instance_class(),
+                    "dst_instance_class": pair[1].instance_class(),
+                    "src_network_tier": pair[0].network_tier(),
+                    "dst_network_tier": pair[1].network_tier(),
                     "throughput_sent": result[0],
                     "throughput_received": result[1],
                 }

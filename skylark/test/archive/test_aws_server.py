@@ -20,13 +20,11 @@ if __name__ == "__main__":
 
     # test run_command
     logger.info("Test: run_command")
-    server.log_comment("Test: run_command")
     assert server.run_command("echo hello")[0] == "hello\n"
     server.flush_command_log()
 
     # test file copy
     logger.info("Test: copy_file")
-    server.log_comment("Test: copy_file")
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpfile = os.path.join(tmpdir, "test.txt")
         with open(tmpfile, "w") as f:
@@ -37,7 +35,6 @@ if __name__ == "__main__":
 
     # test sync_directory
     logger.info("Test: sync_directory")
-    server.log_comment("Test: sync_directory")
     remote_tmpdir = "/tmp/test_sync_directory"
     with tempfile.TemporaryDirectory() as tmpdir:
         with open(os.path.join(tmpdir, "test1.txt"), "w") as f:
@@ -59,7 +56,6 @@ if __name__ == "__main__":
 
     # test copy source directory
     logger.info("Test: sync_directory source")
-    server.log_comment("Test: sync_directory source")
     with tempfile.TemporaryDirectory() as tmpdir:
         source_dir = skylark_root.resolve().absolute()
         server.sync_directory(

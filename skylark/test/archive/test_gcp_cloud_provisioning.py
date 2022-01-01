@@ -28,5 +28,5 @@ if __name__ == "__main__":
     logger.info(f"Terminating skylark instances")
     for region in grouped_by_region:
         for server in grouped_by_region[region]:
-            if server.tags.get("skylark") == "true":
+            if server.tags().get("skylark") == "true":
                 server.terminate_instance()

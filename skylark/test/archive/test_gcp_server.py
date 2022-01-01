@@ -38,6 +38,4 @@ if __name__ == "__main__":
             ssh_private_key=ssh_public_key,
         )
 
-        logger.debug(f"dig public IP: {server.dig_public_ip}")
-
         server.terminate_instance()
