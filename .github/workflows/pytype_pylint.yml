@@ -42,4 +42,4 @@ jobs:
           pip install -e .
           pip install pylint
       - name: Run pylint
-        run: find skylark -type f -name "*.py" | xargs pylint --rcfile=.pylintrc
+        run: (find skylark -type f -name "*.py" | xargs pylint --rcfile=.pylintrc) || true
