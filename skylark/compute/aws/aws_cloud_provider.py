@@ -112,7 +112,7 @@ class AWSCloudProvider(CloudProvider):
             return image_list[0]["ImageId"]
 
     def provision_instance(
-        self, region: str, instance_class: str, name: Optional[str] = None, ami_id: Optional[str] = None, tags={"skylark": "true"}
+        self, region: str, instance_class: str, name: Optional[str] = None, ami_id: Optional[str] = None, tags={"skylark": "true"}, ebs_volume_size: int = 128
     ) -> AWSServer:
         assert not region.startswith("aws:"), "Region should be AWS region"
         if name is None:
@@ -121,6 +121,7 @@ class AWSCloudProvider(CloudProvider):
             ami_id = self.get_ubuntu_ami_id(region)
         ec2 = AWSServer.get_boto3_resource("ec2", region)
         AWSServer.make_keyfile(region)
+        # set instance storage to 128GB EBS
         instance = ec2.create_instances(
             ImageId=ami_id,
             InstanceType=instance_class,
@@ -131,6 +132,16 @@ class AWSCloudProvider(CloudProvider):
                 {
                     "ResourceType": "instance",
                     "Tags": [{"Key": "Name", "Value": name}] + [{"Key": k, "Value": v} for k, v in tags.items()],
+                }
+            ],
+            BlockDeviceMappings=[
+                {
+                    "DeviceName": "/dev/sda1",
+                    "Ebs": {
+                        "DeleteOnTermination": True,
+                        "VolumeSize": ebs_volume_size,
+                        "VolumeType": "gp2",
+                    },
                 }
             ],
         )

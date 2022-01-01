@@ -1,12 +1,6 @@
 import argparse
-import atexit
-import concurrent.futures
-import os
-import tempfile
-import time
 
 from loguru import logger
-from tqdm import tqdm, trange
 
 from skylark.replicate.obj_store import S3Interface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
@@ -39,27 +33,29 @@ def main(args):
     s3_interface_dst.create_bucket()
 
     if not args.skip_upload:
-        matching_src_keys = list(s3_interface_src.list_objects(prefix=args.key_prefix))
-        matching_dst_keys = list(s3_interface_dst.list_objects(prefix=args.key_prefix))
-        if matching_src_keys:
-            logger.warning(f"Deleting objects from source bucket: {matching_src_keys}")
-            s3_interface_src.delete_objects(matching_src_keys)
-        if matching_dst_keys:
-            logger.warning(f"Deleting objects from destination bucket: {matching_dst_keys}")
-            s3_interface_dst.delete_objects(matching_dst_keys)
+        # todo implement object store support
+        pass
+        # matching_src_keys = list(s3_interface_src.list_objects(prefix=args.key_prefix))
+        # matching_dst_keys = list(s3_interface_dst.list_objects(prefix=args.key_prefix))
+        # if matching_src_keys:
+        #     logger.warning(f"Deleting objects from source bucket: {matching_src_keys}")
+        #     s3_interface_src.delete_objects(matching_src_keys)
+        # if matching_dst_keys:
+        #     logger.warning(f"Deleting objects from destination bucket: {matching_dst_keys}")
+        #     s3_interface_dst.delete_objects(matching_dst_keys)
 
-        # create test objects w/ random data
-        logger.info("Creating test objects")
-        obj_keys = []
-        futures = []
-        with tempfile.NamedTemporaryFile() as f:
-            f.write(os.urandom(int(1e6 * args.chunk_size_mb)))
-            f.seek(0)
-            for i in trange(args.n_chunks):
-                k = f"{args.key_prefix}/{i}"
-                futures.append(s3_interface_src.upload_object(f.name, k))
-                obj_keys.append(k)
-        concurrent.futures.wait(futures)
+        # # create test objects w/ random data
+        # logger.info("Creating test objects")
+        # obj_keys = []
+        # futures = []
+        # with tempfile.NamedTemporaryFile() as f:
+        #     f.write(os.urandom(int(1e6 * args.chunk_size_mb)))
+        #     f.seek(0)
+        #     for i in trange(args.n_chunks):
+        #         k = f"{args.key_prefix}/{i}"
+        #         futures.append(s3_interface_src.upload_object(f.name, k))
+        #         obj_keys.append(k)
+        # concurrent.futures.wait(futures)
     else:
         obj_keys = [f"{args.key_prefix}/{i}" for i in range(args.n_chunks)]
 
@@ -79,11 +75,10 @@ def main(args):
     rc.provision_gateways(reuse_instances=True, log_dir=args.log_dir, authorize_ssh_pub_key=args.copy_ssh_key)
     rc.start_gateways()
 
-    def exit_handler():
-        logger.warning("Exiting, closing gateways")
-        rc.kill_gateways()
-
-    atexit.register(exit_handler)
+    # def exit_handler():
+    #     logger.warning("Exiting, closing gateways")
+    #     rc.kill_gateways()
+    # atexit.register(exit_handler)
 
     # run the replication job
     logger.debug(f"Source gateway API endpoint: http://{rc.bound_paths[0][0].public_ip}:8080/api/v1")
@@ -98,18 +93,18 @@ def main(args):
     )
     rc.run_replication_plan(job)
 
-    # monitor the replication job until it is complete
-    with tqdm(total=args.n_chunks * args.chunk_size_mb, unit="MB", desc="Replication progress") as pbar:
-        while True:
-            dst_objs = list(s3_interface_dst.list_objects(prefix=args.key_prefix))
-            pbar.update(len(dst_objs) * args.chunk_size_mb - pbar.n)
-            if len(dst_objs) == args.n_chunks:
-                break
-            time.sleep(0.5)
+    # # monitor the replication job until it is complete
+    # with tqdm(total=args.n_chunks * args.chunk_size_mb, unit="MB", desc="Replication progress") as pbar:
+    #     while True:
+    #         dst_copied = int(str(rc.bound_paths[0][1].run_command(f"cd /dev/shm/skylark/chunks && du -s")[0]).strip()) / 1e6
+    #         pbar.update(dst_copied - pbar.n)
+    #         if dst_copied == args.n_chunks * args.chunk_size_mb:
+    #             break
+    #         time.sleep(0.25)
 
-    # deprovision the gateway instances
-    logger.info("Deprovisioning gateway instances")
-    rc.deprovision_gateways()
+    # # deprovision the gateway instances
+    # logger.info("Deprovisioning gateway instances")
+    # rc.deprovision_gateways()
 
 
 if __name__ == "__main__":

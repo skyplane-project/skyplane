@@ -23,4 +23,6 @@ dependencies:
     - paramiko
     - questionary
     - ray
+    - setproctitle
     - tqdm
+    - werkzeug

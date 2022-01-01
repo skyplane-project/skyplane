@@ -64,18 +64,31 @@ class ReplicatorClient:
         assert "Hello from Docker!" in out
         server.run_command("sudo docker kill $(docker ps -q)")
         docker_out, docker_err = server.run_command(f"sudo docker pull {self.gateway_docker_image}")
-        assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, docker_out
+        assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
 
         # delete old gateway containers that are not self.gateway_docker_image
-        out, err = server.run_command("sudo docker ps -a -q")
-        for container_id in out.splitlines():
-            container_image = server.run_command(f"sudo docker inspect --format='{{.Config.Image}}' {container_id}")[0]
-            if container_image != self.gateway_docker_image:
-                logger.info(f"Deleting old container {container_id}")
-                server.run_command(f"sudo docker rm {container_id}")
+        server.run_command(f"sudo docker kill $(sudo docker ps -q)")
+        server.run_command(f"sudo docker rm -f $(sudo docker ps -a -q)")
 
-        gateway_cmd = f"sudo docker run -d --rm --ipc=host --network=host {self.gateway_docker_image} /env/bin/python /pkg/skylark/gateway/gateway_daemon.py"
-        server.run_command(gateway_cmd)
+        # launch dozzle log viewer
+        server.run_command(
+            f"sudo docker run --name dozzle -d --volume=/var/run/docker.sock:/var/run/docker.sock -p 8888:8080 amir20/dozzle:latest --filter name=skylark_gateway"
+        )
+
+        # launch glances web interface to monitor CPU and memory usage
+        server.run_command(
+            f"sudo docker run --name glances -d -p 61208-61209:61208-61209 -e GLANCES_OPT='-w' -v /var/run/docker.sock:/var/run/docker.sock:ro --pid host nicolargo/glances:latest-full"
+        )
+
+        docker_run_flags = "-d --log-driver=local --ipc=host --network=host"
+        # todo add other launch flags for gateway daemon
+        gateway_daemon_cmd = (
+            "/env/bin/python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections 8"
+        )
+        docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {self.gateway_docker_image} {gateway_daemon_cmd}"
+        start_out, start_err = server.run_command(docker_launch_cmd)
+        assert not start_err, f"Error starting gateway: {start_err}"
+        container_id = start_out.strip()
 
         # wait for gateways to start (check status API)
         def is_ready():
@@ -85,7 +98,13 @@ class ReplicatorClient:
             except Exception as e:
                 return False
 
-        wait_for(is_ready, timeout=60, interval=1)
+        try:
+            wait_for(is_ready, timeout=10, interval=0.1)
+        except Exception as e:
+            logger.error(f"Gateway {server.instance_name} is not ready")
+            logs, err = server.run_command(f"sudo docker logs skylark_gateway --tail=100")
+            logger.error(f"Docker logs: {logs}\nerr: {err}")
+            raise e
 
     def kill_gateway_instance(self, server: Server):
         logger.warning(f"Killing gateway container on {server.instance_name}")
@@ -201,7 +220,8 @@ class ReplicatorClient:
         for idx, obj in enumerate(job.objs):
             # todo support multipart files
             # todo support multiple paths
-            file_size_bytes = src_obj_interface.get_obj_size(obj)
+            # file_size_bytes = src_obj_interface.get_obj_size(obj)
+            file_size_bytes = -1
             chunk = Chunk(
                 key=obj,
                 chunk_id=idx,
@@ -212,14 +232,14 @@ class ReplicatorClient:
             src_path = ChunkRequestHop(
                 hop_cloud_region=src_instance.region_tag,
                 hop_ip_address=src_instance.public_ip,
-                chunk_location_type="src_object_store",
+                chunk_location_type="random_128MB",  # todo src_object_store
                 src_object_store_region=src_instance.region_tag,
                 src_object_store_bucket=job.source_bucket,
             )
             dst_path = ChunkRequestHop(
                 hop_cloud_region=dst_instance.region_tag,
                 hop_ip_address=dst_instance.public_ip,
-                chunk_location_type="dst_object_store",
+                chunk_location_type="save_local",  # dst_object_store
                 dst_object_store_region=dst_instance.region_tag,
                 dst_object_store_bucket=job.dest_bucket,
             )
@@ -247,8 +267,9 @@ class ReplicatorClient:
 
         # send ChunkRequests to each gateway instance
         def send_chunk_req(instance: Server, chunk_reqs: List[ChunkRequest]):
+            logger.debug(f"Sending {len(chunk_reqs)} chunk requests to {instance.public_ip}")
             body = [c.as_dict() for c in chunk_reqs]
-            reply = requests.post(f"http://{instance.public_ip}:8080/api/v1/chunk_requests/pending", json=body)
+            reply = requests.post(f"http://{instance.public_ip}:8080/api/v1/chunk_requests", json=body)
             if reply.status_code != 200:
                 raise Exception(f"Failed to send chunk requests to gateway instance {instance.instance_name}: {reply.text}")
             return reply

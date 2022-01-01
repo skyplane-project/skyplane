@@ -18,12 +18,14 @@ setup(
         "graphviz",
         "loguru",
         "matplotlib",
-        "ray",
         "numpy",
         "pandas",
         "paramiko",
         "questionary",
+        "ray",
+        "setproctitle",
         "tqdm",
+        "werkzeug",
     ],
     extras_require={"test": ["black", "pytest", "ipython", "jupyter_console"]}
 )
