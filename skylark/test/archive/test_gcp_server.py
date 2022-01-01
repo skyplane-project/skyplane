@@ -23,7 +23,7 @@ if __name__ == "__main__":
         instances = compute.instances().list(project=gcp_project, filter="labels.skylark=true", zone=zone).execute()
         for instance in instances.get("items", []):
             zone = instance["zone"].split("/")[-1]
-            servers.append(GCPServer(f"gcp:{zone}", gcp_project, instance["name"], ssh_private_key=ssh_private_key))
+            servers.append(GCPServer(f"gcp:{zone}", gcp_project, instance["name"]))
 
         # terminate all servers
         for server in servers:

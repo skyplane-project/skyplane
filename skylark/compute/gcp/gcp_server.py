@@ -6,10 +6,11 @@ import paramiko
 
 from skylark import key_root
 from skylark.compute.server import Server, ServerState
+from skylark.utils import PathLike
 
 
 class GCPServer(Server):
-    def __init__(self, region_tag, gcp_project, instance_name, key_root=key_root / "gcp", log_dir=None):
+    def __init__(self, region_tag: str, gcp_project: str, instance_name: str, key_root: PathLike = key_root / "gcp", log_dir=None):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "gcp", f"Region name doesn't match pattern gcp:<region> {self.region_tag}"
         self.gcp_region = self.region_tag.split(":")[1]

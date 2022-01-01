@@ -40,7 +40,7 @@ def main(args):
     gcp_public_key = str(data_dir / "keys" / "gcp-cert.pub")
 
     aws = AWSCloudProvider()
-    gcp = GCPCloudProvider(args.gcp_project, gcp_private_key, gcp_public_key)
+    gcp = GCPCloudProvider(args.gcp_project)
     aws_instances: dict[str, list[AWSServer]]
     gcp_instances: dict[str, list[GCPServer]]
     aws_instances, gcp_instances = provision(
@@ -80,7 +80,8 @@ def main(args):
             regex = r"rtt min/avg/max/mdev = (?P<min>\d+\.\d+)/(?P<avg>\d+\.\d+)/(?P<max>\d+\.\d+)/(?P<mdev>\d+\.\d+) ms"
             m = re.search(regex, string)
             return dict(min=float(m.group("min")), avg=float(m.group("avg")), max=float(m.group("max")), mdev=float(m.group("mdev")))
-        except:
+        except Exception as e:
+            logger.exception(e)
             return {}
 
     # save results

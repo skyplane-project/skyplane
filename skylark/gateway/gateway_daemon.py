@@ -16,7 +16,7 @@ from loguru import logger
 from skylark import print_header
 from skylark.gateway.chunk_store import ChunkState, ChunkStore
 from skylark.gateway.gateway_daemon_api import GatewayDaemonAPI
-from skylark.gateway.gateway_reciever import GatewayReciever
+from skylark.gateway.gateway_reciever import GatewayReceiver
 from skylark.gateway.gateway_sender import GatewaySender
 
 
@@ -29,11 +29,11 @@ class GatewayDaemon:
             logger.add(log_dir / "gateway_daemon.log", rotation="10 MB", enqueue=True)
             logger.add(sys.stderr, colorize=True, format="{function:>15}:{line:<3} {level:<8} {message}", level="DEBUG")
         self.chunk_store = ChunkStore(chunk_dir)
-        self.gateway_reciever = GatewayReciever(chunk_store=self.chunk_store)
+        self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store)
         self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, n_processes=outgoing_connections, batch_size=outgoing_batch_size)
 
         # API server
-        self.api_server = GatewayDaemonAPI(self.chunk_store, self.gateway_reciever, debug=debug, log_dir=log_dir)
+        self.api_server = GatewayDaemonAPI(self.chunk_store, self.gateway_receiver, debug=debug, log_dir=log_dir)
         self.api_server.start()
         atexit.register(self.cleanup)
         logger.info("Gateway daemon API started")
@@ -49,7 +49,7 @@ class GatewayDaemon:
         def exit_handler(signum, frame):
             logger.warning("Received signal {}. Exiting...".format(signum))
             exit_flag.set()
-            self.gateway_reciever.stop_servers()
+            self.gateway_receiver.stop_servers()
             self.gateway_sender.stop_workers()
             sys.exit(0)
 
@@ -83,7 +83,7 @@ class GatewayDaemon:
                         self.chunk_store.fail(chunk_req.chunk.chunk_id)
                         raise ValueError(f"Unknown or incorrect chunk_location_type {current_hop.chunk_location_type}")
                 else:
-                    logger.error(f"Ready to upload chunk {chunk_req.chunk_id} has no hops")
+                    logger.error(f"Ready to upload chunk {chunk_req.chunk.chunk_id} has no hops")
 
             # queue object store downloads and relays (if space is available)
             # todo ensure space is available
@@ -113,7 +113,7 @@ class GatewayDaemon:
                         self.chunk_store.fail(chunk_req.chunk.chunk_id)
                         raise ValueError(f"Unknown or incorrect chunk_location_type {current_hop.chunk_location_type}")
                 else:
-                    logger.error(f"Registered chunk {chunk_req.chunk_id} has no hops")
+                    logger.error(f"Registered chunk {chunk_req.chunk.chunk_id} has no hops")
 
 
 if __name__ == "__main__":

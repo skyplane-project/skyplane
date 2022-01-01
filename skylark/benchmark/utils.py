@@ -11,7 +11,7 @@ from skylark.compute.server import Server, ServerState
 from skylark.utils import do_parallel
 
 
-def refresh_instance_list(provider: CloudProvider, region_list=[None], instance_filter=None) -> Dict[str, List[Server]]:
+def refresh_instance_list(provider: CloudProvider, region_list: List[str] = (), instance_filter=None) -> Dict[str, List[Server]]:
     if instance_filter is None:
         instance_filter = {"tags": {"skylark": "true"}}
     results = do_parallel(lambda region: provider.get_matching_instances(region=region, **instance_filter), region_list, progress_bar=False)

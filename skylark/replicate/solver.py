@@ -95,8 +95,7 @@ class ThroughputSolverILP(ThroughputSolver):
         total_throughput_in = cp.sum(edge_flow_gigabits[:, dst_idx])
 
         # constraints
-        constraints = []
-        constraints.append(total_throughput_out == total_throughput_in)
+        constraints = [total_throughput_out == total_throughput_in]
         for u in range(len(regions)):
             for v in range(len(regions)):
                 # capacity constraints

@@ -8,7 +8,7 @@ if __name__ == "__main__":
     gcp = GCPCloudProvider(gcp_project)
 
     grouped_by_region = {}
-    for region in gcp.region_list:
+    for region in gcp.region_list():
         grouped_by_region[region] = gcp.get_matching_instances(region=region)
         if len(grouped_by_region[region]) == 0:
             logger.info(f"No instances found in {region}, provisioning")

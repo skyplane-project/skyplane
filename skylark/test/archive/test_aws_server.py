@@ -10,11 +10,11 @@ from skylark.compute.aws.aws_server import AWSServer
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--region", required=True)
-    parser.add_argument("--instance-id", required=True)
+    parser.add_argument("--instance-worker_id", required=True)
     parser.add_argument("--command-log", default=None)
     args = parser.parse_args()
 
-    server = AWSServer(args.region, args.instance_id, command_log_file=args.command_log)
+    server = AWSServer(args.region, args.instance_id)
     logger.debug(f"Created server {server}")
     server.wait_for_ready()
 

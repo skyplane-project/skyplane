@@ -50,4 +50,4 @@ class WireProtocolHeader:
         return WireProtocolHeader.from_bytes(header_bytes)
 
     def to_socket(self, sock: socket.socket):
-        assert sock.sendall(self.to_bytes()) == None
+        assert sock.sendall(self.to_bytes()) is None

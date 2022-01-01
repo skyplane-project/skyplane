@@ -122,16 +122,17 @@ def main(args):
             )
             for pair, result in results:
                 pbar.update(1)
-                result_rec = {}
-                result_rec["congestion"] = args.iperf3_congestion
-                result_rec["src"] = pair[0].region_tag
-                result_rec["dst"] = pair[1].region_tag
-                result_rec["src_instance_class"] = pair[0].instance_class
-                result_rec["dst_instance_class"] = pair[1].instance_class
-                result_rec["src_network_tier"] = pair[0].network_tier
-                result_rec["dst_network_tier"] = pair[1].network_tier
-                result_rec["throughput_sent"] = result[0]
-                result_rec["throughput_received"] = result[1]  # ignore raw results result[2]
+                result_rec = {
+                    "congestion": args.iperf3_congestion,
+                    "src": pair[0].region_tag,
+                    "dst": pair[1].region_tag,
+                    "src_instance_class": pair[0].instance_class,
+                    "dst_instance_class": pair[1].instance_class,
+                    "src_network_tier": pair[0].network_tier,
+                    "dst_network_tier": pair[1].network_tier,
+                    "throughput_sent": result[0],
+                    "throughput_received": result[1],
+                }
                 throughput_results.append(result_rec)
 
     throughput_dir = data_dir / "throughput" / "iperf3"

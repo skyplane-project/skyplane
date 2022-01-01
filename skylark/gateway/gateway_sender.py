@@ -22,8 +22,8 @@ class GatewaySender:
         # shared state
         self.manager = Manager()
         self.next_worker_id = Value("i", 0)
-        self.worker_queues: queue.Queue[int] = [self.manager.Queue() for _ in range(self.n_processes)]
-        self.exit_flags = [Event() for _ in range(self.n_processes)]
+        self.worker_queues: List[queue.Queue[int]] = [self.manager.Queue() for _ in range(self.n_processes)]
+        self.exit_flags: List[Event] = [Event() for _ in range(self.n_processes)]
 
     def start_workers(self):
         for i in range(self.n_processes):
@@ -38,20 +38,20 @@ class GatewaySender:
             p.join()
         self.processes = []
 
-    def worker_loop(self, id: int):
-        setproctitle.setproctitle(f"skylark-gateway-sender:{id}")
-        while not self.exit_flags[id].is_set():
+    def worker_loop(self, worker_id: int):
+        setproctitle.setproctitle(f"skylark-gateway-sender:{worker_id}")
+        while not self.exit_flags[worker_id].is_set():
             # get up to pipeline_batch_size chunks from the queue
             chunk_ids_to_send = []
             while len(chunk_ids_to_send) < self.batch_size:
                 try:
-                    chunk_ids_to_send.append(self.worker_queues[id].get_nowait())
+                    chunk_ids_to_send.append(self.worker_queues[worker_id].get_nowait())
                 except queue.Empty:
                     break
 
             # check next hop is the same for all chunks in the batch
             if chunk_ids_to_send:
-                logger.debug(f"worker {id} sending {len(chunk_ids_to_send)} chunks")
+                logger.debug(f"worker {worker_id} sending {len(chunk_ids_to_send)} chunks")
                 chunks = []
                 for idx in chunk_ids_to_send:
                     self.chunk_store.pop_chunk_request_path(idx)

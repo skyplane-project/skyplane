@@ -16,7 +16,7 @@ from skylark.gateway.wire_protocol_header import WireProtocolHeader
 from skylark.utils import PathLike, Timer
 
 
-class GatewayReciever:
+class GatewayReceiver:
     def __init__(self, chunk_store: ChunkStore, server_blk_size=4096 * 16):
         self.chunk_store = chunk_store
         self.server_blk_size = server_blk_size
@@ -51,7 +51,7 @@ class GatewayReciever:
                     exit_flag.value = 1
 
                 signal.signal(signal.SIGINT, signal_handler)
-                setproctitle.setproctitle(f"skylark-gateway-reciever:{socket_port}")
+                setproctitle.setproctitle(f"skylark-gateway-receiver:{socket_port}")
 
                 sock.listen()
                 sock.setblocking(False)
@@ -66,7 +66,7 @@ class GatewayReciever:
                         conn, addr = sock.accept()
                         chunks_received = self.recv_chunks(conn, addr)
                         conn.close()
-                        logger.debug(f"[reciver] {chunks_received} chunks received")
+                        logger.debug(f"[receiver] {chunks_received} chunks received")
 
         p = Process(target=server_worker)
         p.start()
@@ -117,7 +117,7 @@ class GatewayReciever:
                         chunk_data_size -= len(data)
                         chunk_received_size += len(data)
                     logger.debug(
-                        f"[reciever:{server_port}] {chunk_header.chunk_id} chunk received {chunk_received_size}/{chunk_header.chunk_len}"
+                        f"[receiver:{server_port}] {chunk_header.chunk_id} chunk received {chunk_received_size}/{chunk_header.chunk_len}"
                     )
             # check hash, update status and close socket if transfer is complete
             # todo write checksums upon read from object store
@@ -126,7 +126,7 @@ class GatewayReciever:
             self.chunk_store.finish_download(chunk_header.chunk_id, t.elapsed)
             chunks_received.append(chunk_header.chunk_id)
             logger.info(
-                f"[reciever:{server_port}] Received chunk {chunk_header.chunk_id} ({chunk_received_size} bytes) in {t.elapsed:.2f} seconds"
+                f"[receiver:{server_port}] Received chunk {chunk_header.chunk_id} ({chunk_received_size} bytes) in {t.elapsed:.2f} seconds"
             )
             if chunk_header.end_of_stream:
                 conn.close()
