@@ -64,7 +64,7 @@ class ReplicatorClient:
         assert "Hello from Docker!" in out
         server.run_command("sudo docker kill $(docker ps -q)")
         docker_out, docker_err = server.run_command(f"sudo docker pull {self.gateway_docker_image}")
-        assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, docker_out
+        assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
 
         # delete old gateway containers that are not self.gateway_docker_image
         server.run_command(f"sudo docker kill $(sudo docker ps -q)")
