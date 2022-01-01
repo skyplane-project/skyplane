@@ -84,31 +84,24 @@ class Server:
     def provider(self) -> str:
         return self.region_tag.split(":")[0]
 
-    @property
     def instance_state(self) -> ServerState:
         raise NotImplementedError()
 
-    @property
     def public_ip(self):
         raise NotImplementedError()
 
-    @property
     def instance_class(self):
         raise NotImplementedError()
 
-    @property
     def region(self):
         raise NotImplementedError()
 
-    @property
     def instance_name(self):
         raise NotImplementedError()
 
-    @property
     def tags(self):
         raise NotImplementedError()
 
-    @property
     def network_tier(self):
         raise NotImplementedError()
 
@@ -126,13 +119,13 @@ class Server:
         e = None
         while (time.time() - start_time) < timeout:
             try:
-                if self.instance_state == ServerState.RUNNING:
+                if self.instance_state() == ServerState.RUNNING:
                     try:
                         self.run_command("true")
                         return True
                     except Exception as e:
                         if verbose:
-                            logger.warning(f"{self.instance_name} is not ready: {e}")
+                            logger.warning(f"{self.instance_name()} is not ready: {e}")
                 time.sleep(wait_intervals.pop(0))
             except Exception as e:
                 continue
@@ -145,10 +138,6 @@ class Server:
             del self.ns.client
         self.flush_command_log()
 
-    @property
-    def dig_public_ip(self):
-        return self.run_command("dig +short myip.opendns.com @resolver1.opendns.com")[0].strip()
-
     def flush_command_log(self):
         if self.command_log_file and len(self.command_log) > 0:
             with open(self.command_log_file, "a") as f:
@@ -159,10 +148,6 @@ class Server:
     def add_command_log(self, command, runtime=None, **kwargs):
         self.command_log.append(dict(command=command, runtime=runtime, **kwargs))
         self.flush_command_log()
-
-    def log_comment(self, comment):
-        """Log comment in command log"""
-        self.add_command_log(command=f"# {comment}")
 
     def run_command(self, command):
         """time command and run it"""

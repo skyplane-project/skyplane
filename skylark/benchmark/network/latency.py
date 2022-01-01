@@ -55,7 +55,7 @@ def main(args):
     # compute pairwise latency by running ping
     def compute_latency(arg_pair: Tuple[Server, Server]) -> str:
         instance_src, instance_dst = arg_pair
-        stdout, stderr = instance_src.run_command(f"ping -c 10 {instance_dst.public_ip}")
+        stdout, stderr = instance_src.run_command(f"ping -c 10 {instance_dst.public_ip()}")
         latency_result = stdout.strip().split("\n")[-1]
         tqdm.write(f"Latency from {instance_src.region_tag} to {instance_dst.region_tag} is {latency_result}")
         return latency_result

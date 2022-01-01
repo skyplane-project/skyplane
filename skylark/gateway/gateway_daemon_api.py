@@ -110,7 +110,8 @@ class GatewayDaemonAPI(threading.Thread):
     def register_request_routes(self):
         def make_chunk_req_payload(chunk_req: ChunkRequest):
             state = self.chunk_store.get_chunk_state(chunk_req.chunk.chunk_id)
-            return {"req": chunk_req.as_dict(), "state": state.name}
+            state_name = state.name if state is not None else "unknown"
+            return {"req": chunk_req.as_dict(), "state": state_name}
 
         def get_chunk_reqs(state=None):
             out = {}

@@ -119,7 +119,7 @@ class GCPCloudProvider(CloudProvider):
         instances: List[Server] = super().get_matching_instances(**kwargs)
         matching_instances = []
         for instance in instances:
-            if network_tier is None or instance.network_tier == network_tier:
+            if network_tier is None or instance.network_tier() == network_tier:
                 matching_instances.append(instance)
         return matching_instances
 

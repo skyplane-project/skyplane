@@ -50,13 +50,13 @@ class CloudProvider:
         for r in region:
             instances = self.get_instance_list(r)
             for instance in instances:
-                if not (instance_type is None or instance_type == instance.instance_class):
+                if not (instance_type is None or instance_type == instance.instance_class()):
                     continue
                 if not (
-                    state is None or (isinstance(state, list) and instance.instance_state in state) or instance.instance_state == state
+                    state is None or (isinstance(state, list) and instance.instance_state() in state) or instance.instance_state == state
                 ):
                     continue
-                if not all(instance.tags.get(k, "") == v for k, v in tags.items()):
+                if not all(instance.tags().get(k, "") == v for k, v in tags.items()):
                     continue
                 matching_instances.append(instance)
         return matching_instances
