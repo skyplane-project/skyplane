@@ -14,7 +14,8 @@ import setproctitle
 from loguru import logger
 
 from skylark import print_header
-from skylark.gateway.chunk_store import ChunkState, ChunkStore
+from skylark.gateway.chunk import ChunkState
+from skylark.gateway.chunk_store import ChunkStore
 from skylark.gateway.gateway_daemon_api import GatewayDaemonAPI
 from skylark.gateway.gateway_reciever import GatewayReceiver
 from skylark.gateway.gateway_sender import GatewaySender
@@ -66,7 +67,7 @@ class GatewayDaemon:
                     current_hop = chunk_req.path[0]
                     if current_hop.chunk_location_type == "dst_object_store":
                         logger.warning(f"NOT IMPLEMENTED: Queuing object store upload for chunk {chunk_req.chunk.chunk_id}")
-                        self.chunk_store.fail(chunk_req.chunk.chunk_id)
+                        self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
                     elif (
                         current_hop.chunk_location_type == "src_object_store"
                         or current_hop.chunk_location_type == "relay"
@@ -74,13 +75,13 @@ class GatewayDaemon:
                     ):
                         logger.info(f"Queuing chunk {chunk_req.chunk.chunk_id} for relay")
                         self.gateway_sender.queue_request(chunk_req)
-                        self.chunk_store.start_upload(chunk_req.chunk.chunk_id)
+                        self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id)
                     elif current_hop.chunk_location_type == "save_local":
                         # do nothing, done
                         pass
                     else:
                         logger.error(f"Unknown chunk location type {current_hop.chunk_location_type}")
-                        self.chunk_store.fail(chunk_req.chunk.chunk_id)
+                        self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
                         raise ValueError(f"Unknown or incorrect chunk_location_type {current_hop.chunk_location_type}")
                 else:
                     logger.error(f"Ready to upload chunk {chunk_req.chunk.chunk_id} has no hops")
@@ -92,9 +93,9 @@ class GatewayDaemon:
                     current_hop = chunk_req.path[0]
                     if current_hop.chunk_location_type == "src_object_store":
                         logger.warning(f"NOT IMPLEMENTED: Queuing object store download for chunk {chunk_req.chunk.chunk_id}")
-                        self.chunk_store.fail(chunk_req.chunk.chunk_id)
+                        self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
                     elif current_hop.chunk_location_type.startswith("random_"):
-                        self.chunk_store.start_download(chunk_req.chunk.chunk_id)
+                        self.chunk_store.state_start_download(chunk_req.chunk.chunk_id)
                         size_mb = int(re.search(r"random_(\d+)MB", current_hop.chunk_location_type).group(1))
 
                         def fn(chunk_req, size_mb):
@@ -102,7 +103,7 @@ class GatewayDaemon:
                             os.system(f"dd if=/dev/zero of={fpath} bs=1M count={size_mb}")
                             chunk_req.chunk.chunk_length_bytes = os.path.getsize(fpath)
                             self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
-                            self.chunk_store.finish_download(chunk_req.chunk.chunk_id)
+                            self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id)
 
                         threading.Thread(target=fn, args=(chunk_req, size_mb)).start()
                     elif current_hop.chunk_location_type == "relay" or current_hop.chunk_location_type == "save_local":
@@ -110,7 +111,7 @@ class GatewayDaemon:
                         continue
                     else:
                         logger.error(f"Unknown chunk location type {current_hop.chunk_location_type}")
-                        self.chunk_store.fail(chunk_req.chunk.chunk_id)
+                        self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
                         raise ValueError(f"Unknown or incorrect chunk_location_type {current_hop.chunk_location_type}")
                 else:
                     logger.error(f"Registered chunk {chunk_req.chunk.chunk_id} has no hops")

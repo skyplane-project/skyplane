@@ -3,7 +3,7 @@ from typing import List
 
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
-from skylark.replicate.obj_store import S3Interface
+from skylark.obj_store.s3_interface import S3Interface
 from skylark.utils import do_parallel
 
 
@@ -62,16 +62,3 @@ class ReplicationTopology:
         path_id = len(self.paths)
         self.paths.append(path)
         return path_id
-
-    def get_direct_paths(self) -> List[List[str]]:
-        return [p for p in self.paths if len(p) == 2]
-
-    def get_indirect_paths(self) -> List[List[str]]:
-        return [p for p in self.paths if len(p) > 2]
-
-
-class ReplicationPlan:
-    def __init__(self, topology: ReplicationTopology, job: ReplicationJob):
-        self.topology = topology
-        self.job = job
-        self.obj_sizes = job.src_obj_sizes()

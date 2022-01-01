@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple
+from typing import Dict, Iterable, List, Tuple
 
 from loguru import logger
 
@@ -11,7 +11,7 @@ from skylark.compute.server import Server, ServerState
 from skylark.utils import do_parallel
 
 
-def refresh_instance_list(provider: CloudProvider, region_list: List[str] = (), instance_filter=None) -> Dict[str, List[Server]]:
+def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None) -> Dict[str, List[Server]]:
     if instance_filter is None:
         instance_filter = {"tags": {"skylark": "true"}}
     results = do_parallel(lambda region: provider.get_matching_instances(region=region, **instance_filter), region_list, progress_bar=False)
@@ -47,7 +47,7 @@ def provision(
     log_dir: str = None,
 ) -> Tuple[Dict[str, List[AWSServer]], Dict[str, List[GCPServer]]]:
     """Provision list of instances in AWS and GCP in each specified region."""
-    gcp_instances, all_instances = {}, {}
+    gcp_instances, aws_instances = {}, {}
     if len(aws_regions_to_provision) > 0:
         logger.info(f"Provisioning AWS instances in {aws_regions_to_provision}")
         aws_instance_filter = {

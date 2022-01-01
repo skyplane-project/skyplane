@@ -1,19 +1,18 @@
-import hashlib
+import os
 import os
 import select
 import signal
 import socket
 from contextlib import closing
 from multiprocessing import Event, Manager, Process, Value
-from pathlib import Path
 from typing import Tuple
 
 import setproctitle
 from loguru import logger
 
+from skylark.gateway.chunk import WireProtocolHeader
 from skylark.gateway.chunk_store import ChunkStore
-from skylark.gateway.wire_protocol_header import WireProtocolHeader
-from skylark.utils import PathLike, Timer
+from skylark.utils import Timer
 
 
 class GatewayReceiver:
@@ -25,15 +24,6 @@ class GatewayReceiver:
         self.manager = Manager()
         self.server_processes = []
         self.server_ports = []
-
-    @staticmethod
-    def checksum_sha256(path: PathLike) -> str:
-        # todo reading the whole file into memory is not ideal, maybe load chunks or use the linux md5 command
-        # todo standardize paths in skylark to be either str or Path or PathLike
-        with Path(open).open("rb") as f:
-            hashstr = hashlib.sha256(f.read()).hexdigest()
-            assert len(hashstr) == 64
-            return hashstr
 
     def start_server(self):
         # todo a good place to add backpressure?
@@ -105,7 +95,7 @@ class GatewayReceiver:
         while True:
             # receive header and write data to file
             chunk_header = WireProtocolHeader.from_socket(conn)
-            self.chunk_store.start_download(chunk_header.chunk_id)
+            self.chunk_store.state_start_download(chunk_header.chunk_id)
             with Timer() as t:
                 chunk_data_size = chunk_header.chunk_len
                 chunk_received_size = 0
@@ -119,11 +109,8 @@ class GatewayReceiver:
                     logger.debug(
                         f"[receiver:{server_port}] {chunk_header.chunk_id} chunk received {chunk_received_size}/{chunk_header.chunk_len}"
                     )
-            # check hash, update status and close socket if transfer is complete
-            # todo write checksums upon read from object store
-            # if self.checksum_sha256(chunk_file_path) != chunk_header.chunk_hash_sha256:
-            #     raise ValueError(f"Received chunk {chunk_header.chunk_id} with invalid hash")
-            self.chunk_store.finish_download(chunk_header.chunk_id, t.elapsed)
+            # todo check hash, update status and close socket if transfer is complete
+            self.chunk_store.state_finish_download(chunk_header.chunk_id, t.elapsed)
             chunks_received.append(chunk_header.chunk_id)
             logger.info(
                 f"[receiver:{server_port}] Received chunk {chunk_header.chunk_id} ({chunk_received_size} bytes) in {t.elapsed:.2f} seconds"

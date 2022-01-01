@@ -2,7 +2,7 @@ import argparse
 
 from loguru import logger
 
-from skylark.replicate.obj_store import S3Interface
+from skylark.obj_store.s3_interface import S3Interface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
 

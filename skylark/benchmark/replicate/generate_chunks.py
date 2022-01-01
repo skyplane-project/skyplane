@@ -10,7 +10,7 @@ import tempfile
 from loguru import logger
 from tqdm import trange
 
-from skylark.replicate.obj_store import S3Interface
+from skylark.obj_store.s3_interface import S3Interface
 from skylark.utils import Timer, do_parallel
 
 

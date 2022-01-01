@@ -2,7 +2,7 @@ import hashlib
 import os
 import tempfile
 
-from skylark.replicate.obj_store import S3Interface
+from skylark.obj_store.s3_interface import S3Interface
 from skylark.utils import Timer
 
 

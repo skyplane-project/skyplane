@@ -2,9 +2,9 @@ from pathlib import Path
 
 from loguru import logger
 
-from skylark.gateway.chunk_store import Chunk, ChunkRequest, ChunkRequestHop, ChunkState
+from skylark.gateway.chunk import Chunk, ChunkRequest, ChunkRequestHop, ChunkState
 from skylark.gateway.gateway_daemon import GatewayDaemon
-from skylark.replicate.obj_store import S3Interface
+from skylark.obj_store.s3_interface import S3Interface
 
 if __name__ == "__main__":
     daemon = GatewayDaemon("/dev/shm/skylark/chunks", debug=True)
@@ -28,14 +28,13 @@ if __name__ == "__main__":
         chunk_id=0,
         file_offset_bytes=0,
         chunk_length_bytes=file_size_bytes,
-        chunk_hash_sha256=None,
     )
     src_path = ChunkRequestHop(
         hop_cloud_region="aws:us-east-1",
         hop_ip_address="localhost",
         chunk_location_type="relay",
-        src_object_store_region="us-east-1",
-        src_object_store_bucket="skylark-us-east-1",
+        # src_object_store_region="us-east-1",
+        # src_object_store_bucket="skylark-us-east-1",
     )
     req = ChunkRequest(chunk=chunk, path=[src_path])
     logger.debug(f"Chunk request: {req}")

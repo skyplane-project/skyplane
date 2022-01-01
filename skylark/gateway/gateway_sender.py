@@ -9,7 +9,8 @@ import requests
 import setproctitle
 from loguru import logger
 
-from skylark.gateway.chunk_store import ChunkRequest, ChunkStore
+from skylark.gateway.chunk import ChunkRequest
+from skylark.gateway.chunk_store import ChunkStore
 
 
 class GatewaySender:
@@ -94,17 +95,16 @@ class GatewaySender:
                 chunk = self.chunk_store.get_chunk_request(chunk_id).chunk
 
                 # send chunk header
-                chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
-                header = chunk.to_wire_header(end_of_stream=idx == len(chunk_ids) - 1)
-                sock.sendall(header.to_bytes())
+                chunk.to_wire_header(end_of_stream=idx == len(chunk_ids) - 1).to_socket(sock)
 
                 # send chunk data
+                chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
                 assert chunk_file_path.exists(), f"chunk file {chunk_file_path} does not exist"
                 with open(chunk_file_path, "rb") as fd:
                     bytes_sent = sock.sendfile(fd)
                     logger.debug(f"[sender -> {dst_port}] Sent {bytes_sent} bytes of data")
 
-                self.chunk_store.finish_upload(chunk_id)
+                self.chunk_store.state_finish_upload(chunk_id)
                 chunk_file_path.unlink()
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 0)  # send remaining packets
 

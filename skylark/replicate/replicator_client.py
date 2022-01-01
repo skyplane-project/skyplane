@@ -8,8 +8,8 @@ from skylark.benchmark.utils import refresh_instance_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server, ServerState
-from skylark.gateway.chunk_store import Chunk, ChunkRequest, ChunkRequestHop
-from skylark.replicate.obj_store import S3Interface
+from skylark.gateway.chunk import Chunk, ChunkRequest, ChunkRequestHop
+from skylark.obj_store.s3_interface import S3Interface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.utils import PathLike, do_parallel, wait_for
 
@@ -88,7 +88,6 @@ class ReplicatorClient:
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {self.gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = server.run_command(docker_launch_cmd)
         assert not start_err, f"Error starting gateway: {start_err}"
-        container_id = start_out.strip()
 
         # wait for gateways to start (check status API)
         def is_ready():
@@ -227,21 +226,20 @@ class ReplicatorClient:
                 chunk_id=idx,
                 file_offset_bytes=0,
                 chunk_length_bytes=file_size_bytes,
-                chunk_hash_sha256=None,
             )
             src_path = ChunkRequestHop(
                 hop_cloud_region=src_instance.region_tag,
                 hop_ip_address=src_instance.public_ip,
                 chunk_location_type="random_128MB",  # todo src_object_store
-                src_object_store_region=src_instance.region_tag,
-                src_object_store_bucket=job.source_bucket,
+                # src_object_store_region=src_instance.region_tag,
+                # src_object_store_bucket=job.source_bucket,
             )
             dst_path = ChunkRequestHop(
                 hop_cloud_region=dst_instance.region_tag,
                 hop_ip_address=dst_instance.public_ip,
                 chunk_location_type="save_local",  # dst_object_store
-                dst_object_store_region=dst_instance.region_tag,
-                dst_object_store_bucket=job.dest_bucket,
+                # dst_object_store_region=dst_instance.region_tag,
+                # dst_object_store_bucket=job.dest_bucket,
             )
             chunk_reqs.append(ChunkRequest(chunk=chunk, path=[src_path, dst_path]))
 

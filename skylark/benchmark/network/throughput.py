@@ -91,8 +91,9 @@ def main(args):
     # start iperf3 clients on each pair of instances
     def start_iperf3_client(arg_pair: Tuple[Server, Server]):
         instance_src, instance_dst = arg_pair
-        src_ip, dst_ip = instance_src.public_ip, instance_dst.public_ip
-        stdout, stderr = instance_src.run_command(f"iperf3 -J -C {args.iperf3_congestion} -t {args.iperf3_runtime} -P 32 -c {dst_ip}")
+        stdout, stderr = instance_src.run_command(
+            f"iperf3 -J -C {args.iperf3_congestion} -t {args.iperf3_runtime} -P 32 -c {instance_dst.public_ip}"
+        )
         try:
             result = json.loads(stdout)
         except json.JSONDecodeError:

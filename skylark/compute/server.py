@@ -2,7 +2,7 @@ import json
 import threading
 import time
 import uuid
-from enum import Enum
+from enum import Enum, auto
 from pathlib import Path, PurePath
 
 from loguru import logger
@@ -11,11 +11,11 @@ from skylark.utils import PathLike, Timer, do_parallel
 
 
 class ServerState(Enum):
-    PENDING = 0
-    RUNNING = 1
-    SUSPENDED = 2
-    TERMINATED = 3
-    UNKNOWN = 4
+    PENDING = auto()
+    RUNNING = auto()
+    SUSPENDED = auto()
+    TERMINATED = auto()
+    UNKNOWN = auto()
 
     def __str__(self):
         return self.name.lower()
@@ -32,7 +32,7 @@ class ServerState(Enum):
             "STOPPING": ServerState.TERMINATED,
             "TERMINATED": ServerState.TERMINATED,
         }
-        return mapping[gcp_state]
+        return mapping.get(gcp_state, ServerState.UNKNOWN)
 
     @staticmethod
     def from_aws_state(aws_state):
@@ -44,7 +44,7 @@ class ServerState(Enum):
             "stopping": ServerState.SUSPENDED,
             "stopped": ServerState.SUSPENDED,
         }
-        return mapping[aws_state]
+        return mapping.get(aws_state, ServerState.UNKNOWN)
 
 
 class Server:

@@ -7,7 +7,8 @@ import setproctitle
 from flask import Flask, jsonify, request
 from werkzeug.serving import make_server
 
-from skylark.gateway.chunk_store import ChunkRequest, ChunkState, ChunkStore
+from skylark.gateway.chunk import ChunkRequest, ChunkState
+from skylark.gateway.chunk_store import ChunkStore
 from skylark.gateway.gateway_reciever import GatewayReceiver
 
 
@@ -108,7 +109,7 @@ class GatewayDaemonAPI(threading.Thread):
 
     def register_request_routes(self):
         def make_chunk_req_payload(chunk_req: ChunkRequest):
-            state = self.chunk_store.get_chunk_status(chunk_req.chunk.chunk_id)
+            state = self.chunk_store.get_chunk_state(chunk_req.chunk.chunk_id)
             return {"req": chunk_req.as_dict(), "state": state.name}
 
         def get_chunk_reqs(state=None):
@@ -169,7 +170,7 @@ class GatewayDaemonAPI(threading.Thread):
                         state = ChunkState.from_str(request.args.get("state"))
                     except ValueError:
                         return jsonify({"error": "invalid state"}), 400
-                    self.chunk_store.set_chunk_status(chunk_id, state)
+                    self.chunk_store.set_chunk_state(chunk_id, state)
                     return jsonify({"status": "ok"})
                 else:
                     return jsonify({"error": "update not supported"}), 400
