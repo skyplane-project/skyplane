@@ -1,18 +1,15 @@
 import queue
 import socket
+import time
 from contextlib import closing
 from multiprocessing import Event, Manager, Process, Value
-import sys
-import time
-from typing import List, Tuple
+from typing import List
 
 import requests
-from loguru import logger
 import setproctitle
+from loguru import logger
 
 from skylark.gateway.chunk_store import ChunkRequest, ChunkStore
-from skylark.gateway.wire_protocol_header import WireProtocolHeader
-from skylark.utils import PathLike, Timer
 
 
 class GatewaySender:

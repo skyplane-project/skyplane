@@ -1,14 +1,11 @@
 import logging
 import logging.handlers
-import os
-from pathlib import Path
 import threading
-from typing import List
-import subprocess
+from pathlib import Path
 
-from flask import Flask, jsonify, request, send_from_directory
-from werkzeug.serving import make_server
 import setproctitle
+from flask import Flask, jsonify, request
+from werkzeug.serving import make_server
 
 from skylark.gateway.chunk_store import ChunkRequest, ChunkState, ChunkStore
 from skylark.gateway.gateway_reciever import GatewayReciever

@@ -1,24 +1,23 @@
 import argparse
 import atexit
-from multiprocessing import Event
 import os
 import re
 import signal
-from os import PathLike
-from pathlib import Path
 import sys
 import threading
-import time
+from multiprocessing import Event
+from os import PathLike
+from pathlib import Path
 from typing import Optional
 
-from loguru import logger
-from skylark.gateway.chunk_store import ChunkRequest, ChunkState, ChunkStore
 import setproctitle
+from loguru import logger
 
-from skylark.gateway.gateway_reciever import GatewayReciever
-from skylark.gateway.gateway_daemon_api import GatewayDaemonAPI
-from skylark.gateway.gateway_sender import GatewaySender
 from skylark import print_header
+from skylark.gateway.chunk_store import ChunkState, ChunkStore
+from skylark.gateway.gateway_daemon_api import GatewayDaemonAPI
+from skylark.gateway.gateway_reciever import GatewayReciever
+from skylark.gateway.gateway_sender import GatewaySender
 
 
 class GatewayDaemon:

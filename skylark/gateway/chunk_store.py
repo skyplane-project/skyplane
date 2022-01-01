@@ -3,7 +3,7 @@ from enum import Enum, auto
 from multiprocessing import Manager
 from os import PathLike
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from loguru import logger
 

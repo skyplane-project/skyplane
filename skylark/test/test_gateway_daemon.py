@@ -1,11 +1,10 @@
-import atexit
 from pathlib import Path
 
 from loguru import logger
+
 from skylark.gateway.chunk_store import Chunk, ChunkRequest, ChunkRequestHop, ChunkState
 from skylark.gateway.gateway_daemon import GatewayDaemon
 from skylark.replicate.obj_store import S3Interface
-
 
 if __name__ == "__main__":
     daemon = GatewayDaemon("/dev/shm/skylark/chunks", debug=True)

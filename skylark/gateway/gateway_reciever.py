@@ -1,19 +1,17 @@
 import hashlib
 import os
-import queue
 import select
 import signal
 import socket
 from contextlib import closing
 from multiprocessing import Event, Manager, Process, Value
 from pathlib import Path
-from typing import List, Tuple
+from typing import Tuple
 
-import requests
-from loguru import logger
 import setproctitle
+from loguru import logger
 
-from skylark.gateway.chunk_store import ChunkRequest, ChunkStore
+from skylark.gateway.chunk_store import ChunkStore
 from skylark.gateway.wire_protocol_header import WireProtocolHeader
 from skylark.utils import PathLike, Timer
 

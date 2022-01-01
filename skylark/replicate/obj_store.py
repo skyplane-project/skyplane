@@ -3,13 +3,11 @@ import os
 from concurrent.futures import Future
 from typing import Iterator, List
 
+import botocore.exceptions
 from awscrt.auth import AwsCredentialsProvider
 from awscrt.http import HttpHeaders, HttpRequest
 from awscrt.io import ClientBootstrap, DefaultHostResolver, EventLoopGroup
 from awscrt.s3 import S3Client, S3RequestTlsMode, S3RequestType
-import boto3
-import botocore.exceptions
-
 
 from skylark.compute.aws.aws_server import AWSServer
 
