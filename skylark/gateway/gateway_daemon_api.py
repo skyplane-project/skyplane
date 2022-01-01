@@ -4,9 +4,11 @@ import os
 from pathlib import Path
 import threading
 from typing import List
+import subprocess
 
 from flask import Flask, jsonify, request, send_from_directory
 from werkzeug.serving import make_server
+import setproctitle
 
 from skylark.gateway.chunk_store import ChunkRequest, ChunkState, ChunkStore
 from skylark.gateway.gateway_reciever import GatewayReciever
@@ -53,6 +55,7 @@ class GatewayDaemonAPI(threading.Thread):
         self.server = make_server(host, port, self.app, threaded=True)
 
     def run(self):
+        setproctitle.setproctitle(f"skylark-gateway-daemon-api")
         self.server.serve_forever()
 
     def shutdown(self):
@@ -84,25 +87,6 @@ class GatewayDaemonAPI(threading.Thread):
         def shutdown():
             self.shutdown()
             return jsonify({"status": "ok"})
-
-        # serve directory listing of /var/logs/skylark on /api/v1/logs
-        @self.app.route("/api/v1/logs", methods=["GET"])
-        def get_logs():
-            if self.log_dir:
-                out = ""
-                for f in os.listdir("/var/log/skylark"):
-                    out += f"<a href='/api/v1/logs/{f}'>{f}</a><br>"
-                return out
-            else:
-                return "No log directory set", 400
-
-        # serve log file on /api/v1/logs/<path>
-        @self.app.route("/api/v1/logs/<path:path>", methods=["GET"])
-        def get_log(path):
-            if self.log_dir:
-                return send_from_directory("/var/log/skylark", path, as_attachment=False, mimetype="text/plain")
-            else:
-                return "No log directory set", 400
 
     def register_server_routes(self):
         # list running gateway servers w/ ports

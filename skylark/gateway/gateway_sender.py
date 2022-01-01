@@ -1,17 +1,14 @@
-import hashlib
-import os
 import queue
-import select
-import signal
 import socket
 from contextlib import closing
 from multiprocessing import Event, Manager, Process, Value
-from pathlib import Path
+import sys
 import time
 from typing import List, Tuple
 
 import requests
 from loguru import logger
+import setproctitle
 
 from skylark.gateway.chunk_store import ChunkRequest, ChunkStore
 from skylark.gateway.wire_protocol_header import WireProtocolHeader
@@ -45,6 +42,7 @@ class GatewaySender:
         self.processes = []
 
     def worker_loop(self, id: int):
+        setproctitle.setproctitle(f"skylark-gateway-sender:{id}")
         while not self.exit_flags[id].is_set():
             # get up to pipeline_batch_size chunks from the queue
             chunk_ids_to_send = []
@@ -91,26 +89,23 @@ class GatewaySender:
         assert response.status_code == 200
         dst_port = int(response.json()["server_port"])
 
-        logger.info(f"sending {len(chunk_ids)} chunks to {dst_host}:{dst_port}")
         with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
             sock.connect((dst_host, dst_port))
             for idx, chunk_id in enumerate(chunk_ids):
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 1)  # disable Nagle's algorithm
-                logger.warning(f"[sender] Sending chunk {chunk_id} to {dst_host}:{dst_port}")
+                logger.warning(f"[sender -> {dst_port}] Sending chunk {chunk_id} to {dst_host}:{dst_port}")
                 chunk = self.chunk_store.get_chunk_request(chunk_id).chunk
 
                 # send chunk header
                 chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
                 header = chunk.to_wire_header(end_of_stream=idx == len(chunk_ids) - 1)
                 sock.sendall(header.to_bytes())
-                logger.debug(f"[sender] Sent chunk header {header}")
 
                 # send chunk data
                 assert chunk_file_path.exists(), f"chunk file {chunk_file_path} does not exist"
                 with open(chunk_file_path, "rb") as fd:
-                    logger.debug(f"[sender] Sending file")
                     bytes_sent = sock.sendfile(fd)
-                    logger.debug(f"[sender] Sent chunk data {bytes_sent} bytes")
+                    logger.debug(f"[sender -> {dst_port}] Sent {bytes_sent} bytes of data")
 
                 self.chunk_store.finish_upload(chunk_id)
                 chunk_file_path.unlink()

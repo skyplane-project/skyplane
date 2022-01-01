@@ -13,10 +13,12 @@ from typing import Optional
 
 from loguru import logger
 from skylark.gateway.chunk_store import ChunkRequest, ChunkState, ChunkStore
+import setproctitle
 
 from skylark.gateway.gateway_reciever import GatewayReciever
 from skylark.gateway.gateway_daemon_api import GatewayDaemonAPI
 from skylark.gateway.gateway_sender import GatewaySender
+from skylark import print_header
 
 
 class GatewayDaemon:
@@ -24,7 +26,9 @@ class GatewayDaemon:
         if log_dir is not None:
             log_dir = Path(log_dir)
             log_dir.mkdir(exist_ok=True)
-            logger.add(log_dir / "gateway_daemon.log", rotation="10 MB")
+            logger.remove()
+            logger.add(log_dir / "gateway_daemon.log", rotation="10 MB", enqueue=True)
+            logger.add(sys.stderr, colorize=True, format="{function:>15}:{line:<3} {level:<8} {message}", level="DEBUG")
         self.chunk_store = ChunkStore(chunk_dir)
         self.gateway_reciever = GatewayReciever(chunk_store=self.chunk_store)
         self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, n_processes=outgoing_connections, batch_size=outgoing_batch_size)
@@ -40,6 +44,7 @@ class GatewayDaemon:
         self.api_server.shutdown()
 
     def run(self):
+        setproctitle.setproctitle(f"skylark-gateway-daemon")
         exit_flag = Event()
 
         def exit_handler(signum, frame):
@@ -96,9 +101,7 @@ class GatewayDaemon:
                         def fn(chunk_req, size_mb):
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
                             os.system(f"dd if=/dev/zero of={fpath} bs=1M count={size_mb}")
-
-                            # update chunk size
-                            chunk_req.chunk.chunk_length_bytes = int(size_mb * 1e6)
+                            chunk_req.chunk.chunk_length_bytes = os.path.getsize(fpath)
                             self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
                             self.chunk_store.finish_download(chunk_req.chunk.chunk_id)
 
@@ -115,12 +118,14 @@ class GatewayDaemon:
 
 
 if __name__ == "__main__":
+    print_header()
     parser = argparse.ArgumentParser(description="Skylark Gateway Daemon")
     parser.add_argument("--chunk-dir", type=Path, default="/dev/shm/skylark/chunks", required=True, help="Directory to store chunks")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode for Flask")
     parser.add_argument("--log-dir", type=Path, default=Path("/var/log/skylark"), help="Directory to write logs to")
     parser.add_argument("--outgoing-connections", type=int, default=1, help="Number of outgoing connections to make to the next relay")
     args = parser.parse_args()
+
     daemon = GatewayDaemon(
         chunk_dir=args.chunk_dir, debug=args.debug, log_dir=Path(args.log_dir), outgoing_connections=args.outgoing_connections
     )

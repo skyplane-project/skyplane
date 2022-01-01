@@ -67,12 +67,18 @@ class ReplicatorClient:
         assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, docker_out
 
         # delete old gateway containers that are not self.gateway_docker_image
-        out, err = server.run_command("sudo docker ps -a -q")
-        for container_id in out.splitlines():
-            container_image = server.run_command(f"sudo docker inspect --format='{{.Config.Image}}' {container_id}")[0]
-            if container_image != self.gateway_docker_image:
-                logger.info(f"Deleting old container {container_id}")
-                server.run_command(f"sudo docker rm {container_id}")
+        server.run_command(f"sudo docker kill $(sudo docker ps -q)")
+        server.run_command(f"sudo docker rm -f $(sudo docker ps -a -q)")
+
+        # launch dozzle log viewer
+        server.run_command(
+            f"sudo docker run --name dozzle -d --volume=/var/run/docker.sock:/var/run/docker.sock -p 8888:8080 amir20/dozzle:latest --filter name=skylark_gateway"
+        )
+
+        # launch glances web interface to monitor CPU and memory usage
+        server.run_command(
+            f"sudo docker run --name glances -d -p 61208-61209:61208-61209 -e GLANCES_OPT='-w' -v /var/run/docker.sock:/var/run/docker.sock:ro --pid host nicolargo/glances:latest-full"
+        )
 
         docker_run_flags = "-d --log-driver=local --ipc=host --network=host"
         # todo add other launch flags for gateway daemon

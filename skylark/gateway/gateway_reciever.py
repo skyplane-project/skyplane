@@ -11,6 +11,7 @@ from typing import List, Tuple
 
 import requests
 from loguru import logger
+import setproctitle
 
 from skylark.gateway.chunk_store import ChunkRequest, ChunkStore
 from skylark.gateway.wire_protocol_header import WireProtocolHeader
@@ -26,7 +27,6 @@ class GatewayReciever:
         self.manager = Manager()
         self.server_processes = []
         self.server_ports = []
-        self.held_ports = set()
 
     @staticmethod
     def checksum_sha256(path: PathLike) -> str:
@@ -37,30 +37,23 @@ class GatewayReciever:
             assert len(hashstr) == 64
             return hashstr
 
-    def get_free_port(self):
-        while True:
-            with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
-                s.bind(("", 0))
-                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                port = s.getsockname()[1]
-            if port not in self.held_ports:
-                self.held_ports.add(port)
-                return port
-
     def start_server(self):
         # todo a good place to add backpressure?
         started_event = Event()
+        port = Value("i", 0)
 
-        def server_worker(port):
+        def server_worker():
             with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-                sock.bind(("0.0.0.0", port))
-                port = sock.getsockname()[1]
+                sock.bind(("0.0.0.0", 0))
+                socket_port = sock.getsockname()[1]
+                port.value = socket_port
                 exit_flag = Value("i", 0)
 
                 def signal_handler(signal, frame):
                     exit_flag.value = 1
 
                 signal.signal(signal.SIGINT, signal_handler)
+                setproctitle.setproctitle(f"skylark-gateway-reciever:{socket_port}")
 
                 sock.listen()
                 sock.setblocking(False)
@@ -75,16 +68,15 @@ class GatewayReciever:
                         conn, addr = sock.accept()
                         chunks_received = self.recv_chunks(conn, addr)
                         conn.close()
-                        logger.info(f"[server] Received {len(chunks_received)} chunks")
+                        logger.debug(f"[reciver] {chunks_received} chunks received")
 
-        port = self.get_free_port()
-        p = Process(target=server_worker, args=(port,))
-        self.server_processes.append(p)
-        self.server_ports.append(port)
+        p = Process(target=server_worker)
         p.start()
         started_event.wait()
-        logger.info(f"[server] Started server (port = {port})")
-        return port
+        self.server_processes.append(p)
+        self.server_ports.append(port.value)
+        logger.info(f"[server] Started server (port = {port.value})")
+        return port.value
 
     def stop_server(self, port: int):
         matched_process = None
@@ -100,7 +92,6 @@ class GatewayReciever:
             matched_process.terminate()
             self.server_processes.remove(matched_process)
             self.server_ports.remove(port)
-            self.held_ports.remove(port)
         logger.warning(f"[server] Stopped server (port = {port})")
         return port
 
@@ -111,7 +102,7 @@ class GatewayReciever:
         assert len(self.server_processes) == 0
 
     def recv_chunks(self, conn: socket.socket, addr: Tuple[str, int]):
-        logger.info(f"[server] Connection from {addr}")
+        server_port = conn.getsockname()[1]
         chunks_received = []
         while True:
             # receive header and write data to file
@@ -127,14 +118,18 @@ class GatewayReciever:
                         f.write(data)
                         chunk_data_size -= len(data)
                         chunk_received_size += len(data)
+                    logger.debug(
+                        f"[reciever:{server_port}] {chunk_header.chunk_id} chunk received {chunk_received_size}/{chunk_header.chunk_len}"
+                    )
             # check hash, update status and close socket if transfer is complete
             # todo write checksums upon read from object store
             # if self.checksum_sha256(chunk_file_path) != chunk_header.chunk_hash_sha256:
             #     raise ValueError(f"Received chunk {chunk_header.chunk_id} with invalid hash")
             self.chunk_store.finish_download(chunk_header.chunk_id, t.elapsed)
             chunks_received.append(chunk_header.chunk_id)
-            logger.info(f"[server] Received chunk {chunk_header.chunk_id} ({chunk_received_size} bytes) in {t.elapsed:.2f} seconds")
+            logger.info(
+                f"[reciever:{server_port}] Received chunk {chunk_header.chunk_id} ({chunk_received_size} bytes) in {t.elapsed:.2f} seconds"
+            )
             if chunk_header.end_of_stream:
-                logger.info(f"[server] Received end of stream, returning")
                 conn.close()
                 return chunks_received

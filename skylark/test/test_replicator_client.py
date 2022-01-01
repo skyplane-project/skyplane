@@ -81,11 +81,10 @@ def main(args):
     rc.provision_gateways(reuse_instances=True, log_dir=args.log_dir, authorize_ssh_pub_key=args.copy_ssh_key)
     rc.start_gateways()
 
-    def exit_handler():
-        logger.warning("Exiting, closing gateways")
-        rc.kill_gateways()
-
-    atexit.register(exit_handler)
+    # def exit_handler():
+    #     logger.warning("Exiting, closing gateways")
+    #     rc.kill_gateways()
+    # atexit.register(exit_handler)
 
     # run the replication job
     logger.debug(f"Source gateway API endpoint: http://{rc.bound_paths[0][0].public_ip}:8080/api/v1")
@@ -100,18 +99,18 @@ def main(args):
     )
     rc.run_replication_plan(job)
 
-    # monitor the replication job until it is complete
-    with tqdm(total=args.n_chunks * args.chunk_size_mb, unit="MB", desc="Replication progress") as pbar:
-        while True:
-            dst_copied = int(rc.bound_paths[0][1].run_command(f"cd /dev/shm/skylark/chunks && du -s")[0]) / 1e6
-            pbar.update(dst_copied - pbar.n)
-            if dst_copied == args.n_chunks * args.chunk_size_mb:
-                break
-            time.sleep(0.25)
+    # # monitor the replication job until it is complete
+    # with tqdm(total=args.n_chunks * args.chunk_size_mb, unit="MB", desc="Replication progress") as pbar:
+    #     while True:
+    #         dst_copied = int(str(rc.bound_paths[0][1].run_command(f"cd /dev/shm/skylark/chunks && du -s")[0]).strip()) / 1e6
+    #         pbar.update(dst_copied - pbar.n)
+    #         if dst_copied == args.n_chunks * args.chunk_size_mb:
+    #             break
+    #         time.sleep(0.25)
 
-    # deprovision the gateway instances
-    logger.info("Deprovisioning gateway instances")
-    rc.deprovision_gateways()
+    # # deprovision the gateway instances
+    # logger.info("Deprovisioning gateway instances")
+    # rc.deprovision_gateways()
 
 
 if __name__ == "__main__":

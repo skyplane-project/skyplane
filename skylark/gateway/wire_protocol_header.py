@@ -47,7 +47,6 @@ class WireProtocolHeader:
     @staticmethod
     def from_socket(sock: socket.socket):
         num_bytes = WireProtocolHeader.length_bytes()
-        logger.info(f"Reading {num_bytes} bytes from socket")
         header_bytes = sock.recv(num_bytes)
         assert len(header_bytes) == num_bytes, f"{len(header_bytes)} != {num_bytes}"
         return WireProtocolHeader.from_bytes(header_bytes)

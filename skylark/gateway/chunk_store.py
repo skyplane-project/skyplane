@@ -108,7 +108,6 @@ class ChunkStore:
         return self.chunk_status[chunk_id] if chunk_id in self.chunk_status else None
 
     def set_chunk_status(self, chunk_id: int, new_status: ChunkState):
-        logger.debug(f"Setting chunk {chunk_id} status to {new_status}")
         self.chunk_status[chunk_id] = new_status
 
     def start_download(self, chunk_id: int):
