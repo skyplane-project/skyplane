@@ -47,11 +47,12 @@ class ReplicatorClient:
         provider, subregion = region.split(":")
         if provider == "aws":
             server = self.aws.provision_instance(subregion, self.aws_instance_class)
+            logger.info(f"Provisioned AWS gateway {server.instance_id} in {server.region}")
         elif provider == "gcp":
             server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
+            logger.info(f"Provisioned GCP gateway {server.instance_name()} in {server.region}")
         else:
             raise NotImplementedError(f"Unknown provider {provider}")
-        logger.info(f"Provisioned gateway {server.instance_id} in {server.region}")
         return server
 
     def start_gateway_instance(self, server: Server):

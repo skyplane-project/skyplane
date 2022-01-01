@@ -1,4 +1,4 @@
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from loguru import logger
 
@@ -44,7 +44,7 @@ def provision(
     gcp_instance_class: str,
     gcp_use_premium_network: bool = True,
     setup_script: object = None,
-    log_dir: str = None,
+    log_dir: Optional[str] = None,
 ) -> Tuple[Dict[str, List[AWSServer]], Dict[str, List[GCPServer]]]:
     """Provision list of instances in AWS and GCP in each specified region."""
     gcp_instances, aws_instances = {}, {}
@@ -98,4 +98,4 @@ def provision(
 
     all_instances = [i for ilist in aws_instances.values() for i in ilist] + [i for ilist in gcp_instances.values() for i in ilist]
     do_parallel(init, all_instances, progress_bar=True, desc="Provisioning init")
-    return aws_instances, gcp_instances
+    return aws_instances, gcp_instances  # pytype: disable=bad-return-type

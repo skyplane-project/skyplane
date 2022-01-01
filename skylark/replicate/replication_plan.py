@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
@@ -25,7 +25,7 @@ class ReplicationJob:
 
 
 class ReplicationTopology:
-    def __init__(self, paths: List[List[str]] = None):
+    def __init__(self, paths: Optional[List[List[str]]] = None):
         """
         paths: List of paths, each path is a list of nodes.
         E.g. [["aws:us-east-1", "aws:us-west-1"], ["aws:us-east-1", "aws:us-east-2", "aws:us-west-1"]]
