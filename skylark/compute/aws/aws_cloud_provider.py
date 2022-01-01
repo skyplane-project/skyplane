@@ -97,7 +97,7 @@ class AWSCloudProvider(CloudProvider):
                     ],
                 },
                 {
-                    "Name": "owner-id",
+                    "Name": "owner-worker_id",
                     "Values": [
                         "099720109477",
                     ],
@@ -112,7 +112,13 @@ class AWSCloudProvider(CloudProvider):
             return image_list[0]["ImageId"]
 
     def provision_instance(
-        self, region: str, instance_class: str, name: Optional[str] = None, ami_id: Optional[str] = None, tags={"skylark": "true"}, ebs_volume_size: int = 128
+        self,
+        region: str,
+        instance_class: str,
+        name: Optional[str] = None,
+        ami_id: Optional[str] = None,
+        tags={"skylark": "true"},
+        ebs_volume_size: int = 128,
     ) -> AWSServer:
         assert not region.startswith("aws:"), "Region should be AWS region"
         if name is None:

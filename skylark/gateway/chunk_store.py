@@ -48,8 +48,8 @@ class ChunkRequestHop:
         return asdict(self)
 
     @staticmethod
-    def from_dict(dict: Dict):
-        return ChunkRequestHop(**dict)
+    def from_dict(src_dict: Dict):
+        return ChunkRequestHop(**src_dict)
 
 
 @dataclass
@@ -60,9 +60,7 @@ class ChunkRequest:
     # todo: flags for compression, encryption, logging api, etc.
 
     def as_dict(self):
-        out = {}
-        out["chunk"] = self.chunk.as_dict()
-        out["path"] = [hop.as_dict() for hop in self.path]
+        out = {"chunk": self.chunk.as_dict(), "path": [hop.as_dict() for hop in self.path]}
         return out
 
     @staticmethod
@@ -95,7 +93,7 @@ class ChunkStore:
 
         # multiprocess-safe concurrent structures
         self.manager = Manager()
-        self.chunk_requests: Dict[int, Chunk] = self.manager.dict()
+        self.chunk_requests: Dict[int, ChunkRequest] = self.manager.dict()
         self.chunk_status: Dict[int, ChunkState] = self.manager.dict()
 
     def get_chunk_file_path(self, chunk_id: int) -> Path:

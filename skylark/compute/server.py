@@ -190,7 +190,7 @@ class Server:
         stdout, stderr = self.run_command(f"{tmp_dest_file}")
         return stdout, stderr
 
-    def sync_directory(self, local_dir, remote_dir, delete_remote=False, ignore_globs=[]):
+    def sync_directory(self, local_dir, remote_dir, delete_remote=False, ignore_globs=()):
         """Copy local directory to remote directory. If remote directory exists, delete if delete_remote else raise exception."""
 
         local_path = Path(local_dir)

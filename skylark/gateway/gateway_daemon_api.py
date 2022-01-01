@@ -8,7 +8,7 @@ from flask import Flask, jsonify, request
 from werkzeug.serving import make_server
 
 from skylark.gateway.chunk_store import ChunkRequest, ChunkState, ChunkStore
-from skylark.gateway.gateway_reciever import GatewayReciever
+from skylark.gateway.gateway_reciever import GatewayReceiver
 
 
 class GatewayDaemonAPI(threading.Thread):
@@ -24,11 +24,11 @@ class GatewayDaemonAPI(threading.Thread):
     * PUT /api/v1/chunk_requests/<int:chunk_id> - updates chunk request
     """
 
-    def __init__(self, chunk_store: ChunkStore, gateway_reciever: GatewayReciever, host="0.0.0.0", port=8080, debug=False, log_dir=None):
+    def __init__(self, chunk_store: ChunkStore, gateway_receiver: GatewayReceiver, host="0.0.0.0", port=8080, debug=False, log_dir=None):
         super().__init__()
         self.app = Flask("gateway_metadata_server")
         self.chunk_store = chunk_store
-        self.gateway_reciever = gateway_reciever
+        self.gateway_receiver = gateway_receiver
 
         # load routes
         self.register_global_routes()
@@ -89,19 +89,19 @@ class GatewayDaemonAPI(threading.Thread):
         # list running gateway servers w/ ports
         @self.app.route("/api/v1/servers", methods=["GET"])
         def get_server_ports():
-            return jsonify({"server_ports": self.gateway_reciever.server_ports})
+            return jsonify({"server_ports": self.gateway_receiver.server_ports})
 
         # add a new server
         @self.app.route("/api/v1/servers", methods=["POST"])
         def add_server():
-            new_port = self.gateway_reciever.start_server()
+            new_port = self.gateway_receiver.start_server()
             return jsonify({"server_port": new_port})
 
         # remove a server
         @self.app.route("/api/v1/servers/<int:port>", methods=["DELETE"])
         def remove_server(port: int):
             try:
-                self.gateway_reciever.stop_server(port)
+                self.gateway_receiver.stop_server(port)
                 return jsonify({"status": "ok"})
             except ValueError as e:
                 return jsonify({"error": str(e)}), 400
@@ -141,7 +141,7 @@ class GatewayDaemonAPI(threading.Thread):
             else:
                 return jsonify({"chunk_requests": get_chunk_reqs()})
 
-        # lookup chunk request given chunk id
+        # lookup chunk request given chunk worker_id
         @self.app.route("/api/v1/chunk_requests/<int:chunk_id>", methods=["GET"])
         def get_chunk_request(chunk_id: int):
             chunk_req = self.chunk_store.get_chunk_request(chunk_id)

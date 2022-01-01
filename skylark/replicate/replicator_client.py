@@ -34,7 +34,7 @@ class ReplicatorClient:
         self.aws = AWSCloudProvider()
         self.gcp = GCPCloudProvider(gcp_project)
         self.init_clouds()
-        self.bound_paths: List[List[Server]] = None
+        self.bound_paths: Optional[List[List[Server]]] = None
 
     def init_clouds(self):
         """Initialize AWS and GCP clouds."""

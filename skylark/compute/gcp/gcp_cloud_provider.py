@@ -110,7 +110,7 @@ class GCPCloudProvider(CloudProvider):
         if "items" in gcp_instance_result:
             instance_list = []
             for i in gcp_instance_result["items"]:
-                instance_list.append(GCPServer(f"gcp:{region}", self.gcp_project, i["name"], ssh_private_key=self.private_key_path))
+                instance_list.append(GCPServer(f"gcp:{region}", self.gcp_project, i["name"]))
             return instance_list
         else:
             return []
@@ -235,6 +235,6 @@ class GCPCloudProvider(CloudProvider):
         }
         result = compute.instances().insert(project=self.gcp_project, zone=region, body=req_body).execute()
         self.wait_for_operation_to_complete(region, result["name"])
-        server = GCPServer(f"gcp:{region}", self.gcp_project, name, ssh_private_key=self.private_key_path)
+        server = GCPServer(f"gcp:{region}", self.gcp_project, name)
         server.wait_for_ready()
         return server

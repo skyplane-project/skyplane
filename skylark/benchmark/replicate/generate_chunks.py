@@ -8,9 +8,9 @@ import os
 import tempfile
 
 from loguru import logger
-from skylark.replicate.obj_store_interface import S3Interface
 from tqdm import trange
 
+from skylark.replicate.obj_store import S3Interface
 from skylark.utils import Timer, do_parallel
 
 

@@ -41,7 +41,7 @@ if __name__ == "__main__":
     logger.debug(f"Chunk request: {req}")
 
     # send chunk request to gateway
-    daemon.chunk_store.add_chunk_request(req, ChunkState.ready_to_upload)
+    daemon.chunk_store.add_chunk_request(req, ChunkState.downloaded)
     assert daemon.chunk_store.get_chunk_request(req.chunk.chunk_id) == req
 
     # run gateway daemon

@@ -8,7 +8,7 @@ class CloudProvider:
     ns = threading.local()
 
     @property
-    def name():
+    def name(self):
         raise NotImplementedError
 
     @staticmethod
