@@ -22,7 +22,7 @@ jobs:
           pip install -e .
           pip install pytype
       - name: Run pytype
-        run: (pytype . --config pytype.cfg) || true
+        run: (pytype . --config .pytype.cfg) || true
   pylint:
     runs-on: ubuntu-latest
     steps:
