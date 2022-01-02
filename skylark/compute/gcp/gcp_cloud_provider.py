@@ -1,18 +1,16 @@
 import os
-import socket
 import time
-from typing import List, Union
 import uuid
 from pathlib import Path
-import googleapiclient
-from loguru import logger
+from typing import List
 
+import googleapiclient
 import paramiko
 
-from skylark.compute.gcp.gcp_server import GCPServer
-from skylark.compute.cloud_providers import CloudProvider
-from skylark.compute.server import Server
 from skylark import key_root
+from skylark.compute.cloud_providers import CloudProvider
+from skylark.compute.gcp.gcp_server import GCPServer
+from skylark.compute.server import Server
 
 
 class GCPCloudProvider(CloudProvider):
@@ -112,7 +110,6 @@ class GCPCloudProvider(CloudProvider):
         if "items" in gcp_instance_result:
             instance_list = []
             for i in gcp_instance_result["items"]:
-                print("KEY PATH", self.private_key_path)
                 instance_list.append(GCPServer(f"gcp:{region}", self.gcp_project, i["name"], ssh_private_key=self.private_key_path))
             return instance_list
         else:
@@ -122,7 +119,7 @@ class GCPCloudProvider(CloudProvider):
         instances: List[Server] = super().get_matching_instances(**kwargs)
         matching_instances = []
         for instance in instances:
-            if network_tier is None or instance.network_tier == network_tier:
+            if network_tier is None or instance.network_tier() == network_tier:
                 matching_instances.append(instance)
         return matching_instances
 
@@ -238,6 +235,6 @@ class GCPCloudProvider(CloudProvider):
         }
         result = compute.instances().insert(project=self.gcp_project, zone=region, body=req_body).execute()
         self.wait_for_operation_to_complete(region, result["name"])
-        server = GCPServer(f"gcp:{region}", self.gcp_project, name, ssh_private_key=self.private_key_path)
+        server = GCPServer(f"gcp:{region}", self.gcp_project, name)
         server.wait_for_ready()
         return server

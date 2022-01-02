@@ -3,14 +3,11 @@ from functools import lru_cache
 from pathlib import Path
 
 import boto3
-from boto3 import session
 import paramiko
 from loguru import logger
-import questionary
 
-from skylark.compute.server import Server, ServerState
 from skylark import key_root
-from tqdm import tqdm
+from skylark.compute.server import Server, ServerState
 
 
 class AWSServer(Server):
@@ -73,21 +70,18 @@ class AWSServer(Server):
             os.chmod(local_key_file, 0o600)
         return local_key_file
 
-    @property
     def public_ip(self):
         ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
         instance = ec2.Instance(self.instance_id)
         ip = instance.public_ip_address
         return ip
 
-    @property
     @lru_cache(maxsize=1)
     def instance_class(self):
         ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
         instance = ec2.Instance(self.instance_id)
         return instance.instance_type
 
-    @property
     @lru_cache(maxsize=1)
     def tags(self):
         ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
@@ -97,21 +91,17 @@ class AWSServer(Server):
             return {}
         return {tag["Key"]: tag["Value"] for tag in instance.tags}
 
-    @property
     @lru_cache(maxsize=1)
     def instance_name(self):
         return self.tags.get("Name", None)
 
-    @property
     def network_tier(self):
         return "STANDARD"
 
-    @property
     @lru_cache(maxsize=1)
     def region(self):
         return self.aws_region
 
-    @property
     def instance_state(self):
         ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
         instance = ec2.Instance(self.instance_id)
@@ -132,6 +122,10 @@ class AWSServer(Server):
     def get_ssh_client_impl(self):
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+<<<<<<< HEAD
         logger.warning(f"Key file {self.local_keyfile}")
         client.connect(self.public_ip, username="ubuntu", key_filename=str(self.local_keyfile))
+=======
+        client.connect(self.public_ip, username="ubuntu", key_filename=str(self.local_keyfile), look_for_keys=False, allow_agent=False)
+>>>>>>> 0cd076d721f74cf51d3b7b46a2e82e92653555a8
         return client

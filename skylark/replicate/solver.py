@@ -1,16 +1,14 @@
 import argparse
 
-from cvxpy.expressions import constants
-import pandas as pd
-import numpy as np
-import graphviz as gv
 import cvxpy as cp
+import graphviz as gv
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 from loguru import logger
 
 from skylark import skylark_root
 from skylark.compute.cloud_providers import CloudProvider
-
 
 GBIT_PER_GBYTE = 8
 
@@ -97,8 +95,7 @@ class ThroughputSolverILP(ThroughputSolver):
         total_throughput_in = cp.sum(edge_flow_gigabits[:, dst_idx])
 
         # constraints
-        constraints = []
-        constraints.append(total_throughput_out == total_throughput_in)
+        constraints = [total_throughput_out == total_throughput_in]
         for u in range(len(regions)):
             for v in range(len(regions)):
                 # capacity constraints
@@ -163,26 +160,22 @@ class ThroughputSolverILP(ThroughputSolver):
         else:
             logger.debug("No feasible solution")
 
-    def plot_graphviz(self, solution):
-        if solution["feasible"]:
-            regions = self.get_regions()
-            # add title text containing src -> dst
-            # add subtitle containing throughput and cost
-            g = gv.Digraph(name="throughput_graph")
-            g.attr(rankdir="LR")
-            g.attr(label=f"{solution['src']} to {solution['dst']}\n{solution['throughput']:.2f} Gbps, ${solution['cost']:.4f}")
-            g.attr(labelloc="t")
-            for i, src in enumerate(regions):
-                for j, dst in enumerate(regions):
-                    if solution["solution"][i, j] > 0:
-                        link_cost = self.get_path_cost(src, dst)
-                        g.edge(
-                            src.replace(":", "/"),
-                            dst.replace(":", "/"),
-                            label=f"{solution['solution'][i, j]:.2f} Gbps, ${link_cost:.2f}/GB",
-                        )
-
-            return g
+    def plot_graphviz(self, solution) -> gv.Digraph:
+        regions = self.get_regions()
+        g = gv.Digraph(name="throughput_graph")
+        g.attr(rankdir="LR")
+        g.attr(label=f"{solution['src']} to {solution['dst']}\n{solution['throughput']:.2f} Gbps, ${solution['cost']:.4f}")
+        g.attr(labelloc="t")
+        for i, src in enumerate(regions):
+            for j, dst in enumerate(regions):
+                if solution["solution"][i, j] > 0:
+                    link_cost = self.get_path_cost(src, dst)
+                    g.edge(
+                        src.replace(":", "/"),
+                        dst.replace(":", "/"),
+                        label=f"{solution['solution'][i, j]:.2f} Gbps, ${link_cost:.2f}/GB",
+                    )
+        return g
 
 
 if __name__ == "__main__":
@@ -204,5 +197,5 @@ if __name__ == "__main__":
         solver_verbose=False,
     )
     tput.print_solution(solution)
-    g = tput.plot_graphviz(solution)
-    g.render(filename="/tmp/throughput_graph.gv", view=True)
+    if solution["feasible"]:
+        tput.plot_graphviz(solution).render(filename="/tmp/throughput_graph.gv", view=True)

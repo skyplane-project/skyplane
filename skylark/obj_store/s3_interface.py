@@ -1,38 +1,16 @@
-from concurrent.futures import Future
 import mimetypes
 import os
-from loguru import logger
-import tempfile
-import hashlib
-from tqdm import tqdm
+from concurrent.futures import Future
+from typing import Iterator, List
 
-from awscrt.s3 import S3Client, S3RequestType, S3RequestTlsMode
-from awscrt.io import ClientBootstrap, DefaultHostResolver, EventLoopGroup
+import botocore.exceptions
 from awscrt.auth import AwsCredentialsProvider
 from awscrt.http import HttpHeaders, HttpRequest
+from awscrt.io import ClientBootstrap, DefaultHostResolver, EventLoopGroup
+from awscrt.s3 import S3Client, S3RequestTlsMode, S3RequestType
 
-from skylark.utils import Timer
 from skylark.compute.aws.aws_server import AWSServer
-
-
-class ObjectStoreInterface:
-    def bucket_exists(self):
-        raise NotImplementedError
-
-    def create_bucket(self):
-        raise NotImplementedError
-
-    def list_objects(self, prefix=""):
-        raise NotImplementedError
-
-    def get_obj_size(self, obj_name):
-        raise NotImplementedError
-
-    def download_object(self, src_object_name, dst_file_path):
-        raise NotImplementedError
-
-    def upload_object(self, src_file_path, dst_object_name, content_type="infer"):
-        raise NotImplementedError
+from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface
 
 
 class S3Interface(ObjectStoreInterface):
@@ -75,22 +53,37 @@ class S3Interface(ObjectStoreInterface):
                 s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": self.aws_region})
         assert self.bucket_exists()
 
-    def list_objects(self, prefix="") -> list:
+    def list_objects(self, prefix="") -> Iterator[str]:
         # todo: pagination
         s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
         paginator = s3_client.get_paginator("list_objects_v2")
         page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix)
         for page in page_iterator:
             for obj in page.get("Contents", []):
-                yield obj
+                yield obj["Key"]
+
+    def delete_objects(self, keys: List[str]):
+        s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
+        s3_client.delete_objects(Bucket=self.bucket_name, Delete={"Objects": [{"Key": k} for k in keys]})
 
     def get_obj_metadata(self, obj_name):
         s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
-        return s3_client.head_object(Bucket=self.bucket_name, Key=obj_name)
+        try:
+            return s3_client.head_object(Bucket=self.bucket_name, Key=str(obj_name).lstrip("/"))
+        except botocore.exceptions.ClientError as e:
+            raise NoSuchObjectException(f"Object {obj_name} does not exist, or you do not have permission to access it") from e
 
     def get_obj_size(self, obj_name):
         return self.get_obj_metadata(obj_name)["ContentLength"]
 
+    def exists(self, obj_name):
+        try:
+            self.get_obj_metadata(obj_name)
+            return True
+        except NoSuchObjectException:
+            return False
+
+    # todo: implement range request for download
     def download_object(self, src_object_name, dst_file_path) -> Future:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         assert src_object_name.startswith("/")

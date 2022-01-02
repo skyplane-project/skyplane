@@ -1,14 +1,14 @@
 from loguru import logger
 
-from skylark.compute.gcp.gcp_server import GCPServer
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
+from skylark.compute.gcp.gcp_server import GCPServer
 
 if __name__ == "__main__":
     gcp_project = "bair-commons-307400"
     gcp = GCPCloudProvider(gcp_project)
 
     grouped_by_region = {}
-    for region in gcp.region_list:
+    for region in gcp.region_list():
         grouped_by_region[region] = gcp.get_matching_instances(region=region)
         if len(grouped_by_region[region]) == 0:
             logger.info(f"No instances found in {region}, provisioning")
@@ -28,5 +28,5 @@ if __name__ == "__main__":
     logger.info(f"Terminating skylark instances")
     for region in grouped_by_region:
         for server in grouped_by_region[region]:
-            if server.tags.get("skylark") == "true":
+            if server.tags().get("skylark") == "true":
                 server.terminate_instance()

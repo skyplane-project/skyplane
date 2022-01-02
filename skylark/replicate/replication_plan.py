@@ -1,9 +1,9 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
-from skylark.replicate.obj_store_interface import S3Interface
+from skylark.obj_store.s3_interface import S3Interface
 from skylark.utils import do_parallel
 
 
@@ -25,7 +25,7 @@ class ReplicationJob:
 
 
 class ReplicationTopology:
-    def __init__(self, paths: List[List[str]] = None):
+    def __init__(self, paths: Optional[List[List[str]]] = None):
         """
         paths: List of paths, each path is a list of nodes.
         E.g. [["aws:us-east-1", "aws:us-west-1"], ["aws:us-east-1", "aws:us-east-2", "aws:us-west-1"]]
@@ -62,16 +62,3 @@ class ReplicationTopology:
         path_id = len(self.paths)
         self.paths.append(path)
         return path_id
-
-    def get_direct_paths(self) -> List[List[str]]:
-        return [p for p in self.paths if len(p) == 2]
-
-    def get_indirect_paths(self) -> List[List[str]]:
-        return [p for p in self.paths if len(p) > 2]
-
-
-class ReplicationPlan:
-    def __init__(self, topology: ReplicationTopology, job: ReplicationJob):
-        self.topology = topology
-        self.job = job
-        self.obj_sizes = job.src_obj_sizes()

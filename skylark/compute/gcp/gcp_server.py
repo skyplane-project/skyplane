@@ -1,22 +1,23 @@
 import os
 from functools import lru_cache
+from pathlib import Path
 
 import googleapiclient.discovery
-from loguru import logger
 import paramiko
-from tqdm import tqdm
 
-from skylark.compute.server import Server, ServerState
 from skylark import key_root
+from skylark.compute.server import Server, ServerState
+from skylark.utils import PathLike
 
 
 class GCPServer(Server):
-    def __init__(self, region_tag, gcp_project, instance_name, key_root=key_root / "gcp", log_dir=None, ssh_private_key=None):
+    def __init__(self, region_tag: str, gcp_project: str, instance_name: str, key_root: PathLike = key_root / "gcp", log_dir=None, ssh_private_key=None):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "gcp", f"Region name doesn't match pattern gcp:<region> {self.region_tag}"
         self.gcp_region = self.region_tag.split(":")[1]
         self.gcp_project = gcp_project
         self.gcp_instance_name = instance_name
+        key_root = Path(key_root)
         key_root.mkdir(parents=True, exist_ok=True)
         if ssh_private_key is None:
             self.ssh_private_key = key_root / f"gcp.pem"
@@ -50,33 +51,26 @@ class GCPServer(Server):
     def get_instance_property(self, prop):
         return self.get_gcp_instance()[prop]
 
-    @property
     def public_ip(self):
         """Get public IP for instance with GCP client"""
         return self.get_instance_property("networkInterfaces")[0]["accessConfigs"][0].get("natIP")
 
-    @property
     def instance_class(self):
         return self.get_instance_property("machineType").split("/")[-1]
 
-    @property
     def region(self):
         return self.gcp_region
 
-    @property
     def instance_state(self):
         return ServerState.from_gcp_state(self.get_instance_property("status"))
 
-    @property
     def instance_name(self):
         return self.get_instance_property("name")
 
-    @property
     def tags(self):
         """Get labels for instance."""
         return self.get_instance_property("labels")
 
-    @property
     def network_tier(self):
         interface = self.get_instance_property("networkInterfaces")[0]
         return interface["accessConfigs"][0]["networkTier"]
@@ -99,7 +93,7 @@ class GCPServer(Server):
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh_client.connect(
-            hostname=self.public_ip,
+            hostname=self.public_ip(),
             username=uname,
             key_filename=str(self.ssh_private_key),
             passphrase=ssh_key_password,

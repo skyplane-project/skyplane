@@ -16,7 +16,7 @@ class Timer:
     def __enter__(self):
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_typ, exc_val, exc_tb):
         self.end = time.time()
 
     @property
@@ -24,10 +24,32 @@ class Timer:
         return self.end - self.start
 
 
+def wait_for(fn, timeout=60, interval=1, progress_bar=False, desc="Waiting"):
+    start = time.time()
+    if progress_bar:
+        pbar = tqdm(total=timeout, desc=desc)
+    while time.time() - start < timeout:
+        if fn():
+            return True
+        if progress_bar:
+            pbar.update(interval)
+        time.sleep(interval)
+    if progress_bar:
+        pbar.close()
+    raise Exception("Timeout")
+
+
 def do_parallel(func, args_list, n=8, progress_bar=False, leave_pbar=True, desc=None, arg_fmt=None):
     """Run list of jobs in parallel with tqdm progress bar"""
+    args_list = list(args_list)
+    if len(args_list) == 0:
+        return []
+
     if arg_fmt is None:
         arg_fmt = lambda x: x.region_tag if hasattr(x, "region_tag") else x
+
+    if n == -1:
+        n = len(args_list)
 
     def wrapped_fn(args):
         return args, func(args)
@@ -45,21 +67,3 @@ def do_parallel(func, args_list, n=8, progress_bar=False, leave_pbar=True, desc=
     if pbar:
         pbar.close()
     return results
-
-
-def common_excludes(
-    ignore_dirs=[
-        ".git",
-        "__pycache__",
-        ".ipynb_checkpoints",
-        "nb",
-        "data",
-        "*.egg-info",
-    ],
-    ignore_recursive_dirs=["__pycache__"],
-    ignore_exts=["pyc", "pyo", "swp"],
-):
-    ignore_full_path = [str(p) for p in ignore_dirs] + [f"{p}/**" for p in ignore_dirs] + [f"{p}/**/*" for p in ignore_dirs]
-    ignore_full_path += [f"**/{p}" for p in ignore_recursive_dirs] + [f"**/{p}/*" for p in ignore_recursive_dirs]
-    ignore_exts = [f"*.{e}" for e in ignore_exts]
-    return ignore_full_path + ignore_exts

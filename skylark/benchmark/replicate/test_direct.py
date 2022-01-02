@@ -1,7 +1,7 @@
 import argparse
-from datetime import datetime
 import json
 import time
+from datetime import datetime
 
 from loguru import logger
 

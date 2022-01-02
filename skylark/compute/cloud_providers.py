@@ -1,7 +1,5 @@
 import threading
-from typing import List, Union
-
-from loguru import logger
+from typing import List, Optional, Union
 
 from skylark.compute.server import Server, ServerState
 
@@ -10,11 +8,11 @@ class CloudProvider:
     ns = threading.local()
 
     @property
-    def name():
+    def name(self):
         raise NotImplementedError
 
     @staticmethod
-    def region_list(self):
+    def region_list():
         raise NotImplementedError
 
     @staticmethod
@@ -37,7 +35,11 @@ class CloudProvider:
         raise NotImplementedError
 
     def get_matching_instances(
-        self, region=None, instance_type=None, state: Union[ServerState, List[ServerState]] = None, tags={"skylark": "true"}
+        self,
+        region: Optional[str] = None,
+        instance_type: Optional[str] = None,
+        state: Optional[Union[ServerState, List[ServerState]]] = None,
+        tags={"skylark": "true"},
     ) -> List[Server]:
         if isinstance(region, str):
             region = [region]
@@ -48,13 +50,13 @@ class CloudProvider:
         for r in region:
             instances = self.get_instance_list(r)
             for instance in instances:
-                if not (instance_type is None or instance_type == instance.instance_class):
+                if not (instance_type is None or instance_type == instance.instance_class()):
                     continue
                 if not (
-                    state is None or (isinstance(state, list) and instance.instance_state in state) or instance.instance_state == state
+                    state is None or (isinstance(state, list) and instance.instance_state() in state) or instance.instance_state == state
                 ):
                     continue
-                if not all(instance.tags.get(k, "") == v for k, v in tags.items()):
+                if not all(instance.tags().get(k, "") == v for k, v in tags.items()):
                     continue
                 matching_instances.append(instance)
         return matching_instances

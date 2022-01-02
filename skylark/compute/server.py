@@ -2,20 +2,20 @@ import json
 import threading
 import time
 import uuid
-from enum import Enum
+from enum import Enum, auto
 from pathlib import Path, PurePath
 
 from loguru import logger
 
-from skylark.utils import Timer, do_parallel
+from skylark.utils import PathLike, Timer, do_parallel
 
 
 class ServerState(Enum):
-    PENDING = 0
-    RUNNING = 1
-    SUSPENDED = 2
-    TERMINATED = 3
-    UNKNOWN = 4
+    PENDING = auto()
+    RUNNING = auto()
+    SUSPENDED = auto()
+    TERMINATED = auto()
+    UNKNOWN = auto()
 
     def __str__(self):
         return self.name.lower()
@@ -32,7 +32,7 @@ class ServerState(Enum):
             "STOPPING": ServerState.TERMINATED,
             "TERMINATED": ServerState.TERMINATED,
         }
-        return mapping[gcp_state]
+        return mapping.get(gcp_state, ServerState.UNKNOWN)
 
     @staticmethod
     def from_aws_state(aws_state):
@@ -44,7 +44,7 @@ class ServerState(Enum):
             "stopping": ServerState.SUSPENDED,
             "stopped": ServerState.SUSPENDED,
         }
-        return mapping[aws_state]
+        return mapping.get(aws_state, ServerState.UNKNOWN)
 
 
 class Server:
@@ -84,31 +84,24 @@ class Server:
     def provider(self) -> str:
         return self.region_tag.split(":")[0]
 
-    @property
     def instance_state(self) -> ServerState:
         raise NotImplementedError()
 
-    @property
     def public_ip(self):
         raise NotImplementedError()
 
-    @property
     def instance_class(self):
         raise NotImplementedError()
 
-    @property
     def region(self):
         raise NotImplementedError()
 
-    @property
     def instance_name(self):
         raise NotImplementedError()
 
-    @property
     def tags(self):
         raise NotImplementedError()
 
-    @property
     def network_tier(self):
         raise NotImplementedError()
 
@@ -126,14 +119,14 @@ class Server:
         error = None
         while (time.time() - start_time) < timeout:
             try:
-                if self.instance_state == ServerState.RUNNING:
+                if self.instance_state() == ServerState.RUNNING:
                     try:
                         self.run_command("true")
                         logger.info(f"{self.instance_name} is ready!")
                         return True
                     except Exception as e:
                         if verbose:
-                            logger.warning(f"{self.instance_name} is not ready: {e}")
+                            logger.warning(f"{self.instance_name()} is not ready: {e}")
                 time.sleep(wait_intervals.pop(0))
             except Exception as e:
                 error = e
@@ -149,10 +142,6 @@ class Server:
             del self.ns.client
         self.flush_command_log()
 
-    @property
-    def dig_public_ip(self):
-        return self.run_command("dig +short myip.opendns.com @resolver1.opendns.com")[0].strip()
-
     def flush_command_log(self):
         if self.command_log_file and len(self.command_log) > 0:
             with open(self.command_log_file, "a") as f:
@@ -163,10 +152,6 @@ class Server:
     def add_command_log(self, command, runtime=None, **kwargs):
         self.command_log.append(dict(command=command, runtime=runtime, **kwargs))
         self.flush_command_log()
-
-    def log_comment(self, comment):
-        """Log comment in command log"""
-        self.add_command_log(command=f"# {comment}")
 
     def run_command(self, command):
         """time command and run it"""
@@ -194,7 +179,7 @@ class Server:
         stdout, stderr = self.run_command(f"{tmp_dest_file}")
         return stdout, stderr
 
-    def sync_directory(self, local_dir, remote_dir, delete_remote=False, ignore_globs=[]):
+    def sync_directory(self, local_dir, remote_dir, delete_remote=False, ignore_globs=()):
         """Copy local directory to remote directory. If remote directory exists, delete if delete_remote else raise exception."""
 
         local_path = Path(local_dir)
@@ -233,3 +218,12 @@ class Server:
             )
         sftp.close()
         self.add_command_log(command=f"<sync_directory> {local_dir} {remote_dir}", runtime=t.elapsed)
+
+    def copy_public_key(self, pub_key_path: PathLike):
+        """Append public key to authorized_keys file on server."""
+        pub_key_path = Path(pub_key_path)
+        assert pub_key_path.suffix == ".pub", f"{pub_key_path} does not have .pub extension, are you sure it is a public key?"
+        pub_key = Path(pub_key_path).read_text()
+        self.run_command(f"mkdir -p ~/.ssh")
+        self.run_command(f"echo '{pub_key}' >> ~/.ssh/authorized_keys")
+        self.run_command("chmod 600 ~/.ssh/authorized_keys")

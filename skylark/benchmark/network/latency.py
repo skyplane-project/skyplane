@@ -1,8 +1,8 @@
 import argparse
 import json
-from pathlib import Path
-from typing import Dict, List, Tuple
 import re
+from pathlib import Path
+from typing import List, Tuple
 
 from loguru import logger
 from tqdm import tqdm
@@ -36,11 +36,8 @@ def main(args):
     log_dir = data_dir / "logs"
     log_dir.mkdir(exist_ok=True, parents=True)
 
-    gcp_private_key = str(data_dir / "keys" / "gcp-cert.pem")
-    gcp_public_key = str(data_dir / "keys" / "gcp-cert.pub")
-
     aws = AWSCloudProvider()
-    gcp = GCPCloudProvider(args.gcp_project, gcp_private_key, gcp_public_key)
+    gcp = GCPCloudProvider(args.gcp_project)
     aws_instances: dict[str, list[AWSServer]]
     gcp_instances: dict[str, list[GCPServer]]
     aws_instances, gcp_instances = provision(
@@ -58,8 +55,7 @@ def main(args):
     # compute pairwise latency by running ping
     def compute_latency(arg_pair: Tuple[Server, Server]) -> str:
         instance_src, instance_dst = arg_pair
-        src_ip, dst_ip = instance_src.public_ip, instance_dst.public_ip
-        stdout, stderr = instance_src.run_command(f"ping -c 10 {dst_ip}")
+        stdout, stderr = instance_src.run_command(f"ping -c 10 {instance_dst.public_ip()}")
         latency_result = stdout.strip().split("\n")[-1]
         tqdm.write(f"Latency from {instance_src.region_tag} to {instance_dst.region_tag} is {latency_result}")
         return latency_result
@@ -80,7 +76,8 @@ def main(args):
             regex = r"rtt min/avg/max/mdev = (?P<min>\d+\.\d+)/(?P<avg>\d+\.\d+)/(?P<max>\d+\.\d+)/(?P<mdev>\d+\.\d+) ms"
             m = re.search(regex, string)
             return dict(min=float(m.group("min")), avg=float(m.group("avg")), max=float(m.group("max")), mdev=float(m.group("mdev")))
-        except:
+        except Exception as e:
+            logger.exception(e)
             return {}
 
     # save results

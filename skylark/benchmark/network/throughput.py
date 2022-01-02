@@ -1,6 +1,6 @@
 import argparse
-from datetime import datetime
 import json
+from datetime import datetime
 from typing import List, Tuple
 
 from loguru import logger
@@ -9,9 +9,7 @@ from tqdm import tqdm
 from skylark import skylark_root
 from skylark.benchmark.utils import provision, split_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
-from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
-from skylark.compute.gcp.gcp_server import GCPServer
 from skylark.compute.server import Server
 from skylark.utils import do_parallel
 
@@ -93,8 +91,9 @@ def main(args):
     # start iperf3 clients on each pair of instances
     def start_iperf3_client(arg_pair: Tuple[Server, Server]):
         instance_src, instance_dst = arg_pair
-        src_ip, dst_ip = instance_src.public_ip, instance_dst.public_ip
-        stdout, stderr = instance_src.run_command(f"iperf3 -J -C {args.iperf3_congestion} -t {args.iperf3_runtime} -P 32 -c {dst_ip}")
+        stdout, stderr = instance_src.run_command(
+            f"iperf3 -J -C {args.iperf3_congestion} -t {args.iperf3_runtime} -P 32 -c {instance_dst.public_ip()}"
+        )
         try:
             result = json.loads(stdout)
         except json.JSONDecodeError:
@@ -103,7 +102,7 @@ def main(args):
         throughput_sent = result["end"]["sum_sent"]["bits_per_second"]
         throughput_received = result["end"]["sum_received"]["bits_per_second"]
         tqdm.write(
-            f"({instance_src.region_tag}:{instance_src.network_tier} -> {instance_dst.region_tag}:{instance_dst.network_tier}) is {throughput_sent / 1e9:0.2f} Gbps"
+            f"({instance_src.region_tag}:{instance_src.network_tier()} -> {instance_dst.region_tag}:{instance_dst.network_tier()}) is {throughput_sent / 1e9:0.2f} Gbps"
         )
         instance_src.close_server()
         instance_dst.close_server()
@@ -120,20 +119,21 @@ def main(args):
                 progress_bar=True,
                 desc=f"Parallel eval group {group_idx}",
                 n=36,
-                arg_fmt=lambda x: f"{x[0].region_tag}:{x[0].network_tier} to {x[1].region_tag}:{x[1].network_tier}",
+                arg_fmt=lambda x: f"{x[0].region_tag}:{x[0].network_tier()} to {x[1].region_tag}:{x[1].network_tier()}",
             )
             for pair, result in results:
                 pbar.update(1)
-                result_rec = {}
-                result_rec["congestion"] = args.iperf3_congestion
-                result_rec["src"] = pair[0].region_tag
-                result_rec["dst"] = pair[1].region_tag
-                result_rec["src_instance_class"] = pair[0].instance_class
-                result_rec["dst_instance_class"] = pair[1].instance_class
-                result_rec["src_network_tier"] = pair[0].network_tier
-                result_rec["dst_network_tier"] = pair[1].network_tier
-                result_rec["throughput_sent"] = result[0]
-                result_rec["throughput_received"] = result[1]  # ignore raw results result[2]
+                result_rec = {
+                    "congestion": args.iperf3_congestion,
+                    "src": pair[0].region_tag,
+                    "dst": pair[1].region_tag,
+                    "src_instance_class": pair[0].instance_class(),
+                    "dst_instance_class": pair[1].instance_class(),
+                    "src_network_tier": pair[0].network_tier(),
+                    "dst_network_tier": pair[1].network_tier(),
+                    "throughput_sent": result[0],
+                    "throughput_received": result[1],
+                }
                 throughput_results.append(result_rec)
 
     throughput_dir = data_dir / "throughput" / "iperf3"
