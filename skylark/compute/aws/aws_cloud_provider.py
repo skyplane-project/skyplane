@@ -89,7 +89,9 @@ class AWSCloudProvider(CloudProvider):
     @lru_cache()
     def get_ubuntu_ami_id(self, region: str, store="hvm:ebs-ssd") -> str:
         client = AWSServer.get_boto3_resource("ec2", region)
-        images = client.images.filter(Owners=["099720109477"], Filters=[{"Name": "name", "Values": ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]}])
+        images = client.images.filter(
+            Owners=["099720109477"], Filters=[{"Name": "name", "Values": ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]}]
+        )
         images = sorted(images, key=lambda i: i.creation_date, reverse=True)  # get newest image
         if len(images) == 0:
             raise Exception(f"No Ubuntu AMI found in {region}")

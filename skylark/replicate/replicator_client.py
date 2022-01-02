@@ -42,9 +42,8 @@ class ReplicatorClient:
         jobs += [lambda: self.gcp.create_ssh_key()]
         jobs += [lambda: self.gcp.configure_default_network()]
         jobs += [lambda: self.gcp.configure_default_firewall()]
-        with Timer() as t:
+        with Timer(f"Cloud SSH key initialization"):
             do_parallel(lambda fn: fn(), jobs)
-        logger.debug(f"Initialized clouds SSH keys in {t.elapsed:.2f}s")
 
     def provision_gateway_instance(self, region: str) -> Server:
         provider, subregion = region.split(":")
@@ -52,15 +51,12 @@ class ReplicatorClient:
             server = self.aws.provision_instance(subregion, self.aws_instance_class)
             logger.info(f"Provisioned AWS gateway {server.instance_id} in {server.region}")
         elif provider == "gcp":
+            # todo specify network tier in ReplicationTopology
             server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
             logger.info(f"Provisioned GCP gateway {server.instance_name()} in {server.region}")
         else:
             raise NotImplementedError(f"Unknown provider {provider}")
         return server
-
-    def kill_gateway_instance(self, server: Server):
-        logger.warning(f"Killing gateway container on {server.instance_name()}")
-        server.run_command("sudo docker kill $(sudo docker ps -q)")
 
     def deprovision_gateway_instance(self, server: Server):
         logger.warning(f"Deprovisioning gateway {server.instance_name()}")
@@ -128,6 +124,7 @@ class ReplicatorClient:
                 server.init_log_files(log_dir)
             if authorize_ssh_pub_key:
                 server.copy_public_key(authorize_ssh_pub_key)
+
         do_parallel(setup, itertools.chain(*instances_by_region.values()), n=-1)
 
         # bind instances to paths
@@ -147,9 +144,6 @@ class ReplicatorClient:
     def deprovision_gateways(self):
         instances = [instance for path in self.bound_paths for instance in path]
         do_parallel(self.deprovision_gateway_instance, instances, n=len(instances))
-
-    def kill_gateways(self):
-        do_parallel(self.kill_gateway_instance, itertools.chain(*self.bound_paths))
 
     def run_replication_plan(self, job: ReplicationJob):
         # todo support more than one gateway instance per region

@@ -120,7 +120,10 @@ class Server:
         def is_up():
             if self.public_ip() is None:
                 return False
-            return subprocess.run(["ping", "-c", "1", self.public_ip()], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+            return (
+                subprocess.run(["ping", "-c", "1", self.public_ip()], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+            )
+
         wait_for(is_up, timeout=timeout, interval=interval)
 
     def close_server(self):
@@ -213,18 +216,23 @@ class Server:
         pub_key = Path(pub_key_path).read_text()
         self.run_command(f"mkdir -p ~/.ssh")
         self.run_command(f"echo '{pub_key}' >> ~/.ssh/authorized_keys")
-        self.run_command("chmod 600 ~/.ssh/authorized_keys")            
+        self.run_command("chmod 600 ~/.ssh/authorized_keys")
 
     def start_gateway(self, gateway_docker_image="ghcr.io/parasj/skylark:main", log_viewer_port=8888, glances_port=8889):
         self.wait_for_ready()
         # install docker and launch monitoring
         # docker_install_cmd = "curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh;"
         docker_install_cmd = "sudo apt-get update && sudo apt install -y docker.io"
-        cmd = "(command -v docker >/dev/null 2>&1 || { " + docker_install_cmd + "; })" +" && { sudo docker kill $(sudo docker ps -q); sudo docker rm -f $(sudo docker ps -a -q); }; "
+        cmd = (
+            "(command -v docker >/dev/null 2>&1 || { "
+            + docker_install_cmd
+            + "; })"
+            + " && { sudo docker kill $(sudo docker ps -q); sudo docker rm -f $(sudo docker ps -a -q); }; "
+        )
         cmd += f"sudo docker run --name dozzle -d --volume=/var/run/docker.sock:/var/run/docker.sock -p {log_viewer_port}:8080 amir20/dozzle:latest --filter name=skylark_gateway; "
         cmd += f"sudo docker run --name glances -d -p {glances_port}-{glances_port + 1}:{glances_port}-{glances_port + 1} -e GLANCES_OPT='-w' -v /var/run/docker.sock:/var/run/docker.sock:ro --pid host nicolargo/glances:latest-full; "
         self.run_command(cmd)
-        
+
         # launch gateway
         docker_out, docker_err = self.run_command(f"sudo docker pull {gateway_docker_image}")
         assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
@@ -244,6 +252,7 @@ class Server:
                 return requests.get(api_url).json().get("status") == "ok"
             except Exception as e:
                 return False
+
         try:
             wait_for(is_ready, timeout=10, interval=0.1)
         except Exception as e:
