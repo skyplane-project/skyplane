@@ -1,4 +1,6 @@
 import argparse
+import re
+import os
 from datetime import datetime
 import json
 from typing import List, Tuple
@@ -80,6 +82,7 @@ def main(args):
     def setup(instance: Server):
         instance.run_command("sudo apt-get update")
         instance.run_command("sudo apt-get install traceroute")
+        instance.run_command("sudo apt-get install whois")
 
     do_parallel(setup, instance_list, progress_bar=True, n=24, desc="Setup")
 
@@ -96,7 +99,15 @@ def main(args):
         for idx in range(len(parser.hops)):
             result[idx] = []
             for probe in parser.hops[idx].probes: 
-                result[idx].append({"ipaddr": probe.ipaddr, "name": probe.name, "rtt": probe.rtt})
+
+                stdout, stderr = instance_src.run_command(f"whois {probe.ipaddr}")
+                lines = stdout.split('\n')
+                orgline = None
+                for l in lines: 
+                    if "OrgName:" in l: orgline = l
+                result[idx].append({"ipaddr": probe.ipaddr, "name": probe.name, "rtt": probe.rtt, "org": orgline})
+
+        
         tqdm.write(
                 f"({instance_src.region_tag}:{instance_src.network_tier} -> {instance_dst.region_tag}:{instance_dst.network_tier}) hops: {len(result.keys())}"
         )
@@ -133,6 +144,7 @@ def main(args):
     traceroute_dir = data_dir / "traceroute"
     traceroute_dir.mkdir(exist_ok=True, parents=True)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
     with open(str(traceroute_dir / f"traceroute_{timestamp}.json"), "w") as f:
         json.dump(traceroute_results, f)
 
