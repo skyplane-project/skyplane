@@ -61,6 +61,7 @@ def main(args):
 
     # define the replication job and topology
     topo = ReplicationTopology(paths=[[args.src_region, args.dest_region]])
+    logger.info("Creating replication client")
     rc = ReplicatorClient(
         topo,
         gcp_project=args.gcp_project,

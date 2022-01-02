@@ -11,7 +11,7 @@ from skylark.compute.server import Server, ServerState
 from skylark.gateway.chunk import Chunk, ChunkRequest, ChunkRequestHop
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
-from skylark.utils import PathLike, do_parallel, wait_for
+from skylark.utils import PathLike, Timer, do_parallel, wait_for
 
 
 class ReplicatorClient:
@@ -38,10 +38,13 @@ class ReplicatorClient:
 
     def init_clouds(self):
         """Initialize AWS and GCP clouds."""
-        do_parallel(self.aws.add_ip_to_security_group, self.aws.region_list())
-        self.gcp.create_ssh_key()
-        self.gcp.configure_default_network()
-        self.gcp.configure_default_firewall()
+        jobs = [lambda: self.aws.add_ip_to_security_group(r) for r in self.aws.region_list()]
+        jobs += [lambda: self.gcp.create_ssh_key()]
+        jobs += [lambda: self.gcp.configure_default_network()]
+        jobs += [lambda: self.gcp.configure_default_firewall()]
+        with Timer() as t:
+            do_parallel(lambda fn: fn(), jobs)
+        logger.debug(f"Initialized clouds SSH keys in {t.elapsed:.2f}s")
 
     def provision_gateway_instance(self, region: str) -> Server:
         provider, subregion = region.split(":")
@@ -54,57 +57,6 @@ class ReplicatorClient:
         else:
             raise NotImplementedError(f"Unknown provider {provider}")
         return server
-
-    def start_gateway_instance(self, server: Server):
-        server.wait_for_ready()
-        server.run_command("sudo apt-get update && sudo apt-get install -y iperf3")
-        docker_installed = "Docker version" in server.run_command(f"sudo docker --version")[0]
-        if not docker_installed:
-            server.run_command("curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh")
-        out, err = server.run_command("sudo docker run --rm hello-world")
-        assert "Hello from Docker!" in out
-        server.run_command("sudo docker kill $(docker ps -q)")
-        docker_out, docker_err = server.run_command(f"sudo docker pull {self.gateway_docker_image}")
-        assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
-
-        # delete old gateway containers that are not self.gateway_docker_image
-        server.run_command(f"sudo docker kill $(sudo docker ps -q)")
-        server.run_command(f"sudo docker rm -f $(sudo docker ps -a -q)")
-
-        # launch dozzle log viewer
-        server.run_command(
-            f"sudo docker run --name dozzle -d --volume=/var/run/docker.sock:/var/run/docker.sock -p 8888:8080 amir20/dozzle:latest --filter name=skylark_gateway"
-        )
-
-        # launch glances web interface to monitor CPU and memory usage
-        server.run_command(
-            f"sudo docker run --name glances -d -p 61208-61209:61208-61209 -e GLANCES_OPT='-w' -v /var/run/docker.sock:/var/run/docker.sock:ro --pid host nicolargo/glances:latest-full"
-        )
-
-        docker_run_flags = "-d --log-driver=local --ipc=host --network=host"
-        # todo add other launch flags for gateway daemon
-        gateway_daemon_cmd = (
-            "/env/bin/python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections 8"
-        )
-        docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {self.gateway_docker_image} {gateway_daemon_cmd}"
-        start_out, start_err = server.run_command(docker_launch_cmd)
-        assert not start_err, f"Error starting gateway: {start_err}"
-
-        # wait for gateways to start (check status API)
-        def is_ready():
-            api_url = f"http://{server.public_ip()}:8080/api/v1/status"
-            try:
-                return requests.get(api_url).json().get("status") == "ok"
-            except Exception as e:
-                return False
-
-        try:
-            wait_for(is_ready, timeout=10, interval=0.1)
-        except Exception as e:
-            logger.error(f"Gateway {server.instance_name()} is not ready")
-            logs, err = server.run_command(f"sudo docker logs skylark_gateway --tail=100")
-            logger.error(f"Docker logs: {logs}\nerr: {err}")
-            raise e
 
     def kill_gateway_instance(self, server: Server):
         logger.warning(f"Killing gateway container on {server.instance_name()}")
@@ -176,8 +128,7 @@ class ReplicatorClient:
                 server.init_log_files(log_dir)
             if authorize_ssh_pub_key:
                 server.copy_public_key(authorize_ssh_pub_key)
-
-        do_parallel(setup, itertools.chain(*instances_by_region.values()), n=-1, progress_bar=True, desc="Setting up gateways")
+        do_parallel(setup, itertools.chain(*instances_by_region.values()), n=-1)
 
         # bind instances to paths
         bound_paths = []
@@ -187,7 +138,7 @@ class ReplicatorClient:
 
     def start_gateways(self):
         do_parallel(
-            self.start_gateway_instance,
+            lambda s: s.start_gateway(gateway_docker_image=self.gateway_docker_image),
             list(itertools.chain(*self.bound_paths)),
             progress_bar=True,
             desc="Starting up gateways",

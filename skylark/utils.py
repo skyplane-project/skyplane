@@ -3,13 +3,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Union
 
+from loguru import logger
 from tqdm import tqdm
 
 PathLike = Union[str, Path]
 
 
 class Timer:
-    def __init__(self):
+    def __init__(self, print_desc=None):
+        self.print_desc = print_desc
         self.start = time.time()
         self.end = None
 
@@ -18,6 +20,8 @@ class Timer:
 
     def __exit__(self, exc_typ, exc_val, exc_tb):
         self.end = time.time()
+        if self.print_desc:
+            logger.debug(f"{self.print_desc}: {self.end - self.start:.2f}s")
 
     @property
     def elapsed(self):
@@ -25,6 +29,7 @@ class Timer:
 
 
 def wait_for(fn, timeout=60, interval=1, progress_bar=False, desc="Waiting"):
+    # wait for fn to return True
     start = time.time()
     if progress_bar:
         pbar = tqdm(total=timeout, desc=desc)
@@ -39,7 +44,7 @@ def wait_for(fn, timeout=60, interval=1, progress_bar=False, desc="Waiting"):
     raise Exception("Timeout")
 
 
-def do_parallel(func, args_list, n=8, progress_bar=False, leave_pbar=True, desc=None, arg_fmt=None):
+def do_parallel(func, args_list, n=-1, progress_bar=False, leave_pbar=True, desc=None, arg_fmt=None):
     """Run list of jobs in parallel with tqdm progress bar"""
     args_list = list(args_list)
     if len(args_list) == 0:

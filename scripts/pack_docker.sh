@@ -17,7 +17,7 @@ DOCKER_URL="ghcr.io/parasj/skylark:$RANDOM_TAG"
 echo -e "${BGreen}Uploading docker image to $DOCKER_URL${NC}"
 sudo docker tag skylark $DOCKER_URL
 sudo docker push $DOCKER_URL
-# sudo docker tag skylark ghcr.io/parasj/skylark:latest
-# sudo docker push ghcr.io/parasj/skylark:latest
+sudo docker system prune -f
+
 export SKYLARK_DOCKER_IMAGE=$DOCKER_URL
 echo -e "${BGreen}SKYLARK_DOCKER_IMAGE=$SKYLARK_DOCKER_IMAGE${NC}"

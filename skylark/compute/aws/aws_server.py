@@ -87,7 +87,7 @@ class AWSServer(Server):
     def tags(self) -> Dict[str, str]:
         ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
         instance = ec2.Instance(self.instance_id)
-        return {tag["Key"]: tag["Value"] for tag in instance.tags()}
+        return {tag["Key"]: tag["Value"] for tag in instance.tags}
 
     @lru_cache(maxsize=1)
     def instance_name(self) -> Optional[str]:

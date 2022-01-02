@@ -1,3 +1,4 @@
+from functools import lru_cache
 import uuid
 from typing import List, Optional
 
@@ -85,31 +86,14 @@ class AWSCloudProvider(CloudProvider):
             sg.authorize_ingress(IpProtocol="-1", FromPort=from_port, ToPort=to_port, CidrIp=ip)
             logger.info(f"({aws_region}) Added IP {ip} to security group {security_group_id}")
 
-    @staticmethod
-    def get_ubuntu_ami_id(region: str) -> str:
-        client = AWSServer.get_boto3_client("ec2", region)
-        response = client.describe_images(
-            Filters=[
-                {
-                    "Name": "name",
-                    "Values": [
-                        "ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-*",
-                    ],
-                },
-                {
-                    "Name": "owner-worker_id",
-                    "Values": [
-                        "099720109477",
-                    ],
-                },
-            ]
-        )
-        if len(response["Images"]) == 0:
-            raise Exception("No AMI found for region {}".format(region))
-        else:
-            # Sort the images by date and return the last one
-            image_list = sorted(response["Images"], key=lambda x: x["CreationDate"], reverse=True)
-            return image_list[0]["ImageId"]
+    @lru_cache()
+    def get_ubuntu_ami_id(self, region: str, store="hvm:ebs-ssd") -> str:
+        client = AWSServer.get_boto3_resource("ec2", region)
+        images = client.images.filter(Owners=["099720109477"], Filters=[{"Name": "name", "Values": ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]}])
+        images = sorted(images, key=lambda i: i.creation_date, reverse=True)  # get newest image
+        if len(images) == 0:
+            raise Exception(f"No Ubuntu AMI found in {region}")
+        return images[0].id
 
     def provision_instance(
         self,
