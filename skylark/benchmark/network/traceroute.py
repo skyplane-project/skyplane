@@ -18,7 +18,7 @@ from skylark.compute.server import Server
 from skylark.utils import do_parallel
 
 # traceroute parser from https://github.com/ckreibich/tracerouteparser.py
-from tracerouteparser import TracerouteParser
+from skylark.benchmark.network.tracerouteparser import TracerouteParser
 
 
 def parse_args():
