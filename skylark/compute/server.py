@@ -116,20 +116,24 @@ class Server:
     def wait_for_ready(self, timeout=120, verbose=False) -> bool:
         wait_intervals = [0.2] * 20 + [1.0] * int(timeout / 2) + [5.0] * int(timeout / 2)  # backoff
         start_time = time.time()
-        e = None
+        error = None
         while (time.time() - start_time) < timeout:
             try:
                 if self.instance_state() == ServerState.RUNNING:
                     try:
                         self.run_command("true")
+                        logger.info(f"{self.instance_name()} is ready!")
                         return True
                     except Exception as e:
                         if verbose:
                             logger.warning(f"{self.instance_name()} is not ready: {e}")
                 time.sleep(wait_intervals.pop(0))
             except Exception as e:
+                error = e
                 continue
         logger.warning(f"({self.region_tag}) Timeout waiting for server to be ready")
+        if error is not None:
+            logger.exception(error)
         return False
 
     def close_server(self):
