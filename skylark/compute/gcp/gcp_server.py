@@ -11,7 +11,15 @@ from skylark.utils import PathLike
 
 
 class GCPServer(Server):
-    def __init__(self, region_tag: str, gcp_project: str, instance_name: str, key_root: PathLike = key_root / "gcp", log_dir=None):
+    def __init__(
+        self,
+        region_tag: str,
+        gcp_project: str,
+        instance_name: str,
+        key_root: PathLike = key_root / "gcp",
+        log_dir=None,
+        ssh_private_key=None,
+    ):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "gcp", f"Region name doesn't match pattern gcp:<region> {self.region_tag}"
         self.gcp_region = self.region_tag.split(":")[1]
@@ -19,7 +27,10 @@ class GCPServer(Server):
         self.gcp_instance_name = instance_name
         key_root = Path(key_root)
         key_root.mkdir(parents=True, exist_ok=True)
-        self.ssh_private_key = key_root / f"gcp.pem"
+        if ssh_private_key is None:
+            self.ssh_private_key = key_root / f"gcp.pem"
+        else:
+            self.ssh_private_key = ssh_private_key
 
     def uuid(self):
         return f"{self.region_tag}:{self.gcp_instance_name}"
@@ -76,7 +87,7 @@ class GCPServer(Server):
         str_repr = "GCPServer("
         str_repr += f"{self.region_tag}, "
         str_repr += f"{self.gcp_project}, "
-        str_repr += f"{self.instance_name}, "
+        str_repr += f"{self.gcp_instance_name}, "
         str_repr += f"{self.command_log_file}"
         str_repr += ")"
         return str_repr
