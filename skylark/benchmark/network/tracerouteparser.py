@@ -36,18 +36,20 @@ Courtesy of the Netalyzr project: http://netalyzr.icsi.berkeley.edu
 # IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from io import StringIO 
+from io import StringIO
 import re
+
 
 class Probe(object):
     """
     Abstraction of an individual probe in a traceroute.
     """
+
     def __init__(self):
         self.ipaddr = None
         self.name = None
-        self.rtt = None # RTT in ms
-        self.anno = None # Annotation, such as !H, !N, !X, etc
+        self.rtt = None  # RTT in ms
+        self.anno = None  # Annotation, such as !H, !N, !X, etc
 
     def clone(self):
         """
@@ -58,13 +60,15 @@ class Probe(object):
         copy.name = self.name
         return copy
 
+
 class Hop(object):
     """
     A traceroute hop consists of a number of probes.
     """
+
     def __init__(self):
-        self.idx = None # Hop count, starting at 1
-        self.probes = [] # Series of Probe instances
+        self.idx = None  # Hop count, starting at 1
+        self.probes = []  # Series of Probe instances
 
     def add_probe(self, probe):
         """Adds a Probe instance to this hop's results."""
@@ -75,16 +79,16 @@ class Hop(object):
         last_probe = None
         for probe in self.probes:
             if probe.name is None:
-                res.append('*')
+                res.append("*")
                 continue
-            anno = '' if probe.anno is None else ' ' + probe.anno
+            anno = "" if probe.anno is None else " " + probe.anno
             if last_probe is None or last_probe.name != probe.name:
-                res.append('%s (%s) %1.3f ms%s' % (probe.name, probe.ipaddr,
-                                                   probe.rtt, anno))
+                res.append("%s (%s) %1.3f ms%s" % (probe.name, probe.ipaddr, probe.rtt, anno))
             else:
-                res.append('%1.3f ms%s' % (probe.rtt, anno))
+                res.append("%1.3f ms%s" % (probe.rtt, anno))
             last_probe = probe
-        return '  '.join(res)
+        return "  ".join(res)
+
 
 class TracerouteParser(object):
     """
@@ -92,7 +96,8 @@ class TracerouteParser(object):
     hops, each of which has at least one probe. Each probe records IP,
     hostname and timing information.
     """
-    HEADER_RE = re.compile(r'traceroute to (\S+) \((\d+\.\d+\.\d+\.\d+)\)')
+
+    HEADER_RE = re.compile(r"traceroute to (\S+) \((\d+\.\d+\.\d+\.\d+)\)")
 
     def __init__(self):
         self.dest_ip = None
@@ -100,12 +105,12 @@ class TracerouteParser(object):
         self.hops = []
 
     def __str__(self):
-        res = ['traceroute to %s (%s)' % (self.dest_name, self.dest_ip) ]
+        res = ["traceroute to %s (%s)" % (self.dest_name, self.dest_ip)]
         ctr = 1
         for hop in self.hops:
-            res.append('%2d  %s' % (ctr, str(hop)))
+            res.append("%2d  %s" % (ctr, str(hop)))
             ctr += 1
-        return '\n'.join(res)
+        return "\n".join(res)
 
     def parse_data(self, data):
         """Parser entry point, given string of the whole traceroute output."""
@@ -119,9 +124,9 @@ class TracerouteParser(object):
 
         for line in hdl:
             line = line.strip()
-            if line == '':
+            if line == "":
                 continue
-            if line.lower().startswith('traceroute'):
+            if line.lower().startswith("traceroute"):
                 # It's the header line at the beginning of the traceroute.
                 mob = self.HEADER_RE.match(line)
                 if mob:
@@ -134,7 +139,7 @@ class TracerouteParser(object):
     def _parse_hop(self, line):
         """Internal helper, parses a single line in the output."""
         parts = line.split()
-        parts.pop(0) # Drop hop number, implicit in resulting sequence
+        parts.pop(0)  # Drop hop number, implicit in resulting sequence
         hop = Hop()
         probe = None
 
@@ -151,29 +156,30 @@ class TracerouteParser(object):
             probe = Probe() if last_probe is None else last_probe.clone()
 
             tok1 = parts.pop(0)
-            if tok1 == '*':
+            if tok1 == "*":
                 return probe
 
             tok2 = parts.pop(0)
-            if tok2 == 'ms':
+            if tok2 == "ms":
                 # This is an additional RTT for the same endpoint we
                 # saw before.
                 probe.rtt = float(tok1)
-                if len(parts) > 0 and parts[0].startswith('!'):
+                if len(parts) > 0 and parts[0].startswith("!"):
                     probe.anno = parts.pop(0)
             else:
                 # This is a probe result from a different endpoint
                 probe.name = tok1
                 probe.ipaddr = tok2[1:][:-1]
                 probe.rtt = float(parts.pop(0))
-                parts.pop(0) # Drop "ms"
-                if len(parts) > 0 and parts[0].startswith('!'):
+                parts.pop(0)  # Drop "ms"
+                if len(parts) > 0 and parts[0].startswith("!"):
                     probe.anno = parts.pop(0)
 
             return probe
 
         except (IndexError, ValueError):
             return None
+
 
 def demo():
     """A simple example."""
@@ -204,5 +210,6 @@ traceroute to edgecastcdn.net (72.21.81.13), 30 hops max, 38 byte packets
     # Give it some data:
     trp.parse_data(tr_data)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     demo()

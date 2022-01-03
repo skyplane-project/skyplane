@@ -86,8 +86,8 @@ class AWSServer(Server):
     def tags(self):
         ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
         instance = ec2.Instance(self.instance_id)
-        # returns empty dict if no tags 
-        if instance.tags is None: 
+        # returns empty dict if no tags
+        if instance.tags is None:
             return {}
         return {tag["Key"]: tag["Value"] for tag in instance.tags}
 
@@ -122,5 +122,5 @@ class AWSServer(Server):
     def get_ssh_client_impl(self):
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(self.public_ip, username="ubuntu", key_filename=str(self.local_keyfile), look_for_keys=False, allow_agent=False)
+        client.connect(self.public_ip(), username="ubuntu", key_filename=str(self.local_keyfile), look_for_keys=False, allow_agent=False)
         return client

@@ -20,6 +20,7 @@ from skylark.utils import do_parallel
 # traceroute parser from https://github.com/ckreibich/tracerouteparser.py
 from tracerouteparser import TracerouteParser
 
+
 def parse_args():
     aws_regions = AWSCloudProvider.region_list()
     gcp_regions = GCPCloudProvider.region_list()
@@ -98,22 +99,22 @@ def main(args):
         result = {}
         for idx in range(len(parser.hops)):
             result[idx] = []
-            for probe in parser.hops[idx].probes: 
+            for probe in parser.hops[idx].probes:
 
                 stdout, stderr = instance_src.run_command(f"whois {probe.ipaddr}")
-                lines = stdout.split('\n')
+                lines = stdout.split("\n")
                 orgline = None
-                for l in lines: 
-                    if "OrgName:" in l: orgline = l
+                for l in lines:
+                    if "OrgName:" in l:
+                        orgline = l
                 result[idx].append({"ipaddr": probe.ipaddr, "name": probe.name, "rtt": probe.rtt, "org": orgline})
 
-        
         tqdm.write(
-                f"({instance_src.region_tag}:{instance_src.network_tier} -> {instance_dst.region_tag}:{instance_dst.network_tier}) hops: {len(result.keys())}"
+            f"({instance_src.region_tag}:{instance_src.network_tier} -> {instance_dst.region_tag}:{instance_dst.network_tier}) hops: {len(result.keys())}"
         )
         instance_src.close_server()
         instance_dst.close_server()
-       
+
         return result
 
     traceroute_results = []
@@ -134,10 +135,10 @@ def main(args):
                 result_rec = {}
                 result_rec["src"] = pair[0].region_tag
                 result_rec["dst"] = pair[1].region_tag
-                result_rec["src_instance_class"] = pair[0].instance_class
-                result_rec["dst_instance_class"] = pair[1].instance_class
-                result_rec["src_network_tier"] = pair[0].network_tier
-                result_rec["dst_network_tier"] = pair[1].network_tier
+                result_rec["src_instance_class"] = pair[0].instance_class()
+                result_rec["dst_instance_class"] = pair[1].instance_class()
+                result_rec["src_network_tier"] = pair[0].network_tier()
+                result_rec["dst_network_tier"] = pair[1].network_tier()
                 result_rec["result"] = result
                 traceroute_results.append(result_rec)
 

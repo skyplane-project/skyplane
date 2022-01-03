@@ -122,7 +122,7 @@ class Server:
                 if self.instance_state() == ServerState.RUNNING:
                     try:
                         self.run_command("true")
-                        logger.info(f"{self.instance_name} is ready!")
+                        logger.info(f"{self.instance_name()} is ready!")
                         return True
                     except Exception as e:
                         if verbose:
