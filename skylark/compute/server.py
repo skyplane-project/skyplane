@@ -218,7 +218,9 @@ class Server:
         self.run_command(f"echo '{pub_key}' >> ~/.ssh/authorized_keys")
         self.run_command("chmod 600 ~/.ssh/authorized_keys")
 
-    def start_gateway(self, gateway_docker_image="ghcr.io/parasj/skylark:main", log_viewer_port=8888, glances_port=8889):
+    def start_gateway(
+        self, gateway_docker_image="ghcr.io/parasj/skylark:main", log_viewer_port=8888, glances_port=8889, num_outgoing_connections=8
+    ):
         self.wait_for_ready()
         # install docker and launch monitoring
         # docker_install_cmd = "curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh;"
@@ -238,9 +240,7 @@ class Server:
         assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
         docker_run_flags = "-d --log-driver=local --ipc=host --network=host"
         # todo add other launch flags for gateway daemon
-        gateway_daemon_cmd = (
-            "/env/bin/python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections 8"
-        )
+        gateway_daemon_cmd = f"/env/bin/python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections {num_outgoing_connections}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = self.run_command(docker_launch_cmd)
         assert not start_err, f"Error starting gateway: {start_err}"

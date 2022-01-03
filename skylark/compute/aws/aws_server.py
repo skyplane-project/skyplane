@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import boto3
+import botocore
 import paramiko
 from loguru import logger
 
@@ -72,10 +73,13 @@ class AWSServer(Server):
         return local_key_file
 
     def public_ip(self) -> str:
-        ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
-        instance = ec2.Instance(self.instance_id)
-        ip = instance.public_ip_address
-        return ip
+        try:
+            ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
+            instance = ec2.Instance(self.instance_id)
+            ip = instance.public_ip_address
+            return ip
+        except botocore.exceptions.ClientError:
+            return None
 
     @lru_cache(maxsize=1)
     def instance_class(self) -> str:

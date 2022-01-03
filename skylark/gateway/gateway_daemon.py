@@ -102,7 +102,7 @@ class GatewayDaemon:
 
                         def fn(chunk_req, size_mb):
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
-                            os.system(f"dd if=/dev/zero of={fpath} bs=1M count={size_mb}")
+                            os.system(f"dd if=/dev/zero of={fpath} bs=1000000 count={size_mb}")
                             chunk_req.chunk.chunk_length_bytes = os.path.getsize(fpath)
                             self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
                             self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id)

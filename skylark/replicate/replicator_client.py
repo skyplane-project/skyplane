@@ -49,11 +49,11 @@ class ReplicatorClient:
         provider, subregion = region.split(":")
         if provider == "aws":
             server = self.aws.provision_instance(subregion, self.aws_instance_class)
-            logger.info(f"Provisioned AWS gateway {server.instance_id} in {server.region}")
+            logger.info(f"Provisioned AWS gateway {server.instance_id} in {server.region()}")
         elif provider == "gcp":
             # todo specify network tier in ReplicationTopology
             server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
-            logger.info(f"Provisioned GCP gateway {server.instance_name()} in {server.region}")
+            logger.info(f"Provisioned GCP gateway {server.instance_name()} in {server.region()}")
         else:
             raise NotImplementedError(f"Unknown provider {provider}")
         return server
@@ -63,7 +63,11 @@ class ReplicatorClient:
         server.terminate_instance()
 
     def provision_gateways(
-        self, reuse_instances=False, log_dir: Optional[PathLike] = None, authorize_ssh_pub_key: Optional[PathLike] = None
+        self,
+        reuse_instances=False,
+        log_dir: Optional[PathLike] = None,
+        authorize_ssh_pub_key: Optional[PathLike] = None,
+        num_outgoing_connections=8,
     ):
         regions_to_provision = [r for path in self.topology.paths for r in path]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
@@ -133,9 +137,9 @@ class ReplicatorClient:
             bound_paths.append([instances_by_region[r].pop() for r in path])
         self.bound_paths = bound_paths
 
-    def start_gateways(self):
+        # start gateways
         do_parallel(
-            lambda s: s.start_gateway(gateway_docker_image=self.gateway_docker_image),
+            lambda s: s.start_gateway(gateway_docker_image=self.gateway_docker_image, num_outgoing_connections=num_outgoing_connections),
             list(itertools.chain(*self.bound_paths)),
             progress_bar=True,
             desc="Starting up gateways",
@@ -146,77 +150,74 @@ class ReplicatorClient:
         do_parallel(self.deprovision_gateway_instance, instances, n=len(instances))
 
     def run_replication_plan(self, job: ReplicationJob):
-        # todo support more than one gateway instance per region
-        assert len(self.topology.paths) == 1, f"Replication plan requires exactly one path but got {len(self.topology.paths)} paths"
+        with Timer("Computing chunk requests"):
+            assert all(len(path) == 2 for path in self.bound_paths), f"Only two-hop replication is supported"
 
-        # todo support more than one direct path
-        assert len(self.topology.paths[0]) == 2, f"Only two-hop replication is supported but {len(self.topology.paths[0])} hops found"
+            # todo support GCP
+            assert job.source_region.split(":")[0] == "aws", f"Only AWS is supported for now, got {job.source_region}"
+            assert job.dest_region.split(":")[0] == "aws", f"Only AWS is supported for now, got {job.dest_region}"
 
-        # todo support GCP
-        assert job.source_region.split(":")[0] == "aws", f"Only AWS is supported for now, got {job.source_region}"
-        assert job.dest_region.split(":")[0] == "aws", f"Only AWS is supported for now, got {job.dest_region}"
-        src_obj_interface = S3Interface(job.source_region.split(":")[1], job.source_bucket)
+            # make list of chunks
+            chunks = []
+            for idx, obj in enumerate(job.objs):
+                file_size_bytes = 128 * 1000 * 1000
+                chunks.append(
+                    Chunk(
+                        key=obj,
+                        chunk_id=idx,
+                        file_offset_bytes=0,
+                        chunk_length_bytes=file_size_bytes,
+                    )
+                )
 
-        src_instance = self.bound_paths[0][0]
-        dst_instance = self.bound_paths[0][1]
+            # partition chunks into roughly equal-sized batches (by bytes)
+            n_src_instances = len(self.bound_paths)
+            chunk_lens = [c.chunk_length_bytes for c in chunks]
+            approx_bytes_per_connection = sum(chunk_lens) / n_src_instances
+            batch_bytes = 0
+            chunk_batches = []
+            current_batch = []
+            for chunk in chunks:
+                current_batch.append(chunk)
+                batch_bytes += chunk.chunk_length_bytes
+                if batch_bytes >= approx_bytes_per_connection and len(chunk_batches) < n_src_instances:
+                    chunk_batches.append(current_batch)
+                    batch_bytes = 0
+                    current_batch = []
+            if current_batch:  # add remaining chunks to the smallest batch by total bytes
+                smallest_batch = min(chunk_batches, key=lambda b: sum([c.chunk_length_bytes for c in b]))
+                smallest_batch.extend(current_batch)
+            assert len(chunk_batches) == n_src_instances, f"{len(chunk_batches)} batches, expected {n_src_instances}"
 
-        # make list of ChunkRequests
-        chunk_reqs = []
-        for idx, obj in enumerate(job.objs):
-            # todo support multipart files
-            # todo support multiple paths
-            # file_size_bytes = src_obj_interface.get_obj_size(obj)
-            file_size_bytes = -1
-            chunk = Chunk(
-                key=obj,
-                chunk_id=idx,
-                file_offset_bytes=0,
-                chunk_length_bytes=file_size_bytes,
-            )
-            src_path = ChunkRequestHop(
-                hop_cloud_region=src_instance.region_tag,
-                hop_ip_address=src_instance.public_ip(),
-                chunk_location_type="random_128MB",  # todo src_object_store
-                # src_object_store_region=src_instance.region_tag,
-                # src_object_store_bucket=job.source_bucket,
-            )
-            dst_path = ChunkRequestHop(
-                hop_cloud_region=dst_instance.region_tag,
-                hop_ip_address=dst_instance.public_ip(),
-                chunk_location_type="save_local",  # dst_object_store
-                # dst_object_store_region=dst_instance.region_tag,
-                # dst_object_store_bucket=job.dest_bucket,
-            )
-            chunk_reqs.append(ChunkRequest(chunk=chunk, path=[src_path, dst_path]))
+            # make list of ChunkRequests and dispatch to source gateway
+            with Timer("Make chunk requests"):
+                chunk_requests_sharded = {}
+                for batch, path in zip(chunk_batches, self.bound_paths):
+                    chunk_requests_sharded[path[0]] = []
+                    for chunk in batch:
+                        # make ChunkRequestHop list
+                        cr_path = []
+                        for hop_idx, hop_instance in enumerate(path):
+                            if hop_idx == 0:  # source gateway
+                                location = "random_128MB"
+                            elif hop_idx == len(path) - 1:  # destination gateway
+                                location = "save_local"
+                            else:  # intermediate gateway
+                                location = "relay"
+                            cr_path.append(
+                                ChunkRequestHop(
+                                    hop_cloud_region=hop_instance.region_tag,
+                                    hop_ip_address=hop_instance.public_ip(),
+                                    chunk_location_type=location,
+                                )
+                            )
+                        chunk_requests_sharded[path[0]].append(ChunkRequest(chunk, cr_path))
 
-        # partition chunks into roughly equal-sized batches (by bytes)
-        n_src_instances = len(self.bound_paths)
-        chunk_lens = [c.chunk.chunk_length_bytes for c in chunk_reqs]
-        approx_bytes_per_connection = sum(chunk_lens) / n_src_instances
-        batch_bytes = 0
-        chunk_batches = []
-        current_batch = []
-        for req in chunk_reqs:
-            current_batch.append(req)
-            batch_bytes += req.chunk.chunk_length_bytes
-            if batch_bytes >= approx_bytes_per_connection and len(chunk_batches) < n_src_instances:
-                chunk_batches.append(current_batch)
-                batch_bytes = 0
-                current_batch = []
-
-        # add remaining chunks to the smallest batch by total bytes
-        if current_batch:
-            smallest_batch = min(chunk_batches, key=lambda b: sum([c.chunk.chunk_length_bytes for c in b]))
-            smallest_batch.extend(current_batch)
-
-        # send ChunkRequests to each gateway instance
-        def send_chunk_req(instance: Server, chunk_reqs: List[ChunkRequest]):
-            logger.debug(f"Sending {len(chunk_reqs)} chunk requests to {instance.public_ip()}")
-            body = [c.as_dict() for c in chunk_reqs]
-            reply = requests.post(f"http://{instance.public_ip()}:8080/api/v1/chunk_requests", json=body)
-            if reply.status_code != 200:
-                raise Exception(f"Failed to send chunk requests to gateway instance {instance.instance_name()}: {reply.text}")
-            return reply
-
-        assert len(chunk_batches) == len(self.bound_paths)
-        send_chunk_req(src_instance, chunk_batches[0])
+            # send chunk requests to source gateway
+            for instance, chunk_requests in chunk_requests_sharded.items():
+                logger.debug(f"Sending {len(chunk_requests)} chunk requests to {instance.public_ip()}")
+                reply = requests.post(
+                    f"http://{instance.public_ip()}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests]
+                )
+                if reply.status_code != 200:
+                    raise Exception(f"Failed to send chunk requests to gateway instance {instance.instance_name()}: {reply.text}")
