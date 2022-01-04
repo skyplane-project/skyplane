@@ -1,3 +1,4 @@
+from functools import lru_cache
 import uuid
 from typing import List, Optional
 
@@ -7,6 +8,7 @@ from loguru import logger
 from skylark import skylark_root
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.cloud_providers import CloudProvider
+from skylark.utils import Timer
 
 
 class AWSCloudProvider(CloudProvider):
@@ -56,18 +58,19 @@ class AWSCloudProvider(CloudProvider):
             raise NotImplementedError
 
     def get_instance_list(self, region: str) -> List[AWSServer]:
-        ec2 = AWSServer.get_boto3_resource("ec2", region)
-        instances = ec2.instances.filter(
-            Filters=[
-                {
-                    "Name": "instance-state-name",
-                    "Values": ["pending", "running", "stopped", "stopping"],
-                }
-            ]
-        )
-        instance_ids = [i.id for i in instances]
-        instances = [AWSServer(f"aws:{region}", i) for i in instance_ids]
-        return instances
+        with Timer(f"Listing instances in {region}"):
+            ec2 = AWSServer.get_boto3_resource("ec2", region)
+            instances = ec2.instances.filter(
+                Filters=[
+                    {
+                        "Name": "instance-state-name",
+                        "Values": ["pending", "running", "stopped", "stopping"],
+                    }
+                ]
+            )
+            instance_ids = [i.id for i in instances]
+            instances = [AWSServer(f"aws:{region}", i) for i in instance_ids]
+            return instances
 
     def add_ip_to_security_group(
         self, aws_region: str, security_group_id: Optional[str] = None, ip="0.0.0.0/0", from_port=0, to_port=65535
@@ -85,31 +88,16 @@ class AWSCloudProvider(CloudProvider):
             sg.authorize_ingress(IpProtocol="-1", FromPort=from_port, ToPort=to_port, CidrIp=ip)
             logger.info(f"({aws_region}) Added IP {ip} to security group {security_group_id}")
 
-    @staticmethod
-    def get_ubuntu_ami_id(region: str) -> str:
-        client = AWSServer.get_boto3_client("ec2", region)
-        response = client.describe_images(
-            Filters=[
-                {
-                    "Name": "name",
-                    "Values": [
-                        "ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-*",
-                    ],
-                },
-                {
-                    "Name": "owner-worker_id",
-                    "Values": [
-                        "099720109477",
-                    ],
-                },
-            ]
+    @lru_cache()
+    def get_ubuntu_ami_id(self, region: str, store="hvm:ebs-ssd") -> str:
+        client = AWSServer.get_boto3_resource("ec2", region)
+        images = client.images.filter(
+            Owners=["099720109477"], Filters=[{"Name": "name", "Values": ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]}]
         )
-        if len(response["Images"]) == 0:
-            raise Exception("No AMI found for region {}".format(region))
-        else:
-            # Sort the images by date and return the last one
-            image_list = sorted(response["Images"], key=lambda x: x["CreationDate"], reverse=True)
-            return image_list[0]["ImageId"]
+        images = sorted(images, key=lambda i: i.creation_date, reverse=True)  # get newest image
+        if len(images) == 0:
+            raise Exception(f"No Ubuntu AMI found in {region}")
+        return images[0].id
 
     def provision_instance(
         self,

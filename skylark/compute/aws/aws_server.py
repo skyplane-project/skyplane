@@ -1,13 +1,16 @@
 import os
 from functools import lru_cache
 from pathlib import Path
+from typing import Dict, Optional
 
 import boto3
+import botocore
 import paramiko
 from loguru import logger
 
 from skylark import key_root
 from skylark.compute.server import Server, ServerState
+from skylark.utils import Timer
 
 
 class AWSServer(Server):
@@ -70,29 +73,26 @@ class AWSServer(Server):
             os.chmod(local_key_file, 0o600)
         return local_key_file
 
-    def public_ip(self):
-        ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
-        instance = ec2.Instance(self.instance_id)
-        ip = instance.public_ip_address
-        return ip
-
     @lru_cache(maxsize=1)
-    def instance_class(self):
+    def get_boto3_instance_resource(self):
         ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
-        instance = ec2.Instance(self.instance_id)
-        return instance.instance_type
+        return ec2.Instance(self.instance_id)
 
-    @lru_cache(maxsize=1)
-    def tags(self):
-        ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
-        instance = ec2.Instance(self.instance_id)
-        # returns empty dict if no tags
-        if instance.tags is None:
-            return {}
-        return {tag["Key"]: tag["Value"] for tag in instance.tags}
+    @lru_cache
+    def public_ip(self) -> str:
+        return self.get_boto3_instance_resource().public_ip_address
 
-    @lru_cache(maxsize=1)
-    def instance_name(self):
+    @lru_cache
+    def instance_class(self) -> str:
+        return self.get_boto3_instance_resource().instance_type
+
+    @lru_cache
+    def tags(self) -> Dict[str, str]:
+        tags = self.get_boto3_instance_resource().tags
+        return {tag["Key"]: tag["Value"] for tag in tags} if tags else {}
+
+    @lru_cache
+    def instance_name(self) -> Optional[str]:
         return self.tags.get("Name", None)
 
     def network_tier(self):
@@ -103,9 +103,7 @@ class AWSServer(Server):
         return self.aws_region
 
     def instance_state(self):
-        ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
-        instance = ec2.Instance(self.instance_id)
-        return ServerState.from_aws_state(instance.state["Name"])
+        return ServerState.from_aws_state(self.get_boto3_instance_resource().state["Name"])
 
     def __repr__(self):
         str_repr = f"AWSServer("

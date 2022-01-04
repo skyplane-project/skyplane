@@ -1,4 +1,6 @@
 import json
+import os
+import subprocess
 import threading
 import time
 import uuid
@@ -6,8 +8,9 @@ from enum import Enum, auto
 from pathlib import Path, PurePath
 
 from loguru import logger
+import requests
 
-from skylark.utils import PathLike, Timer, do_parallel
+from skylark.utils import PathLike, Timer, do_parallel, wait_for
 
 
 class ServerState(Enum):
@@ -66,6 +69,7 @@ class Server:
     def init_log_files(self, log_dir):
         if log_dir:
             log_dir = Path(log_dir)
+            log_dir.mkdir(parents=True, exist_ok=True)
             self.command_log_file = str(log_dir / f"{self.uuid()}.jsonl")
         else:
             self.command_log_file = None
@@ -113,28 +117,17 @@ class Server:
         self.close_server()
         self.terminate_instance_impl()
 
-    def wait_for_ready(self, timeout=120, verbose=False) -> bool:
-        wait_intervals = [0.2] * 20 + [1.0] * int(timeout / 2) + [5.0] * int(timeout / 2)  # backoff
-        start_time = time.time()
-        error = None
-        while (time.time() - start_time) < timeout:
+    def wait_for_ready(self, timeout=120, interval=0.1) -> bool:
+        def is_up():
             try:
-                if self.instance_state() == ServerState.RUNNING:
-                    try:
-                        self.run_command("true")
-                        logger.info(f"{self.instance_name()} is ready!")
-                        return True
-                    except Exception as e:
-                        if verbose:
-                            logger.warning(f"{self.instance_name()} is not ready: {e}")
-                time.sleep(wait_intervals.pop(0))
+                ip = self.public_ip()
             except Exception as e:
-                error = e
-                continue
-        logger.warning(f"({self.region_tag}) Timeout waiting for server to be ready")
-        if error is not None:
-            logger.exception(error)
-        return False
+                logger.debug(f"wait_for_ready exception: {e}")
+                return False
+            ping_return = subprocess.run(["ping", "-c", "1", ip], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return ping_return.returncode == 0
+
+        wait_for(is_up, timeout=timeout, interval=interval)
 
     def close_server(self):
         if hasattr(self.ns, "client"):
@@ -224,6 +217,47 @@ class Server:
         pub_key_path = Path(pub_key_path)
         assert pub_key_path.suffix == ".pub", f"{pub_key_path} does not have .pub extension, are you sure it is a public key?"
         pub_key = Path(pub_key_path).read_text()
-        self.run_command(f"mkdir -p ~/.ssh")
-        self.run_command(f"echo '{pub_key}' >> ~/.ssh/authorized_keys")
-        self.run_command("chmod 600 ~/.ssh/authorized_keys")
+        self.run_command(f"mkdir -p ~/.ssh && (echo '{pub_key}' >> ~/.ssh/authorized_keys) && chmod 600 ~/.ssh/authorized_keys")
+
+    def start_gateway(
+        self, gateway_docker_image="ghcr.io/parasj/skylark:main", log_viewer_port=8888, glances_port=8889, num_outgoing_connections=8
+    ):
+        self.wait_for_ready()
+        # install docker and launch monitoring
+        # docker_install_cmd = "curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh;"
+        docker_install_cmd = "sudo apt-get update && sudo apt install -y docker.io"
+        cmd = (
+            "(command -v docker >/dev/null 2>&1 || { "
+            + docker_install_cmd
+            + "; })"
+            + " && { sudo docker kill $(sudo docker ps -q); sudo docker rm -f $(sudo docker ps -a -q); }; "
+        )
+        cmd += f"sudo docker run --name dozzle -d --volume=/var/run/docker.sock:/var/run/docker.sock -p {log_viewer_port}:8080 amir20/dozzle:latest --filter name=skylark_gateway; "
+        cmd += f"sudo docker run --name glances -d -p {glances_port}-{glances_port + 1}:{glances_port}-{glances_port + 1} -e GLANCES_OPT='-w' -v /var/run/docker.sock:/var/run/docker.sock:ro --pid host nicolargo/glances:latest-full; "
+        self.run_command(cmd)
+
+        # launch gateway
+        docker_out, docker_err = self.run_command(f"sudo docker pull {gateway_docker_image}")
+        assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
+        docker_run_flags = "-d --log-driver=local --ipc=host --network=host"
+        # todo add other launch flags for gateway daemon
+        gateway_daemon_cmd = f"/env/bin/python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections {num_outgoing_connections}"
+        docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
+        start_out, start_err = self.run_command(docker_launch_cmd)
+        assert not start_err, f"Error starting gateway: {start_err}"
+
+        # wait for gateways to start (check status API)
+        def is_ready():
+            api_url = f"http://{self.public_ip()}:8080/api/v1/status"
+            try:
+                return requests.get(api_url).json().get("status") == "ok"
+            except Exception as e:
+                return False
+
+        try:
+            wait_for(is_ready, timeout=10, interval=0.1)
+        except Exception as e:
+            logger.error(f"Gateway {self.instance_name()} is not ready")
+            logs, err = self.run_command(f"sudo docker logs skylark_gateway --tail=100")
+            logger.error(f"Docker logs: {logs}\nerr: {err}")
+            raise e
