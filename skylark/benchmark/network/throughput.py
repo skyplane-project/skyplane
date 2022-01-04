@@ -34,7 +34,6 @@ def parse_args():
     parser.add_argument("--iperf3_runtime", type=int, default=4, help="Runtime for iperf3 in seconds")
     parser.add_argument("--iperf3_congestion", type=str, default="cubic", help="Congestion control algorithm for iperf3")
     parser.add_argument("--iperf3_mode", type=str, default="tcp", help="Mode for iperf3")
-    parser.add_argument("--iperf3_udp_bandwidth", type=str, default="0", help="UDP bandwidth for iperf3 (e.g. 0 = unlimited, 1M = 1Mbit)")
     args = parser.parse_args()
 
     # filter by valid regions
@@ -114,7 +113,7 @@ def main(args):
             out_rec = dict(throughput_sent=throughput_sent, throughput_received=throughput_received, cpu_utilization=cpu_utilization)
         elif args.iperf3_mode == "udp":
             stdout, stderr = instance_src.run_command(
-                f"nuttcp -u -R {args.iperf3_udp_bandwidth} -T {args.iperf3_runtime} {instance_dst.public_ip()}"
+                f"nuttcp -u -l8972 -w4m -Ru -T {args.iperf3_runtime} {instance_dst.public_ip()}"
             )
             # example return:
             # "  659.1631 MB /   2.00 sec = 2764.6834 Mbps 99 %TX 53 %RX 36045 / 711028 drop/pkt 5.07 %loss"
