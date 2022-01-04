@@ -31,7 +31,7 @@ def parse_args():
     parser.add_argument("--gateway-docker-image", default="ghcr.io/parasj/skylark:main", help="Docker image for gateway instances")
     parser.add_argument("--aws-instance-class", default="m5.4xlarge", help="AWS instance class")
     parser.add_argument("--gcp-instance-class", default="n2-standard-16", help="GCP instance class")
-    parser.add_argument("--copy-ssh-key", default=None, help="SSH public key to add to server")
+    parser.add_argument("--copy-ssh-key", default=None, help="SSH public key to add to gateways")
     parser.add_argument("--log-dir", default=None, help="Directory to write instance SSH logs to")
     parser.add_argument("--gcp-use-premium-network", action="store_true", help="Use GCP premium network")
     return parser.parse_args()
@@ -91,12 +91,11 @@ def main(args):
         authorize_ssh_pub_key=args.copy_ssh_key,
         num_outgoing_connections=args.num_outgoing_connections,
     )
+    for path in rc.bound_paths:
+        logger.info(f"Provisioned path {' -> '.join(path[i].region_tag for i in range(2))}")
+        logger.debug(f"Source API: http://{path[0].public_ip()}:8080/api/v1, destination API: http://{path[-1].public_ip()}:8080/api/v1")
 
-    # run the replication job
-    src_gateways = [f"http://{rc.bound_paths[i][0].public_ip()}:8080/api/v1" for i in range(args.num_gateways)]
-    dst_gateways = [f"http://{rc.bound_paths[i][-1].public_ip()}:8080/api/v1" for i in range(args.num_gateways)]
-    logger.debug(f"Source gateway API endpoint: {src_gateways}")
-    logger.debug(f"Destination gateway API endpoint: {dst_gateways}")
+    # run replication, monitor progress
     job = ReplicationJob(
         source_region=args.src_region,
         source_bucket=src_bucket,
@@ -104,8 +103,6 @@ def main(args):
         dest_bucket=dst_bucket,
         objs=obj_keys,
     )
-
-    # run replication, monitor progress
     total_bytes = args.n_chunks * args.chunk_size_mb * 1000 * 1000
     with Timer() as t:
         with tqdm(total=total_bytes * 8, unit="bit", unit_scale=True, unit_divisor=1000, desc="Replication progress") as pbar:

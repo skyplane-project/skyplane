@@ -69,6 +69,7 @@ class Server:
     def init_log_files(self, log_dir):
         if log_dir:
             log_dir = Path(log_dir)
+            log_dir.mkdir(parents=True, exist_ok=True)
             self.command_log_file = str(log_dir / f"{self.uuid()}.jsonl")
         else:
             self.command_log_file = None
@@ -118,11 +119,13 @@ class Server:
 
     def wait_for_ready(self, timeout=120, interval=0.1) -> bool:
         def is_up():
-            if self.public_ip() is None:
+            try:
+                ip = self.public_ip()
+            except Exception as e:
+                logger.debug(f"wait_for_ready exception: {e}")
                 return False
-            return (
-                subprocess.run(["ping", "-c", "1", self.public_ip()], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
-            )
+            ping_return = subprocess.run(["ping", "-c", "1", ip], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return ping_return.returncode == 0
 
         wait_for(is_up, timeout=timeout, interval=interval)
 
@@ -214,9 +217,7 @@ class Server:
         pub_key_path = Path(pub_key_path)
         assert pub_key_path.suffix == ".pub", f"{pub_key_path} does not have .pub extension, are you sure it is a public key?"
         pub_key = Path(pub_key_path).read_text()
-        self.run_command(f"mkdir -p ~/.ssh")
-        self.run_command(f"echo '{pub_key}' >> ~/.ssh/authorized_keys")
-        self.run_command("chmod 600 ~/.ssh/authorized_keys")
+        self.run_command(f"mkdir -p ~/.ssh && (echo '{pub_key}' >> ~/.ssh/authorized_keys) && chmod 600 ~/.ssh/authorized_keys")
 
     def start_gateway(
         self, gateway_docker_image="ghcr.io/parasj/skylark:main", log_viewer_port=8888, glances_port=8889, num_outgoing_connections=8

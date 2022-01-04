@@ -8,6 +8,7 @@ from loguru import logger
 from skylark import skylark_root
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.cloud_providers import CloudProvider
+from skylark.utils import Timer
 
 
 class AWSCloudProvider(CloudProvider):
@@ -57,18 +58,19 @@ class AWSCloudProvider(CloudProvider):
             raise NotImplementedError
 
     def get_instance_list(self, region: str) -> List[AWSServer]:
-        ec2 = AWSServer.get_boto3_resource("ec2", region)
-        instances = ec2.instances.filter(
-            Filters=[
-                {
-                    "Name": "instance-state-name",
-                    "Values": ["pending", "running", "stopped", "stopping"],
-                }
-            ]
-        )
-        instance_ids = [i.id for i in instances]
-        instances = [AWSServer(f"aws:{region}", i) for i in instance_ids]
-        return instances
+        with Timer(f"Listing instances in {region}"):
+            ec2 = AWSServer.get_boto3_resource("ec2", region)
+            instances = ec2.instances.filter(
+                Filters=[
+                    {
+                        "Name": "instance-state-name",
+                        "Values": ["pending", "running", "stopped", "stopping"],
+                    }
+                ]
+            )
+            instance_ids = [i.id for i in instances]
+            instances = [AWSServer(f"aws:{region}", i) for i in instance_ids]
+            return instances
 
     def add_ip_to_security_group(
         self, aws_region: str, security_group_id: Optional[str] = None, ip="0.0.0.0/0", from_port=0, to_port=65535
