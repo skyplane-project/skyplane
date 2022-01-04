@@ -124,8 +124,10 @@ class Server:
             except Exception as e:
                 logger.debug(f"wait_for_ready exception: {e}")
                 return False
-            ping_return = subprocess.run(["ping", "-c", "1", ip], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return ping_return.returncode == 0
+            if ip is not None:
+                ping_return = subprocess.run(["ping", "-c", "1", ip], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return ping_return.returncode == 0
+            return False
 
         wait_for(is_up, timeout=timeout, interval=interval)
 

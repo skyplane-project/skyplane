@@ -32,6 +32,8 @@ def parse_args():
     parser.add_argument("--iperf_connection_list", type=int, nargs="+", default=[128], help="List of connections to test")
     parser.add_argument("--iperf3_runtime", type=int, default=4, help="Runtime for iperf3 in seconds")
     parser.add_argument("--iperf3_congestion", type=str, default="cubic", help="Congestion control algorithm for iperf3")
+    parser.add_argument("--iperf3_mode", type=str, default="tcp", help="Mode for iperf3")
+    parser.add_argument("--iperf3_udp_bandwidth", type=str, default="0", help="UDP bandwidth for iperf3 (e.g. 0 = unlimited, 1M = 1Mbit)")
     args = parser.parse_args()
 
     # filter by valid regions
@@ -77,36 +79,49 @@ def main(args):
         instance_list.extend([i for ilist in gcp_standard_instances.values() for i in ilist])
 
     def setup(instance: Server):
-        instance.run_command("sudo apt-get update")
-        instance.run_command("sudo apt-get install -y iperf3")
-        instance.run_command("pkill iperf3")
-        instance.run_command("iperf3 -s -D")
+        instance.run_command("(sudo apt-get update && sudo apt-get install -y iperf3); pkill iperf3; iperf3 -s -D")
         if args.iperf3_congestion == "bbr":
-            instance.run_command("sudo sysctl -w net.ipv4.tcp_congestion_control=bbr")
-            instance.run_command("sudo sysctl -w net.core.default_qdisc=fq")
-            instance.run_command("sudo sysctl -w net.ipv4.tcp_available_congestion_control=bbr")
+            instance.run_command("sudo sysctl -w net.ipv4.tcp_congestion_control=bbr; sudo sysctl -w net.core.default_qdisc=fq; sudo sysctl -w net.ipv4.tcp_available_congestion_control=bbr")
 
     do_parallel(setup, instance_list, progress_bar=True, n=24, desc="Setup")
 
     # start iperf3 clients on each pair of instances
     def start_iperf3_client(arg_pair: Tuple[Server, Server]):
         instance_src, instance_dst = arg_pair
+        udp_flags = f" --udp --bandwidth {args.iperf3_udp_bandwidth}" if args.iperf3_mode == 'udp' else ""
         stdout, stderr = instance_src.run_command(
-            f"iperf3 -J -C {args.iperf3_congestion} -t {args.iperf3_runtime} -P 32 -c {instance_dst.public_ip()}"
+            f"iperf3 -J -Z -C {args.iperf3_congestion} -t {args.iperf3_runtime} -P 32 -c {instance_dst.public_ip()}{udp_flags}"
         )
         try:
             result = json.loads(stdout)
         except json.JSONDecodeError:
             logger.error(f"({instance_src.region_tag} -> {instance_dst.region_tag}) iperf3 client failed: {stdout} {stderr}")
             return None
-        throughput_sent = result["end"]["sum_sent"]["bits_per_second"]
-        throughput_received = result["end"]["sum_received"]["bits_per_second"]
-        tqdm.write(
-            f"({instance_src.region_tag}:{instance_src.network_tier()} -> {instance_dst.region_tag}:{instance_dst.network_tier()}) is {throughput_sent / 1e9:0.2f} Gbps"
-        )
+        
+        if args.iperf3_mode == 'tcp':
+            throughput_sent = result["end"]["sum_sent"]["bits_per_second"]
+            throughput_received = result["end"]["sum_received"]["bits_per_second"]
+            cpu_utilization = result["end"]["cpu_utilization_percent"]["host_total"]
+            tqdm.write(
+                f"({instance_src.region_tag}:{instance_src.network_tier()} -> {instance_dst.region_tag}:{instance_dst.network_tier()}) is {throughput_sent / 1e9:0.2f} Gbps"
+            )
+            out_rec = dict(throughput_sent=throughput_sent, throughput_received=throughput_received, cpu_utilization=cpu_utilization)
+        elif args.iperf3_mode == 'udp':
+            out_rec = dict(
+                throughput=result["end"]["sum"]["bits_per_second"],
+                jitter=result["end"]["sum"]["jitter_ms"],
+                packets=result["end"]["sum"]["packets"],
+                lost_packets=result["end"]["sum"]["lost_packets"],
+                cpu_utilization=result["end"]["cpu_utilization_percent"]["host_total"],
+            )
+            tqdm.write(
+                f"({instance_src.region_tag}:{instance_src.network_tier()} -> {instance_dst.region_tag}:{instance_dst.network_tier()}) is {out_rec['throughput'] / 1e9:0.2f} Gbps"
+            )
         instance_src.close_server()
         instance_dst.close_server()
-        return throughput_sent, throughput_received, result
+        return out_rec
+
+
 
     throughput_results = []
     instance_pairs = [(i1, i2) for i1 in instance_list for i2 in instance_list if i1 != i2]
@@ -131,9 +146,8 @@ def main(args):
                     "dst_instance_class": pair[1].instance_class(),
                     "src_network_tier": pair[0].network_tier(),
                     "dst_network_tier": pair[1].network_tier(),
-                    "throughput_sent": result[0],
-                    "throughput_received": result[1],
                 }
+                result_rec.update(result)
                 throughput_results.append(result_rec)
 
     throughput_dir = data_dir / "throughput" / "iperf3"
