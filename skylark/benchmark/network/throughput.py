@@ -83,7 +83,7 @@ def main(args):
         if args.iperf3_mode == "tcp":
             instance.run_command("iperf3 -s -D -J")
         else:
-            instance.run_command("nuttcp -S -u")
+            instance.run_command("nuttcp -S -u -w4m -l1460")
         if args.iperf3_congestion == "bbr":
             instance.run_command(
                 "sudo sysctl -w net.ipv4.tcp_congestion_control=bbr; sudo sysctl -w net.core.default_qdisc=fq; sudo sysctl -w net.ipv4.tcp_available_congestion_control=bbr"
@@ -112,9 +112,7 @@ def main(args):
             )
             out_rec = dict(throughput_sent=throughput_sent, throughput_received=throughput_received, cpu_utilization=cpu_utilization)
         elif args.iperf3_mode == "udp":
-            stdout, stderr = instance_src.run_command(
-                f"nuttcp -u -l8972 -w4m -Ru -T {args.iperf3_runtime} {instance_dst.public_ip()}"
-            )
+            stdout, stderr = instance_src.run_command(f"nuttcp -uu -l1460 -w4m -T {args.iperf3_runtime} {instance_dst.public_ip()}")
             # example return:
             # "  659.1631 MB /   2.00 sec = 2764.6834 Mbps 99 %TX 53 %RX 36045 / 711028 drop/pkt 5.07 %loss"
             # "   208.2891 MB /   4.00 sec =  436.7620 Mbps 11 %TX 8 %RX 0 / 213288 drop/pkt 0.00 %loss"
