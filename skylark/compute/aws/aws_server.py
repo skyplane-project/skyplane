@@ -93,7 +93,7 @@ class AWSServer(Server):
 
     @lru_cache
     def instance_name(self) -> Optional[str]:
-        return self.tags.get("Name", None)
+        return self.tags().get("Name", None)
 
     def network_tier(self):
         return "STANDARD"

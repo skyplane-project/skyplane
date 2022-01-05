@@ -49,11 +49,11 @@ class ReplicatorClient:
         provider, subregion = region.split(":")
         if provider == "aws":
             server = self.aws.provision_instance(subregion, self.aws_instance_class)
-            logger.info(f"Provisioned AWS gateway {server.instance_id} in {server.region()}")
+            logger.info(f"Provisioned AWS gateway {server.instance_id} in {server.region()} (ip = {server.public_ip()})")
         elif provider == "gcp":
             # todo specify network tier in ReplicationTopology
             server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
-            logger.info(f"Provisioned GCP gateway {server.instance_name()} in {server.region()}")
+            logger.info(f"Provisioned GCP gateway {server.instance_name()} in {server.region()} (ip = {server.public_ip()})")
         else:
             raise NotImplementedError(f"Unknown provider {provider}")
         return server
@@ -158,7 +158,7 @@ class ReplicatorClient:
         do_parallel(self.deprovision_gateway_instance, instances, n=len(instances))
 
     def run_replication_plan(self, job: ReplicationJob):
-        assert all(len(path) == 2 for path in self.bound_paths), f"Only two-hop replication is supported"
+        # assert all(len(path) == 2 for path in self.bound_paths), f"Only two-hop replication is supported"
 
         # todo support GCP
         assert job.source_region.split(":")[0] == "aws", f"Only AWS is supported for now, got {job.source_region}"

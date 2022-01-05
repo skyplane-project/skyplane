@@ -16,6 +16,7 @@ def parse_args():
 
     # gateway path parameters
     parser.add_argument("--src-region", default="aws:us-east-1", help="AWS region of source bucket")
+    parser.add_argument("--inter-region", default=None, help="AWS region of intermediate bucket")
     parser.add_argument("--dest-region", default="aws:us-west-1", help="AWS region of destination bucket")
     parser.add_argument("--num-gateways", default=1, type=int, help="Number of gateways to use")
     parser.add_argument("--num-outgoing-connections", default=16, type=int, help="Number of outgoing connections from a gateway")
@@ -72,7 +73,10 @@ def main(args):
         obj_keys = [f"{args.key_prefix}/{i}" for i in range(args.n_chunks)]
 
     # define the replication job and topology
-    topo = ReplicationTopology(paths=[[args.src_region, args.dest_region] for _ in range(args.num_gateways)])
+    if args.inter_region:
+        topo = ReplicationTopology(paths=[[args.src_region, args.inter_region, args.dest_region] for _ in range(args.num_gateways)])
+    else:
+        topo = ReplicationTopology(paths=[[args.src_region, args.dest_region] for _ in range(args.num_gateways)])
     logger.info("Creating replication client")
     rc = ReplicatorClient(
         topo,
@@ -92,7 +96,7 @@ def main(args):
         num_outgoing_connections=args.num_outgoing_connections,
     )
     for path in rc.bound_paths:
-        logger.info(f"Provisioned path {' -> '.join(path[i].region_tag for i in range(2))}")
+        logger.info(f"Provisioned path {' -> '.join(path[i].region_tag for i in range(len(path)))}")
         logger.debug(f"Source API: http://{path[0].public_ip()}:8080/api/v1, destination API: http://{path[-1].public_ip()}:8080/api/v1")
 
     # run replication, monitor progress
