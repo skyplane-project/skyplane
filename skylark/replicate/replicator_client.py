@@ -44,7 +44,7 @@ class ReplicatorClient:
         if self.gcp is not None:
             jobs.append(lambda: self.gcp.create_ssh_key())
             jobs.append(lambda: self.gcp.configure_default_network())
-            jobs.jobs.append(lambda: self.gcp.configure_default_firewall())
+            jobs.append(lambda: self.gcp.configure_default_firewall())
         with Timer(f"Cloud SSH key initialization"):
             do_parallel(lambda fn: fn(), jobs)
 

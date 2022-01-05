@@ -35,7 +35,15 @@ def parse_args():
     parser.add_argument("--copy-ssh-key", default=None, help="SSH public key to add to gateways")
     parser.add_argument("--log-dir", default=None, help="Directory to write instance SSH logs to")
     parser.add_argument("--gcp-use-premium-network", action="store_true", help="Use GCP premium network")
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    # add support for None arguments
+    if args.aws_instance_class == "None":
+        args.aws_instance_class = None
+    if args.gcp_instance_class == "None":
+        args.gcp_instance_class = None
+    
+    return args
 
 
 def main(args):

@@ -128,7 +128,7 @@ class Server:
                 return ping_return.returncode == 0
             return False
 
-        wait_for(is_up, timeout=timeout, interval=interval)
+        wait_for(is_up, timeout=timeout, interval=interval, progress_bar=True, desc=f"Waiting to boot {self.uuid()}")
 
     def close_server(self):
         if hasattr(self.ns, "client"):
