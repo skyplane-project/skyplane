@@ -1,5 +1,7 @@
 #!/bin/bash
 
+current_dir=$(pwd)
+
 # color output
 BGreen='\033[1;32m'
 NC='\033[0m' # No Color
@@ -21,3 +23,5 @@ sudo docker system prune -f
 
 export SKYLARK_DOCKER_IMAGE=$DOCKER_URL
 echo -e "${BGreen}SKYLARK_DOCKER_IMAGE=$SKYLARK_DOCKER_IMAGE${NC}"
+
+cd $current_dir
