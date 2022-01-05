@@ -106,6 +106,7 @@ def main(args):
         dest_region=args.dest_region,
         dest_bucket=dst_bucket,
         objs=obj_keys,
+        random_chunk_size_mb=args.chunk_size_mb,
     )
     total_bytes = args.n_chunks * args.chunk_size_mb * 1000 * 1000
     with Timer() as t:

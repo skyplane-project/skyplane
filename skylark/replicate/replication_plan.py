@@ -15,6 +15,9 @@ class ReplicationJob:
     dest_bucket: str
     objs: List[str]
 
+    # Generates random chunks for testing on the gateways
+    random_chunk_size_mb: Optional[int] = None
+
     def src_obj_sizes(self):
         if self.source_region.split(":")[0] == "aws":
             interface = S3Interface(self.source_region, self.source_bucket)
