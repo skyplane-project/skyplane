@@ -40,10 +40,10 @@ def parse_args():
 
 def main(args):
     src_bucket, dst_bucket = f"skylark-{args.src_region.split(':')[1]}", f"skylark-{args.dest_region.split(':')[1]}"
-    s3_interface_src = S3Interface(args.src_region.split(":")[1], src_bucket)
-    s3_interface_dst = S3Interface(args.dest_region.split(":")[1], dst_bucket)
-    s3_interface_src.create_bucket()
-    s3_interface_dst.create_bucket()
+    # s3_interface_src = S3Interface(args.src_region.split(":")[1], src_bucket)
+    # s3_interface_dst = S3Interface(args.dest_region.split(":")[1], dst_bucket)
+    # s3_interface_src.create_bucket()
+    # s3_interface_dst.create_bucket()
 
     if not args.skip_upload:
         # todo implement object store support

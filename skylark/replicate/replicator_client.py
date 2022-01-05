@@ -20,8 +20,8 @@ class ReplicatorClient:
         topology: ReplicationTopology,
         gcp_project: str,
         gateway_docker_image: str = "ghcr.io/parasj/skylark:latest",
-        aws_instance_class: str = "m5.4xlarge",
-        gcp_instance_class: str = "n2-standard-16",
+        aws_instance_class: Optional[str] = "m5.4xlarge",  # set to None to disable AWS
+        gcp_instance_class: Optional[str] = "n2-standard-16",  # set to None to disable GCP
         gcp_use_premium_network: bool = True,
     ):
         self.topology = topology
@@ -31,26 +31,31 @@ class ReplicatorClient:
         self.gcp_use_premium_network = gcp_use_premium_network
 
         # provisioning
-        self.aws = AWSCloudProvider()
-        self.gcp = GCPCloudProvider(gcp_project)
+        self.aws = AWSCloudProvider() if aws_instance_class is not None else None
+        self.gcp = GCPCloudProvider(gcp_project) if gcp_instance_class is not None else None
         self.init_clouds()
         self.bound_paths: Optional[List[List[Server]]] = None
 
     def init_clouds(self):
         """Initialize AWS and GCP clouds."""
-        jobs = [lambda: self.aws.add_ip_to_security_group(r) for r in self.aws.region_list()]
-        jobs += [lambda: self.gcp.create_ssh_key()]
-        jobs += [lambda: self.gcp.configure_default_network()]
-        jobs += [lambda: self.gcp.configure_default_firewall()]
+        jobs = []
+        if self.aws is not None:
+            jobs.extend([lambda: self.aws.add_ip_to_security_group(r) for r in self.aws.region_list()])
+        if self.gcp is not None:
+            jobs.append(lambda: self.gcp.create_ssh_key())
+            jobs.append(lambda: self.gcp.configure_default_network())
+            jobs.jobs.append(lambda: self.gcp.configure_default_firewall())
         with Timer(f"Cloud SSH key initialization"):
             do_parallel(lambda fn: fn(), jobs)
 
     def provision_gateway_instance(self, region: str) -> Server:
         provider, subregion = region.split(":")
         if provider == "aws":
+            assert self.aws is not None
             server = self.aws.provision_instance(subregion, self.aws_instance_class)
             logger.info(f"Provisioned AWS gateway {server.instance_id} in {server.region()} (ip = {server.public_ip()})")
         elif provider == "gcp":
+            assert self.gcp is not None
             # todo specify network tier in ReplicationTopology
             server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
             logger.info(f"Provisioned GCP gateway {server.instance_name()} in {server.region()} (ip = {server.public_ip()})")
@@ -69,40 +74,47 @@ class ReplicatorClient:
         authorize_ssh_pub_key: Optional[PathLike] = None,
         num_outgoing_connections=8,
     ):
-
         regions_to_provision = [r for path in self.topology.paths for r in path]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
         gcp_regions_to_provision = [r for r in regions_to_provision if r.startswith("gcp:")]
 
+        assert len(aws_regions_to_provision) == 0 or self.aws is not None, "AWS not enabled"
+        assert len(gcp_regions_to_provision) == 0 or self.gcp is not None, "GCP not enabled"
+
         # reuse existing AWS instances
         if reuse_instances:
-            aws_instance_filter = {
-                "tags": {"skylark": "true"},
-                "instance_type": self.aws_instance_class,
-                "state": [ServerState.PENDING, ServerState.RUNNING],
-            }
-            with Timer("Refresh AWS instances"):
-                current_aws_instances = refresh_instance_list(
-                    self.aws, set([r.split(":")[1] for r in aws_regions_to_provision]), aws_instance_filter
-                )
-            for r, ilist in current_aws_instances.items():
-                for i in ilist:
-                    if f"aws:{r}" in aws_regions_to_provision:
-                        aws_regions_to_provision.remove(f"aws:{r}")
+            if self.aws is not None:
+                aws_instance_filter = {
+                    "tags": {"skylark": "true"},
+                    "instance_type": self.aws_instance_class,
+                    "state": [ServerState.PENDING, ServerState.RUNNING],
+                }
+                with Timer("Refresh AWS instances"):
+                    current_aws_instances = refresh_instance_list(
+                        self.aws, set([r.split(":")[1] for r in aws_regions_to_provision]), aws_instance_filter
+                    )
+                for r, ilist in current_aws_instances.items():
+                    for i in ilist:
+                        if f"aws:{r}" in aws_regions_to_provision:
+                            aws_regions_to_provision.remove(f"aws:{r}")
+            else:
+                current_aws_instances = {}
 
-            # reuse existing GCP
-            gcp_instance_filter = {
-                "tags": {"skylark": "true"},
-                "instance_type": self.gcp_instance_class,
-                "state": [ServerState.PENDING, ServerState.RUNNING],
-            }
-            current_gcp_instances = refresh_instance_list(
-                self.gcp, set([r.split(":")[1] for r in gcp_regions_to_provision]), gcp_instance_filter
-            )
-            for r, ilist in current_gcp_instances.items():
-                for i in ilist:
-                    if f"gcp:{r}" in gcp_regions_to_provision:
-                        gcp_regions_to_provision.remove(f"gcp:{r}")
+            if self.gcp is not None:
+                gcp_instance_filter = {
+                    "tags": {"skylark": "true"},
+                    "instance_type": self.gcp_instance_class,
+                    "state": [ServerState.PENDING, ServerState.RUNNING],
+                }
+                current_gcp_instances = refresh_instance_list(
+                    self.gcp, set([r.split(":")[1] for r in gcp_regions_to_provision]), gcp_instance_filter
+                )
+                for r, ilist in current_gcp_instances.items():
+                    for i in ilist:
+                        if f"gcp:{r}" in gcp_regions_to_provision:
+                            gcp_regions_to_provision.remove(f"gcp:{r}")
+            else:
+                current_gcp_instances = {}
 
         with Timer("Provision gateways"):
             # provision instances
