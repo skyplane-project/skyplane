@@ -205,7 +205,7 @@ class ReplicatorClient:
                 cr_path = []
                 for hop_idx, hop_instance in enumerate(path):
                     if hop_idx == 0:  # source gateway
-                        location = "random_128MB"
+                        location = "random_16MB"
                     elif hop_idx == len(path) - 1:  # destination gateway
                         location = "save_local"
                     else:  # intermediate gateway
