@@ -14,6 +14,7 @@ To run a sample replication, first build a new version of the GatewayDaemon Dock
 <details>
 <summary>pack_docker result</summary>
 <br>
+
 ```
 Building docker image
 [+] Building 0.0s (2/2) FINISHED
@@ -37,6 +38,7 @@ u0e2ymhmv64oriiq66ibepn63
 Total reclaimed space: 0B
 SKYLARK_DOCKER_IMAGE=ghcr.io/parasj/skylark:local-PotRzrFT
 ```
+
 </details>
 
 By running with `.` (source), the script will export the new image (ghcr.io/parasj/skylark:local-PotRzrFT) to an environment variable (`SKYLARK_DOCKER_IMAGE`).
