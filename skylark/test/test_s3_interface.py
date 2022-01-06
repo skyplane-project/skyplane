@@ -3,7 +3,7 @@ import os
 import tempfile
 
 from skylark.obj_store.s3_interface import S3Interface
-from skylark.utils import Timer
+from skylark.utils.utils import Timer
 
 
 def test_s3_interface():

@@ -4,7 +4,7 @@ from typing import List, Optional
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.obj_store.s3_interface import S3Interface
-from skylark.utils import do_parallel
+from skylark.utils.utils import do_parallel
 
 
 @dataclass

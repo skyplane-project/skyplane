@@ -10,7 +10,7 @@ from pathlib import Path, PurePath
 from loguru import logger
 import requests
 
-from skylark.utils import PathLike, Timer, do_parallel, wait_for
+from skylark.utils.utils import PathLike, Timer, do_parallel, wait_for
 
 
 class ServerState(Enum):
@@ -62,6 +62,9 @@ class Server:
 
     def __repr__(self):
         return f"Server({self.uuid()})"
+
+    def __hash__(self):
+        return hash((self.region_tag, self.uuid()))
 
     def uuid(self):
         raise NotImplementedError()
@@ -124,11 +127,12 @@ class Server:
             except Exception as e:
                 return False
             if ip is not None:
-                ping_return = subprocess.run(["ping", "-c", "1", ip], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                cmd = ["nc", "-zvw1", str(ip), "22"]
+                ping_return = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 return ping_return.returncode == 0
             return False
 
-        wait_for(is_up, timeout=timeout, interval=interval, progress_bar=True, desc=f"Waiting to boot {self.uuid()}")
+        wait_for(is_up, timeout=timeout, interval=interval, progress_bar=True, desc=f"Wait for {self.uuid()} to be ready", leave_pbar=False)
 
     def close_server(self):
         if hasattr(self.ns, "client"):
@@ -230,9 +234,10 @@ class Server:
         cmd += "{ sudo docker stop $(docker ps -a -q); sudo docker kill $(sudo docker ps -a -q); sudo docker rm -f $(sudo docker ps -a -q); }; "
         cmd += f"sudo docker run --name dozzle -d --volume=/var/run/docker.sock:/var/run/docker.sock -p {log_viewer_port}:8080 amir20/dozzle:latest --filter name=skylark_gateway; "
         cmd += f"sudo docker run --name glances -d -p {glances_port}-{glances_port + 1}:{glances_port}-{glances_port + 1} -e GLANCES_OPT='-w' -v /var/run/docker.sock:/var/run/docker.sock:ro --pid host nicolargo/glances:latest-full; "
-        cmd += f"echo 'Success, Docker version = $(docker --version)'"
+        cmd += f"(docker --version && echo 'Success, Docker installed' || echo 'Failed to install Docker'); "
         out, err = self.run_command(cmd)
-        assert "Success, Docker version =" in out, f"Failed to install docker on {self.public_ip}: {out}, {err}"
+        docker_version = out.strip().split("\n")[-1]
+        assert docker_version.startswith("Success"), f"Failed to install Docker: {out}\n{err}"
 
         # launch gateway
         docker_out, docker_err = self.run_command(f"sudo docker pull {gateway_docker_image}")

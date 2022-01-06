@@ -1,5 +1,7 @@
 import os
-from functools import lru_cache
+import threading
+import cachetools
+import cachetools.func
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -10,48 +12,44 @@ from loguru import logger
 
 from skylark import key_root
 from skylark.compute.server import Server, ServerState
-from skylark.utils import Timer
+from skylark.utils.cache import ignore_lru_cache
 
 
 class AWSServer(Server):
     """AWS Server class to support basic SSH operations"""
+
+    ns = threading.local()
 
     def __init__(self, region_tag, instance_id, log_dir=None):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "aws"
         self.aws_region = self.region_tag.split(":")[1]
         self.instance_id = instance_id
+        self.boto3_session = boto3.Session(region_name=self.aws_region)
         self.local_keyfile = self.make_keyfile(self.aws_region)
 
     def uuid(self):
         return f"{self.region_tag}:{self.instance_id}"
 
     @classmethod
-    def get_boto3_session(cls, aws_region):
-        ns_key = f"boto3_session_{aws_region}"
-        if not hasattr(cls.ns, ns_key):
-            setattr(cls.ns, ns_key, boto3.Session(region_name=aws_region))
-        return getattr(cls.ns, ns_key)
+    def get_boto3_session(cls, aws_region) -> boto3.Session:
+        # cache in thead-local storage
+        key = f"{aws_region}_boto3_session"
+        if not hasattr(cls.ns, key):
+            setattr(cls.ns, key, boto3.Session(region_name=aws_region))
+        return getattr(cls.ns, key)
 
     @classmethod
     def get_boto3_resource(cls, service_name, aws_region):
-        """Get boto3 resource (cache in threadlocal)"""
-        ns_key = f"boto3_resource_{service_name}_{aws_region}"
-        if not hasattr(cls.ns, ns_key):
-            session = cls.get_boto3_session(aws_region)
-            resource = session.resource(service_name, region_name=aws_region)
-            setattr(cls.ns, ns_key, resource)
-        return getattr(cls.ns, ns_key)
+        return cls.get_boto3_session(aws_region).resource(service_name, region_name=aws_region)
 
     @classmethod
     def get_boto3_client(cls, service_name, aws_region):
-        """Get boto3 client (cache in threadlocal)"""
-        ns_key = f"boto3_client_{service_name}_{aws_region}"
-        if not hasattr(cls.ns, ns_key):
-            session = cls.get_boto3_session(aws_region)
-            client = session.client(service_name, region_name=aws_region)
-            setattr(cls.ns, ns_key, client)
-        return getattr(cls.ns, ns_key)
+        return cls.get_boto3_session(aws_region).client(service_name, region_name=aws_region)
+
+    def get_boto3_instance_resource(self):
+        ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
+        return ec2.Instance(self.instance_id)
 
     @staticmethod
     def make_keyfile(aws_region, prefix=key_root / "aws"):
@@ -73,32 +71,26 @@ class AWSServer(Server):
             os.chmod(local_key_file, 0o600)
         return local_key_file
 
-    @lru_cache(maxsize=1)
-    def get_boto3_instance_resource(self):
-        ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
-        return ec2.Instance(self.instance_id)
-
-    @lru_cache
+    @ignore_lru_cache()
     def public_ip(self) -> str:
         return self.get_boto3_instance_resource().public_ip_address
 
-    @lru_cache
+    @ignore_lru_cache()
     def instance_class(self) -> str:
         return self.get_boto3_instance_resource().instance_type
 
-    @lru_cache
+    @ignore_lru_cache(ignored_value={})
     def tags(self) -> Dict[str, str]:
         tags = self.get_boto3_instance_resource().tags
         return {tag["Key"]: tag["Value"] for tag in tags} if tags else {}
 
-    @lru_cache
+    @ignore_lru_cache()
     def instance_name(self) -> Optional[str]:
         return self.tags().get("Name", None)
 
     def network_tier(self):
         return "STANDARD"
 
-    @lru_cache(maxsize=1)
     def region(self):
         return self.aws_region
 
@@ -106,12 +98,7 @@ class AWSServer(Server):
         return ServerState.from_aws_state(self.get_boto3_instance_resource().state["Name"])
 
     def __repr__(self):
-        str_repr = f"AWSServer("
-        str_repr += f"{self.region_tag}, "
-        str_repr += f"{self.instance_id}, "
-        str_repr += f"{self.command_log_file}"
-        str_repr += f")"
-        return str_repr
+        return f"AWSServer(region_tag={self.region_tag}, instance_id={self.instance_id})"
 
     def terminate_instance_impl(self):
         ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)

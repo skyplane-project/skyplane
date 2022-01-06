@@ -8,7 +8,7 @@ from skylark import print_header
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
-from skylark.utils import Timer
+from skylark.utils.utils import Timer
 
 
 def parse_args():
@@ -42,7 +42,7 @@ def parse_args():
         args.aws_instance_class = None
     if args.gcp_instance_class == "None":
         args.gcp_instance_class = None
-    
+
     return args
 
 

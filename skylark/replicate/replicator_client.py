@@ -1,8 +1,9 @@
 import itertools
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import requests
 from loguru import logger
+from tqdm import tqdm
 
 from skylark.benchmark.utils import refresh_instance_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
@@ -11,7 +12,7 @@ from skylark.compute.server import Server, ServerState
 from skylark.gateway.chunk import Chunk, ChunkRequest, ChunkRequestHop
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
-from skylark.utils import PathLike, Timer, do_parallel, wait_for
+from skylark.utils.utils import PathLike, Timer, do_parallel, wait_for
 
 
 class ReplicatorClient:
@@ -209,27 +210,29 @@ class ReplicatorClient:
         assert len(chunk_batches) == n_src_instances, f"{len(chunk_batches)} batches, expected {n_src_instances}"
 
         # make list of ChunkRequests
-        chunk_requests_sharded = {}
-        for batch, path in zip(chunk_batches, self.bound_paths):
-            chunk_requests_sharded[path[0]] = []
-            for chunk in batch:
-                # make ChunkRequestHop list
-                cr_path = []
-                for hop_idx, hop_instance in enumerate(path):
-                    if hop_idx == 0:  # source gateway
-                        location = f"random_{job.random_chunk_size_mb}MB"
-                    elif hop_idx == len(path) - 1:  # destination gateway
-                        location = "save_local"
-                    else:  # intermediate gateway
-                        location = "relay"
-                    cr_path.append(
-                        ChunkRequestHop(
-                            hop_cloud_region=hop_instance.region_tag,
-                            hop_ip_address=hop_instance.public_ip(),
-                            chunk_location_type=location,
+        chunk_requests_sharded: Dict[Server, List[ChunkRequest]] = {}
+        with tqdm(total=len(chunks), desc="Solving chunk path") as pbar:
+            for batch, path in zip(chunk_batches, self.bound_paths):
+                chunk_requests_sharded[path[0]] = []
+                for chunk in batch:
+                    # make ChunkRequestHop list
+                    cr_path = []
+                    for hop_idx, hop_instance in enumerate(path):
+                        if hop_idx == 0:  # source gateway
+                            location = f"random_{job.random_chunk_size_mb}MB"
+                        elif hop_idx == len(path) - 1:  # destination gateway
+                            location = "save_local"
+                        else:  # intermediate gateway
+                            location = "relay"
+                        cr_path.append(
+                            ChunkRequestHop(
+                                hop_cloud_region=hop_instance.region_tag,
+                                hop_ip_address=hop_instance.public_ip(),
+                                chunk_location_type=location,
+                            )
                         )
-                    )
-                chunk_requests_sharded[path[0]].append(ChunkRequest(chunk, cr_path))
+                    chunk_requests_sharded[path[0]].append(ChunkRequest(chunk, cr_path))
+                    pbar.update()
 
         # send chunk requests to source gateway
         for instance, chunk_requests in chunk_requests_sharded.items():

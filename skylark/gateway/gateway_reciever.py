@@ -12,7 +12,7 @@ from loguru import logger
 
 from skylark.gateway.chunk import WireProtocolHeader
 from skylark.gateway.chunk_store import ChunkStore
-from skylark.utils import Timer
+from skylark.utils.utils import Timer
 
 
 class GatewayReceiver:
