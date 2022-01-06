@@ -332,28 +332,42 @@ class ReplicatorClient:
                 # args: Any arguments provided for the event. Some of the event types have required argument fields, otherwise, you can put any information you wish in here. The arguments are displayed in Trace Viewer when you view an event in the analysis section.
                 state = entry_in["state"]
                 entry = {
-                    "name": f"Chunk {chunk_id} = {state}",
-                    "tid": f"({entry_in['path_idx']}, {entry_in['hop_idx']})",
-                    "pid": chunk_id,
+                    "pid": f"({entry_in['path_idx']}, {entry_in['hop_idx']})",
                     "ts": (entry_in["time"] - min_time).total_seconds() * 1000000,
                 }
 
                 if state == ChunkState.download_in_progress:
+                    entry["tid"] = "DL"
+                    entry["name"] = f"Downloading chunk {chunk_id}"
                     entry["ph"] = "B"
                     entry["cat"] = "DOWNLOAD"
                 elif state == ChunkState.downloaded:
+                    entry["tid"] = "DL"
+                    entry["name"] = f"Downloading chunk {chunk_id}"
                     entry["ph"] = "E"
                     entry["cat"] = "DOWNLOAD"
                 elif state == ChunkState.upload_queued:
-                    entry["ph"] = "I"
-                    entry["cat"] = "UPLOAD_QUEUED"
+                    continue
+                    # entry["name"] = f"Queue chunk {chunk_id}"
+                    # entry["ph"] = "B"
+                    # entry["cat"] = "UPLOAD_QUEUED"
                 elif state == ChunkState.upload_in_progress:
+                    # entry["name"] = f"Queue chunk {chunk_id}"
+                    # entry["ph"] = "E"
+                    # entry["cat"] = "UPLOAD_QUEUED"
+                    # trace["traceEvents"].append(entry)
+                    entry["tid"] = "UL"
+                    entry["name"] = f"Uploading chunk {chunk_id}"
                     entry["ph"] = "B"
                     entry["cat"] = "UPLOAD"
                 elif state == ChunkState.upload_complete:
+                    entry["tid"] = "UL"
+                    entry["name"] = f"Uploading chunk {chunk_id}"
                     entry["ph"] = "E"
                     entry["cat"] = "UPLOAD"
                 elif state == ChunkState.failed:
+                    entry["tid"] = "UL"
+                    entry["name"] = f"Fail; chunk {chunk_id}"
                     entry["ph"] = "I"
                     entry["cat"] = "UPLOAD"
 
