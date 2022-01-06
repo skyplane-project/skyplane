@@ -9,6 +9,7 @@ from pathlib import Path, PurePath
 
 from loguru import logger
 import requests
+from tqdm import tqdm
 
 from skylark.utils.utils import PathLike, Timer, do_parallel, wait_for
 
@@ -227,28 +228,43 @@ class Server:
     def start_gateway(
         self, gateway_docker_image="ghcr.io/parasj/skylark:main", log_viewer_port=8888, glances_port=8889, num_outgoing_connections=8
     ):
-        self.wait_for_ready()
+        desc_prefix = f"Starting gateway {self.uuid()}"
+        with tqdm(desc=desc_prefix, leave=False) as pbar:
+            pbar.set_description(desc_prefix + ": Installing docker")
+            # install docker and launch monitoring
+            cmd = "(command -v docker >/dev/null 2>&1 || { rm -rf get-docker.sh; curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh; }); "
+            cmd += "{ sudo docker stop $(docker ps -a -q); sudo docker kill $(sudo docker ps -a -q); sudo docker rm -f $(sudo docker ps -a -q); }; "
+            cmd += f"(docker --version && echo 'Success, Docker installed' || echo 'Failed to install Docker'); "
+            out, err = self.run_command(cmd)
+            docker_version = out.strip().split("\n")[-1]
+            
+            if not docker_version.startswith("Success"):  # retry since docker install fails sometimes
+                logger.warning(f"{desc_prefix}: Docker install failed, retrying")
+                pbar.set_description(desc_prefix + ": Installing docker (retry)")
+                out, err = self.run_command(cmd)
+                docker_version = out.strip().split("\n")[-1]
+            assert docker_version.startswith("Success"), f"Failed to install Docker: {out}\n{err}"
 
-        # install docker and launch monitoring
-        cmd = "(command -v docker >/dev/null 2>&1 || { rm -rf get-docker.sh; curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh; }); "
-        cmd += "{ sudo docker stop $(docker ps -a -q); sudo docker kill $(sudo docker ps -a -q); sudo docker rm -f $(sudo docker ps -a -q); }; "
-        cmd += f"sudo docker run --name dozzle -d --volume=/var/run/docker.sock:/var/run/docker.sock -p {log_viewer_port}:8080 amir20/dozzle:latest --filter name=skylark_gateway; "
-        cmd += f"sudo docker run --name glances -d -p {glances_port}-{glances_port + 1}:{glances_port}-{glances_port + 1} -e GLANCES_OPT='-w' -v /var/run/docker.sock:/var/run/docker.sock:ro --pid host nicolargo/glances:latest-full; "
-        cmd += f"(docker --version && echo 'Success, Docker installed' || echo 'Failed to install Docker'); "
-        out, err = self.run_command(cmd)
-        docker_version = out.strip().split("\n")[-1]
-        assert docker_version.startswith("Success"), f"Failed to install Docker: {out}\n{err}"
+            # launch monitoring
+            pbar.set_description(desc_prefix + ": Starting monitoring")
+            monitor_cmd = f"sudo docker run --name dozzle -d --volume=/var/run/docker.sock:/var/run/docker.sock -p {log_viewer_port}:8080 amir20/dozzle:latest --filter name=skylark_gateway"
+            monitor_cmd += f" && sudo docker run --name glances -d -p {glances_port}-{glances_port + 1}:{glances_port}-{glances_port + 1} -e GLANCES_OPT='-w' -v /var/run/docker.sock:/var/run/docker.sock:ro --pid host nicolargo/glances:latest-full"
+            monitor_cmd += f" && echo 'Success, monitoring started' || echo 'Failed to start monitoring'"
+            out, err = self.run_command(monitor_cmd)
+            assert out.strip().split("\n")[-1].startswith("Success"), f"Failed to start monitoring: {out}\n{err}"
 
-        # launch gateway
-        docker_out, docker_err = self.run_command(f"sudo docker pull {gateway_docker_image}")
-        assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
+            # launch gateway
+            pbar.set_description(desc_prefix + ": Pulling docker image")
+            docker_out, docker_err = self.run_command(f"sudo docker rm -f $(sudo docker ps -a -q) && sudo docker pull {gateway_docker_image}")
+            assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
 
-        # todo add other launch flags for gateway daemon
-        docker_run_flags = "-d --log-driver=local --ipc=host --network=host"
-        gateway_daemon_cmd = f"/env/bin/python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections {num_outgoing_connections}"
-        docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
-        start_out, start_err = self.run_command(docker_launch_cmd)
-        assert not start_err, f"Error starting gateway: {start_err}"
+            # todo add other launch flags for gateway daemon
+            pbar.set_description(desc_prefix + f": Starting gateway container {gateway_docker_image}")
+            docker_run_flags = "-d --log-driver=local --ipc=host --network=host"
+            gateway_daemon_cmd = f"/env/bin/python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections {num_outgoing_connections}"
+            docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
+            start_out, start_err = self.run_command(docker_launch_cmd)
+            assert not start_err, f"Error starting gateway: {start_err}"
 
         # wait for gateways to start (check status API)
         def is_ready():
@@ -261,7 +277,7 @@ class Server:
                 return False
 
         try:
-            wait_for(is_ready, timeout=10, interval=0.1)
+            wait_for(is_ready, timeout=10, interval=0.1, desc=f"Waiting for gateway {self.uuid()} to start", leave_pbar=False)
         except Exception as e:
             logger.error(f"Gateway {self.instance_name()} is not ready")
             logs, err = self.run_command(f"sudo docker logs skylark_gateway --tail=100")

@@ -23,6 +23,7 @@ class GatewayDaemonAPI(threading.Thread):
     * GET /api/v1/chunk_requests/<int:chunk_id> - returns chunk request
     * POST /api/v1/chunk_requests - adds a new chunk request
     * PUT /api/v1/chunk_requests/<int:chunk_id> - updates chunk request
+    * GET /api/v1/chunk_status_log - returns list of chunk status log entries
     """
 
     def __init__(self, chunk_store: ChunkStore, gateway_receiver: GatewayReceiver, host="0.0.0.0", port=8080, debug=False, log_dir=None):
@@ -175,3 +176,12 @@ class GatewayDaemonAPI(threading.Thread):
                     return jsonify({"status": "ok"})
                 else:
                     return jsonify({"error": "update not supported"}), 400
+
+        # list chunk status log
+        @self.app.route("/api/v1/chunk_status_log", methods=["GET"])
+        def get_chunk_status_log():
+            log = self.chunk_store.get_chunk_status_log()
+            for entry in log:
+                entry["time"] = entry["time"].isoformat()
+                entry["state"] = entry["state"].name
+            return jsonify({"chunk_status_log": log})
