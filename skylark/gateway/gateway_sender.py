@@ -93,6 +93,7 @@ class GatewaySender:
             for idx, chunk_id in enumerate(chunk_ids):
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 1)  # disable Nagle's algorithm
                 logger.warning(f"[sender -> {dst_port}] Sending chunk {chunk_id} to {dst_host}:{dst_port}")
+                self.chunk_store.state_start_upload(chunk_id)
                 chunk = self.chunk_store.get_chunk_request(chunk_id).chunk
 
                 # send chunk header

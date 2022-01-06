@@ -38,7 +38,7 @@ class ChunkStore:
 
     def set_chunk_state(self, chunk_id: int, new_status: ChunkState):
         self.chunk_status[chunk_id] = new_status
-        self.chunk_status_log.append({"chunk_id": chunk_id, "state": new_status, "time": datetime.now()})
+        self.chunk_status_log.append({"chunk_id": chunk_id, "state": new_status, "time": datetime.utcnow()})
     
     def get_chunk_status_log(self) -> List[Dict]:
         return list(self.chunk_status_log)
@@ -58,9 +58,16 @@ class ChunkStore:
         else:
             raise ValueError(f"Invalid transition finish_download from {self.get_chunk_state(chunk_id)}")
 
+    def state_queue_upload(self, chunk_id: int):
+        state = self.get_chunk_state(chunk_id)
+        if state in [ChunkState.downloaded, ChunkState.upload_queued]:
+            self.set_chunk_state(chunk_id, ChunkState.upload_queued)
+        else:
+            raise ValueError(f"Invalid transition upload_queued from {self.get_chunk_state(chunk_id)}")
+
     def state_start_upload(self, chunk_id: int):
         state = self.get_chunk_state(chunk_id)
-        if state in [ChunkState.downloaded, ChunkState.upload_in_progress]:
+        if state in [ChunkState.upload_queued, ChunkState.upload_in_progress]:
             self.set_chunk_state(chunk_id, ChunkState.upload_in_progress)
         else:
             raise ValueError(f"Invalid transition start_upload from {self.get_chunk_state(chunk_id)}")

@@ -1,4 +1,8 @@
+from datetime import datetime
 import itertools
+import json
+from logging import log
+import time
 from typing import Dict, List, Optional
 
 import requests
@@ -9,7 +13,7 @@ from skylark.benchmark.utils import refresh_instance_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server, ServerState
-from skylark.gateway.chunk import Chunk, ChunkRequest, ChunkRequestHop
+from skylark.gateway.chunk import Chunk, ChunkRequest, ChunkRequestHop, ChunkState
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.utils.utils import PathLike, Timer, do_parallel, wait_for
@@ -34,11 +38,9 @@ class ReplicatorClient:
         # provisioning
         self.aws = AWSCloudProvider() if aws_instance_class is not None else None
         self.gcp = GCPCloudProvider(gcp_project) if gcp_instance_class is not None else None
-        self.init_clouds()
         self.bound_paths: Optional[List[List[Server]]] = None
 
-    def init_clouds(self):
-        """Initialize AWS and GCP clouds."""
+        # init clouds
         jobs = []
         if self.aws is not None:
             jobs.extend([lambda: self.aws.add_ip_to_security_group(r) for r in self.aws.region_list()])
@@ -49,22 +51,6 @@ class ReplicatorClient:
         with Timer(f"Cloud SSH key initialization"):
             do_parallel(lambda fn: fn(), jobs)
 
-    def provision_gateway_instance(self, region: str) -> Server:
-        provider, subregion = region.split(":")
-        if provider == "aws":
-            assert self.aws is not None
-            server = self.aws.provision_instance(subregion, self.aws_instance_class)
-        elif provider == "gcp":
-            assert self.gcp is not None
-            # todo specify network tier in ReplicationTopology
-            server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
-        else:
-            raise NotImplementedError(f"Unknown provider {provider}")
-        return server
-
-    def deprovision_gateway_instance(self, server: Server):
-        logger.warning(f"Deprovisioning gateway {server.instance_name()}")
-        server.terminate_instance()
 
     def provision_gateways(
         self,
@@ -117,8 +103,21 @@ class ReplicatorClient:
 
         with Timer("Provision gateways"):
             # provision instances
+            def provision_gateway_instance(region: str) -> Server:
+                provider, subregion = region.split(":")
+                if provider == "aws":
+                    assert self.aws is not None
+                    server = self.aws.provision_instance(subregion, self.aws_instance_class)
+                elif provider == "gcp":
+                    assert self.gcp is not None
+                    # todo specify network tier in ReplicationTopology
+                    server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
+                else:
+                    raise NotImplementedError(f"Unknown provider {provider}")
+                return server
+            
             results = do_parallel(
-                self.provision_gateway_instance,
+                provision_gateway_instance,
                 list(aws_regions_to_provision + gcp_regions_to_provision),
                 progress_bar=True,
                 desc="Provisioning gateways",
@@ -165,8 +164,11 @@ class ReplicatorClient:
             )
 
     def deprovision_gateways(self):
+        def deprovision_gateway_instance(server: Server):
+            logger.warning(f"Deprovisioning gateway {server.instance_name()}")
+            server.terminate_instance()
         instances = [instance for path in self.bound_paths for instance in path]
-        do_parallel(self.deprovision_gateway_instance, instances, n=len(instances))
+        do_parallel(deprovision_gateway_instance, instances, n=len(instances))
 
     def run_replication_plan(self, job: ReplicationJob):
         # assert all(len(path) == 2 for path in self.bound_paths), f"Only two-hop replication is supported"
@@ -209,7 +211,7 @@ class ReplicatorClient:
 
         # make list of ChunkRequests
         chunk_requests_sharded: Dict[Server, List[ChunkRequest]] = {}
-        with tqdm(total=len(chunks), desc="Solving chunk path") as pbar:
+        with tqdm(total=len(chunks), desc="Building chunk requests") as pbar:
             for batch, path in zip(chunk_batches, self.bound_paths):
                 chunk_requests_sharded[path[0]] = []
                 for chunk in batch:
@@ -238,3 +240,121 @@ class ReplicatorClient:
             reply = requests.post(f"http://{instance.public_ip()}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests])
             if reply.status_code != 200:
                 raise Exception(f"Failed to send chunk requests to gateway instance {instance.instance_name()}: {reply.text}")
+        
+        return [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
+
+    def get_chunk_status(self, crs: List[ChunkRequest]):
+        chunk_logs = {}
+
+        # add entry for each chunk
+        for cr in crs:
+            chunk_logs[cr.chunk.chunk_id] = []
+
+        # load status
+        for path_idx, path in enumerate(self.bound_paths):
+            for hop_idx, hop_instance in enumerate(path):
+                reply = requests.get(f"http://{hop_instance.public_ip()}:8080/api/v1/chunk_status_log")
+                if reply.status_code != 200:
+                    raise Exception(f"Failed to get chunk status from gateway instance {hop_instance.instance_name()}: {reply.text}")
+                for log_entry in reply.json()["chunk_status_log"]:
+                    log_entry["hop_cloud_region"] = hop_instance.region_tag
+                    log_entry["path_idx"] = path_idx
+                    log_entry["hop_idx"] = hop_idx
+                    log_entry["time"] = datetime.fromisoformat(log_entry["time"])
+                    log_entry["state"] = ChunkState.from_str(log_entry["state"])
+                    chunk_logs[log_entry["chunk_id"]].append(log_entry)
+        
+        return chunk_logs
+    
+    def monitor_transfer(self, crs: List[ChunkRequest]):
+        total_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs])
+        with tqdm(total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=1000) as pbar:
+            while True:
+                # get chunk status
+                # todo fix this disgusting code
+                chunk_last_position = {}
+                chunk_last_status = {}
+                for chunk_id, chunk_log in self.get_chunk_status(crs).items():
+                    last_entry_idx = -1
+                    for entry_idx, entry in enumerate(chunk_log):
+                        if entry["state"] != ChunkState.registered:
+                            if last_entry_idx == -1 or entry["hop_idx"] >= chunk_log[last_entry_idx]["hop_idx"]:
+                                if last_entry_idx == -1 or entry["path_idx"] >= chunk_log[last_entry_idx]["path_idx"]:
+                                    if last_entry_idx == -1 or entry["time"] > chunk_log[last_entry_idx]["time"]:
+                                        last_entry_idx = entry_idx
+                                        chunk_last_position[chunk_id] = (entry["path_idx"], entry["hop_idx"])
+                                        chunk_last_status[chunk_id] = entry["state"]
+
+                # print info on chunk 0
+                # tqdm.write(f"Chunk 0: last position: {chunk_last_position[0]}, last status: {chunk_last_status[0]}")
+
+                # count completed chunks
+                completed_chunks = 0
+                completed_bytes = 0
+                for chunk_id in chunk_last_status.keys():
+                    last_path_idx, last_hop_idx = chunk_last_position[chunk_id]
+                    last_status = chunk_last_status[chunk_id]
+                    if last_status == ChunkState.downloaded and last_path_idx == len(self.bound_paths) - 1 and last_hop_idx == len(self.bound_paths[last_path_idx]) - 1:
+                        completed_chunks += 1
+                        completed_bytes += crs[chunk_id].chunk.chunk_length_bytes
+                
+                # update progress bar
+                pbar.update(completed_bytes * 8 - pbar.n)
+
+                if completed_chunks == len(crs):
+                    break
+                else:
+                    tqdm.write(f"remaining chunks: {len(crs) - completed_chunks}")
+
+                
+                time.sleep(0.5)
+    
+    def write_chrome_trace(self, crs: List[ChunkRequest], out_file: str):
+        trace = {"traceEvents": []}
+
+        chunk_logs = self.get_chunk_status(crs)
+        min_time = min([min(entry["time"] for entry in chunk_log) for chunk_log in chunk_logs.values()])
+
+        for chunk_id, chunk_log in chunk_logs.items():
+            for entry_in in chunk_log:
+                # entry example
+                # {"name": "Asub", "cat": "PERF", "ph": "B", "pid": 22630, "tid": 22630, "ts": 829}
+                # name: The name of the event, as displayed in Trace Viewer
+                # cat: The event categories. This is a comma separated list of categories for the event. The categories can be used to hide events in the Trace Viewer UI.
+                # ph: The event type. This is a single character which changes depending on the type of event being output. The valid values are listed in the table below. We will discuss each phase type below. B = Begin, E = End
+                # ts: The tracing clock timestamp of the event. The timestamps are provided at microsecond granularity.
+                # tts: Optional. The thread clock timestamp of the event. The timestamps are provided at microsecond granularity.
+                # pid: The process ID for the process that output this event.
+                # tid: The thread ID for the thread that output this event.
+                # args: Any arguments provided for the event. Some of the event types have required argument fields, otherwise, you can put any information you wish in here. The arguments are displayed in Trace Viewer when you view an event in the analysis section.
+                state = entry_in["state"]
+                entry = {
+                    "name": f"Chunk {chunk_id} = {state}",
+                    "tid": f"({entry_in['path_idx']}, {entry_in['hop_idx']})",
+                    "pid": chunk_id,
+                    "ts": (entry_in["time"] - min_time).total_seconds() * 1000000,
+                }
+
+                if state == ChunkState.download_in_progress:
+                    entry["ph"] = "B"
+                    entry["cat"] = "DOWNLOAD"
+                elif state == ChunkState.downloaded:
+                    entry["ph"] = "E"
+                    entry["cat"] = "DOWNLOAD"
+                elif state == ChunkState.upload_queued:
+                    entry["ph"] = "I"
+                    entry["cat"] = "UPLOAD_QUEUED"
+                elif state == ChunkState.upload_in_progress:
+                    entry["ph"] = "B"
+                    entry["cat"] = "UPLOAD"
+                elif state == ChunkState.upload_complete:
+                    entry["ph"] = "E"
+                    entry["cat"] = "UPLOAD"
+                elif state == ChunkState.failed:
+                    entry["ph"] = "I"
+                    entry["cat"] = "UPLOAD"
+
+                trace["traceEvents"].append(entry)
+        
+        with open(out_file, "w") as f:
+            json.dump(trace, f)

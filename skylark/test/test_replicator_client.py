@@ -1,14 +1,13 @@
 import argparse
-import time
+import atexit
 
 from loguru import logger
-from tqdm import tqdm
 from skylark import print_header
 
-from skylark.obj_store.s3_interface import S3Interface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
 from skylark.utils.utils import Timer
+from skylark import skylark_root
 
 
 def parse_args():
@@ -117,25 +116,25 @@ def main(args):
         objs=obj_keys,
         random_chunk_size_mb=args.chunk_size_mb,
     )
+
+
     total_bytes = args.n_chunks * args.chunk_size_mb * 1000 * 1000
     with Timer() as t:
-        with tqdm(total=total_bytes * 8, unit="bit", unit_scale=True, unit_divisor=1000, desc="Replication progress") as pbar:
-            rc.run_replication_plan(job)
-            logger.info(f"{total_bytes / 1e9:.2}fGByte replication job launched")
+        crs = rc.run_replication_plan(job)
+        logger.info(f"{total_bytes / 1e9:.2f}GByte replication job launched")
 
-            # monitor the replication job until it is complete
-            while True:
-                total_copied_bytes = 0
-                for gw in rc.bound_paths:
-                    total_copied_bytes += int(gw[-1].run_command(f"du -bs /dev/shm/skylark/chunks")[0].split()[0])
-                pbar.update(total_copied_bytes * 8 - pbar.n)
-                if total_copied_bytes >= total_bytes:
-                    break
-                time.sleep(0.25)
-    logger.info(f"Copied {total_copied_bytes} of {total_bytes} bytes in {t.elapsed} seconds")
-    # # deprovision the gateway instances
-    # logger.info("Deprovisioning gateway instances")
-    # rc.deprovision_gateways()
+        # signal handler
+        def handler():
+            log_dir = skylark_root / "data" / "logs" / "test_replicator_client"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            rc.write_chrome_trace(crs, str(log_dir / "trace.json"))
+            logger.info(f"Wrote trace to {log_dir / 'trace.json'}")
+        
+        atexit.register(handler)
+
+        # monitor the replication job until it is complete
+        rc.monitor_transfer(crs)
+    logger.info(f"Copied {total_bytes} bytes in {t.elapsed} seconds, effective bandwidth {total_bytes * 8 / t.elapsed / 1e9:.2f} Gbit/s")
 
 
 if __name__ == "__main__":
