@@ -98,6 +98,7 @@ class ReplicatorClient:
                     for i in ilist:
                         if f"aws:{r}" in aws_regions_to_provision:
                             aws_regions_to_provision.remove(f"aws:{r}")
+                            logger.debug(f"Found existing instance {i}")
             else:
                 current_aws_instances = {}
 
@@ -119,6 +120,7 @@ class ReplicatorClient:
 
         with Timer("Provision gateways"):
             # provision instances
+            logger.debug(f"Provisioning instances in regions: {list(aws_regions_to_provision + gcp_regions_to_provision)}")
             results = do_parallel(
                 self.provision_gateway_instance,
                 list(aws_regions_to_provision + gcp_regions_to_provision),

@@ -84,9 +84,15 @@ class AWSCloudProvider(CloudProvider):
         matches_ports = lambda rule: ("FromPort" not in rule and "ToPort" not in rule) or (
             rule["FromPort"] <= from_port and rule["ToPort"] >= to_port
         )
-        if not any(rule["IpProtocol"] == "-1" and matches_ip(rule) and matches_ports(rule) for rule in sg.ip_permissions):
-            sg.authorize_ingress(IpProtocol="-1", FromPort=from_port, ToPort=to_port, CidrIp=ip)
-            logger.info(f"({aws_region}) Added IP {ip} to security group {security_group_id}")
+        try:
+            if not any(rule["IpProtocol"] == "-1" and matches_ip(rule) and matches_ports(rule) for rule in sg.ip_permissions):
+                sg.authorize_ingress(IpProtocol="-1", FromPort=from_port, ToPort=to_port, CidrIp=ip)
+                logger.info(f"({aws_region}) Added IP {ip} to security group {security_group_id}")
+        except botocore.exceptions.ClientError as e:
+            if str(e).endswith('already exists'):
+                logger.warning(f"Error adding IPs to security group, {e}")
+            else:
+                raise e
 
     @lru_cache()
     def get_ubuntu_ami_id(self, region: str, store="hvm:ebs-ssd") -> str:
@@ -115,6 +121,8 @@ class AWSCloudProvider(CloudProvider):
             ami_id = self.get_ubuntu_ami_id(region)
         ec2 = AWSServer.get_boto3_resource("ec2", region)
         AWSServer.make_keyfile(region)
+
+        logger.debug(f"[{region}] Provisioning instance w/ ami {ami_id}, instance class {instance_class}")
         # set instance storage to 128GB EBS
         instance = ec2.create_instances(
             ImageId=ami_id,
@@ -140,5 +148,6 @@ class AWSCloudProvider(CloudProvider):
             ],
         )
         server = AWSServer(f"aws:{region}", instance[0].id)
+        logger.debug(f"[{region}] Started server {server}")
         server.wait_for_ready()
         return server
