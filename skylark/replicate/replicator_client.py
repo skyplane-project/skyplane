@@ -51,7 +51,6 @@ class ReplicatorClient:
         with Timer(f"Cloud SSH key initialization"):
             do_parallel(lambda fn: fn(), jobs)
 
-
     def provision_gateways(
         self,
         reuse_instances=False,
@@ -115,7 +114,7 @@ class ReplicatorClient:
                 else:
                     raise NotImplementedError(f"Unknown provider {provider}")
                 return server
-            
+
             results = do_parallel(
                 provision_gateway_instance,
                 list(aws_regions_to_provision + gcp_regions_to_provision),
@@ -167,6 +166,7 @@ class ReplicatorClient:
         def deprovision_gateway_instance(server: Server):
             logger.warning(f"Deprovisioning gateway {server.instance_name()}")
             server.terminate_instance()
+
         instances = [instance for path in self.bound_paths for instance in path]
         do_parallel(deprovision_gateway_instance, instances, n=len(instances))
 
@@ -240,7 +240,7 @@ class ReplicatorClient:
             reply = requests.post(f"http://{instance.public_ip()}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests])
             if reply.status_code != 200:
                 raise Exception(f"Failed to send chunk requests to gateway instance {instance.instance_name()}: {reply.text}")
-        
+
         return [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
 
     def get_chunk_status(self, crs: List[ChunkRequest]):
@@ -263,9 +263,9 @@ class ReplicatorClient:
                     log_entry["time"] = datetime.fromisoformat(log_entry["time"])
                     log_entry["state"] = ChunkState.from_str(log_entry["state"])
                     chunk_logs[log_entry["chunk_id"]].append(log_entry)
-        
+
         return chunk_logs
-    
+
     def monitor_transfer(self, crs: List[ChunkRequest]):
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs])
         with tqdm(total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=1000) as pbar:
@@ -294,10 +294,14 @@ class ReplicatorClient:
                 for chunk_id in chunk_last_status.keys():
                     last_path_idx, last_hop_idx = chunk_last_position[chunk_id]
                     last_status = chunk_last_status[chunk_id]
-                    if last_status == ChunkState.downloaded and last_path_idx == len(self.bound_paths) - 1 and last_hop_idx == len(self.bound_paths[last_path_idx]) - 1:
+                    if (
+                        last_status == ChunkState.downloaded
+                        and last_path_idx == len(self.bound_paths) - 1
+                        and last_hop_idx == len(self.bound_paths[last_path_idx]) - 1
+                    ):
                         completed_chunks += 1
                         completed_bytes += crs[chunk_id].chunk.chunk_length_bytes
-                
+
                 # update progress bar
                 pbar.update(completed_bytes * 8 - pbar.n)
 
@@ -306,9 +310,8 @@ class ReplicatorClient:
                 else:
                     tqdm.write(f"remaining chunks: {len(crs) - completed_chunks}")
 
-                
                 time.sleep(0.5)
-    
+
     def write_chrome_trace(self, crs: List[ChunkRequest], out_file: str):
         trace = {"traceEvents": []}
 
@@ -355,6 +358,6 @@ class ReplicatorClient:
                     entry["cat"] = "UPLOAD"
 
                 trace["traceEvents"].append(entry)
-        
+
         with open(out_file, "w") as f:
             json.dump(trace, f)

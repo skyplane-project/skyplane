@@ -39,7 +39,7 @@ class ChunkStore:
     def set_chunk_state(self, chunk_id: int, new_status: ChunkState):
         self.chunk_status[chunk_id] = new_status
         self.chunk_status_log.append({"chunk_id": chunk_id, "state": new_status, "time": datetime.utcnow()})
-    
+
     def get_chunk_status_log(self) -> List[Dict]:
         return list(self.chunk_status_log)
 

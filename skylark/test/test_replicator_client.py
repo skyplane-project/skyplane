@@ -117,7 +117,6 @@ def main(args):
         random_chunk_size_mb=args.chunk_size_mb,
     )
 
-
     total_bytes = args.n_chunks * args.chunk_size_mb * 1000 * 1000
     with Timer() as t:
         crs = rc.run_replication_plan(job)
@@ -129,7 +128,7 @@ def main(args):
             log_dir.mkdir(parents=True, exist_ok=True)
             rc.write_chrome_trace(crs, str(log_dir / "trace.json"))
             logger.info(f"Wrote trace to {log_dir / 'trace.json'}")
-        
+
         atexit.register(handler)
 
         # monitor the replication job until it is complete

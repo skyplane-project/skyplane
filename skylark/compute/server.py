@@ -237,7 +237,7 @@ class Server:
             cmd += f"(docker --version && echo 'Success, Docker installed' || echo 'Failed to install Docker'); "
             out, err = self.run_command(cmd)
             docker_version = out.strip().split("\n")[-1]
-            
+
             if not docker_version.startswith("Success"):  # retry since docker install fails sometimes
                 logger.warning(f"{desc_prefix}: Docker install failed, retrying")
                 pbar.set_description(desc_prefix + ": Installing docker (retry)")
@@ -255,7 +255,9 @@ class Server:
 
             # launch gateway
             pbar.set_description(desc_prefix + ": Pulling docker image")
-            docker_out, docker_err = self.run_command(f"sudo docker rm -f $(sudo docker ps -a -q) && sudo docker pull {gateway_docker_image}")
+            docker_out, docker_err = self.run_command(
+                f"sudo docker rm -f $(sudo docker ps -a -q) && sudo docker pull {gateway_docker_image}"
+            )
             assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
 
             # todo add other launch flags for gateway daemon
