@@ -8,7 +8,7 @@ from skylark import print_header
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
-from skylark.utils import Timer
+from skylark.utils.utils import Timer
 
 
 def parse_args():
@@ -35,15 +35,23 @@ def parse_args():
     parser.add_argument("--copy-ssh-key", default=None, help="SSH public key to add to gateways")
     parser.add_argument("--log-dir", default=None, help="Directory to write instance SSH logs to")
     parser.add_argument("--gcp-use-premium-network", action="store_true", help="Use GCP premium network")
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    # add support for None arguments
+    if args.aws_instance_class == "None":
+        args.aws_instance_class = None
+    if args.gcp_instance_class == "None":
+        args.gcp_instance_class = None
+
+    return args
 
 
 def main(args):
     src_bucket, dst_bucket = f"skylark-{args.src_region.split(':')[1]}", f"skylark-{args.dest_region.split(':')[1]}"
-    s3_interface_src = S3Interface(args.src_region.split(":")[1], src_bucket)
-    s3_interface_dst = S3Interface(args.dest_region.split(":")[1], dst_bucket)
-    s3_interface_src.create_bucket()
-    s3_interface_dst.create_bucket()
+    # s3_interface_src = S3Interface(args.src_region.split(":")[1], src_bucket)
+    # s3_interface_dst = S3Interface(args.dest_region.split(":")[1], dst_bucket)
+    # s3_interface_src.create_bucket()
+    # s3_interface_dst.create_bucket()
 
     if not args.skip_upload:
         # todo implement object store support
@@ -97,7 +105,8 @@ def main(args):
     )
     for path in rc.bound_paths:
         logger.info(f"Provisioned path {' -> '.join(path[i].region_tag for i in range(len(path)))}")
-        logger.debug(f"Source API: http://{path[0].public_ip()}:8080/api/v1, destination API: http://{path[-1].public_ip()}:8080/api/v1")
+        for gw in path:
+            logger.info(f"\t[{gw.region_tag}] http://{gw.public_ip()}:8080/api/v1")
 
     # run replication, monitor progress
     job = ReplicationJob(
@@ -106,6 +115,7 @@ def main(args):
         dest_region=args.dest_region,
         dest_bucket=dst_bucket,
         objs=obj_keys,
+        random_chunk_size_mb=args.chunk_size_mb,
     )
     total_bytes = args.n_chunks * args.chunk_size_mb * 1000 * 1000
     with Timer() as t:

@@ -9,6 +9,7 @@ setup(
     install_requires=[
         "awscrt",
         "boto3",
+        "cachetools",
         "click",
         "cvxopt",
         "cvxpy",

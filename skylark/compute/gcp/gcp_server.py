@@ -7,7 +7,7 @@ import paramiko
 
 from skylark import key_root
 from skylark.compute.server import Server, ServerState
-from skylark.utils import PathLike
+from skylark.utils.utils import PathLike
 
 
 class GCPServer(Server):
@@ -33,7 +33,7 @@ class GCPServer(Server):
             self.ssh_private_key = ssh_private_key
 
     def uuid(self):
-        return f"{self.region_tag}:{self.gcp_instance_name}"
+        return f"{self.gcp_project}:{self.region_tag}:{self.gcp_instance_name}"
 
     @classmethod
     def get_gcp_client(cls, service_name="compute", version="v1"):
@@ -84,13 +84,7 @@ class GCPServer(Server):
         return interface["accessConfigs"][0]["networkTier"]
 
     def __repr__(self):
-        str_repr = "GCPServer("
-        str_repr += f"{self.region_tag}, "
-        str_repr += f"{self.gcp_project}, "
-        str_repr += f"{self.gcp_instance_name}, "
-        str_repr += f"{self.command_log_file}"
-        str_repr += ")"
-        return str_repr
+        return f"GCPServer(region_tag={self.region_tag}, gcp_project={self.gcp_project}, instance_name={self.gcp_instance_name})"
 
     def terminate_instance_impl(self):
         compute = self.get_gcp_client()

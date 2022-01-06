@@ -15,7 +15,7 @@ from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.gcp.gcp_server import GCPServer
 from skylark.compute.server import Server
-from skylark.utils import do_parallel
+from skylark.utils.utils import do_parallel
 
 # traceroute parser from https://github.com/ckreibich/tracerouteparser.py
 from skylark.benchmark.network.tracerouteparser import TracerouteParser

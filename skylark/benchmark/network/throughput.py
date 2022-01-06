@@ -12,7 +12,7 @@ from skylark.benchmark.utils import provision, split_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server
-from skylark.utils import do_parallel
+from skylark.utils.utils import do_parallel
 
 
 def parse_args():
