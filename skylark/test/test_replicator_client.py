@@ -105,7 +105,8 @@ def main(args):
     )
     for path in rc.bound_paths:
         logger.info(f"Provisioned path {' -> '.join(path[i].region_tag for i in range(len(path)))}")
-        logger.debug(f"Source API: http://{path[0].public_ip()}:8080/api/v1, destination API: http://{path[-1].public_ip()}:8080/api/v1")
+        for gw in path:
+            logger.info(f"\t[{gw.region_tag}] http://{gw.public_ip()}:8080/api/v1")
 
     # run replication, monitor progress
     job = ReplicationJob(
