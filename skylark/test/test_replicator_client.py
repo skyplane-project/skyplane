@@ -98,7 +98,7 @@ def main(args):
     # provision the gateway instances
     logger.info("Provisioning gateway instances")
     rc.provision_gateways(
-        # reuse_instances=True,
+        reuse_instances=True,
         log_dir=args.log_dir,
         authorize_ssh_pub_key=args.copy_ssh_key,
         num_outgoing_connections=args.num_outgoing_connections,
