@@ -6,6 +6,7 @@ from pathlib import Path
 import setproctitle
 from flask import Flask, jsonify, request
 from werkzeug.serving import make_server
+from werkzeug import serving
 from skylark import MB
 
 from skylark.gateway.chunk import ChunkRequest, ChunkState
@@ -44,14 +45,24 @@ class GatewayDaemonAPI(threading.Thread):
             log_dir = Path(log_dir)
             handler = logging.handlers.RotatingFileHandler(log_dir / "gateway_daemon_api.log", maxBytes=1 * MB)
             logging.getLogger("werkzeug").addHandler(handler)
-            if debug:
-                logging.getLogger("werkzeug").addHandler(logging.StreamHandler())
-                logging.getLogger("werkzeug").setLevel(logging.DEBUG)
-            else:
-                logging.getLogger("werkzeug").setLevel(logging.INFO)
         if debug:
             self.app.config["JSONIFY_PRETTYPRINT_REGULAR"] = True
             self.app.config["TESTING"] = True
+            logging.getLogger("werkzeug").addHandler(logging.StreamHandler())
+            logging.getLogger("werkzeug").setLevel(logging.DEBUG)
+        else:
+            logging.getLogger("werkzeug").setLevel(logging.INFO)
+
+        # override werkzeug's logger to ignore requests to /api/v1/chunk_status_log
+        parent_log_request = serving.WSGIRequestHandler.log_request
+
+        def log_request(self, *args, **kwargs):
+            if self.path == "/api/v1/chunk_status_log":
+                return
+            parent_log_request(self, *args, **kwargs)
+
+        serving.WSGIRequestHandler.log_request = log_request
+
         self.server = make_server(host, port, self.app, threaded=True)
 
     def run(self):
