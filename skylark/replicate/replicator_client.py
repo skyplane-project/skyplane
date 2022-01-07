@@ -3,7 +3,7 @@ import itertools
 import json
 from logging import log
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import requests
 from loguru import logger
@@ -244,7 +244,7 @@ class ReplicatorClient:
 
         return [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
 
-    def get_chunk_status(self, crs: List[ChunkRequest]):
+    def get_chunk_status_log(self, crs: List[ChunkRequest]) -> Dict[int, Dict]:
         chunk_logs = {cr.chunk.chunk_id: [] for cr in crs}
         for path_idx, path in enumerate(self.bound_paths):
             for hop_idx, hop_instance in enumerate(path):
@@ -260,7 +260,7 @@ class ReplicatorClient:
                     chunk_logs[log_entry["chunk_id"]].append(log_entry)
         return chunk_logs
 
-    def monitor_transfer(self, crs: List[ChunkRequest]):
+    def monitor_transfer(self, crs: List[ChunkRequest]) -> Tuple[float, float]:
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs])
         with tqdm(total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=1000) as pbar:
             while True:
@@ -268,7 +268,7 @@ class ReplicatorClient:
                 # todo fix this disgusting code
                 chunk_last_position = {}
                 chunk_last_status = {}
-                for chunk_id, chunk_log in self.get_chunk_status(crs).items():
+                for chunk_id, chunk_log in self.get_chunk_status_log(crs).items():
                     last_entry_idx = -1
                     for entry_idx, entry in enumerate(chunk_log):
                         if entry["state"] != ChunkState.registered:
@@ -297,7 +297,14 @@ class ReplicatorClient:
                 pbar.update(completed_bytes * 8 - pbar.n)
 
                 if len(completed_chunk_ids) == len(crs):
-                    break
+                    log = self.get_chunk_status_log(crs)
+                    # compute transfer time as last event - earliest event
+                    first_event = min([log[chunk_id][log_idx]["time"] for chunk_id in log for log_idx in range(len(log[chunk_id]))])
+                    last_event = max([log[chunk_id][log_idx]["time"] for chunk_id in log for log_idx in range(len(log[chunk_id]))])
+                    transfer_time_s = (last_event - first_event).total_seconds()
+                    throughput_gbits = completed_bytes * 8 / 1e9 / transfer_time_s
+                    logger.info(f"Replication completed in {transfer_time_s:.2f}s, throughput: {throughput_gbits:.2f}Gbit/s")
+                    return transfer_time_s, throughput_gbits
                 else:
                     remaining_chunks = [cr for cr in crs if cr.chunk.chunk_id not in completed_chunk_ids]
                     tqdm.write(f"{len(remaining_chunks)} chunks remaining")
