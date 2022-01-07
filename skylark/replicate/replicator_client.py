@@ -306,5 +306,5 @@ class ReplicatorClient:
                     tqdm.write(f"\tremaining chunk ids: {[cr.chunk.chunk_id for cr in remaining_chunks]}")
                     tqdm.write(f"\tremaining locations: {remaining_locations}")
                     tqdm.write(f"\tremaining statuses:  {[cs.name if cs else None for cs in remaining_statuses]}")
-                    tqdm.write()
+                    tqdm.write("\n")
                     time.sleep(1)
