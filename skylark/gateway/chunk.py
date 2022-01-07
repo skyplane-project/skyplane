@@ -106,6 +106,7 @@ class ChunkState(Enum):
     registered = auto()
     download_in_progress = auto()
     downloaded = auto()
+    upload_queued = auto()
     upload_in_progress = auto()
     upload_complete = auto()
     failed = auto()

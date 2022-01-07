@@ -117,4 +117,5 @@ class GatewayReceiver:
             )
             if chunk_header.end_of_stream:
                 conn.close()
+                logger.debug(f"[receiver:{server_port}] End of stream reached")
                 return chunks_received

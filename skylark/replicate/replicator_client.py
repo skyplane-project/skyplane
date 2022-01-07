@@ -1,4 +1,8 @@
+from datetime import datetime
 import itertools
+import json
+from logging import log
+import time
 from typing import Dict, List, Optional
 
 import requests
@@ -9,7 +13,7 @@ from skylark.benchmark.utils import refresh_instance_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server, ServerState
-from skylark.gateway.chunk import Chunk, ChunkRequest, ChunkRequestHop
+from skylark.gateway.chunk import Chunk, ChunkRequest, ChunkRequestHop, ChunkState
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.utils.utils import PathLike, Timer, do_parallel, wait_for
@@ -34,11 +38,9 @@ class ReplicatorClient:
         # provisioning
         self.aws = AWSCloudProvider() if aws_instance_class is not None else None
         self.gcp = GCPCloudProvider(gcp_project) if gcp_instance_class is not None else None
-        self.init_clouds()
         self.bound_paths: Optional[List[List[Server]]] = None
 
-    def init_clouds(self):
-        """Initialize AWS and GCP clouds."""
+        # init clouds
         jobs = []
         if self.aws is not None:
             jobs.extend([lambda: self.aws.add_ip_to_security_group(r) for r in self.aws.region_list()])
@@ -48,25 +50,6 @@ class ReplicatorClient:
             jobs.append(lambda: self.gcp.configure_default_firewall())
         with Timer(f"Cloud SSH key initialization"):
             do_parallel(lambda fn: fn(), jobs)
-
-    def provision_gateway_instance(self, region: str) -> Server:
-        provider, subregion = region.split(":")
-        if provider == "aws":
-            assert self.aws is not None
-            server = self.aws.provision_instance(subregion, self.aws_instance_class)
-            logger.info(f"Provisioned AWS gateway {server.instance_id} in {server.region()} (ip = {server.public_ip()})")
-        elif provider == "gcp":
-            assert self.gcp is not None
-            # todo specify network tier in ReplicationTopology
-            server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
-            logger.info(f"Provisioned GCP gateway {server.instance_name()} in {server.region()} (ip = {server.public_ip()})")
-        else:
-            raise NotImplementedError(f"Unknown provider {provider}")
-        return server
-
-    def deprovision_gateway_instance(self, server: Server):
-        logger.warning(f"Deprovisioning gateway {server.instance_name()}")
-        server.terminate_instance()
 
     def provision_gateways(
         self,
@@ -120,9 +103,21 @@ class ReplicatorClient:
 
         with Timer("Provision gateways"):
             # provision instances
-            logger.debug(f"Provisioning instances in regions: {list(aws_regions_to_provision + gcp_regions_to_provision)}")
+            def provision_gateway_instance(region: str) -> Server:
+                provider, subregion = region.split(":")
+                if provider == "aws":
+                    assert self.aws is not None
+                    server = self.aws.provision_instance(subregion, self.aws_instance_class)
+                elif provider == "gcp":
+                    assert self.gcp is not None
+                    # todo specify network tier in ReplicationTopology
+                    server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
+                else:
+                    raise NotImplementedError(f"Unknown provider {provider}")
+                return server
+
             results = do_parallel(
-                self.provision_gateway_instance,
+                provision_gateway_instance,
                 list(aws_regions_to_provision + gcp_regions_to_provision),
                 progress_bar=True,
                 desc="Provisioning gateways",
@@ -169,8 +164,12 @@ class ReplicatorClient:
             )
 
     def deprovision_gateways(self):
+        def deprovision_gateway_instance(server: Server):
+            logger.warning(f"Deprovisioning gateway {server.instance_name()}")
+            server.terminate_instance()
+
         instances = [instance for path in self.bound_paths for instance in path]
-        do_parallel(self.deprovision_gateway_instance, instances, n=len(instances))
+        do_parallel(deprovision_gateway_instance, instances, n=len(instances))
 
     def run_replication_plan(self, job: ReplicationJob):
         # assert all(len(path) == 2 for path in self.bound_paths), f"Only two-hop replication is supported"
@@ -213,7 +212,7 @@ class ReplicatorClient:
 
         # make list of ChunkRequests
         chunk_requests_sharded: Dict[Server, List[ChunkRequest]] = {}
-        with tqdm(total=len(chunks), desc="Solving chunk path") as pbar:
+        with tqdm(total=len(chunks), desc="Building chunk requests") as pbar:
             for batch, path in zip(chunk_batches, self.bound_paths):
                 chunk_requests_sharded[path[0]] = []
                 for chunk in batch:
@@ -242,3 +241,70 @@ class ReplicatorClient:
             reply = requests.post(f"http://{instance.public_ip()}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests])
             if reply.status_code != 200:
                 raise Exception(f"Failed to send chunk requests to gateway instance {instance.instance_name()}: {reply.text}")
+
+        return [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
+
+    def get_chunk_status(self, crs: List[ChunkRequest]):
+        chunk_logs = {cr.chunk.chunk_id: [] for cr in crs}
+        for path_idx, path in enumerate(self.bound_paths):
+            for hop_idx, hop_instance in enumerate(path):
+                reply = requests.get(f"http://{hop_instance.public_ip()}:8080/api/v1/chunk_status_log")
+                if reply.status_code != 200:
+                    raise Exception(f"Failed to get chunk status from gateway instance {hop_instance.instance_name()}: {reply.text}")
+                for log_entry in reply.json()["chunk_status_log"]:
+                    log_entry["hop_cloud_region"] = hop_instance.region_tag
+                    log_entry["path_idx"] = path_idx
+                    log_entry["hop_idx"] = hop_idx
+                    log_entry["time"] = datetime.fromisoformat(log_entry["time"])
+                    log_entry["state"] = ChunkState.from_str(log_entry["state"])
+                    chunk_logs[log_entry["chunk_id"]].append(log_entry)
+        return chunk_logs
+
+    def monitor_transfer(self, crs: List[ChunkRequest]):
+        total_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs])
+        with tqdm(total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=1000) as pbar:
+            while True:
+                # get chunk status
+                # todo fix this disgusting code
+                chunk_last_position = {}
+                chunk_last_status = {}
+                for chunk_id, chunk_log in self.get_chunk_status(crs).items():
+                    last_entry_idx = -1
+                    for entry_idx, entry in enumerate(chunk_log):
+                        if entry["state"] != ChunkState.registered:
+                            if last_entry_idx == -1 or entry["hop_idx"] >= chunk_log[last_entry_idx]["hop_idx"]:
+                                if last_entry_idx == -1 or entry["path_idx"] >= chunk_log[last_entry_idx]["path_idx"]:
+                                    if last_entry_idx == -1 or entry["time"] > chunk_log[last_entry_idx]["time"]:
+                                        last_entry_idx = entry_idx
+                                        chunk_last_position[chunk_id] = (entry["path_idx"], entry["hop_idx"])
+                                        chunk_last_status[chunk_id] = entry["state"]
+
+                # count completed chunks
+                completed_chunk_ids = []
+                completed_bytes = 0
+                for chunk_id in chunk_last_status.keys():
+                    last_path_idx, last_hop_idx = chunk_last_position[chunk_id]
+                    last_status = chunk_last_status[chunk_id]
+                    if (
+                        last_status == ChunkState.downloaded
+                        and last_path_idx == len(self.bound_paths) - 1
+                        and last_hop_idx == len(self.bound_paths[last_path_idx]) - 1
+                    ):
+                        completed_chunk_ids.append(chunk_id)
+                        completed_bytes += crs[chunk_id].chunk.chunk_length_bytes
+
+                # update progress bar
+                pbar.update(completed_bytes * 8 - pbar.n)
+
+                if len(completed_chunk_ids) == len(crs):
+                    break
+                else:
+                    remaining_chunks = [cr for cr in crs if cr.chunk.chunk_id not in completed_chunk_ids]
+                    tqdm.write(f"{len(remaining_chunks)} chunks remaining")
+                    remaining_locations = [chunk_last_position.get(cr.chunk.chunk_id) for cr in remaining_chunks]
+                    remaining_statuses = [chunk_last_status.get(cr.chunk.chunk_id) for cr in remaining_chunks]
+                    tqdm.write(f"\tremaining chunk ids: {[cr.chunk.chunk_id for cr in remaining_chunks]}")
+                    tqdm.write(f"\tremaining locations: {remaining_locations}")
+                    tqdm.write(f"\tremaining statuses:  {[cs.name if cs else None for cs in remaining_statuses]}")
+                    tqdm.write()
+                    time.sleep(1)
