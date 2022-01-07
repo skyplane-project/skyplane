@@ -81,6 +81,7 @@ class ReplicatorClient:
                     for i in ilist:
                         if f"aws:{r}" in aws_regions_to_provision:
                             aws_regions_to_provision.remove(f"aws:{r}")
+                            logger.debug(f"Found existing instance {i}")
             else:
                 current_aws_instances = {}
 

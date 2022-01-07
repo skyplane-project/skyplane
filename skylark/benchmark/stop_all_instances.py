@@ -16,14 +16,18 @@ def stop_instance(instance: Server):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Stop all instances")
-    parser.add_argument("--gcp-project", type=str, help="GCP project", required=True)
+    parser.add_argument("--gcp-project", type=str, help="GCP project", default=None)
     args = parser.parse_args()
+
+    instances = []
 
     logger.info("Getting matching AWS instances")
     aws = AWSCloudProvider()
-    aws_instances = aws.get_matching_instances()
-    logger.info("Getting matching GCP instances")
-    gcp = GCPCloudProvider(gcp_project=args.gcp_project)
-    gcp_instances = gcp.get_matching_instances()
+    instances += aws.get_matching_instances()
 
-    do_parallel(stop_instance, aws_instances + gcp_instances, progress_bar=True)
+    if args.gcp_project:
+        logger.info("Getting matching GCP instances")
+        gcp = GCPCloudProvider(gcp_project=args.gcp_project)
+        instances += gcp.get_matching_instances()
+
+    do_parallel(stop_instance, instances, progress_bar=True)
