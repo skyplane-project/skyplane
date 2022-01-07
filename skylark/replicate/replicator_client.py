@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Tuple
 import requests
 from loguru import logger
 from tqdm import tqdm
+from skylark import GB, KB, MB
 
 from skylark.benchmark.utils import refresh_instance_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
@@ -181,7 +182,7 @@ class ReplicatorClient:
         # make list of chunks
         chunks = []
         for idx, obj in enumerate(job.objs):
-            file_size_bytes = job.random_chunk_size_mb * 1000 * 1000  # todo support object store objects
+            file_size_bytes = job.random_chunk_size_mb * MB  # todo support object store objects
             chunks.append(
                 Chunk(
                     key=obj,
@@ -262,7 +263,7 @@ class ReplicatorClient:
 
     def monitor_transfer(self, crs: List[ChunkRequest]) -> Tuple[float, float]:
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs])
-        with tqdm(total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=1000) as pbar:
+        with tqdm(total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB) as pbar:
             while True:
                 # get chunk status
                 # todo fix this disgusting code
@@ -302,7 +303,7 @@ class ReplicatorClient:
                     first_event = min([log[chunk_id][log_idx]["time"] for chunk_id in log for log_idx in range(len(log[chunk_id]))])
                     last_event = max([log[chunk_id][log_idx]["time"] for chunk_id in log for log_idx in range(len(log[chunk_id]))])
                     transfer_time_s = (last_event - first_event).total_seconds()
-                    throughput_gbits = completed_bytes * 8 / 1e9 / transfer_time_s
+                    throughput_gbits = completed_bytes * 8 / GB / transfer_time_s
                     logger.info(f"Replication completed in {transfer_time_s:.2f}s, throughput: {throughput_gbits:.2f}Gbit/s")
                     return transfer_time_s, throughput_gbits
                 else:

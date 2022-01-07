@@ -6,6 +6,7 @@ from pathlib import Path
 import setproctitle
 from flask import Flask, jsonify, request
 from werkzeug.serving import make_server
+from skylark import MB
 
 from skylark.gateway.chunk import ChunkRequest, ChunkState
 from skylark.gateway.chunk_store import ChunkStore
@@ -41,7 +42,7 @@ class GatewayDaemonAPI(threading.Thread):
         self.log_dir = log_dir
         if log_dir is not None:
             log_dir = Path(log_dir)
-            handler = logging.handlers.RotatingFileHandler(log_dir / "gateway_daemon_api.log", maxBytes=1024 * 1024 * 10)
+            handler = logging.handlers.RotatingFileHandler(log_dir / "gateway_daemon_api.log", maxBytes=1 * MB)
             logging.getLogger("werkzeug").addHandler(handler)
             if debug:
                 logging.getLogger("werkzeug").addHandler(logging.StreamHandler())
