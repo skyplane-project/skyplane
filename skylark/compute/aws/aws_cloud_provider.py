@@ -2,6 +2,7 @@ from functools import lru_cache
 import uuid
 from typing import List, Optional
 
+import botocore
 import pandas as pd
 from loguru import logger
 
@@ -89,7 +90,7 @@ class AWSCloudProvider(CloudProvider):
                 sg.authorize_ingress(IpProtocol="-1", FromPort=from_port, ToPort=to_port, CidrIp=ip)
                 logger.info(f"({aws_region}) Added IP {ip} to security group {security_group_id}")
         except botocore.exceptions.ClientError as e:
-            if str(e).endswith('already exists'):
+            if str(e).endswith("already exists"):
                 logger.warning(f"Error adding IPs to security group, {e}")
             else:
                 raise e
