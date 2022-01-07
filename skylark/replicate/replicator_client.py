@@ -181,7 +181,7 @@ class ReplicatorClient:
         # make list of chunks
         chunks = []
         for idx, obj in enumerate(job.objs):
-            file_size_bytes = 128 * 1000 * 1000
+            file_size_bytes = job.random_chunk_size_mb * 1000 * 1000  # todo support object store objects
             chunks.append(
                 Chunk(
                     key=obj,

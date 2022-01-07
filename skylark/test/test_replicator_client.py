@@ -121,6 +121,7 @@ def main(args):
     with Timer() as t:
         crs = rc.run_replication_plan(job)
         logger.info(f"{total_bytes / 1e9:.2f}GByte replication job launched")
+
         rc.monitor_transfer(crs)
     logger.info(f"Copied {total_bytes} bytes in {t.elapsed} seconds, effective bandwidth {total_bytes * 8 / t.elapsed / 1e9:.2f} Gbit/s")
 
