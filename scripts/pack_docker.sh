@@ -10,7 +10,7 @@ cd "$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )/.."
 mkdir -p ./dist
 
 echo -e "${BGreen}Building docker image${NC}"
-DOCKER_BUILDKIT=1 sudo docker build -t skylark .
+sudo DOCKER_BUILDKIT=1 docker build -t skylark .
 # sudo docker save skylark | pv > ./dist/skylark.tar
 # du -sh ./dist/skylark.tar
 
