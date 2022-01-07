@@ -245,7 +245,7 @@ class ReplicatorClient:
 
         return [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
 
-    def get_chunk_status_log(self, crs: List[ChunkRequest]) -> Dict[int, Dict]:
+    def get_chunk_status_log(self, crs: List[ChunkRequest]) -> Dict[int, List[Dict]]:
         chunk_logs = {cr.chunk.chunk_id: [] for cr in crs}
         for path_idx, path in enumerate(self.bound_paths):
             for hop_idx, hop_instance in enumerate(path):
