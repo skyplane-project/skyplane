@@ -2,7 +2,7 @@ import argparse
 import atexit
 
 from loguru import logger
-from skylark import print_header
+from skylark import GB, MB, print_header
 
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
@@ -69,7 +69,7 @@ def main(args):
         # obj_keys = []
         # futures = []
         # with tempfile.NamedTemporaryFile() as f:
-        #     f.write(os.urandom(int(1e6 * args.chunk_size_mb)))
+        #     f.write(os.urandom(int(MB * args.chunk_size_mb)))
         #     f.seek(0)
         #     for i in trange(args.n_chunks):
         #         k = f"{args.key_prefix}/{i}"
@@ -117,10 +117,10 @@ def main(args):
         random_chunk_size_mb=args.chunk_size_mb,
     )
 
-    total_bytes = args.n_chunks * args.chunk_size_mb * 1000 * 1000
+    total_bytes = args.n_chunks * args.chunk_size_mb * MB
     with Timer() as t:
         crs = rc.run_replication_plan(job)
-        logger.info(f"{total_bytes / 1e9:.2f}GByte replication job launched")
+        logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
         transfer_time_s, throughput_gbits = rc.monitor_transfer(crs)
 
 

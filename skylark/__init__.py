@@ -1,9 +1,10 @@
 from pathlib import Path
 
+# paths
 skylark_root = Path(__file__).parent.parent
 key_root = skylark_root / "data" / "keys"
 
-
+# header
 def print_header():
     header = "\n"
     header += """=================================================
@@ -17,3 +18,9 @@ def print_header():
 ================================================="""
     header += "\n"
     print(header, flush=True)
+
+
+# definitions
+KB = 1024
+MB = 1024 * 1024
+GB = 1024 * 1024 * 1024

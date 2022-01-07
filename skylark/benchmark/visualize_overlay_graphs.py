@@ -6,7 +6,7 @@ import pandas as pd
 import ray
 from tqdm import tqdm
 
-from skylark import skylark_root
+from skylark import GB, skylark_root
 from skylark.replicate.solver import ThroughputSolverILP
 
 
@@ -15,7 +15,7 @@ def benchmark(path, src, dst, min_throughput, gbyte_to_transfer=1):
     solver = ThroughputSolverILP(path)
     solution = solver.solve(src, dst, required_throughput_gbits=min_throughput, gbyte_to_transfer=gbyte_to_transfer, solver=cp.GUROBI)
     if solution["feasible"]:
-        baseline_throughput = solver.get_path_throughput(src, dst) / 1e9
+        baseline_throughput = solver.get_path_throughput(src, dst) / GB
         baseline_cost = solver.get_path_cost(src, dst) * gbyte_to_transfer
         return dict(
             src=src,

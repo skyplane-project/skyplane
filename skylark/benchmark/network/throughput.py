@@ -7,7 +7,7 @@ import re
 from loguru import logger
 from tqdm import tqdm
 
-from skylark import skylark_root
+from skylark import GB, KB, skylark_root
 from skylark.benchmark.utils import provision, split_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
@@ -108,16 +108,11 @@ def main(args):
             throughput_received = result["end"]["sum_received"]["bits_per_second"]
             cpu_utilization = result["end"]["cpu_utilization_percent"]["host_total"]
             tqdm.write(
-                f"({instance_src.region_tag}:{instance_src.network_tier()} -> {instance_dst.region_tag}:{instance_dst.network_tier()}) is {throughput_sent / 1e9:0.2f} Gbps"
+                f"({instance_src.region_tag}:{instance_src.network_tier()} -> {instance_dst.region_tag}:{instance_dst.network_tier()}) is {throughput_sent / GB:0.2f} Gbps"
             )
             out_rec = dict(throughput_sent=throughput_sent, throughput_received=throughput_received, cpu_utilization=cpu_utilization)
         elif args.iperf3_mode == "udp":
             stdout, stderr = instance_src.run_command(f"nuttcp -uu -l1460 -w4m -T {args.iperf3_runtime} {instance_dst.public_ip()}")
-            # example return:
-            # "  659.1631 MB /   2.00 sec = 2764.6834 Mbps 99 %TX 53 %RX 36045 / 711028 drop/pkt 5.07 %loss"
-            # "   208.2891 MB /   4.00 sec =  436.7620 Mbps 11 %TX 8 %RX 0 / 213288 drop/pkt 0.00 %loss"
-            # " 1490.9326 MB /   4.00 sec = 3126.9937 Mbps 99 %TX 55 %RX 179 / 1526894 drop/pkt 0.01172 %loss"
-            # returns: data_sent, runtime, throughput, cpu_tx, cpu_rx, dropped_packets, total_packets, loss_percent
             regex = r"\s*(?P<data_sent>\d+\.\d+)\s*MB\s*/\s*(?P<runtime>\d+\.\d+)\s*sec\s*=\s*(?P<throughput_mbps>\d+\.\d+)\s*Mbps\s*(?P<cpu_tx>\d+)\s*%TX\s*(?P<cpu_rx>\d+)\s*%RX\s*(?P<dropped_packets>\d+)\s*\/\s*(?P<total_packets>\d+)\s*drop/pkt\s*(?P<loss_percent>\d+\.?\d*)\s*%loss"
             match = re.search(regex, stdout)
             if match is None:
@@ -132,7 +127,7 @@ def main(args):
                 out_rec["total_packets"] = float(out_rec["total_packets"])
                 out_rec["loss_percent"] = float(out_rec["loss_percent"])
                 tqdm.write(
-                    f"({instance_src.region_tag}:{instance_src.network_tier()} -> {instance_dst.region_tag}:{instance_dst.network_tier()}) is {out_rec['throughput_mbps'] / 1e3:0.2f} Gbps w/ loss {out_rec['loss_percent']:0.2f}%"
+                    f"({instance_src.region_tag}:{instance_src.network_tier()} -> {instance_dst.region_tag}:{instance_dst.network_tier()}) is {out_rec['throughput_mbps'] / KB:0.2f} Gbps w/ loss {out_rec['loss_percent']:0.2f}%"
                 )
         instance_src.close_server()
         instance_dst.close_server()
