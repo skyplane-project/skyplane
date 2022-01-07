@@ -11,11 +11,11 @@ This package represents both components as a single binary. Docker builds a sing
 ### Requirements
 * Python 3.8 or greater
 * Docker
-    * Install using `curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh`
     * **Ensure you have authenticated your Github account with Docker**: https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-to-the-container-registry
     * TLDR:
-        * (1) create a Personal Access Token at https://github.com/settings/tokens/new with "write:packages" permissions
-        * (2) run `echo <PERSONAL_ACCESS_TOKEN> | docker login ghcr.io -u <USERNAME> --password-stdin`
+        * (1) Install docker with `curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh`
+        * (1) Create a Personal Access Token at https://github.com/settings/tokens/new with "write:packages" permissions
+        * (2) Run `echo <PERSONAL_ACCESS_TOKEN> | sudo docker login ghcr.io -u <GITHUB_USERNAME> --password-stdin`
 
 ### Building and deploying the gateway
 To run a sample replication, first build a new version of the GatewayDaemon Docker image and push it to ghcr.io (ensure you are authenticated as above):
