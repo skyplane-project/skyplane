@@ -121,17 +121,6 @@ def main(args):
     with Timer() as t:
         crs = rc.run_replication_plan(job)
         logger.info(f"{total_bytes / 1e9:.2f}GByte replication job launched")
-
-        # signal handler
-        def handler():
-            log_dir = skylark_root / "data" / "logs" / "test_replicator_client"
-            log_dir.mkdir(parents=True, exist_ok=True)
-            rc.write_chrome_trace(crs, str(log_dir / "trace.json"))
-            logger.info(f"Wrote trace to {log_dir / 'trace.json'}")
-
-        atexit.register(handler)
-
-        # monitor the replication job until it is complete
         rc.monitor_transfer(crs)
     logger.info(f"Copied {total_bytes} bytes in {t.elapsed} seconds, effective bandwidth {total_bytes * 8 / t.elapsed / 1e9:.2f} Gbit/s")
 

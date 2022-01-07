@@ -245,13 +245,7 @@ class ReplicatorClient:
         return [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
 
     def get_chunk_status(self, crs: List[ChunkRequest]):
-        chunk_logs = {}
-
-        # add entry for each chunk
-        for cr in crs:
-            chunk_logs[cr.chunk.chunk_id] = []
-
-        # load status
+        chunk_logs = {cr.chunk.chunk_id: [] for cr in crs}
         for path_idx, path in enumerate(self.bound_paths):
             for hop_idx, hop_instance in enumerate(path):
                 reply = requests.get(f"http://{hop_instance.public_ip()}:8080/api/v1/chunk_status_log")
@@ -264,7 +258,6 @@ class ReplicatorClient:
                     log_entry["time"] = datetime.fromisoformat(log_entry["time"])
                     log_entry["state"] = ChunkState.from_str(log_entry["state"])
                     chunk_logs[log_entry["chunk_id"]].append(log_entry)
-
         return chunk_logs
 
     def monitor_transfer(self, crs: List[ChunkRequest]):
@@ -286,11 +279,8 @@ class ReplicatorClient:
                                         chunk_last_position[chunk_id] = (entry["path_idx"], entry["hop_idx"])
                                         chunk_last_status[chunk_id] = entry["state"]
 
-                # print info on chunk 0
-                # tqdm.write(f"Chunk 0: last position: {chunk_last_position[0]}, last status: {chunk_last_status[0]}")
-
                 # count completed chunks
-                completed_chunks = 0
+                completed_chunk_ids = []
                 completed_bytes = 0
                 for chunk_id in chunk_last_status.keys():
                     last_path_idx, last_hop_idx = chunk_last_position[chunk_id]
@@ -300,79 +290,21 @@ class ReplicatorClient:
                         and last_path_idx == len(self.bound_paths) - 1
                         and last_hop_idx == len(self.bound_paths[last_path_idx]) - 1
                     ):
-                        completed_chunks += 1
+                        completed_chunk_ids.append(chunk_id)
                         completed_bytes += crs[chunk_id].chunk.chunk_length_bytes
 
                 # update progress bar
                 pbar.update(completed_bytes * 8 - pbar.n)
 
-                if completed_chunks == len(crs):
+                if len(completed_chunk_ids) == len(crs):
                     break
                 else:
-                    tqdm.write(f"remaining chunks: {len(crs) - completed_chunks}")
-
-                time.sleep(0.5)
-
-    def write_chrome_trace(self, crs: List[ChunkRequest], out_file: str):
-        trace = {"traceEvents": []}
-
-        chunk_logs = self.get_chunk_status(crs)
-        min_time = min([min(entry["time"] for entry in chunk_log) for chunk_log in chunk_logs.values()])
-
-        for chunk_id, chunk_log in chunk_logs.items():
-            for entry_in in chunk_log:
-                # entry example
-                # {"name": "Asub", "cat": "PERF", "ph": "B", "pid": 22630, "tid": 22630, "ts": 829}
-                # name: The name of the event, as displayed in Trace Viewer
-                # cat: The event categories. This is a comma separated list of categories for the event. The categories can be used to hide events in the Trace Viewer UI.
-                # ph: The event type. This is a single character which changes depending on the type of event being output. The valid values are listed in the table below. We will discuss each phase type below. B = Begin, E = End
-                # ts: The tracing clock timestamp of the event. The timestamps are provided at microsecond granularity.
-                # tts: Optional. The thread clock timestamp of the event. The timestamps are provided at microsecond granularity.
-                # pid: The process ID for the process that output this event.
-                # tid: The thread ID for the thread that output this event.
-                # args: Any arguments provided for the event. Some of the event types have required argument fields, otherwise, you can put any information you wish in here. The arguments are displayed in Trace Viewer when you view an event in the analysis section.
-                state = entry_in["state"]
-                entry = {
-                    "pid": f"({entry_in['path_idx']}, {entry_in['hop_idx']})",
-                    "ts": (entry_in["time"] - min_time).total_seconds() * 1000000,
-                }
-
-                if state == ChunkState.download_in_progress:
-                    entry["tid"] = "DL"
-                    entry["name"] = f"Downloading chunk {chunk_id}"
-                    entry["ph"] = "B"
-                    entry["cat"] = "DOWNLOAD"
-                elif state == ChunkState.downloaded:
-                    entry["tid"] = "DL"
-                    entry["name"] = f"Downloading chunk {chunk_id}"
-                    entry["ph"] = "E"
-                    entry["cat"] = "DOWNLOAD"
-                elif state == ChunkState.upload_queued:
-                    continue
-                    # entry["name"] = f"Queue chunk {chunk_id}"
-                    # entry["ph"] = "B"
-                    # entry["cat"] = "UPLOAD_QUEUED"
-                elif state == ChunkState.upload_in_progress:
-                    # entry["name"] = f"Queue chunk {chunk_id}"
-                    # entry["ph"] = "E"
-                    # entry["cat"] = "UPLOAD_QUEUED"
-                    # trace["traceEvents"].append(entry)
-                    entry["tid"] = "UL"
-                    entry["name"] = f"Uploading chunk {chunk_id}"
-                    entry["ph"] = "B"
-                    entry["cat"] = "UPLOAD"
-                elif state == ChunkState.upload_complete:
-                    entry["tid"] = "UL"
-                    entry["name"] = f"Uploading chunk {chunk_id}"
-                    entry["ph"] = "E"
-                    entry["cat"] = "UPLOAD"
-                elif state == ChunkState.failed:
-                    entry["tid"] = "UL"
-                    entry["name"] = f"Fail; chunk {chunk_id}"
-                    entry["ph"] = "I"
-                    entry["cat"] = "UPLOAD"
-
-                trace["traceEvents"].append(entry)
-
-        with open(out_file, "w") as f:
-            json.dump(trace, f)
+                    remaining_chunks = [cr for cr in crs if cr.chunk.chunk_id not in completed_chunk_ids]
+                    tqdm.write(f"{len(remaining_chunks)} chunks remaining")
+                    remaining_locations = [chunk_last_position.get(cr.chunk.chunk_id) for cr in remaining_chunks]
+                    remaining_statuses = [chunk_last_status.get(cr.chunk.chunk_id) for cr in remaining_chunks]
+                    tqdm.write(f"\tremaining chunk ids: {[cr.chunk.chunk_id for cr in remaining_chunks]}")
+                    tqdm.write(f"\tremaining locations: {remaining_locations}")
+                    tqdm.write(f"\tremaining statuses:  {[cs.name if cs else None for cs in remaining_statuses]}")
+                    tqdm.write()
+                    time.sleep(1)
