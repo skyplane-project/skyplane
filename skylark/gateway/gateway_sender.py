@@ -23,7 +23,7 @@ class GatewaySender:
         # shared state
         self.manager = Manager()
         self.next_worker_id = Value("i", 0)
-        self.worker_queues: List[queue.Queue[int]] = [self.manager.Queue() for _ in range(self.n_processes)]
+        self.queue = self.manager.Queue()
         self.exit_flags = [Event() for _ in range(self.n_processes)]
 
     def start_workers(self):
@@ -46,7 +46,7 @@ class GatewaySender:
             chunk_ids_to_send = []
             while len(chunk_ids_to_send) < self.batch_size:
                 try:
-                    chunk_ids_to_send.append(self.worker_queues[worker_id].get_nowait())
+                    chunk_ids_to_send.append(self.queue.get_nowait())
                 except queue.Empty:
                     break
 
@@ -72,7 +72,7 @@ class GatewaySender:
         with self.next_worker_id.get_lock():
             worker_id = self.next_worker_id.value
             logger.debug(f"queuing chunk request {chunk_request.chunk.chunk_id} to worker {worker_id}")
-            self.worker_queues[worker_id].put(chunk_request.chunk.chunk_id)
+            self.queue.put(chunk_request.chunk.chunk_id)
             self.next_worker_id.value = (worker_id + 1) % self.n_processes
 
     def send_chunks(self, chunk_ids: List[int], dst_host="127.0.0.1"):
