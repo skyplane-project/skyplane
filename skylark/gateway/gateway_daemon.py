@@ -13,7 +13,7 @@ from typing import Optional
 import setproctitle
 from loguru import logger
 
-from skylark import print_header
+from skylark import MB, print_header
 from skylark.gateway.chunk import ChunkState
 from skylark.gateway.chunk_store import ChunkStore
 from skylark.gateway.gateway_daemon_api import GatewayDaemonAPI
@@ -75,7 +75,7 @@ class GatewayDaemon:
                     ):
                         logger.info(f"Queuing chunk {chunk_req.chunk.chunk_id} for relay")
                         self.gateway_sender.queue_request(chunk_req)
-                        self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id)
+                        self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
                     elif current_hop.chunk_location_type == "save_local":
                         # do nothing, done
                         pass
@@ -102,7 +102,7 @@ class GatewayDaemon:
 
                         def fn(chunk_req, size_mb):
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
-                            os.system(f"dd if=/dev/zero of={fpath} bs=1000000 count={size_mb}")
+                            os.system(f"dd if=/dev/zero of={fpath} bs={MB} count={size_mb}")
                             chunk_req.chunk.chunk_length_bytes = os.path.getsize(fpath)
                             self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
                             self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id)

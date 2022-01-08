@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from skylark import skylark_root
+from skylark import GB, skylark_root
 from skylark.compute.cloud_providers import CloudProvider
 
 GBIT_PER_GBYTE = 8
@@ -37,7 +37,7 @@ class ThroughputSolver:
         for i, src in enumerate(regions):
             for j, dst in enumerate(regions):
                 data_grid[i, j] = self.get_path_throughput(src, dst) if self.get_path_throughput(src, dst) is not None else 0
-        data_grid = data_grid / 1e9
+        data_grid = data_grid / GB
         return data_grid
 
     def get_cost_grid(self):

@@ -1,17 +1,23 @@
+from datetime import datetime
 import itertools
-from typing import List, Optional
+import json
+from logging import log
+import time
+from typing import Dict, List, Optional, Tuple
 
 import requests
 from loguru import logger
+from tqdm import tqdm
+from skylark import GB, KB, MB
 
 from skylark.benchmark.utils import refresh_instance_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server, ServerState
-from skylark.gateway.chunk import Chunk, ChunkRequest, ChunkRequestHop
+from skylark.gateway.chunk import Chunk, ChunkRequest, ChunkRequestHop, ChunkState
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
-from skylark.utils import PathLike, Timer, do_parallel, wait_for
+from skylark.utils.utils import PathLike, Timer, do_parallel, wait_for
 
 
 class ReplicatorClient:
@@ -20,8 +26,8 @@ class ReplicatorClient:
         topology: ReplicationTopology,
         gcp_project: str,
         gateway_docker_image: str = "ghcr.io/parasj/skylark:latest",
-        aws_instance_class: str = "m5.4xlarge",
-        gcp_instance_class: str = "n2-standard-16",
+        aws_instance_class: Optional[str] = "m5.4xlarge",  # set to None to disable AWS
+        gcp_instance_class: Optional[str] = "n2-standard-16",  # set to None to disable GCP
         gcp_use_premium_network: bool = True,
     ):
         self.topology = topology
@@ -31,36 +37,20 @@ class ReplicatorClient:
         self.gcp_use_premium_network = gcp_use_premium_network
 
         # provisioning
-        self.aws = AWSCloudProvider()
-        self.gcp = GCPCloudProvider(gcp_project)
-        self.init_clouds()
+        self.aws = AWSCloudProvider() if aws_instance_class is not None else None
+        self.gcp = GCPCloudProvider(gcp_project) if gcp_instance_class is not None else None
         self.bound_paths: Optional[List[List[Server]]] = None
 
-    def init_clouds(self):
-        """Initialize AWS and GCP clouds."""
-        jobs = [lambda: self.aws.add_ip_to_security_group(r) for r in self.aws.region_list()]
-        jobs += [lambda: self.gcp.create_ssh_key()]
-        jobs += [lambda: self.gcp.configure_default_network()]
-        jobs += [lambda: self.gcp.configure_default_firewall()]
+        # init clouds
+        jobs = []
+        if self.aws is not None:
+            jobs.extend([lambda: self.aws.add_ip_to_security_group(r) for r in self.aws.region_list()])
+        if self.gcp is not None:
+            jobs.append(lambda: self.gcp.create_ssh_key())
+            jobs.append(lambda: self.gcp.configure_default_network())
+            jobs.append(lambda: self.gcp.configure_default_firewall())
         with Timer(f"Cloud SSH key initialization"):
             do_parallel(lambda fn: fn(), jobs)
-
-    def provision_gateway_instance(self, region: str) -> Server:
-        provider, subregion = region.split(":")
-        if provider == "aws":
-            server = self.aws.provision_instance(subregion, self.aws_instance_class)
-            logger.info(f"Provisioned AWS gateway {server.instance_id} in {server.region()}")
-        elif provider == "gcp":
-            # todo specify network tier in ReplicationTopology
-            server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
-            logger.info(f"Provisioned GCP gateway {server.instance_name()} in {server.region()}")
-        else:
-            raise NotImplementedError(f"Unknown provider {provider}")
-        return server
-
-    def deprovision_gateway_instance(self, server: Server):
-        logger.warning(f"Deprovisioning gateway {server.instance_name()}")
-        server.terminate_instance()
 
     def provision_gateways(
         self,
@@ -69,45 +59,66 @@ class ReplicatorClient:
         authorize_ssh_pub_key: Optional[PathLike] = None,
         num_outgoing_connections=8,
     ):
-
         regions_to_provision = [r for path in self.topology.paths for r in path]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
         gcp_regions_to_provision = [r for r in regions_to_provision if r.startswith("gcp:")]
 
+        assert len(aws_regions_to_provision) == 0 or self.aws is not None, "AWS not enabled"
+        assert len(gcp_regions_to_provision) == 0 or self.gcp is not None, "GCP not enabled"
+
         # reuse existing AWS instances
         if reuse_instances:
-            aws_instance_filter = {
-                "tags": {"skylark": "true"},
-                "instance_type": self.aws_instance_class,
-                "state": [ServerState.PENDING, ServerState.RUNNING],
-            }
-            with Timer("Refresh AWS instances"):
-                current_aws_instances = refresh_instance_list(
-                    self.aws, set([r.split(":")[1] for r in aws_regions_to_provision]), aws_instance_filter
-                )
-            for r, ilist in current_aws_instances.items():
-                for i in ilist:
-                    if f"aws:{r}" in aws_regions_to_provision:
-                        aws_regions_to_provision.remove(f"aws:{r}")
+            if self.aws is not None:
+                aws_instance_filter = {
+                    "tags": {"skylark": "true"},
+                    "instance_type": self.aws_instance_class,
+                    "state": [ServerState.PENDING, ServerState.RUNNING],
+                }
+                with Timer("Refresh AWS instances"):
+                    current_aws_instances = refresh_instance_list(
+                        self.aws, set([r.split(":")[1] for r in aws_regions_to_provision]), aws_instance_filter
+                    )
+                for r, ilist in current_aws_instances.items():
+                    for i in ilist:
+                        if f"aws:{r}" in aws_regions_to_provision:
+                            aws_regions_to_provision.remove(f"aws:{r}")
+                            logger.debug(f"Found existing instance {i}")
+            else:
+                current_aws_instances = {}
 
-            # reuse existing GCP
-            gcp_instance_filter = {
-                "tags": {"skylark": "true"},
-                "instance_type": self.gcp_instance_class,
-                "state": [ServerState.PENDING, ServerState.RUNNING],
-            }
-            current_gcp_instances = refresh_instance_list(
-                self.gcp, set([r.split(":")[1] for r in gcp_regions_to_provision]), gcp_instance_filter
-            )
-            for r, ilist in current_gcp_instances.items():
-                for i in ilist:
-                    if f"gcp:{r}" in gcp_regions_to_provision:
-                        gcp_regions_to_provision.remove(f"gcp:{r}")
+            if self.gcp is not None:
+                gcp_instance_filter = {
+                    "tags": {"skylark": "true"},
+                    "instance_type": self.gcp_instance_class,
+                    "state": [ServerState.PENDING, ServerState.RUNNING],
+                }
+                current_gcp_instances = refresh_instance_list(
+                    self.gcp, set([r.split(":")[1] for r in gcp_regions_to_provision]), gcp_instance_filter
+                )
+                for r, ilist in current_gcp_instances.items():
+                    for i in ilist:
+                        if f"gcp:{r}" in gcp_regions_to_provision:
+                            gcp_regions_to_provision.remove(f"gcp:{r}")
+            else:
+                current_gcp_instances = {}
 
         with Timer("Provision gateways"):
             # provision instances
+            def provision_gateway_instance(region: str) -> Server:
+                provider, subregion = region.split(":")
+                if provider == "aws":
+                    assert self.aws is not None
+                    server = self.aws.provision_instance(subregion, self.aws_instance_class)
+                elif provider == "gcp":
+                    assert self.gcp is not None
+                    # todo specify network tier in ReplicationTopology
+                    server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
+                else:
+                    raise NotImplementedError(f"Unknown provider {provider}")
+                return server
+
             results = do_parallel(
-                self.provision_gateway_instance,
+                provision_gateway_instance,
                 list(aws_regions_to_provision + gcp_regions_to_provision),
                 progress_bar=True,
                 desc="Provisioning gateways",
@@ -154,11 +165,15 @@ class ReplicatorClient:
             )
 
     def deprovision_gateways(self):
+        def deprovision_gateway_instance(server: Server):
+            logger.warning(f"Deprovisioning gateway {server.instance_name()}")
+            server.terminate_instance()
+
         instances = [instance for path in self.bound_paths for instance in path]
-        do_parallel(self.deprovision_gateway_instance, instances, n=len(instances))
+        do_parallel(deprovision_gateway_instance, instances, n=len(instances))
 
     def run_replication_plan(self, job: ReplicationJob):
-        assert all(len(path) == 2 for path in self.bound_paths), f"Only two-hop replication is supported"
+        # assert all(len(path) == 2 for path in self.bound_paths), f"Only two-hop replication is supported"
 
         # todo support GCP
         assert job.source_region.split(":")[0] == "aws", f"Only AWS is supported for now, got {job.source_region}"
@@ -167,7 +182,7 @@ class ReplicatorClient:
         # make list of chunks
         chunks = []
         for idx, obj in enumerate(job.objs):
-            file_size_bytes = 128 * 1000 * 1000
+            file_size_bytes = job.random_chunk_size_mb * MB  # todo support object store objects
             chunks.append(
                 Chunk(
                     key=obj,
@@ -197,27 +212,29 @@ class ReplicatorClient:
         assert len(chunk_batches) == n_src_instances, f"{len(chunk_batches)} batches, expected {n_src_instances}"
 
         # make list of ChunkRequests
-        chunk_requests_sharded = {}
-        for batch, path in zip(chunk_batches, self.bound_paths):
-            chunk_requests_sharded[path[0]] = []
-            for chunk in batch:
-                # make ChunkRequestHop list
-                cr_path = []
-                for hop_idx, hop_instance in enumerate(path):
-                    if hop_idx == 0:  # source gateway
-                        location = "random_128MB"
-                    elif hop_idx == len(path) - 1:  # destination gateway
-                        location = "save_local"
-                    else:  # intermediate gateway
-                        location = "relay"
-                    cr_path.append(
-                        ChunkRequestHop(
-                            hop_cloud_region=hop_instance.region_tag,
-                            hop_ip_address=hop_instance.public_ip(),
-                            chunk_location_type=location,
+        chunk_requests_sharded: Dict[Server, List[ChunkRequest]] = {}
+        with tqdm(total=len(chunks), desc="Building chunk requests") as pbar:
+            for batch, path in zip(chunk_batches, self.bound_paths):
+                chunk_requests_sharded[path[0]] = []
+                for chunk in batch:
+                    # make ChunkRequestHop list
+                    cr_path = []
+                    for hop_idx, hop_instance in enumerate(path):
+                        if hop_idx == 0:  # source gateway
+                            location = f"random_{job.random_chunk_size_mb}MB"
+                        elif hop_idx == len(path) - 1:  # destination gateway
+                            location = "save_local"
+                        else:  # intermediate gateway
+                            location = "relay"
+                        cr_path.append(
+                            ChunkRequestHop(
+                                hop_cloud_region=hop_instance.region_tag,
+                                hop_ip_address=hop_instance.public_ip(),
+                                chunk_location_type=location,
+                            )
                         )
-                    )
-                chunk_requests_sharded[path[0]].append(ChunkRequest(chunk, cr_path))
+                    chunk_requests_sharded[path[0]].append(ChunkRequest(chunk, cr_path))
+                    pbar.update()
 
         # send chunk requests to source gateway
         for instance, chunk_requests in chunk_requests_sharded.items():
@@ -225,3 +242,77 @@ class ReplicatorClient:
             reply = requests.post(f"http://{instance.public_ip()}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests])
             if reply.status_code != 200:
                 raise Exception(f"Failed to send chunk requests to gateway instance {instance.instance_name()}: {reply.text}")
+
+        return [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
+
+    def get_chunk_status_log(self, crs: List[ChunkRequest]) -> Dict[int, List[Dict]]:
+        chunk_logs = {cr.chunk.chunk_id: [] for cr in crs}
+        for path_idx, path in enumerate(self.bound_paths):
+            for hop_idx, hop_instance in enumerate(path):
+                reply = requests.get(f"http://{hop_instance.public_ip()}:8080/api/v1/chunk_status_log")
+                if reply.status_code != 200:
+                    raise Exception(f"Failed to get chunk status from gateway instance {hop_instance.instance_name()}: {reply.text}")
+                for log_entry in reply.json()["chunk_status_log"]:
+                    log_entry["hop_cloud_region"] = hop_instance.region_tag
+                    log_entry["path_idx"] = path_idx
+                    log_entry["hop_idx"] = hop_idx
+                    log_entry["time"] = datetime.fromisoformat(log_entry["time"])
+                    log_entry["state"] = ChunkState.from_str(log_entry["state"])
+                    chunk_logs[log_entry["chunk_id"]].append(log_entry)
+        return chunk_logs
+
+    def monitor_transfer(self, crs: List[ChunkRequest]) -> Tuple[float, float]:
+        total_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs])
+        with tqdm(total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB) as pbar:
+            while True:
+                # get chunk status
+                # todo fix this disgusting code
+                chunk_last_position = {}
+                chunk_last_status = {}
+                for chunk_id, chunk_log in self.get_chunk_status_log(crs).items():
+                    last_entry_idx = -1
+                    for entry_idx, entry in enumerate(chunk_log):
+                        if entry["state"] != ChunkState.registered:
+                            if last_entry_idx == -1 or entry["hop_idx"] >= chunk_log[last_entry_idx]["hop_idx"]:
+                                if last_entry_idx == -1 or entry["path_idx"] >= chunk_log[last_entry_idx]["path_idx"]:
+                                    if last_entry_idx == -1 or entry["time"] > chunk_log[last_entry_idx]["time"]:
+                                        last_entry_idx = entry_idx
+                                        chunk_last_position[chunk_id] = (entry["path_idx"], entry["hop_idx"])
+                                        chunk_last_status[chunk_id] = entry["state"]
+
+                # count completed chunks
+                completed_chunk_ids = []
+                completed_bytes = 0
+                for chunk_id in chunk_last_status.keys():
+                    last_path_idx, last_hop_idx = chunk_last_position[chunk_id]
+                    last_status = chunk_last_status[chunk_id]
+                    if (
+                        last_status == ChunkState.downloaded
+                        and last_path_idx == len(self.bound_paths) - 1
+                        and last_hop_idx == len(self.bound_paths[last_path_idx]) - 1
+                    ):
+                        completed_chunk_ids.append(chunk_id)
+                        completed_bytes += crs[chunk_id].chunk.chunk_length_bytes
+
+                # update progress bar
+                pbar.update(completed_bytes * 8 - pbar.n)
+
+                if len(completed_chunk_ids) == len(crs):
+                    log = self.get_chunk_status_log(crs)
+                    # compute transfer time as last event - earliest event
+                    first_event = min([log[chunk_id][log_idx]["time"] for chunk_id in log for log_idx in range(len(log[chunk_id]))])
+                    last_event = max([log[chunk_id][log_idx]["time"] for chunk_id in log for log_idx in range(len(log[chunk_id]))])
+                    transfer_time_s = (last_event - first_event).total_seconds()
+                    throughput_gbits = completed_bytes * 8 / GB / transfer_time_s
+                    logger.info(f"Replication completed in {transfer_time_s:.2f}s, throughput: {throughput_gbits:.2f}Gbit/s")
+                    return transfer_time_s, throughput_gbits
+                else:
+                    remaining_chunks = [cr for cr in crs if cr.chunk.chunk_id not in completed_chunk_ids]
+                    tqdm.write(f"{len(remaining_chunks)} chunks remaining")
+                    remaining_locations = [chunk_last_position.get(cr.chunk.chunk_id) for cr in remaining_chunks]
+                    remaining_statuses = [chunk_last_status.get(cr.chunk.chunk_id) for cr in remaining_chunks]
+                    tqdm.write(f"\tremaining chunk ids: {[cr.chunk.chunk_id for cr in remaining_chunks]}")
+                    tqdm.write(f"\tremaining locations: {remaining_locations}")
+                    tqdm.write(f"\tremaining statuses:  {[cs.name if cs else None for cs in remaining_statuses]}")
+                    tqdm.write("\n")
+                    time.sleep(1)

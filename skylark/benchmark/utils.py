@@ -8,7 +8,7 @@ from skylark.compute.cloud_providers import CloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.gcp.gcp_server import GCPServer
 from skylark.compute.server import Server, ServerState
-from skylark.utils import do_parallel
+from skylark.utils.utils import do_parallel
 
 
 def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None) -> Dict[str, List[Server]]:

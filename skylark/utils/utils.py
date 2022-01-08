@@ -28,13 +28,16 @@ class Timer:
         return self.end - self.start
 
 
-def wait_for(fn, timeout=60, interval=1, progress_bar=False, desc="Waiting"):
+def wait_for(fn, timeout=60, interval=1, progress_bar=False, desc="Waiting", leave_pbar=True):
     # wait for fn to return True
     start = time.time()
     if progress_bar:
-        pbar = tqdm(total=timeout, desc=desc)
+        pbar = tqdm(desc=desc, leave=leave_pbar)
     while time.time() - start < timeout:
         if fn():
+            if progress_bar:
+                pbar.close()
+                print()
             return True
         if progress_bar:
             pbar.update(interval)

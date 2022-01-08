@@ -6,6 +6,8 @@ from pathlib import Path
 import setproctitle
 from flask import Flask, jsonify, request
 from werkzeug.serving import make_server
+from werkzeug import serving
+from skylark import MB
 
 from skylark.gateway.chunk import ChunkRequest, ChunkState
 from skylark.gateway.chunk_store import ChunkStore
@@ -23,6 +25,7 @@ class GatewayDaemonAPI(threading.Thread):
     * GET /api/v1/chunk_requests/<int:chunk_id> - returns chunk request
     * POST /api/v1/chunk_requests - adds a new chunk request
     * PUT /api/v1/chunk_requests/<int:chunk_id> - updates chunk request
+    * GET /api/v1/chunk_status_log - returns list of chunk status log entries
     """
 
     def __init__(self, chunk_store: ChunkStore, gateway_receiver: GatewayReceiver, host="0.0.0.0", port=8080, debug=False, log_dir=None):
@@ -40,16 +43,26 @@ class GatewayDaemonAPI(threading.Thread):
         self.log_dir = log_dir
         if log_dir is not None:
             log_dir = Path(log_dir)
-            handler = logging.handlers.RotatingFileHandler(log_dir / "gateway_daemon_api.log", maxBytes=1024 * 1024 * 10)
+            handler = logging.handlers.RotatingFileHandler(log_dir / "gateway_daemon_api.log", maxBytes=1 * MB)
             logging.getLogger("werkzeug").addHandler(handler)
-            if debug:
-                logging.getLogger("werkzeug").addHandler(logging.StreamHandler())
-                logging.getLogger("werkzeug").setLevel(logging.DEBUG)
-            else:
-                logging.getLogger("werkzeug").setLevel(logging.INFO)
         if debug:
             self.app.config["JSONIFY_PRETTYPRINT_REGULAR"] = True
             self.app.config["TESTING"] = True
+            logging.getLogger("werkzeug").addHandler(logging.StreamHandler())
+            logging.getLogger("werkzeug").setLevel(logging.DEBUG)
+        else:
+            logging.getLogger("werkzeug").setLevel(logging.INFO)
+
+        # override werkzeug's logger to ignore requests to /api/v1/chunk_status_log
+        parent_log_request = serving.WSGIRequestHandler.log_request
+
+        def log_request(self, *args, **kwargs):
+            if self.path == "/api/v1/chunk_status_log":
+                return
+            parent_log_request(self, *args, **kwargs)
+
+        serving.WSGIRequestHandler.log_request = log_request
+
         self.server = make_server(host, port, self.app, threaded=True)
 
     def run(self):
@@ -175,3 +188,12 @@ class GatewayDaemonAPI(threading.Thread):
                     return jsonify({"status": "ok"})
                 else:
                     return jsonify({"error": "update not supported"}), 400
+
+        # list chunk status log
+        @self.app.route("/api/v1/chunk_status_log", methods=["GET"])
+        def get_chunk_status_log():
+            log = self.chunk_store.get_chunk_status_log()
+            for entry in log:
+                entry["time"] = entry["time"].isoformat()
+                entry["state"] = entry["state"].name
+            return jsonify({"chunk_status_log": log})

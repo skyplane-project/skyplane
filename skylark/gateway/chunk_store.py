@@ -2,6 +2,7 @@ from multiprocessing import Manager
 from os import PathLike
 from pathlib import Path
 from typing import Dict, List, Optional
+from datetime import datetime
 
 from loguru import logger
 
@@ -23,6 +24,9 @@ class ChunkStore:
         self.chunk_requests: Dict[int, ChunkRequest] = self.manager.dict()
         self.chunk_status: Dict[int, ChunkState] = self.manager.dict()
 
+        # state log
+        self.chunk_status_log: List[Dict] = self.manager.list()
+
     def get_chunk_file_path(self, chunk_id: int) -> Path:
         return self.chunk_dir / f"{chunk_id}.chunk"
 
@@ -34,6 +38,10 @@ class ChunkStore:
 
     def set_chunk_state(self, chunk_id: int, new_status: ChunkState):
         self.chunk_status[chunk_id] = new_status
+        self.chunk_status_log.append({"chunk_id": chunk_id, "state": new_status, "time": datetime.utcnow()})
+
+    def get_chunk_status_log(self) -> List[Dict]:
+        return list(self.chunk_status_log)
 
     def state_start_download(self, chunk_id: int):
         state = self.get_chunk_state(chunk_id)
@@ -50,9 +58,16 @@ class ChunkStore:
         else:
             raise ValueError(f"Invalid transition finish_download from {self.get_chunk_state(chunk_id)}")
 
+    def state_queue_upload(self, chunk_id: int):
+        state = self.get_chunk_state(chunk_id)
+        if state in [ChunkState.downloaded, ChunkState.upload_queued]:
+            self.set_chunk_state(chunk_id, ChunkState.upload_queued)
+        else:
+            raise ValueError(f"Invalid transition upload_queued from {self.get_chunk_state(chunk_id)}")
+
     def state_start_upload(self, chunk_id: int):
         state = self.get_chunk_state(chunk_id)
-        if state in [ChunkState.downloaded, ChunkState.upload_in_progress]:
+        if state in [ChunkState.upload_queued, ChunkState.upload_in_progress]:
             self.set_chunk_state(chunk_id, ChunkState.upload_in_progress)
         else:
             raise ValueError(f"Invalid transition start_upload from {self.get_chunk_state(chunk_id)}")

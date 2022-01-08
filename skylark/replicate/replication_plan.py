@@ -4,7 +4,7 @@ from typing import List, Optional
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.obj_store.s3_interface import S3Interface
-from skylark.utils import do_parallel
+from skylark.utils.utils import do_parallel
 
 
 @dataclass
@@ -14,6 +14,9 @@ class ReplicationJob:
     dest_region: str
     dest_bucket: str
     objs: List[str]
+
+    # Generates random chunks for testing on the gateways
+    random_chunk_size_mb: Optional[int] = None
 
     def src_obj_sizes(self):
         if self.source_region.split(":")[0] == "aws":

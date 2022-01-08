@@ -1,9 +1,10 @@
 import hashlib
 import os
 import tempfile
+from skylark import MB
 
 from skylark.obj_store.s3_interface import S3Interface
-from skylark.utils import Timer
+from skylark.utils.utils import Timer
 
 
 def test_s3_interface():
@@ -18,7 +19,7 @@ def test_s3_interface():
     with tempfile.NamedTemporaryFile() as tmp:
         fpath = tmp.name
         with open(fpath, "wb") as f:
-            f.write(os.urandom(int(file_size_mb * 1e6)))
+            f.write(os.urandom(int(file_size_mb * MB)))
         file_md5 = hashlib.md5(open(fpath, "rb").read()).hexdigest()
 
         with Timer() as t:

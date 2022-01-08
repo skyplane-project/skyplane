@@ -12,7 +12,7 @@ from loguru import logger
 
 from skylark.gateway.chunk import WireProtocolHeader
 from skylark.gateway.chunk_store import ChunkStore
-from skylark.utils import Timer
+from skylark.utils.utils import Timer
 
 
 class GatewayReceiver:
@@ -117,4 +117,5 @@ class GatewayReceiver:
             )
             if chunk_header.end_of_stream:
                 conn.close()
+                logger.debug(f"[receiver:{server_port}] End of stream reached")
                 return chunks_received
