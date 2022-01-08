@@ -3,6 +3,7 @@ import atexit
 
 from loguru import logger
 from skylark import GB, MB, print_header
+from skylark.gateway.chunk import ChunkState
 
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
@@ -105,7 +106,7 @@ def main(args):
     for path in rc.bound_paths:
         logger.info(f"Provisioned path {' -> '.join(path[i].region_tag for i in range(len(path)))}")
         for gw in path:
-            logger.info(f"\t[{gw.region_tag}] http://{gw.public_ip()}:8080/api/v1")
+            logger.info(f"\t[{gw.region_tag}] {gw.gateway_log_viewer_url}")
 
     # run replication, monitor progress
     job = ReplicationJob(
@@ -118,10 +119,10 @@ def main(args):
     )
 
     total_bytes = args.n_chunks * args.chunk_size_mb * MB
-    with Timer() as t:
-        crs = rc.run_replication_plan(job)
-        logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
-        transfer_time_s, throughput_gbits = rc.monitor_transfer(crs)
+    crs = rc.run_replication_plan(job)
+    logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
+    stats = rc.monitor_transfer(crs)
+    logger.info(f"Replication completed in {stats['total_runtime_s']:.2f}s ({stats['throughput_gbits']:.2f}GByte/s)")
 
 
 if __name__ == "__main__":

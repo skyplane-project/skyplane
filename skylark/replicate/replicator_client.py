@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Tuple
 import requests
 from loguru import logger
 from tqdm import tqdm
+import pandas as pd
 from skylark import GB, KB, MB
 
 from skylark.benchmark.utils import refresh_instance_list
@@ -221,6 +222,7 @@ class ReplicatorClient:
                     # make ChunkRequestHop list
                     cr_path = []
                     for hop_idx, hop_instance in enumerate(path):
+                        # todo support object stores
                         if hop_idx == 0:  # source gateway
                             location = f"random_{job.random_chunk_size_mb}MB"
                         elif hop_idx == len(path) - 1:  # destination gateway
@@ -246,8 +248,8 @@ class ReplicatorClient:
 
         return [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
 
-    def get_chunk_status_log(self, crs: List[ChunkRequest]) -> Dict[int, List[Dict]]:
-        chunk_logs = {cr.chunk.chunk_id: [] for cr in crs}
+    def get_chunk_status_log_df(self) -> pd.DataFrame:
+        chunk_logs = []
         for path_idx, path in enumerate(self.bound_paths):
             for hop_idx, hop_instance in enumerate(path):
                 reply = requests.get(f"http://{hop_instance.public_ip()}:8080/api/v1/chunk_status_log")
@@ -259,61 +261,53 @@ class ReplicatorClient:
                     log_entry["hop_idx"] = hop_idx
                     log_entry["time"] = datetime.fromisoformat(log_entry["time"])
                     log_entry["state"] = ChunkState.from_str(log_entry["state"])
-                    chunk_logs[log_entry["chunk_id"]].append(log_entry)
-        return chunk_logs
+                    chunk_logs.append(log_entry)
+        df = pd.DataFrame(chunk_logs)
+        return df
 
-    def monitor_transfer(self, crs: List[ChunkRequest]) -> Tuple[float, float]:
+    def monitor_transfer(self, crs: List[ChunkRequest], completed_state=ChunkState.upload_complete) -> Dict:
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs])
         with tqdm(total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB) as pbar:
             while True:
-                # get chunk status
-                # todo fix this disgusting code
-                chunk_last_position = {}
-                chunk_last_status = {}
-                for chunk_id, chunk_log in self.get_chunk_status_log(crs).items():
-                    last_entry_idx = -1
-                    for entry_idx, entry in enumerate(chunk_log):
-                        if entry["state"] != ChunkState.registered:
-                            if last_entry_idx == -1 or entry["hop_idx"] >= chunk_log[last_entry_idx]["hop_idx"]:
-                                if last_entry_idx == -1 or entry["path_idx"] >= chunk_log[last_entry_idx]["path_idx"]:
-                                    if last_entry_idx == -1 or entry["time"] > chunk_log[last_entry_idx]["time"]:
-                                        last_entry_idx = entry_idx
-                                        chunk_last_position[chunk_id] = (entry["path_idx"], entry["hop_idx"])
-                                        chunk_last_status[chunk_id] = entry["state"]
-
-                # count completed chunks
-                completed_chunk_ids = []
-                completed_bytes = 0
-                for chunk_id in chunk_last_status.keys():
-                    last_path_idx, last_hop_idx = chunk_last_position[chunk_id]
-                    last_status = chunk_last_status[chunk_id]
-                    if (
-                        last_status == ChunkState.downloaded
-                        and last_path_idx == len(self.bound_paths) - 1
-                        and last_hop_idx == len(self.bound_paths[last_path_idx]) - 1
-                    ):
-                        completed_chunk_ids.append(chunk_id)
-                        completed_bytes += crs[chunk_id].chunk.chunk_length_bytes
+                log_df = self.get_chunk_status_log_df()
+                last_log_df = (
+                    log_df.groupby(["chunk_id"])
+                    .apply(lambda df: df.sort_values(["path_idx", "hop_idx", "time"], ascending=False).head(1))
+                    .reset_index(drop=True)
+                )
+                is_complete_fn = (
+                    lambda row: row["state"] >= completed_state
+                    and row["path_idx"] == len(self.bound_paths) - 1
+                    and row["hop_idx"] == len(self.bound_paths[row["path_idx"]]) - 1
+                )
+                completed_chunk_ids = last_log_df[last_log_df.apply(is_complete_fn, axis=1)].chunk_id.values
+                completed_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs if cr.chunk.chunk_id in completed_chunk_ids])
 
                 # update progress bar
                 pbar.update(completed_bytes * 8 - pbar.n)
+                total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
+                throughput_gbits = completed_bytes * 8 / GB / total_runtime_s
+                pbar.set_description(f"Replication: average {throughput_gbits:.2f}Gbit/s")
 
                 if len(completed_chunk_ids) == len(crs):
-                    log = self.get_chunk_status_log(crs)
-                    # compute transfer time as last event - earliest event
-                    first_event = min([log[chunk_id][log_idx]["time"] for chunk_id in log for log_idx in range(len(log[chunk_id]))])
-                    last_event = max([log[chunk_id][log_idx]["time"] for chunk_id in log for log_idx in range(len(log[chunk_id]))])
-                    transfer_time_s = (last_event - first_event).total_seconds()
-                    throughput_gbits = completed_bytes * 8 / GB / transfer_time_s
-                    logger.info(f"Replication completed in {transfer_time_s:.2f}s, throughput: {throughput_gbits:.2f}Gbit/s")
-                    return transfer_time_s, throughput_gbits
+                    return dict(completed_chunk_ids=completed_chunk_ids, total_runtime_s=total_runtime_s, throughput_gbits=throughput_gbits)
                 else:
-                    remaining_chunks = [cr for cr in crs if cr.chunk.chunk_id not in completed_chunk_ids]
-                    tqdm.write(f"{len(remaining_chunks)} chunks remaining")
-                    remaining_locations = [chunk_last_position.get(cr.chunk.chunk_id) for cr in remaining_chunks]
-                    remaining_statuses = [chunk_last_status.get(cr.chunk.chunk_id) for cr in remaining_chunks]
-                    tqdm.write(f"\tremaining chunk ids: {[cr.chunk.chunk_id for cr in remaining_chunks]}")
-                    tqdm.write(f"\tremaining locations: {remaining_locations}")
-                    tqdm.write(f"\tremaining statuses:  {[cs.name if cs else None for cs in remaining_statuses]}")
-                    tqdm.write("\n")
-                    time.sleep(0.25)
+                    tqdm.write("\n\n")
+                    # print each path + hop (with region_tag) along with incomplete chunks and their status
+                    for path_idx, path in enumerate(self.bound_paths):
+                        for hop_idx, hop_instance in enumerate(path):
+                            last_log_df = (
+                                log_df[
+                                    (log_df.path_idx == path_idx)
+                                    & (log_df.hop_idx == hop_idx)
+                                    & (~log_df.chunk_id.isin(completed_chunk_ids))
+                                ]
+                                .groupby(["chunk_id"])
+                                .apply(lambda df: df.sort_values(["path_idx", "hop_idx", "time"], ascending=False).head(1))
+                                .reset_index(drop=True)
+                            )
+                            for state, match_df in last_log_df.groupby("state"):
+                                tqdm.write(
+                                    f"[({path_idx}, {hop_idx}):{hop_instance.region_tag}] {state.name}: {', '.join(str(v) for v in match_df.chunk_id.values)}"
+                                )
+                    time.sleep(0.5)

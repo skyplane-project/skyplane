@@ -48,7 +48,7 @@ class GatewayReceiver:
                 started_event.set()
                 while True:
                     if exit_flag.value == 1:
-                        logger.warning(f"[server:{port}] Exiting on signal")
+                        logger.warning(f"[server:{socket_port}] Exiting on signal")
                         return
                     # Wait for a connection with a timeout of 1 second w/ select
                     readable, _, _ = select.select([sock], [], [], 1)
@@ -96,6 +96,7 @@ class GatewayReceiver:
             # receive header and write data to file
             chunk_header = WireProtocolHeader.from_socket(conn)
             self.chunk_store.state_start_download(chunk_header.chunk_id)
+            logger.debug(f"[server:{server_port}] Got chunk header {chunk_header.chunk_id}: {chunk_header}")
             with Timer() as t:
                 chunk_data_size = chunk_header.chunk_len
                 chunk_received_size = 0

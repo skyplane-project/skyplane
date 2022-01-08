@@ -68,17 +68,14 @@ class GatewayDaemon:
                     if current_hop.chunk_location_type == "dst_object_store":
                         logger.warning(f"NOT IMPLEMENTED: Queuing object store upload for chunk {chunk_req.chunk.chunk_id}")
                         self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
-                    elif (
-                        current_hop.chunk_location_type == "src_object_store"
-                        or current_hop.chunk_location_type == "relay"
-                        or current_hop.chunk_location_type.startswith("random_")
-                    ):
+                    elif current_hop.chunk_location_type == "relay" or current_hop.chunk_location_type.startswith("random_"):
                         logger.info(f"Queuing chunk {chunk_req.chunk.chunk_id} for relay")
                         self.gateway_sender.queue_request(chunk_req)
                         self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
-                    elif current_hop.chunk_location_type == "save_local":
-                        # do nothing, done
-                        pass
+                    elif current_hop.chunk_location_type == "save_local":  # do nothing, save to ChunkStore
+                        self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
+                        self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id)
+                        self.chunk_store.state_finish_upload(chunk_req.chunk.chunk_id)
                     else:
                         logger.error(f"Unknown chunk location type {current_hop.chunk_location_type}")
                         self.chunk_store.state_fail(chunk_req.chunk.chunk_id)

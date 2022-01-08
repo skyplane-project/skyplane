@@ -34,6 +34,7 @@ WireProtocolHeader:
     end_of_stream: bool
 """
 
+from functools import total_ordering
 import socket
 from dataclasses import asdict, dataclass
 from enum import Enum, auto
@@ -102,6 +103,7 @@ class ChunkRequest:
         return ChunkRequest(chunk=Chunk.from_dict(in_dict["chunk"]), path=[ChunkRequestHop.from_dict(hop) for hop in in_dict["path"]])
 
 
+@total_ordering
 class ChunkState(Enum):
     registered = auto()
     download_in_progress = auto()
@@ -114,6 +116,20 @@ class ChunkState(Enum):
     @staticmethod
     def from_str(s: str):
         return ChunkState[s.lower()]
+
+    def to_short_str(self):
+        return {
+            ChunkState.registered: "REG",
+            ChunkState.download_in_progress: "DL",
+            ChunkState.downloaded: "DL_DONE",
+            ChunkState.upload_queued: "UL_QUE",
+            ChunkState.upload_in_progress: "UL",
+            ChunkState.upload_complete: "UL_DONE",
+            ChunkState.failed: "FAILED",
+        }
+
+    def __lt__(self, other):
+        return self.value < other.value
 
 
 @dataclass
