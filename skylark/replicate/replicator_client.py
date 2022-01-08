@@ -2,6 +2,7 @@ from datetime import datetime
 import itertools
 import json
 from logging import log
+from functools import partial
 import time
 from typing import Dict, List, Optional, Tuple
 
@@ -44,11 +45,12 @@ class ReplicatorClient:
         # init clouds
         jobs = []
         if self.aws is not None:
-            jobs.extend([lambda: self.aws.add_ip_to_security_group(r) for r in self.aws.region_list()])
+            for r in self.aws.region_list():
+                jobs.append(partial(self.aws.add_ip_to_security_group, r))
         if self.gcp is not None:
-            jobs.append(lambda: self.gcp.create_ssh_key())
-            jobs.append(lambda: self.gcp.configure_default_network())
-            jobs.append(lambda: self.gcp.configure_default_firewall())
+            jobs.append(self.gcp.create_ssh_key)
+            jobs.append(self.gcp.configure_default_network)
+            jobs.append(self.gcp.configure_default_firewall)
         with Timer(f"Cloud SSH key initialization"):
             do_parallel(lambda fn: fn(), jobs)
 
@@ -82,7 +84,6 @@ class ReplicatorClient:
                     for i in ilist:
                         if f"aws:{r}" in aws_regions_to_provision:
                             aws_regions_to_provision.remove(f"aws:{r}")
-                            logger.debug(f"Found existing instance {i}")
             else:
                 current_aws_instances = {}
 
@@ -315,4 +316,4 @@ class ReplicatorClient:
                     tqdm.write(f"\tremaining locations: {remaining_locations}")
                     tqdm.write(f"\tremaining statuses:  {[cs.name if cs else None for cs in remaining_statuses]}")
                     tqdm.write("\n")
-                    time.sleep(1)
+                    time.sleep(0.25)

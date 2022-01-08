@@ -4,11 +4,8 @@
 BGreen='\033[1;32m'
 NC='\033[0m' # No Color
 
-mkdir -p ./dist
 echo -e "${BGreen}Building docker image${NC}"
 sudo DOCKER_BUILDKIT=1 docker build -t skylark .
-# sudo docker save skylark | pv > ./dist/skylark.tar
-# du -sh ./dist/skylark.tar
 
 DOCKER_URL="ghcr.io/parasj/skylark:local-$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)"
 echo -e "${BGreen}Uploading docker image to $DOCKER_URL${NC}"

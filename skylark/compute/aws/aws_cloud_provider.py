@@ -1,5 +1,6 @@
 from functools import lru_cache
 import uuid
+import time
 from typing import List, Optional
 
 import botocore
@@ -72,31 +73,95 @@ class AWSCloudProvider(CloudProvider):
         instances = ec2.instances.filter(Filters=[{"Name": "instance-state-name", "Values": valid_states}])
         instance_ids = [i.id for i in instances]
         return [AWSServer(f"aws:{region}", i) for i in instance_ids]
+    
+    def get_security_group(self, region: str, vpc_name = "skylark") -> List[str]:
+        ec2 = AWSServer.get_boto3_resource("ec2", region)
+        vpcs = list(ec2.vpcs.filter(Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]).all())
+        return list(vpcs[0].security_groups.all())[0]
 
-    def add_ip_to_security_group(
-        self, aws_region: str, security_group_id: Optional[str] = None, ip="0.0.0.0/0", from_port=0, to_port=65535
-    ):
-        """Add IP to security group. If security group ID is None, use default."""
-        ec2 = AWSServer.get_boto3_resource("ec2", aws_region)
-        if security_group_id is None:
-            security_group_id = [i for i in ec2.security_groups.filter(GroupNames=["default"]).all()][0].id
-        sg = ec2.SecurityGroup(security_group_id)
-        matches_ip = lambda rule: len(rule["IpRanges"]) > 0 and rule["IpRanges"][0]["CidrIp"] == ip
-        matches_ports = lambda rule: ("FromPort" not in rule and "ToPort" not in rule) or (
-            rule["FromPort"] <= from_port and rule["ToPort"] >= to_port
-        )
+    def delete_vpc(self, region: str, vpcid: str):
+        """Delete VPC, from https://gist.github.com/vernhart/c6a0fc94c0aeaebe84e5cd6f3dede4ce"""
+        ec2 = AWSServer.get_boto3_resource("ec2", region)
+        ec2client = ec2.meta.client
+        vpc = ec2.Vpc(vpcid)
+        # detach and delete all gateways associated with the vpc
+        for gw in vpc.internet_gateways.all():
+            vpc.detach_internet_gateway(InternetGatewayId=gw.id)
+            gw.delete()
+        # delete all route table associations
+        for rt in vpc.route_tables.all():
+            for rta in rt.associations:
+                if not rta.main:
+                    rta.delete()
+        # delete any instances
+        for subnet in vpc.subnets.all():
+            for instance in subnet.instances.all():
+                instance.terminate()
+        # delete our endpoints
+        for ep in ec2client.describe_vpc_endpoints(
+                Filters=[{
+                    'Name': 'vpc-id',
+                    'Values': [vpcid]
+                }])['VpcEndpoints']:
+            ec2client.delete_vpc_endpoints(VpcEndpointIds=[ep['VpcEndpointId']])
+        # delete our security groups
+        for sg in vpc.security_groups.all():
+            if sg.group_name != 'default':
+                sg.delete()
+        # delete any vpc peering connections
+        for vpcpeer in ec2client.describe_vpc_peering_connections(
+                Filters=[{
+                    'Name': 'requester-vpc-info.vpc-id',
+                    'Values': [vpcid]
+                }])['VpcPeeringConnections']:
+            ec2.VpcPeeringConnection(vpcpeer['VpcPeeringConnectionId']).delete()
+        # delete non-default network acls
+        for netacl in vpc.network_acls.all():
+            if not netacl.is_default:
+                netacl.delete()
+        # delete network interfaces
+        for subnet in vpc.subnets.all():
+            for interface in subnet.network_interfaces.all():
+                interface.delete()
+            subnet.delete()
+        # finally, delete the vpc
+        ec2client.delete_vpc(VpcId=vpcid)
+
+    def get_vpc(self, region: str, vpc_name = "skylark"):
+        ec2 = AWSServer.get_boto3_resource("ec2", region)
+        vpcs = list(ec2.vpcs.filter(Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]).all())
+        if len(vpcs) == 0:
+            return None
+        else:
+            return vpcs[0]
+
+    def make_vpc(self, region: str, vpc_name = "skylark"):
+        ec2 = AWSServer.get_boto3_resource("ec2", region)
+        vpcs = list(ec2.vpcs.filter(Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]).all())
+        if len(vpcs) > 0:
+            for vpc in vpcs:
+                try:
+                    logger.warning(f"[{region}] Deleting VPC {vpc.id}")
+                    self.delete_vpc(region, vpc.id)
+                except botocore.exceptions.ClientError as e:
+                    logger.warning(f"Failed to delete VPC {vpc.id} in {region}: {e}")
+        vpc = ec2.create_vpc(CidrBlock="10.0.0.0/16")
+        vpc.wait_until_available()
+        vpc.create_tags(Tags=[{"Key": "Name", "Value": vpc_name}])
+        return list(vpc.security_groups.all())[0]
+    
+    def add_ip_to_security_group(self, aws_region: str):
+        """Add IP to security group. If security group ID is None, use group named skylark (create if not exists)."""
+        self.make_vpc(aws_region)
+        sg = self.get_security_group(aws_region)
         try:
-            if not any(rule["IpProtocol"] == "-1" and matches_ip(rule) and matches_ports(rule) for rule in sg.ip_permissions):
-                sg.authorize_ingress(IpProtocol="-1", FromPort=from_port, ToPort=to_port, CidrIp=ip)
-                logger.info(f"({aws_region}) Added IP {ip} to security group {security_group_id}")
+            sg.authorize_ingress(IpPermissions=[{"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}])
         except botocore.exceptions.ClientError as e:
-            if str(e).endswith("already exists"):
-                logger.warning(f"Error adding IPs to security group, {e}")
-            else:
+            if not str(e).endswith("already exists"):
                 raise e
 
     @lru_cache()
-    def get_ubuntu_ami_id(self, region: str, store="hvm:ebs-ssd") -> str:
+    def get_ubuntu_ami_id(self, region: str) -> str:
         client = AWSServer.get_boto3_resource("ec2", region)
         images = client.images.filter(
             Owners=["099720109477"], Filters=[{"Name": "name", "Values": ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]}]
@@ -123,8 +188,13 @@ class AWSCloudProvider(CloudProvider):
         ec2 = AWSServer.get_boto3_resource("ec2", region)
         AWSServer.make_keyfile(region)
 
-        logger.debug(f"[{region}] Provisioning instance w/ ami {ami_id}, instance class {instance_class}")
         # set instance storage to 128GB EBS
+        # use security group named default
+        # use vpc named skylark
+        vpc = self.get_vpc(region)
+        assert vpc is not None, "No VPC found"
+        subnets = list(vpc.subnets.all())
+        breakpoint()
         instance = ec2.create_instances(
             ImageId=ami_id,
             InstanceType=instance_class,
@@ -147,8 +217,9 @@ class AWSCloudProvider(CloudProvider):
                     },
                 }
             ],
+            SecurityGroupIds=[self.get_security_group(region).id],
+            SubnetId=subnet.id,
         )
         server = AWSServer(f"aws:{region}", instance[0].id)
-        logger.debug(f"[{region}] Started server {server}")
         server.wait_for_ready()
         return server
