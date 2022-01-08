@@ -266,6 +266,10 @@ class Server:
             docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
             start_out, start_err = self.run_command(docker_launch_cmd)
             assert not start_err, f"Error starting gateway: {start_err}"
+            gateway_container_hash = start_out.strip().split("\n")[-1][:12]
+            self.gateway_api_url = f"http://{self.public_ip()}:8080/api/v1"
+            self.gateway_log_viewer_url = f"http://{self.public_ip()}:8888/container/{gateway_container_hash}"
+            self.gateway_htop_url = f"http://{self.public_ip()}:8889"
 
         # wait for gateways to start (check status API)
         def is_ready():

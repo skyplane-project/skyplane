@@ -28,7 +28,7 @@ class ChunkStore:
         self.chunk_status_log: List[Dict] = self.manager.list()
 
     def get_chunk_file_path(self, chunk_id: int) -> Path:
-        return self.chunk_dir / f"{chunk_id}.chunk"
+        return self.chunk_dir / f"{chunk_id:05d}.chunk"
 
     ###
     # ChunkState management

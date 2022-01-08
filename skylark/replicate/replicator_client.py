@@ -298,12 +298,17 @@ class ReplicatorClient:
                     # print each path + hop (with region_tag) along with incomplete chunks and their status
                     for path_idx, path in enumerate(self.bound_paths):
                         for hop_idx, hop_instance in enumerate(path):
-                            matches = (
-                                (last_log_df.path_idx == path_idx)
-                                & (last_log_df.hop_idx == hop_idx)
-                                & (~last_log_df.chunk_id.isin(completed_chunk_ids))
+                            last_log_df = (
+                                log_df[
+                                    (log_df.path_idx == path_idx)
+                                    & (log_df.hop_idx == hop_idx)
+                                    & (~log_df.chunk_id.isin(completed_chunk_ids))
+                                ]
+                                .groupby(["chunk_id"])
+                                .apply(lambda df: df.sort_values(["path_idx", "hop_idx", "time"], ascending=False).head(1))
+                                .reset_index(drop=True)
                             )
-                            for state, match_df in last_log_df[matches].groupby("state"):
+                            for state, match_df in last_log_df.groupby("state"):
                                 tqdm.write(
                                     f"[({path_idx}, {hop_idx}):{hop_instance.region_tag}] {state.name}: {', '.join(str(v) for v in match_df.chunk_id.values)}"
                                 )
