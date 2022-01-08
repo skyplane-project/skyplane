@@ -265,9 +265,7 @@ class ReplicatorClient:
         df = pd.DataFrame(chunk_logs)
         return df
 
-    def monitor_transfer(
-        self, crs: List[ChunkRequest], completed_state=ChunkState.downloaded
-    ) -> Tuple[float, float]:  # todo should be uploaded once object store is implemented
+    def monitor_transfer(self, crs: List[ChunkRequest], completed_state=ChunkState.upload_complete) -> Dict:
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs])
         with tqdm(total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB) as pbar:
             while True:
@@ -278,7 +276,7 @@ class ReplicatorClient:
                     .reset_index(drop=True)
                 )
                 is_complete_fn = (
-                    lambda row: row["state"] >= ChunkState.downloaded
+                    lambda row: row["state"] >= completed_state
                     and row["path_idx"] == len(self.bound_paths) - 1
                     and row["hop_idx"] == len(self.bound_paths[row["path_idx"]]) - 1
                 )
