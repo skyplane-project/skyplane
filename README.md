@@ -113,3 +113,5 @@ Replication progress:  17%|█████████████████�
 ```
 
 </details>
+
+When done, stop all instances started by Skylark by running `python skylark/benchmark/stop_all_instances.py`. If you use GCP, pass your GCP project ID in with the `--gcp-project` flag.
