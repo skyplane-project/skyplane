@@ -68,11 +68,9 @@ class GatewayDaemon:
                     if current_hop.chunk_location_type == "dst_object_store":
                         logger.warning(f"NOT IMPLEMENTED: Queuing object store upload for chunk {chunk_req.chunk.chunk_id}")
                         self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
-                    elif (
-                        current_hop.chunk_location_type == "src_object_store"
-                        or current_hop.chunk_location_type == "relay"
-                        or current_hop.chunk_location_type.startswith("random_")
-                    ):
+                    elif current_hop.chunk_location_type == "src_object_store":
+                        raise ValueError(f"Invalid state for chunk {chunk_req.chunk.chunk_id}: {chunk_req.state}")
+                    elif current_hop.chunk_location_type == "relay" or current_hop.chunk_location_type.startswith("random_"):
                         logger.info(f"Queuing chunk {chunk_req.chunk.chunk_id} for relay")
                         self.gateway_sender.queue_request(chunk_req)
                         self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)

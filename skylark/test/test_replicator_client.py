@@ -121,7 +121,8 @@ def main(args):
     with Timer() as t:
         crs = rc.run_replication_plan(job)
         logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
-        transfer_time_s, throughput_gbits = rc.monitor_transfer(crs)
+        stats = rc.monitor_transfer(crs)
+    logger.info(f"Replication completed in {t.elapsed_s:.2f}s ({total_bytes / GB / t.elapsed_s:.2f}GByte/s)")
 
 
 if __name__ == "__main__":
