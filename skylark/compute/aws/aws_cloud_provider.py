@@ -73,14 +73,18 @@ class AWSCloudProvider(CloudProvider):
         instances = ec2.instances.filter(Filters=[{"Name": "instance-state-name", "Values": valid_states}])
         instance_ids = [i.id for i in instances]
         return [AWSServer(f"aws:{region}", i) for i in instance_ids]
-    
-    def get_security_group(self, region: str, vpc_name = "skylark") -> List[str]:
+
+    def get_security_group(self, region: str, vpc_name="skylark", sg_name="skylark") -> List[str]:
         ec2 = AWSServer.get_boto3_resource("ec2", region)
         vpcs = list(ec2.vpcs.filter(Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]).all())
-        return list(vpcs[0].security_groups.all())[0]
+        assert len(vpcs) == 1, f"Found {len(vpcs)} vpcs with name {vpc_name}"
+        sgs = [sg for sg in vpcs[0].security_groups.all() if sg.group_name == sg_name]
+        assert len(sgs) == 1
+        return sgs[0]
 
     def delete_vpc(self, region: str, vpcid: str):
         """Delete VPC, from https://gist.github.com/vernhart/c6a0fc94c0aeaebe84e5cd6f3dede4ce"""
+        logger.warning(f"[{region}] Deleting VPC {vpcid}")
         ec2 = AWSServer.get_boto3_resource("ec2", region)
         ec2client = ec2.meta.client
         vpc = ec2.Vpc(vpcid)
@@ -98,23 +102,17 @@ class AWSCloudProvider(CloudProvider):
             for instance in subnet.instances.all():
                 instance.terminate()
         # delete our endpoints
-        for ep in ec2client.describe_vpc_endpoints(
-                Filters=[{
-                    'Name': 'vpc-id',
-                    'Values': [vpcid]
-                }])['VpcEndpoints']:
-            ec2client.delete_vpc_endpoints(VpcEndpointIds=[ep['VpcEndpointId']])
+        for ep in ec2client.describe_vpc_endpoints(Filters=[{"Name": "vpc-id", "Values": [vpcid]}])["VpcEndpoints"]:
+            ec2client.delete_vpc_endpoints(VpcEndpointIds=[ep["VpcEndpointId"]])
         # delete our security groups
         for sg in vpc.security_groups.all():
-            if sg.group_name != 'default':
+            if sg.group_name != "default":
                 sg.delete()
         # delete any vpc peering connections
-        for vpcpeer in ec2client.describe_vpc_peering_connections(
-                Filters=[{
-                    'Name': 'requester-vpc-info.vpc-id',
-                    'Values': [vpcid]
-                }])['VpcPeeringConnections']:
-            ec2.VpcPeeringConnection(vpcpeer['VpcPeeringConnectionId']).delete()
+        for vpcpeer in ec2client.describe_vpc_peering_connections(Filters=[{"Name": "requester-vpc-info.vpc-id", "Values": [vpcid]}])[
+            "VpcPeeringConnections"
+        ]:
+            ec2.VpcPeeringConnection(vpcpeer["VpcPeeringConnectionId"]).delete()
         # delete non-default network acls
         for netacl in vpc.network_acls.all():
             if not netacl.is_default:
@@ -127,7 +125,7 @@ class AWSCloudProvider(CloudProvider):
         # finally, delete the vpc
         ec2client.delete_vpc(VpcId=vpcid)
 
-    def get_vpc(self, region: str, vpc_name = "skylark"):
+    def get_vpc(self, region: str, vpc_name="skylark"):
         ec2 = AWSServer.get_boto3_resource("ec2", region)
         vpcs = list(ec2.vpcs.filter(Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]).all())
         if len(vpcs) == 0:
@@ -135,21 +133,60 @@ class AWSCloudProvider(CloudProvider):
         else:
             return vpcs[0]
 
-    def make_vpc(self, region: str, vpc_name = "skylark"):
+    def make_vpc(self, region: str, vpc_name="skylark"):
         ec2 = AWSServer.get_boto3_resource("ec2", region)
+        ec2client = ec2.meta.client
         vpcs = list(ec2.vpcs.filter(Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]).all())
-        if len(vpcs) > 0:
+
+        # find matching valid VPC
+        matching_vpc = None
+        for vpc in vpcs:
+            if (
+                vpc.cidr_block == "10.0.0.0/16"
+                and vpc.describe_attribute(Attribute="enableDnsSupport")["EnableDnsSupport"]
+                and vpc.describe_attribute(Attribute="enableDnsHostnames")["EnableDnsHostnames"]
+            ):
+                matching_vpc = vpc
+                # delete all other vpcs
+                for vpc in vpcs:
+                    if vpc != matching_vpc:
+                        try:
+                            self.delete_vpc(region, vpc.id)
+                        except botocore.exceptions.ClientError as e:
+                            logger.warning(f"Failed to delete VPC {vpc.id} in {region}: {e}")
+                break
+
+        # make vpc if none found
+        if matching_vpc is None:
+            # delete old skylark vpcs
             for vpc in vpcs:
-                try:
-                    logger.warning(f"[{region}] Deleting VPC {vpc.id}")
-                    self.delete_vpc(region, vpc.id)
-                except botocore.exceptions.ClientError as e:
-                    logger.warning(f"Failed to delete VPC {vpc.id} in {region}: {e}")
-        vpc = ec2.create_vpc(CidrBlock="10.0.0.0/16")
-        vpc.wait_until_available()
-        vpc.create_tags(Tags=[{"Key": "Name", "Value": vpc_name}])
-        return list(vpc.security_groups.all())[0]
-    
+                self.delete_vpc(region, vpc.id)
+
+            # enable dns support, enable dns hostnames
+            vpc = ec2.create_vpc(CidrBlock="10.0.0.0/16", InstanceTenancy="default")
+            vpc.modify_attribute(EnableDnsSupport={"Value": True})
+            vpc.modify_attribute(EnableDnsHostnames={"Value": True})
+            vpc.create_tags(Tags=[{"Key": "Name", "Value": vpc_name}])
+            vpc.wait_until_available()
+
+            # make subnet
+            subnet = ec2.create_subnet(CidrBlock="10.0.2.0/24", VpcId=vpc.id)
+            subnet.meta.client.modify_subnet_attribute(SubnetId=subnet.id, MapPublicIpOnLaunch={"Value": True})
+
+            # make internet gateway
+            igw = ec2.create_internet_gateway()
+            igw.attach_to_vpc(VpcId=vpc.id)
+            public_route_table = list(vpc.route_tables.all())[0]
+            # add a default route, for Public Subnet, pointing to Internet Gateway
+            ec2client.create_route(RouteTableId=public_route_table.id, DestinationCidrBlock="0.0.0.0/0", GatewayId=igw.id)
+            public_route_table.associate_with_subnet(SubnetId=subnet.id)
+
+            # make security group named "default"
+            sg = ec2.create_security_group(GroupName="skylark", Description="Default security group for Skylark VPC", VpcId=vpc.id)
+        else:
+            sg = self.get_security_group(region, vpc_name)
+        return sg
+
     def add_ip_to_security_group(self, aws_region: str):
         """Add IP to security group. If security group ID is None, use group named skylark (create if not exists)."""
         self.make_vpc(aws_region)
@@ -194,7 +231,7 @@ class AWSCloudProvider(CloudProvider):
         vpc = self.get_vpc(region)
         assert vpc is not None, "No VPC found"
         subnets = list(vpc.subnets.all())
-        breakpoint()
+        assert len(subnets) > 0, "No subnets found"
         instance = ec2.create_instances(
             ImageId=ami_id,
             InstanceType=instance_class,
@@ -217,9 +254,17 @@ class AWSCloudProvider(CloudProvider):
                     },
                 }
             ],
-            SecurityGroupIds=[self.get_security_group(region).id],
-            SubnetId=subnet.id,
+            NetworkInterfaces=[
+                {
+                    "DeviceIndex": 0,
+                    "Groups": [self.get_security_group(region).group_id],
+                    "SubnetId": subnets[0].id,
+                    "AssociatePublicIpAddress": True,
+                    "DeleteOnTermination": True,
+                }
+            ],
         )
+        instance[0].wait_until_running()
         server = AWSServer(f"aws:{region}", instance[0].id)
         server.wait_for_ready()
         return server
