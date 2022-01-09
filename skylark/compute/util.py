@@ -11,7 +11,7 @@ def make_netdata_command(port, netdata_hostname=None):
         -v /etc/os-release:/host/etc/os-release:ro \
         --cap-add SYS_PTRACE \
         --security-opt apparmor=unconfined \
-        {docker_args} netdata/netdata"""
+        {docker_args} netdata/netdata:stable"""
     docker_args = "--hostname={}".format(netdata_hostname) if netdata_hostname else ""
     return cmd.format(port=port, docker_args=docker_args)
 
