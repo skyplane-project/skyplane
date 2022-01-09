@@ -28,7 +28,7 @@ class Timer:
         return self.end - self.start
 
 
-def wait_for(fn, timeout=60, interval=1, progress_bar=False, desc="Waiting", leave_pbar=True):
+def wait_for(fn, timeout=60, interval=.25, progress_bar=False, desc="Waiting", leave_pbar=True):
     # wait for fn to return True
     start = time.time()
     if progress_bar:

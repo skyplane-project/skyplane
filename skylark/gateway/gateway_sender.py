@@ -1,8 +1,9 @@
+from functools import partial
 import queue
 import socket
 from contextlib import closing
 from multiprocessing import Event, Manager, Process, Value
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import requests
 import setproctitle
@@ -11,7 +12,7 @@ from skylark import MB
 
 from skylark.gateway.chunk import ChunkRequest
 from skylark.gateway.chunk_store import ChunkStore
-from skylark.utils.utils import Timer
+from skylark.utils.utils import Timer, wait_for
 
 
 class GatewaySender:
@@ -28,9 +29,10 @@ class GatewaySender:
         self.exit_flags = [Event() for _ in range(self.n_processes)]
 
         # process-local state
-        self.worker_id: int = None
-        self.destination_ports: Dict[str, int] = None  # ip_address -> int
-        self.destination_sockets: Dict[str, socket.socket] = None  # ip_address -> socket
+        self.worker_id: Optional[int] = None
+        self.destination_ports: Dict[str, int] = {}  # ip_address -> int
+        self.destination_sockets: Dict[str, socket.socket] = {}  # ip_address -> socket
+        self.sent_chunk_ids: Dict[str, List[int]] = {}  # ip_address -> list of chunk_ids
 
     def start_workers(self):
         for i in range(self.n_processes):
@@ -48,8 +50,7 @@ class GatewaySender:
     def worker_loop(self, worker_id: int):
         setproctitle.setproctitle(f"skylark-gateway-sender:{worker_id}")
         self.worker_id = worker_id
-        self.destination_ports = {}
-        self.destination_sockets = {}
+
         while not self.exit_flags[worker_id].is_set():
             # get all items from queue
             chunk_ids_to_send = []
@@ -83,10 +84,28 @@ class GatewaySender:
                     # send chunks
                     chunk_ids = [req.chunk.chunk_id for req in chunks]
                     self.send_chunks(chunk_ids, next_hop.hop_ip_address)
+                    if next_hop.hop_ip_address not in self.sent_chunk_ids:
+                        self.sent_chunk_ids[next_hop.hop_ip_address] = []
+                    self.sent_chunk_ids[next_hop.hop_ip_address].extend(chunk_ids)
 
         # close destination sockets
         for dst_socket in self.destination_sockets.values():
             dst_socket.close()
+        
+        # wait for all chunks to reach state "downloaded"
+        def wait_for_chunks(chunk_ids):
+            cr_status = {}
+            for ip, ip_chunk_ids in self.sent_chunk_ids.items():
+                response = requests.get(f"http://{ip}:8080/api/v1/chunk_requests")
+                assert response.status_code == 200, f"{response.status_code} {response.text}"
+                host_state = response.json()["chunk_requests"]
+                for chunk_id in chunk_ids:
+                    cr_status[chunk_id] = host_state[chunk_id]["state"]
+            return all(cr_status[chunk_id] == "downloaded" for chunk_id in chunk_ids)
+        
+        wait_for(partial(wait_for_chunks, chunk_ids_to_send))
+
+        # close servers
         for dst_host, dst_port in self.destination_ports.items():
             response = requests.delete(f"http://{dst_host}:8080/api/v1/servers/{dst_port}")
             assert response.status_code == 200 and response.json() == {"status": "ok"}, response.json()
