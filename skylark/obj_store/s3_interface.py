@@ -42,6 +42,8 @@ class S3Interface(ObjectStoreInterface):
 
     def bucket_exists(self):
         s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
+        print("bucket name", self.bucket_name)
+        print([b["Name"] for b in s3_client.list_buckets()["Buckets"]])
         return self.bucket_name in [b["Name"] for b in s3_client.list_buckets()["Buckets"]]
 
     def create_bucket(self):
@@ -106,6 +108,7 @@ class S3Interface(ObjectStoreInterface):
         ).finished_future
 
     def upload_object(self, src_file_path, dst_object_name, content_type="infer") -> Future:
+        print("uploading object", src_file_path, dst_object_name)
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         assert dst_object_name.startswith("/")
         content_len = os.path.getsize(src_file_path)

@@ -5,6 +5,11 @@ from loguru import logger
 from skylark import GB, MB, print_header
 from skylark.gateway.chunk import ChunkState
 
+import tempfile
+import concurrent
+import os
+from skylark.obj_store.s3_interface import S3Interface
+
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
 from skylark.utils.utils import Timer
@@ -27,6 +32,9 @@ def parse_args():
     parser.add_argument("--n-chunks", default=16, type=int, help="Number of chunks in bucket")
     parser.add_argument("--skip-upload", action="store_true", help="Skip uploading objects to S3")
 
+    # bucket namespace
+    parser.add_argument("--bucket-prefix", default="sarah", help="Prefix for bucket to avoid naming collision")
+
     # gateway provisioning
     parser.add_argument("--gcp-project", default="skylark-333700", help="GCP project ID")
     parser.add_argument("--gateway-docker-image", default="ghcr.io/parasj/skylark:main", help="Docker image for gateway instances")
@@ -48,35 +56,40 @@ def parse_args():
 
 def main(args):
     src_bucket, dst_bucket = f"skylark-{args.src_region.split(':')[1]}", f"skylark-{args.dest_region.split(':')[1]}"
-    # s3_interface_src = S3Interface(args.src_region.split(":")[1], src_bucket)
-    # s3_interface_dst = S3Interface(args.dest_region.split(":")[1], dst_bucket)
-    # s3_interface_src.create_bucket()
-    # s3_interface_dst.create_bucket()
+    s3_interface_src = S3Interface(args.src_region.split(":")[1], f"{args.bucket_prefix}-{src_bucket}")
+    s3_interface_dst = S3Interface(args.dest_region.split(":")[1], f"{args.bucket_prefix}-{dst_bucket}")
+    s3_interface_src.create_bucket()
+    s3_interface_dst.create_bucket()
 
     if not args.skip_upload:
         # todo implement object store support
-        pass
-        # matching_src_keys = list(s3_interface_src.list_objects(prefix=args.key_prefix))
-        # matching_dst_keys = list(s3_interface_dst.list_objects(prefix=args.key_prefix))
-        # if matching_src_keys:
-        #     logger.warning(f"Deleting objects from source bucket: {matching_src_keys}")
-        #     s3_interface_src.delete_objects(matching_src_keys)
-        # if matching_dst_keys:
-        #     logger.warning(f"Deleting objects from destination bucket: {matching_dst_keys}")
-        #     s3_interface_dst.delete_objects(matching_dst_keys)
+        #pass
+        print("Not skipping upload...", src_bucket, dst_bucket)
+        matching_src_keys = list(s3_interface_src.list_objects(prefix=args.key_prefix))
+        matching_dst_keys = list(s3_interface_dst.list_objects(prefix=args.key_prefix))
+        if matching_src_keys:
+            logger.warning(f"Deleting objects from source bucket: {matching_src_keys}")
+            s3_interface_src.delete_objects(matching_src_keys)
+        if matching_dst_keys:
+            logger.warning(f"Deleting objects from destination bucket: {matching_dst_keys}")
+            s3_interface_dst.delete_objects(matching_dst_keys)
 
-        # # create test objects w/ random data
-        # logger.info("Creating test objects")
-        # obj_keys = []
-        # futures = []
-        # with tempfile.NamedTemporaryFile() as f:
-        #     f.write(os.urandom(int(MB * args.chunk_size_mb)))
-        #     f.seek(0)
-        #     for i in trange(args.n_chunks):
-        #         k = f"{args.key_prefix}/{i}"
-        #         futures.append(s3_interface_src.upload_object(f.name, k))
-        #         obj_keys.append(k)
-        # concurrent.futures.wait(futures)
+        # create test objects w/ random data
+        logger.info("Creating test objects")
+        obj_keys = []
+        futures = []
+
+        # TODO: for n_chunks > 880, get syscall error
+        with tempfile.NamedTemporaryFile() as f:
+            f.write(os.urandom(int(MB * args.chunk_size_mb)))
+            f.seek(0)
+            for i in range(args.n_chunks):
+                k = f"{args.key_prefix}/{i}"
+                futures.append(s3_interface_src.upload_object(f.name, k))
+                print("done", f.name, len(futures))
+                obj_keys.append(k)
+        print("created all futures")
+        concurrent.futures.wait(futures)
     else:
         obj_keys = [f"{args.key_prefix}/{i}" for i in range(args.n_chunks)]
 
