@@ -9,6 +9,7 @@ from typing import Tuple
 
 import setproctitle
 from loguru import logger
+from skylark import MB
 
 from skylark.gateway.chunk import WireProtocolHeader
 from skylark.gateway.chunk_store import ChunkStore
@@ -16,7 +17,7 @@ from skylark.utils.utils import Timer
 
 
 class GatewayReceiver:
-    def __init__(self, chunk_store: ChunkStore, server_blk_size=4096 * 16):
+    def __init__(self, chunk_store: ChunkStore, server_blk_size=1 * MB):
         self.chunk_store = chunk_store
         self.server_blk_size = server_blk_size
 
@@ -50,13 +51,12 @@ class GatewayReceiver:
                     if exit_flag.value == 1:
                         logger.warning(f"[server:{socket_port}] Exiting on signal")
                         return
+
                     # Wait for a connection with a timeout of 1 second w/ select
                     readable, _, _ = select.select([sock], [], [], 1)
                     if readable:
                         conn, addr = sock.accept()
-                        chunks_received = self.recv_chunks(conn, addr)
-                        conn.close()
-                        logger.debug(f"[receiver] {chunks_received} chunks received")
+                        self.recv_chunks(conn, addr)
 
         p = Process(target=server_worker)
         p.start()
@@ -95,12 +95,15 @@ class GatewayReceiver:
         while True:
             # receive header and write data to file
             chunk_header = WireProtocolHeader.from_socket(conn)
-            self.chunk_store.state_start_download(chunk_header.chunk_id)
             logger.debug(f"[server:{server_port}] Got chunk header {chunk_header.chunk_id}: {chunk_header}")
+            self.chunk_store.state_start_download(chunk_header.chunk_id)
+
+            # get data
             with Timer() as t:
                 chunk_data_size = chunk_header.chunk_len
                 chunk_received_size = 0
                 chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_header.chunk_id)
+
                 with chunk_file_path.open("wb") as f:
                     while chunk_data_size > 0:
                         data = conn.recv(min(chunk_data_size, self.server_blk_size))
@@ -110,13 +113,15 @@ class GatewayReceiver:
                     logger.debug(
                         f"[receiver:{server_port}] {chunk_header.chunk_id} chunk received {chunk_received_size}/{chunk_header.chunk_len}"
                     )
-            # todo check hash, update status and close socket if transfer is complete
+
+            # todo check hash
             self.chunk_store.state_finish_download(chunk_header.chunk_id, t.elapsed)
             chunks_received.append(chunk_header.chunk_id)
             logger.info(
                 f"[receiver:{server_port}] Received chunk {chunk_header.chunk_id} ({chunk_received_size} bytes) in {t.elapsed:.2f} seconds"
             )
-            if chunk_header.end_of_stream:
+
+            if chunk_header.n_chunks_left_on_socket == 0:
                 conn.close()
-                logger.debug(f"[receiver:{server_port}] End of stream reached")
-                return chunks_received
+                logger.debug(f"[receiver:{server_port}] End of stream reached, closing connection and waiting for another")
+                return
