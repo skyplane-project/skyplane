@@ -4,20 +4,12 @@ CLI for the Skylark object store.
 Usage mostly matches the aws-cli command line tool:
 `skylark [command] [subcommand] [flags] [args]`
 
-
-* `skylark ls [directory]`: List objects in the object store.
-* `skylark cp [flags] [args]`: Copy objects from the object store to the local filesystem.
-* `skylark mv [flags] [args]`: Move objects from the object store to the local filesystem.
-* `skylark rm [flags] [args]`: Remove objects from the object store.
-
-
-Copying to/from local files:
-* `skylark cp [flags] /path/to/file.txt s3://bucket/path/to/file.txt`
-* `skylark cp [flags] s3://bucket/path/to/file.txt /path/to/file.txt`
-* (not supported) `skylark cp [flags] s3://bucket/path/to/file.txt /path/to/file.txt`
-
-Replicating between remote object stores:
-* `skylark replicate [flags] s3://bucket/path/to/file.txt s3://bucket/path/to/file.txt`
+Current support:
+* `skylark ls /local/path`
+* `skylark ls s3://bucket/path`
+* `skylark cp /local/path /local/path`
+* `skylark cp /local/path s3://bucket/path`
+* `skylark cp s3://bucket/path /local/path`
 """
 
 
