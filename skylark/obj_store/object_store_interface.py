@@ -1,3 +1,20 @@
+from dataclasses import dataclass
+
+
+@dataclass
+class ObjectStoreObject:
+    """Defines object in object store."""
+
+    provider: str
+    bucket: str
+    key: str
+    size: int
+    last_modified: str
+
+    def full_path(self):
+        raise NotImplementedError
+
+
 class ObjectStoreInterface:
     def bucket_exists(self):
         raise NotImplementedError
