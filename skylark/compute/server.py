@@ -234,7 +234,7 @@ class Server:
         num_outgoing_connections=8,
     ):
         desc_prefix = f"Starting gateway {self.uuid()}"
-        with tqdm(desc=desc_prefix, leave=False) as pbar:
+        with tqdm(desc=desc_prefix, leave=False, ascii=True) as pbar:
             pbar.set_description(desc_prefix + ": Installing docker")
             # install docker and launch monitoring
             cmd = "(command -v docker >/dev/null 2>&1 || { rm -rf get-docker.sh; curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh; }); "

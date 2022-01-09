@@ -215,7 +215,7 @@ class ReplicatorClient:
 
         # make list of ChunkRequests
         chunk_requests_sharded: Dict[Server, List[ChunkRequest]] = {}
-        with tqdm(total=len(chunks), desc="Building chunk requests") as pbar:
+        with tqdm(total=len(chunks), desc="Building chunk requests", ascii=True) as pbar:
             for batch, path in zip(chunk_batches, self.bound_paths):
                 chunk_requests_sharded[path[0]] = []
                 for chunk in batch:
@@ -267,7 +267,7 @@ class ReplicatorClient:
 
     def monitor_transfer(self, crs: List[ChunkRequest], completed_state=ChunkState.upload_complete) -> Dict:
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs])
-        with tqdm(total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB) as pbar:
+        with tqdm(total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB, ascii=True) as pbar:
             while True:
                 log_df = self.get_chunk_status_log_df()
                 last_log_df = (
