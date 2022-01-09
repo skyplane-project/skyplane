@@ -117,7 +117,7 @@ class S3Interface(ObjectStoreInterface):
 
     def upload_object(self, src_file_path, dst_object_name, content_type="infer") -> Future:
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
-        assert dst_object_name.startswith("/")
+        dst_object_name = "/" + dst_object_name if dst_object_name[0] != "/" else dst_object_name
         content_len = os.path.getsize(src_file_path)
         if content_type == "infer":
             content_type = mimetypes.guess_type(src_file_path)[0] or "application/octet-stream"

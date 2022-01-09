@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import concurrent.futures
 from typing import Dict, List, Tuple
@@ -83,7 +84,7 @@ def copy_local_s3(src: Path, dst_bucket: str, dst_key: str, use_tls: bool = True
     def _copy(path: Path, dst_key: str, total_size=0.0):
         if path.is_dir():
             for child in path.iterdir():
-                total_size += _copy(child, dst_key + "/" + child.name)
+                total_size += _copy(child, os.path.join(dst_key, child.name))
             return total_size
         else:
             future = s3.upload_object(path, dst_key)
@@ -94,7 +95,7 @@ def copy_local_s3(src: Path, dst_bucket: str, dst_key: str, use_tls: bool = True
     total_bytes = _copy(src, dst_key)
 
     # wait for all uploads to complete, displaying a progress bar
-    with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Uploading") as pbar:
+    with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Uploading", ascii=True) as pbar:
         for op in concurrent.futures.as_completed(ops):
             op.result()
             pbar.update(path_mapping[op].stat().st_size)
@@ -121,7 +122,7 @@ def copy_s3_local(src_bucket: str, src_key: str, dst: Path):
         total_bytes += _copy(obj, dest_path)
 
     # wait for all downloads to complete, displaying a progress bar
-    with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Downloading") as pbar:
+    with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Downloading", ascii=True) as pbar:
         for op in concurrent.futures.as_completed(ops):
             op.result()
             pbar.update(obj_mapping[op].size)

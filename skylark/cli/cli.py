@@ -18,7 +18,7 @@ import typer
 
 from skylark.cli.cli_helper import copy_local_local, copy_local_s3, copy_s3_local, ls_local, ls_s3, parse_path
 
-app = typer.Typer()
+app = typer.Typer(name="skylark")
 
 
 @app.command()
@@ -27,10 +27,10 @@ def ls(directory: str):
     provider, bucket, key = parse_path(directory)
     if provider == "local":
         for path in ls_local(Path(directory)):
-            print(path)
+            typer.echo(path)
     elif provider == "s3":
         for path in ls_s3(bucket, key):
-            print(path)
+            typer.echo(path)
 
 
 @app.command()
