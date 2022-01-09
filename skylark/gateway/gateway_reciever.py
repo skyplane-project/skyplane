@@ -45,18 +45,14 @@ class GatewayReceiver:
                 setproctitle.setproctitle(f"skylark-gateway-receiver:{socket_port}")
 
                 sock.listen()
-                sock.setblocking(False)
                 started_event.set()
+                conn, addr = sock.accept()
                 while True:
                     if exit_flag.value == 1:
                         logger.warning(f"[server:{socket_port}] Exiting on signal")
+                        conn.close()
                         return
-
-                    # Wait for a connection with a timeout of 1 second w/ select
-                    readable, _, _ = select.select([sock], [], [], 1)
-                    if readable:
-                        conn, addr = sock.accept()
-                        self.recv_chunks(conn, addr)
+                    self.recv_chunks(conn, addr)
 
         p = Process(target=server_worker)
         p.start()
@@ -122,6 +118,5 @@ class GatewayReceiver:
             )
 
             if chunk_header.n_chunks_left_on_socket == 0:
-                conn.close()
                 logger.debug(f"[receiver:{server_port}] End of stream reached, closing connection and waiting for another")
                 return
