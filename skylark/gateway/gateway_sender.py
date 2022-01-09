@@ -91,7 +91,7 @@ class GatewaySender:
         # close destination sockets
         for dst_socket in self.destination_sockets.values():
             dst_socket.close()
-        
+
         # wait for all chunks to reach state "downloaded"
         def wait_for_chunks(chunk_ids):
             cr_status = {}
@@ -102,7 +102,7 @@ class GatewaySender:
                 for chunk_id in chunk_ids:
                     cr_status[chunk_id] = host_state[chunk_id]["state"]
             return all(cr_status[chunk_id] == "downloaded" for chunk_id in chunk_ids)
-        
+
         wait_for(partial(wait_for_chunks, chunk_ids_to_send))
 
         # close servers
