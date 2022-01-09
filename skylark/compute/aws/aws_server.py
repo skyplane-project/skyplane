@@ -40,11 +40,11 @@ class AWSServer(Server):
         return getattr(cls.ns, key)
 
     @classmethod
-    def get_boto3_resource(cls, service_name, aws_region):
+    def get_boto3_resource(cls, service_name, aws_region=None):
         return cls.get_boto3_session(aws_region).resource(service_name, region_name=aws_region)
 
     @classmethod
-    def get_boto3_client(cls, service_name, aws_region):
+    def get_boto3_client(cls, service_name, aws_region=None):
         return cls.get_boto3_session(aws_region).client(service_name, region_name=aws_region)
 
     def get_boto3_instance_resource(self):
