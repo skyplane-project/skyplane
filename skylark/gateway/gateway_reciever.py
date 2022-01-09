@@ -17,9 +17,9 @@ from skylark.utils.utils import Timer
 
 
 class GatewayReceiver:
-    def __init__(self, chunk_store: ChunkStore, server_blk_size=1 * MB):
+    def __init__(self, chunk_store: ChunkStore, write_back_block_size=1 * MB):
         self.chunk_store = chunk_store
-        self.server_blk_size = server_blk_size
+        self.write_back_block_size = write_back_block_size
 
         # shared state
         self.manager = Manager()
@@ -106,7 +106,7 @@ class GatewayReceiver:
 
                 with chunk_file_path.open("wb") as f:
                     while chunk_data_size > 0:
-                        data = conn.recv(min(chunk_data_size, self.server_blk_size))
+                        data = conn.recv(min(chunk_data_size, self.write_back_block_size))
                         f.write(data)
                         chunk_data_size -= len(data)
                         chunk_received_size += len(data)

@@ -1,6 +1,5 @@
 import queue
 import socket
-import time
 from contextlib import closing
 from multiprocessing import Event, Manager, Process, Value
 from typing import Dict, List
@@ -10,15 +9,16 @@ import setproctitle
 from loguru import logger
 from skylark import MB
 
-from skylark.gateway.chunk import ChunkRequest, WireProtocolHeader
+from skylark.gateway.chunk import ChunkRequest
 from skylark.gateway.chunk_store import ChunkStore
+from skylark.utils.utils import Timer
 
 
 class GatewaySender:
-    def __init__(self, chunk_store: ChunkStore, n_processes=1, max_batch_size_mb=16):
+    def __init__(self, chunk_store: ChunkStore, n_processes=1, max_batch_size_bytes=64 * MB):
         self.chunk_store = chunk_store
         self.n_processes = n_processes
-        self.max_batch_size_bytes = max_batch_size_mb * MB
+        self.max_batch_size_bytes = max_batch_size_bytes
         self.processes = []
 
         # shared state
@@ -77,9 +77,6 @@ class GatewaySender:
                     assert all(next_hop.hop_ip_address == chunk.path[0].hop_ip_address for chunk in chunks)
 
                     # send chunks
-                    logger.debug(
-                        f"[sender:{worker_id}] Sending {len(chunks)} chunks ({total_bytes / MB:.2f}MB) to {next_hop.hop_ip_address}, {chunk_ids_to_send}"
-                    )
                     chunk_ids = [req.chunk.chunk_id for req in chunks]
                     self.send_chunks(chunk_ids, next_hop.hop_ip_address)
 
@@ -109,20 +106,21 @@ class GatewaySender:
 
         with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
             sock.connect((dst_host, dst_port))
-            for idx, chunk_id in enumerate(chunk_ids):
-                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 1)  # disable Nagle's algorithm
-                self.chunk_store.state_start_upload(chunk_id)
-                chunk = self.chunk_store.get_chunk_request(chunk_id).chunk
+            with Timer() as t:
+                for idx, chunk_id in enumerate(chunk_ids):
+                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 1)  # disable Nagle's algorithm
+                    self.chunk_store.state_start_upload(chunk_id)
+                    chunk = self.chunk_store.get_chunk_request(chunk_id).chunk
 
-                # send chunk header
-                chunk.to_wire_header(n_chunks_left_on_socket=len(chunk_ids) - idx - 1).to_socket(sock)
+                    # send chunk header
+                    chunk.to_wire_header(n_chunks_left_on_socket=len(chunk_ids) - idx - 1).to_socket(sock)
 
-                # send chunk data
-                chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
-                assert chunk_file_path.exists(), f"chunk file {chunk_file_path} does not exist"
-                with open(chunk_file_path, "rb") as fd:
-                    bytes_sent = sock.sendfile(fd)
-                self.chunk_store.state_finish_upload(chunk_id)
-                chunk_file_path.unlink()
-                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 0)  # send remaining packets
-            logger.info(f"[sender:{self.worker_id} -> {dst_port}] Sent {len(chunk_ids)} chunks, {chunk_ids}")
+                    # send chunk data
+                    chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
+                    assert chunk_file_path.exists(), f"chunk file {chunk_file_path} does not exist"
+                    with open(chunk_file_path, "rb") as fd:
+                        bytes_sent = sock.sendfile(fd)
+                    self.chunk_store.state_finish_upload(chunk_id)
+                    chunk_file_path.unlink()
+                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 0)  # send remaining packets
+            logger.info(f"[sender:{self.worker_id} -> {dst_port}] Sent {len(chunk_ids)} chunks in {t.elapsed:.2}s, {chunk_ids}")
