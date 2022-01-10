@@ -3,7 +3,6 @@ import logging.handlers
 import threading
 from pathlib import Path
 
-import setproctitle
 from flask import Flask, jsonify, request
 from werkzeug.serving import make_server
 from werkzeug import serving
@@ -66,7 +65,6 @@ class GatewayDaemonAPI(threading.Thread):
         self.server = make_server(host, port, self.app, threaded=True)
 
     def run(self):
-        setproctitle.setproctitle(f"skylark-gateway-daemon-api")
         self.server.serve_forever()
 
     def shutdown(self):

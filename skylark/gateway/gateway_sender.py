@@ -89,6 +89,7 @@ class GatewaySender:
                     self.sent_chunk_ids[next_hop.hop_ip_address].extend(chunk_ids)
 
         # close destination sockets
+        logger.info(f"[sender:{worker_id}] exiting, closing sockets")
         for dst_socket in self.destination_sockets.values():
             dst_socket.close()
 
@@ -103,9 +104,11 @@ class GatewaySender:
                     cr_status[chunk_id] = host_state[chunk_id]["state"]
             return all(cr_status[chunk_id] == "downloaded" for chunk_id in chunk_ids)
 
+        logger.info(f"[sender:{worker_id}] waiting for chunks to reach state 'downloaded'")
         wait_for(partial(wait_for_chunks, chunk_ids_to_send))
 
         # close servers
+        logger.info(f"[sender:{worker_id}] exiting, closing servers")
         for dst_host, dst_port in self.destination_ports.items():
             response = requests.delete(f"http://{dst_host}:8080/api/v1/servers/{dst_port}")
             assert response.status_code == 200 and response.json() == {"status": "ok"}, response.json()

@@ -31,20 +31,15 @@ class Timer:
 def wait_for(fn, timeout=60, interval=0.25, progress_bar=False, desc="Waiting", leave_pbar=True):
     # wait for fn to return True
     start = time.time()
-    if progress_bar:
-        pbar = tqdm(desc=desc, leave=leave_pbar)
-    while time.time() - start < timeout:
-        if fn():
-            if progress_bar:
+    with tqdm(desc=desc, leave=leave_pbar, disable=not progress_bar) as pbar:
+        while time.time() - start < timeout:
+            if fn():
                 pbar.close()
-                print()
-            return True
-        if progress_bar:
+                print()  # clear progress bar
+                return True
             pbar.update(interval)
-        time.sleep(interval)
-    if progress_bar:
-        pbar.close()
-    raise Exception("Timeout")
+            time.sleep(interval)
+        raise Exception("Timeout")
 
 
 def do_parallel(func, args_list, n=-1, progress_bar=False, leave_pbar=True, desc=None, arg_fmt=None):
@@ -63,15 +58,12 @@ def do_parallel(func, args_list, n=-1, progress_bar=False, leave_pbar=True, desc
         return args, func(args)
 
     results = []
-    pbar = tqdm(total=len(args_list), leave=leave_pbar, desc=desc) if progress_bar else None
-    with ThreadPoolExecutor(max_workers=n) as executor:
-        future_list = [executor.submit(wrapped_fn, args) for args in args_list]
-        for future in as_completed(future_list):
-            args, result = future.result()
-            results.append((args, result))
-            if pbar:
+    with tqdm(total=len(args_list), leave=leave_pbar, desc=desc, disable=not progress_bar) as pbar:
+        with ThreadPoolExecutor(max_workers=n) as executor:
+            future_list = [executor.submit(wrapped_fn, args) for args in args_list]
+            for future in as_completed(future_list):
+                args, result = future.result()
+                results.append((args, result))
                 pbar.set_description(f"{desc} ({str(arg_fmt(args))})" if desc else str(arg_fmt(args)))
                 pbar.update()
-    if pbar:
-        pbar.close()
-    return results
+        return results

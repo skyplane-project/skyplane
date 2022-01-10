@@ -244,7 +244,6 @@ class Server:
             docker_version = out.strip().split("\n")[-1]
 
             if not docker_version.startswith("Success"):  # retry since docker install fails sometimes
-                logger.warning(f"{desc_prefix}: Docker install failed, retrying")
                 pbar.set_description(desc_prefix + ": Installing docker (retry)")
                 out, err = self.run_command(cmd)
                 docker_version = out.strip().split("\n")[-1]
