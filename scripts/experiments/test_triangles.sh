@@ -27,8 +27,8 @@ rm -rf $LOG_DIR
 mkdir -p $LOG_DIR
 touch $LOG_DIR/launch.log
 
-log "Stopping existing instances"
-python skylark/benchmark/stop_all_instances.py &>> $LOG_DIR/launch.log
+# log "Stopping existing instances"
+# python skylark/benchmark/stop_all_instances.py &>> $LOG_DIR/launch.log
 
 log "Building docker image"
 source scripts/pack_docker.sh &>> $LOG_DIR/launch.log
@@ -70,15 +70,15 @@ echo -e "$PARALLEL_CMD_LIST\n"
 
 log "Parallel:"
 parallel \
-    -j 16 \
+    -j 8 \
     --results $LOG_DIR/parallel_results.txt \
     --joblog $LOG_DIR/parallel_joblog.txt \
     --eta \
     --halt 1 < <(echo -e "$PARALLEL_CMD_LIST")
 
 
-log "Stopping instances"
-python skylark/benchmark/stop_all_instances.py &>> $LOG_DIR/launch.log
+# log "Stopping instances"
+# python skylark/benchmark/stop_all_instances.py &>> $LOG_DIR/launch.log
 
 log "Done, results in $LOG_DIR"
 log "Experiment ID: $EXP_ID"
@@ -87,5 +87,7 @@ log "Experiment ID: $EXP_ID"
 # bash scripts/experiments/test_triangles.sh "aws:us-east-1" "aws:us-west-1"
 # bash scripts/experiments/test_triangles.sh "aws:ap-northeast-1" "aws:eu-central-1"
 # bash scripts/experiments/test_triangles.sh "aws:ap-southeast-1" "aws:eu-west-1"
-# bash scripts/experiments/test_triangles.sh "aws:eu-central-1" "aws:us-east-1"
 # bash scripts/experiments/test_triangles.sh "aws:sa-east-1" "aws:us-west-2"
+
+# todo
+# bash scripts/experiments/test_triangles.sh "aws:eu-central-1" "aws:us-east-1"

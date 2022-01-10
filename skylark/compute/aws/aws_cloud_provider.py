@@ -186,16 +186,22 @@ class AWSCloudProvider(CloudProvider):
         # finally, delete the vpc
         ec2client.delete_vpc(VpcId=vpcid)
 
-    @lockutils.synchronized("aws_add_ip_to_security_group", external=True, lock_path="/tmp/skylark_locks")
     def add_ip_to_security_group(self, aws_region: str):
         """Add IP to security group. If security group ID is None, use group named skylark (create if not exists)."""
-        self.make_vpc(aws_region)
-        sg = self.get_security_group(aws_region)
-        try:
-            sg.authorize_ingress(IpPermissions=[{"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}])
-        except botocore.exceptions.ClientError as e:
-            if not str(e).endswith("already exists"):
-                raise e
+
+        @lockutils.synchronized(f"aws_add_ip_to_security_group_{aws_region}", external=True, lock_path="/tmp/skylark_locks")
+        def fn():
+            self.make_vpc(aws_region)
+            sg = self.get_security_group(aws_region)
+            try:
+                sg.authorize_ingress(
+                    IpPermissions=[{"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]
+                )
+            except botocore.exceptions.ClientError as e:
+                if not str(e).endswith("already exists"):
+                    raise e
+
+        return fn()
 
     @lru_cache()
     def get_ubuntu_ami_id(self, region: str) -> str:

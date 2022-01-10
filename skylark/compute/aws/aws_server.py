@@ -54,30 +54,28 @@ class AWSServer(Server):
         prefix = Path(prefix)
         key_name = f"skylark-{aws_region}"
         local_key_file = prefix / f"{key_name}.pem"
+
+        @lockutils.synchronized(f"aws_keyfile_lock_{aws_region}", external=True, lock_path="/tmp/skylark_locks")
+        def create_keyfile():
+            if not local_key_file.exists():  # we have to check again since another process may have created it
+                ec2 = AWSServer.get_boto3_resource("ec2", aws_region)
+                ec2_client = AWSServer.get_boto3_client("ec2", aws_region)
+                local_key_file.parent.mkdir(parents=True, exist_ok=True)
+                # delete key pair from ec2 if it exists
+                keys_in_region = set(p["KeyName"] for p in ec2_client.describe_key_pairs()["KeyPairs"])
+                if key_name in keys_in_region:
+                    logger.warning(f"Deleting key {key_name} in region {aws_region}")
+                    ec2_client.delete_key_pair(KeyName=key_name)
+                key_pair = ec2.create_key_pair(KeyName=f"skylark-{aws_region}")
+                with local_key_file.open("w") as f:
+                    f.write(key_pair.key_material)
+                    f.flush()  # sometimes generates keys with zero bytes, so we flush to ensure it's written
+                os.chmod(local_key_file, 0o600)
+
         if not local_key_file.exists():
-            # separate locked file to avoid contention
-            logger.debug(f"Creating key file {local_key_file}")
-            AWSServer.create_keyfile(key_name, local_key_file, aws_region)
+            create_keyfile(key_name, local_key_file)
             logger.info(f"Created key file {local_key_file}")
         return local_key_file
-
-    @staticmethod
-    @lockutils.synchronized("aws_keyfile_lock", external=True, lock_path="/tmp/skylark_locks")
-    def create_keyfile(key_name: str, local_key_file: Path, aws_region):
-        if not local_key_file.exists():  # we have to check again since another process may have created it
-            ec2 = AWSServer.get_boto3_resource("ec2", aws_region)
-            ec2_client = AWSServer.get_boto3_client("ec2", aws_region)
-            local_key_file.parent.mkdir(parents=True, exist_ok=True)
-            # delete key pair from ec2 if it exists
-            keys_in_region = set(p["KeyName"] for p in ec2_client.describe_key_pairs()["KeyPairs"])
-            if key_name in keys_in_region:
-                logger.warning(f"Deleting key {key_name} in region {aws_region}")
-                ec2_client.delete_key_pair(KeyName=key_name)
-            key_pair = ec2.create_key_pair(KeyName=f"skylark-{aws_region}")
-            with local_key_file.open("w") as f:
-                f.write(key_pair.key_material)
-                f.flush()  # sometimes generates keys with zero bytes, so we flush to ensure it's written
-            os.chmod(local_key_file, 0o600)
 
     @ignore_lru_cache()
     def public_ip(self) -> str:
