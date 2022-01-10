@@ -10,6 +10,7 @@ from pathlib import Path, PurePath
 from loguru import logger
 import requests
 from tqdm import tqdm
+from skylark.compute.util import make_dozzle_command, make_netdata_command
 
 from skylark.utils.utils import PathLike, Timer, do_parallel, wait_for
 
@@ -226,7 +227,11 @@ class Server:
         self.run_command(f"mkdir -p ~/.ssh && (echo '{pub_key}' >> ~/.ssh/authorized_keys) && chmod 600 ~/.ssh/authorized_keys")
 
     def start_gateway(
-        self, gateway_docker_image="ghcr.io/parasj/skylark:main", log_viewer_port=8888, glances_port=8889, num_outgoing_connections=8
+        self,
+        gateway_docker_image="ghcr.io/parasj/skylark:main",
+        log_viewer_port=8888,
+        activity_monitor_port=8889,
+        num_outgoing_connections=8,
     ):
         desc_prefix = f"Starting gateway {self.uuid()}"
         with tqdm(desc=desc_prefix, leave=False) as pbar:
@@ -247,12 +252,8 @@ class Server:
 
             # launch monitoring
             pbar.set_description(desc_prefix + ": Starting monitoring")
-            self.run_command(
-                f"sudo docker run --name log_viewer -d --volume=/var/run/docker.sock:/var/run/docker.sock -p {log_viewer_port}:8080 amir20/dozzle:latest"
-            )
-            self.run_command(
-                f"sudo docker run --name glances -d --rm -p {glances_port}-{glances_port + 1}:61208-61209 -e GLANCES_OPT='-w' -v /var/run/docker.sock:/var/run/docker.sock:ro --pid host nicolargo/glances:latest-full"
-            )
+            self.run_command(make_dozzle_command(log_viewer_port))
+            self.run_command(make_netdata_command(activity_monitor_port, netdata_hostname=self.public_ip()))
 
             # launch gateway
             pbar.set_description(desc_prefix + ": Pulling docker image")
@@ -265,7 +266,7 @@ class Server:
             gateway_daemon_cmd = f"/env/bin/python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections {num_outgoing_connections}"
             docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
             start_out, start_err = self.run_command(docker_launch_cmd)
-            assert not start_err, f"Error starting gateway: {start_err}"
+            assert not start_err.strip(), f"Error starting gateway: {start_err}"
             gateway_container_hash = start_out.strip().split("\n")[-1][:12]
             self.gateway_api_url = f"http://{self.public_ip()}:8080/api/v1"
             self.gateway_log_viewer_url = f"http://{self.public_ip()}:8888/container/{gateway_container_hash}"

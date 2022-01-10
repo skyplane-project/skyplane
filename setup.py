@@ -26,7 +26,13 @@ setup(
         "ray",
         "setproctitle",
         "tqdm",
+        "typer[all]",
         "werkzeug",
     ],
-    extras_require={"test": ["black", "pytest", "ipython", "jupyter_console"]}
+    extras_require={"test": ["black", "pytest", "ipython", "jupyter_console"]},
+    entry_points={
+        "console_scripts": [
+            "skylark=skylark.cli.cli:app",
+        ]
+    },
 )

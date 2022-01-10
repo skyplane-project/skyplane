@@ -23,15 +23,14 @@ ChunkRequest:
         dst_object_store_bucket: str
 
 As compared to a ChunkRequest, the WireProtocolHeader is solely used to manage transfers over network sockets. It identifies the ID and
-length of the upcoming stream of data (contents of the Chunk) on the socket. An end_of_stream flag is used to indicate that this is the
-last transfer over a socket while a magic int (SKY_LARK) as well as the protocol version are used to enable wire protocol upgrades.
+length of the upcoming stream of data (contents of the Chunk) on the socket.
 
 WireProtocolHeader:
     magic: int
     protocol_version: int
     chunk_id: int
     chunk_len: int
-    end_of_stream: bool
+    n_chunks_left_on_socket: int
 """
 
 from functools import total_ordering
@@ -50,8 +49,10 @@ class Chunk:
     file_offset_bytes: int
     chunk_length_bytes: int
 
-    def to_wire_header(self, end_of_stream: bool = False):
-        return WireProtocolHeader(chunk_id=self.chunk_id, chunk_len=self.chunk_length_bytes, end_of_stream=end_of_stream)
+    def to_wire_header(self, n_chunks_left_on_socket):
+        return WireProtocolHeader(
+            chunk_id=self.chunk_id, chunk_len=self.chunk_length_bytes, n_chunks_left_on_socket=n_chunks_left_on_socket
+        )
 
     def as_dict(self):
         return asdict(self)
@@ -136,9 +137,9 @@ class ChunkState(Enum):
 class WireProtocolHeader:
     """Lightweight wire protocol header for chunk transfers along socket."""
 
-    chunk_id: int  # unsigned long
-    chunk_len: int  # unsigned long
-    end_of_stream: bool = False  # false by default, but true if this is the last chunk
+    chunk_id: int  # long
+    chunk_len: int  # long
+    n_chunks_left_on_socket: int  # long
 
     @staticmethod
     def magic_hex():
@@ -150,8 +151,8 @@ class WireProtocolHeader:
 
     @staticmethod
     def length_bytes():
-        # magic (8) + protocol_version (4) + chunk_id (8) + chunk_len (8) + end_of_stream (1)
-        return 8 + 4 + 8 + 8 + 1
+        # magic (8) + protocol_version (4) + chunk_id (8) + chunk_len (8) + n_chunks_left_on_socket (8)
+        return 8 + 4 + 8 + 8 + 8
 
     @staticmethod
     def from_bytes(data: bytes):
@@ -164,8 +165,8 @@ class WireProtocolHeader:
             raise ValueError("Invalid protocol version")
         chunk_id = int.from_bytes(data[12:20], byteorder="big")
         chunk_len = int.from_bytes(data[20:28], byteorder="big")
-        end_of_stream = bool(data[28])
-        return WireProtocolHeader(chunk_id=chunk_id, chunk_len=chunk_len, end_of_stream=end_of_stream)
+        n_chunks_left_on_socket = int.from_bytes(data[28:36], byteorder="big")
+        return WireProtocolHeader(chunk_id=chunk_id, chunk_len=chunk_len, n_chunks_left_on_socket=n_chunks_left_on_socket)
 
     def to_bytes(self):
         out_bytes = b""
@@ -173,7 +174,7 @@ class WireProtocolHeader:
         out_bytes += self.protocol_version().to_bytes(4, byteorder="big")
         out_bytes += self.chunk_id.to_bytes(8, byteorder="big")
         out_bytes += self.chunk_len.to_bytes(8, byteorder="big")
-        out_bytes += bytes([int(self.end_of_stream)])
+        out_bytes += self.n_chunks_left_on_socket.to_bytes(8, byteorder="big")
         assert len(out_bytes) == WireProtocolHeader.length_bytes(), f"{len(out_bytes)} != {WireProtocolHeader.length_bytes()}"
         return out_bytes
 

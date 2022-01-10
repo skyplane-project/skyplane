@@ -26,4 +26,5 @@ dependencies:
     - ray
     - setproctitle
     - tqdm
+    - typer[all]
     - werkzeug

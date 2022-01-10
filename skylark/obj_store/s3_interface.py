@@ -10,12 +10,17 @@ from awscrt.io import ClientBootstrap, DefaultHostResolver, EventLoopGroup
 from awscrt.s3 import S3Client, S3RequestTlsMode, S3RequestType
 
 from skylark.compute.aws.aws_server import AWSServer
-from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface
+from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
+
+
+class S3Object(ObjectStoreObject):
+    def full_path(self):
+        return f"s3://{self.bucket}/{self.key}"
 
 
 class S3Interface(ObjectStoreInterface):
     def __init__(self, aws_region, bucket_name, use_tls=True):
-        self.aws_region = aws_region
+        self.aws_region = self.infer_s3_region(bucket_name) if aws_region is None or aws_region == "infer" else aws_region
         self.bucket_name = bucket_name
         self.pending_downloads, self.completed_downloads = 0, 0
         self.pending_uploads, self.completed_uploads = 0, 0
@@ -25,7 +30,7 @@ class S3Interface(ObjectStoreInterface):
         credential_provider = AwsCredentialsProvider.new_default_chain(bootstrap)
         self._s3_client = S3Client(
             bootstrap=bootstrap,
-            region=aws_region,
+            region=self.aws_region,
             credential_provider=credential_provider,
             throughput_target_gbps=100,
             part_size=None,
@@ -39,6 +44,11 @@ class S3Interface(ObjectStoreInterface):
     def _on_done_upload(self, **kwargs):
         self.completed_uploads += 1
         self.pending_uploads -= 1
+
+    def infer_s3_region(self, bucket_name: str):
+        s3_client = AWSServer.get_boto3_client("s3")
+        region = s3_client.get_bucket_location(Bucket=bucket_name).get("LocationConstraint", "us-east-1")
+        return region if region is not None else "us-east-1"
 
     def bucket_exists(self):
         s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
@@ -55,14 +65,14 @@ class S3Interface(ObjectStoreInterface):
                 s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": self.aws_region})
         assert self.bucket_exists()
 
-    def list_objects(self, prefix="") -> Iterator[str]:
-        # todo: pagination
+    def list_objects(self, prefix="") -> Iterator[S3Object]:
+        prefix = prefix if not prefix.startswith("/") else prefix[1:]
         s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
         paginator = s3_client.get_paginator("list_objects_v2")
         page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix)
         for page in page_iterator:
             for obj in page.get("Contents", []):
-                yield obj["Key"]
+                yield S3Object("s3", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"])
 
     def delete_objects(self, keys: List[str]):
         s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
@@ -88,7 +98,7 @@ class S3Interface(ObjectStoreInterface):
     # todo: implement range request for download
     def download_object(self, src_object_name, dst_file_path) -> Future:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
-        assert src_object_name.startswith("/")
+        src_object_name = "/" + src_object_name if src_object_name[0] != "/" else src_object_name
         download_headers = HttpHeaders([("host", self.bucket_name + ".s3." + self.aws_region + ".amazonaws.com")])
         request = HttpRequest("GET", src_object_name, download_headers)
 
@@ -110,7 +120,7 @@ class S3Interface(ObjectStoreInterface):
     def upload_object(self, src_file_path, dst_object_name, content_type="infer") -> Future:
         print("uploading object", src_file_path, dst_object_name)
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
-        assert dst_object_name.startswith("/")
+        dst_object_name = "/" + dst_object_name if dst_object_name[0] != "/" else dst_object_name
         content_len = os.path.getsize(src_file_path)
         if content_type == "infer":
             content_type = mimetypes.guess_type(src_file_path)[0] or "application/octet-stream"
