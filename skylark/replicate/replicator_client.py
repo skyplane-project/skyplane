@@ -125,6 +125,7 @@ class ReplicatorClient:
                 provision_gateway_instance,
                 list(aws_regions_to_provision + gcp_regions_to_provision),
                 progress_bar=True,
+                leave_pbar=False,
                 desc="Provisioning instances and waiting to boot",
             )
             instances_by_region = {
