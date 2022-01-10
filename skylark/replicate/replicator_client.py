@@ -280,6 +280,7 @@ class ReplicatorClient:
             dash = ReplicatorClientDashboard(dash_host, dash_port)
             dash.start()
             atexit.register(dash.shutdown)
+            logger.info(f"Web dashboard running at {dash.dashboard_url}")
         with tqdm(total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB) as pbar:
             while True:
                 log_df = self.get_chunk_status_log_df()

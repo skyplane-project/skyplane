@@ -21,6 +21,9 @@ class ReplicatorClientDashboard(threading.Thread):
         logging.getLogger("werkzeug").setLevel(logging.ERROR)
         self.server = make_server(host, port, self.app, threaded=True)
 
+        ip = requests.get("https://api.ipify.org").content.decode("utf8")
+        self.dashboard_url = f"http://{ip}:{port}"
+
     def update_status_df(self, status_df):
         self.status_df = status_df
 
@@ -53,8 +56,6 @@ class ReplicatorClientDashboard(threading.Thread):
             return self.app.send_static_file("index.html")
 
     def run(self):
-        ip = requests.get("https://api.ipify.org").content.decode("utf8")
-        logger.info(f"Dashboard URL: http://{ip}:{self.server.server_port}")
         self.server.serve_forever()
 
     def shutdown(self):
