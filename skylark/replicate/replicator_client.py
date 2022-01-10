@@ -279,11 +279,12 @@ class ReplicatorClient:
         if serve_web_dashboard:
             dash = ReplicatorClientDashboard(dash_host, dash_port)
             dash.start()
-        atexit.register(dash.shutdown)
+            atexit.register(dash.shutdown)
         with tqdm(total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB) as pbar:
             while True:
                 log_df = self.get_chunk_status_log_df()
-                dash.update_status_df(log_df)
+                if serve_web_dashboard:
+                    dash.update_status_df(log_df)
 
                 # count completed bytes
                 last_log_df = (
