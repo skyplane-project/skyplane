@@ -1,9 +1,9 @@
 from functools import lru_cache
 import uuid
-import time
 from typing import List, Optional
 
 import botocore
+from oslo_concurrency import lockutils
 import pandas as pd
 from loguru import logger
 
@@ -35,6 +35,7 @@ class AWSCloudProvider(CloudProvider):
             "eu-west-1",
             "eu-west-2",
             "eu-west-3",
+            "sa-east-1",
             "us-east-1",
             "us-east-2",
             "us-west-1",
@@ -185,6 +186,7 @@ class AWSCloudProvider(CloudProvider):
         # finally, delete the vpc
         ec2client.delete_vpc(VpcId=vpcid)
 
+    @lockutils.synchronized("aws_add_ip_to_security_group", external=True, lock_path="/tmp/skylark_locks")
     def add_ip_to_security_group(self, aws_region: str):
         """Add IP to security group. If security group ID is None, use group named skylark (create if not exists)."""
         self.make_vpc(aws_region)
@@ -221,7 +223,7 @@ class AWSCloudProvider(CloudProvider):
         if ami_id is None:
             ami_id = self.get_ubuntu_ami_id(region)
         ec2 = AWSServer.get_boto3_resource("ec2", region)
-        AWSServer.make_keyfile(region)
+        AWSServer.ensure_keyfile_exists(region)
 
         # set instance storage to 128GB EBS
         # use security group named default

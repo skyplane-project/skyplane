@@ -20,6 +20,7 @@ dependencies:
     - graphviz
     - loguru
     - matplotlib
+    - oslo.concurrency
     - pandas
     - paramiko
     - questionary

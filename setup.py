@@ -2,8 +2,8 @@ from setuptools import setup
 
 
 setup(
-    name='skylark',
-    version='0.1',
+    name="skylark",
+    version="0.1",
     packages=["skylark"],
     python_requires=">=3.8",
     install_requires=[
@@ -20,6 +20,7 @@ setup(
         "loguru",
         "matplotlib",
         "numpy",
+        "oslo.concurrency",
         "pandas",
         "paramiko",
         "questionary",
