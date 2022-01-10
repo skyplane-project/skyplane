@@ -95,7 +95,7 @@ def copy_local_s3(src: Path, dst_bucket: str, dst_key: str, use_tls: bool = True
     total_bytes = _copy(src, dst_key)
 
     # wait for all uploads to complete, displaying a progress bar
-    with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Uploading", ascii=True) as pbar:
+    with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Uploading") as pbar:
         for op in concurrent.futures.as_completed(ops):
             op.result()
             pbar.update(path_mapping[op].stat().st_size)
@@ -122,7 +122,7 @@ def copy_s3_local(src_bucket: str, src_key: str, dst: Path):
         total_bytes += _copy(obj, dest_path)
 
     # wait for all downloads to complete, displaying a progress bar
-    with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Downloading", ascii=True) as pbar:
+    with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Downloading") as pbar:
         for op in concurrent.futures.as_completed(ops):
             op.result()
             pbar.update(obj_mapping[op].size)

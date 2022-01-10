@@ -1,3 +1,5 @@
+import atexit
+from contextlib import closing
 from datetime import datetime
 import itertools
 import json
@@ -19,6 +21,7 @@ from skylark.compute.server import Server, ServerState
 from skylark.gateway.chunk import Chunk, ChunkRequest, ChunkRequestHop, ChunkState
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
+from skylark.replicate.replicator_client_dashboard import ReplicatorClientDashboard
 from skylark.utils.utils import PathLike, Timer, do_parallel, wait_for
 
 
@@ -77,10 +80,9 @@ class ReplicatorClient:
                     "instance_type": self.aws_instance_class,
                     "state": [ServerState.PENDING, ServerState.RUNNING],
                 }
-                with Timer("Refresh AWS instances"):
-                    current_aws_instances = refresh_instance_list(
-                        self.aws, set([r.split(":")[1] for r in aws_regions_to_provision]), aws_instance_filter
-                    )
+                current_aws_instances = refresh_instance_list(
+                    self.aws, set([r.split(":")[1] for r in aws_regions_to_provision]), aws_instance_filter
+                )
                 for r, ilist in current_aws_instances.items():
                     for i in ilist:
                         if f"aws:{r}" in aws_regions_to_provision:
@@ -104,7 +106,7 @@ class ReplicatorClient:
             else:
                 current_gcp_instances = {}
 
-        with Timer("Provision gateways"):
+        with Timer("Provisioning instances and waiting to boot"):
             # provision instances
             def provision_gateway_instance(region: str) -> Server:
                 provider, subregion = region.split(":")
@@ -123,7 +125,7 @@ class ReplicatorClient:
                 provision_gateway_instance,
                 list(aws_regions_to_provision + gcp_regions_to_provision),
                 progress_bar=True,
-                desc="Provisioning gateways",
+                desc="Provisioning instances and waiting to boot",
             )
             instances_by_region = {
                 r: [instance for instance_region, instance in results if instance_region == r] for r in set(regions_to_provision)
@@ -155,7 +157,7 @@ class ReplicatorClient:
             bound_paths.append([instances_by_region[r].pop() for r in path])
         self.bound_paths = bound_paths
 
-        with Timer("Configure gateways"):
+        with Timer("Install gateway package on instances"):
             # start gateways
             do_parallel(
                 lambda s: s.start_gateway(
@@ -163,7 +165,7 @@ class ReplicatorClient:
                 ),
                 list(itertools.chain(*self.bound_paths)),
                 progress_bar=True,
-                desc="Starting up gateways",
+                desc="Install gateway package on instances",
             )
 
     def deprovision_gateways(self):
@@ -215,7 +217,7 @@ class ReplicatorClient:
 
         # make list of ChunkRequests
         chunk_requests_sharded: Dict[Server, List[ChunkRequest]] = {}
-        with tqdm(total=len(chunks), desc="Building chunk requests", ascii=True) as pbar:
+        with tqdm(total=len(chunks), desc="Building chunk requests", leave=False) as pbar:
             for batch, path in zip(chunk_batches, self.bound_paths):
                 chunk_requests_sharded[path[0]] = []
                 for chunk in batch:
@@ -265,11 +267,25 @@ class ReplicatorClient:
         df = pd.DataFrame(chunk_logs)
         return df
 
-    def monitor_transfer(self, crs: List[ChunkRequest], completed_state=ChunkState.upload_complete) -> Dict:
+    def monitor_transfer(
+        self,
+        crs: List[ChunkRequest],
+        completed_state=ChunkState.upload_complete,
+        serve_web_dashboard=False,
+        dash_host="0.0.0.0",
+        dash_port="8080",
+    ) -> Dict:
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs])
-        with tqdm(total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB, ascii=True) as pbar:
+        if serve_web_dashboard:
+            dash = ReplicatorClientDashboard(dash_host, dash_port)
+            dash.start()
+        atexit.register(dash.shutdown)
+        with tqdm(total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB) as pbar:
             while True:
                 log_df = self.get_chunk_status_log_df()
+                dash.update_status_df(log_df)
+
+                # count completed bytes
                 last_log_df = (
                     log_df.groupby(["chunk_id"])
                     .apply(lambda df: df.sort_values(["path_idx", "hop_idx", "time"], ascending=False).head(1))
@@ -290,24 +306,12 @@ class ReplicatorClient:
                 pbar.set_description(f"Replication: average {throughput_gbits:.2f}Gbit/s")
 
                 if len(completed_chunk_ids) == len(crs):
-                    return dict(completed_chunk_ids=completed_chunk_ids, total_runtime_s=total_runtime_s, throughput_gbits=throughput_gbits)
+                    if serve_web_dashboard:
+                        dash.shutdown()
+                    return dict(
+                        completed_chunk_ids=completed_chunk_ids,
+                        total_runtime_s=total_runtime_s,
+                        throughput_gbits=throughput_gbits,
+                    )
                 else:
-                    tqdm.write("\n\n")
-                    # print each path + hop (with region_tag) along with incomplete chunks and their status
-                    for path_idx, path in enumerate(self.bound_paths):
-                        for hop_idx, hop_instance in enumerate(path):
-                            last_log_df = (
-                                log_df[
-                                    (log_df.path_idx == path_idx)
-                                    & (log_df.hop_idx == hop_idx)
-                                    & (~log_df.chunk_id.isin(completed_chunk_ids))
-                                ]
-                                .groupby(["chunk_id"])
-                                .apply(lambda df: df.sort_values(["path_idx", "hop_idx", "time"], ascending=False).head(1))
-                                .reset_index(drop=True)
-                            )
-                            for state, match_df in last_log_df.groupby("state"):
-                                tqdm.write(
-                                    f"[({path_idx}, {hop_idx}):{hop_instance.region_tag}] {state.name}: {', '.join(str(v) for v in match_df.chunk_id.values)}"
-                                )
-                    time.sleep(0.5)
+                    time.sleep(0.25)

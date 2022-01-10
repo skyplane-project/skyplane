@@ -234,7 +234,7 @@ class Server:
         num_outgoing_connections=8,
     ):
         desc_prefix = f"Starting gateway {self.uuid()}"
-        with tqdm(desc=desc_prefix, leave=False, ascii=True) as pbar:
+        with tqdm(desc=desc_prefix, leave=False) as pbar:
             pbar.set_description(desc_prefix + ": Installing docker")
             # install docker and launch monitoring
             cmd = "(command -v docker >/dev/null 2>&1 || { rm -rf get-docker.sh; curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh; }); "
@@ -244,7 +244,6 @@ class Server:
             docker_version = out.strip().split("\n")[-1]
 
             if not docker_version.startswith("Success"):  # retry since docker install fails sometimes
-                logger.warning(f"{desc_prefix}: Docker install failed, retrying")
                 pbar.set_description(desc_prefix + ": Installing docker (retry)")
                 out, err = self.run_command(cmd)
                 docker_version = out.strip().split("\n")[-1]

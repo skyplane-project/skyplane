@@ -31,7 +31,7 @@ class Timer:
 def wait_for(fn, timeout=60, interval=0.25, progress_bar=False, desc="Waiting", leave_pbar=True):
     # wait for fn to return True
     start = time.time()
-    with tqdm(desc=desc, leave=leave_pbar, ascii=True, disable=not progress_bar) as pbar:
+    with tqdm(desc=desc, leave=leave_pbar, disable=not progress_bar) as pbar:
         while time.time() - start < timeout:
             if fn():
                 pbar.close()
@@ -58,7 +58,7 @@ def do_parallel(func, args_list, n=-1, progress_bar=False, leave_pbar=True, desc
         return args, func(args)
 
     results = []
-    with tqdm(total=len(args_list), leave=leave_pbar, desc=desc, ascii=True, disable=not progress_bar) as pbar:
+    with tqdm(total=len(args_list), leave=leave_pbar, desc=desc, disable=not progress_bar) as pbar:
         with ThreadPoolExecutor(max_workers=n) as executor:
             future_list = [executor.submit(wrapped_fn, args) for args in args_list]
             for future in as_completed(future_list):
