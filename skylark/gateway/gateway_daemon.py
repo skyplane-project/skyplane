@@ -91,19 +91,33 @@ class GatewayDaemon:
                     if current_hop.chunk_location_type == "src_object_store":
                         logger.warning(f"NOT IMPLEMENTED: Queuing object store download for chunk {chunk_req.chunk.chunk_id}")
                         self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
-                    elif current_hop.chunk_location_type.startswith("random_"):
+                         
+                        # update chunk state 
                         self.chunk_store.state_start_download(chunk_req.chunk.chunk_id)
+
+                        # function to download data from S3
+                        # TODO: add this to a queue like with GatewaySender to prevent OOM
+                        
+                        # start in seperate thread
+
+                    elif current_hop.chunk_location_type.startswith("random_"):
+                        # update chunk state
+                        self.chunk_store.state_start_download(chunk_req.chunk.chunk_id)
+
                         size_mb_match = re.search(r"random_(\d+)MB", current_hop.chunk_location_type)
                         assert size_mb_match is not None
                         size_mb = int(size_mb_match.group(1))
 
+                        # function to write random data file 
                         def fn(chunk_req, size_mb):
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
+                            logger.info(f"Writing random data path {fpath}")
                             os.system(f"dd if=/dev/zero of={fpath} bs={MB} count={size_mb}")
                             chunk_req.chunk.chunk_length_bytes = os.path.getsize(fpath)
                             self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
                             self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id)
-
+                        
+                        # generate random data in seperate thread
                         threading.Thread(target=fn, args=(chunk_req, size_mb)).start()
                     elif current_hop.chunk_location_type == "relay" or current_hop.chunk_location_type == "save_local":
                         # do nothing, waiting for chunk to be be ready_to_upload
