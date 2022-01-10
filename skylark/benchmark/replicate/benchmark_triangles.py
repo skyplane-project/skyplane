@@ -93,7 +93,9 @@ def bench_triangle(
     stats["n_chunks"] = n_chunks
 
     logger.info(f"Stats: {stats}")
-    with open(result_dir / f"src={src_region}_inter={inter_region}_dst={dst_region}.pkl", "wb") as f:
+    # compute hash of src_region, dst_region, inter_region, num_gateways, num_outgoing_connections, chunk_size_mb, n_chunks
+    arg_hash = hash((src_region, dst_region, inter_region, num_gateways, num_outgoing_connections, chunk_size_mb, n_chunks))
+    with open(result_dir / f"{arg_hash}.pkl", "wb") as f:
         pickle.dump(stats, f)
 
 

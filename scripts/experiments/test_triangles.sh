@@ -20,9 +20,7 @@ function log() {
     echo -e "${BGreen}$1${NC}"
 }
 
-# make log directory w/ random datetime string at data/experiments/benchmark_triangles/%Y-%m-%d_%H-%M-%S (delete if exists)
-# save path to LOG_DIR
-EXP_ID=$(./scripts/utils/get_random_datetime_str.sh)
+EXP_ID=$(./scripts/utils/get_random_word_hash.sh)
 LOG_DIR=data/experiments/benchmark_triangles/$EXP_ID
 log "Creating log directory $LOG_DIR"
 rm -rf $LOG_DIR
@@ -61,6 +59,10 @@ fi
 # make list of commands to run with gnu parallel (one for each inter-region) and save to $PARALLEL_CMD_LIST (one command per line)
 PARALLEL_CMD_LIST="$(run_direct_cmd $SRC_REGION $DST_REGION)\n$(run_direct_cmd_double_conn $SRC_REGION $DST_REGION)"
 for inter_region in "aws:ap-northeast-1" "aws:ap-northeast-2" "aws:ap-northeast-3" "aws:ap-southeast-1" "aws:ap-southeast-2" "aws:ca-central-1" "aws:eu-central-1" "aws:eu-north-1" "aws:eu-west-1" "aws:eu-west-2" "aws:eu-west-3" "aws:sa-east-1" "aws:us-east-1" "aws:us-east-2" "aws:us-west-1" "aws:us-west-2"; do
+    # if inter-region is same as src or dst region, skip
+    if [ "$inter_region" == "$SRC_REGION" ] || [ "$inter_region" == "$DST_REGION" ]; then
+        continue
+    fi
     PARALLEL_CMD_LIST="$PARALLEL_CMD_LIST\n$(run_triangles_inter_cmd $SRC_REGION $DST_REGION $inter_region) &> $LOG_DIR/$inter_region.log"
 done
 log "Running commands with gnu parallel:"
