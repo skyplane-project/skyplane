@@ -166,6 +166,7 @@ class ReplicatorClient:
                 list(itertools.chain(*self.bound_paths)),
                 progress_bar=True,
                 desc="Install gateway package on instances",
+                leave_pbar=False,
             )
 
     def deprovision_gateways(self):
