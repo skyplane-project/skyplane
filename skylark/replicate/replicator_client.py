@@ -265,10 +265,11 @@ class ReplicatorClient:
         crs: List[ChunkRequest],
         completed_state=ChunkState.upload_complete,
         show_pbar=True,
+        log_interval_s: int = None,
         serve_web_dashboard=True,
         dash_host="0.0.0.0",
         dash_port="8080",
-        time_limit_seconds=None,
+        time_limit_seconds: int = None,
     ) -> Dict:
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs])
         if serve_web_dashboard:
@@ -276,6 +277,7 @@ class ReplicatorClient:
             dash.start()
             atexit.register(dash.shutdown)
             logger.info(f"Web dashboard running at {dash.dashboard_url}")
+        last_log = None
         with Timer() as t:
             with tqdm(
                 total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB, disable=not show_pbar
@@ -302,7 +304,7 @@ class ReplicatorClient:
                     # update progress bar
                     pbar.update(completed_bytes * 8 - pbar.n)
                     total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
-                    throughput_gbits = completed_bytes * 8 / GB / total_runtime_s
+                    throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
                     pbar.set_description(f"Replication: average {throughput_gbits:.2f}Gbit/s")
 
                     if len(completed_chunk_ids) == len(crs) or time_limit_seconds is not None and t.elapsed > time_limit_seconds:
@@ -315,4 +317,10 @@ class ReplicatorClient:
                             monitor_status="completed" if len(completed_chunk_ids) == len(crs) else "timed_out",
                         )
                     else:
+                        current_time = datetime.now()
+                        if log_interval_s and (not last_log or (current_time - last_log).seconds > float(log_interval_s)):
+                            last_log = current_time
+                            logger.debug(
+                                f"{len(completed_chunk_ids)}/{len(crs)} chunks completed ({completed_bytes / GB:.2f}GB out of {total_bytes / GB:.2f}GB) at average throughput {throughput_gbits:.2f}Gbit/s"
+                            )
                         time.sleep(0.25)
