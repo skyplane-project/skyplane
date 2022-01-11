@@ -17,8 +17,8 @@ def bench_triangle(
     log_dir: Path = None,
     num_gateways: int = 1,
     num_outgoing_connections: int = 16,
-    chunk_size_mb: int = 16,
-    n_chunks: int = 512,
+    chunk_size_mb: int = 8,
+    n_chunks: int = 2048,
     gcp_project: str = "skylark-333700",
     gateway_docker_image: str = "ghcr.io/parasj/skylark:main",
     aws_instance_class: str = "m5.4xlarge",
@@ -70,11 +70,9 @@ def bench_triangle(
         total_bytes = n_chunks * chunk_size_mb * MB
         crs = rc.run_replication_plan(job)
         logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
-        stats = rc.monitor_transfer(crs, serve_web_dashboard=False, time_limit_seconds=600)
-        logger.info(f"Stats: {stats}")
+        stats = rc.monitor_transfer(crs, serve_web_dashboard=False, show_pbar=False, time_limit_seconds=600)
         stats["success"] = True
         stats["log"] = rc.get_chunk_status_log_df()
-
         rc.deprovision_gateways()
     except Exception as e:
         logger.error(f"Failed to benchmark triangle {src_region} -> {dst_region}")
@@ -92,7 +90,11 @@ def bench_triangle(
     stats["chunk_size_mb"] = chunk_size_mb
     stats["n_chunks"] = n_chunks
 
-    logger.info(f"Stats: {stats}")
+    logger.info(f"Stats:")
+    for k, v in stats.items():
+        if k not in ["log", "completed_chunk_ids"]:
+            logger.info(f"\t{k}: {v}")
+
     # compute hash of src_region, dst_region, inter_region, num_gateways, num_outgoing_connections, chunk_size_mb, n_chunks
     arg_hash = hash((src_region, dst_region, inter_region, num_gateways, num_outgoing_connections, chunk_size_mb, n_chunks))
     with open(result_dir / f"{arg_hash}.pkl", "wb") as f:

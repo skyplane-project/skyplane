@@ -16,6 +16,9 @@ from skylark.utils.utils import Timer
 class AWSCloudProvider(CloudProvider):
     def __init__(self):
         super().__init__()
+        # Ubuntu deep learning AMI
+        # https://aws.amazon.com/marketplace/pp/prodview-dxk3xpeg6znhm
+        self.ami_alias = "resolve:ssm:/aws/service/marketplace/prod-oivea5digmbj6/latest"
 
     @property
     def name(self):
@@ -26,12 +29,10 @@ class AWSCloudProvider(CloudProvider):
         return [
             "ap-northeast-1",
             "ap-northeast-2",
-            "ap-northeast-3",
             "ap-southeast-1",
             "ap-southeast-2",
             "ca-central-1",
             "eu-central-1",
-            "eu-north-1",
             "eu-west-1",
             "eu-west-2",
             "eu-west-3",
@@ -40,9 +41,11 @@ class AWSCloudProvider(CloudProvider):
             "us-east-2",
             "us-west-1",
             "us-west-2",
+            # "ap-northeast-3",  # dl ami not available here
             # "af-south-1",
             # "ap-south-1",
             # "ap-southeast-3",
+            # "eu-north-1",  # dl ami not available here
             # "eu-south-1",
             # "me-south-1",
         ]
@@ -219,15 +222,15 @@ class AWSCloudProvider(CloudProvider):
         region: str,
         instance_class: str,
         name: Optional[str] = None,
-        ami_id: Optional[str] = None,
+        # ami_id: Optional[str] = None,
         tags={"skylark": "true"},
         ebs_volume_size: int = 128,
     ) -> AWSServer:
         assert not region.startswith("aws:"), "Region should be AWS region"
         if name is None:
             name = f"skylark-aws-{str(uuid.uuid4()).replace('-', '')}"
-        if ami_id is None:
-            ami_id = self.get_ubuntu_ami_id(region)
+        # if ami_id is None:
+        #     ami_id = self.get_ubuntu_ami_id(region)
         ec2 = AWSServer.get_boto3_resource("ec2", region)
         AWSServer.ensure_keyfile_exists(region)
 
@@ -239,7 +242,7 @@ class AWSCloudProvider(CloudProvider):
         subnets = list(vpc.subnets.all())
         assert len(subnets) > 0, "No subnets found"
         instance = ec2.create_instances(
-            ImageId=ami_id,
+            ImageId=self.ami_alias,
             InstanceType=instance_class,
             MinCount=1,
             MaxCount=1,

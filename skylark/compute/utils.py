@@ -1,5 +1,6 @@
 def make_netdata_command(port, netdata_hostname=None):
-    cmd = """sudo docker run -d --rm --name=netdata \
+    stop_cmd = "(sudo docker stop netdata || true; sudo docker kill netdata || true; sudo docker rm -f netdata || true)"
+    cmd = """{stop_cmd}; sudo docker run -d --rm --name=netdata \
         -p {port}:19999 \
         -v netdataconfig:/etc/netdata \
         -v netdatalib:/var/lib/netdata \
@@ -13,15 +14,16 @@ def make_netdata_command(port, netdata_hostname=None):
         --security-opt apparmor=unconfined \
         {docker_args} netdata/netdata:stable"""
     docker_args = "--hostname={}".format(netdata_hostname) if netdata_hostname else ""
-    return cmd.format(port=port, docker_args=docker_args)
+    return cmd.format(port=port, docker_args=docker_args, stop_cmd=stop_cmd)
 
 
 def make_dozzle_command(port, dozzle_args=None):
-    cmd = """sudo docker run -d --rm --name dozzle \
+    stop_cmd = "(sudo docker stop dozzle || true; sudo docker kill dozzle || true; sudo docker rm -f dozzle || true)"
+    cmd = """{stop_cmd}; sudo docker run -d --rm --name dozzle \
         -p {log_viewer_port}:8080 \
         --volume=/var/run/docker.sock:/var/run/docker.sock \
         amir20/dozzle:latest"""
-    return cmd.format(log_viewer_port=port) + " " + dozzle_args if dozzle_args else ""
+    return cmd.format(log_viewer_port=port, stop_cmd=stop_cmd) + " " + dozzle_args if dozzle_args else ""
 
 
 def make_glances_command(port):

@@ -211,7 +211,7 @@ class ReplicatorClient:
 
         # make list of ChunkRequests
         chunk_requests_sharded: Dict[Server, List[ChunkRequest]] = {}
-        with tqdm(total=len(chunks), desc="Building chunk requests", leave=False) as pbar:
+        with Timer("Building chunk requests"):
             for batch, path in zip(chunk_batches, self.bound_paths):
                 chunk_requests_sharded[path[0]] = []
                 for chunk in batch:
@@ -233,7 +233,6 @@ class ReplicatorClient:
                             )
                         )
                     chunk_requests_sharded[path[0]].append(ChunkRequest(chunk, cr_path))
-                    pbar.update()
 
         # send chunk requests to source gateway
         for instance, chunk_requests in chunk_requests_sharded.items():
@@ -265,7 +264,8 @@ class ReplicatorClient:
         self,
         crs: List[ChunkRequest],
         completed_state=ChunkState.upload_complete,
-        serve_web_dashboard=False,
+        show_pbar=True,
+        serve_web_dashboard=True,
         dash_host="0.0.0.0",
         dash_port="8080",
         time_limit_seconds=None,
@@ -277,7 +277,9 @@ class ReplicatorClient:
             atexit.register(dash.shutdown)
             logger.info(f"Web dashboard running at {dash.dashboard_url}")
         with Timer() as t:
-            with tqdm(total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB) as pbar:
+            with tqdm(
+                total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB, disable=not show_pbar
+            ) as pbar:
                 while True:
                     log_df = self.get_chunk_status_log_df()
                     if serve_web_dashboard:

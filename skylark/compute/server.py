@@ -9,8 +9,7 @@ from pathlib import Path, PurePath
 
 from loguru import logger
 import requests
-from tqdm import tqdm
-from skylark.compute.util import make_dozzle_command, make_netdata_command
+from skylark.compute.utils import make_dozzle_command, make_netdata_command
 
 from skylark.utils.utils import PathLike, Timer, do_parallel, wait_for
 
@@ -134,7 +133,9 @@ class Server:
                 return ping_return.returncode == 0
             return False
 
-        wait_for(is_up, timeout=timeout, interval=interval, progress_bar=True, desc=f"Wait for {self.uuid()} to be ready", leave_pbar=False)
+        logger.debug(f"Waiting for {self.uuid()} to be ready")
+        wait_for(is_up, timeout=timeout, interval=interval)
+        logger.debug(f"{self.uuid()} is ready")
 
     def close_server(self):
         if hasattr(self.ns, "client"):
@@ -162,63 +163,6 @@ class Server:
         self.add_command_log(command=command, stdout=stdout, stderr=stderr, runtime=t.elapsed)
         return stdout, stderr
 
-    def copy_file(self, local_file, remote_file):
-        """Copy local file to remote file."""
-        client = self.ssh_client
-        sftp = client.open_sftp()
-        with Timer() as t:
-            sftp.put(local_file, remote_file)
-        self.add_command_log(command=f"<copy_file> {local_file} {remote_file}", runtime=t.elapsed)
-        sftp.close()
-
-    def copy_and_run_script(self, local_file):
-        """Copy local file to remote file and run command."""
-        tmp_dest_file = Path("/tmp") / f"{uuid.uuid4()}_{Path(local_file).name}"
-        self.copy_file(local_file, str(tmp_dest_file))
-        self.run_command(f"chmod +x {tmp_dest_file}")
-        stdout, stderr = self.run_command(f"{tmp_dest_file}")
-        return stdout, stderr
-
-    def sync_directory(self, local_dir, remote_dir, delete_remote=False, ignore_globs=()):
-        """Copy local directory to remote directory. If remote directory exists, delete if delete_remote else raise exception."""
-
-        local_path = Path(local_dir)
-        remote_path = PurePath(remote_dir)
-        ignored_paths = [Path(local_dir).glob(pattern) for pattern in ignore_globs]
-        ignored_paths = set([path.relative_to(local_dir) for path_list in ignored_paths for path in path_list])
-
-        def copy_file(sftp, local_file: Path, remote_file: Path):
-            with Timer() as t:
-                sftp.put(str(local_file), str(remote_file))
-            self.add_command_log(command=f"<copy_file> {local_file} {remote_file}", runtime=t.elapsed)
-
-        client = self.ssh_client
-        sftp = client.open_sftp()
-        with Timer() as t:
-            if delete_remote:
-                self.run_command(f"rm -rf {remote_dir}")
-            self.run_command(f"mkdir -p {remote_dir}")
-
-            # make all directories
-            recursive_dir_list = [x.relative_to(local_dir) for x in Path(local_dir).glob("**/*/") if x.is_dir()]
-            recursive_dir_list = [x for x in recursive_dir_list if x not in ignored_paths]
-            do_parallel(
-                lambda x: self.run_command(f"mkdir -p {remote_dir}/{x}"),
-                recursive_dir_list,
-            )
-
-            # copy all files
-            file_list = [x.relative_to(local_dir) for x in Path(local_dir).glob("**/*") if x.is_file()]
-            file_list = [x for x in file_list if x not in ignored_paths]
-            do_parallel(
-                lambda x: copy_file(sftp, local_path / x, remote_path / x),
-                file_list,
-                progress_bar=True,
-                n=1,
-            )
-        sftp.close()
-        self.add_command_log(command=f"<sync_directory> {local_dir} {remote_dir}", runtime=t.elapsed)
-
     def copy_public_key(self, pub_key_path: PathLike):
         """Append public key to authorized_keys file on server."""
         pub_key_path = Path(pub_key_path)
@@ -234,42 +178,44 @@ class Server:
         num_outgoing_connections=8,
     ):
         desc_prefix = f"Starting gateway {self.uuid()}"
-        with tqdm(desc=desc_prefix, leave=False) as pbar:
-            pbar.set_description(desc_prefix + ": Installing docker")
-            # install docker and launch monitoring
-            cmd = "(command -v docker >/dev/null 2>&1 || { rm -rf get-docker.sh; curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh; }); "
-            cmd += "{ sudo docker stop $(docker ps -a -q); sudo docker kill $(sudo docker ps -a -q); sudo docker rm -f $(sudo docker ps -a -q); }; "
-            cmd += f"(docker --version && echo 'Success, Docker installed' || echo 'Failed to install Docker'); "
+        logger.debug(desc_prefix + ": Installing docker")
+
+        # install docker and launch monitoring
+        cmd = "(command -v docker >/dev/null 2>&1 || { rm -rf get-docker.sh; curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh; }); "
+        cmd += "{ sudo docker stop $(docker ps -a -q); sudo docker kill $(sudo docker ps -a -q); sudo docker rm -f $(sudo docker ps -a -q); }; "
+        cmd += f"(docker --version && echo 'Success, Docker installed' || echo 'Failed to install Docker'); "
+        out, err = self.run_command(cmd)
+        docker_version = out.strip().split("\n")[-1]
+
+        if not docker_version.startswith("Success"):  # retry since docker install fails sometimes
+            logger.debug(desc_prefix + ": Installing docker (retry)")
             out, err = self.run_command(cmd)
             docker_version = out.strip().split("\n")[-1]
+        assert docker_version.startswith("Success"), f"Failed to install Docker: {out}\n{err}"
 
-            if not docker_version.startswith("Success"):  # retry since docker install fails sometimes
-                pbar.set_description(desc_prefix + ": Installing docker (retry)")
-                out, err = self.run_command(cmd)
-                docker_version = out.strip().split("\n")[-1]
-            assert docker_version.startswith("Success"), f"Failed to install Docker: {out}\n{err}"
+        # launch monitoring
+        logger.debug(desc_prefix + ": Starting monitoring")
+        launch_cmd = (
+            f"({make_dozzle_command(log_viewer_port)}; {make_netdata_command(activity_monitor_port, netdata_hostname=self.public_ip())})"
+        )
+        self.run_command(launch_cmd)
 
-            # launch monitoring
-            pbar.set_description(desc_prefix + ": Starting monitoring")
-            self.run_command(make_dozzle_command(log_viewer_port))
-            self.run_command(make_netdata_command(activity_monitor_port, netdata_hostname=self.public_ip()))
+        # launch gateway
+        logger.debug(desc_prefix + ": Pulling docker image")
+        docker_out, docker_err = self.run_command(f"sudo docker pull {gateway_docker_image}")
+        assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
 
-            # launch gateway
-            pbar.set_description(desc_prefix + ": Pulling docker image")
-            docker_out, docker_err = self.run_command(f"sudo docker pull {gateway_docker_image}")
-            assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
-
-            # todo add other launch flags for gateway daemon
-            pbar.set_description(desc_prefix + f": Starting gateway container {gateway_docker_image}")
-            docker_run_flags = "-d --rm --log-driver=local --ipc=host --network=host"
-            gateway_daemon_cmd = f"/env/bin/python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections {num_outgoing_connections}"
-            docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
-            start_out, start_err = self.run_command(docker_launch_cmd)
-            assert not start_err.strip(), f"Error starting gateway: {start_err}"
-            gateway_container_hash = start_out.strip().split("\n")[-1][:12]
-            self.gateway_api_url = f"http://{self.public_ip()}:8080/api/v1"
-            self.gateway_log_viewer_url = f"http://{self.public_ip()}:8888/container/{gateway_container_hash}"
-            self.gateway_htop_url = f"http://{self.public_ip()}:8889"
+        # todo add other launch flags for gateway daemon
+        logger.debug(desc_prefix + f": Starting gateway container {gateway_docker_image}")
+        docker_run_flags = "-d --rm --log-driver=local --ipc=host --network=host"
+        gateway_daemon_cmd = f"python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections {num_outgoing_connections}"
+        docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
+        start_out, start_err = self.run_command(docker_launch_cmd)
+        assert not start_err.strip(), f"Error starting gateway: {start_err}"
+        gateway_container_hash = start_out.strip().split("\n")[-1][:12]
+        self.gateway_api_url = f"http://{self.public_ip()}:8080/api/v1"
+        self.gateway_log_viewer_url = f"http://{self.public_ip()}:8888/container/{gateway_container_hash}"
+        self.gateway_htop_url = f"http://{self.public_ip()}:8889"
 
         # wait for gateways to start (check status API)
         def is_ready():

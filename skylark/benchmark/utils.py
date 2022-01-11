@@ -44,7 +44,6 @@ def provision(
     aws_instance_class: str,
     gcp_instance_class: str,
     gcp_use_premium_network: bool = True,
-    setup_script: object = None,
     log_dir: Optional[str] = None,
 ) -> Tuple[Dict[str, List[AWSServer]], Dict[str, List[GCPServer]]]:
     """Provision list of instances in AWS and GCP in each specified region."""
@@ -94,8 +93,6 @@ def provision(
     def init(i: Server):
         i.wait_for_ready()
         i.init_log_files(log_dir)
-        if setup_script:
-            i.copy_and_run_script(setup_script)
 
     all_instances = [i for ilist in aws_instances.values() for i in ilist] + [i for ilist in gcp_instances.values() for i in ilist]
     do_parallel(init, all_instances, progress_bar=True, desc="Provisioning init")

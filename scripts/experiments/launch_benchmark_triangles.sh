@@ -2,7 +2,7 @@
 set -x
 
 function cleanup {
-    python skylark/benchmark/stop_all_instances.py --gcp-project $GCP_PROJECT
+    python skylark/benchmark/stop_all_instances.py
 }
 trap cleanup EXIT
 

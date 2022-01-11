@@ -4,7 +4,7 @@ SRC_REGION=$1
 DST_REGION=$2
 
 NUM_GATEWAYS=${3:-1}
-NUM_CONNECTIONS=${4:-128}
+NUM_CONNECTIONS=${4:-64}
 
 if [ -z "$SRC_REGION" ] || [ -z "$DST_REGION" ]; then
     echo "Usage: $0 SRC_REGION DST_REGION [OPTIONS]"
@@ -58,7 +58,7 @@ fi
 
 # make list of commands to run with gnu parallel (one for each inter-region) and save to $PARALLEL_CMD_LIST (one command per line)
 PARALLEL_CMD_LIST="$(run_direct_cmd $SRC_REGION $DST_REGION)\n$(run_direct_cmd_double_conn $SRC_REGION $DST_REGION)"
-for inter_region in "aws:ap-northeast-1" "aws:ap-northeast-2" "aws:ap-northeast-3" "aws:ap-southeast-1" "aws:ap-southeast-2" "aws:ca-central-1" "aws:eu-central-1" "aws:eu-north-1" "aws:eu-west-1" "aws:eu-west-2" "aws:eu-west-3" "aws:sa-east-1" "aws:us-east-1" "aws:us-east-2" "aws:us-west-1" "aws:us-west-2"; do
+for inter_region in "aws:ap-northeast-1" "aws:ap-northeast-2" "aws:ap-southeast-1" "aws:ap-southeast-2" "aws:ca-central-1" "aws:eu-central-1" "aws:eu-west-1" "aws:eu-west-2" "aws:eu-west-3" "aws:sa-east-1" "aws:us-east-1" "aws:us-east-2" "aws:us-west-1" "aws:us-west-2"; do
     # if inter-region is same as src or dst region, skip
     if [ "$inter_region" == "$SRC_REGION" ] || [ "$inter_region" == "$DST_REGION" ]; then
         continue
