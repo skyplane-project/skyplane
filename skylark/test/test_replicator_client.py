@@ -3,7 +3,7 @@ import atexit
 
 from loguru import logger
 from skylark import GB, MB, print_header
-from skylark.gateway.chunk import ChunkState
+from skylark.chunk import ChunkState
 
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient

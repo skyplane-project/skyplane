@@ -13,10 +13,17 @@ Current support:
 """
 
 
+import atexit
+import json
+import os
 from pathlib import Path
-import typer
 
+import typer
+from loguru import logger
+from skylark import GB, MB
 from skylark.cli.cli_helper import copy_local_local, copy_local_s3, copy_s3_local, ls_local, ls_s3, parse_path
+from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
+from skylark.replicate.replicator_client import ReplicatorClient
 
 app = typer.Typer(name="skylark")
 
@@ -47,6 +54,75 @@ def cp(src: str, dst: str):
         copy_s3_local(bucket_src, path_src, Path(path_dst))
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
+
+
+@app.command()
+def replicate_random(
+    src_region: str,
+    dst_region: str,
+    inter_region: str = None,
+    num_gateways: int = 1,
+    num_outgoing_connections: int = 16,
+    chunk_size_mb: int = 8,
+    n_chunks: int = 2048,
+    reuse_gateways: bool = True,
+    gcp_project: str = "skylark-333700",
+    gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
+    aws_instance_class: str = "m5.8xlarge",
+    gcp_instance_class: str = None,
+    gcp_use_premium_network: bool = False,
+    key_prefix: str = "/test/replicate_random",
+    time_limit_seconds: int = None,
+    log_interval_s: int = 1.0,
+    serve_web_dashboard: bool = True,
+):
+    """Replicate objects from remote object store to another remote object store."""
+    if inter_region:
+        topo = ReplicationTopology(paths=[[src_region, inter_region, dst_region] for _ in range(num_gateways)])
+        num_conn = num_outgoing_connections
+    else:
+        topo = ReplicationTopology(paths=[[src_region, dst_region] for _ in range(num_gateways)])
+        num_conn = num_outgoing_connections
+    rc = ReplicatorClient(
+        topo,
+        gcp_project=gcp_project,
+        gateway_docker_image=gateway_docker_image,
+        aws_instance_class=aws_instance_class,
+        gcp_instance_class=gcp_instance_class,
+        gcp_use_premium_network=gcp_use_premium_network,
+    )
+
+    rc.provision_gateways(
+        reuse_instances=reuse_gateways,
+        num_outgoing_connections=num_conn,
+    )
+    atexit.register(rc.deprovision_gateways)
+    for path in rc.bound_paths:
+        logger.info(f"Provisioned path {' -> '.join(path[i].region_tag for i in range(len(path)))}")
+        for gw in path:
+            logger.info(f"\t[{gw.region_tag}] {gw.gateway_log_viewer_url}")
+
+    job = ReplicationJob(
+        source_region=src_region,
+        source_bucket=None,
+        dest_region=dst_region,
+        dest_bucket=None,
+        objs=[f"{key_prefix}/{i}" for i in range(n_chunks)],
+        random_chunk_size_mb=chunk_size_mb,
+    )
+
+    total_bytes = n_chunks * chunk_size_mb * MB
+    crs = rc.run_replication_plan(job)
+    logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
+    stats = rc.monitor_transfer(
+        crs, serve_web_dashboard=serve_web_dashboard, show_pbar=False, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds
+    )
+    stats["success"] = True
+    stats["log"] = rc.get_chunk_status_log_df()
+    rc.deprovision_gateways()
+
+    out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
+    print(f"\n{json.dumps(out_json)}")
 
 
 if __name__ == "__main__":

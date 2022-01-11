@@ -11,7 +11,7 @@ import setproctitle
 from loguru import logger
 from skylark import MB
 
-from skylark.gateway.chunk import WireProtocolHeader
+from skylark.chunk import WireProtocolHeader
 from skylark.gateway.chunk_store import ChunkStore
 from skylark.utils.utils import Timer
 

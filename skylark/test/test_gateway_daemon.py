@@ -2,7 +2,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from skylark.gateway.chunk import Chunk, ChunkRequest, ChunkRequestHop, ChunkState
+from skylark.chunk import Chunk, ChunkRequest, ChunkRequestHop, ChunkState
 from skylark.gateway.gateway_daemon import GatewayDaemon
 from skylark.obj_store.s3_interface import S3Interface
 

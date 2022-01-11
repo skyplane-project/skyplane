@@ -38,7 +38,6 @@ def wait_for(fn, timeout=60, interval=0.25, progress_bar=False, desc="Waiting", 
         while time.time() - start < timeout:
             if fn():
                 pbar.close()
-                print()  # clear progress bar
                 return True
             pbar.update(interval)
             time.sleep(interval)
