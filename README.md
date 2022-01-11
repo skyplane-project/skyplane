@@ -61,17 +61,14 @@ The script will export the new image (ghcr.io/parasj/skylark:local-PotRzrFT) to 
 ### Running a replication job
 We then run the ReplicatorClient with that new Docker image (stored in `$SKYLARK_DOCKER_IMAGE`):
 ```
-$ python skylark/test/test_replicator_client.py \
-    --gateway-docker-image $SKYLARK_DOCKER_IMAGE \
-    --skip-upload \
-    --n-chunks 2048 \
-    --chunk-size-mb 4 \
-    --num-gateways 1 \
-    --src-region aws:us-west-1 \
-    --dest-region aws:us-east-1
+$ skylark replicate-random aws:ap-northeast-1 aws:eu-central-1 --inter-region aws:us-east-2 \
+   --chunk-size-mb 16 \
+   --n-chunks 2048 \
+   --num-gateways 1 \
+   --num-outgoing-connections 32
 ```
 <details>
-<summary>test_replicator_client.py result</summary>
+<summary>`skylark replicate-random` result</summary>
 <br>
  
 ```
