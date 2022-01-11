@@ -23,7 +23,8 @@ if __name__ == "__main__":
 
     logger.info("Getting matching AWS instances")
     aws = AWSCloudProvider()
-    instances += aws.get_matching_instances()
+    for _, instance_list in do_parallel(aws.get_matching_instances, aws.region_list(), progress_bar=True):
+        instances += instance_list
 
     if args.gcp_project:
         logger.info("Getting matching GCP instances")

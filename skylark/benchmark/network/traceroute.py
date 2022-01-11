@@ -35,7 +35,6 @@ def parse_args():
         "--gcp_test_standard_network", action="store_true", help="Test GCP standard network in addition to premium (default)"
     )
 
-    parser.add_argument("--setup_script", type=str, default=None, help="Setup script to run on each instance (URL), optional")
     args = parser.parse_args()
 
     # filter by valid regions
@@ -60,7 +59,6 @@ def main(args):
         aws_instance_class=args.aws_instance_class,
         gcp_instance_class=args.gcp_instance_class,
         gcp_use_premium_network=True,
-        setup_script=args.setup_script,
         log_dir=str(log_dir),
     )
     instance_list: List[Server] = [i for ilist in aws_instances.values() for i in ilist]
@@ -75,7 +73,6 @@ def main(args):
             aws_instance_class=args.aws_instance_class,
             gcp_instance_class=args.gcp_instance_class,
             gcp_use_premium_network=False,
-            setup_script=args.setup_script,
             log_dir=str(log_dir),
         )
         instance_list.extend([i for ilist in gcp_standard_instances.values() for i in ilist])

@@ -121,13 +121,7 @@ class ReplicatorClient:
                     raise NotImplementedError(f"Unknown provider {provider}")
                 return server
 
-            results = do_parallel(
-                provision_gateway_instance,
-                list(aws_regions_to_provision + gcp_regions_to_provision),
-                progress_bar=True,
-                leave_pbar=False,
-                desc="Provisioning instances and waiting to boot",
-            )
+            results = do_parallel(provision_gateway_instance, list(aws_regions_to_provision + gcp_regions_to_provision))
             instances_by_region = {
                 r: [instance for instance_region, instance in results if instance_region == r] for r in set(regions_to_provision)
             }
@@ -165,15 +159,13 @@ class ReplicatorClient:
                     gateway_docker_image=self.gateway_docker_image, num_outgoing_connections=num_outgoing_connections
                 ),
                 list(itertools.chain(*self.bound_paths)),
-                progress_bar=True,
-                desc="Install gateway package on instances",
-                leave_pbar=False,
             )
 
     def deprovision_gateways(self):
         def deprovision_gateway_instance(server: Server):
-            logger.warning(f"Deprovisioning gateway {server.instance_name()}")
-            server.terminate_instance()
+            if server.instance_state() == ServerState.RUNNING:
+                logger.warning(f"Deprovisioning gateway {server.instance_name()}")
+                server.terminate_instance()
 
         instances = [instance for path in self.bound_paths for instance in path]
         do_parallel(deprovision_gateway_instance, instances, n=len(instances))
@@ -219,7 +211,7 @@ class ReplicatorClient:
 
         # make list of ChunkRequests
         chunk_requests_sharded: Dict[Server, List[ChunkRequest]] = {}
-        with tqdm(total=len(chunks), desc="Building chunk requests", leave=False) as pbar:
+        with Timer("Building chunk requests"):
             for batch, path in zip(chunk_batches, self.bound_paths):
                 chunk_requests_sharded[path[0]] = []
                 for chunk in batch:
@@ -241,7 +233,6 @@ class ReplicatorClient:
                             )
                         )
                     chunk_requests_sharded[path[0]].append(ChunkRequest(chunk, cr_path))
-                    pbar.update()
 
         # send chunk requests to source gateway
         for instance, chunk_requests in chunk_requests_sharded.items():
@@ -273,9 +264,11 @@ class ReplicatorClient:
         self,
         crs: List[ChunkRequest],
         completed_state=ChunkState.upload_complete,
-        serve_web_dashboard=False,
+        show_pbar=True,
+        serve_web_dashboard=True,
         dash_host="0.0.0.0",
         dash_port="8080",
+        time_limit_seconds=None,
     ) -> Dict:
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs])
         if serve_web_dashboard:
@@ -283,39 +276,43 @@ class ReplicatorClient:
             dash.start()
             atexit.register(dash.shutdown)
             logger.info(f"Web dashboard running at {dash.dashboard_url}")
-        with tqdm(total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB) as pbar:
-            while True:
-                log_df = self.get_chunk_status_log_df()
-                if serve_web_dashboard:
-                    dash.update_status_df(log_df)
-
-                # count completed bytes
-                last_log_df = (
-                    log_df.groupby(["chunk_id"])
-                    .apply(lambda df: df.sort_values(["path_idx", "hop_idx", "time"], ascending=False).head(1))
-                    .reset_index(drop=True)
-                )
-                is_complete_fn = (
-                    lambda row: row["state"] >= completed_state
-                    and row["path_idx"] == len(self.bound_paths) - 1
-                    and row["hop_idx"] == len(self.bound_paths[row["path_idx"]]) - 1
-                )
-                completed_chunk_ids = last_log_df[last_log_df.apply(is_complete_fn, axis=1)].chunk_id.values
-                completed_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs if cr.chunk.chunk_id in completed_chunk_ids])
-
-                # update progress bar
-                pbar.update(completed_bytes * 8 - pbar.n)
-                total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
-                throughput_gbits = completed_bytes * 8 / GB / total_runtime_s
-                pbar.set_description(f"Replication: average {throughput_gbits:.2f}Gbit/s")
-
-                if len(completed_chunk_ids) == len(crs):
+        with Timer() as t:
+            with tqdm(
+                total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB, disable=not show_pbar
+            ) as pbar:
+                while True:
+                    log_df = self.get_chunk_status_log_df()
                     if serve_web_dashboard:
-                        dash.shutdown()
-                    return dict(
-                        completed_chunk_ids=completed_chunk_ids,
-                        total_runtime_s=total_runtime_s,
-                        throughput_gbits=throughput_gbits,
+                        dash.update_status_df(log_df)
+
+                    # count completed bytes
+                    last_log_df = (
+                        log_df.groupby(["chunk_id"])
+                        .apply(lambda df: df.sort_values(["path_idx", "hop_idx", "time"], ascending=False).head(1))
+                        .reset_index(drop=True)
                     )
-                else:
-                    time.sleep(0.25)
+                    is_complete_fn = (
+                        lambda row: row["state"] >= completed_state
+                        and row["path_idx"] == len(self.bound_paths) - 1
+                        and row["hop_idx"] == len(self.bound_paths[row["path_idx"]]) - 1
+                    )
+                    completed_chunk_ids = last_log_df[last_log_df.apply(is_complete_fn, axis=1)].chunk_id.values
+                    completed_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs if cr.chunk.chunk_id in completed_chunk_ids])
+
+                    # update progress bar
+                    pbar.update(completed_bytes * 8 - pbar.n)
+                    total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
+                    throughput_gbits = completed_bytes * 8 / GB / total_runtime_s
+                    pbar.set_description(f"Replication: average {throughput_gbits:.2f}Gbit/s")
+
+                    if len(completed_chunk_ids) == len(crs) or time_limit_seconds is not None and t.elapsed > time_limit_seconds:
+                        if serve_web_dashboard:
+                            dash.shutdown()
+                        return dict(
+                            completed_chunk_ids=completed_chunk_ids,
+                            total_runtime_s=total_runtime_s,
+                            throughput_gbits=throughput_gbits,
+                            monitor_status="completed" if len(completed_chunk_ids) == len(crs) else "timed_out",
+                        )
+                    else:
+                        time.sleep(0.25)

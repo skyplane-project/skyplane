@@ -119,7 +119,7 @@ class GatewayDaemon:
 if __name__ == "__main__":
     print_header()
     parser = argparse.ArgumentParser(description="Skylark Gateway Daemon")
-    parser.add_argument("--chunk-dir", type=Path, default="/dev/shm/skylark/chunks", required=True, help="Directory to store chunks")
+    parser.add_argument("--chunk-dir", type=Path, default="/dev/shm/skylark/chunks", help="Directory to store chunks")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode for Flask")
     parser.add_argument("--log-dir", type=Path, default=Path("/var/log/skylark"), help="Directory to write logs to")
     parser.add_argument("--outgoing-connections", type=int, default=1, help="Number of outgoing connections to make to the next relay")

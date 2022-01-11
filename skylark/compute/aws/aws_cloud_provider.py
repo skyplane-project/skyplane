@@ -1,9 +1,9 @@
 from functools import lru_cache
 import uuid
-import time
 from typing import List, Optional
 
 import botocore
+from oslo_concurrency import lockutils
 import pandas as pd
 from loguru import logger
 
@@ -16,6 +16,9 @@ from skylark.utils.utils import Timer
 class AWSCloudProvider(CloudProvider):
     def __init__(self):
         super().__init__()
+        # Ubuntu deep learning AMI
+        # https://aws.amazon.com/marketplace/pp/prodview-dxk3xpeg6znhm
+        self.ami_alias = "resolve:ssm:/aws/service/marketplace/prod-oivea5digmbj6/latest"
 
     @property
     def name(self):
@@ -26,22 +29,23 @@ class AWSCloudProvider(CloudProvider):
         return [
             "ap-northeast-1",
             "ap-northeast-2",
-            "ap-northeast-3",
             "ap-southeast-1",
             "ap-southeast-2",
             "ca-central-1",
             "eu-central-1",
-            "eu-north-1",
             "eu-west-1",
             "eu-west-2",
             "eu-west-3",
+            "sa-east-1",
             "us-east-1",
             "us-east-2",
             "us-west-1",
             "us-west-2",
-            # "af-south-1",
+            # "ap-northeast-3",  # dl ami not available here
+            "af-south-1",
             # "ap-south-1",
             # "ap-southeast-3",
+            # "eu-north-1",  # dl ami not available here
             # "eu-south-1",
             # "me-south-1",
         ]
@@ -187,13 +191,20 @@ class AWSCloudProvider(CloudProvider):
 
     def add_ip_to_security_group(self, aws_region: str):
         """Add IP to security group. If security group ID is None, use group named skylark (create if not exists)."""
-        self.make_vpc(aws_region)
-        sg = self.get_security_group(aws_region)
-        try:
-            sg.authorize_ingress(IpPermissions=[{"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}])
-        except botocore.exceptions.ClientError as e:
-            if not str(e).endswith("already exists"):
-                raise e
+
+        @lockutils.synchronized(f"aws_add_ip_to_security_group_{aws_region}", external=True, lock_path="/tmp/skylark_locks")
+        def fn():
+            self.make_vpc(aws_region)
+            sg = self.get_security_group(aws_region)
+            try:
+                sg.authorize_ingress(
+                    IpPermissions=[{"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]
+                )
+            except botocore.exceptions.ClientError as e:
+                if not str(e).endswith("already exists"):
+                    raise e
+
+        return fn()
 
     @lru_cache()
     def get_ubuntu_ami_id(self, region: str) -> str:
@@ -211,17 +222,17 @@ class AWSCloudProvider(CloudProvider):
         region: str,
         instance_class: str,
         name: Optional[str] = None,
-        ami_id: Optional[str] = None,
+        # ami_id: Optional[str] = None,
         tags={"skylark": "true"},
         ebs_volume_size: int = 128,
     ) -> AWSServer:
         assert not region.startswith("aws:"), "Region should be AWS region"
         if name is None:
             name = f"skylark-aws-{str(uuid.uuid4()).replace('-', '')}"
-        if ami_id is None:
-            ami_id = self.get_ubuntu_ami_id(region)
+        # if ami_id is None:
+        #     ami_id = self.get_ubuntu_ami_id(region)
         ec2 = AWSServer.get_boto3_resource("ec2", region)
-        AWSServer.make_keyfile(region)
+        AWSServer.ensure_keyfile_exists(region)
 
         # set instance storage to 128GB EBS
         # use security group named default
@@ -231,7 +242,7 @@ class AWSCloudProvider(CloudProvider):
         subnets = list(vpc.subnets.all())
         assert len(subnets) > 0, "No subnets found"
         instance = ec2.create_instances(
-            ImageId=ami_id,
+            ImageId=self.ami_alias,
             InstanceType=instance_class,
             MinCount=1,
             MaxCount=1,

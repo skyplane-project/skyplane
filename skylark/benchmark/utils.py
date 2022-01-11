@@ -1,3 +1,4 @@
+import sys
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from loguru import logger
@@ -43,7 +44,6 @@ def provision(
     aws_instance_class: str,
     gcp_instance_class: str,
     gcp_use_premium_network: bool = True,
-    setup_script: object = None,
     log_dir: Optional[str] = None,
 ) -> Tuple[Dict[str, List[AWSServer]], Dict[str, List[GCPServer]]]:
     """Provision list of instances in AWS and GCP in each specified region."""
@@ -93,9 +93,27 @@ def provision(
     def init(i: Server):
         i.wait_for_ready()
         i.init_log_files(log_dir)
-        if setup_script:
-            i.copy_and_run_script(setup_script)
 
     all_instances = [i for ilist in aws_instances.values() for i in ilist] + [i for ilist in gcp_instances.values() for i in ilist]
     do_parallel(init, all_instances, progress_bar=True, desc="Provisioning init")
     return aws_instances, gcp_instances  # pytype: disable=bad-return-type
+
+
+class RedirectStdStreams(object):
+    """https://stackoverflow.com/a/6796752"""
+
+    def __init__(self, stdout=None, stderr=None):
+        self._stdout = stdout or sys.stdout
+        self._stderr = stderr or sys.stderr
+
+    def __enter__(self):
+        self.old_stdout, self.old_stderr = sys.stdout, sys.stderr
+        self.old_stdout.flush()
+        self.old_stderr.flush()
+        sys.stdout, sys.stderr = self._stdout, self._stderr
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self._stdout.flush()
+        self._stderr.flush()
+        sys.stdout = self.old_stdout
+        sys.stderr = self.old_stderr
