@@ -8,7 +8,7 @@ from werkzeug.serving import make_server
 from werkzeug import serving
 from skylark import MB
 
-from skylark.gateway.chunk import ChunkRequest, ChunkState
+from skylark.chunk import ChunkRequest, ChunkState
 from skylark.gateway.chunk_store import ChunkStore
 from skylark.gateway.gateway_reciever import GatewayReceiver
 

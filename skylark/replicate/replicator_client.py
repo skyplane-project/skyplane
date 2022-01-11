@@ -18,7 +18,7 @@ from skylark.benchmark.utils import refresh_instance_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server, ServerState
-from skylark.gateway.chunk import Chunk, ChunkRequest, ChunkRequestHop, ChunkState
+from skylark.chunk import Chunk, ChunkRequest, ChunkRequestHop, ChunkState
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client_dashboard import ReplicatorClientDashboard

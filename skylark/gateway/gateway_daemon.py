@@ -14,7 +14,7 @@ import setproctitle
 from loguru import logger
 
 from skylark import MB, print_header
-from skylark.gateway.chunk import ChunkState
+from skylark.chunk import ChunkState
 from skylark.gateway.chunk_store import ChunkStore
 from skylark.gateway.gateway_daemon_api import GatewayDaemonAPI
 from skylark.gateway.gateway_reciever import GatewayReceiver
