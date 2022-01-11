@@ -57,8 +57,8 @@ if ! [ -x "$(command -v parallel)" ]; then
 fi
 
 # make list of commands to run with gnu parallel (one for each inter-region) and save to $PARALLEL_CMD_LIST (one command per line)
-PARALLEL_CMD_LIST="$(run_direct_cmd $SRC_REGION $DST_REGION)\n$(run_direct_cmd_double_conn $SRC_REGION $DST_REGION)"
-for inter_region in "aws:ap-northeast-1" "aws:ap-northeast-2" "aws:ap-southeast-1" "aws:ap-southeast-2" "aws:ca-central-1" "aws:eu-central-1" "aws:eu-west-1" "aws:eu-west-2" "aws:eu-west-3" "aws:sa-east-1" "aws:us-east-1" "aws:us-east-2" "aws:us-west-1" "aws:us-west-2"; do
+PARALLEL_CMD_LIST="$(run_direct_cmd $SRC_REGION $DST_REGION) &> $LOG_DIR/direct_1x.log\n$(run_direct_cmd_double_conn $SRC_REGION $DST_REGION) &> $LOG_DIR/direct_2x.log"
+for inter_region in "aws:af-south-1" "aws:ap-northeast-1" "aws:ap-northeast-2" "aws:ap-southeast-1" "aws:ap-southeast-2" "aws:ca-central-1" "aws:eu-central-1" "aws:eu-west-1" "aws:eu-west-2" "aws:eu-west-3" "aws:sa-east-1" "aws:us-east-1" "aws:us-east-2" "aws:us-west-1" "aws:us-west-2"; do
     # if inter-region is same as src or dst region, skip
     if [ "$inter_region" == "$SRC_REGION" ] || [ "$inter_region" == "$DST_REGION" ]; then
         continue
@@ -70,7 +70,7 @@ echo -e "$PARALLEL_CMD_LIST\n"
 echo -e "$PARALLEL_CMD_LIST\n" >> $LOG_DIR/launch.log
 
 log "Parallel:"
-parallel -j 8 --results $LOG_DIR/parallel_results.txt --joblog $LOG_DIR/parallel_joblog.txt --eta < <(echo -e "$PARALLEL_CMD_LIST")
+parallel -j 8 --results $LOG_DIR/raw_logs --joblog $LOG_DIR/parallel_joblog.txt --eta < <(echo -e "$PARALLEL_CMD_LIST")
 
 
 log "Stopping instances"

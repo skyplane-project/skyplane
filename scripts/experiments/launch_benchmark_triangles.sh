@@ -6,6 +6,7 @@ function cleanup {
 }
 trap cleanup EXIT
 
+bash scrips/experiments/benchmark_triangles.sh "aws:af-south-1" "aws:ap-southeast-1"
 bash scripts/experiments/benchmark_triangles.sh "aws:sa-east-1" "aws:us-west-2"
 bash scripts/experiments/benchmark_triangles.sh "aws:ap-northeast-1" "aws:eu-central-1"
 bash scripts/experiments/benchmark_triangles.sh "aws:ap-southeast-1" "aws:eu-west-1"
