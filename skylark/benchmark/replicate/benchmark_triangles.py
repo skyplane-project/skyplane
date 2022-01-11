@@ -70,9 +70,9 @@ def bench_triangle(
         total_bytes = n_chunks * chunk_size_mb * MB
         crs = rc.run_replication_plan(job)
         logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
-        stats = rc.monitor_transfer(crs, serve_web_dashboard=False, time_limit_seconds=10 * 60)
+        stats = rc.monitor_transfer(crs, serve_web_dashboard=False, time_limit_seconds=600)
         logger.info(f"Stats: {stats}")
-        stats["success"] = stats["monitor_status"] == "success"
+        stats["success"] = True
         stats["log"] = rc.get_chunk_status_log_df()
 
         rc.deprovision_gateways()

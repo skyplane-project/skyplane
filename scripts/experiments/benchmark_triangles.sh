@@ -20,15 +20,16 @@ function log() {
     echo -e "${BGreen}$1${NC}"
 }
 
-EXP_ID=$(./scripts/utils/get_random_word_hash.sh)
-LOG_DIR=data/experiments/benchmark_triangles/$EXP_ID
+EXP_ID="$SRC_REGION-$DST_REGION-$(./scripts/utils/get_random_word_hash.sh)"
+LOG_DIR=data/experiments/benchmark_triangles/logs/$EXP_ID
 log "Creating log directory $LOG_DIR"
+log "Experiment ID: $EXP_ID"
 rm -rf $LOG_DIR
 mkdir -p $LOG_DIR
 touch $LOG_DIR/launch.log
 
-# log "Stopping existing instances"
-# python skylark/benchmark/stop_all_instances.py &>> $LOG_DIR/launch.log
+log "Stopping existing instances"
+python skylark/benchmark/stop_all_instances.py &>> $LOG_DIR/launch.log
 
 log "Building docker image"
 source scripts/pack_docker.sh &>> $LOG_DIR/launch.log
@@ -42,7 +43,6 @@ function run_direct_cmd {
 }
 
 function run_direct_cmd_double_conn {
-    # multiply num-outgoing-connections by 2
     echo "python skylark/benchmark/replicate/benchmark_triangles.py --log-dir $LOG_DIR $PASS_THROUGH_ARGS --gateway-docker-image $SKYLARK_DOCKER_IMAGE --num-gateways $NUM_GATEWAYS --num-outgoing-connections $(($NUM_CONNECTIONS * 2)) $1 $2"
 }
 
@@ -67,27 +67,14 @@ for inter_region in "aws:ap-northeast-1" "aws:ap-northeast-2" "aws:ap-northeast-
 done
 log "Running commands with gnu parallel:"
 echo -e "$PARALLEL_CMD_LIST\n"
+echo -e "$PARALLEL_CMD_LIST\n" >> $LOG_DIR/launch.log
 
 log "Parallel:"
-parallel \
-    -j 8 \
-    --results $LOG_DIR/parallel_results.txt \
-    --joblog $LOG_DIR/parallel_joblog.txt \
-    --eta \
-    --halt 1 < <(echo -e "$PARALLEL_CMD_LIST")
+parallel -j 8 --results $LOG_DIR/parallel_results.txt --joblog $LOG_DIR/parallel_joblog.txt --eta < <(echo -e "$PARALLEL_CMD_LIST")
 
 
-# log "Stopping instances"
-# python skylark/benchmark/stop_all_instances.py &>> $LOG_DIR/launch.log
+log "Stopping instances"
+python skylark/benchmark/stop_all_instances.py &>> $LOG_DIR/launch.log
 
 log "Done, results in $LOG_DIR"
 log "Experiment ID: $EXP_ID"
-
-# interesting pairs
-# bash scripts/experiments/test_triangles.sh "aws:us-east-1" "aws:us-west-1"
-# bash scripts/experiments/test_triangles.sh "aws:ap-northeast-1" "aws:eu-central-1"
-# bash scripts/experiments/test_triangles.sh "aws:ap-southeast-1" "aws:eu-west-1"
-# bash scripts/experiments/test_triangles.sh "aws:sa-east-1" "aws:us-west-2"
-
-# todo
-# bash scripts/experiments/test_triangles.sh "aws:eu-central-1" "aws:us-east-1"

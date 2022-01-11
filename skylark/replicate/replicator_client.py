@@ -303,17 +303,14 @@ class ReplicatorClient:
                     throughput_gbits = completed_bytes * 8 / GB / total_runtime_s
                     pbar.set_description(f"Replication: average {throughput_gbits:.2f}Gbit/s")
 
-                    if len(completed_chunk_ids) == len(crs):
+                    if len(completed_chunk_ids) == len(crs) or time_limit_seconds is not None and t.elapsed > time_limit_seconds:
                         if serve_web_dashboard:
                             dash.shutdown()
                         return dict(
                             completed_chunk_ids=completed_chunk_ids,
                             total_runtime_s=total_runtime_s,
                             throughput_gbits=throughput_gbits,
-                            monitor_status="completed",
+                            monitor_status="completed" if len(completed_chunk_ids) == len(crs) else "timed_out",
                         )
                     else:
                         time.sleep(0.25)
-                        if time_limit_seconds is not None and t.elapsed > time_limit_seconds:
-                            logger.warning(f"Time limit reached, stopping replication")
-                            return dict(monitor_status="timed_out")

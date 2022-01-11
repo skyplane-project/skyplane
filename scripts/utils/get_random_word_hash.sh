@@ -3,8 +3,8 @@
 
 NUM_WORDS=${1:-4}
 
-DICT_FILE_LOCAL=/tmp/clean_words.txt
-DICT_FILE_REMOTE=https://github.com/InnovativeInventor/dict4schools/blob/master/safedict_full.txt?raw=true
+DICT_FILE_LOCAL=/tmp/clean_words_simple.txt
+DICT_FILE_REMOTE=https://github.com/InnovativeInventor/dict4schools/blob/master/safedict_simple.txt?raw=true
 DICT_FILE_HASH=8baa88ae4f04bcb394017397491853a4
 
 # if dict_file_local does not exist or if it's md5sum doesn't match dict_file_hash, download dict_file_remote
