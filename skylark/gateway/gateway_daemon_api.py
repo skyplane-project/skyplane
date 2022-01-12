@@ -63,6 +63,7 @@ class GatewayDaemonAPI(threading.Thread):
         serving.WSGIRequestHandler.log_request = log_request
 
         self.server = make_server(host, port, self.app, threaded=True)
+        self.url = "http://{}:{}".format(host, port)
 
     def run(self):
         self.server.serve_forever()

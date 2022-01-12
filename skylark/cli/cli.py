@@ -17,11 +17,20 @@ import atexit
 import json
 import os
 from pathlib import Path
+from typing import Optional
 
 import typer
 from loguru import logger
 from skylark import GB, MB
-from skylark.cli.cli_helper import copy_local_local, copy_local_s3, copy_s3_local, ls_local, ls_s3, parse_path
+from skylark.cli.cli_helper import (
+    copy_local_local,
+    copy_local_s3,
+    copy_s3_local,
+    deprovision_skylark_instances,
+    ls_local,
+    ls_s3,
+    parse_path,
+)
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
 
@@ -60,7 +69,7 @@ def cp(src: str, dst: str):
 def replicate_random(
     src_region: str,
     dst_region: str,
-    inter_region: str = None,
+    inter_region: Optional[str] = None,
     num_gateways: int = 1,
     num_outgoing_connections: int = 16,
     chunk_size_mb: int = 8,
@@ -69,11 +78,11 @@ def replicate_random(
     gcp_project: str = "skylark-333700",
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
     aws_instance_class: str = "m5.8xlarge",
-    gcp_instance_class: str = None,
+    gcp_instance_class: Optional[str] = None,
     gcp_use_premium_network: bool = False,
     key_prefix: str = "/test/replicate_random",
-    time_limit_seconds: int = None,
-    log_interval_s: int = 1.0,
+    time_limit_seconds: Optional[int] = None,
+    log_interval_s: float = 1.0,
     serve_web_dashboard: bool = True,
 ):
     """Replicate objects from remote object store to another remote object store."""
@@ -92,11 +101,17 @@ def replicate_random(
         gcp_use_premium_network=gcp_use_premium_network,
     )
 
+    if not reuse_gateways:
+        logger.warning(f"Deprovisioning gateways because reuse_gateways=False")
+        atexit.register(rc.deprovision_gateways)
+    else:
+        logger.warning(
+            f"Gateways not deprovisioned because reuse_gateways=True. Remember to call `skylark deprovision` to deprovision gateways."
+        )
     rc.provision_gateways(
         reuse_instances=reuse_gateways,
         num_outgoing_connections=num_conn,
     )
-    atexit.register(rc.deprovision_gateways)
     for path in rc.bound_paths:
         logger.info(f"Provisioned path {' -> '.join(path[i].region_tag for i in range(len(path)))}")
         for gw in path:
@@ -104,9 +119,9 @@ def replicate_random(
 
     job = ReplicationJob(
         source_region=src_region,
-        source_bucket=None,
+        source_bucket="random",
         dest_region=dst_region,
-        dest_bucket=None,
+        dest_bucket="random",
         objs=[f"{key_prefix}/{i}" for i in range(n_chunks)],
         random_chunk_size_mb=chunk_size_mb,
     )
@@ -119,10 +134,15 @@ def replicate_random(
     )
     stats["success"] = True
     stats["log"] = rc.get_chunk_status_log_df()
-    rc.deprovision_gateways()
 
     out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
     print(f"\n{json.dumps(out_json)}")
+
+
+@app.command()
+def deprovision(gcp_project: Optional[str] = None):
+    """Deprovision gateways."""
+    deprovision_skylark_instances(gcp_project_id=gcp_project)
 
 
 if __name__ == "__main__":

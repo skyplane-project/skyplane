@@ -16,12 +16,12 @@ def make_netdata_command(port, netdata_hostname=None):
     return cmd.format(port=port, docker_args=docker_args)
 
 
-def make_dozzle_command(port, dozzle_args=None):
+def make_dozzle_command(port):
     cmd = """sudo docker run -d --rm --name dozzle \
         -p {log_viewer_port}:8080 \
         --volume=/var/run/docker.sock:/var/run/docker.sock \
         amir20/dozzle:latest"""
-    return cmd.format(log_viewer_port=port) + " " + dozzle_args if dozzle_args else ""
+    return cmd.format(log_viewer_port=port)
 
 
 def make_glances_command(port):

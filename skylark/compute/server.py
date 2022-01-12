@@ -195,10 +195,13 @@ class Server:
 
         # launch monitoring
         logger.debug(desc_prefix + ": Starting monitoring")
-        launch_cmd = (
-            f"({make_dozzle_command(log_viewer_port)}; {make_netdata_command(activity_monitor_port, netdata_hostname=self.public_ip())})"
+        out, err = self.run_command(make_dozzle_command(log_viewer_port))
+        out, err = self.run_command(make_netdata_command(activity_monitor_port, netdata_hostname=self.public_ip()))
+
+        # increase TCP connections
+        self.run_command(
+            "sudo sysctl net.ipv4.tcp_tw_reuse=1 net.core.somaxconn=1024 net.core.netdev_max_backlog=2000 net.ipv4.tcp_max_syn_backlog=2048"
         )
-        self.run_command(launch_cmd)
 
         # launch gateway
         logger.debug(desc_prefix + ": Pulling docker image")

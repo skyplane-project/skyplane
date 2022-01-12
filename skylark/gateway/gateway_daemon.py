@@ -37,7 +37,7 @@ class GatewayDaemon:
         self.api_server = GatewayDaemonAPI(self.chunk_store, self.gateway_receiver, debug=debug, log_dir=log_dir)
         self.api_server.start()
         atexit.register(self.cleanup)
-        logger.info("Gateway daemon API started")
+        logger.info(f"Gateway daemon API started at {self.api_server.url}")
 
     def cleanup(self):
         logger.warning("Shutting down gateway daemon")
