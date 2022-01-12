@@ -145,7 +145,9 @@ def deprovision_skylark_instances(gcp_project_id: Optional[str] = None):
         instances += gcp.get_matching_instances()
 
     aws = AWSCloudProvider()
-    for _, instance_list in do_parallel(aws.get_matching_instances, aws.region_list(), progress_bar=True, leave_pbar=False, desc="Retrieve AWS instances"):
+    for _, instance_list in do_parallel(
+        aws.get_matching_instances, aws.region_list(), progress_bar=True, leave_pbar=False, desc="Retrieve AWS instances"
+    ):
         instances += instance_list
 
     if instances:

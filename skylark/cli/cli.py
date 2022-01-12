@@ -82,7 +82,7 @@ def replicate_random(
     gcp_use_premium_network: bool = False,
     key_prefix: str = "/test/replicate_random",
     time_limit_seconds: Optional[int] = None,
-    log_interval_s: float = 1.,
+    log_interval_s: float = 1.0,
     serve_web_dashboard: bool = True,
 ):
     """Replicate objects from remote object store to another remote object store."""

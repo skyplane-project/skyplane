@@ -99,22 +99,24 @@ class GatewaySender:
     def send_chunks(self, chunk_ids: List[int], dst_host: str):
         """Send list of chunks to gateway server, pipelining small chunks together into a single socket stream."""
         # notify server of upcoming ChunkRequests
-        chunk_reqs = [self.chunk_store.get_chunk_request(chunk_id) for chunk_id in chunk_ids]
-        response = requests.post(f"http://{dst_host}:8080/api/v1/chunk_requests", json=[c.as_dict() for c in chunk_reqs])
-        assert response.status_code == 200 and response.json()["status"] == "ok"
+        with Timer("Notify"):
+            chunk_reqs = [self.chunk_store.get_chunk_request(chunk_id) for chunk_id in chunk_ids]
+            response = requests.post(f"http://{dst_host}:8080/api/v1/chunk_requests", json=[c.as_dict() for c in chunk_reqs])
+            assert response.status_code == 200 and response.json()["status"] == "ok"
 
-        # contact server to set up socket connection
-        if self.destination_ports.get(dst_host) is None:
-            response = requests.post(f"http://{dst_host}:8080/api/v1/servers")
-            assert response.status_code == 200
-            self.destination_ports[dst_host] = int(response.json()["server_port"])
-            self.destination_sockets[dst_host] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.destination_sockets[dst_host].connect((dst_host, self.destination_ports[dst_host]))
-            logger.info(f"[sender:{self.worker_id}] started new server connection to {dst_host}:{self.destination_ports[dst_host]}")
-        sock = self.destination_sockets[dst_host]
-        dst_port = self.destination_ports[dst_host]
+        with Timer("Start connection"):
+            # contact server to set up socket connection
+            if self.destination_ports.get(dst_host) is None:
+                response = requests.post(f"http://{dst_host}:8080/api/v1/servers")
+                assert response.status_code == 200
+                self.destination_ports[dst_host] = int(response.json()["server_port"])
+                self.destination_sockets[dst_host] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.destination_sockets[dst_host].connect((dst_host, self.destination_ports[dst_host]))
+                logger.info(f"[sender:{self.worker_id}] started new server connection to {dst_host}:{self.destination_ports[dst_host]}")
+            sock = self.destination_sockets[dst_host]
+            dst_port = self.destination_ports[dst_host]
 
-        with Timer() as t:
+        with Timer("Send chunk") as t:
             for idx, chunk_id in enumerate(chunk_ids):
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 1)
                 self.chunk_store.state_start_upload(chunk_id)

@@ -199,7 +199,9 @@ class Server:
         out, err = self.run_command(make_netdata_command(activity_monitor_port, netdata_hostname=self.public_ip()))
 
         # increase TCP connections
-        self.run_command("sudo sysctl net.ipv4.tcp_tw_reuse=1 net.core.somaxconn=1024 net.core.netdev_max_backlog=2000 net.ipv4.tcp_max_syn_backlog=2048")
+        self.run_command(
+            "sudo sysctl net.ipv4.tcp_tw_reuse=1 net.core.somaxconn=1024 net.core.netdev_max_backlog=2000 net.ipv4.tcp_max_syn_backlog=2048"
+        )
 
         # launch gateway
         logger.debug(desc_prefix + ": Pulling docker image")
