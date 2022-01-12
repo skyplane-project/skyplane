@@ -183,13 +183,21 @@ class ReplicatorClient:
 
         # make list of chunks
         chunks = []
+        print("get object sizes", job.source_bucket)
+        obj_file_size_bytes = job.src_obj_sizes() if job.source_bucket else None
         for idx, obj in enumerate(job.objs):
-            file_size_bytes = job.random_chunk_size_mb * MB  # todo support object store objects
+            if obj_file_size_bytes:
+                # object store objects
+                file_size_bytes = obj_file_size_bytes[idx][1]
+            else:
+                # random data 
+                file_size_bytes = job.random_chunk_size_mb * MB  
+
             chunks.append(
                 Chunk(
                     key=obj,
                     chunk_id=idx,
-                    file_offset_bytes=0,
+                    file_offset_bytes=0, # TODO: what is this?
                     chunk_length_bytes=file_size_bytes,
                 )
             )
@@ -223,10 +231,25 @@ class ReplicatorClient:
                     cr_path = []
                     for hop_idx, hop_instance in enumerate(path):
                         # todo support object stores
-                        if hop_idx == 0:  # source gateway
-                            location = f"random_{job.random_chunk_size_mb}MB"
-                        elif hop_idx == len(path) - 1:  # destination gateway
-                            location = "save_local"
+                        # TODO: cleanup...
+                        src_object_store_region = None
+                        src_object_store_bucket = None
+                        dst_object_store_region = None
+                        dst_object_store_bucket = None
+                        if hop_idx == 0: 
+                            if job.source_bucket: # source bucket
+                                location = "src_bucket"
+                                src_object_store_region = job.source_region
+                                src_object_store_bucket = job.source_bucket
+                            else: # source gateway
+                                location = f"random_{job.random_chunk_size_mb}MB"
+                        elif hop_idx == len(path) - 1:  
+                            if job.dest_bucket: # destination bucket
+                                location = "dst_object_store"
+                                dst_object_store_region = job.dest_region
+                                dst_object_store_bucket = job.dest_bucket
+                            else: # destination gateway
+                                location = "save_local"
                         else:  # intermediate gateway
                             location = "relay"
                         cr_path.append(
@@ -234,6 +257,11 @@ class ReplicatorClient:
                                 hop_cloud_region=hop_instance.region_tag,
                                 hop_ip_address=hop_instance.public_ip(),
                                 chunk_location_type=location,
+                                src_object_store_region=src_object_store_region, 
+                                src_object_store_bucket=src_object_store_bucket,
+                                dst_object_store_region=dst_object_store_region,
+                                dst_object_store_bucket=dst_object_store_bucket,
+ 
                             )
                         )
                     chunk_requests_sharded[path[0]].append(ChunkRequest(chunk, cr_path))

@@ -55,9 +55,10 @@ def parse_args():
 
 
 def main(args):
-    src_bucket, dst_bucket = f"skylark-{args.src_region.split(':')[1]}", f"skylark-{args.dest_region.split(':')[1]}"
-    s3_interface_src = S3Interface(args.src_region.split(":")[1], f"{args.bucket_prefix}-{src_bucket}")
-    s3_interface_dst = S3Interface(args.dest_region.split(":")[1], f"{args.bucket_prefix}-{dst_bucket}")
+    src_bucket = f"{args.bucket_prefix}-skylark-{args.src_region.split(':')[1]}"
+    dst_bucket = f"{args.bucket_prefix}-skylark-{args.dest_region.split(':')[1]}"
+    s3_interface_src = S3Interface(args.src_region.split(":")[1], src_bucket)
+    s3_interface_dst = S3Interface(args.dest_region.split(":")[1], dst_bucket)
     s3_interface_src.create_bucket()
     s3_interface_dst.create_bucket()
 
@@ -65,8 +66,10 @@ def main(args):
         # todo implement object store support
         #pass
         print("Not skipping upload...", src_bucket, dst_bucket)
-        matching_src_keys = list(s3_interface_src.list_objects(prefix=args.key_prefix))
-        matching_dst_keys = list(s3_interface_dst.list_objects(prefix=args.key_prefix))
+
+        # TODO: fix this to get the key instead of S3Object
+        matching_src_keys = list([obj.key for obj in s3_interface_src.list_objects(prefix=args.key_prefix)])
+        matching_dst_keys = list([obj.key for obj in s3_interface_dst.list_objects(prefix=args.key_prefix)])
         if matching_src_keys:
             logger.warning(f"Deleting objects from source bucket: {matching_src_keys}")
             s3_interface_src.delete_objects(matching_src_keys)
