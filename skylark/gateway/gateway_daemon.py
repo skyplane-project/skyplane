@@ -93,7 +93,7 @@ class GatewayDaemon:
                         self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
                          
                         # update chunk state 
-                        self.chunk_store.state_start_download(chunk_req.chunk.chunk_id)
+                        #self.chunk_store.state_start_download(chunk_req.chunk.chunk_id)
 
                         # function to download data from S3
                         # TODO: add this to a queue like with GatewaySender to prevent OOM
