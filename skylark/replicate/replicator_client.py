@@ -265,11 +265,11 @@ class ReplicatorClient:
         crs: List[ChunkRequest],
         completed_state=ChunkState.upload_complete,
         show_pbar=True,
-        log_interval_s: int = None,
+        log_interval_s: Optional[int] = None,
         serve_web_dashboard=True,
         dash_host="0.0.0.0",
         dash_port="8080",
-        time_limit_seconds: int = None,
+        time_limit_seconds: Optional[int] = None,
     ) -> Dict:
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs])
         if serve_web_dashboard:

@@ -32,16 +32,13 @@ if __name__ == "__main__":
     src_path = ChunkRequestHop(
         hop_cloud_region="aws:us-east-1",
         hop_ip_address="localhost",
-        chunk_location_type="relay",
+        chunk_location_type="src_object_store",
         # src_object_store_region="us-east-1",
         # src_object_store_bucket="skylark-us-east-1",
     )
     req = ChunkRequest(chunk=chunk, path=[src_path])
     logger.debug(f"Chunk request: {req}")
-
-    # send chunk request to gateway
-    daemon.chunk_store.add_chunk_request(req, ChunkState.downloaded)
-    assert daemon.chunk_store.get_chunk_request(req.chunk.chunk_id) == req
+    daemon.chunk_store.add_chunk_request(req, ChunkState.registered)
 
     # run gateway daemon
     daemon.run()
