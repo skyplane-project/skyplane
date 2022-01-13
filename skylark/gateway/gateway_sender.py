@@ -1,18 +1,14 @@
-import atexit
-from collections import defaultdict
-from functools import partial
 import queue
 import socket
-from contextlib import closing
+from collections import defaultdict
 from multiprocessing import Event, Manager, Process, Value
 from typing import Dict, List, Optional
 
 import requests
 import setproctitle
 from loguru import logger
-from skylark import GB, MB
-
-from skylark.chunk import ChunkRequest, ChunkState
+from skylark import GB
+from skylark.chunk import ChunkRequest
 from skylark.gateway.chunk_store import ChunkStore
 from skylark.utils.utils import Timer, wait_for
 
@@ -100,14 +96,7 @@ class GatewaySender:
             logger.info(f"[sender:{worker_id}] closed destination socket {dst_host}:{dst_port}")
 
     def send_chunk(self, chunk_id: int, dst_host: str):
-        """Send a single chunk to gateway server, pipelining small chunks together into a single socket stream."""
-        chunk_request = self.chunk_store.get_chunk_request(chunk_id)
-        chunk = chunk_request.chunk
-        with Timer("Register chunk"):
-            reply = requests.post(f"http://{dst_host}:8080/api/v1/chunk_requests", json=[chunk_request.as_dict()])
-            if reply.status_code != 200:
-                raise Exception(f"Failed to send chunk requests to gateway instance {dst_host}: {reply.text}")
-
+        chunk = self.chunk_store.get_chunk_request(chunk_id).chunk
         with Timer("Start connection"):
             # contact server to set up socket connection
             if self.destination_ports.get(dst_host) is None:
@@ -121,7 +110,7 @@ class GatewaySender:
 
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 1)
         self.chunk_store.state_start_upload(chunk_id)
-        with Timer("Send chunk") as t:
+        with Timer() as t:
             logger.info(f"[sender:{self.worker_id}] sending header for {chunk_id}")
             chunk.to_wire_header(n_chunks_left_on_socket=0).to_socket(sock)  # todo remove n_chunks_left_on_socket since it's always 0
             chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
