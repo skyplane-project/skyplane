@@ -21,7 +21,7 @@ This package represents both components as a single binary. Docker builds a sing
 To run a sample replication, first build a new version of the GatewayDaemon Docker image and push it to ghcr.io (ensure you are authenticated as above):
 
 ```
-$ pip install -e .
+$ pip install -e ".[all]"
 $ source scripts/pack_docker.sh
 ```
 <details>
