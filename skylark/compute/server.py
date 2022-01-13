@@ -202,12 +202,15 @@ class Server:
             logger.debug(desc_prefix + ": Installing docker (retry)")
             out, err = self.run_command(cmd)
             docker_version = out.strip().split("\n")[-1]
+
         assert docker_version.startswith("Success"), f"Failed to install Docker: {out}\n{err}"
 
         # launch monitoring
         logger.debug(desc_prefix + ": Starting monitoring")
         out, err = self.run_command(make_dozzle_command(log_viewer_port))
         out, err = self.run_command(make_netdata_command(activity_monitor_port, netdata_hostname=self.public_ip()))
+
+        # TODO: create file and write AWS credentials 
 
         # launch gateway
         logger.debug(desc_prefix + ": Pulling docker image")
