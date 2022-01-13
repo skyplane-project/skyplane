@@ -244,6 +244,7 @@ class ReplicatorClient:
                                 dst_object_store_bucket = job.dest_bucket
                             else: # destination gateway
                                 location = "save_local"
+                        else: 
                            location = "relay"
                         cr_path.append(
                             ChunkRequestHop(
