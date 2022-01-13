@@ -26,8 +26,17 @@ class AWSCloudProvider(CloudProvider):
         return "aws"
 
     @staticmethod
-    def region_list():
-        return [
+    @lru_cache
+    def get_enabled_regions():
+        # check if the region is enabled or not
+        # use descibe-regions call to check OptInStatus
+        ec2 = AWSServer.get_boto3_resource("ec2", "us-east-1")
+        desc_regions = ec2.meta.client.describe_regions()
+        return [r["RegionName"] for r in desc_regions["Regions"]]
+
+    @staticmethod
+    def region_list(include_disabled: bool = False) -> List[str]:
+        all_regions = [
             "ap-northeast-1",
             "ap-northeast-2",
             "ap-southeast-1",
@@ -50,6 +59,14 @@ class AWSCloudProvider(CloudProvider):
             # "eu-south-1",
             # "me-south-1",
         ]
+        if include_disabled:
+            return all_regions
+        else:
+            enabled_regions = AWSCloudProvider.get_enabled_regions()
+            for r in all_regions:
+                if r not in enabled_regions:
+                    logger.warning(f"Skipping region {r}")
+            return [r for r in all_regions if r in enabled_regions]
 
     @staticmethod
     def get_transfer_cost(src_key, dst_key):
