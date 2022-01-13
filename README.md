@@ -68,7 +68,7 @@ $ skylark replicate-random aws:ap-northeast-1 aws:eu-central-1 --inter-region aw
    --num-outgoing-connections 32
 ```
 <details>
-<summary>`skylark replicate-random` result</summary>
+<summary>skylark replicate-random result</summary>
 <br>
  
 ```
@@ -121,12 +121,14 @@ When done, stop all instances started by Skylark by running:
 ```skyklark deprovision [--gcp-project GCP_PROJECT_ID]```
 
 <details>
-<summary>`skylark deprovision` result</summary>
+<summary>skylark deprovision result</summary>
 <br>
+
 ```
 $ skylark deprovision
 No GCP project ID given, so will only deprovision AWS instances
 Deprovisioning 3 instances
 Deprovisioning (aws:ap-northeast-1): 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 3/3 [00:01<00:00,  2.33it/s]
 ```
-</details
+
+</details>
