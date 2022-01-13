@@ -1,4 +1,5 @@
 from functools import lru_cache
+import time
 import uuid
 from typing import List, Optional
 
@@ -241,39 +242,51 @@ class AWSCloudProvider(CloudProvider):
         assert vpc is not None, "No VPC found"
         subnets = list(vpc.subnets.all())
         assert len(subnets) > 0, "No subnets found"
-        instance = ec2.create_instances(
-            ImageId=self.ami_alias,
-            InstanceType=instance_class,
-            MinCount=1,
-            MaxCount=1,
-            KeyName=f"skylark-{region}",
-            TagSpecifications=[
-                {
-                    "ResourceType": "instance",
-                    "Tags": [{"Key": "Name", "Value": name}] + [{"Key": k, "Value": v} for k, v in tags.items()],
-                }
-            ],
-            BlockDeviceMappings=[
-                {
-                    "DeviceName": "/dev/sda1",
-                    "Ebs": {
-                        "DeleteOnTermination": True,
-                        "VolumeSize": ebs_volume_size,
-                        "VolumeType": "gp2",
-                    },
-                }
-            ],
-            NetworkInterfaces=[
-                {
-                    "DeviceIndex": 0,
-                    "Groups": [self.get_security_group(region).group_id],
-                    "SubnetId": subnets[0].id,
-                    "AssociatePublicIpAddress": True,
-                    "DeleteOnTermination": True,
-                }
-            ],
-        )
-        instance[0].wait_until_running()
-        server = AWSServer(f"aws:{region}", instance[0].id)
-        server.wait_for_ready()
-        return server
+
+        # catch botocore.exceptions.ClientError: "An error occurred (RequestLimitExceeded) when calling the RunInstances operation (reached max retries: 4): Request limit exceeded." and retry
+        for i in range(4):
+            try:
+                instance = ec2.create_instances(
+                    ImageId=self.ami_alias,
+                    InstanceType=instance_class,
+                    MinCount=1,
+                    MaxCount=1,
+                    KeyName=f"skylark-{region}",
+                    TagSpecifications=[
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [{"Key": "Name", "Value": name}] + [{"Key": k, "Value": v} for k, v in tags.items()],
+                        }
+                    ],
+                    BlockDeviceMappings=[
+                        {
+                            "DeviceName": "/dev/sda1",
+                            "Ebs": {
+                                "DeleteOnTermination": True,
+                                "VolumeSize": ebs_volume_size,
+                                "VolumeType": "gp2",
+                            },
+                        }
+                    ],
+                    NetworkInterfaces=[
+                        {
+                            "DeviceIndex": 0,
+                            "Groups": [self.get_security_group(region).group_id],
+                            "SubnetId": subnets[0].id,
+                            "AssociatePublicIpAddress": True,
+                            "DeleteOnTermination": True,
+                        }
+                    ],
+                )
+            except botocore.exceptions.ClientError as e:
+                if not "RequestLimitExceeded" in str(e):
+                    raise e
+                else:
+                    logger.warning(f"RequestLimitExceeded, retrying ({i})")
+                    time.sleep(1)
+                    continue
+            instance[0].wait_until_running()
+            server = AWSServer(f"aws:{region}", instance[0].id)
+            server.wait_for_ready()
+            return server
+        raise Exception("Failed to provision instance")

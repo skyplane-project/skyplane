@@ -41,7 +41,7 @@ app.add_typer(skylark.cli.cli_aws.app, name="aws")
 
 # config logger
 logger.remove()
-logger.add(sys.stderr, format="{function:>20}:{line:<3} | <level>{message}</level>", colorize=True, enqueue=True)
+logger.add(sys.stderr, format="{function:>20}:{line:<3} | <level>{message}</level>", enqueue=True)
 
 
 @app.command()

@@ -235,6 +235,7 @@ class ReplicatorClient:
 
         # send chunk requests to start gateways in parallel
         with Timer("Dispatch chunk requests"):
+
             def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
                 hop_instance, chunk_requests = args
                 logger.debug(f"Sending {len(chunk_requests)} chunk requests to {hop_instance.public_ip()}")
@@ -300,9 +301,7 @@ class ReplicatorClient:
                         .reset_index(drop=True)
                     )
                     is_complete_fn = (
-                        lambda row: row["state"] >= completed_state
-                        and row["path_idx"] == len(self.bound_paths) - 1
-                        and row["hop_idx"] == len(self.bound_paths[row["path_idx"]]) - 1
+                        lambda row: row["state"] >= completed_state and row["hop_idx"] == len(self.bound_paths[row["path_idx"]]) - 1
                     )
                     completed_chunk_ids = last_log_df[last_log_df.apply(is_complete_fn, axis=1)].chunk_id.values
                     completed_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs if cr.chunk.chunk_id in completed_chunk_ids])

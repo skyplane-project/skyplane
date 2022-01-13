@@ -20,7 +20,7 @@ function benchmark_config {
     NUM_GATEWAYS=$2
     N_CHUNKS=$((N_CHUNKS_PER_CONNECTION * NUM_CONNECTIONS * NUM_GATEWAYS))
     set -x
-    skylark replicate-random $SRC_REGION $DST_REGION $INTER_REGION --chunk-size-mb $CHUNK_SIZE_MB --n-chunks $N_CHUNKS --num-gateways $NUM_GATEWAYS --num-outgoing-connections $NUM_CONNECTIONS --no-serve-web-dashboard
+    skylark replicate-random $SRC_REGION $DST_REGION $INTER_REGION --chunk-size-mb $CHUNK_SIZE_MB --n-chunks $N_CHUNKS --num-gateways $NUM_GATEWAYS --num-outgoing-connections $NUM_CONNECTIONS --no-serve-web-dashboard --aws-instance-class m5.4xlarge
     set +x
 }
 
@@ -55,9 +55,9 @@ if ! [ -x "$(command -v parallel)" ]; then
     exit 1
 fi
 
-for NUM_GATEWAYS in 1 2 4; do
+for NUM_GATEWAYS in 24; do
     log "Running benchmark with $NUM_GATEWAYS gateways"
-    benchmark_config $NUM_CONNECTIONS $NUM_GATEWAYS &> $LOG_DIR/$NUM_GATEWAYS.log
+    benchmark_config $NUM_CONNECTIONS $NUM_GATEWAYS |& tee $LOG_DIR/$NUM_GATEWAYS.log
 done
 
 log "Stopping instances"
