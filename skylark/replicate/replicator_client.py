@@ -164,7 +164,6 @@ class ReplicatorClient:
     def deprovision_gateways(self):
         def deprovision_gateway_instance(server: Server):
             if server.instance_state() == ServerState.RUNNING:
-                logger.warning(f"Deprovisioning gateway {server.instance_name()}")
                 server.terminate_instance()
 
         instances = [instance for path in self.bound_paths for instance in path]
@@ -212,16 +211,15 @@ class ReplicatorClient:
         # make list of ChunkRequests
         chunk_requests_sharded: Dict[Server, List[ChunkRequest]] = {}
         with Timer("Building chunk requests"):
-            for batch, path in zip(chunk_batches, self.bound_paths):
-                chunk_requests_sharded[path[0]] = []
+            for batch, (path_idx, path_instances) in zip(chunk_batches, enumerate(self.bound_paths)):
+                chunk_requests_sharded[path_idx] = []
                 for chunk in batch:
-                    # make ChunkRequestHop list
                     cr_path = []
-                    for hop_idx, hop_instance in enumerate(path):
+                    for hop_idx, hop_instance in enumerate(path_instances):
                         # todo support object stores
                         if hop_idx == 0:  # source gateway
                             location = f"random_{job.random_chunk_size_mb}MB"
-                        elif hop_idx == len(path) - 1:  # destination gateway
+                        elif hop_idx == len(path_instances) - 1:  # destination gateway
                             location = "save_local"
                         else:  # intermediate gateway
                             location = "relay"
@@ -232,14 +230,20 @@ class ReplicatorClient:
                                 chunk_location_type=location,
                             )
                         )
-                    chunk_requests_sharded[path[0]].append(ChunkRequest(chunk, cr_path))
+                    chunk_requests_sharded[path_idx].append(ChunkRequest(chunk, cr_path))
 
-        # send chunk requests to source gateway
-        for instance, chunk_requests in chunk_requests_sharded.items():
-            logger.debug(f"Sending {len(chunk_requests)} chunk requests to {instance.public_ip()}")
-            reply = requests.post(f"http://{instance.public_ip()}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests])
+        # send chunk requests to start gateways in parallel
+        def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
+            hop_instance, chunk_requests = args
+            logger.debug(f"Sending {len(chunk_requests)} chunk requests to {hop_instance.public_ip()}")
+            reply = requests.post(
+                f"http://{hop_instance.public_ip()}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests]
+            )
             if reply.status_code != 200:
-                raise Exception(f"Failed to send chunk requests to gateway instance {instance.instance_name()}: {reply.text}")
+                raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
+
+        start_instances = [(path[0], chunk_requests_sharded[path_idx]) for path_idx, path in enumerate(self.bound_paths)]
+        do_parallel(send_chunk_requests, start_instances, n=-1)
 
         return [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
 
