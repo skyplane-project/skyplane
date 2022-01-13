@@ -178,15 +178,18 @@ class Server:
         log_viewer_port=8888,
         activity_monitor_port=8889,
         num_outgoing_connections=8,
+        use_bbr=False,
     ):
         desc_prefix = f"Starting gateway {self.uuid()}"
         logger.debug(desc_prefix + ": Installing docker")
 
         # increase TCP connections and enable BBR
-        self.run_command(
-            "sudo sysctl -w net.ipv4.tcp_tw_reuse=1 net.core.somaxconn=1024 net.core.netdev_max_backlog=2000 net.ipv4.tcp_max_syn_backlog=2048 net.ipv4.tcp_congestion_control=cubic"
-        )  #  net.core.default_qdisc=fq net.ipv4.tcp_congestion_control=bbr
-        # assert "bbr" in self.run_command("sysctl net.ipv4.tcp_congestion_control")[0]
+        net_config = "sudo sysctl -w net.ipv4.tcp_tw_reuse=1 net.core.somaxconn=1024 net.core.netdev_max_backlog=2000 net.ipv4.tcp_max_syn_backlog=2048"
+        if use_bbr:
+            net_config += " net.core.default_qdisc=fq net.ipv4.tcp_congestion_control=bbr"
+        else:
+            net_config += " net.ipv4.tcp_congestion_control=cubic"
+        self.run_command(net_config)
 
         # install docker and launch monitoring
         cmd = "(command -v docker >/dev/null 2>&1 || { rm -rf get-docker.sh; curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh; }); "
