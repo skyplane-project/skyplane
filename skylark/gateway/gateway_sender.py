@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 import requests
 import setproctitle
 from loguru import logger
-from skylark import MB
+from skylark import GB, MB
 
 from skylark.chunk import ChunkRequest, ChunkState
 from skylark.gateway.chunk_store import ChunkStore
@@ -129,8 +129,10 @@ class GatewaySender:
             logger.info(f"[sender:{self.worker_id}] sending data for {chunk_id}")
             with open(chunk_file_path, "rb") as fd:
                 bytes_sent = sock.sendfile(fd)
-            assert bytes_sent == chunk.size, f"{bytes_sent} != {chunk.size}"
-            logger.info(f"[sender:{self.worker_id}] sent chunk {chunk_id}")
+            assert bytes_sent == chunk.chunk_length_bytes, f"{bytes_sent} != {chunk.chunk_length_bytes}"
+        logger.info(
+            f"[sender:{self.worker_id}] sent chunk {chunk_id} in {t.elapsed} ({chunk.chunk_length_bytes * 8 / t.elapsed / GB:.2f}Gbps)"
+        )
         self.chunk_store.state_finish_upload(chunk_id)
         chunk_file_path.unlink()
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 0)  # send remaining packets

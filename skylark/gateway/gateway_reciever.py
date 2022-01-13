@@ -9,7 +9,7 @@ from typing import Tuple
 
 import setproctitle
 from loguru import logger
-from skylark import MB
+from skylark import GB, MB
 
 from skylark.chunk import WireProtocolHeader
 from skylark.gateway.chunk_store import ChunkStore
@@ -114,7 +114,7 @@ class GatewayReceiver:
             self.chunk_store.state_finish_download(chunk_header.chunk_id, t.elapsed)
             chunks_received.append(chunk_header.chunk_id)
             logger.info(
-                f"[receiver:{server_port}] Received chunk {chunk_header.chunk_id} ({chunk_received_size} bytes) in {t.elapsed:.2f} seconds"
+                f"[receiver:{server_port}] Received chunk {chunk_header.chunk_id} in {t.elapsed:.2f} seconds ({chunk_received_size * 8 / t.elapsed / GB:.2f}Gbps)"
             )
 
             if chunk_header.n_chunks_left_on_socket == 0:

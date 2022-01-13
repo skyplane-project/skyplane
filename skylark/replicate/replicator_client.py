@@ -5,6 +5,7 @@ import itertools
 import json
 from logging import log
 from functools import partial
+from re import T
 import time
 from typing import Dict, List, Optional, Tuple
 
@@ -242,9 +243,9 @@ class ReplicatorClient:
             if reply.status_code != 200:
                 raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
 
+        # register with non-start instances before starting the transfer by sending chunk requests to the source gateways
         start_instances = [(path[0], chunk_requests_sharded[path_idx]) for path_idx, path in enumerate(self.bound_paths)]
-        do_parallel(send_chunk_requests, start_instances, n=-1)
-
+        do_parallel(send_chunk_requests, start_instances, n=-1, progress_bar=True, desc="Send start")
         return [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
 
     def get_chunk_status_log_df(self) -> pd.DataFrame:
