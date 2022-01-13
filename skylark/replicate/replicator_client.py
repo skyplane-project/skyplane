@@ -238,7 +238,7 @@ class ReplicatorClient:
                         dst_object_store_bucket = None
                         if hop_idx == 0: 
                             if job.source_bucket: # source bucket
-                                location = "src_bucket"
+                                location = "src_object_store"
                                 src_object_store_region = job.source_region
                                 src_object_store_bucket = job.source_bucket
                             else: # source gateway

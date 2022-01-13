@@ -255,6 +255,8 @@ class Server:
             self.run_command(make_dozzle_command(log_viewer_port))
             self.run_command(make_netdata_command(activity_monitor_port, netdata_hostname=self.public_ip()))
 
+            # TODO: create file and write AWS credentials 
+
             # launch gateway
             pbar.set_description(desc_prefix + ": Pulling docker image")
             docker_out, docker_err = self.run_command(f"sudo docker pull {gateway_docker_image}")
