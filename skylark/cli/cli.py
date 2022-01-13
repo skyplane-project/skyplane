@@ -17,11 +17,13 @@ import atexit
 import json
 import os
 from pathlib import Path
+import sys
 from typing import Optional
 
 import typer
 from loguru import logger
-from skylark import GB, MB
+from skylark import GB, MB, print_header
+import skylark.cli.cli_aws
 from skylark.cli.cli_helper import (
     copy_local_local,
     copy_local_s3,
@@ -35,6 +37,11 @@ from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopolo
 from skylark.replicate.replicator_client import ReplicatorClient
 
 app = typer.Typer(name="skylark")
+app.add_typer(skylark.cli.cli_aws.app, name="aws")
+
+# config logger
+logger.remove()
+logger.add(sys.stderr, format="{function:>20}:{line:<3} | <level>{message}</level>", colorize=True, enqueue=True)
 
 
 @app.command()
@@ -52,6 +59,8 @@ def ls(directory: str):
 @app.command()
 def cp(src: str, dst: str):
     """Copy objects from the object store to the local filesystem."""
+    print_header()
+
     provider_src, bucket_src, path_src = parse_path(src)
     provider_dst, bucket_dst, path_dst = parse_path(dst)
 
@@ -69,7 +78,7 @@ def cp(src: str, dst: str):
 def replicate_random(
     src_region: str,
     dst_region: str,
-    inter_region: Optional[str] = None,
+    inter_region: Optional[str] = typer.Argument(None),
     num_gateways: int = 1,
     num_outgoing_connections: int = 16,
     chunk_size_mb: int = 8,
@@ -86,6 +95,8 @@ def replicate_random(
     serve_web_dashboard: bool = True,
 ):
     """Replicate objects from remote object store to another remote object store."""
+    print_header()
+
     if inter_region:
         topo = ReplicationTopology(paths=[[src_region, inter_region, dst_region] for _ in range(num_gateways)])
         num_conn = num_outgoing_connections
@@ -102,11 +113,10 @@ def replicate_random(
     )
 
     if not reuse_gateways:
-        logger.warning(f"Deprovisioning gateways because reuse_gateways=False")
         atexit.register(rc.deprovision_gateways)
     else:
         logger.warning(
-            f"Gateways not deprovisioned because reuse_gateways=True. Remember to call `skylark deprovision` to deprovision gateways."
+            f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
         )
     rc.provision_gateways(
         reuse_instances=reuse_gateways,
@@ -130,13 +140,18 @@ def replicate_random(
     crs = rc.run_replication_plan(job)
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
     stats = rc.monitor_transfer(
-        crs, serve_web_dashboard=serve_web_dashboard, show_pbar=False, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds
+        crs,
+        serve_web_dashboard=serve_web_dashboard,
+        show_pbar=False,
+        log_interval_s=log_interval_s,
+        time_limit_seconds=time_limit_seconds,
     )
-    stats["success"] = True
+    stats["success"] = stats["monitor_status"] == "completed"
     stats["log"] = rc.get_chunk_status_log_df()
 
     out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
-    print(f"\n{json.dumps(out_json)}")
+    typer.echo(f"\n{json.dumps(out_json)}")
+    return 0 if stats["success"] else 1
 
 
 @app.command()

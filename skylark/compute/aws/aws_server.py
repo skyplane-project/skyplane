@@ -43,7 +43,10 @@ class AWSServer(Server):
 
     @classmethod
     def get_boto3_client(cls, service_name, aws_region=None):
-        return cls.get_boto3_session(aws_region).client(service_name, region_name=aws_region)
+        if aws_region is None:
+            return cls.get_boto3_session(aws_region).client(service_name)
+        else:
+            return cls.get_boto3_session(aws_region).client(service_name, region_name=aws_region)
 
     def get_boto3_instance_resource(self):
         ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
