@@ -79,6 +79,7 @@ class AWSServer(Server):
 
     @ignore_lru_cache()
     def public_ip(self) -> str:
+        # todo maybe eventually support VPC peering?
         return self.get_boto3_instance_resource().public_ip_address
 
     @ignore_lru_cache()

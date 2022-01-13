@@ -6,10 +6,10 @@ INTER_REGION=$3
 
 NUM_GATEWAYS=${4:-1}
 CHUNK_SIZE_MB=${5:-16}
-N_CHUNKS=${6:-512}
+N_CHUNKS_PER_CONNECTION=${6:-512}
 
 if [ -z "$SRC_REGION" ] || [ -z "$DST_REGION" ] || [ -z "$INTER_REGION" ]; then
-    echo "Usage: $0 SRC_REGION DST_REGION INTER_REGION [NUM_GATEWAYS] [CHUNK_SIZE_MB] [N_CHUNKS]"
+    echo "Usage: $0 SRC_REGION DST_REGION INTER_REGION [NUM_GATEWAYS] [CHUNK_SIZE_MB] [N_CHUNKS_PER_CONNECTION]"
     echo "Options include:"
     skylark replicate-random --help
     exit 1
@@ -18,6 +18,8 @@ fi
 function benchmark_config {
     NUM_CONNECTIONS=$1
     NUM_GATEWAYS=$2
+    # N_CHUNKS_PER_CONNECTION * NUM_CONNECTIONS
+    N_CHUNKS=$((N_CHUNKS_PER_CONNECTION * NUM_CONNECTIONS))
     echo "skylark replicate-random $SRC_REGION $DST_REGION --inter-region $INTER_REGION --chunk-size-mb $CHUNK_SIZE_MB --n-chunks $N_CHUNKS --num-gateways $NUM_GATEWAYS --num-outgoing-connections $NUM_CONNECTIONS --no-reuse-gateways --no-serve-web-dashboard"
 }
 

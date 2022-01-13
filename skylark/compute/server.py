@@ -57,7 +57,7 @@ class Server:
     ns = threading.local()
 
     def __init__(self, region_tag, log_dir=None):
-        self.region_tag = region_tag
+        self.region_tag = region_tag  # format provider:region
         self.command_log = []
         self.init_log_files(log_dir)
 
@@ -90,6 +90,7 @@ class Server:
 
     @property
     def provider(self) -> str:
+        """Format provider"""
         return self.region_tag.split(":")[0]
 
     def instance_state(self) -> ServerState:
@@ -102,6 +103,7 @@ class Server:
         raise NotImplementedError()
 
     def region(self):
+        """Per-provider region e.g. us-east-1"""
         raise NotImplementedError()
 
     def instance_name(self):
@@ -176,9 +178,18 @@ class Server:
         log_viewer_port=8888,
         activity_monitor_port=8889,
         num_outgoing_connections=8,
+        use_bbr=False,
     ):
         desc_prefix = f"Starting gateway {self.uuid()}"
         logger.debug(desc_prefix + ": Installing docker")
+
+        # increase TCP connections and enable BBR
+        net_config = "sudo sysctl -w net.ipv4.tcp_tw_reuse=1 net.core.somaxconn=1024 net.core.netdev_max_backlog=2000 net.ipv4.tcp_max_syn_backlog=2048"
+        if use_bbr:
+            net_config += " net.core.default_qdisc=fq net.ipv4.tcp_congestion_control=bbr"
+        else:
+            net_config += " net.ipv4.tcp_congestion_control=cubic"
+        self.run_command(net_config)
 
         # install docker and launch monitoring
         cmd = "(command -v docker >/dev/null 2>&1 || { rm -rf get-docker.sh; curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh; }); "
@@ -197,11 +208,6 @@ class Server:
         logger.debug(desc_prefix + ": Starting monitoring")
         out, err = self.run_command(make_dozzle_command(log_viewer_port))
         out, err = self.run_command(make_netdata_command(activity_monitor_port, netdata_hostname=self.public_ip()))
-
-        # increase TCP connections
-        self.run_command(
-            "sudo sysctl net.ipv4.tcp_tw_reuse=1 net.core.somaxconn=1024 net.core.netdev_max_backlog=2000 net.ipv4.tcp_max_syn_backlog=2048"
-        )
 
         # launch gateway
         logger.debug(desc_prefix + ": Pulling docker image")
