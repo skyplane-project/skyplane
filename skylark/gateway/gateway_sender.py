@@ -1,3 +1,5 @@
+import atexit
+from collections import defaultdict
 from functools import partial
 import queue
 import socket
@@ -10,13 +12,13 @@ import setproctitle
 from loguru import logger
 from skylark import MB
 
-from skylark.chunk import ChunkRequest
+from skylark.chunk import ChunkRequest, ChunkState
 from skylark.gateway.chunk_store import ChunkStore
 from skylark.utils.utils import Timer, wait_for
 
 
 class GatewaySender:
-    def __init__(self, chunk_store: ChunkStore, n_processes=1, max_batch_size_bytes=64 * MB):
+    def __init__(self, chunk_store: ChunkStore, n_processes=1):
         self.chunk_store = chunk_store
         self.n_processes = n_processes
         self.processes = []
@@ -31,7 +33,7 @@ class GatewaySender:
         self.worker_id: Optional[int] = None
         self.destination_ports: Dict[str, int] = {}  # ip_address -> int
         self.destination_sockets: Dict[str, socket.socket] = {}  # ip_address -> socket
-        self.sent_chunk_ids: Dict[str, List[int]] = {}  # ip_address -> list of chunk_ids
+        self.sent_chunk_ids: Dict[str, List[int]] = defaultdict(list)  # ip_address -> list of chunk_ids
 
     def start_workers(self):
         for i in range(self.n_processes):
@@ -46,6 +48,9 @@ class GatewaySender:
             p.join()
         self.processes = []
 
+    def queue_request(self, chunk_request: ChunkRequest):
+        self.worker_queue.put(chunk_request.chunk.chunk_id)
+
     def worker_loop(self, worker_id: int):
         setproctitle.setproctitle(f"skylark-gateway-sender:{worker_id}")
         self.worker_id = worker_id
@@ -55,17 +60,18 @@ class GatewaySender:
                 next_chunk_id = self.worker_queue.get_nowait()
             except queue.Empty:
                 continue
-
-            logger.debug(f"[sender:{self.worker_id}] Sending chunk ID {next_chunk_id}")
+            logger.info(f"[sender:{worker_id}] processing chunk {next_chunk_id}")
             self.chunk_store.pop_chunk_request_path(next_chunk_id)
             req = self.chunk_store.get_chunk_request(next_chunk_id)
             if len(req.path) > 0:
                 next_hop = req.path[0]
-                self.send_chunks([next_chunk_id], next_hop.hop_ip_address)
-                if next_hop.hop_ip_address not in self.sent_chunk_ids:
-                    self.sent_chunk_ids[next_hop.hop_ip_address] = []
+                self.send_chunk(next_chunk_id, next_hop.hop_ip_address)
                 self.sent_chunk_ids[next_hop.hop_ip_address].append(next_chunk_id)
+            else:
+                logger.info(f"[sender:{worker_id}] chunk {next_chunk_id} has no path, {req}")
+        self.shutdown(worker_id)
 
+    def shutdown(self, worker_id: int):
         # close destination sockets
         logger.info(f"[sender:{worker_id}] exiting, closing sockets")
         for dst_socket in self.destination_sockets.values():
@@ -93,16 +99,14 @@ class GatewaySender:
             assert response.status_code == 200 and response.json() == {"status": "ok"}, response.json()
             logger.info(f"[sender:{worker_id}] closed destination socket {dst_host}:{dst_port}")
 
-    def queue_request(self, chunk_request: ChunkRequest):
-        self.worker_queue.put(chunk_request.chunk.chunk_id)
-
-    def send_chunks(self, chunk_ids: List[int], dst_host: str):
-        """Send list of chunks to gateway server, pipelining small chunks together into a single socket stream."""
-        # notify server of upcoming ChunkRequests
-        with Timer("Notify"):
-            chunk_reqs = [self.chunk_store.get_chunk_request(chunk_id) for chunk_id in chunk_ids]
-            response = requests.post(f"http://{dst_host}:8080/api/v1/chunk_requests", json=[c.as_dict() for c in chunk_reqs])
-            assert response.status_code == 200 and response.json()["status"] == "ok"
+    def send_chunk(self, chunk_id: int, dst_host: str):
+        """Send a single chunk to gateway server, pipelining small chunks together into a single socket stream."""
+        chunk_request = self.chunk_store.get_chunk_request(chunk_id)
+        chunk = chunk_request.chunk
+        with Timer("Register chunk"):
+            reply = requests.post(f"http://{dst_host}:8080/api/v1/chunk_requests", json=[chunk_request.as_dict()])
+            if reply.status_code != 200:
+                raise Exception(f"Failed to send chunk requests to gateway instance {dst_host}: {reply.text}")
 
         with Timer("Start connection"):
             # contact server to set up socket connection
@@ -114,23 +118,19 @@ class GatewaySender:
                 self.destination_sockets[dst_host].connect((dst_host, self.destination_ports[dst_host]))
                 logger.info(f"[sender:{self.worker_id}] started new server connection to {dst_host}:{self.destination_ports[dst_host]}")
             sock = self.destination_sockets[dst_host]
-            dst_port = self.destination_ports[dst_host]
 
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 1)
+        self.chunk_store.state_start_upload(chunk_id)
         with Timer("Send chunk") as t:
-            for idx, chunk_id in enumerate(chunk_ids):
-                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 1)
-                self.chunk_store.state_start_upload(chunk_id)
-                chunk = self.chunk_store.get_chunk_request(chunk_id).chunk
-
-                # send chunk header
-                chunk.to_wire_header(n_chunks_left_on_socket=len(chunk_ids) - idx - 1).to_socket(sock)
-
-                # send chunk data
-                chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
-                assert chunk_file_path.exists(), f"chunk file {chunk_file_path} does not exist"
-                with open(chunk_file_path, "rb") as fd:
-                    bytes_sent = sock.sendfile(fd)
-                self.chunk_store.state_finish_upload(chunk_id)
-                chunk_file_path.unlink()
-                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 0)  # send remaining packets
-        logger.info(f"[sender:{self.worker_id} -> {dst_port}] Sent {len(chunk_ids)} chunks in {t.elapsed:.2}s, {chunk_ids}")
+            logger.info(f"[sender:{self.worker_id}] sending header for {chunk_id}")
+            chunk.to_wire_header(n_chunks_left_on_socket=0).to_socket(sock)  # todo remove n_chunks_left_on_socket since it's always 0
+            chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
+            assert chunk_file_path.exists(), f"chunk file {chunk_file_path} does not exist"
+            logger.info(f"[sender:{self.worker_id}] sending data for {chunk_id}")
+            with open(chunk_file_path, "rb") as fd:
+                bytes_sent = sock.sendfile(fd)
+            assert bytes_sent == chunk.size, f"{bytes_sent} != {chunk.size}"
+            logger.info(f"[sender:{self.worker_id}] sent chunk {chunk_id}")
+        self.chunk_store.state_finish_upload(chunk_id)
+        chunk_file_path.unlink()
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 0)  # send remaining packets
