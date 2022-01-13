@@ -116,4 +116,17 @@ $ skylark replicate-random aws:ap-northeast-1 aws:eu-central-1 --inter-region aw
 
 </details>
 
-When done, stop all instances started by Skylark by running `python skylark/benchmark/stop_all_instances.py`. If you use GCP, pass your GCP project ID in with the `--gcp-project` flag.
+When done, stop all instances started by Skylark by running:
+
+```skyklark deprovision [--gcp-project GCP_PROJECT_ID]```
+
+<details>
+<summary>`skylark deprovision` result</summary>
+<br>
+```
+$ skylark deprovision
+No GCP project ID given, so will only deprovision AWS instances
+Deprovisioning 3 instances
+Deprovisioning (aws:ap-northeast-1): 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 3/3 [00:01<00:00,  2.33it/s]
+```
+</details
