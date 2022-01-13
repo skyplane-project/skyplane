@@ -234,17 +234,19 @@ class ReplicatorClient:
                     chunk_requests_sharded[path_idx].append(ChunkRequest(chunk, cr_path))
 
         # send chunk requests to start gateways in parallel
-        def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
-            hop_instance, chunk_requests = args
-            logger.debug(f"Sending {len(chunk_requests)} chunk requests to {hop_instance.public_ip()}")
-            reply = requests.post(
-                f"http://{hop_instance.public_ip()}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests]
-            )
-            if reply.status_code != 200:
-                raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
+        with Timer("Dispatch chunk requests"):
 
-        start_instances = [(path[0], chunk_requests_sharded[path_idx]) for path_idx, path in enumerate(self.bound_paths)]
-        do_parallel(send_chunk_requests, start_instances, n=-1)
+            def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
+                hop_instance, chunk_requests = args
+                logger.debug(f"Sending {len(chunk_requests)} chunk requests to {hop_instance.public_ip()}")
+                reply = requests.post(
+                    f"http://{hop_instance.public_ip()}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests]
+                )
+                if reply.status_code != 200:
+                    raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
+
+            start_instances = [(path[0], chunk_requests_sharded[path_idx]) for path_idx, path in enumerate(self.bound_paths)]
+            do_parallel(send_chunk_requests, start_instances, n=-1)
 
         return [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
 
@@ -299,9 +301,7 @@ class ReplicatorClient:
                         .reset_index(drop=True)
                     )
                     is_complete_fn = (
-                        lambda row: row["state"] >= completed_state
-                        and row["path_idx"] == len(self.bound_paths) - 1
-                        and row["hop_idx"] == len(self.bound_paths[row["path_idx"]]) - 1
+                        lambda row: row["state"] >= completed_state and row["hop_idx"] == len(self.bound_paths[row["path_idx"]]) - 1
                     )
                     completed_chunk_ids = last_log_df[last_log_df.apply(is_complete_fn, axis=1)].chunk_id.values
                     completed_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs if cr.chunk.chunk_id in completed_chunk_ids])
