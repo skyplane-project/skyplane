@@ -182,8 +182,11 @@ class Server:
         desc_prefix = f"Starting gateway {self.uuid()}"
         logger.debug(desc_prefix + ": Installing docker")
 
-        # enable BBR on instances
-        self.run_command("sudo sysctl -w net.core.default_qdisc=fq && sudo sysctl -w net.ipv4.tcp_congestion_control=bbr")
+        # increase TCP connections and enable BBR
+        self.run_command(
+            "sudo sysctl -w net.ipv4.tcp_tw_reuse=1 net.core.somaxconn=1024 net.core.netdev_max_backlog=2000 net.ipv4.tcp_max_syn_backlog=2048 net.ipv4.tcp_congestion_control=cubic"
+        )  #  net.core.default_qdisc=fq net.ipv4.tcp_congestion_control=bbr
+        # assert "bbr" in self.run_command("sysctl net.ipv4.tcp_congestion_control")[0]
 
         # install docker and launch monitoring
         cmd = "(command -v docker >/dev/null 2>&1 || { rm -rf get-docker.sh; curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh; }); "
@@ -202,11 +205,6 @@ class Server:
         logger.debug(desc_prefix + ": Starting monitoring")
         out, err = self.run_command(make_dozzle_command(log_viewer_port))
         out, err = self.run_command(make_netdata_command(activity_monitor_port, netdata_hostname=self.public_ip()))
-
-        # increase TCP connections
-        self.run_command(
-            "sudo sysctl net.ipv4.tcp_tw_reuse=1 net.core.somaxconn=1024 net.core.netdev_max_backlog=2000 net.ipv4.tcp_max_syn_backlog=2048"
-        )
 
         # launch gateway
         logger.debug(desc_prefix + ": Pulling docker image")
