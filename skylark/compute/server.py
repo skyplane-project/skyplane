@@ -57,7 +57,7 @@ class Server:
     ns = threading.local()
 
     def __init__(self, region_tag, log_dir=None):
-        self.region_tag = region_tag
+        self.region_tag = region_tag  # format provider:region
         self.command_log = []
         self.init_log_files(log_dir)
 
@@ -90,6 +90,7 @@ class Server:
 
     @property
     def provider(self) -> str:
+        """Format provider"""
         return self.region_tag.split(":")[0]
 
     def instance_state(self) -> ServerState:
@@ -102,6 +103,7 @@ class Server:
         raise NotImplementedError()
 
     def region(self):
+        """Per-provider region e.g. us-east-1"""
         raise NotImplementedError()
 
     def instance_name(self):
@@ -179,6 +181,9 @@ class Server:
     ):
         desc_prefix = f"Starting gateway {self.uuid()}"
         logger.debug(desc_prefix + ": Installing docker")
+
+        # enable BBR on instances
+        self.run_command("sudo sysctl -w net.core.default_qdisc=fq && sudo sysctl -w net.ipv4.tcp_congestion_control=bbr")
 
         # install docker and launch monitoring
         cmd = "(command -v docker >/dev/null 2>&1 || { rm -rf get-docker.sh; curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh; }); "
