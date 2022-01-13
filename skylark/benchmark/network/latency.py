@@ -27,7 +27,6 @@ def parse_args():
     parser.add_argument("--use-premium-network", action="store_true", help="Use premium network")
     parser.add_argument("--gcp_project", type=str, default="bair-commons-307400", help="GCP project")
     parser.add_argument("--gcp_region_list", type=str, nargs="+", default=gcp_regions)
-    parser.add_argument("--setup_script", type=str, default=None, help="Setup script to run on each instance (URL), optional")
     return parser.parse_args()
 
 
@@ -47,7 +46,6 @@ def main(args):
         gcp_regions_to_provision=args.gcp_region_list,
         aws_instance_class=args.aws_instance_class,
         gcp_instance_class=args.gcp_instance_class,
-        setup_script=str(Path(args.setup_script).resolve().absolute()) if args.setup_script else None,
     )
     instance_list: List[Server] = [i for ilist in aws_instances.values() for i in ilist]
     instance_list.extend([i for ilist in gcp_instances.values() for i in ilist])

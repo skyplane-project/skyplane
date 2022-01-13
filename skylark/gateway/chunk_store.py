@@ -6,7 +6,7 @@ from datetime import datetime
 
 from loguru import logger
 
-from skylark.gateway.chunk import ChunkRequest, ChunkRequestHop, ChunkState
+from skylark.chunk import ChunkRequest, ChunkRequestHop, ChunkState
 
 
 class ChunkStore:

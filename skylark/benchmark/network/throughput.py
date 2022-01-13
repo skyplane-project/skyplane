@@ -29,7 +29,6 @@ def parse_args():
         "--gcp_test_standard_network", action="store_true", help="Test GCP standard network in addition to premium (default)"
     )
 
-    parser.add_argument("--setup_script", type=str, default=None, help="Setup script to run on each instance (URL), optional")
     parser.add_argument("--iperf_connection_list", type=int, nargs="+", default=[128], help="List of connections to test")
     parser.add_argument("--iperf3_runtime", type=int, default=4, help="Runtime for iperf3 in seconds")
     parser.add_argument("--iperf3_congestion", type=str, default="cubic", help="Congestion control algorithm for iperf3")
@@ -58,7 +57,6 @@ def main(args):
         aws_instance_class=args.aws_instance_class,
         gcp_instance_class=args.gcp_instance_class,
         gcp_use_premium_network=True,
-        setup_script=args.setup_script,
         log_dir=str(log_dir),
     )
     instance_list: List[Server] = [i for ilist in aws_instances.values() for i in ilist]
@@ -73,7 +71,6 @@ def main(args):
             aws_instance_class=args.aws_instance_class,
             gcp_instance_class=args.gcp_instance_class,
             gcp_use_premium_network=False,
-            setup_script=args.setup_script,
             log_dir=str(log_dir),
         )
         instance_list.extend([i for ilist in gcp_standard_instances.values() for i in ilist])

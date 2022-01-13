@@ -7,7 +7,7 @@ NC='\033[0m' # No Color
 echo -e "${BGreen}Building docker image${NC}"
 sudo DOCKER_BUILDKIT=1 docker build -t skylark .
 
-DOCKER_URL="ghcr.io/parasj/skylark:local-$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 8 | head -n 1)"
+DOCKER_URL="ghcr.io/parasj/skylark:local-$(openssl rand -hex 16)"
 echo -e "${BGreen}Uploading docker image to $DOCKER_URL${NC}"
 sudo docker tag skylark $DOCKER_URL
 sudo docker push $DOCKER_URL

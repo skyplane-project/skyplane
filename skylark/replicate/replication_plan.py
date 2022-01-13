@@ -46,9 +46,9 @@ class ReplicationTopology:
         # validate path entries are valid regions
         for p in path:
             if p.startswith("aws:"):
-                assert p.split(":")[1] in AWSCloudProvider.region_list()
+                assert p.split(":")[1] in AWSCloudProvider.region_list(), f"{p} is not a valid AWS region"
             elif p.startswith("gcp:"):
-                assert p.split(":")[1] in GCPCloudProvider.region_list()
+                assert p.split(":")[1] in GCPCloudProvider.region_list(), f"{p} is not a valid GCP region"
             else:
                 raise NotImplementedError(f"Unknown provider for region {p}")
 
