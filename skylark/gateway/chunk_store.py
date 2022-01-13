@@ -1,7 +1,7 @@
 from multiprocessing import Manager
 from os import PathLike
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
 from loguru import logger
@@ -105,11 +105,13 @@ class ChunkStore:
         self.set_chunk_state(chunk_request.chunk.chunk_id, state)
         self.chunk_requests[chunk_request.chunk.chunk_id] = chunk_request
 
-    def pop_chunk_request_path(self, chunk_id: int) -> Optional[ChunkRequestHop]:
+    def pop_chunk_request_path(self, chunk_id: int) -> Tuple[Optional[ChunkRequestHop], ChunkRequest]:
         if chunk_id in self.chunk_requests:
             chunk_request = self.chunk_requests[chunk_id]
             if len(chunk_request.path) > 0:
                 result = chunk_request.path.pop(0)
                 self.chunk_requests[chunk_id] = chunk_request
-                return result
-        return None
+                return result, chunk_request
+            else:
+                return None, chunk_request
+        raise ValueError(f"ChunkRequest {chunk_id} not found")

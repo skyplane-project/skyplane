@@ -141,9 +141,9 @@ def replicate_random(
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
     stats = rc.monitor_transfer(
         crs,
-        serve_web_dashboard=serve_web_dashboard,
         show_pbar=False,
         log_interval_s=log_interval_s,
+        serve_web_dashboard=serve_web_dashboard,
         time_limit_seconds=time_limit_seconds,
     )
     stats["success"] = stats["monitor_status"] == "completed"

@@ -5,6 +5,7 @@ import itertools
 import json
 from logging import log
 from functools import partial
+from re import T
 import time
 from typing import Dict, List, Optional, Tuple
 
@@ -209,7 +210,7 @@ class ReplicatorClient:
         assert len(chunk_batches) == n_src_instances, f"{len(chunk_batches)} batches, expected {n_src_instances}"
 
         # make list of ChunkRequests
-        chunk_requests_sharded: Dict[Server, List[ChunkRequest]] = {}
+        chunk_requests_sharded: Dict[int, List[ChunkRequest]] = {}
         with Timer("Building chunk requests"):
             for batch, (path_idx, path_instances) in zip(chunk_batches, enumerate(self.bound_paths)):
                 chunk_requests_sharded[path_idx] = []
@@ -233,18 +234,24 @@ class ReplicatorClient:
                     chunk_requests_sharded[path_idx].append(ChunkRequest(chunk, cr_path))
 
         # send chunk requests to start gateways in parallel
-        def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
-            hop_instance, chunk_requests = args
-            logger.debug(f"Sending {len(chunk_requests)} chunk requests to {hop_instance.public_ip()}")
-            reply = requests.post(
-                f"http://{hop_instance.public_ip()}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests]
-            )
+        def send_chunk_requests(args: Tuple[int, int, List[ChunkRequest]]):
+            path_idx, hop_idx, chunk_requests = args
+            hop_instance = self.bound_paths[path_idx][hop_idx]
+            cr_out = [ChunkRequest(cr.chunk, cr.path[hop_idx:]) for cr in chunk_requests]
+            logger.debug(f"Sending {len(cr_out)} chunk requests to {hop_instance.public_ip()}")
+            reply = requests.post(f"http://{hop_instance.public_ip()}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in cr_out])
             if reply.status_code != 200:
                 raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
 
-        start_instances = [(path[0], chunk_requests_sharded[path_idx]) for path_idx, path in enumerate(self.bound_paths)]
-        do_parallel(send_chunk_requests, start_instances, n=-1)
-
+        # register with non-start instances before starting the transfer by sending chunk requests to the source gateways
+        non_start_instances = [
+            (p_idx, h_idx, chunk_requests_sharded[path_idx])
+            for p_idx in range(len(self.bound_paths))
+            for h_idx in range(1, len(self.bound_paths[p_idx]))
+        ]
+        do_parallel(send_chunk_requests, non_start_instances, n=-1, progress_bar=True, desc="Send non-start")
+        start_instances = [(p_idx, 0, chunk_requests_sharded[path_idx]) for p_idx in range(len(self.bound_paths))]
+        do_parallel(send_chunk_requests, start_instances, n=-1, progress_bar=True, desc="Send start")
         return [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
 
     def get_chunk_status_log_df(self) -> pd.DataFrame:
@@ -269,11 +276,11 @@ class ReplicatorClient:
         crs: List[ChunkRequest],
         completed_state=ChunkState.upload_complete,
         show_pbar=True,
-        log_interval_s: Optional[int] = None,
+        log_interval_s: Optional[float] = None,
         serve_web_dashboard=True,
         dash_host="0.0.0.0",
         dash_port="8080",
-        time_limit_seconds: Optional[int] = None,
+        time_limit_seconds: Optional[float] = None,
     ) -> Dict:
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs])
         if serve_web_dashboard:
