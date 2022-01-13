@@ -1,0 +1,9 @@
+awscrt
+boto3
+flask
+google-api-python-client
+google-cloud-compute
+loguru
+setproctitle
+tqdm
+werkzeug

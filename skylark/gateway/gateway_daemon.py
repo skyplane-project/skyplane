@@ -14,7 +14,7 @@ import setproctitle
 from loguru import logger
 
 from skylark import MB, print_header
-from skylark.gateway.chunk import ChunkState
+from skylark.chunk import ChunkState
 from skylark.gateway.chunk_store import ChunkStore
 from skylark.gateway.gateway_daemon_api import GatewayDaemonAPI
 from skylark.gateway.gateway_reciever import GatewayReceiver
@@ -37,7 +37,7 @@ class GatewayDaemon:
         self.api_server = GatewayDaemonAPI(self.chunk_store, self.gateway_receiver, debug=debug, log_dir=log_dir)
         self.api_server.start()
         atexit.register(self.cleanup)
-        logger.info("Gateway daemon API started")
+        logger.info(f"Gateway daemon API started at {self.api_server.url}")
 
     def cleanup(self):
         logger.warning("Shutting down gateway daemon")
@@ -133,7 +133,7 @@ class GatewayDaemon:
 if __name__ == "__main__":
     print_header()
     parser = argparse.ArgumentParser(description="Skylark Gateway Daemon")
-    parser.add_argument("--chunk-dir", type=Path, default="/dev/shm/skylark/chunks", required=True, help="Directory to store chunks")
+    parser.add_argument("--chunk-dir", type=Path, default="/dev/shm/skylark/chunks", help="Directory to store chunks")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode for Flask")
     parser.add_argument("--log-dir", type=Path, default=Path("/var/log/skylark"), help="Directory to write logs to")
     parser.add_argument("--outgoing-connections", type=int, default=1, help="Number of outgoing connections to make to the next relay")

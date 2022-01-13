@@ -3,7 +3,7 @@ import atexit
 
 from loguru import logger
 from skylark import GB, MB, print_header
-from skylark.gateway.chunk import ChunkState
+from skylark.chunk import ChunkState
 
 import tempfile
 import concurrent
@@ -137,7 +137,7 @@ def main(args):
     total_bytes = args.n_chunks * args.chunk_size_mb * MB
     crs = rc.run_replication_plan(job)
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
-    stats = rc.monitor_transfer(crs)
+    stats = rc.monitor_transfer(crs, serve_web_dashboard=True)
     logger.info(f"Replication completed in {stats['total_runtime_s']:.2f}s ({stats['throughput_gbits']:.2f}Gbit/s)")
 
 

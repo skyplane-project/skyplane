@@ -1,14 +1,18 @@
 import os
 from pathlib import Path
 import concurrent.futures
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 import re
 from shutil import copyfile
 
 from tqdm import tqdm
+import typer
+from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
+from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.obj_store.object_store_interface import ObjectStoreObject
 
 from skylark.obj_store.s3_interface import S3Interface
+from skylark.utils.utils import do_parallel
 
 
 def is_plausible_local_path(path: str):
@@ -95,7 +99,7 @@ def copy_local_s3(src: Path, dst_bucket: str, dst_key: str, use_tls: bool = True
     total_bytes = _copy(src, dst_key)
 
     # wait for all uploads to complete, displaying a progress bar
-    with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Uploading", ascii=True) as pbar:
+    with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Uploading") as pbar:
         for op in concurrent.futures.as_completed(ops):
             op.result()
             pbar.update(path_mapping[op].stat().st_size)
@@ -122,7 +126,32 @@ def copy_s3_local(src_bucket: str, src_key: str, dst: Path):
         total_bytes += _copy(obj, dest_path)
 
     # wait for all downloads to complete, displaying a progress bar
-    with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Downloading", ascii=True) as pbar:
+    with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Downloading") as pbar:
         for op in concurrent.futures.as_completed(ops):
             op.result()
             pbar.update(obj_mapping[op].size)
+
+
+# utility functions
+
+
+def deprovision_skylark_instances(gcp_project_id: Optional[str] = None):
+    instances = []
+
+    if not gcp_project_id:
+        typer.secho("No GCP project ID given, so will only deprovision AWS instances", color=typer.colors.YELLOW, bold=True)
+    else:
+        gcp = GCPCloudProvider(gcp_project=gcp_project_id)
+        instances += gcp.get_matching_instances()
+
+    aws = AWSCloudProvider()
+    for _, instance_list in do_parallel(
+        aws.get_matching_instances, aws.region_list(), progress_bar=True, leave_pbar=False, desc="Retrieve AWS instances"
+    ):
+        instances += instance_list
+
+    if instances:
+        typer.secho(f"Deprovisioning {len(instances)} instances", color=typer.colors.YELLOW, bold=True)
+        do_parallel(lambda instance: instance.terminate_instance(), instances, progress_bar=True, desc="Deprovisioning")
+    else:
+        typer.secho("No instances to deprovision, exiting...", color=typer.colors.YELLOW, bold=True)
