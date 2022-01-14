@@ -94,10 +94,9 @@ class GatewayReceiver:
             logger.debug(f"[server:{server_port}] Got chunk header {chunk_header.chunk_id}: {chunk_header}")
 
             # wait for free space (at least space for two chunks)
-            # while self.chunk_store.remaining_bytes() < chunk_header.chunk_size * 2:
-            #     logger.debug(f"[server:{server_port}] Waiting for free space")
-            #     time.sleep(0.01)  # busy wait, yield
-            logger.debug(f"Remaining bytes: {self.chunk_store.remaining_bytes()}")
+            while self.chunk_store.remaining_bytes() < chunk_header.chunk_len * 2:
+                logger.debug(f"[server:{server_port}] Waiting for free space")
+                time.sleep(0.01)  # busy wait, yield
 
             self.chunk_store.state_start_download(chunk_header.chunk_id)
 

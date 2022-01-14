@@ -53,7 +53,7 @@ class ChunkStore:
         if state in [ChunkState.registered, ChunkState.download_in_progress]:
             self.set_chunk_state(chunk_id, ChunkState.download_in_progress)
             if state == ChunkState.registered:
-                self.chunk_store_size.increment(self.get_chunk_request(chunk_id).chunk.size)
+                self.chunk_store_size.increment(self.get_chunk_request(chunk_id).chunk.chunk_length_bytes)
         else:
             raise ValueError(f"Invalid transition start_download from {self.get_chunk_state(chunk_id)}")
 
@@ -62,8 +62,6 @@ class ChunkStore:
         state = self.get_chunk_state(chunk_id)
         if state in [ChunkState.download_in_progress, ChunkState.downloaded]:
             self.set_chunk_state(chunk_id, ChunkState.downloaded)
-            if state == ChunkState.download_in_progress:
-                self.chunk_store_size.increment(self.get_chunk_request(chunk_id).chunk.size)
         else:
             raise ValueError(f"Invalid transition finish_download from {self.get_chunk_state(chunk_id)}")
 
@@ -71,8 +69,6 @@ class ChunkStore:
         state = self.get_chunk_state(chunk_id)
         if state in [ChunkState.downloaded, ChunkState.upload_queued]:
             self.set_chunk_state(chunk_id, ChunkState.upload_queued)
-            if state == ChunkState.downloaded:
-                self.chunk_store_size.increment(-1 * self.get_chunk_request(chunk_id).chunk.size)
         else:
             raise ValueError(f"Invalid transition upload_queued from {self.get_chunk_state(chunk_id)}")
 
@@ -80,8 +76,6 @@ class ChunkStore:
         state = self.get_chunk_state(chunk_id)
         if state in [ChunkState.upload_queued, ChunkState.upload_in_progress]:
             self.set_chunk_state(chunk_id, ChunkState.upload_in_progress)
-            if state == ChunkState.upload_queued:
-                self.chunk_store_size.increment(-1 * self.get_chunk_request(chunk_id).chunk.size)
         else:
             raise ValueError(f"Invalid transition start_upload from {self.get_chunk_state(chunk_id)}")
 
@@ -91,7 +85,7 @@ class ChunkStore:
         if state in [ChunkState.upload_in_progress, ChunkState.upload_complete]:
             self.set_chunk_state(chunk_id, ChunkState.upload_complete)
             if state == ChunkState.upload_in_progress:
-                self.chunk_store_size.increment(-1 * self.get_chunk_request(chunk_id).chunk.size)
+                self.chunk_store_size.increment(-1 * self.get_chunk_request(chunk_id).chunk.chunk_length_bytes)
         else:
             raise ValueError(f"Invalid transition finish_upload from {self.get_chunk_state(chunk_id)}")
 
@@ -134,5 +128,5 @@ class ChunkStore:
     ###
 
     def remaining_bytes(self) -> int:
-        logger.debug(f"Remaining bytes: {self.chunk_stor_size.value} out of {self.chunk_store_max_size}")
+        logger.debug(f"Remaining bytes: {self.chunk_store_size.value} out of {self.chunk_store_max_size}")
         return self.chunk_store_max_size - self.chunk_store_size.value
