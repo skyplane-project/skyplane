@@ -5,6 +5,7 @@ import signal
 import socket
 from contextlib import closing
 from multiprocessing import Event, Manager, Process, Value
+import time
 from typing import Tuple
 
 import setproctitle
@@ -92,6 +93,12 @@ class GatewayReceiver:
             # receive header and write data to file
             chunk_header = WireProtocolHeader.from_socket(conn)
             logger.debug(f"[server:{server_port}] Got chunk header {chunk_header.chunk_id}: {chunk_header}")
+
+            # wait for free space (self.chunk_store.remaining_bytes() returns remaining bytes)
+            while self.chunk_store.remaining_bytes() < chunk_header.chunk_size:
+                logger.debug(f"[server:{server_port}] Waiting for free space")
+                time.sleep(0.01)  # busy wait, yield
+
             self.chunk_store.state_start_download(chunk_header.chunk_id)
 
             # get data
