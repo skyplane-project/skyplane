@@ -174,8 +174,8 @@ class ReplicatorClient:
         # assert all(len(path) == 2 for path in self.bound_paths), f"Only two-hop replication is supported"
 
         # todo support GCP
-        assert job.source_region.split(":")[0] == "aws", f"Only AWS is supported for now, got {job.source_region}"
-        assert job.dest_region.split(":")[0] == "aws", f"Only AWS is supported for now, got {job.dest_region}"
+        assert job.source_region.split(":")[0] in ["aws", "gcp"], f"Only AWS and GCP is supported for now, got {job.source_region}"
+        assert job.dest_region.split(":")[0] in ["aws", "gcp"], f"Only AWS and GCP is supported for now, got {job.dest_region}"
 
         # make list of chunks
         chunks = []
