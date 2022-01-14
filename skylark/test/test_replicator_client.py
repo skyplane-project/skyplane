@@ -29,8 +29,10 @@ def parse_args():
 
     # gateway provisioning
     parser.add_argument("--gcp-project", default="skylark-333700", help="GCP project ID")
+    parser.add_argument("--azure-subscription", default="", help="Azure subscription")
     parser.add_argument("--gateway-docker-image", default="ghcr.io/parasj/skylark:main", help="Docker image for gateway instances")
     parser.add_argument("--aws-instance-class", default="m5.4xlarge", help="AWS instance class")
+    parser.add_argument("--azure-instance-class", default="Standard_D2_v5", help="Azure instance class")
     parser.add_argument("--gcp-instance-class", default="n2-standard-16", help="GCP instance class")
     parser.add_argument("--copy-ssh-key", default=None, help="SSH public key to add to gateways")
     parser.add_argument("--log-dir", default=None, help="Directory to write instance SSH logs to")
@@ -40,6 +42,8 @@ def parse_args():
     # add support for None arguments
     if args.aws_instance_class == "None":
         args.aws_instance_class = None
+    if args.azure_instance_class == "None":
+        args.azure_instance_class = None
     if args.gcp_instance_class == "None":
         args.gcp_instance_class = None
 
@@ -89,8 +93,10 @@ def main(args):
     rc = ReplicatorClient(
         topo,
         gcp_project=args.gcp_project,
+        azure_subscription=args.azure_subscription,
         gateway_docker_image=args.gateway_docker_image,
         aws_instance_class=args.aws_instance_class,
+        azure_instance_class=args.azure_instance_class,
         gcp_instance_class=args.gcp_instance_class,
         gcp_use_premium_network=args.gcp_use_premium_network,
     )
