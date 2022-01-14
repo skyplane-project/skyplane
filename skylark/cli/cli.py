@@ -87,7 +87,7 @@ def replicate_random(
     gcp_project: str = "skylark-333700",
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
     aws_instance_class: str = "m5.8xlarge",
-    gcp_instance_class: Optional[str] = None,
+    gcp_instance_class: Optional[str] = "n2-highmem-4",
     gcp_use_premium_network: bool = False,
     key_prefix: str = "/test/replicate_random",
     time_limit_seconds: Optional[int] = None,
