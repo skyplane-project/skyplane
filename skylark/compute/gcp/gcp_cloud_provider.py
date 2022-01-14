@@ -196,7 +196,7 @@ class GCPCloudProvider(CloudProvider):
         premium_network=False,
         uname=os.environ.get("USER"),
         tags={"skylark": "true"},
-    ) -> "GCPServer":
+    ) -> GCPServer:
         assert not region.startswith("gcp:"), "Region should be GCP region"
         if name is None:
             name = f"skylark-gcp-{str(uuid.uuid4()).replace('-', '')}"
