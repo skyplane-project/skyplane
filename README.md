@@ -61,7 +61,7 @@ The script will export the new image (ghcr.io/parasj/skylark:local-PotRzrFT) to 
 ### Running a replication job
 We then run the ReplicatorClient with that new Docker image (stored in `$SKYLARK_DOCKER_IMAGE`):
 ```
-$ skylark replicate-random aws:ap-northeast-1 aws:eu-central-1 --inter-region aws:us-east-2 \
+$ skylark replicate-random aws:ap-northeast-1 aws:eu-central-1 aws:us-east-2 \
    --chunk-size-mb 16 \
    --n-chunks 2048 \
    --num-gateways 1 \

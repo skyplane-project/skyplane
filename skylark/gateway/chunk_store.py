@@ -134,4 +134,5 @@ class ChunkStore:
     ###
 
     def remaining_bytes(self) -> int:
+        logger.debug(f"Remaining bytes: {self.chunk_stor_size.value} out of {self.chunk_store_max_size}")
         return self.chunk_store_max_size - self.chunk_store_size.value

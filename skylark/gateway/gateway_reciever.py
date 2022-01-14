@@ -1,6 +1,5 @@
 import os
 import os
-import select
 import signal
 import socket
 from contextlib import closing
@@ -94,10 +93,11 @@ class GatewayReceiver:
             chunk_header = WireProtocolHeader.from_socket(conn)
             logger.debug(f"[server:{server_port}] Got chunk header {chunk_header.chunk_id}: {chunk_header}")
 
-            # wait for free space (self.chunk_store.remaining_bytes() returns remaining bytes)
-            while self.chunk_store.remaining_bytes() < chunk_header.chunk_size:
-                logger.debug(f"[server:{server_port}] Waiting for free space")
-                time.sleep(0.01)  # busy wait, yield
+            # wait for free space (at least space for two chunks)
+            # while self.chunk_store.remaining_bytes() < chunk_header.chunk_size * 2:
+            #     logger.debug(f"[server:{server_port}] Waiting for free space")
+            #     time.sleep(0.01)  # busy wait, yield
+            logger.debug(f"Remaining bytes: {self.chunk_store.remaining_bytes()}")
 
             self.chunk_store.state_start_download(chunk_header.chunk_id)
 
