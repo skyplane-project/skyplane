@@ -34,6 +34,8 @@ class AzureServer(Server):
         else:
             self.ssh_private_key = ssh_private_key
 
+        self.cached_public_ip_address = None
+
     @staticmethod
     def vnet_name(name):
         return name + "-vnet"
@@ -106,6 +108,9 @@ class AzureServer(Server):
         return ServerState.UNKNOWN
 
     def public_ip(self):
+        if self.cached_public_ip_address is not None:
+            return self.cached_public_ip_address
+
         credential = DefaultAzureCredential()
         network_client = NetworkManagementClient(credential, self.subscription_id)
         public_ip = network_client.public_ip_addresses.get(self.name, AzureServer.ip_name(self.name))
@@ -114,6 +119,7 @@ class AzureServer(Server):
         assert public_ip.location == self.location
         assert public_ip.name == AzureServer.ip_name(self.name)
 
+        self.cached_public_ip_address = public_ip.ip_address
         return public_ip.ip_address
 
     def instance_class(self):

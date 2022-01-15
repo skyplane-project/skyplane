@@ -218,7 +218,6 @@ class AzureCloudProvider(CloudProvider):
             AzureServer.vm_name(name),
             {
                 "location": location,
-                "zones": ["1"],
                 "hardware_profile": {"vm_size": vm_size},
                 "storage_profile": {
                     "image_reference": {

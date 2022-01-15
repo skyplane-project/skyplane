@@ -31,8 +31,8 @@ class ReplicatorClient:
     def __init__(
         self,
         topology: ReplicationTopology,
-        azure_subscription: str,
-        gcp_project: str,
+        azure_subscription: Optional[str],
+        gcp_project: Optional[str],
         gateway_docker_image: str = "ghcr.io/parasj/skylark:latest",
         aws_instance_class: Optional[str] = "m5.4xlarge",  # set to None to disable AWS
         azure_instance_class: Optional[str] = "Standard_D2_v5",  # set to None to disable Azure
@@ -48,9 +48,9 @@ class ReplicatorClient:
         self.gcp_use_premium_network = gcp_use_premium_network
 
         # provisioning
-        self.aws = AWSCloudProvider() if aws_instance_class is not None else None
-        self.azure = AzureCloudProvider(azure_subscription) if azure_instance_class is not None else None
-        self.gcp = GCPCloudProvider(gcp_project) if gcp_instance_class is not None else None
+        self.aws = AWSCloudProvider() if aws_instance_class != "None" else None
+        self.azure = AzureCloudProvider(azure_subscription) if azure_instance_class != "None" and azure_subscription is not None else None
+        self.gcp = GCPCloudProvider(gcp_project) if gcp_instance_class != "None" and gcp_project is not None else None
         self.bound_paths: Optional[List[List[Server]]] = None
 
         # init clouds
@@ -208,8 +208,16 @@ class ReplicatorClient:
     def run_replication_plan(self, job: ReplicationJob):
         # assert all(len(path) == 2 for path in self.bound_paths), f"Only two-hop replication is supported"
 
-        assert job.source_region.split(":")[0] in ["aws", "azure", "gcp"], f"Only AWS, Azure, and GCP are supported, but got {job.source_region}"
-        assert job.dest_region.split(":")[0] in ["aws", "azure", "gcp"], f"Only AWS, Azure, and GCP are supported, but got {job.dest_region}"
+        assert job.source_region.split(":")[0] in [
+            "aws",
+            "azure",
+            "gcp",
+        ], f"Only AWS, Azure, and GCP are supported, but got {job.source_region}"
+        assert job.dest_region.split(":")[0] in [
+            "aws",
+            "azure",
+            "gcp",
+        ], f"Only AWS, Azure, and GCP are supported, but got {job.dest_region}"
 
         # make list of chunks
         chunks = []
