@@ -279,10 +279,10 @@ class ReplicatorClient:
                                 hop_cloud_region=hop_instance.region_tag,
                                 hop_ip_address=hop_instance.public_ip(),
                                 chunk_location_type=location,
-                                src_object_store_region=src_object_store_region, 
-                                src_object_store_bucket=src_object_store_bucket,
-                                dst_object_store_region=dst_object_store_region,
-                                dst_object_store_bucket=dst_object_store_bucket,
+                                #src_object_store_region=src_object_store_region, 
+                                #src_object_store_bucket=src_object_store_bucket,
+                                #dst_object_store_region=dst_object_store_region,
+                                #dst_object_store_bucket=dst_object_store_bucket,
  
                             )
                         )
