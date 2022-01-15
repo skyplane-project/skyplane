@@ -64,7 +64,12 @@ def do_parallel(func, args_list, n=-1, progress_bar=False, leave_pbar=True, desc
         with ThreadPoolExecutor(max_workers=n) as executor:
             future_list = [executor.submit(wrapped_fn, args) for args in args_list]
             for future in as_completed(future_list):
-                args, result = future.result()
+                try:
+                    args, result = future.result()
+                except ConnectionResetError:
+                    logger.debug(f"Connection Busy. Retrying after a few mins solves it")
+                    exit(-1)
+
                 results.append((args, result))
                 pbar.set_description(f"{desc} ({str(arg_fmt(args))})" if desc else str(arg_fmt(args)))
                 pbar.update()
