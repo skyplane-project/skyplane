@@ -255,7 +255,15 @@ class Server:
             self.run_command(make_dozzle_command(log_viewer_port))
             self.run_command(make_netdata_command(activity_monitor_port, netdata_hostname=self.public_ip()))
 
-            # TODO: create file and write AWS credentials 
+            ## TODO: create file and write AWS credentials 
+            import configparser
+            config = configparser.RawConfigParser()
+            config.read("/home/ubuntu/.aws/credentials")
+            aws_access_key_id = config.get('default', 'aws_access_key_id')
+            aws_secret_access_key = config.get('default', 'aws_secret_access_key')
+            docker_envs = ""
+            docker_envs += f" -e AWS_ACCESS_KEY_ID='{aws_access_key_id}'"
+            docker_envs += f" -e AWS_SECRET_ACCESS_KEY='{aws_secret_access_key}'"
 
             # launch gateway
             pbar.set_description(desc_prefix + ": Pulling docker image")
@@ -264,7 +272,7 @@ class Server:
 
             # todo add other launch flags for gateway daemon
             pbar.set_description(desc_prefix + f": Starting gateway container {gateway_docker_image}")
-            docker_run_flags = "-d --rm --log-driver=local --ipc=host --network=host"
+            docker_run_flags = f"-d --rm --log-driver=local --ipc=host --network=host {docker_envs}"
             gateway_daemon_cmd = f"/env/bin/python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections {num_outgoing_connections}"
             docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
             start_out, start_err = self.run_command(docker_launch_cmd)

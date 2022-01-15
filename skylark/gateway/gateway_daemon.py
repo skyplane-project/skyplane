@@ -90,11 +90,10 @@ class GatewayDaemon:
                 if len(chunk_req.path) > 0:
                     current_hop = chunk_req.path[0]
                     if current_hop.chunk_location_type == "src_object_store":
-                        logger.warning(f"NOT IMPLEMENTED: Queuing object store download for chunk {chunk_req.chunk.chunk_id}")
-                        self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
+                        self.chunk_store.state_start_download(chunk_req.chunk.chunk_id)
 
                         src_bucket = current_hop.src_object_store_bucket
-                        src_region = current_hop.src_object_store_bucket
+                        src_region = current_hop.src_object_store_region
                          
                         # update chunk state 
                         #self.chunk_store.state_start_download(chunk_req.chunk.chunk_id)
@@ -103,8 +102,9 @@ class GatewayDaemon:
                         # TODO: add this to a queue like with GatewaySender to prevent OOM
                         def fn(chunk_req, src_region, src_bucket): 
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
+
                             logger.info(f"Creating interface {src_region}--{src_bucket}")
-                            s3_interface = S3Interface(src_region, src_bucket)
+                            s3_interface = S3Interface(src_region.split(":")[1], src_bucket, use_tls=False)
                             logger.info(f"Waiting for download {src_bucket}:{chunk_req.chunk.key}")
                             s3_interface.download_object(chunk_req.chunk.key, fpath).result()
                             logger.info(f"Downloaded key {chunk_req.chunk.key} to {fpath})")
@@ -112,7 +112,7 @@ class GatewayDaemon:
 
                         
                         # start in seperate thread
-                        threading.Thread(target=fn, args=(chunk_req, src_bucket, src_region)).start()
+                        threading.Thread(target=fn, args=(chunk_req, src_region, src_bucket)).start()
 
                     elif current_hop.chunk_location_type.startswith("random_"):
                         # update chunk state
