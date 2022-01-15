@@ -239,7 +239,7 @@ class Server:
             # install docker and launch monitoring
             cmd = "(command -v docker >/dev/null 2>&1 || { rm -rf get-docker.sh; curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh; }); "
             cmd += "{ sudo docker stop $(docker ps -a -q); sudo docker kill $(sudo docker ps -a -q); sudo docker rm -f $(sudo docker ps -a -q); }; "
-            cmd += f"(docker --version && echo 'Success, Docker installed' || echo 'Failed to install Docker'); "
+            cmd += f"(sudo docker --version && echo 'Success, Docker installed' || echo 'Failed to install Docker'); "
             out, err = self.run_command(cmd)
             docker_version = out.strip().split("\n")[-1]
 

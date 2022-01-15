@@ -252,6 +252,8 @@ class ReplicatorClient:
                                 location = "save_local"
                         else:  # intermediate gateway
                             location = "relay"
+
+                        print("LOCATION", location, job.source_bucket, job.dest_bucket)
                         cr_path.append(
                             ChunkRequestHop(
                                 hop_cloud_region=hop_instance.region_tag,
