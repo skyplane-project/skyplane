@@ -17,7 +17,7 @@ from skylark import MB, print_header
 from skylark.chunk import ChunkState
 from skylark.gateway.chunk_store import ChunkStore
 from skylark.gateway.gateway_daemon_api import GatewayDaemonAPI
-from skylark.gateway.gateway_reciever import GatewayReceiver
+from skylark.gateway.gateway_receiver import GatewayReceiver
 from skylark.gateway.gateway_sender import GatewaySender
 
 from skylark.obj_store.s3_interface import S3Interface

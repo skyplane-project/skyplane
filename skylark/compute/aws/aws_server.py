@@ -76,7 +76,7 @@ class AWSServer(Server):
                 os.chmod(local_key_file, 0o600)
 
         if not local_key_file.exists():
-            create_keyfile(key_name, local_key_file)
+            create_keyfile()
             logger.info(f"Created key file {local_key_file}")
         return local_key_file
 

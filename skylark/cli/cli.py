@@ -84,10 +84,12 @@ def replicate_random(
     chunk_size_mb: int = 8,
     n_chunks: int = 2048,
     reuse_gateways: bool = True,
-    gcp_project: str = "skylark-333700",
+    azure_subscription: Optional[str] = None,
+    gcp_project: Optional[str] = None,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
     aws_instance_class: str = "m5.8xlarge",
-    gcp_instance_class: Optional[str] = None,
+    azure_instance_class: str = "Standard_D32_v4",
+    gcp_instance_class: Optional[str] = "n2-standard-32",
     gcp_use_premium_network: bool = False,
     key_prefix: str = "/test/replicate_random",
     time_limit_seconds: Optional[int] = None,
@@ -105,9 +107,11 @@ def replicate_random(
         num_conn = num_outgoing_connections
     rc = ReplicatorClient(
         topo,
+        azure_subscription=azure_subscription,
         gcp_project=gcp_project,
         gateway_docker_image=gateway_docker_image,
         aws_instance_class=aws_instance_class,
+        azure_instance_class=azure_instance_class,
         gcp_instance_class=gcp_instance_class,
         gcp_use_premium_network=gcp_use_premium_network,
     )
@@ -155,9 +159,9 @@ def replicate_random(
 
 
 @app.command()
-def deprovision(gcp_project: Optional[str] = None):
+def deprovision(azure_subscription: Optional[str] = None, gcp_project: Optional[str] = None):
     """Deprovision gateways."""
-    deprovision_skylark_instances(gcp_project_id=gcp_project)
+    deprovision_skylark_instances(azure_subscription=azure_subscription, gcp_project_id=gcp_project)
 
 
 if __name__ == "__main__":

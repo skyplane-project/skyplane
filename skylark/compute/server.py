@@ -39,6 +39,18 @@ class ServerState(Enum):
         return mapping.get(gcp_state, ServerState.UNKNOWN)
 
     @staticmethod
+    def from_azure_state(azure_state):
+        mapping = {
+            "PowerState/starting": ServerState.PENDING,
+            "PowerState/running": ServerState.RUNNING,
+            "PowerState/stopping": ServerState.SUSPENDED,
+            "PowerState/stopped": ServerState.SUSPENDED,
+            "PowerState/deallocating": ServerState.TERMINATED,
+            "PowerState/deallocated": ServerState.TERMINATED,
+        }
+        return mapping.get(azure_state, ServerState.UNKNOWN)
+
+    @staticmethod
     def from_aws_state(aws_state):
         mapping = {
             "pending": ServerState.PENDING,

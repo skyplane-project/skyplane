@@ -17,6 +17,7 @@ from skylark import GB, KB, MB
 
 from skylark.benchmark.utils import refresh_instance_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
+from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server, ServerState
 from skylark.chunk import Chunk, ChunkRequest, ChunkRequestHop, ChunkState
@@ -30,21 +31,26 @@ class ReplicatorClient:
     def __init__(
         self,
         topology: ReplicationTopology,
-        gcp_project: str,
+        azure_subscription: Optional[str],
+        gcp_project: Optional[str],
         gateway_docker_image: str = "ghcr.io/parasj/skylark:latest",
         aws_instance_class: Optional[str] = "m5.4xlarge",  # set to None to disable AWS
+        azure_instance_class: Optional[str] = "Standard_D2_v5",  # set to None to disable Azure
         gcp_instance_class: Optional[str] = "n2-standard-16",  # set to None to disable GCP
         gcp_use_premium_network: bool = True,
     ):
         self.topology = topology
         self.gateway_docker_image = gateway_docker_image
         self.aws_instance_class = aws_instance_class
+        self.azure_instance_class = azure_instance_class
+        self.azure_subscription = azure_subscription
         self.gcp_instance_class = gcp_instance_class
         self.gcp_use_premium_network = gcp_use_premium_network
 
         # provisioning
-        self.aws = AWSCloudProvider() if aws_instance_class is not None else None
-        self.gcp = GCPCloudProvider(gcp_project) if gcp_instance_class is not None else None
+        self.aws = AWSCloudProvider() if aws_instance_class != "None" else None
+        self.azure = AzureCloudProvider(azure_subscription) if azure_instance_class != "None" and azure_subscription is not None else None
+        self.gcp = GCPCloudProvider(gcp_project) if gcp_instance_class != "None" and gcp_project is not None else None
         self.bound_paths: Optional[List[List[Server]]] = None
 
         # init clouds
@@ -52,6 +58,8 @@ class ReplicatorClient:
         if self.aws is not None:
             for r in self.aws.region_list():
                 jobs.append(partial(self.aws.add_ip_to_security_group, r))
+        if self.azure is not None:
+            jobs.append(self.azure.create_ssh_key)
         if self.gcp is not None:
             jobs.append(self.gcp.create_ssh_key)
             jobs.append(self.gcp.configure_default_network)
@@ -68,9 +76,11 @@ class ReplicatorClient:
     ):
         regions_to_provision = [r for path in self.topology.paths for r in path]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
+        azure_regions_to_provision = [r for r in regions_to_provision if r.startswith("azure:")]
         gcp_regions_to_provision = [r for r in regions_to_provision if r.startswith("gcp:")]
 
         assert len(aws_regions_to_provision) == 0 or self.aws is not None, "AWS not enabled"
+        assert len(azure_regions_to_provision) == 0 or self.azure is not None, "Azure not enabled"
         assert len(gcp_regions_to_provision) == 0 or self.gcp is not None, "GCP not enabled"
 
         # reuse existing AWS instances
@@ -90,6 +100,22 @@ class ReplicatorClient:
                             aws_regions_to_provision.remove(f"aws:{r}")
             else:
                 current_aws_instances = {}
+
+            if self.azure is not None:
+                azure_instance_filter = {
+                    "tags": {"skylark": "true"},
+                    "instance_type": self.azure_instance_class,
+                    "state": [ServerState.PENDING, ServerState.RUNNING],
+                }
+                current_azure_instances = refresh_instance_list(
+                    self.azure, set([r.split(":")[1] for r in azure_regions_to_provision]), azure_instance_filter
+                )
+                for r, ilist in current_azure_instances.items():
+                    for i in ilist:
+                        if f"azure:{r}" in azure_regions_to_provision:
+                            azure_regions_to_provision.remove(f"azure:{r}")
+            else:
+                current_azure_instances = {}
 
             if self.gcp is not None:
                 gcp_instance_filter = {
@@ -114,6 +140,9 @@ class ReplicatorClient:
                 if provider == "aws":
                     assert self.aws is not None
                     server = self.aws.provision_instance(subregion, self.aws_instance_class)
+                elif provider == "azure":
+                    assert self.azure is not None
+                    server = self.azure.provision_instance(subregion, self.azure_instance_class)
                 elif provider == "gcp":
                     assert self.gcp is not None
                     # todo specify network tier in ReplicationTopology
@@ -122,7 +151,9 @@ class ReplicatorClient:
                     raise NotImplementedError(f"Unknown provider {provider}")
                 return server
 
-            results = do_parallel(provision_gateway_instance, list(aws_regions_to_provision + gcp_regions_to_provision))
+            results = do_parallel(
+                provision_gateway_instance, list(aws_regions_to_provision + azure_regions_to_provision + gcp_regions_to_provision)
+            )
             instances_by_region = {
                 r: [instance for instance_region, instance in results if instance_region == r] for r in set(regions_to_provision)
             }
@@ -133,6 +164,10 @@ class ReplicatorClient:
                 if f"aws:{r}" not in instances_by_region:
                     instances_by_region[f"aws:{r}"] = []
                 instances_by_region[f"aws:{r}"].extend(ilist)
+            for r, ilist in current_azure_instances.items():
+                if f"azure:{r}" not in instances_by_region:
+                    instances_by_region[f"azure:{r}"] = []
+                instances_by_region[f"azure:{r}"].extend(ilist)
             for r, ilist in current_gcp_instances.items():
                 if f"gcp:{r}" not in instances_by_region:
                     instances_by_region[f"gcp:{r}"] = []
@@ -173,9 +208,16 @@ class ReplicatorClient:
     def run_replication_plan(self, job: ReplicationJob):
         # assert all(len(path) == 2 for path in self.bound_paths), f"Only two-hop replication is supported"
 
-        # todo support GCP
-        assert job.source_region.split(":")[0] == "aws", f"Only AWS is supported for now, got {job.source_region}"
-        assert job.dest_region.split(":")[0] == "aws", f"Only AWS is supported for now, got {job.dest_region}"
+        assert job.source_region.split(":")[0] in [
+            "aws",
+            "azure",
+            "gcp",
+        ], f"Only AWS, Azure, and GCP are supported, but got {job.source_region}"
+        assert job.dest_region.split(":")[0] in [
+            "aws",
+            "azure",
+            "gcp",
+        ], f"Only AWS, Azure, and GCP are supported, but got {job.dest_region}"
 
         # make list of chunks
         chunks = []
@@ -251,10 +293,6 @@ class ReplicatorClient:
                                 hop_cloud_region=hop_instance.region_tag,
                                 hop_ip_address=hop_instance.public_ip(),
                                 chunk_location_type=location,
-                                src_object_store_region=src_object_store_region, 
-                                src_object_store_bucket=src_object_store_bucket,
-                                dst_object_store_region=dst_object_store_region,
-                                dst_object_store_bucket=dst_object_store_bucket,
  
                             )
                         )

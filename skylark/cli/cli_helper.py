@@ -8,6 +8,7 @@ from shutil import copyfile
 from tqdm import tqdm
 import typer
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
+from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.obj_store.object_store_interface import ObjectStoreObject
 
@@ -135,20 +136,28 @@ def copy_s3_local(src_bucket: str, src_key: str, dst: Path):
 # utility functions
 
 
-def deprovision_skylark_instances(gcp_project_id: Optional[str] = None):
+def deprovision_skylark_instances(azure_subscription: Optional[str] = None, gcp_project_id: Optional[str] = None):
     instances = []
-
-    if not gcp_project_id:
-        typer.secho("No GCP project ID given, so will only deprovision AWS instances", color=typer.colors.YELLOW, bold=True)
-    else:
-        gcp = GCPCloudProvider(gcp_project=gcp_project_id)
-        instances += gcp.get_matching_instances()
 
     aws = AWSCloudProvider()
     for _, instance_list in do_parallel(
         aws.get_matching_instances, aws.region_list(), progress_bar=True, leave_pbar=False, desc="Retrieve AWS instances"
     ):
         instances += instance_list
+
+    if not azure_subscription:
+        typer.secho(
+            "No Microsoft Azure subscription given, so Azure instances will not be terminated", color=typer.colors.YELLOW, bold=True
+        )
+    else:
+        azure = AzureCloudProvider(azure_subscription=azure_subscription)
+        instances += azure.get_matching_instances()
+
+    if not gcp_project_id:
+        typer.secho("No GCP project ID given, so GCP instances will not be deprovisioned", color=typer.colors.YELLOW, bold=True)
+    else:
+        gcp = GCPCloudProvider(gcp_project=gcp_project_id)
+        instances += gcp.get_matching_instances()
 
     if instances:
         typer.secho(f"Deprovisioning {len(instances)} instances", color=typer.colors.YELLOW, bold=True)

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
+from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.utils.utils import do_parallel
@@ -47,6 +48,8 @@ class ReplicationTopology:
         for p in path:
             if p.startswith("aws:"):
                 assert p.split(":")[1] in AWSCloudProvider.region_list(), f"{p} is not a valid AWS region"
+            elif p.startswith("azure:"):
+                assert p.split(":")[1] in AzureCloudProvider.region_list(), f"{p} is not a valid Azure region"
             elif p.startswith("gcp:"):
                 assert p.split(":")[1] in GCPCloudProvider.region_list(), f"{p} is not a valid GCP region"
             else:
