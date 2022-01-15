@@ -4,6 +4,7 @@ from pathlib import Path
 
 import googleapiclient.discovery
 import paramiko
+from loguru import logger
 
 from skylark import key_root
 from skylark.compute.server import Server, ServerState
@@ -28,7 +29,7 @@ class GCPServer(Server):
         key_root = Path(key_root)
         key_root.mkdir(parents=True, exist_ok=True)
         if ssh_private_key is None:
-            self.ssh_private_key = key_root / f"gcp.pem"
+            self.ssh_private_key = key_root / f"gcp-cert.pem"
         else:
             self.ssh_private_key = ssh_private_key
 
@@ -88,7 +89,7 @@ class GCPServer(Server):
 
     def terminate_instance_impl(self):
         compute = self.get_gcp_client()
-        compute.instances().delete(project=self.gcp_project, zone=self.gcp_region, instance=self.instance_name).execute()
+        compute.instances().delete(project=self.gcp_project, zone=self.gcp_region, instance=self.instance_name()).execute()
 
     def get_ssh_client_impl(self, uname=os.environ.get("USER"), ssh_key_password="skylark"):
         """Return paramiko client that connects to this instance."""

@@ -7,6 +7,10 @@ setup(
     packages=["skylark"],
     python_requires=">=3.8",
     install_requires=[
+        "azure-mgmt-resource",
+        "azure-mgmt-compute",
+        "azure-mgmt-network",
+        "azure-identity",
         "awscrt",
         "boto3",
         "flask",
