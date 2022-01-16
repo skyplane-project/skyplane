@@ -37,7 +37,6 @@ class AWSCloudProvider(CloudProvider):
             "af-south-1",
             "ap-northeast-1",
             "ap-northeast-2",
-            "ap-south-1",
             "ap-southeast-1",
             "ap-southeast-2",
             "ca-central-1",
@@ -50,6 +49,7 @@ class AWSCloudProvider(CloudProvider):
             "us-east-2",
             "us-west-1",
             "us-west-2",
+            # "ap-south-1",
             # "ap-northeast-3",  # dl ami not available here
             # "ap-southeast-3",
             # "eu-north-1",  # dl ami not available here
