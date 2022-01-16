@@ -4,8 +4,8 @@ import os
 import re
 import signal
 import sys
-import threading
 from multiprocessing import Event
+from multiprocessing.pool import ThreadPool
 from os import PathLike
 from pathlib import Path
 from typing import Optional
@@ -33,6 +33,9 @@ class GatewayDaemon:
         self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store)
         self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, n_processes=outgoing_connections)
 
+        # Throttle random chunk generation
+        self.random_chunk_gen_pool = ThreadPool(processes=os.cpu_count() // 4)
+
         # API server
         self.api_server = GatewayDaemonAPI(self.chunk_store, self.gateway_receiver, debug=debug, log_dir=log_dir)
         self.api_server.start()
@@ -41,6 +44,8 @@ class GatewayDaemon:
 
     def cleanup(self):
         logger.warning("Shutting down gateway daemon")
+        self.random_chunk_gen_pool.join()
+        self.random_chunk_gen_pool.close()
         self.api_server.shutdown()
 
     def run(self):
@@ -104,7 +109,7 @@ class GatewayDaemon:
                             self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
                             self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id)
 
-                        threading.Thread(target=fn, args=(chunk_req, size_mb)).start()
+                        self.random_chunk_gen_pool.apply_async(fn, (chunk_req, size_mb))
                     elif current_hop.chunk_location_type == "relay" or current_hop.chunk_location_type == "save_local":
                         # do nothing, waiting for chunk to be be ready_to_upload
                         continue
