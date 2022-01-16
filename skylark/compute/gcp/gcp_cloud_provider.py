@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import List
 
 import googleapiclient
+from loguru import logger
+from oslo_concurrency import lockutils
 import paramiko
 
 from skylark import key_root
@@ -28,15 +30,33 @@ class GCPCloudProvider(CloudProvider):
     @staticmethod
     def region_list():
         return [
+            "asia-east1-a",
+            "asia-east2-a",
+            "asia-northeast1-a",
+            "asia-northeast2-a",
+            "asia-northeast3-a",
+            "asia-south1-a",
+            "asia-south2-a",
+            "asia-southeast1-a",
+            "asia-southeast2-a",
+            "australia-southeast1-a",
+            "australia-southeast2-a",
+            "europe-central2-a",
+            "europe-north1-a",
+            "europe-west1-a",
+            "europe-west2-a",
+            "europe-west3-a",
+            "europe-west4-a",
+            "europe-west6-a",
+            "northamerica-northeast1-a",
+            "northamerica-northeast2-a",
+            "southamerica-east1-a",
+            "southamerica-west1-a",
             "us-central1-a",
             "us-east1-b",
-            # "us-east4-a",
+            "us-east4-a",
             "us-west1-a",
-            # "us-west2-a",
-            "southamerica-east1-a",
-            "europe-north1-a",
-            "europe-west1-b",
-            "asia-east2-a",
+            "us-west4-a",
         ]
 
     @staticmethod
@@ -150,6 +170,15 @@ class GCPCloudProvider(CloudProvider):
     def configure_default_firewall(self, ip="0.0.0.0/0"):
         """Configure default firewall to allow access from all ports from all IPs (if not exists)."""
         compute = GCPServer.get_gcp_client()
+
+        @lockutils.synchronized(f"gcp_configure_default_firewall", external=True, lock_path="/tmp/skylark_locks")
+        def create_firewall(body, update_firewall=False):
+            if update_firewall:
+                op = compute.firewalls().update(project=self.gcp_project, firewall="default", body=fw_body).execute()
+            else:
+                op = compute.firewalls().insert(project=self.gcp_project, body=fw_body).execute()
+            self.wait_for_operation_to_complete("global", op["name"])
+
         try:
             current_firewall = compute.firewalls().get(project=self.gcp_project, firewall="default").execute()
         except googleapiclient.errors.HttpError as e:
@@ -157,6 +186,7 @@ class GCPCloudProvider(CloudProvider):
                 current_firewall = None
             else:
                 raise e
+
         fw_body = {
             "name": "default",
             "allowed": [{"IPProtocol": "tcp", "ports": ["1-65535"]}, {"IPProtocol": "udp", "ports": ["1-65535"]}, {"IPProtocol": "icmp"}],
@@ -164,10 +194,13 @@ class GCPCloudProvider(CloudProvider):
             "sourceRanges": [ip],
         }
         if current_firewall is None:
-            op = compute.firewalls().insert(project=self.gcp_project, body=fw_body).execute()
-        else:
-            op = compute.firewalls().update(project=self.gcp_project, firewall="default", body=fw_body).execute()
-        self.wait_for_operation_to_complete("global", op["name"])
+            logger.warning(f"[GCP] Creating new firewall")
+            create_firewall(fw_body, update_firewall=False)
+            logger.debug(f"[GCP] Created new firewall")
+        elif current_firewall["allowed"] != fw_body["allowed"]:
+            logger.warning(f"[GCP] Updating firewall, current rules do not match")
+            create_firewall(fw_body, update_firewall=True)
+            logger.debug(f"[GCP] Updated firewall")
 
     def get_operation_state(self, zone, operation_name):
         compute = GCPServer.get_gcp_client()
