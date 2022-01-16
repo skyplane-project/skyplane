@@ -1,4 +1,3 @@
-import multiprocessing
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -70,26 +69,3 @@ def do_parallel(func, args_list, n=-1, progress_bar=False, leave_pbar=True, desc
                 pbar.set_description(f"{desc} ({str(arg_fmt(args))})" if desc else str(arg_fmt(args)))
                 pbar.update()
         return results
-
-
-class ConcurrentCounter(object):
-    """Multiprocess safe counter from https://stackoverflow.com/a/21681534"""
-
-    def __init__(self, min_value=None, max_value=None):
-        self.val = multiprocessing.Value("i", 0)
-        self.min_value = min_value
-        self.max_value = max_value
-
-    def increment(self, n=1):
-        with self.val.get_lock():
-            new_val = self.val.value + n
-            if self.min_value is not None:
-                new_val = max(new_val, self.min_value)
-            if self.max_value is not None:
-                new_val = min(new_val, self.max_value)
-            self.val.value = new_val
-            return self
-
-    @property
-    def value(self):
-        return self.val.value

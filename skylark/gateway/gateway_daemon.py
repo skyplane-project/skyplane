@@ -30,7 +30,7 @@ class GatewayDaemon:
             logger.add(log_dir / "gateway_daemon.log", rotation="10 MB", enqueue=True)
             logger.add(sys.stderr, colorize=True, format="{function:>15}:{line:<3} {level:<8} {message}", level="DEBUG", enqueue=True)
         self.chunk_store = ChunkStore(chunk_dir)
-        self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store, max_n_processes=outgoing_connections)
+        self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store)
         self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, n_processes=outgoing_connections)
 
         # API server
