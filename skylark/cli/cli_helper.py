@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 import concurrent.futures
@@ -5,13 +6,15 @@ from typing import Dict, List, Optional, Tuple
 import re
 from shutil import copyfile
 
+from loguru import logger
 from tqdm import tqdm
 import typer
+
+from skylark import config_file
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.obj_store.object_store_interface import ObjectStoreObject
-
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.utils.utils import do_parallel
 
@@ -164,3 +167,21 @@ def deprovision_skylark_instances(azure_subscription: Optional[str] = None, gcp_
         do_parallel(lambda instance: instance.terminate_instance(), instances, progress_bar=True, desc="Deprovisioning")
     else:
         typer.secho("No instances to deprovision, exiting...", color=typer.colors.YELLOW, bold=True)
+
+
+def load_config():
+    if config_file.exists():
+        try:
+            with config_file.open("r") as f:
+                config = json.load(f)
+            if "azure_tenant_id" in config:
+                os.environ["AZURE_TENANT_ID"] = config["azure_tenant_id"]
+            if "azure_client_id" in config:
+                os.environ["AZURE_CLIENT_ID"] = config["azure_client_id"]
+            if "azure_client_secret" in config:
+                os.environ["AZURE_CLIENT_SECRET"] = config["azure_client_secret"]
+            return config
+        except json.JSONDecodeError as e:
+            logger.error(f"Error decoding config file: {e}")
+            raise typer.Abort()
+    return {}

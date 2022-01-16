@@ -22,13 +22,16 @@ from typing import Optional
 
 import typer
 from loguru import logger
-from skylark import GB, MB, print_header
+import questionary
+
+from skylark import GB, MB, print_header, config_file
 import skylark.cli.cli_aws
 from skylark.cli.cli_helper import (
     copy_local_local,
     copy_local_s3,
     copy_s3_local,
     deprovision_skylark_instances,
+    load_config,
     ls_local,
     ls_s3,
     parse_path,
@@ -98,6 +101,9 @@ def replicate_random(
 ):
     """Replicate objects from remote object store to another remote object store."""
     print_header()
+    config = load_config()
+    gcp_project = gcp_project or config.get("gcp_project_id")
+    azure_subscription = azure_subscription or config.get("azure_subscription_id")
 
     if inter_region:
         topo = ReplicationTopology(paths=[[src_region, inter_region, dst_region] for _ in range(num_gateways)])
@@ -162,6 +168,38 @@ def replicate_random(
 def deprovision(azure_subscription: Optional[str] = None, gcp_project: Optional[str] = None):
     """Deprovision gateways."""
     deprovision_skylark_instances(azure_subscription=azure_subscription, gcp_project_id=gcp_project)
+
+
+@app.command()
+def init(
+    gcp_project: str = typer.Option(None, envvar="GCP_PROJECT_ID", prompt="GCP project ID"),
+    azure_tenant_id: str = typer.Option(None, envvar="AZURE_TENANT_ID", prompt="Azure tenant ID"),
+    azure_client_id: str = typer.Option(None, envvar="AZURE_CLIENT_ID", prompt="Azure client ID"),
+    azure_client_secret: str = typer.Option(None, envvar="AZURE_CLIENT_SECRET", prompt="Azure client secret"),
+    azure_subscription_id: str = typer.Option(None, envvar="AZURE_SUBSCRIPTION_ID", prompt="Azure subscription ID"),
+):
+    if config_file.exists():
+        typer.confirm("Config file already exists. Overwrite?", abort=True)
+
+    out_config = {}
+    if gcp_project is not None or len(gcp_project) > 0:
+        out_config["gcp_project_id"] = gcp_project
+    if azure_tenant_id is not None or len(azure_tenant_id) > 0:
+        out_config["azure_tenant_id"] = azure_tenant_id
+    if azure_client_id is not None or len(azure_client_id) > 0:
+        out_config["azure_client_id"] = azure_client_id
+    if azure_client_secret is not None or len(azure_client_secret) > 0:
+        out_config["azure_client_secret"] = azure_client_secret
+    if azure_subscription_id is not None or len(azure_subscription_id) > 0:
+        out_config["azure_subscription_id"] = azure_subscription_id
+
+    # write to config file
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+    with config_file.open("w") as f:
+        json.dump(out_config, f)
+    typer.secho(f"Config: {out_config}", fg=typer.colors.GREEN)
+    typer.secho(f"Wrote config to {config_file}", fg=typer.colors.GREEN)
+    return 0
 
 
 if __name__ == "__main__":
