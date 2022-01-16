@@ -150,8 +150,6 @@ class Server:
         logger.debug(f"Waiting for {self.uuid()} to be ready")
         wait_for(is_up, timeout=timeout, interval=interval)
         logger.debug(f"{self.uuid()} is ready")
->>>>>>> dev/s3
->>>>>>> dev/s3
 
     def close_server(self):
         if hasattr(self.ns, "client"):

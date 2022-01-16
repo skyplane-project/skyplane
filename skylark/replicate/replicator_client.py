@@ -280,7 +280,7 @@ class ReplicatorClient:
                                 src_object_store_bucket = job.source_bucket
                             else: # source gateway
                                 location = f"random_{job.random_chunk_size_mb}MB"
-                        elif hop_idx == len(path) - 1:  
+                        elif hop_idx == len(path_instances) - 1:  
                             if job.dest_bucket: # destination bucket
                                 location = "dst_object_store"
                                 dst_object_store_region = job.dest_region
@@ -290,12 +290,16 @@ class ReplicatorClient:
                         else:  # intermediate gateway
                             location = "relay"
 
-                        print("LOCATION", location, job.source_bucket, job.dest_bucket)
                         cr_path.append(
                             ChunkRequestHop(
                                 hop_cloud_region=hop_instance.region_tag,
                                 hop_ip_address=hop_instance.public_ip(),
                                 chunk_location_type=location,
+                                src_object_store_region=src_object_store_region,
+                                src_object_store_bucket=src_object_store_bucket,
+                                dst_object_store_region=dst_object_store_region,
+                                dst_object_store_bucket=dst_object_store_bucket,
+
                             )
                         )
                     chunk_requests_sharded[path_idx].append(ChunkRequest(chunk, cr_path))
