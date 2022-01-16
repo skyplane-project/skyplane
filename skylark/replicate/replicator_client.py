@@ -219,6 +219,9 @@ class ReplicatorClient:
             "gcp",
         ], f"Only AWS, Azure, and GCP are supported, but got {job.dest_region}"
 
+        # pre-fetch instance IPs for all gateways
+        gateway_ips: Dict[Server, str] = {s: s.public_ip() for path in self.bound_paths for s in path}
+
         # make list of chunks
         chunks = []
         for idx, obj in enumerate(job.objs):
@@ -269,7 +272,7 @@ class ReplicatorClient:
                         cr_path.append(
                             ChunkRequestHop(
                                 hop_cloud_region=hop_instance.region_tag,
-                                hop_ip_address=hop_instance.public_ip(),
+                                hop_ip_address=gateway_ips[hop_instance],
                                 chunk_location_type=location,
                             )
                         )
@@ -280,10 +283,9 @@ class ReplicatorClient:
 
             def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
                 hop_instance, chunk_requests = args
-                logger.debug(f"Sending {len(chunk_requests)} chunk requests to {hop_instance.public_ip()}")
-                reply = requests.post(
-                    f"http://{hop_instance.public_ip()}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests]
-                )
+                ip = gateway_ips[hop_instance]
+                logger.debug(f"Sending {len(chunk_requests)} chunk requests to {ip}")
+                reply = requests.post(f"http://{ip}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests])
                 if reply.status_code != 200:
                     raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
 
