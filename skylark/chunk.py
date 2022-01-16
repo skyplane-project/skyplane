@@ -70,7 +70,7 @@ class ChunkRequestHop:
     hop_ip_address: str
     chunk_location_type: str  # enum of {"src_object_store", "dst_object_store", "relay", "random_XMB", "save_local"}
 
-    # TODO: cleanup 
+    # TODO: cleanup
     # if chunk_location_type == "src_object_store":
     src_object_store_region: str = None  # format is provider:region
     src_object_store_bucket: str = None

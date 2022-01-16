@@ -13,7 +13,6 @@ from skylark.compute.aws.aws_server import AWSServer
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
 
-
 class S3Object(ObjectStoreObject):
     def full_path(self):
         return f"s3://{self.bucket}/{self.key}"
@@ -21,11 +20,12 @@ class S3Object(ObjectStoreObject):
 
 class S3Interface(ObjectStoreInterface):
     def __init__(self, aws_region, bucket_name, use_tls=True):
-       
+
         # TODO: remove (debugging)
-        # install tls thing? 
+        # install tls thing?
         import awscrt
-        awscrt.io.init_logging(awscrt.io.LogLevel.Error, 'stderr')
+
+        awscrt.io.init_logging(awscrt.io.LogLevel.Error, "stderr")
 
         self.aws_region = self.infer_s3_region(bucket_name) if aws_region is None or aws_region == "infer" else aws_region
         self.bucket_name = bucket_name
@@ -36,11 +36,11 @@ class S3Interface(ObjectStoreInterface):
         bootstrap = ClientBootstrap(event_loop_group, host_resolver)
 
         # get aws auth info for docker envs
-        aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID', None)
-        aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY', None)
+        aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID", None)
+        aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY", None)
         if aws_access_key_id and aws_secret_access_key:
             credential_provider = AwsCredentialsProvider.new_static(aws_access_key_id, aws_secret_access_key)
-        else: # use default
+        else:  # use default
             credential_provider = AwsCredentialsProvider.new_default_chain(bootstrap)
 
         self._s3_client = S3Client(
@@ -67,8 +67,6 @@ class S3Interface(ObjectStoreInterface):
 
     def bucket_exists(self):
         s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
-        print("bucket name", self.bucket_name)
-        print([b["Name"] for b in s3_client.list_buckets()["Buckets"]])
         return self.bucket_name in [b["Name"] for b in s3_client.list_buckets()["Buckets"]]
 
     def create_bucket(self):
@@ -133,7 +131,6 @@ class S3Interface(ObjectStoreInterface):
         ).finished_future
 
     def upload_object(self, src_file_path, dst_object_name, content_type="infer") -> Future:
-        print("uploading object", src_file_path, dst_object_name)
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         dst_object_name = "/" + dst_object_name if dst_object_name[0] != "/" else dst_object_name
         content_len = os.path.getsize(src_file_path)

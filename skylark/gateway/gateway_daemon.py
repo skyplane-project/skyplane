@@ -22,9 +22,8 @@ from skylark.gateway.gateway_sender import GatewaySender
 
 from skylark.obj_store.s3_interface import S3Interface
 
+
 class GatewayDaemon:
-
-
     def __init__(self, chunk_dir: PathLike, debug=False, log_dir: Optional[PathLike] = None, outgoing_connections=1):
         if log_dir is not None:
             log_dir = Path(log_dir)
@@ -74,7 +73,7 @@ class GatewayDaemon:
 
                         # function to upload data from S3
                         # TODO: add this to a queue like with GatewaySender to prevent OOM
-                        def fn(chunk_req, dst_region, dst_bucket): 
+                        def fn(chunk_req, dst_region, dst_bucket):
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
 
                             logger.info(f"Creating interface {dst_region}--{dst_bucket}")
@@ -83,11 +82,17 @@ class GatewayDaemon:
                             s3_interface.upload_object(fpath, chunk_req.chunk.key).result()
                             logger.info(f"Uploaded {fpath} to {dst_bucket}:{chunk_req.chunk.key})")
                             self.chunk_store.state_finish_upload(chunk_req.chunk.chunk_id)
-                        
-                        # start in seperate thread
-                        threading.Thread(target=fn, args=(chunk_req, current_hop.dst_object_store_region, current_hop.dst_object_store_bucket)).start()
 
-                    elif current_hop.chunk_location_type == "relay" or current_hop.chunk_location_type.startswith("random_") or current_hop.chunk_location_type == "src_object_store":
+                        # start in seperate thread
+                        threading.Thread(
+                            target=fn, args=(chunk_req, current_hop.dst_object_store_region, current_hop.dst_object_store_bucket)
+                        ).start()
+
+                    elif (
+                        current_hop.chunk_location_type == "relay"
+                        or current_hop.chunk_location_type.startswith("random_")
+                        or current_hop.chunk_location_type == "src_object_store"
+                    ):
                         logger.info(f"Queuing chunk {chunk_req.chunk.chunk_id} for relay")
                         self.gateway_sender.queue_request(chunk_req)
                         self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
@@ -114,11 +119,10 @@ class GatewayDaemon:
 
                         src_bucket = current_hop.src_object_store_bucket
                         src_region = current_hop.src_object_store_region
-                         
 
                         # function to download data from S3
                         # TODO: add this to a queue like with GatewaySender to prevent OOM
-                        def fn(chunk_req, src_region, src_bucket): 
+                        def fn(chunk_req, src_region, src_bucket):
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
 
                             logger.info(f"Creating interface {src_region}--{src_bucket}")
@@ -129,7 +133,7 @@ class GatewayDaemon:
                             logger.info(f"Downloaded key {chunk_req.chunk.key} to {fpath})")
                             self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
                             self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id)
-                        
+
                         # start in seperate thread
                         threading.Thread(target=fn, args=(chunk_req, src_region, src_bucket)).start()
 
@@ -141,7 +145,7 @@ class GatewayDaemon:
                         assert size_mb_match is not None
                         size_mb = int(size_mb_match.group(1))
 
-                        # function to write random data file 
+                        # function to write random data file
                         def fn(chunk_req, size_mb):
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
                             logger.info(f"Writing random data path {fpath}")
@@ -149,10 +153,14 @@ class GatewayDaemon:
                             chunk_req.chunk.chunk_length_bytes = os.path.getsize(fpath)
                             self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
                             self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id)
-                        
+
                         # generate random data in seperate thread
                         threading.Thread(target=fn, args=(chunk_req, size_mb)).start()
-                    elif current_hop.chunk_location_type == "relay" or current_hop.chunk_location_type == "save_local" or current_hop.chunk_location_type == "dst_object_store":
+                    elif (
+                        current_hop.chunk_location_type == "relay"
+                        or current_hop.chunk_location_type == "save_local"
+                        or current_hop.chunk_location_type == "dst_object_store"
+                    ):
                         # do nothing, waiting for chunk to be be ready_to_upload
                         continue
                     else:

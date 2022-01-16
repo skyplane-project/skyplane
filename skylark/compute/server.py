@@ -13,6 +13,8 @@ from skylark.compute.utils import make_dozzle_command, make_netdata_command
 
 from skylark.utils.utils import PathLike, Timer, do_parallel, wait_for
 
+import configparser
+
 
 class ServerState(Enum):
     PENDING = auto()
@@ -227,16 +229,17 @@ class Server:
         docker_out, docker_err = self.run_command(f"sudo docker pull {gateway_docker_image}")
         assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
 
-        ## TODO: create file and write AWS credentials 
-        import configparser
-        config = configparser.RawConfigParser()
-        config.read("/home/ubuntu/.aws/credentials")
-        aws_access_key_id = config.get('default', 'aws_access_key_id')
-        aws_secret_access_key = config.get('default', 'aws_secret_access_key')
+        # read AWS config file to get credentials
         docker_envs = ""
-        docker_envs += f" -e AWS_ACCESS_KEY_ID='{aws_access_key_id}'"
-        docker_envs += f" -e AWS_SECRET_ACCESS_KEY='{aws_secret_access_key}'"
-
+        try:
+            config = configparser.RawConfigParser()
+            config.read(os.path.expanduser("~/.aws/credentials"))
+            aws_access_key_id = config.get("default", "aws_access_key_id")
+            aws_secret_access_key = config.get("default", "aws_secret_access_key")
+            docker_envs += f" -e AWS_ACCESS_KEY_ID='{aws_access_key_id}'"
+            docker_envs += f" -e AWS_SECRET_ACCESS_KEY='{aws_secret_access_key}'"
+        except Exception as e:
+            logger.error(f"Failed to read AWS credentials locally {e}")
 
         # todo add other launch flags for gateway daemon
         logger.debug(desc_prefix + f": Starting gateway container {gateway_docker_image}")

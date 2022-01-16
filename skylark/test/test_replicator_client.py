@@ -68,7 +68,7 @@ def main(args):
 
     if not args.skip_upload:
         # todo implement object store support
-        #pass
+        # pass
         print("Not skipping upload...", src_bucket, dst_bucket)
 
         # TODO: fix this to get the key instead of S3Object
@@ -93,9 +93,7 @@ def main(args):
             for i in range(args.n_chunks):
                 k = f"{args.key_prefix}/{i}"
                 futures.append(s3_interface_src.upload_object(f.name, k))
-                print("done", f.name, len(futures))
                 obj_keys.append(k)
-        print("created all futures")
         concurrent.futures.wait(futures)
     else:
         obj_keys = [f"{args.key_prefix}/{i}" for i in range(args.n_chunks)]
