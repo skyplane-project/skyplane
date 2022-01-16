@@ -156,5 +156,6 @@ class AzureServer(Server):
             key_filename=str(self.ssh_private_key),
             passphrase=ssh_key_password,
             look_for_keys=False,
+            banner_timeout=200,
         )
         return ssh_client
