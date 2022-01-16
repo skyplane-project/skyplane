@@ -22,7 +22,9 @@ from typing import Optional
 
 import typer
 from loguru import logger
-from skylark import GB, MB, print_header
+import questionary
+
+from skylark import GB, MB, print_header, config_file
 import skylark.cli.cli_aws
 import skylark.cli.cli_azure
 from skylark.cli.cli_helper import (
@@ -30,6 +32,7 @@ from skylark.cli.cli_helper import (
     copy_local_s3,
     copy_s3_local,
     deprovision_skylark_instances,
+    load_config,
     ls_local,
     ls_s3,
     parse_path,
@@ -100,6 +103,10 @@ def replicate_random(
 ):
     """Replicate objects from remote object store to another remote object store."""
     print_header()
+    config = load_config()
+    gcp_project = gcp_project or config.get("gcp_project_id")
+    azure_subscription = azure_subscription or config.get("azure_subscription_id")
+    logger.debug(f"Loaded gcp_project: {gcp_project}, azure_subscription: {azure_subscription}")
 
     if inter_region:
         topo = ReplicationTopology(paths=[[src_region, inter_region, dst_region] for _ in range(num_gateways)])
@@ -163,7 +170,90 @@ def replicate_random(
 @app.command()
 def deprovision(azure_subscription: Optional[str] = None, gcp_project: Optional[str] = None):
     """Deprovision gateways."""
+    config = load_config()
+    gcp_project = gcp_project or config.get("gcp_project_id")
+    azure_subscription = azure_subscription or config.get("azure_subscription_id")
+    logger.debug(f"Loaded from config file: gcp_project={gcp_project}, azure_subscription={azure_subscription}")
     deprovision_skylark_instances(azure_subscription=azure_subscription, gcp_project_id=gcp_project)
+
+
+@app.command()
+def init(
+    azure_tenant_id: str = typer.Option(None, envvar="AZURE_TENANT_ID", prompt="Azure tenant ID"),
+    azure_client_id: str = typer.Option(None, envvar="AZURE_CLIENT_ID", prompt="Azure client ID"),
+    azure_client_secret: str = typer.Option(None, envvar="AZURE_CLIENT_SECRET", prompt="Azure client secret"),
+    azure_subscription_id: str = typer.Option(None, envvar="AZURE_SUBSCRIPTION_ID", prompt="Azure subscription ID"),
+    gcp_application_credentials_file: Path = typer.Option(
+        None,
+        envvar="GOOGLE_APPLICATION_CREDENTIALS",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="Path to GCP application credentials file (usually a JSON file)",
+    ),
+    gcp_project: str = typer.Option(None, envvar="GCP_PROJECT_ID", prompt="GCP project ID"),
+):
+    out_config = {}
+    if config_file.exists():
+        typer.confirm("Config file already exists. Overwrite?", abort=True)
+
+    # AWS config
+    def load_aws_credentials():
+        if "AWS_ACCESS_KEY_ID" in os.environ and "AWS_SECRET_ACCESS_KEY" in os.environ:
+            return os.environ["AWS_ACCESS_KEY_ID"], os.environ["AWS_SECRET_ACCESS_KEY"]
+        if (Path.home() / ".aws" / "credentials").exists():
+            with open(Path.home() / ".aws" / "credentials") as f:
+                access_key, secret_key = None, None
+                lines = f.readlines()
+                for line in lines:
+                    if line.startswith("aws_access_key_id"):
+                        access_key = line.split("=")[1].strip()
+                    if line.startswith("aws_secret_access_key"):
+                        secret_key = line.split("=")[1].strip()
+                if access_key and secret_key:
+                    return access_key, secret_key
+        return None, None
+
+    aws_access_key, aws_secret_key = load_aws_credentials()
+    if aws_access_key is None:
+        aws_access_key = typer.prompt("AWS access key")
+        assert aws_access_key is not None and aws_access_key != ""
+    if aws_secret_key is None:
+        aws_secret_key = typer.prompt("AWS secret key")
+        assert aws_secret_key is not None and aws_secret_key != ""
+    out_config["aws_access_key_id"] = aws_access_key
+    out_config["aws_secret_access_key"] = aws_secret_key
+
+    # Azure config
+    if azure_tenant_id is not None or len(azure_tenant_id) > 0:
+        logger.info(f"Setting Azure tenant ID to {azure_tenant_id}")
+        out_config["azure_tenant_id"] = azure_tenant_id
+    if azure_client_id is not None or len(azure_client_id) > 0:
+        logger.info(f"Setting Azure client ID to {azure_client_id}")
+        out_config["azure_client_id"] = azure_client_id
+    if azure_client_secret is not None or len(azure_client_secret) > 0:
+        logger.info(f"Setting Azure client secret to {azure_client_secret}")
+        out_config["azure_client_secret"] = azure_client_secret
+    if azure_subscription_id is not None or len(azure_subscription_id) > 0:
+        logger.info(f"Setting Azure subscription ID to {azure_subscription_id}")
+        out_config["azure_subscription_id"] = azure_subscription_id
+
+    # GCP config
+    if gcp_application_credentials_file is not None and gcp_application_credentials_file.exists():
+        logger.info(f"Setting GCP application credentials file to {gcp_application_credentials_file}")
+        out_config["gcp_application_credentials_file"] = str(gcp_application_credentials_file)
+    if gcp_project is not None or len(gcp_project) > 0:
+        logger.info(f"Setting GCP project ID to {gcp_project}")
+        out_config["gcp_project_id"] = gcp_project
+
+    # write to config file
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+    with config_file.open("w") as f:
+        json.dump(out_config, f)
+    typer.secho(f"Config: {out_config}", fg=typer.colors.GREEN)
+    typer.secho(f"Wrote config to {config_file}", fg=typer.colors.GREEN)
+    return 0
 
 
 if __name__ == "__main__":

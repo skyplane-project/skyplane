@@ -3,6 +3,7 @@ from pathlib import Path
 # paths
 skylark_root = Path(__file__).parent.parent
 key_root = skylark_root / "data" / "keys"
+config_file = skylark_root / "data" / "config.json"
 
 # header
 def print_header():
