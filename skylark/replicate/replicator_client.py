@@ -1,11 +1,7 @@
 import atexit
-from contextlib import closing
 from datetime import datetime
 import itertools
-import json
-from logging import log
 from functools import partial
-from re import T
 import time
 from typing import Dict, List, Optional, Tuple
 
@@ -21,10 +17,9 @@ from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server, ServerState
 from skylark.chunk import Chunk, ChunkRequest, ChunkRequestHop, ChunkState
-from skylark.obj_store.s3_interface import S3Interface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client_dashboard import ReplicatorClientDashboard
-from skylark.utils.utils import PathLike, Timer, do_parallel, wait_for
+from skylark.utils.utils import PathLike, Timer, do_parallel
 
 
 class ReplicatorClient:
@@ -321,6 +316,7 @@ class ReplicatorClient:
         dash_host="0.0.0.0",
         dash_port="8080",
         time_limit_seconds: Optional[float] = None,
+        cancel_pending: bool = True,
     ) -> Dict:
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs])
         if serve_web_dashboard:
@@ -329,6 +325,23 @@ class ReplicatorClient:
             atexit.register(dash.shutdown)
             logger.info(f"Web dashboard running at {dash.dashboard_url}")
         last_log = None
+
+        # register atexit handler to cancel pending chunk requests (force shutdown gateways)
+        if cancel_pending:
+
+            def shutdown_handler():
+                def fn(s: Server):
+                    logger.warning(f"Cancelling pending chunk requests to {s.public_ip()}")
+                    try:
+                        requests.post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
+                    except requests.exceptions.ConnectionError as e:
+                        return  # ignore connection errors since server may be shutting down
+
+                do_parallel(fn, [hop for path in self.bound_paths for hop in path], n=-1)
+                logger.warning("Cancelled pending chunk requests")
+
+            atexit.register(shutdown_handler)
+
         with Timer() as t:
             with tqdm(
                 total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB, disable=not show_pbar
