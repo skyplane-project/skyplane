@@ -1,10 +1,10 @@
 import os
 import os
-import select
 import signal
 import socket
 from contextlib import closing
 from multiprocessing import Event, Manager, Process, Value
+import time
 from typing import Tuple
 
 import setproctitle
@@ -17,9 +17,10 @@ from skylark.utils.utils import Timer
 
 
 class GatewayReceiver:
-    def __init__(self, chunk_store: ChunkStore, write_back_block_size=1 * MB):
+    def __init__(self, chunk_store: ChunkStore, write_back_block_size=1 * MB, max_n_processes=1):
         self.chunk_store = chunk_store
         self.write_back_block_size = write_back_block_size
+        self.max_n_processes = max_n_processes  # number of chunks to leave free (max outstanding chunks = num senders)
 
         # shared state
         self.manager = Manager()
@@ -92,6 +93,12 @@ class GatewayReceiver:
             # receive header and write data to file
             chunk_header = WireProtocolHeader.from_socket(conn)
             logger.debug(f"[server:{server_port}] Got chunk header {chunk_header.chunk_id}: {chunk_header}")
+
+            # wait for free space (at least space for two chunks)
+            while self.chunk_store.remaining_bytes() < chunk_header.chunk_len * self.max_n_processes:
+                logger.debug(f"[server:{server_port}] Waiting for free space")
+                time.sleep(0.01)  # busy wait, yield
+
             self.chunk_store.state_start_download(chunk_header.chunk_id)
 
             # get data

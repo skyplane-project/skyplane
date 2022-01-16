@@ -34,6 +34,7 @@ class AWSCloudProvider(CloudProvider):
     @staticmethod
     def region_list(include_disabled: bool = False) -> List[str]:
         all_regions = [
+            "af-south-1",
             "ap-northeast-1",
             "ap-northeast-2",
             "ap-southeast-1",
@@ -48,9 +49,8 @@ class AWSCloudProvider(CloudProvider):
             "us-east-2",
             "us-west-1",
             "us-west-2",
-            # "ap-northeast-3",  # dl ami not available here
-            "af-south-1",
             # "ap-south-1",
+            # "ap-northeast-3",  # dl ami not available here
             # "ap-southeast-3",
             # "eu-north-1",  # dl ami not available here
             # "eu-south-1",

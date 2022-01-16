@@ -1,5 +1,6 @@
 from multiprocessing import Manager
 from os import PathLike
+import os
 from pathlib import Path
 from typing import Dict, List, Optional
 from datetime import datetime
@@ -7,12 +8,15 @@ from datetime import datetime
 from loguru import logger
 
 from skylark.chunk import ChunkRequest, ChunkRequestHop, ChunkState
+from skylark.utils.utils import ConcurrentCounter
 
 
 class ChunkStore:
     def __init__(self, chunk_dir: PathLike):
         self.chunk_dir = Path(chunk_dir)
         self.chunk_dir.mkdir(parents=True, exist_ok=True)
+        self.chunk_store_max_size = os.statvfs(self.chunk_dir).f_frsize * os.statvfs(self.chunk_dir).f_bfree
+        logger.info(f"Chunk directory {self.chunk_dir} can have max size {self.chunk_store_max_size} bytes")
 
         # delete existing chunks
         for chunk_file in self.chunk_dir.glob("*.chunk"):
@@ -23,6 +27,7 @@ class ChunkStore:
         self.manager = Manager()
         self.chunk_requests: Dict[int, ChunkRequest] = self.manager.dict()
         self.chunk_status: Dict[int, ChunkState] = self.manager.dict()
+        self.chunk_store_size = ConcurrentCounter(min_value=0)
 
         # state log
         self.chunk_status_log: List[Dict] = self.manager.list()
@@ -47,6 +52,8 @@ class ChunkStore:
         state = self.get_chunk_state(chunk_id)
         if state in [ChunkState.registered, ChunkState.download_in_progress]:
             self.set_chunk_state(chunk_id, ChunkState.download_in_progress)
+            if state == ChunkState.registered:
+                self.chunk_store_size.increment(self.get_chunk_request(chunk_id).chunk.chunk_length_bytes)
         else:
             raise ValueError(f"Invalid transition start_download from {self.get_chunk_state(chunk_id)}")
 
@@ -77,6 +84,8 @@ class ChunkStore:
         state = self.get_chunk_state(chunk_id)
         if state in [ChunkState.upload_in_progress, ChunkState.upload_complete]:
             self.set_chunk_state(chunk_id, ChunkState.upload_complete)
+            if state == ChunkState.upload_in_progress:
+                self.chunk_store_size.increment(-1 * self.get_chunk_request(chunk_id).chunk.chunk_length_bytes)
         else:
             raise ValueError(f"Invalid transition finish_upload from {self.get_chunk_state(chunk_id)}")
 
@@ -113,3 +122,11 @@ class ChunkStore:
                 self.chunk_requests[chunk_id] = chunk_request
                 return result
         return None
+
+    ###
+    # ChunkStore space management
+    ###
+
+    def remaining_bytes(self) -> int:
+        logger.debug(f"Remaining bytes: {self.chunk_store_size.value} out of {self.chunk_store_max_size}")
+        return self.chunk_store_max_size - self.chunk_store_size.value
