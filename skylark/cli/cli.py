@@ -177,19 +177,53 @@ def deprovision(azure_subscription: Optional[str] = None, gcp_project: Optional[
 
 @app.command()
 def init(
-    gcp_project: str = typer.Option(None, envvar="GCP_PROJECT_ID", prompt="GCP project ID"),
     azure_tenant_id: str = typer.Option(None, envvar="AZURE_TENANT_ID", prompt="Azure tenant ID"),
     azure_client_id: str = typer.Option(None, envvar="AZURE_CLIENT_ID", prompt="Azure client ID"),
     azure_client_secret: str = typer.Option(None, envvar="AZURE_CLIENT_SECRET", prompt="Azure client secret"),
     azure_subscription_id: str = typer.Option(None, envvar="AZURE_SUBSCRIPTION_ID", prompt="Azure subscription ID"),
+    gcp_application_credentials_file: Path = typer.Option(
+        None,
+        envvar="GOOGLE_APPLICATION_CREDENTIALS",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="Path to GCP application credentials file (usually a JSON file)",
+    ),
+    gcp_project: str = typer.Option(None, envvar="GCP_PROJECT_ID", prompt="GCP project ID"),
 ):
     if config_file.exists():
         typer.confirm("Config file already exists. Overwrite?", abort=True)
 
     out_config = {}
-    if gcp_project is not None or len(gcp_project) > 0:
-        logger.info(f"Setting GCP project ID to {gcp_project}")
-        out_config["gcp_project_id"] = gcp_project
+
+    # AWS config
+    # if ~/.aws/credentials exists, load values from there. else prompt.
+    def load_aws_credentials():
+        if (Path.home() / ".aws" / "credentials").exists():
+            with open(Path.home() / ".aws" / "credentials") as f:
+                access_key, secret_key = None, None
+                lines = f.readlines()
+                for line in lines:
+                    if line.startswith("aws_access_key_id"):
+                        access_key = line.split("=")[1].strip()
+                    if line.startswith("aws_secret_access_key"):
+                        secret_key = line.split("=")[1].strip()
+                return access_key, secret_key
+        else:
+            return None, None
+
+    aws_access_key, aws_secret_key = load_aws_credentials()
+    if aws_access_key is None:
+        aws_access_key = typer.prompt("AWS access key")
+        assert aws_access_key is not None and aws_access_key != ""
+    if aws_secret_key is None:
+        aws_secret_key = typer.prompt("AWS secret key")
+        assert aws_secret_key is not None and aws_secret_key != ""
+    out_config["aws_access_key_id"] = aws_access_key
+    out_config["aws_secret_access_key"] = aws_secret_key
+
+    # Azure config
     if azure_tenant_id is not None or len(azure_tenant_id) > 0:
         logger.info(f"Setting Azure tenant ID to {azure_tenant_id}")
         out_config["azure_tenant_id"] = azure_tenant_id
@@ -202,6 +236,14 @@ def init(
     if azure_subscription_id is not None or len(azure_subscription_id) > 0:
         logger.info(f"Setting Azure subscription ID to {azure_subscription_id}")
         out_config["azure_subscription_id"] = azure_subscription_id
+
+    # GCP config
+    if gcp_application_credentials_file is not None and gcp_application_credentials_file.exists():
+        logger.info(f"Setting GCP application credentials file to {gcp_application_credentials_file}")
+        out_config["gcp_application_credentials_file"] = str(gcp_application_credentials_file)
+    if gcp_project is not None or len(gcp_project) > 0:
+        logger.info(f"Setting GCP project ID to {gcp_project}")
+        out_config["gcp_project_id"] = gcp_project
 
     # write to config file
     config_file.parent.mkdir(parents=True, exist_ok=True)
