@@ -17,9 +17,6 @@ from skylark.utils.utils import Timer
 class AWSCloudProvider(CloudProvider):
     def __init__(self):
         super().__init__()
-        # Ubuntu deep learning AMI
-        # https://aws.amazon.com/marketplace/pp/prodview-dxk3xpeg6znhm
-        self.ami_alias = "resolve:ssm:/aws/service/marketplace/prod-oivea5digmbj6/latest"
 
     @property
     def name(self):
@@ -264,7 +261,7 @@ class AWSCloudProvider(CloudProvider):
         for i in range(4):
             try:
                 instance = ec2.create_instances(
-                    ImageId=self.ami_alias,
+                    ImageId=self.get_ubuntu_ami_id(region),
                     InstanceType=instance_class,
                     MinCount=1,
                     MaxCount=1,

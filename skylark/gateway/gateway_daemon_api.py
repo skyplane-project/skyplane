@@ -10,7 +10,7 @@ from skylark import MB
 
 from skylark.chunk import ChunkRequest, ChunkState
 from skylark.gateway.chunk_store import ChunkStore
-from skylark.gateway.gateway_reciever import GatewayReceiver
+from skylark.gateway.gateway_receiver import GatewayReceiver
 
 
 class GatewayDaemonAPI(threading.Thread):
