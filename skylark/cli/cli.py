@@ -171,7 +171,7 @@ def deprovision(azure_subscription: Optional[str] = None, gcp_project: Optional[
     config = load_config()
     gcp_project = gcp_project or config.get("gcp_project_id")
     azure_subscription = azure_subscription or config.get("azure_subscription_id")
-    logger.debug(f"Loaded gcp_project: {gcp_project}, azure_subscription: {azure_subscription}")
+    logger.debug(f"Loaded from config file: gcp_project={gcp_project}, azure_subscription={azure_subscription}")
     deprovision_skylark_instances(azure_subscription=azure_subscription, gcp_project_id=gcp_project)
 
 
@@ -188,14 +188,19 @@ def init(
 
     out_config = {}
     if gcp_project is not None or len(gcp_project) > 0:
+        logger.info(f"Setting GCP project ID to {gcp_project}")
         out_config["gcp_project_id"] = gcp_project
     if azure_tenant_id is not None or len(azure_tenant_id) > 0:
+        logger.info(f"Setting Azure tenant ID to {azure_tenant_id}")
         out_config["azure_tenant_id"] = azure_tenant_id
     if azure_client_id is not None or len(azure_client_id) > 0:
+        logger.info(f"Setting Azure client ID to {azure_client_id}")
         out_config["azure_client_id"] = azure_client_id
     if azure_client_secret is not None or len(azure_client_secret) > 0:
+        logger.info(f"Setting Azure client secret to {azure_client_secret}")
         out_config["azure_client_secret"] = azure_client_secret
     if azure_subscription_id is not None or len(azure_subscription_id) > 0:
+        logger.info(f"Setting Azure subscription ID to {azure_subscription_id}")
         out_config["azure_subscription_id"] = azure_subscription_id
 
     # write to config file
