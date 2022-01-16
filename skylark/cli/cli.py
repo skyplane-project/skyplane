@@ -104,6 +104,7 @@ def replicate_random(
     config = load_config()
     gcp_project = gcp_project or config.get("gcp_project_id")
     azure_subscription = azure_subscription or config.get("azure_subscription_id")
+    logger.debug(f"Loaded gcp_project: {gcp_project}, azure_subscription: {azure_subscription}")
 
     if inter_region:
         topo = ReplicationTopology(paths=[[src_region, inter_region, dst_region] for _ in range(num_gateways)])
@@ -167,6 +168,10 @@ def replicate_random(
 @app.command()
 def deprovision(azure_subscription: Optional[str] = None, gcp_project: Optional[str] = None):
     """Deprovision gateways."""
+    config = load_config()
+    gcp_project = gcp_project or config.get("gcp_project_id")
+    azure_subscription = azure_subscription or config.get("azure_subscription_id")
+    logger.debug(f"Loaded gcp_project: {gcp_project}, azure_subscription: {azure_subscription}")
     deprovision_skylark_instances(azure_subscription=azure_subscription, gcp_project_id=gcp_project)
 
 
