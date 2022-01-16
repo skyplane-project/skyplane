@@ -268,12 +268,29 @@ class ReplicatorClient:
                     cr_path = []
                     for hop_idx, hop_instance in enumerate(path_instances):
                         # todo support object stores
-                        if hop_idx == 0:  # source gateway
-                            location = f"random_{job.random_chunk_size_mb}MB"
-                        elif hop_idx == len(path_instances) - 1:  # destination gateway
-                            location = "save_local"
+                        # TODO: cleanup...
+                        src_object_store_region = None
+                        src_object_store_bucket = None
+                        dst_object_store_region = None
+                        dst_object_store_bucket = None
+                        if hop_idx == 0: 
+                            if job.source_bucket: # source bucket
+                                location = "src_object_store"
+                                src_object_store_region = job.source_region
+                                src_object_store_bucket = job.source_bucket
+                            else: # source gateway
+                                location = f"random_{job.random_chunk_size_mb}MB"
+                        elif hop_idx == len(path) - 1:  
+                            if job.dest_bucket: # destination bucket
+                                location = "dst_object_store"
+                                dst_object_store_region = job.dest_region
+                                dst_object_store_bucket = job.dest_bucket
+                            else: # destination gateway
+                                location = "save_local"
                         else:  # intermediate gateway
                             location = "relay"
+
+                        print("LOCATION", location, job.source_bucket, job.dest_bucket)
                         cr_path.append(
                             ChunkRequestHop(
                                 hop_cloud_region=hop_instance.region_tag,

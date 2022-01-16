@@ -13,6 +13,7 @@ from skylark.compute.aws.aws_server import AWSServer
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
 
+
 class S3Object(ObjectStoreObject):
     def full_path(self):
         return f"s3://{self.bucket}/{self.key}"
@@ -20,6 +21,12 @@ class S3Object(ObjectStoreObject):
 
 class S3Interface(ObjectStoreInterface):
     def __init__(self, aws_region, bucket_name, use_tls=True):
+       
+        # TODO: remove (debugging)
+        # install tls thing? 
+        import awscrt
+        awscrt.io.init_logging(awscrt.io.LogLevel.Error, 'stderr')
+
         self.aws_region = self.infer_s3_region(bucket_name) if aws_region is None or aws_region == "infer" else aws_region
         self.bucket_name = bucket_name
         self.pending_downloads, self.completed_downloads = 0, 0
@@ -27,7 +34,15 @@ class S3Interface(ObjectStoreInterface):
         event_loop_group = EventLoopGroup(num_threads=os.cpu_count(), cpu_group=None)
         host_resolver = DefaultHostResolver(event_loop_group)
         bootstrap = ClientBootstrap(event_loop_group, host_resolver)
-        credential_provider = AwsCredentialsProvider.new_default_chain(bootstrap)
+
+        # get aws auth info for docker envs
+        aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID', None)
+        aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY', None)
+        if aws_access_key_id and aws_secret_access_key:
+            credential_provider = AwsCredentialsProvider.new_static(aws_access_key_id, aws_secret_access_key)
+        else: # use default
+            credential_provider = AwsCredentialsProvider.new_default_chain(bootstrap)
+
         self._s3_client = S3Client(
             bootstrap=bootstrap,
             region=self.aws_region,
