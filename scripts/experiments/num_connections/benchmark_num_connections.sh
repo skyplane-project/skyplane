@@ -20,7 +20,7 @@ function benchmark_config {
     NUM_GATEWAYS=$2
     # N_CHUNKS_PER_CONNECTION * NUM_CONNECTIONS
     N_CHUNKS=$((N_CHUNKS_PER_CONNECTION * NUM_CONNECTIONS))
-    echo "skylark replicate-random $SRC_REGION $DST_REGION $INTER_REGION --chunk-size-mb $CHUNK_SIZE_MB --n-chunks $N_CHUNKS --num-gateways $NUM_GATEWAYS --num-outgoing-connections $NUM_CONNECTIONS --no-reuse-gateways --no-serve-web-dashboard --gcp-project skylark-333700 --azure-subscription ab110d95-7b83-4cec-b9dc-400255f3166e"
+    echo "skylark replicate-random $SRC_REGION $DST_REGION $INTER_REGION --chunk-size-mb $CHUNK_SIZE_MB --n-chunks $N_CHUNKS --num-gateways $NUM_GATEWAYS --num-outgoing-connections $NUM_CONNECTIONS --no-reuse-gateways --no-serve-web-dashboard"
 }
 
 # log function with message argument
@@ -30,8 +30,7 @@ function log() {
     echo -e "${BGreen}$1${NC}"
 }
 
-EXP_TAG=${EXP_TAG:-"$SRC_REGION+$DST_REGION+$INTER_REGION"}
-EXP_ID="$EXP_TAG-$(./scripts/utils/get_random_word_hash.sh)"
+EXP_ID="$SRC_REGION-$DST_REGION-$(./scripts/utils/get_random_word_hash.sh)"
 LOG_DIR=data/experiments/benchmark_num_connections/logs/$EXP_ID
 log "Creating log directory $LOG_DIR"
 log "Experiment ID: $EXP_ID"
@@ -39,8 +38,8 @@ rm -rf $LOG_DIR
 mkdir -p $LOG_DIR
 touch $LOG_DIR/launch.log
 
-# log "Stopping existing instances"
-# skylark deprovision &>> $LOG_DIR/launch.log
+log "Stopping existing instances"
+skylark deprovision &>> $LOG_DIR/launch.log
 
 log "Building docker image"
 source scripts/pack_docker.sh &>> $LOG_DIR/launch.log
@@ -59,7 +58,7 @@ fi
 # make list of commands to run with gnu parallel (one for each inter-region) and save to $PARALLEL_CMD_LIST (one command per line)
 PARALLEL_CMD_LIST=""
 # powers of 2
-for NUM_CONNECTIONS in 128 96 64 32 16 8 4 2 1; do
+for NUM_CONNECTIONS in 1 2 4 8 16 32 64 128 144; do
     PARALLEL_CMD_LIST="$PARALLEL_CMD_LIST\n$(benchmark_config $NUM_CONNECTIONS $NUM_GATEWAYS) &> $LOG_DIR/$NUM_CONNECTIONS.log"
 done
 log "Running commands with gnu parallel:"
@@ -67,11 +66,11 @@ echo -e "$PARALLEL_CMD_LIST\n"
 echo -e "$PARALLEL_CMD_LIST\n" >> $LOG_DIR/launch.log
 
 log "Parallel:"
-parallel -j 2 --results $LOG_DIR/raw_logs --joblog $LOG_DIR/parallel_joblog.txt --eta < <(echo -e "$PARALLEL_CMD_LIST")
+parallel -j 8 --results $LOG_DIR/raw_logs --joblog $LOG_DIR/parallel_joblog.txt --eta < <(echo -e "$PARALLEL_CMD_LIST")
 
 
-# log "Stopping instances"
-# skylark deprovision &>> $LOG_DIR/launch.log
+log "Stopping instances"
+skylark deprovision &>> $LOG_DIR/launch.log
 
 log "Done, results in $LOG_DIR"
 log "Experiment ID: $EXP_ID"
