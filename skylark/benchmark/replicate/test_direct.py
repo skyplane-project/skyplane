@@ -108,7 +108,7 @@ def main(args):
     dst_server.run_command("sudo docker kill gateway_server")
 
     # start gateway on dst server
-    dst_ip = dst_server.run_command("dig +short myip.opendns.com @resolver1.opendns.com")[0].strip()
+    dst_server.run_command("dig +short myip.opendns.com @resolver1.opendns.com")[0].strip()
     server_cmd = f"sudo docker run -d --rm --ipc=host --network=host --name=gateway_server {args.gateway_docker_image} /env/bin/python /pkg/skylark/replicate/gateway_server.py --port 3333 --num_connections 1"
     dst_server.run_command(server_cmd)
 

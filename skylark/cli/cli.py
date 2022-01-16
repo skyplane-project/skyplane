@@ -22,7 +22,6 @@ from typing import Optional
 
 import typer
 from loguru import logger
-import questionary
 
 from skylark import GB, MB, print_header, config_file
 import skylark.cli.cli_aws

@@ -1,17 +1,14 @@
 import json
-import os
 import subprocess
 import threading
-import time
-import uuid
 from enum import Enum, auto
-from pathlib import Path, PurePath
+from pathlib import Path
 
 from loguru import logger
 import requests
 from skylark.compute.utils import make_dozzle_command, make_netdata_command
 
-from skylark.utils.utils import PathLike, Timer, do_parallel, wait_for
+from skylark.utils.utils import PathLike, Timer, wait_for
 
 
 class ServerState(Enum):
@@ -139,7 +136,7 @@ class Server:
         def is_up():
             try:
                 ip = self.public_ip()
-            except Exception as e:
+            except Exception:
                 return False
             if ip is not None:
                 cmd = ["nc", "-zvw1", str(ip), "22"]
@@ -245,7 +242,7 @@ class Server:
                 status_val = requests.get(api_url)
                 is_up = status_val.json().get("status") == "ok"
                 return is_up
-            except Exception as e:
+            except Exception:
                 return False
 
         try:

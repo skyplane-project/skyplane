@@ -1,13 +1,10 @@
 import logging
 import logging.handlers
-from loguru import logger
 import requests
 import threading
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
 from werkzeug.serving import make_server
-
-from skylark import skylark_root
 
 
 class ReplicatorClientDashboard(threading.Thread):

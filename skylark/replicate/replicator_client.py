@@ -372,6 +372,8 @@ class ReplicatorClient:
                     if len(completed_chunk_ids) == len(crs) or time_limit_seconds is not None and t.elapsed > time_limit_seconds:
                         if serve_web_dashboard:
                             dash.shutdown()
+                        if cancel_pending:
+                            atexit.unregister(shutdown_handler)
                         return dict(
                             completed_chunk_ids=completed_chunk_ids,
                             total_runtime_s=total_runtime_s,

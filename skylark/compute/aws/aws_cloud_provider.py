@@ -11,7 +11,6 @@ from loguru import logger
 from skylark import skylark_root
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.cloud_providers import CloudProvider
-from skylark.utils.utils import Timer
 
 
 class AWSCloudProvider(CloudProvider):
