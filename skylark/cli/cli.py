@@ -192,14 +192,14 @@ def init(
     ),
     gcp_project: str = typer.Option(None, envvar="GCP_PROJECT_ID", prompt="GCP project ID"),
 ):
+    out_config = {}
     if config_file.exists():
         typer.confirm("Config file already exists. Overwrite?", abort=True)
 
-    out_config = {}
-
     # AWS config
-    # if ~/.aws/credentials exists, load values from there. else prompt.
     def load_aws_credentials():
+        if "AWS_ACCESS_KEY_ID" in os.environ and "AWS_SECRET_ACCESS_KEY" in os.environ:
+            return os.environ["AWS_ACCESS_KEY_ID"], os.environ["AWS_SECRET_ACCESS_KEY"]
         if (Path.home() / ".aws" / "credentials").exists():
             with open(Path.home() / ".aws" / "credentials") as f:
                 access_key, secret_key = None, None
@@ -209,9 +209,9 @@ def init(
                         access_key = line.split("=")[1].strip()
                     if line.startswith("aws_secret_access_key"):
                         secret_key = line.split("=")[1].strip()
-                return access_key, secret_key
-        else:
-            return None, None
+                if access_key and secret_key:
+                    return access_key, secret_key
+        return None, None
 
     aws_access_key, aws_secret_key = load_aws_credentials()
     if aws_access_key is None:
