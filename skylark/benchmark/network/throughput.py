@@ -29,11 +29,11 @@ def parse_args():
     parser.add_argument("--aws_instance_class", type=str, default="m5.8xlarge", help="AWS instance class")
     parser.add_argument("--aws_region_list", type=str, nargs="*", default=aws_regions)
 
-    parser.add_argument("--azure_subscription", type = str, default = None)
-    parser.add_argument("--azure_instance_class", type = str, default = "Standard_D32_v4", help = "Azure instance class")
-    parser.add_argument("--azure_region_list", type = str, nargs = "*", default = azure_regions)
+    parser.add_argument("--azure_subscription", type=str, default=None)
+    parser.add_argument("--azure_instance_class", type=str, default="Standard_D32_v4", help="Azure instance class")
+    parser.add_argument("--azure_region_list", type=str, nargs="*", default=azure_regions)
 
-    parser.add_argument("--gcp_project", type=str, default = None, help="GCP project")
+    parser.add_argument("--gcp_project", type=str, default=None, help="GCP project")
     parser.add_argument("--gcp_instance_class", type=str, default="n2-standard-32", help="GCP instance class")
     parser.add_argument("--gcp_region_list", type=str, nargs="*", default=gcp_regions)
     parser.add_argument(
@@ -114,6 +114,7 @@ def main(args):
     # start iperf3 clients on each pair of instances
     iperf_log_dir = log_dir / "iperf3" / "raw_data"
     iperf_log_dir.mkdir(exist_ok=True, parents=True)
+
     def start_iperf3_client(arg_pair: Tuple[Server, Server]):
         instance_src, instance_dst = arg_pair
         if args.iperf3_mode == "tcp":
@@ -165,7 +166,7 @@ def main(args):
         logger.info(f"Group {group_idx}:")
         for instance_pair in group:
             logger.info(f"\t{instance_pair[0].region_tag} -> {instance_pair[1].region_tag}")
-    
+
     if not questionary.confirm("Launch experiment?").ask():
         logger.error("Exiting")
         sys.exit(1)

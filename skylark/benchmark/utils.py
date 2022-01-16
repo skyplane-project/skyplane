@@ -87,7 +87,7 @@ def provision(
         if missing_azure_regions:
             logger.info(f"(Azure) provisioning missing regions: {missing_azure_regions}")
             azure_provisioner = lambda r: azure.provision_instance(r, azure_instance_class)
-            results = do_parallel(azure_provisioner, missing_azure_regions, progress_bar = True, desc = "provision Azure")
+            results = do_parallel(azure_provisioner, missing_azure_regions, progress_bar=True, desc="provision Azure")
             for region, result in results:
                 assert region not in azure_instances
                 azure_instances[region] = [result]
@@ -121,7 +121,11 @@ def provision(
         i.wait_for_ready()
         i.init_log_files(log_dir)
 
-    all_instances = [i for ilist in aws_instances.values() for i in ilist] + [i for ilist in azure_instances.values() for i in ilist] + [i for ilist in gcp_instances.values() for i in ilist]
+    all_instances = (
+        [i for ilist in aws_instances.values() for i in ilist]
+        + [i for ilist in azure_instances.values() for i in ilist]
+        + [i for ilist in gcp_instances.values() for i in ilist]
+    )
     do_parallel(init, all_instances, progress_bar=True, desc="Provisioning init")
     return aws_instances, azure_instances, gcp_instances  # pytype: disable=bad-return-type
 
