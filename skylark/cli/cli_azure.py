@@ -61,21 +61,20 @@ def get_valid_skus(
             if len(sku.restrictions) == 0 and (not prefix or sku.name.startswith(prefix)):
                 valid_skus.append(sku.name)
         return set(valid_skus)
-    
+
     result = do_parallel(get_skus, regions, progress_bar=True, leave_pbar=False, desc="Query SKUs")
-    
+
     sku_regions = defaultdict(set)
     for region, skus in result:
         for sku in skus:
             sku_regions[sku].add(region)
-    
+
     # print top-k entries (if not -1)
     sorted_top_keys = sorted(sku_regions.keys(), key=lambda x: len(sku_regions[x]), reverse=True)
     if top_k > 0:
         sorted_top_keys = sorted_top_keys[:top_k]
     for sku in sorted_top_keys:
         typer.secho(f"{sku} in {len(sku_regions[sku])} regions: {', '.join(sorted(sku_regions[sku]))}")
-        
 
 
 if __name__ == "__main__":
