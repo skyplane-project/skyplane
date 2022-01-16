@@ -4,37 +4,32 @@ AWS convenience interface
 
 
 import atexit
-from collections import Counter, defaultdict
 import json
 import os
-from pathlib import Path
 import sys
+from collections import Counter, defaultdict
+from pathlib import Path
 from typing import List, Optional
 
 import azure.core.exceptions
-from azure.identity import DefaultAzureCredential
-from azure.mgmt.resource import ResourceManagementClient
-from azure.mgmt.network import NetworkManagementClient
-from azure.mgmt.compute import ComputeManagementClient
 import typer
+from azure.identity import DefaultAzureCredential
+from azure.mgmt.compute import ComputeManagementClient
+from azure.mgmt.network import NetworkManagementClient
+from azure.mgmt.resource import ResourceManagementClient
 from loguru import logger
-
 from skylark import GB, MB, print_header
-from skylark.cli.cli_helper import (
-    copy_local_local,
-    copy_local_s3,
-    copy_s3_local,
-    deprovision_skylark_instances,
-    ls_local,
-    ls_s3,
-    parse_path,
-)
-from skylark.utils.utils import do_parallel
-from skylark.compute.aws.aws_server import AWSServer
-from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
-from skylark.replicate.replicator_client import ReplicatorClient
+from skylark.cli.cli_helper import (copy_local_local, copy_local_s3,
+                                    copy_s3_local,
+                                    deprovision_skylark_instances, ls_local,
+                                    ls_s3, parse_path)
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
+from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
+from skylark.replicate.replication_plan import (ReplicationJob,
+                                                ReplicationTopology)
+from skylark.replicate.replicator_client import ReplicatorClient
+from skylark.utils.utils import do_parallel
 
 app = typer.Typer(name="skylark")
 
