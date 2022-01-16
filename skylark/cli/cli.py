@@ -24,6 +24,7 @@ import typer
 from loguru import logger
 from skylark import GB, MB, print_header
 import skylark.cli.cli_aws
+import skylark.cli.cli_azure
 from skylark.cli.cli_helper import (
     copy_local_local,
     copy_local_s3,
@@ -38,6 +39,7 @@ from skylark.replicate.replicator_client import ReplicatorClient
 
 app = typer.Typer(name="skylark")
 app.add_typer(skylark.cli.cli_aws.app, name="aws")
+app.add_typer(skylark.cli.cli_azure.app, name="azure")
 
 # config logger
 logger.remove()
@@ -84,12 +86,12 @@ def replicate_random(
     chunk_size_mb: int = 8,
     n_chunks: int = 2048,
     reuse_gateways: bool = True,
-    azure_subscription: Optional[str] = None,
-    gcp_project: Optional[str] = None,
+    azure_subscription: str = "skylark-invalid-subscription",
+    gcp_project: str = "skylark-333700",
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
     aws_instance_class: str = "m5.8xlarge",
-    azure_instance_class: str = "Standard_D32_v4",
-    gcp_instance_class: Optional[str] = "n2-standard-32",
+    azure_instance_class: str = "Standard_D2_v5",
+    gcp_instance_class: Optional[str] = "n2-highmem-4",
     gcp_use_premium_network: bool = False,
     key_prefix: str = "/test/replicate_random",
     time_limit_seconds: Optional[int] = None,
