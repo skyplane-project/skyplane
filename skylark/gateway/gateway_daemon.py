@@ -20,8 +20,6 @@ from skylark.gateway.gateway_daemon_api import GatewayDaemonAPI
 from skylark.gateway.gateway_receiver import GatewayReceiver
 from skylark.gateway.gateway_sender import GatewaySender
 
-from skylark.obj_store.s3_interface import S3Interface
-
 class GatewayDaemon:
     def __init__(self, chunk_dir: PathLike, debug=False, log_dir: Optional[PathLike] = None, outgoing_connections=1):
         if log_dir is not None:
@@ -92,27 +90,9 @@ class GatewayDaemon:
                     if current_hop.chunk_location_type == "src_object_store":
                         logger.warning(f"NOT IMPLEMENTED: Queuing object store download for chunk {chunk_req.chunk.chunk_id}")
                         self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
+                        # TODO: figure out why this causes docker error
+                        #from skylark.obj_store.s3_interface import S3Interface
 
-                        src_bucket = current_hop.src_object_store_bucket
-                        src_region = current_hop.src_object_store_bucket
-                         
-                        # update chunk state 
-                        #self.chunk_store.state_start_download(chunk_req.chunk.chunk_id)
-
-                        # function to download data from S3
-                        # TODO: add this to a queue like with GatewaySender to prevent OOM
-                        def fn(chunk_req, src_region, src_bucket): 
-                            fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
-                            logger.info(f"Creating interface {src_region}--{src_bucket}")
-                            s3_interface = S3Interface(src_region, src_bucket)
-                            logger.info(f"Waiting for download {src_bucket}:{chunk_req.chunk.key}")
-                            s3_interface.download_object(chunk_req.chunk.key, fpath).result()
-                            logger.info(f"Downloaded key {chunk_req.chunk.key} to {fpath})")
-                            self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id)
-
-                        
-                        # start in seperate thread
-                        threading.Thread(target=fn, args=(chunk_req, src_bucket, src_region)).start()
 
                     elif current_hop.chunk_location_type.startswith("random_"):
                         # update chunk state
