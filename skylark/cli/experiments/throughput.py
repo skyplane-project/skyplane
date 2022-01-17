@@ -20,9 +20,48 @@ from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server
 from skylark.utils.utils import do_parallel
 
-aws_regions = AWSCloudProvider.region_list()
-azure_regions = AzureCloudProvider.region_list()
-gcp_regions = GCPCloudProvider.region_list()
+# aws_regions = AWSCloudProvider.region_list()
+# azure_regions = AzureCloudProvider.region_list()
+# gcp_regions = GCPCloudProvider.region_list()
+
+aws_regions = [
+    "eu-south-1",
+    "us-west-2",
+    "us-east-2",
+    "ap-northeast-3",
+    "eu-central-1",
+    "eu-north-1",
+    "us-west-1",
+    "sa-east-1",
+    "eu-west-2",
+    "ap-southeast-3",
+]
+
+azure_regions = [
+    "northcentralus",
+    "uksouth",
+    "swedencentral",
+    "canadacentral",
+    "australiaeast",
+    "westeurope",
+    "centralindia",
+    "francecentral",
+    "norwayeast",
+    "switzerlandnorth",
+]
+
+gcp_regions = [
+    "australia-southeast2-a",
+    "europe-west6-a",
+    "australia-southeast1-a",
+    "southamerica-west1-a",
+    "southamerica-east1-a",
+    "asia-southeast1-a",
+    "europe-west4-a",
+    "asia-southeast2-a",
+    "northamerica-northeast1-a",
+    "northamerica-northeast2-a",
+]
 
 
 log_info = partial(typer.secho, fg="blue")
@@ -47,8 +86,9 @@ def start_iperf3_client(arg_pair: Tuple[Server, Server], iperf3_log_dir: Path, i
     with (iperf3_log_dir / f"{tag}.stdout").open("w") as f:
         f.write(stdout)
     if stderr:
-        with (iperf3_log_dir / f"{tag}.stderr").open("W") as f:
+        with (iperf3_log_dir / f"{tag}.stderr").open("w") as f:
             f.write(stderr)
+        log_error(f"{tag} stderr: {stderr}")
 
     out_rec = dict(
         tag=tag,
@@ -74,7 +114,7 @@ def start_iperf3_client(arg_pair: Tuple[Server, Server], iperf3_log_dir: Path, i
 
 
 def throughput_grid(
-    resume_from_file: Optional[Path] = typer.Option(
+    resume: Optional[Path] = typer.Option(
         None, help="Resume from a past result. Pass the resulting CSV for the past result to resume. Default is None."
     ),
     copy_resume_file: bool = typer.Option(True, help="Copy the resume file to the output CSV. Default is True."),
@@ -95,7 +135,7 @@ def throughput_grid(
     gcp_project: Optional[str] = None,
     azure_subscription: Optional[str] = None,
     # iperf3 options
-    iperf3_runtime: int = typer.Option(4, help="Runtime for iperf3 in seconds"),
+    iperf3_runtime: int = typer.Option(5, help="Runtime for iperf3 in seconds"),
     iperf3_connections: int = typer.Option(64, help="Number of connections to test"),
 ):
     config = load_config()
@@ -103,7 +143,7 @@ def throughput_grid(
     azure_subscription = azure_subscription or config.get("azure_subscription_id")
     log_info(f"Loaded from config file: gcp_project={gcp_project}, azure_subscription={azure_subscription}")
 
-    if resume_from_file:
+    if resume:
         index_key = [
             "iperf3_connections",
             "iperf3_runtime",
@@ -114,7 +154,7 @@ def throughput_grid(
             "src_region",
             "dst_region",
         ]
-        resume_from_trial = pd.read_csv(resume_from_file).set_index(index_key)
+        resume_from_trial = pd.read_csv(resume).set_index(index_key)
         resume_keys = resume_from_trial.index.unique().tolist()
     else:
         resume_keys = []
@@ -159,8 +199,17 @@ def throughput_grid(
     instance_list.extend([i for ilist in gcp_instances.values() for i in ilist])
 
     # setup instances
-    setup_cmd = "(sudo apt-get update && sudo apt-get install -y iperf3 nuttcp); pkill iperf3 nuttcp; iperf3 -s -D -J"
-    do_parallel(lambda x: x.run_command(setup_cmd), instance_list, progress_bar=True, n=-1, desc="Setup")
+    def setup(server: Server):
+        sysctl_updates = {
+            "net.core.rmem_max": 2147483647,
+            "net.core.wmem_max": 2147483647,
+            "net.ipv4.tcp_rmem": "4096 87380 1073741824",
+            "net.ipv4.tcp_wmem": "4096 65536 1073741824",
+        }
+        server.run_command("sudo sysctl -w {}".format(" ".join(f"{k}={v}" for k, v in sysctl_updates.items())))
+        server.run_command("(sudo apt-get update && sudo apt-get install -y iperf3); pkill iperf3; iperf3 -s -D -J")
+
+    do_parallel(setup, instance_list, progress_bar=True, n=-1, desc="Setup")
 
     # build experiment
     instance_pairs_all = [(i1, i2) for i1 in instance_list for i2 in instance_list if i1 != i2]
@@ -247,9 +296,9 @@ def throughput_grid(
             # build dataframe from results
             tqdm.write(f"Saving intermediate results to {output_file}")
             df = pd.DataFrame(new_througput_results)
-            if resume_from_file and copy_resume_file:
-                log_info(f"Copying old CSV entries from {resume_from_file}")
-                df = df.append(pd.read_csv(resume_from_file))
+            if resume and copy_resume_file:
+                log_info(f"Copying old CSV entries from {resume}")
+                df = df.append(pd.read_csv(resume))
             df.to_csv(output_file, index=False)
 
     log_success(f"Experiment complete: {experiment_tag}")
