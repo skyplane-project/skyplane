@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import threading
 from enum import Enum, auto
@@ -267,4 +268,5 @@ class Server:
             logger.error(f"Gateway {self.instance_name()} is not ready")
             logs, err = self.run_command(f"sudo docker logs skylark_gateway --tail=100")
             logger.error(f"Docker logs: {logs}\nerr: {err}")
+            logger.error(f"Docker launch command: {docker_launch_cmd}")
             raise e

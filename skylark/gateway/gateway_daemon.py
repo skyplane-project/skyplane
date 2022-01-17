@@ -35,8 +35,6 @@ class GatewayDaemon:
         self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store)
         self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, n_processes=outgoing_connections)
 
-        self.src_s3
-
         # API server
         atexit.register(self.cleanup)
         self.api_server = GatewayDaemonAPI(
