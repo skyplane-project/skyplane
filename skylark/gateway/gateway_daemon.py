@@ -35,6 +35,10 @@ class GatewayDaemon:
         self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store)
         self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, n_processes=outgoing_connections)
 
+        # S3 interface objects 
+        # TODO: figure out if awscrt parallelizes with a single interface
+        self.s3_interface_objs: Dict[str, S3Interface] = {}
+
         # API server
         atexit.register(self.cleanup)
         self.api_server = GatewayDaemonAPI(
@@ -46,6 +50,18 @@ class GatewayDaemon:
     def cleanup(self):
         logger.warning("Shutting down gateway daemon")
         self.api_server.shutdown()
+
+    def get_obj_store_interface(region, bucket):
+
+        # TODO: GCP/Azure support
+        if region in self.s3_interface_objs: # cached interface
+            return self.s3_interface_objs[region]
+
+        s3_interface = S3Interface(region.split(":")[1], bucket, use_tls=False)
+        self.s3_interface_objs[region] = s3_interface
+        return s3_interface
+
+
 
     def run(self):
         setproctitle.setproctitle(f"skylark-gateway-daemon")
@@ -76,9 +92,7 @@ class GatewayDaemon:
                         # function to upload data from S3
                         def fn(chunk_req, dst_region, dst_bucket):
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
-
-                            logger.info(f"Creating interface {dst_region}--{dst_bucket}")
-                            s3_interface = S3Interface(dst_region.split(":")[1], dst_bucket, use_tls=False)
+                            s3_interface = self.get_obj_store_interface(dst_region, dst_bucket)
                             logger.info(f"Waiting for upload {dst_bucket}:{chunk_req.chunk.key}")
                             s3_interface.upload_object(fpath, chunk_req.chunk.key).result()
                             logger.info(f"Uploaded {fpath} to {dst_bucket}:{chunk_req.chunk.key})")
@@ -122,12 +136,9 @@ class GatewayDaemon:
                         src_region = current_hop.src_object_store_region
 
                         # function to download data from S3
-                        # TODO: add this to a queue like with GatewaySender to prevent OOM
                         def fn(chunk_req, src_region, src_bucket):
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
-
-                            logger.info(f"Creating interface {src_region}--{src_bucket}")
-                            s3_interface = S3Interface(src_region.split(":")[1], src_bucket, use_tls=False)
+                            s3_interface = self.get_obj_store_interface(src_region, src_bucket)
 
                             logger.info(f"Waiting for download {src_bucket}:{chunk_req.chunk.key}")
                             s3_interface.download_object(chunk_req.chunk.key, fpath).result()

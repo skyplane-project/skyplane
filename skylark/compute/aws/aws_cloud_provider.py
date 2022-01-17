@@ -40,7 +40,7 @@ class AWSCloudProvider(CloudProvider):
             "eu-west-2",
             "eu-west-3",
             "me-south-1",
-            "sa-east-1",
+            #"sa-east-1",
             "us-east-1",
             "us-east-2",
             "us-west-1",
