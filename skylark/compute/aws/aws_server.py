@@ -99,7 +99,7 @@ class AWSServer(Server):
         return self.tags().get("Name", None)
 
     def network_tier(self):
-        return "STANDARD"
+        return "PREMIUM"
 
     def region(self):
         return self.aws_region
