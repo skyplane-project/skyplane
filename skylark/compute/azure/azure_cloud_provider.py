@@ -84,12 +84,56 @@ class AzureCloudProvider(CloudProvider):
 
     @staticmethod
     def lookup_valid_instance(region: str, instance_name: str) -> Optional[str]:
-        if instance_name == "Standard_D32_v4":
-            if region == "eastus2" or region == "westus2":
-                logger.warning(f"Warning: {instance_name} is not available in {region}, using Standard_D32_v5 instead")
-                return "Standard_D32_v5"
+        # todo this should query the Azure API for available SKUs
+        available_regions = {
+            "Standard_D32_v5": [
+                "australiaeast",
+                "canadacentral",
+                "eastus",
+                "eastus2",
+                "francecentral",
+                "germanywestcentral",
+                "japaneast",
+                "koreacentral",
+                "northcentralus",
+                "northeurope",
+                "uksouth",
+                "westeurope",
+                "westus",
+                "westus2",
+                "westus3",
+            ],
+            "Standard_D32_v4": [
+                "australiaeast",
+                "brazilsouth",
+                "canadacentral",
+                "centralindia",
+                "eastasia",
+                "eastus",
+                "francecentral",
+                "germanywestcentral",
+                "japaneast",
+                "koreacentral",
+                "northcentralus",
+                "northeurope",
+                "norwayeast",
+                "southafricanorth",
+                "swedencentral",
+                "switzerlandnorth",
+                "uaenorth",
+                "uksouth",
+                "westeurope",
+                "westus",
+                "westus3",
+            ],
+        }
+        if region in available_regions["Standard_D32_v5"] and instance_name == "Standard_D32_v5":
+            return "Standard_D32_v5"
+        elif region in available_regions["Standard_D32_v4"] and instance_name == "Standard_D32_v5":
             return "Standard_D32_v4"
-        return None
+        else:
+            logger.error(f"Cannot confirm availability of {instance_name} in {region}")
+            return None
 
     @staticmethod
     def get_resource_group_name(name):
