@@ -2,7 +2,6 @@ import threading
 from typing import List, Optional, Union
 
 from skylark.compute.server import Server, ServerState
-from skylark.utils.utils import Timer
 
 
 class CloudProvider:

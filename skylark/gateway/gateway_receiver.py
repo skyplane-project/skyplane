@@ -1,6 +1,5 @@
 import os
 import os
-import select
 import signal
 import socket
 from contextlib import closing

@@ -38,9 +38,11 @@ class GatewayDaemon:
         self.src_s3
 
         # API server
-        self.api_server = GatewayDaemonAPI(self.chunk_store, self.gateway_receiver, debug=debug, log_dir=log_dir)
-        self.api_server.start()
         atexit.register(self.cleanup)
+        self.api_server = GatewayDaemonAPI(
+            self.chunk_store, self.gateway_receiver, debug=debug, log_dir=log_dir, daemon_cleanup_handler=self.cleanup
+        )
+        self.api_server.start()
         logger.info(f"Gateway daemon API started at {self.api_server.url}")
 
     def cleanup(self):

@@ -1,5 +1,4 @@
 import cachetools
-from loguru import logger
 
 
 class IngoreLRUCache(cachetools.LRUCache):

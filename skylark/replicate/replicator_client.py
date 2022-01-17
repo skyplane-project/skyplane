@@ -1,11 +1,7 @@
 import atexit
-from contextlib import closing
 from datetime import datetime
 import itertools
-import json
-from logging import log
 from functools import partial
-from re import T
 import time
 from typing import Dict, List, Optional, Tuple
 
@@ -21,10 +17,9 @@ from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server, ServerState
 from skylark.chunk import Chunk, ChunkRequest, ChunkRequestHop, ChunkState
-from skylark.obj_store.s3_interface import S3Interface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client_dashboard import ReplicatorClientDashboard
-from skylark.utils.utils import PathLike, Timer, do_parallel, wait_for
+from skylark.utils.utils import PathLike, Timer, do_parallel
 
 
 class ReplicatorClient:
@@ -219,6 +214,9 @@ class ReplicatorClient:
             "gcp",
         ], f"Only AWS, Azure, and GCP are supported, but got {job.dest_region}"
 
+        # pre-fetch instance IPs for all gateways
+        gateway_ips: Dict[Server, str] = {s: s.public_ip() for path in self.bound_paths for s in path}
+
         # make list of chunks
         chunks = []
         obj_file_size_bytes = job.src_obj_sizes() if job.source_bucket else None
@@ -290,7 +288,7 @@ class ReplicatorClient:
                         cr_path.append(
                             ChunkRequestHop(
                                 hop_cloud_region=hop_instance.region_tag,
-                                hop_ip_address=hop_instance.public_ip(),
+                                hop_ip_address=gateway_ips[hop_instance],
                                 chunk_location_type=location,
                                 src_object_store_region=src_object_store_region,
                                 src_object_store_bucket=src_object_store_bucket,
@@ -305,10 +303,9 @@ class ReplicatorClient:
 
             def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
                 hop_instance, chunk_requests = args
-                logger.debug(f"Sending {len(chunk_requests)} chunk requests to {hop_instance.public_ip()}")
-                reply = requests.post(
-                    f"http://{hop_instance.public_ip()}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests]
-                )
+                ip = gateway_ips[hop_instance]
+                logger.debug(f"Sending {len(chunk_requests)} chunk requests to {ip}")
+                reply = requests.post(f"http://{ip}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests])
                 if reply.status_code != 200:
                     raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
 
@@ -344,6 +341,7 @@ class ReplicatorClient:
         dash_host="0.0.0.0",
         dash_port="8080",
         time_limit_seconds: Optional[float] = None,
+        cancel_pending: bool = True,
     ) -> Dict:
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs])
         if serve_web_dashboard:
@@ -352,6 +350,23 @@ class ReplicatorClient:
             atexit.register(dash.shutdown)
             logger.info(f"Web dashboard running at {dash.dashboard_url}")
         last_log = None
+
+        # register atexit handler to cancel pending chunk requests (force shutdown gateways)
+        if cancel_pending:
+
+            def shutdown_handler():
+                def fn(s: Server):
+                    logger.warning(f"Cancelling pending chunk requests to {s.public_ip()}")
+                    try:
+                        requests.post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
+                    except requests.exceptions.ConnectionError as e:
+                        return  # ignore connection errors since server may be shutting down
+
+                do_parallel(fn, [hop for path in self.bound_paths for hop in path], n=-1)
+                logger.warning("Cancelled pending chunk requests")
+
+            atexit.register(shutdown_handler)
+
         with Timer() as t:
             with tqdm(
                 total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB, disable=not show_pbar
@@ -382,6 +397,8 @@ class ReplicatorClient:
                     if len(completed_chunk_ids) == len(crs) or time_limit_seconds is not None and t.elapsed > time_limit_seconds:
                         if serve_web_dashboard:
                             dash.shutdown()
+                        if cancel_pending:
+                            atexit.unregister(shutdown_handler)
                         return dict(
                             completed_chunk_ids=completed_chunk_ids,
                             total_runtime_s=total_runtime_s,
