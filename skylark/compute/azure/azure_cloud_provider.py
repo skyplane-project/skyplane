@@ -33,52 +33,63 @@ class AzureCloudProvider(CloudProvider):
     @staticmethod
     def region_list():
         return [
+            "australiaeast",
+            "brazilsouth",
+            "canadacentral",
+            "centralindia",
             "eastasia",
-            "southeastasia",
-            "centralus",
             "eastus",
             "eastus2",
-            "westus",
-            "northcentralus",
-            "southcentralus",
-            "northeurope",
-            "westeurope",
-            "japanwest",
-            "japaneast",
-            "brazilsouth",
-            "australiaeast",
-            "australiasoutheast",
-            "southindia",
-            "centralindia",
-            "westindia",
-            # "jioindiawest",
-            # "jioindiacentral",
-            "canadacentral",
-            "canadaeast",
-            "uksouth",
-            "ukwest",
-            "westcentralus",
-            "westus2",
-            "koreacentral",
-            # "koreasouth",
             "francecentral",
-            # "francesouth",
-            "australiacentral",
-            # "australiacentral2",
-            # "uaecentral",
-            "uaenorth",
-            "southafricanorth",
-            # "southafricawest",
-            "switzerlandnorth",
-            # "switzerlandwest",
-            # "germanynorth",
             "germanywestcentral",
-            # "norwaywest",
+            "japaneast",
+            "koreacentral",
+            "northcentralus",
+            "northeurope",
             "norwayeast",
-            # "brazilsoutheast",
-            "westus3",
+            "southafricanorth",
             "swedencentral",
+            "switzerlandnorth",
+            "uaenorth",
+            "uksouth",
+            "westeurope",
+            "westus",
+            "westus2",
+            "westus3",
+            # D32_v4 or D32_v5 not available:
+            #   "australiacentral",
+            #   "australiasoutheast",
+            #   "canadaeast",
+            #   "centralus",
+            #   "japanwest",
+            #   "southcentralus",
+            #   "southeastasia",
+            #   "southindia",
+            #   "ukwest",
+            #   "westcentralus",
+            #   "westindia",
+            # not available due to restrictions:
+            #   "australiacentral2",
+            #   "brazilsoutheast",
+            #   "francesouth",
+            #   "germanynorth",
+            #   "jioindiacentral",
+            #   "jioindiawest",
+            #   "koreasouth",
+            #   "norwaywest",
+            #   "southafricawest",
+            #   "switzerlandwest",
+            #   "uaecentral",
         ]
+
+    @staticmethod
+    def lookup_valid_instance(region: str, instance_name: str) -> Optional[str]:
+        if instance_name == "Standard_D32_v4":
+            if region == "eastus2" or region == "westus2":
+                logger.warning(f"Warning: {instance_name} is not available in {region}, using Standard_D32_v5 instead")
+                return "Standard_D32_v5"
+            return "Standard_D32_v4"
+        return None
 
     @staticmethod
     def get_resource_group_name(name):
@@ -217,7 +228,7 @@ class AzureCloudProvider(CloudProvider):
             AzureServer.vm_name(name),
             {
                 "location": location,
-                "hardware_profile": {"vm_size": vm_size},
+                "hardware_profile": {"vm_size": self.lookup_valid_instance(location, vm_size)},
                 "storage_profile": {
                     "image_reference": {
                         "publisher": "canonical",
