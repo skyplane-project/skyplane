@@ -26,6 +26,7 @@ from loguru import logger
 from skylark import GB, MB, print_header, config_file
 import skylark.cli.cli_aws
 import skylark.cli.cli_azure
+import skylark.cli.experiments
 from skylark.cli.cli_helper import (
     copy_local_local,
     copy_local_s3,
@@ -40,6 +41,7 @@ from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopolo
 from skylark.replicate.replicator_client import ReplicatorClient
 
 app = typer.Typer(name="skylark")
+app.add_typer(skylark.cli.experiments.app, name="experiments")
 app.add_typer(skylark.cli.cli_aws.app, name="aws")
 app.add_typer(skylark.cli.cli_azure.app, name="azure")
 
