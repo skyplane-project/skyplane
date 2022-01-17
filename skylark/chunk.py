@@ -69,14 +69,11 @@ class ChunkRequestHop:
     hop_cloud_region: str  # format is provider:region
     hop_ip_address: str
     chunk_location_type: str  # enum of {"src_object_store", "dst_object_store", "relay", "random_XMB", "save_local"}
-
-    # TODO: cleanup
-    # if chunk_location_type == "src_object_store":
+    
+    # (optional) object store information
     src_object_store_region: str = None  # format is provider:region
     src_object_store_bucket: str = None
-
-    # if chunk_location_type == "dst_object_store":
-    dst_object_store_region: str = None  # format is provider:region
+    dst_object_store_region: str = None 
     dst_object_store_bucket: str = None
 
     def as_dict(self):

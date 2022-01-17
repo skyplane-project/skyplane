@@ -35,6 +35,8 @@ class GatewayDaemon:
         self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store)
         self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, n_processes=outgoing_connections)
 
+        self.src_s3
+
         # API server
         self.api_server = GatewayDaemonAPI(self.chunk_store, self.gateway_receiver, debug=debug, log_dir=log_dir)
         self.api_server.start()
@@ -72,7 +74,6 @@ class GatewayDaemon:
                         self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id)
 
                         # function to upload data from S3
-                        # TODO: add this to a queue like with GatewaySender to prevent OOM
                         def fn(chunk_req, dst_region, dst_bucket):
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
 
@@ -138,7 +139,6 @@ class GatewayDaemon:
                         threading.Thread(target=fn, args=(chunk_req, src_region, src_bucket)).start()
 
                     elif current_hop.chunk_location_type.startswith("random_"):
-                        # update chunk state
                         self.chunk_store.state_start_download(chunk_req.chunk.chunk_id)
 
                         size_mb_match = re.search(r"random_(\d+)MB", current_hop.chunk_location_type)

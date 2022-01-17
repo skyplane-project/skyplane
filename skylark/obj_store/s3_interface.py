@@ -21,12 +21,6 @@ class S3Object(ObjectStoreObject):
 class S3Interface(ObjectStoreInterface):
     def __init__(self, aws_region, bucket_name, use_tls=True):
 
-        # TODO: remove (debugging)
-        # install tls thing?
-        import awscrt
-
-        awscrt.io.init_logging(awscrt.io.LogLevel.Error, "stderr")
-
         self.aws_region = self.infer_s3_region(bucket_name) if aws_region is None or aws_region == "infer" else aws_region
         self.bucket_name = bucket_name
         self.pending_downloads, self.completed_downloads = 0, 0

@@ -230,6 +230,7 @@ class Server:
         assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
 
         # read AWS config file to get credentials
+        # TODO: Integrate this with updated skylark config file
         docker_envs = ""
         try:
             config = configparser.RawConfigParser()
