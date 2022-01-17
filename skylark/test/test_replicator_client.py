@@ -1,9 +1,7 @@
 import argparse
-import atexit
 
 from loguru import logger
 from skylark import GB, MB, print_header
-from skylark.chunk import ChunkState
 
 import tempfile
 import concurrent
@@ -12,8 +10,6 @@ from skylark.obj_store.s3_interface import S3Interface
 
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
-from skylark.utils.utils import Timer
-from skylark import skylark_root
 
 
 def parse_args():

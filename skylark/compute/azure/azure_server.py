@@ -11,6 +11,7 @@ import paramiko
 
 from skylark import key_root
 from skylark.compute.server import Server, ServerState
+from skylark.utils.cache import ignore_lru_cache
 from skylark.utils.utils import PathLike
 
 
@@ -107,10 +108,8 @@ class AzureServer(Server):
                 return ServerState.from_azure_state(status.code)
         return ServerState.UNKNOWN
 
+    @ignore_lru_cache()
     def public_ip(self):
-        if self.cached_public_ip_address is not None:
-            return self.cached_public_ip_address
-
         credential = DefaultAzureCredential()
         network_client = NetworkManagementClient(credential, self.subscription_id)
         public_ip = network_client.public_ip_addresses.get(self.name, AzureServer.ip_name(self.name))
@@ -118,10 +117,9 @@ class AzureServer(Server):
         # Sanity checks
         assert public_ip.location == self.location
         assert public_ip.name == AzureServer.ip_name(self.name)
-
-        self.cached_public_ip_address = public_ip.ip_address
         return public_ip.ip_address
 
+    @ignore_lru_cache()
     def instance_class(self):
         vm = self.get_virtual_machine()
         return vm.hardware_profile.vm_size
@@ -132,6 +130,7 @@ class AzureServer(Server):
     def instance_name(self):
         return self.name
 
+    @ignore_lru_cache()
     def tags(self):
         resource_group = self.get_resource_group()
         return resource_group.tags
@@ -156,5 +155,6 @@ class AzureServer(Server):
             key_filename=str(self.ssh_private_key),
             passphrase=ssh_key_password,
             look_for_keys=False,
+            banner_timeout=200,
         )
         return ssh_client

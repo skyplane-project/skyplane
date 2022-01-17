@@ -16,7 +16,6 @@ from loguru import logger
 from skylark import key_root
 from skylark.compute.cloud_providers import CloudProvider
 from skylark.compute.azure.azure_server import AzureServer
-from skylark.utils.utils import Timer
 
 
 class AzureCloudProvider(CloudProvider):
@@ -52,8 +51,8 @@ class AzureCloudProvider(CloudProvider):
             "southindia",
             "centralindia",
             "westindia",
-            "jioindiawest",
-            "jioindiacentral",
+            # "jioindiawest",
+            # "jioindiacentral",
             "canadacentral",
             "canadaeast",
             "uksouth",
@@ -61,22 +60,22 @@ class AzureCloudProvider(CloudProvider):
             "westcentralus",
             "westus2",
             "koreacentral",
-            "koreasouth",
+            # "koreasouth",
             "francecentral",
-            "francesouth",
+            # "francesouth",
             "australiacentral",
-            "australiacentral2",
-            "uaecentral",
+            # "australiacentral2",
+            # "uaecentral",
             "uaenorth",
             "southafricanorth",
-            "southafricawest",
+            # "southafricawest",
             "switzerlandnorth",
-            "switzerlandwest",
-            "germanynorth",
+            # "switzerlandwest",
+            # "germanynorth",
             "germanywestcentral",
-            "norwaywest",
+            # "norwaywest",
             "norwayeast",
-            "brazilsoutheast",
+            # "brazilsoutheast",
             "westus3",
             "swedencentral",
         ]
@@ -149,7 +148,7 @@ class AzureCloudProvider(CloudProvider):
         poller = network_client.virtual_networks.begin_create_or_update(
             resource_group, AzureServer.vnet_name(name), {"location": location, "address_space": {"address_prefixes": ["10.0.0.0/24"]}}
         )
-        vnet_result = poller.result()
+        poller.result()
 
         # Create a Network Security Group for this instance
         # NOTE: This is insecure. We should fix this soon.
@@ -238,6 +237,6 @@ class AzureCloudProvider(CloudProvider):
                 "network_profile": {"network_interfaces": [{"id": nic_result.id}]},
             },
         )
-        vm_result = poller.result()
+        poller.result()
 
         return AzureServer(self.subscription_id, resource_group)

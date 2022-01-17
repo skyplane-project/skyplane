@@ -1,7 +1,5 @@
-from functools import partial
 import queue
 import socket
-from contextlib import closing
 from multiprocessing import Event, Manager, Process, Value
 from typing import Dict, List, Optional
 
@@ -129,7 +127,7 @@ class GatewaySender:
                 chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
                 assert chunk_file_path.exists(), f"chunk file {chunk_file_path} does not exist"
                 with open(chunk_file_path, "rb") as fd:
-                    bytes_sent = sock.sendfile(fd)
+                    sock.sendfile(fd)
                 self.chunk_store.state_finish_upload(chunk_id)
                 chunk_file_path.unlink()
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK, 0)  # send remaining packets
