@@ -4,6 +4,7 @@ import signal
 import socket
 from contextlib import closing
 from multiprocessing import Event, Manager, Process, Value
+import time
 from typing import Tuple
 
 import setproctitle
@@ -16,9 +17,10 @@ from skylark.utils.utils import Timer
 
 
 class GatewayReceiver:
-    def __init__(self, chunk_store: ChunkStore, write_back_block_size=1 * MB):
+    def __init__(self, chunk_store: ChunkStore, write_back_block_size=1 * MB, max_pending_chunks=1):
         self.chunk_store = chunk_store
         self.write_back_block_size = write_back_block_size
+        self.max_pending_chunks = max_pending_chunks
 
         # shared state
         self.manager = Manager()
@@ -92,6 +94,11 @@ class GatewayReceiver:
             chunk_header = WireProtocolHeader.from_socket(conn)
             logger.debug(f"[server:{server_port}] Got chunk header {chunk_header.chunk_id}: {chunk_header}")
             self.chunk_store.state_start_download(chunk_header.chunk_id)
+
+            # block until we have enough space to write the chunk
+            while self.chunk_store.remaining_bytes() < chunk_header.chunk_len * self.max_pending_chunks:
+                logger.warning(f"[server:{server_port}] Waiting for space to write chunk {chunk_header.chunk_id}")
+                time.sleep(0.01)  # todo should use inotify
 
             # get data
             with Timer() as t:
