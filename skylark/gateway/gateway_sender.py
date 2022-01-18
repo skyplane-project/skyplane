@@ -7,7 +7,6 @@ import requests
 import setproctitle
 from loguru import logger
 from skylark import MB
-
 from skylark.chunk import ChunkRequest
 from skylark.gateway.chunk_store import ChunkStore
 from skylark.utils.utils import Timer, wait_for

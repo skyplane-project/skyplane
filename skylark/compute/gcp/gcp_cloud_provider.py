@@ -5,10 +5,9 @@ from pathlib import Path
 from typing import List
 
 import googleapiclient
+import paramiko
 from loguru import logger
 from oslo_concurrency import lockutils
-import paramiko
-
 from skylark import key_root
 from skylark.compute.cloud_providers import CloudProvider
 from skylark.compute.gcp.gcp_server import GCPServer
@@ -43,7 +42,7 @@ class GCPCloudProvider(CloudProvider):
             "australia-southeast2-a",
             "europe-central2-a",
             "europe-north1-a",
-            "europe-west1-a",
+            "europe-west1-b",
             "europe-west2-a",
             "europe-west3-a",
             "europe-west4-a",

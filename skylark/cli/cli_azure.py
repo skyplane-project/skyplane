@@ -11,6 +11,7 @@ import typer
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
 from loguru import logger
+from skylark.cli.cli_helper import load_config
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.utils.utils import do_parallel
 
@@ -28,6 +29,10 @@ def get_valid_skus(
     prefix: str = typer.Option("", "--prefix", help="Filter by prefix"),
     top_k: int = typer.Option(-1, "--top-k", help="Print top k entries"),
 ):
+    config = load_config()
+    azure_subscription = azure_subscription or config.get("azure_subscription_id")
+    typer.secho(f"Loaded from config file: azure_subscription={azure_subscription}", fg="blue")
+
     credential = DefaultAzureCredential()
 
     # query azure API for each region to get available SKUs for each resource type
