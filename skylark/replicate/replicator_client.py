@@ -290,29 +290,39 @@ class ReplicatorClient:
         return [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
 
     def get_chunk_status_log_df(self) -> pd.DataFrame:
-        chunk_logs = []
+        def get_chunk_status(args):
+            hop_instance, path_idx, hop_idx = args
+            reply = requests.get(f"http://{hop_instance.public_ip()}:8080/api/v1/chunk_status_log")
+            if reply.status_code != 200:
+                raise Exception(f"Failed to get chunk status from gateway instance {hop_instance.instance_name()}: {reply.text}")
+            logs = []
+            for log_entry in reply.json()["chunk_status_log"]:
+                log_entry["hop_cloud_region"] = hop_instance.region_tag
+                log_entry["path_idx"] = path_idx
+                log_entry["hop_idx"] = hop_idx
+                log_entry["time"] = datetime.fromisoformat(log_entry["time"])
+                log_entry["state"] = ChunkState.from_str(log_entry["state"])
+                logs.append(log_entry)
+            return logs
+
+        reqs = []
         for path_idx, path in enumerate(self.bound_paths):
             for hop_idx, hop_instance in enumerate(path):
-                reply = requests.get(f"http://{hop_instance.public_ip()}:8080/api/v1/chunk_status_log")
-                if reply.status_code != 200:
-                    raise Exception(f"Failed to get chunk status from gateway instance {hop_instance.instance_name()}: {reply.text}")
-                for log_entry in reply.json()["chunk_status_log"]:
-                    log_entry["hop_cloud_region"] = hop_instance.region_tag
-                    log_entry["path_idx"] = path_idx
-                    log_entry["hop_idx"] = hop_idx
-                    log_entry["time"] = datetime.fromisoformat(log_entry["time"])
-                    log_entry["state"] = ChunkState.from_str(log_entry["state"])
-                    chunk_logs.append(log_entry)
-        df = pd.DataFrame(chunk_logs)
-        return df
+                reqs.append((hop_instance, path_idx, hop_idx))
+
+        # aggregate results
+        rows = []
+        for _, result in do_parallel(get_chunk_status, reqs, n=-1):
+            rows.extend(result)
+        return pd.DataFrame(rows)
 
     def monitor_transfer(
         self,
         crs: List[ChunkRequest],
         completed_state=ChunkState.upload_complete,
-        show_pbar=True,
+        show_pbar=False,
         log_interval_s: Optional[float] = None,
-        serve_web_dashboard=True,
+        serve_web_dashboard=False,
         dash_host="0.0.0.0",
         dash_port="8080",
         time_limit_seconds: Optional[float] = None,
@@ -397,4 +407,4 @@ class ReplicatorClient:
                                 throughput_gbits=throughput_gbits,
                                 monitor_status="timed_out",
                             )
-                        time.sleep(0.25)
+                        time.sleep(0.01 if show_pbar else 0.25)
