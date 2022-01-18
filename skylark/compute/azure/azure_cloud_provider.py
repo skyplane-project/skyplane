@@ -63,7 +63,7 @@ class AzureCloudProvider(CloudProvider):
             #   "centralus",
             #   "japanwest",
             #   "southcentralus",
-            #   "southeastasia",
+            "southeastasia",
             #   "southindia",
             #   "ukwest",
             #   "westcentralus",
@@ -133,7 +133,7 @@ class AzureCloudProvider(CloudProvider):
             return "Standard_D32_v4"
         else:
             logger.error(f"Cannot confirm availability of {instance_name} in {region}")
-            return None
+            return instance_name
 
     @staticmethod
     def get_resource_group_name(name):
