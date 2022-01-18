@@ -228,9 +228,8 @@ class Server:
 
         # todo add other launch flags for gateway daemon
         logger.debug(desc_prefix + f": Starting gateway container {gateway_docker_image}")
-        file_limit = 1024 * 1024 * 1024
-        docker_run_flags = f"-d --rm --log-driver=local --ipc=host --network=host --ulimit nofile={file_limit}:{file_limit}"
-        gateway_daemon_cmd = f"python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections {num_outgoing_connections}"
+        docker_run_flags = f"-d --rm --log-driver=local --ipc=host --network=host --ulimit nofile={1024 * 1024}"
+        gateway_daemon_cmd = f"python /pkg/skylark/gateway/gateway_daemon.py --chunk-dir /dev/shm/skylark/chunks --outgoing-connections {num_outgoing_connections}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = self.run_command(docker_launch_cmd)
         assert not start_err.strip(), f"Error starting gateway: {start_err}"
