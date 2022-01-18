@@ -55,7 +55,7 @@ def main(args):
         src_nodes = [src]
         for idx in range(len(hops)):
 
-            nodes = list(set([ip["ipaddr"] for ip in hops[str(idx)]]))
+            list(set([ip["ipaddr"] for ip in hops[str(idx)]]))
             next_nodes = []
             for node in hops[str(idx)]:
                 ip = node["ipaddr"]

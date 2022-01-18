@@ -1,17 +1,15 @@
+import concurrent.futures
 import json
 import os
-from pathlib import Path
-import concurrent.futures
-import subprocess
-from typing import Dict, List, Optional
 import re
 import resource
+import subprocess
+from pathlib import Path
 from shutil import copyfile
+from typing import Dict, List, Optional
 
-from loguru import logger
-from tqdm import tqdm
 import typer
-
+from loguru import logger
 from skylark import config_file
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
@@ -19,6 +17,7 @@ from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.obj_store.object_store_interface import ObjectStoreObject
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.utils.utils import do_parallel
+from tqdm import tqdm
 
 
 def is_plausible_local_path(path: str):

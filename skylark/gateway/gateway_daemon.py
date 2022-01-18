@@ -12,7 +12,6 @@ from typing import Optional
 
 import setproctitle
 from loguru import logger
-
 from skylark import MB, print_header
 from skylark.chunk import ChunkState
 from skylark.gateway.chunk_store import ChunkStore

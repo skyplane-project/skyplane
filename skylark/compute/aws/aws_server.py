@@ -4,10 +4,9 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import boto3
-from oslo_concurrency import lockutils
 import paramiko
 from loguru import logger
-
+from oslo_concurrency import lockutils
 from skylark import key_root
 from skylark.compute.server import Server, ServerState
 from skylark.utils.cache import ignore_lru_cache

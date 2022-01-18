@@ -4,10 +4,9 @@ import threading
 from enum import Enum, auto
 from pathlib import Path
 
-from loguru import logger
 import requests
+from loguru import logger
 from skylark.compute.utils import make_dozzle_command, make_netdata_command
-
 from skylark.utils.utils import PathLike, Timer, wait_for
 
 

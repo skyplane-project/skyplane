@@ -1,12 +1,11 @@
+import os
+from datetime import datetime
 from multiprocessing import Manager
 from os import PathLike
-import os
 from pathlib import Path
 from typing import Dict, List, Optional
-from datetime import datetime
 
 from loguru import logger
-
 from skylark.chunk import ChunkRequest, ChunkRequestHop, ChunkState
 
 

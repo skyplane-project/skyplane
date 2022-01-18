@@ -1,16 +1,14 @@
 import os
-import os
 import signal
 import socket
+import time
 from contextlib import closing
 from multiprocessing import Event, Manager, Process, Value
-import time
 from typing import Tuple
 
 import setproctitle
 from loguru import logger
 from skylark import GB, MB
-
 from skylark.chunk import WireProtocolHeader
 from skylark.gateway.chunk_store import ChunkStore
 from skylark.utils.utils import Timer

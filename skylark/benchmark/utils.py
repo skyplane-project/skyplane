@@ -2,10 +2,10 @@ import sys
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from loguru import logger
-
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
-from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.aws.aws_server import AWSServer
+from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
+from skylark.compute.azure.azure_server import AzureServer
 from skylark.compute.cloud_providers import CloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.gcp.gcp_server import GCPServer
@@ -49,7 +49,7 @@ def provision(
     gcp_instance_class: str,
     gcp_use_premium_network: bool = True,
     log_dir: Optional[str] = None,
-) -> Tuple[Dict[str, List[AWSServer]], Dict[str, List[GCPServer]]]:
+) -> Tuple[Dict[str, List[AWSServer]], Dict[str, List[AzureServer]], Dict[str, List[GCPServer]]]:
     """Provision list of instances in AWS, Azure, and GCP in each specified region."""
     aws_instances = {}
     azure_instances = {}

@@ -5,10 +5,9 @@ from pathlib import Path
 from typing import List
 
 import googleapiclient
+import paramiko
 from loguru import logger
 from oslo_concurrency import lockutils
-import paramiko
-
 from skylark import key_root
 from skylark.compute.cloud_providers import CloudProvider
 from skylark.compute.gcp.gcp_server import GCPServer

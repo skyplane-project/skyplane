@@ -1,16 +1,14 @@
-from functools import partial
 import json
-from pathlib import Path
-from typing import List, Optional, Tuple
+import os
 import sys
 from datetime import datetime, timezone
-import os
+from functools import partial
+from pathlib import Path
+from typing import List, Optional, Tuple
 
-from tqdm import tqdm
 import pandas as pd
-import typer
 import questionary
-
+import typer
 from skylark import GB, skylark_root
 from skylark.benchmark.utils import provision, split_list
 from skylark.cli.cli_helper import load_config
@@ -19,6 +17,7 @@ from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server
 from skylark.utils.utils import do_parallel
+from tqdm import tqdm
 
 # aws_regions = AWSCloudProvider.region_list()
 # azure_regions = AzureCloudProvider.region_list()
@@ -67,10 +66,6 @@ gcp_regions = [
 log_info = partial(typer.secho, fg="blue")
 log_success = partial(typer.secho, fg="green")
 log_error = partial(typer.secho, fg="red")
-
-
-def setup(instance: Server):
-    instance.run_command()
 
 
 def start_iperf3_client(arg_pair: Tuple[Server, Server], iperf3_log_dir: Path, iperf3_runtime: int, iperf3_connections: int):

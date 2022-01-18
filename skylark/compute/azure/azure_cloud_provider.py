@@ -1,21 +1,18 @@
 import os
 import uuid
-
 from pathlib import Path
 from typing import List, Optional
 
-from azure.identity import DefaultAzureCredential
-from azure.mgmt.resource import ResourceManagementClient
-from azure.mgmt.network import NetworkManagementClient
-from azure.mgmt.compute import ComputeManagementClient
-
 import paramiko
-
 from loguru import logger
-
 from skylark import key_root
-from skylark.compute.cloud_providers import CloudProvider
 from skylark.compute.azure.azure_server import AzureServer
+from skylark.compute.cloud_providers import CloudProvider
+
+from azure.identity import DefaultAzureCredential
+from azure.mgmt.compute import ComputeManagementClient
+from azure.mgmt.network import NetworkManagementClient
+from azure.mgmt.resource import ResourceManagementClient
 
 
 class AzureCloudProvider(CloudProvider):

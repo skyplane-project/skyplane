@@ -4,15 +4,13 @@ import os
 import threading
 from pathlib import Path
 
-from loguru import logger
 from flask import Flask, jsonify, request
-from werkzeug.serving import make_server
-from werkzeug import serving
+from loguru import logger
 from skylark import MB
-
 from skylark.chunk import ChunkRequest, ChunkState
 from skylark.gateway.chunk_store import ChunkStore
 from skylark.gateway.gateway_receiver import GatewayReceiver
+from werkzeug.serving import make_server
 
 
 class GatewayDaemonAPI(threading.Thread):
