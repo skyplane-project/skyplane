@@ -28,6 +28,7 @@ import skylark.cli.cli_aws
 import skylark.cli.cli_azure
 import skylark.cli.experiments
 from skylark.cli.cli_helper import (
+    check_ulimit,
     copy_local_local,
     copy_local_s3,
     copy_s3_local,
@@ -108,6 +109,7 @@ def replicate_random(
     gcp_project = gcp_project or config.get("gcp_project_id")
     azure_subscription = azure_subscription or config.get("azure_subscription_id")
     logger.debug(f"Loaded gcp_project: {gcp_project}, azure_subscription: {azure_subscription}")
+    check_ulimit()
 
     if inter_region:
         topo = ReplicationTopology(paths=[[src_region, inter_region, dst_region] for _ in range(num_gateways)])

@@ -30,7 +30,7 @@ class GatewayDaemon:
             logger.add(log_dir / "gateway_daemon.log", rotation="10 MB", enqueue=True)
             logger.add(sys.stderr, colorize=True, format="{function:>15}:{line:<3} {level:<8} {message}", level="DEBUG", enqueue=True)
         self.chunk_store = ChunkStore(chunk_dir)
-        self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store)
+        self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store, max_pending_chunks=outgoing_connections)
         self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, n_processes=outgoing_connections)
 
         # API server
@@ -101,7 +101,7 @@ class GatewayDaemon:
 
                         def fn(chunk_req, size_mb):
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
-                            os.system(f"dd if=/dev/zero of={fpath} bs={MB} count={size_mb}")
+                            os.system(f"fallocate -l {size_mb * MB} {fpath}")
                             chunk_req.chunk.chunk_length_bytes = os.path.getsize(fpath)
                             self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
                             self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id)

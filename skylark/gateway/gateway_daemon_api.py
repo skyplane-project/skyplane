@@ -62,18 +62,7 @@ class GatewayDaemonAPI(threading.Thread):
             logging.getLogger("werkzeug").addHandler(logging.StreamHandler())
             logging.getLogger("werkzeug").setLevel(logging.DEBUG)
         else:
-            logging.getLogger("werkzeug").setLevel(logging.INFO)
-
-        # override werkzeug's logger to ignore requests to /api/v1/chunk_status_log
-        parent_log_request = serving.WSGIRequestHandler.log_request
-
-        def log_request(self, *args, **kwargs):
-            if self.path == "/api/v1/chunk_status_log":
-                return
-            parent_log_request(self, *args, **kwargs)
-
-        serving.WSGIRequestHandler.log_request = log_request
-
+            logging.getLogger("werkzeug").setLevel(logging.WARNING)
         self.server = make_server(host, port, self.app, threaded=True)
         self.url = "http://{}:{}".format(host, port)
 

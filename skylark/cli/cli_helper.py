@@ -2,8 +2,10 @@ import json
 import os
 from pathlib import Path
 import concurrent.futures
+import subprocess
 from typing import Dict, List, Optional
 import re
+import resource
 from shutil import copyfile
 
 from loguru import logger
@@ -137,6 +139,26 @@ def copy_s3_local(src_bucket: str, src_key: str, dst: Path):
 
 
 # utility functions
+
+
+def check_ulimit(hard_limit=1024 * 1024 * 2, soft_limit=1024 * 1024):
+    current_limit_soft, current_limit_hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    typer.secho(f"Current soft limit: {current_limit_soft}, current hard limit: {current_limit_hard}", fg="yellow")
+    if current_limit_soft < soft_limit:
+        typer.secho(f"Warning: ulimit is set to {current_limit_soft}, which is less than the recommended minimum of {soft_limit}", fg="red")
+        if typer.confirm("sudo required; Do you want to increase the limit?"):
+            os.system(f"sudo sysctl -w fs.file-max={hard_limit}")
+            new_limit = subprocess.check_output(["sysctl", "-n", "fs.file-max"]).decode("utf-8").strip()
+            typer.secho(f"New system limit: {new_limit}", fg="green")
+
+            # set soft and hard limit
+            subprocess.check_call(["sudo", "prlimit", "--pid", str(os.getpid()), f"--nofile={soft_limit}:{hard_limit}"])
+            new_limit = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
+            if new_limit < soft_limit:
+                typer.secho(f"Failed to increase ulimit to {soft_limit}, please set manually. Current limit is {new_limit}", fg="red")
+                typer.Abort()
+            else:
+                typer.secho(f"Successfully increased ulimit to {new_limit}", fg="green")
 
 
 def deprovision_skylark_instances(azure_subscription: Optional[str] = None, gcp_project_id: Optional[str] = None):

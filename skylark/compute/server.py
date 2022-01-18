@@ -200,6 +200,9 @@ class Server:
             net_config += " net.ipv4.tcp_congestion_control=cubic"
         self.run_command(net_config)
 
+        # raise file limits
+        self.run_command(f"sudo sysctl -w fs.file-max={1024 * 1024 * 1024}")
+
         # install docker and launch monitoring
         cmd = "(command -v docker >/dev/null 2>&1 || { rm -rf get-docker.sh; curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh; }); "
         cmd += "{ sudo docker stop $(docker ps -a -q); sudo docker kill $(sudo docker ps -a -q); sudo docker rm -f $(sudo docker ps -a -q); }; "
@@ -225,8 +228,8 @@ class Server:
 
         # todo add other launch flags for gateway daemon
         logger.debug(desc_prefix + f": Starting gateway container {gateway_docker_image}")
-        docker_run_flags = "-d --rm --log-driver=local --ipc=host --network=host"
-        gateway_daemon_cmd = f"python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections {num_outgoing_connections}"
+        docker_run_flags = f"-d --rm --log-driver=local --ipc=host --network=host --ulimit nofile={1024 * 1024}"
+        gateway_daemon_cmd = f"python /pkg/skylark/gateway/gateway_daemon.py --chunk-dir /dev/shm/skylark/chunks --outgoing-connections {num_outgoing_connections}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = self.run_command(docker_launch_cmd)
         assert not start_err.strip(), f"Error starting gateway: {start_err}"
