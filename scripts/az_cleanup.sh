@@ -2,11 +2,12 @@
 
 echo "If you want to filter this list to a subset, pass an argument as a prefix: az_cleanup.sh <prefix>"
 
-AZURE_GROUPS=$(az group list | jq -c ".[].name")
 
 # if argument is passed, filter output with grep
-if [ -n "$1" ]; then
-  AZURE_GROUPS=$(echo $AZURE_GROUPS | grep $1)
+if [ ! -z "$1" ]; then
+  AZURE_GROUPS=$(az group list | jq -r -c ".[].name" | grep $1)
+else
+  AZURE_GROUPS=$(az group list | jq -r -c ".[].name")
 fi
 
 # exit if no groups found
@@ -29,7 +30,13 @@ select yn in "Yes" "No"; do
     esac
 done
 
-set -xe
-az group list | jq -c ".[].name" | xargs -L 1 echo | parallel --progress -j0 az group delete --yes --no-wait --name {}
+for AZ_GROUP in $AZURE_GROUPS; do
+  echo "Deleting resources in group: $AZ_GROUP"
+  az group delete --yes --no-wait --name $AZ_GROUP
+done
 echo "\n Queued cleanup of resource groups. Watching for completion..."
-az group list | jq -c ".[].name" | xargs -L 1 echo | parallel --progress -j0 az group delete --yes --name {}
+for AZ_GROUP in $AZURE_GROUPS; do
+  echo "Waiting for deletion of $AZ_GROUP"
+  az group delete --yes --name $AZ_GROUP
+done
+
