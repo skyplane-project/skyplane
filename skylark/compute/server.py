@@ -192,16 +192,24 @@ class Server:
         desc_prefix = f"Starting gateway {self.uuid()}"
         logger.debug(desc_prefix + ": Installing docker")
 
-        # increase TCP connections and enable BBR
-        net_config = "sudo sysctl -w net.ipv4.tcp_tw_reuse=1 net.core.somaxconn=1024 net.core.netdev_max_backlog=2000 net.ipv4.tcp_max_syn_backlog=2048"
+        # increase TCP connections, enable BBR optionally and raise file limits
+        sysctl_updates = {
+            "net.core.rmem_max": 2147483647,
+            "net.core.wmem_max": 2147483647,
+            "net.ipv4.tcp_rmem": "4096 87380 1073741824",
+            "net.ipv4.tcp_wmem": "4096 65536 1073741824",
+            "net.ipv4.tcp_tw_reuse": 1,
+            "net.core.somaxconn": 1024,
+            "net.core.netdev_max_backlog": 2000,
+            "net.ipv4.tcp_max_syn_backlog": 2048,
+            "fs.file-max": 1024 * 1024 * 1024,
+        }
         if use_bbr:
-            net_config += " net.core.default_qdisc=fq net.ipv4.tcp_congestion_control=bbr"
+            sysctl_updates["net.core.default_qdisc"] = "fq"
+            sysctl_updates["net.ipv4.tcp_congestion_control"] = "bbr"
         else:
-            net_config += " net.ipv4.tcp_congestion_control=cubic"
-        self.run_command(net_config)
-
-        # raise file limits
-        self.run_command(f"sudo sysctl -w fs.file-max={1024 * 1024 * 1024}")
+            sysctl_updates["net.ipv4.tcp_congestion_control"] = "cubic"
+        self.run_command("sudo sysctl -w {}".format(" ".join(f"{k}={v}" for k, v in sysctl_updates.items())))
 
         # install docker and launch monitoring
         cmd = "(command -v docker >/dev/null 2>&1 || { rm -rf get-docker.sh; curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh; }); "
