@@ -37,7 +37,7 @@ from functools import total_ordering
 import socket
 from dataclasses import asdict, dataclass
 from enum import Enum, auto
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 @dataclass
@@ -69,12 +69,12 @@ class ChunkRequestHop:
     hop_cloud_region: str  # format is provider:region
     hop_ip_address: str
     chunk_location_type: str  # enum of {"src_object_store", "dst_object_store", "relay", "random_XMB", "save_local"}
-    
+
     # (optional) object store information
-    src_object_store_region: str = None  # format is provider:region
-    src_object_store_bucket: str = None
-    dst_object_store_region: str = None 
-    dst_object_store_bucket: str = None
+    src_object_store_region: Optional[str] = None  # format is provider:region
+    src_object_store_bucket: Optional[str] = None
+    dst_object_store_region: Optional[str] = None
+    dst_object_store_bucket: Optional[str] = None
 
     def as_dict(self):
         return asdict(self)

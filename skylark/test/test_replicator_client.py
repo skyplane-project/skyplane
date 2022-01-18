@@ -71,10 +71,10 @@ def main(args):
         matching_src_keys = list([obj.key for obj in s3_interface_src.list_objects(prefix=args.key_prefix)])
         matching_dst_keys = list([obj.key for obj in s3_interface_dst.list_objects(prefix=args.key_prefix)])
         if matching_src_keys:
-            logger.warning(f"Deleting objects from source bucket: {matching_src_keys}")
+            logger.warning(f"Deleting {len(matching_src_keys)} objects from source bucket")
             s3_interface_src.delete_objects(matching_src_keys)
         if matching_dst_keys:
-            logger.warning(f"Deleting objects from destination bucket: {matching_dst_keys}")
+            logger.warning(f"Deleting {len(matching_dst_keys)} objects from destination bucket")
             s3_interface_dst.delete_objects(matching_dst_keys)
 
         # create test objects w/ random data
