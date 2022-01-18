@@ -8,7 +8,7 @@ import threading
 from multiprocessing import Event
 from os import PathLike
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 import setproctitle
 from loguru import logger
@@ -33,8 +33,7 @@ class GatewayDaemon:
         self.chunk_store = ChunkStore(chunk_dir)
         self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store, max_pending_chunks=outgoing_connections)
         self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, n_processes=outgoing_connections)
-
-        self.src_s3
+        self.s3_interfaces: Dict[str, S3Interface] = {}
 
         # API server
         atexit.register(self.cleanup)
@@ -43,6 +42,11 @@ class GatewayDaemon:
         )
         self.api_server.start()
         logger.info(f"Gateway daemon API started at {self.api_server.url}")
+
+    def get_s3_interface(self, region: str, bucket: str) -> S3Interface:
+        if region not in self.s3_interfaces:
+            self.s3_interfaces[region] = S3Interface(region, bucket, use_tls=False)
+        return self.s3_interfaces[region]
 
     def cleanup(self):
         logger.warning("Shutting down gateway daemon")
@@ -77,9 +81,8 @@ class GatewayDaemon:
                         # function to upload data from S3
                         def fn(chunk_req, dst_region, dst_bucket):
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
-
                             logger.info(f"Creating interface {dst_region}--{dst_bucket}")
-                            s3_interface = S3Interface(dst_region.split(":")[1], dst_bucket, use_tls=False)
+                            s3_interface = self.get_s3_interface(dst_region.split(":")[1], dst_bucket)
                             logger.info(f"Waiting for upload {dst_bucket}:{chunk_req.chunk.key}")
                             s3_interface.upload_object(fpath, chunk_req.chunk.key).result()
                             logger.info(f"Uploaded {fpath} to {dst_bucket}:{chunk_req.chunk.key})")
@@ -126,10 +129,8 @@ class GatewayDaemon:
                         # TODO: add this to a queue like with GatewaySender to prevent OOM
                         def fn(chunk_req, src_region, src_bucket):
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
-
                             logger.info(f"Creating interface {src_region}--{src_bucket}")
-                            s3_interface = S3Interface(src_region.split(":")[1], src_bucket, use_tls=False)
-
+                            s3_interface = self.get_s3_interface(src_region.split(":")[1], src_bucket)
                             logger.info(f"Waiting for download {src_bucket}:{chunk_req.chunk.key}")
                             s3_interface.download_object(chunk_req.chunk.key, fpath).result()
                             logger.info(f"Downloaded key {chunk_req.chunk.key} to {fpath})")
