@@ -52,6 +52,8 @@ class GatewayDaemon:
         logger.warning("Shutting down gateway daemon")
         self.api_server.shutdown()
 
+
+
     def run(self):
         setproctitle.setproctitle(f"skylark-gateway-daemon")
         exit_flag = Event()
@@ -126,7 +128,6 @@ class GatewayDaemon:
                         src_region = current_hop.src_object_store_region
 
                         # function to download data from S3
-                        # TODO: add this to a queue like with GatewaySender to prevent OOM
                         def fn(chunk_req, src_region, src_bucket):
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
                             logger.info(f"Creating interface {src_region}--{src_bucket}")
