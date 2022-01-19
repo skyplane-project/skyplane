@@ -11,7 +11,7 @@ from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.utils.utils import do_parallel
 
-app = typer.Typer(name="skylark")
+app = typer.Typer(name="skylark-aws")
 
 # config logger
 logger.remove()

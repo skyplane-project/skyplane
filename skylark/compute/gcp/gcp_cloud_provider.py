@@ -9,6 +9,7 @@ import paramiko
 from loguru import logger
 from oslo_concurrency import lockutils
 from skylark import key_root
+from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.cloud_providers import CloudProvider
 from skylark.compute.gcp.gcp_server import GCPServer
 from skylark.compute.server import Server
@@ -89,32 +90,22 @@ class GCPCloudProvider(CloudProvider):
                 return 0.15
             else:
                 return 0.08
-        elif dst_provider == "aws" and premium_tier:
-            dst_continent, dst_region = dst.split("-", 1)
+        elif dst_provider in ["aws", "azure"] and premium_tier:
+            is_dst_australia = (
+                (dst == "ap-southeast-2") if dst_provider == "aws" else (AzureCloudProvider.lookup_continent(dst) == "oceania")
+            )
             # singapore or tokyo or osaka
             if src_continent == "asia" and (src_region == "southeast2" or src_region == "northeast1" or src_region == "northeast2"):
-                if dst == "ap-southeast-2":  # australia
-                    return 0.19
-                else:
-                    return 0.14
+                return 0.19 if is_dst_australia else 0.14
             # jakarta
             elif (src_continent == "asia" and src_region == "southeast1") or (src_continent == "australia"):
-                if dst == "ap-southeast-2":
-                    return 0.19
-                else:
-                    return 0.19
+                return 0.19
             # seoul
             elif src_continent == "asia" and src_region == "northeast3":
-                if dst == "ap-northeast-2":
-                    return 0.19
-                else:
-                    return 0.147
+                return 0.19 if is_dst_australia else 0.147
             else:
-                if dst == "ap-southeast-2":
-                    return 0.19
-                else:
-                    return 0.12
-        elif dst_provider == "aws" and not premium_tier:
+                return 0.19 if is_dst_australia else 0.12
+        elif dst_provider in ["aws", "azure"] and not premium_tier:
             if src_continent == "us" or src_continent == "europe" or src_continent == "northamerica":
                 return 0.085
             elif src_continent == "southamerica" or src_continent == "australia":
