@@ -22,6 +22,7 @@ from typing import Optional
 
 import skylark.cli.cli_aws
 import skylark.cli.cli_azure
+import skylark.cli.cli_solver
 import skylark.cli.experiments
 import typer
 from loguru import logger
@@ -44,6 +45,7 @@ app = typer.Typer(name="skylark")
 app.add_typer(skylark.cli.experiments.app, name="experiments")
 app.add_typer(skylark.cli.cli_aws.app, name="aws")
 app.add_typer(skylark.cli.cli_azure.app, name="azure")
+app.add_typer(skylark.cli.cli_solver.app, name="solver")
 
 # config logger
 logger.remove()

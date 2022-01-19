@@ -60,7 +60,7 @@ class AzureCloudProvider(CloudProvider):
             #   "centralus",
             #   "japanwest",
             #   "southcentralus",
-            "southeastasia",
+            #   "southeastasia",
             #   "southindia",
             #   "ukwest",
             #   "westcentralus",
@@ -78,6 +78,60 @@ class AzureCloudProvider(CloudProvider):
             #   "switzerlandwest",
             #   "uaecentral",
         ]
+
+    @staticmethod
+    def lookup_continent(region: str) -> str:
+        lookup_dict = {
+            "oceania": {"australiaeast", "australiacentral", "australiasoutheast", "australiacentral2"},
+            "asia": {
+                "eastasia",
+                "japaneast",
+                "japanwest",
+                "koreacentral",
+                "koreasouth",
+                "southeastasia",
+                "southindia",
+                "centralindia",
+                "westindia",
+                "jioindiacentral",
+                "jioindiawest",
+            },
+            "north-america": {
+                "canadacentral",
+                "canadaeast",
+                "centralus",
+                "eastus",
+                "eastus2",
+                "northcentralus",
+                "westus",
+                "westus2",
+                "westus3",
+                "southcentralus",
+                "westcentralus",
+            },
+            "south-america": {"brazilsouth", "brazilsoutheast"},
+            "europe": {
+                "francecentral",
+                "germanywestcentral",
+                "northeurope",
+                "norwayeast",
+                "swedencentral",
+                "switzerlandnorth",
+                "switzerlandwest",
+                "westeurope",
+                "uksouth",
+                "ukwest",
+                "francesouth",
+                "germanynorth",
+                "norwaywest",
+            },
+            "africa": {"southafricanorth", "southafricawest"},
+            "middle-east": {"uaenorth", "uaecentral"},
+        }
+        for continent, regions in lookup_dict.items():
+            if region in regions:
+                return continent
+        return "unknown"
 
     @staticmethod
     def lookup_valid_instance(region: str, instance_name: str) -> Optional[str]:
@@ -137,8 +191,61 @@ class AzureCloudProvider(CloudProvider):
         return name
 
     @staticmethod
-    def get_transfer_cost(src_key, dst_key):
-        raise NotImplementedError
+    def get_transfer_cost(src_key, dst_key, premium_tier=True):
+        """Assumes <10TB transfer tier."""
+        src_provider, src_region = src_key.split(":")
+        dst_provider, dst_region = dst_key.split(":")
+        assert src_provider == "azure"
+        if not premium_tier:
+            return NotImplementedError()
+
+        src_continent = AzureCloudProvider.lookup_continent(src_region)
+        dst_continent = AzureCloudProvider.lookup_continent(dst_region)
+
+        if dst_provider != "azure":  # internet transfer
+            # From North America, Europe to any destination
+            if src_continent in {"north-america", "europe"}:
+                return 0.0875
+            # From Asia (China excluded), Australia, MEA to any destination
+            elif src_continent in {"asia", "oceania", "middle-east", "africa"}:
+                return 0.12
+            # From South America to any destination
+            elif src_continent == "south-america":
+                return 0.181
+            else:
+                raise ValueError(f"Unknown transfer cost for {src_key} -> {dst_key}")
+        else:  # local transfer
+            # intracontinental transfer
+            if src_continent == dst_continent:
+                # Between regions within North America, Between regions within Europe
+                if src_continent in {"north-america", "europe"} and dst_continent in {"north-america", "europe"}:
+                    return 0.02
+                # Between regions within Asia, Between regions within Oceania, Between regions within Middle East and Africa
+                elif src_continent in {"asia", "oceania", "middle-east", "africa"} and dst_continent in {
+                    "asia",
+                    "oceania",
+                    "middle-east",
+                    "africa",
+                }:
+                    return 0.08
+                # Between regions within South America
+                elif src_continent == "south-america" and dst_continent == "south-america":
+                    return 0.181
+                else:
+                    raise ValueError(f"Unknown transfer cost for {src_key} -> {dst_key}")
+            # intercontinental transfer
+            else:
+                # From North America to other continents, From Europe to other continents
+                if src_continent in {"north-america", "europe"}:
+                    return 0.05
+                # From Asia to other continents, From Oceania to other continents, From Africa to other continents
+                elif src_continent in {"asia", "oceania", "middle-east", "africa"}:
+                    return 0.08
+                # From South America to other continents
+                elif src_continent == "south-america":
+                    return 0.16
+                else:
+                    raise ValueError(f"Unknown transfer cost for {src_key} -> {dst_key}")
 
     def get_instance_list(self, region: str) -> List[AzureServer]:
         credential = DefaultAzureCredential()

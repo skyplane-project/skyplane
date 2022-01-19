@@ -49,7 +49,8 @@ class AWSCloudProvider(CloudProvider):
         return all_regions
 
     @staticmethod
-    def get_transfer_cost(src_key, dst_key):
+    def get_transfer_cost(src_key, dst_key, premium_tier=True):
+        assert premium_tier, "AWS transfer cost is only available for premium tier"
         transfer_df = pd.read_csv(skylark_root / "profiles" / "aws_transfer_costs.csv").set_index(["src", "dst"])
 
         src_provider, src = src_key.split(":")
@@ -64,7 +65,7 @@ class AWSCloudProvider(CloudProvider):
                 src_rows = transfer_df.loc[src]
                 src_rows = src_rows[src_rows.index != "internet"]
                 return src_rows.max()["cost"]
-        elif dst_provider == "gcp":
+        elif dst_provider == "gcp" or dst_provider == "azure":
             return transfer_df.loc[src, "internet"]["cost"]
         else:
             raise NotImplementedError

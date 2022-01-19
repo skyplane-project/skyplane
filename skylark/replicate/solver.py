@@ -1,4 +1,5 @@
 import argparse
+import shutil
 
 import cvxpy as cp
 import graphviz as gv
@@ -15,7 +16,7 @@ GBIT_PER_GBYTE = 8
 
 class ThroughputSolver:
     def __init__(self, df_path, default_throughput=0.0):
-        self.df = pd.read_csv(df_path).drop(columns="Unnamed: 0").set_index(["src", "dst"])
+        self.df = pd.read_csv(df_path).set_index(["src_region", "dst_region"])
         self.default_throughput = default_throughput
 
     def get_path_throughput(self, src, dst):
@@ -82,14 +83,29 @@ class ThroughputSolver:
 
 
 class ThroughputSolverILP(ThroughputSolver):
-    def solve(self, src, dst, required_throughput_gbits=None, cost_limit=None, gbyte_to_transfer=1.0, solver=cp.GLPK, solver_verbose=False):
+    def solve(
+        self,
+        src,
+        dst,
+        required_throughput_gbits=None,
+        cost_limit=None,
+        gbyte_to_transfer=1.0,
+        instance_limit=1,
+        aws_instance_throughput_limit=5.0,
+        gcp_instance_throughput_limit=8.0,
+        azure_instance_throughput_limit=16.0,
+        solver=cp.GLPK,
+        solver_verbose=False,
+    ):
         regions = self.get_regions()
         src_idx = regions.index(src)
         dst_idx = regions.index(dst)
 
-        # define constants and variables
+        # define constants
         edge_cost_per_gigabyte, edge_capacity_gigabits = self.get_cost_grid(), self.get_throughput_grid()
         edge_cost_per_gigabit = edge_cost_per_gigabyte / GBIT_PER_GBYTE
+
+        # define variables
         edge_flow_gigabits = cp.Variable((len(regions), len(regions)), boolean=False, name="edge_flow_gigabits")
         total_throughput_out = cp.sum(edge_flow_gigabits[src_idx, :])
         total_throughput_in = cp.sum(edge_flow_gigabits[:, dst_idx])
@@ -106,6 +122,18 @@ class ThroughputSolverILP(ThroughputSolver):
             if u != src_idx and u != dst_idx:
                 constraints.append(cp.sum(edge_flow_gigabits[u, :]) == 0)
 
+        # instance throughput constraints
+        for idx, r in enumerate(regions):
+            provider = r.split(":")[0]
+            if provider == "aws":
+                constraints.append(cp.sum(edge_flow_gigabits[idx, :]) <= aws_instance_throughput_limit)
+            elif provider == "gcp":
+                constraints.append(cp.sum(edge_flow_gigabits[idx, :]) <= gcp_instance_throughput_limit)
+            elif provider == "azure":
+                constraints.append(cp.sum(edge_flow_gigabits[idx, :]) <= azure_instance_throughput_limit)
+            else:
+                raise ValueError(f"Unknown provider {provider}")
+
         if required_throughput_gbits is not None and cost_limit is None:  # min cost
             assert required_throughput_gbits > 0
             cost_per_second = cp.sum(cp.multiply(edge_cost_per_gigabit, cp.pos(edge_flow_gigabits)))  # $/gbit * gbit/s = $/s
@@ -113,8 +141,8 @@ class ThroughputSolverILP(ThroughputSolver):
             total_cost = cost_per_second * transfer_runtime
 
             objective = cp.Minimize(total_cost)
-            constraints.append(total_throughput_out == required_throughput_gbits)
-            constraints.append(total_throughput_in == required_throughput_gbits)
+            constraints.append(total_throughput_out * instance_limit == required_throughput_gbits)
+            constraints.append(total_throughput_in * instance_limit == required_throughput_gbits)
         elif cost_limit is not None and required_throughput_gbits is None:  # max throughput
             raise NotImplementedError("Max throughput not implemented")
             # assert cost_limit > 0
@@ -161,6 +189,11 @@ class ThroughputSolverILP(ThroughputSolver):
             logger.debug("No feasible solution")
 
     def plot_graphviz(self, solution) -> gv.Digraph:
+        # if dot is not installed
+        has_dot = shutil.which("dot") is not None
+        if not has_dot:
+            logger.error("Graphviz is not installed. Please install it to plot the solution (sudo apt install graphviz).")
+            return None
         regions = self.get_regions()
         g = gv.Digraph(name="throughput_graph")
         g.attr(rankdir="LR")
