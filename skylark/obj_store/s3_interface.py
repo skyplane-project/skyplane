@@ -19,7 +19,7 @@ class S3Object(ObjectStoreObject):
 
 
 class S3Interface(ObjectStoreInterface):
-    def __init__(self, aws_region, bucket_name, use_tls=True, part_size=None, throughput_target_gbps=None)):
+    def __init__(self, aws_region, bucket_name, use_tls=True, part_size=None, throughput_target_gbps=None):
 
         self.aws_region = self.infer_s3_region(bucket_name) if aws_region is None or aws_region == "infer" else aws_region
         self.bucket_name = bucket_name
