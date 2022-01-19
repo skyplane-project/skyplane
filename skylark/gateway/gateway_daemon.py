@@ -50,7 +50,7 @@ class GatewayDaemon:
         logger.warning("Shutting down gateway daemon")
         self.api_server.shutdown()
 
-    def get_obj_store_interface(region, bucket):
+    def get_obj_store_interface(self, region, bucket):
 
         # TODO: GCP/Azure support
         if region in self.s3_interface_objs: # cached interface

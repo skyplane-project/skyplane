@@ -10,6 +10,7 @@ from skylark.compute.utils import make_dozzle_command, make_netdata_command
 from skylark.utils.utils import PathLike, Timer, wait_for
 
 import configparser
+import os
 
 
 class ServerState(Enum):
