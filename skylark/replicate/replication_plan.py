@@ -25,7 +25,7 @@ class ReplicationJob:
             get_size = lambda o: interface.get_obj_size(o)
         else:
             raise NotImplementedError
-        return do_parallel(get_size, self.objs)
+        return do_parallel(get_size, self.objs, n=16, progress_bar=True, desc="Query object sizes")
 
 
 class ReplicationTopology:

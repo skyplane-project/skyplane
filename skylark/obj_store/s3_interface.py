@@ -85,17 +85,19 @@ class S3Interface(ObjectStoreInterface):
 
     def delete_objects(self, keys: List[str]):
         s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
-        s3_client.delete_objects(Bucket=self.bucket_name, Delete={"Objects": [{"Key": k} for k in keys]})
+        while keys:
+            batch, keys = keys[:1000], keys[1000:]  # take up to 1000 keys at a time
+            s3_client.delete_objects(Bucket=self.bucket_name, Delete={"Objects": [{"Key": k} for k in batch]})
 
     def get_obj_metadata(self, obj_name):
-        s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
+        s3_resource = AWSServer.get_boto3_resource("s3", self.aws_region).Bucket(self.bucket_name)
         try:
-            return s3_client.head_object(Bucket=self.bucket_name, Key=str(obj_name).lstrip("/"))
+            return s3_resource.Object(str(obj_name).lstrip("/"))
         except botocore.exceptions.ClientError as e:
             raise NoSuchObjectException(f"Object {obj_name} does not exist, or you do not have permission to access it") from e
 
     def get_obj_size(self, obj_name):
-        return self.get_obj_metadata(obj_name)["ContentLength"]
+        return self.get_obj_metadata(obj_name).content_length
 
     def exists(self, obj_name):
         try:
