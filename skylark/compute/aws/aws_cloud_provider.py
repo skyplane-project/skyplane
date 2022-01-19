@@ -6,7 +6,7 @@ from typing import List, Optional
 import botocore
 import pandas as pd
 from loguru import logger
-from oslo_concurrency import lockutils
+# from oslo_concurrency import lockutils
 from skylark import skylark_root
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.cloud_providers import CloudProvider

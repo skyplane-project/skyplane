@@ -97,6 +97,7 @@ class ThroughputSolverILP(ThroughputSolver):
         solver=cp.GLPK,
         solver_verbose=False,
     ):
+        logger.info(f"Solving {src} -> {dst} with tput = {required_throughput_gbits} Gbps and cost <= {cost_limit}")
         regions = self.get_regions()
         src_idx = regions.index(src)
         dst_idx = regions.index(dst)
@@ -153,7 +154,7 @@ class ThroughputSolverILP(ThroughputSolver):
             # objective = cp.Maximize(total_throughput_out)
             # constraints.append(total_cost <= cost_limit)
         else:  # min cost and max throughput
-            raise NotImplementedError()
+            raise NotImplementedError("min cost max throughput not implemented")
 
         prob = cp.Problem(objective, constraints)
         prob.solve(solver=solver, verbose=solver_verbose)
