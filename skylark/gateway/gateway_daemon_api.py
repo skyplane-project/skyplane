@@ -4,15 +4,13 @@ import os
 import threading
 from pathlib import Path
 
-from loguru import logger
 from flask import Flask, jsonify, request
-from werkzeug.serving import make_server
-from werkzeug import serving
+from loguru import logger
 from skylark import MB
-
 from skylark.chunk import ChunkRequest, ChunkState
 from skylark.gateway.chunk_store import ChunkStore
 from skylark.gateway.gateway_receiver import GatewayReceiver
+from werkzeug.serving import make_server
 
 
 class GatewayDaemonAPI(threading.Thread):
@@ -62,18 +60,7 @@ class GatewayDaemonAPI(threading.Thread):
             logging.getLogger("werkzeug").addHandler(logging.StreamHandler())
             logging.getLogger("werkzeug").setLevel(logging.DEBUG)
         else:
-            logging.getLogger("werkzeug").setLevel(logging.INFO)
-
-        # override werkzeug's logger to ignore requests to /api/v1/chunk_status_log
-        parent_log_request = serving.WSGIRequestHandler.log_request
-
-        def log_request(self, *args, **kwargs):
-            if self.path == "/api/v1/chunk_status_log":
-                return
-            parent_log_request(self, *args, **kwargs)
-
-        serving.WSGIRequestHandler.log_request = log_request
-
+            logging.getLogger("werkzeug").setLevel(logging.WARNING)
         self.server = make_server(host, port, self.app, threaded=True)
         self.url = "http://{}:{}".format(host, port)
 

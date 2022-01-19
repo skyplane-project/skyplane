@@ -1,13 +1,12 @@
-from functools import lru_cache
 import time
 import uuid
+from functools import lru_cache
 from typing import List, Optional
 
 import botocore
-from oslo_concurrency import lockutils
 import pandas as pd
 from loguru import logger
-
+from oslo_concurrency import lockutils
 from skylark import skylark_root
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.cloud_providers import CloudProvider
@@ -28,6 +27,7 @@ class AWSCloudProvider(CloudProvider):
             "ap-northeast-1",
             "ap-northeast-2",
             "ap-northeast-3",
+            "ap-east-1",
             "ap-south-1",
             "ap-southeast-1",
             "ap-southeast-2",

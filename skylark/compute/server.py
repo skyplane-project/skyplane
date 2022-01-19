@@ -1,14 +1,12 @@
 import json
-import os
 import subprocess
 import threading
 from enum import Enum, auto
 from pathlib import Path
 
-from loguru import logger
 import requests
+from loguru import logger
 from skylark.compute.utils import make_dozzle_command, make_netdata_command
-
 from skylark.utils.utils import PathLike, Timer, wait_for
 
 import configparser
@@ -195,13 +193,24 @@ class Server:
         desc_prefix = f"Starting gateway {self.uuid()}"
         logger.debug(desc_prefix + ": Installing docker")
 
-        # increase TCP connections and enable BBR
-        net_config = "sudo sysctl -w net.ipv4.tcp_tw_reuse=1 net.core.somaxconn=1024 net.core.netdev_max_backlog=2000 net.ipv4.tcp_max_syn_backlog=2048"
+        # increase TCP connections, enable BBR optionally and raise file limits
+        sysctl_updates = {
+            "net.core.rmem_max": 2147483647,
+            "net.core.wmem_max": 2147483647,
+            "net.ipv4.tcp_rmem": "4096 87380 1073741824",
+            "net.ipv4.tcp_wmem": "4096 65536 1073741824",
+            "net.ipv4.tcp_tw_reuse": 1,
+            "net.core.somaxconn": 1024,
+            "net.core.netdev_max_backlog": 2000,
+            "net.ipv4.tcp_max_syn_backlog": 2048,
+            "fs.file-max": 1024 * 1024 * 1024,
+        }
         if use_bbr:
-            net_config += " net.core.default_qdisc=fq net.ipv4.tcp_congestion_control=bbr"
+            sysctl_updates["net.core.default_qdisc"] = "fq"
+            sysctl_updates["net.ipv4.tcp_congestion_control"] = "bbr"
         else:
-            net_config += " net.ipv4.tcp_congestion_control=cubic"
-        self.run_command(net_config)
+            sysctl_updates["net.ipv4.tcp_congestion_control"] = "cubic"
+        self.run_command("sudo sysctl -w {}".format(" ".join(f"{k}={v}" for k, v in sysctl_updates.items())))
 
         # install docker and launch monitoring
         cmd = "(command -v docker >/dev/null 2>&1 || { rm -rf get-docker.sh; curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh; }); "
@@ -242,7 +251,7 @@ class Server:
 
         # todo add other launch flags for gateway daemon
         logger.debug(desc_prefix + f": Starting gateway container {gateway_docker_image}")
-        docker_run_flags = f"-d --rm --log-driver=local --ipc=host --network=host {docker_envs}"
+        docker_run_flags = f"-d --rm --log-driver=local --ipc=host --network=host --ulimit nofile={1024 * 1024} {docker_envs}"
         gateway_daemon_cmd = f"python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections {num_outgoing_connections}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = self.run_command(docker_launch_cmd)
@@ -268,5 +277,4 @@ class Server:
             logger.error(f"Gateway {self.instance_name()} is not ready")
             logs, err = self.run_command(f"sudo docker logs skylark_gateway --tail=100")
             logger.error(f"Docker logs: {logs}\nerr: {err}")
-            logger.error(f"Docker launch command: {docker_launch_cmd}")
             raise e

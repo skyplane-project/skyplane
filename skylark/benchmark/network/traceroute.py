@@ -1,6 +1,4 @@
 import argparse
-import re
-import os
 from datetime import datetime
 import json
 from typing import List, Tuple
@@ -11,9 +9,7 @@ from tqdm import tqdm
 from skylark import skylark_root
 from skylark.benchmark.utils import provision, split_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
-from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
-from skylark.compute.gcp.gcp_server import GCPServer
 from skylark.compute.server import Server
 from skylark.utils.utils import do_parallel
 

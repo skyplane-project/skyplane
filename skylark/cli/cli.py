@@ -16,17 +16,18 @@ Current support:
 import atexit
 import json
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import Optional
 
-import typer
-from loguru import logger
-
-from skylark import GB, MB, print_header, config_file
 import skylark.cli.cli_aws
 import skylark.cli.cli_azure
+import skylark.cli.experiments
+import typer
+from loguru import logger
+from skylark import GB, MB, config_file, print_header
 from skylark.cli.cli_helper import (
+    check_ulimit,
     copy_local_local,
     copy_local_s3,
     copy_s3_local,
@@ -40,6 +41,7 @@ from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopolo
 from skylark.replicate.replicator_client import ReplicatorClient
 
 app = typer.Typer(name="skylark")
+app.add_typer(skylark.cli.experiments.app, name="experiments")
 app.add_typer(skylark.cli.cli_aws.app, name="aws")
 app.add_typer(skylark.cli.cli_azure.app, name="azure")
 
@@ -92,7 +94,7 @@ def replicate_random(
     gcp_project: Optional[str] = None,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
     aws_instance_class: str = "m5.8xlarge",
-    azure_instance_class: str = "Standard_D32_v4",
+    azure_instance_class: str = "Standard_D32_v5",
     gcp_instance_class: Optional[str] = "n2-standard-32",
     gcp_use_premium_network: bool = False,
     key_prefix: str = "/test/replicate_random",
@@ -106,6 +108,7 @@ def replicate_random(
     gcp_project = gcp_project or config.get("gcp_project_id")
     azure_subscription = azure_subscription or config.get("azure_subscription_id")
     logger.debug(f"Loaded gcp_project: {gcp_project}, azure_subscription: {azure_subscription}")
+    check_ulimit()
 
     if inter_region:
         topo = ReplicationTopology(paths=[[src_region, inter_region, dst_region] for _ in range(num_gateways)])

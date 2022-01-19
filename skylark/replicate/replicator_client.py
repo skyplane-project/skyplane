@@ -219,18 +219,20 @@ class ReplicatorClient:
 
         # make list of chunks
         chunks = []
-        with Timer("Get object sizes from object store"):
-            obj_file_size_bytes = job.src_obj_sizes() if job.source_bucket else None
+        obj_file_size_bytes = job.src_obj_sizes() if job.source_bucket else None
         for idx, obj in enumerate(job.objs):
             if obj_file_size_bytes:
+                # object store objects
                 file_size_bytes = obj_file_size_bytes[idx][1]
-            else:  # random data
+            else:
+                # random data
                 file_size_bytes = job.random_chunk_size_mb * MB
+
             chunks.append(
                 Chunk(
                     key=obj,
                     chunk_id=idx,
-                    file_offset_bytes=0,
+                    file_offset_bytes=0,  # TODO: what is this?
                     chunk_length_bytes=file_size_bytes,
                 )
             )

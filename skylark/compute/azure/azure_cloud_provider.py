@@ -1,21 +1,18 @@
 import os
 import uuid
-
 from pathlib import Path
 from typing import List, Optional
 
-from azure.identity import DefaultAzureCredential
-from azure.mgmt.resource import ResourceManagementClient
-from azure.mgmt.network import NetworkManagementClient
-from azure.mgmt.compute import ComputeManagementClient
-
 import paramiko
-
 from loguru import logger
-
 from skylark import key_root
-from skylark.compute.cloud_providers import CloudProvider
 from skylark.compute.azure.azure_server import AzureServer
+from skylark.compute.cloud_providers import CloudProvider
+
+from azure.identity import DefaultAzureCredential
+from azure.mgmt.compute import ComputeManagementClient
+from azure.mgmt.network import NetworkManagementClient
+from azure.mgmt.resource import ResourceManagementClient
 
 
 class AzureCloudProvider(CloudProvider):
@@ -33,52 +30,107 @@ class AzureCloudProvider(CloudProvider):
     @staticmethod
     def region_list():
         return [
+            "australiaeast",
+            "brazilsouth",
+            "canadacentral",
+            "centralindia",
             "eastasia",
-            "southeastasia",
-            "centralus",
             "eastus",
             "eastus2",
-            "westus",
-            "northcentralus",
-            "southcentralus",
-            "northeurope",
-            "westeurope",
-            "japanwest",
-            "japaneast",
-            "brazilsouth",
-            "australiaeast",
-            "australiasoutheast",
-            "southindia",
-            "centralindia",
-            "westindia",
-            # "jioindiawest",
-            # "jioindiacentral",
-            "canadacentral",
-            "canadaeast",
-            "uksouth",
-            "ukwest",
-            "westcentralus",
-            "westus2",
-            "koreacentral",
-            # "koreasouth",
             "francecentral",
-            # "francesouth",
-            "australiacentral",
-            # "australiacentral2",
-            # "uaecentral",
-            "uaenorth",
-            "southafricanorth",
-            # "southafricawest",
-            "switzerlandnorth",
-            # "switzerlandwest",
-            # "germanynorth",
             "germanywestcentral",
-            # "norwaywest",
+            "japaneast",
+            "koreacentral",
+            "northcentralus",
+            "northeurope",
             "norwayeast",
-            # "brazilsoutheast",
-            "westus3",
+            "southafricanorth",
             "swedencentral",
+            "switzerlandnorth",
+            "uaenorth",
+            "uksouth",
+            "westeurope",
+            "westus",
+            "westus2",
+            "westus3",
+            # D32_v4 or D32_v5 not available:
+            #   "australiacentral",
+            #   "australiasoutheast",
+            #   "canadaeast",
+            #   "centralus",
+            #   "japanwest",
+            #   "southcentralus",
+            "southeastasia",
+            #   "southindia",
+            #   "ukwest",
+            #   "westcentralus",
+            #   "westindia",
+            # not available due to restrictions:
+            #   "australiacentral2",
+            #   "brazilsoutheast",
+            #   "francesouth",
+            #   "germanynorth",
+            #   "jioindiacentral",
+            #   "jioindiawest",
+            #   "koreasouth",
+            #   "norwaywest",
+            #   "southafricawest",
+            #   "switzerlandwest",
+            #   "uaecentral",
         ]
+
+    @staticmethod
+    def lookup_valid_instance(region: str, instance_name: str) -> Optional[str]:
+        # todo this should query the Azure API for available SKUs
+        available_regions = {
+            "Standard_D32_v5": [
+                "australiaeast",
+                "canadacentral",
+                "eastus",
+                "eastus2",
+                "francecentral",
+                "germanywestcentral",
+                "japaneast",
+                "koreacentral",
+                "northcentralus",
+                "northeurope",
+                "uksouth",
+                "westeurope",
+                "westus",
+                "westus2",
+                "westus3",
+            ],
+            "Standard_D32_v4": [
+                "australiaeast",
+                "brazilsouth",
+                "canadacentral",
+                "centralindia",
+                "eastasia",
+                "eastus",
+                "francecentral",
+                "germanywestcentral",
+                "japaneast",
+                "koreacentral",
+                "northcentralus",
+                "northeurope",
+                "norwayeast",
+                "southafricanorth",
+                "swedencentral",
+                "switzerlandnorth",
+                "uaenorth",
+                "uksouth",
+                "westeurope",
+                "westus",
+                "westus3",
+            ],
+        }
+        if region in available_regions["Standard_D32_v5"] and instance_name == "Standard_D32_v5":
+            return "Standard_D32_v5"
+        elif region in available_regions["Standard_D32_v4"] and instance_name == "Standard_D32_v5":
+            return "Standard_D32_v4"
+        else:
+            logger.error(f"Cannot confirm availability of {instance_name} in {region}")
+            return instance_name
 
     @staticmethod
     def get_resource_group_name(name):
@@ -217,7 +269,7 @@ class AzureCloudProvider(CloudProvider):
             AzureServer.vm_name(name),
             {
                 "location": location,
-                "hardware_profile": {"vm_size": vm_size},
+                "hardware_profile": {"vm_size": self.lookup_valid_instance(location, vm_size)},
                 "storage_profile": {
                     "image_reference": {
                         "publisher": "canonical",
