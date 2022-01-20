@@ -96,6 +96,7 @@ class ThroughputSolverILP(ThroughputSolver):
         azure_instance_throughput_limit=16.0,
         max_connections_per_path=64,
         max_connections_per_node=64,
+        sparsity_penalty=0,
         solver=cp.GLPK,
         solver_verbose=False,
         save_lp_path=None,
@@ -173,9 +174,9 @@ class ThroughputSolverILP(ThroughputSolver):
         total_cost = cp.sum(cost_per_edge)
 
         # sparsity constraint
-        sparsity_constraint = cp.sum(cp.abs(edge_flow_gigabits))
+        sparsity_constraint = cp.norm1(conn)
 
-        prob = cp.Problem(cp.Minimize(total_cost + 0.01 * sparsity_constraint), constraints)
+        prob = cp.Problem(cp.Minimize(total_cost + sparsity_penalty * sparsity_constraint), constraints)
 
         if solver == cp.GUROBI or solver == "gurobi":
             solver_options = {}

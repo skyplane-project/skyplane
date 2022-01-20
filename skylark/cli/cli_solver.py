@@ -28,6 +28,7 @@ def solve_throughput(
     required_throughput_gbits: float = typer.Argument(..., help="Required throughput in gbps."),
     gbyte_to_transfer: float = typer.Option(1, help="Gigabytes to transfer"),
     max_instances: int = typer.Option(1, help="Max number of instances per overlay region."),
+    sparsity_penalty: float = typer.Option(0.0, help="Sparsity penalty"),
     throughput_grid: Path = typer.Option(
         skylark_root / "profiles" / "throughput_mini.csv", "--throughput-grid", help="Throughput grid file"
     ),
@@ -48,6 +49,7 @@ def solve_throughput(
         required_throughput_gbits=required_throughput_gbits,
         gbyte_to_transfer=gbyte_to_transfer,
         instance_limit=max_instances,
+        sparsity_penalty=sparsity_penalty,
         solver=solver,
         solver_verbose=solver_verbose,
         save_lp_path=skylark_root / "data" / "throughput_solver.lp",
