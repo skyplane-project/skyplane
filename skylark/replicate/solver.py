@@ -122,9 +122,10 @@ class ThroughputSolverILP(ThroughputSolver):
         constraints = []
 
         # connection limits
-        constraints.append(conn >= 1)
+        constraints.append(conn >= 0)
         constraints.append(conn <= max_connections_per_path)
-        constraints.append(cp.sum(conn, axis=1) <= max_connections_per_node)
+        node_conns_out = cp.sum(conn, axis=1)
+        constraints.append(node_conns_out <= max_connections_per_node)
 
         # instance limit
         constraints.append(inv_n_instances >= 1.0 / instance_limit)
@@ -168,20 +169,23 @@ class ThroughputSolverILP(ThroughputSolver):
         transfer_size_gbit = gbyte_to_transfer * GBIT_PER_GBYTE
         runtime_s = transfer_size_gbit / required_throughput_gbits  # gbit * s / gbit = s
         edge_cost_per_gigabit = edge_cost_per_gigabyte / GBIT_PER_GBYTE  # $ / (GB * 8) = $/gbit
-        cost_per_second = cp.sum(cp.multiply(edge_flow_gigabits, edge_cost_per_gigabit))  #  gbit/s * $/gbit = $/s
-        total_cost = cost_per_second * runtime_s  # + 0.01 * n_instances
+        cost_per_edge = cp.multiply(edge_flow_gigabits * runtime_s, edge_cost_per_gigabit)  #  gbit/s * $/gbit = $/s
+        total_cost = cp.sum(cost_per_edge)
 
-        prob = cp.Problem(cp.Minimize(total_cost), constraints)
+        # sparsity constraint
+        sparsity_constraint = cp.sum(cp.abs(edge_flow_gigabits))
 
-        if solver == cp.GUROBI or solver == 'gurobi':
+        prob = cp.Problem(cp.Minimize(total_cost + 0.01 * sparsity_constraint), constraints)
+
+        if solver == cp.GUROBI or solver == "gurobi":
             solver_options = {}
-            solver_options['Threads'] = os.cpu_count()
+            solver_options["Threads"] = os.cpu_count()
             if save_lp_path:
-                solver_options['ResultFile'] = str(save_lp_path)
+                solver_options["ResultFile"] = str(save_lp_path)
             prob.solve(verbose=True, qcp=True, solver=cp.GUROBI)
         else:
             prob.solve(solver=solver, verbose=solver_verbose)
-        
+
         if prob.status == "optimal":
             return dict(
                 src=src,
@@ -189,8 +193,10 @@ class ThroughputSolverILP(ThroughputSolver):
                 gbyte_to_transfer=gbyte_to_transfer,
                 n_instances=n_instances.value,
                 solution=edge_flow_gigabits.value,
+                cost_per_edge=cost_per_edge.value,
                 connections=conn.value,
                 cost=total_cost.value,
+                runtime_s=runtime_s,
                 throughput=node_flow_in[sinks[0]].value * n_instances.value,
                 feasible=True,
             )
@@ -210,12 +216,15 @@ class ThroughputSolverILP(ThroughputSolver):
             logger.debug(f"Total cost: ${cost:.4f}")
             logger.debug(f"Total throughput: {throughput:.2f} Gbps")
             logger.debug(f"Number of instances: {n_instances:.2f}")
+            logger.debug(f"Total runtime: {solution['runtime_s']:.2f}s")
             logger.debug("Flow matrix:")
             for i, src in enumerate(regions):
-                logger.debug(f"\t{src}: Active? {solution['is_instance_active']}")
                 for j, dst in enumerate(regions):
                     if sol[i, j] > 0:
-                        logger.debug(f"\t{src} -> {dst}: {sol[i, j]:.2f} Gbps with {connections[i, j]:.1f} connections (link capacity = {throughput_grid[i, j]:.2f} Gbps)")
+                        gb_sent = solution["runtime_s"] * solution["solution"][i, j] * GBIT_PER_GBYTE
+                        logger.debug(
+                            f"\t{src} -> {dst}: {sol[i, j]:.2f} Gbps with {connections[i, j]:.1f} connections, {gb_sent:.1f}GB (link capacity = {throughput_grid[i, j]:.2f} Gbps)"
+                        )
         else:
             logger.debug("No feasible solution")
 
@@ -227,19 +236,21 @@ class ThroughputSolverILP(ThroughputSolver):
             return None
         regions = self.get_regions()
         throughput_grid = self.get_throughput_grid()
+        cost_per_gb = solution["cost"] / solution["gbyte_to_transfer"]
         g = gv.Digraph(name="throughput_graph")
         g.attr(rankdir="LR")
         g.attr(
-            label=f"{solution['src']} to {solution['dst']}\n{solution['throughput']:.2f} Gbps, ${solution['cost']:.4f}, {solution['n_instances']:.2f} instances"
+            label=f"{solution['src']} to {solution['dst']}\n{solution['throughput']:.2f} Gbps, ${solution['cost']:.4f}\nAverage: ${cost_per_gb:.4f}/GB"
         )
         g.attr(labelloc="t")
         for i, src in enumerate(regions):
             for j, dst in enumerate(regions):
                 if solution["solution"][i, j] > 0:
                     link_cost = self.get_path_cost(src, dst)
+                    gb_sent = solution["runtime_s"] * solution["solution"][i, j] * GBIT_PER_GBYTE
                     g.edge(
                         src.replace(":", "/"),
                         dst.replace(":", "/"),
-                        label=f"{solution['solution'][i, j]:.2f} Gbps (of {throughput_grid[i, j]:.2f}Gbps), ${link_cost:.4f}/GB w/ {solution['connections'][i, j]:.1f}c",
+                        label=f"{solution['solution'][i, j]:.2f} Gbps (of {throughput_grid[i, j]:.2f}Gbps), ${link_cost:.4f}/GB w/ {gb_sent:.1f}GB sent w/ {solution['connections'][i, j]:.1f}c",
                     )
         return g

@@ -35,6 +35,7 @@ def solve_throughput(
 ):
     try:
         import gurobipy as grb
+
         solver = cp.GUROBI
     except ImportError:
         solver = cp.GLPK
@@ -57,4 +58,4 @@ def solve_throughput(
     if solution["feasible"]:
         g = tput.plot_graphviz(solution)
         if g is not None:
-            g.render(filename="/tmp/throughput_graph.gv", quiet_view=True)
+            g.render(filename="/tmp/throughput_graph.gv", quiet_view=True, format="png")
