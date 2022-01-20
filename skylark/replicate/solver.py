@@ -1,7 +1,8 @@
-import argparse
+import os
 import shutil
 
 import cvxpy as cp
+import cvxpy.transforms as ct
 import graphviz as gv
 import matplotlib.pyplot as plt
 import numpy as np
@@ -83,89 +84,121 @@ class ThroughputSolver:
 
 
 class ThroughputSolverILP(ThroughputSolver):
-    def solve(
+    def solve_min_cost(
         self,
         src,
         dst,
-        required_throughput_gbits=None,
-        cost_limit=None,
-        gbyte_to_transfer=1.0,
+        required_throughput_gbits,
+        gbyte_to_transfer,
         instance_limit=1,
         aws_instance_throughput_limit=5.0,
         gcp_instance_throughput_limit=8.0,
         azure_instance_throughput_limit=16.0,
+        max_connections_per_path=64,
+        max_connections_per_node=64,
+        sparsity_penalty=0,
         solver=cp.GLPK,
         solver_verbose=False,
+        save_lp_path=None,
     ):
+        logger.info(f"Solving {src} -> {dst} with tput = {required_throughput_gbits} Gbps")
         regions = self.get_regions()
         src_idx = regions.index(src)
         dst_idx = regions.index(dst)
+        sources = [src_idx]
+        sinks = [dst_idx]
 
         # define constants
         edge_cost_per_gigabyte, edge_capacity_gigabits = self.get_cost_grid(), self.get_throughput_grid()
-        edge_cost_per_gigabit = edge_cost_per_gigabyte / GBIT_PER_GBYTE
 
         # define variables
-        edge_flow_gigabits = cp.Variable((len(regions), len(regions)), boolean=False, name="edge_flow_gigabits")
-        total_throughput_out = cp.sum(edge_flow_gigabits[src_idx, :])
-        total_throughput_in = cp.sum(edge_flow_gigabits[:, dst_idx])
+        edge_flow_gigabits = cp.Variable((len(regions), len(regions)), name="edge_flow_gigabits")
+        conn = cp.Variable((len(regions), len(regions)), name="conn")
+        inv_n_instances = cp.Variable(name="n_instances")  # integer=True
+        n_instances = cp.inv_pos(inv_n_instances)
+        node_flow_in = cp.sum(edge_flow_gigabits, axis=0)
+        node_flow_out = cp.sum(edge_flow_gigabits, axis=1)
+        req_tput_instance = required_throughput_gbits * inv_n_instances
 
-        # constraints
-        constraints = [total_throughput_out == total_throughput_in]
-        for u in range(len(regions)):
-            for v in range(len(regions)):
-                # capacity constraints
-                constraints.append(edge_flow_gigabits[u, v] <= edge_capacity_gigabits[u, v])
-                # skew symmetry
-                constraints.append(edge_flow_gigabits[u, v] == -1 * edge_flow_gigabits[v, u])
-            # flow conservation
-            if u != src_idx and u != dst_idx:
-                constraints.append(cp.sum(edge_flow_gigabits[u, :]) == 0)
+        constraints = []
 
-        # instance throughput constraints
+        # connection limits
+        constraints.append(conn >= 0)
+        constraints.append(conn <= max_connections_per_path)
+        node_conns_out = cp.sum(conn, axis=1)
+        constraints.append(node_conns_out <= max_connections_per_node)
+
+        # instance limit
+        constraints.append(inv_n_instances >= 1.0 / instance_limit)
+        constraints.append(inv_n_instances <= 1)
+        # constraints.append(n_instances >= 1)
+
+        # flow capacity constraint
+        adjusted_edge_capacity_gigabits = cp.multiply(edge_capacity_gigabits, conn / max_connections_per_path)
+        constraints.append(edge_flow_gigabits <= adjusted_edge_capacity_gigabits)
+
+        # flow conservation
+        for v in range(len(regions)):
+            f_in, f_out = node_flow_in[v], node_flow_out[v]
+            if v in sources:
+                constraints.append(f_in == 0)
+                constraints.append(f_out == req_tput_instance)
+            elif v in sinks:
+                constraints.append(f_in == req_tput_instance)
+            else:
+                constraints.append(f_in == f_out)
+
+        # non-negative flow constraint
+        constraints.append(edge_flow_gigabits >= 0)
+
+        # instance throughput constraints (egress)
         for idx, r in enumerate(regions):
             provider = r.split(":")[0]
+            f_out = node_flow_out[idx]
             if provider == "aws":
-                constraints.append(cp.sum(edge_flow_gigabits[idx, :]) <= aws_instance_throughput_limit)
+                constraints.append(f_out <= aws_instance_throughput_limit)
             elif provider == "gcp":
-                constraints.append(cp.sum(edge_flow_gigabits[idx, :]) <= gcp_instance_throughput_limit)
+                constraints.append(f_out <= gcp_instance_throughput_limit)
             elif provider == "azure":
-                constraints.append(cp.sum(edge_flow_gigabits[idx, :]) <= azure_instance_throughput_limit)
+                constraints.append(f_out <= azure_instance_throughput_limit)
             else:
                 raise ValueError(f"Unknown provider {provider}")
 
-        if required_throughput_gbits is not None and cost_limit is None:  # min cost
-            assert required_throughput_gbits > 0
-            cost_per_second = cp.sum(cp.multiply(edge_cost_per_gigabit, cp.pos(edge_flow_gigabits)))  # $/gbit * gbit/s = $/s
-            transfer_runtime = (GBIT_PER_GBYTE * gbyte_to_transfer) / required_throughput_gbits  # gbit / (gbit/s) = s
-            total_cost = cost_per_second * transfer_runtime
+        assert required_throughput_gbits > 0
 
-            objective = cp.Minimize(total_cost)
-            constraints.append(total_throughput_out * instance_limit == required_throughput_gbits)
-            constraints.append(total_throughput_in * instance_limit == required_throughput_gbits)
-        elif cost_limit is not None and required_throughput_gbits is None:  # max throughput
-            raise NotImplementedError("Max throughput not implemented")
-            # assert cost_limit > 0
-            # cost_per_second = cp.sum(cp.multiply(edge_cost_per_gigabit, cp.pos(edge_flow_gigabits)))  # $/gbit * gbit/s = $/s
-            # transfer_runtime = (GBIT_PER_GBYTE * gbyte_to_transfer) / cp.inv_pos(total_throughput_out)  # gbit / (gbit/s) = s
-            # total_cost = cost_per_second * transfer_runtime
+        # define objective
+        transfer_size_gbit = gbyte_to_transfer * GBIT_PER_GBYTE
+        runtime_s = transfer_size_gbit / required_throughput_gbits  # gbit * s / gbit = s
+        edge_cost_per_gigabit = edge_cost_per_gigabyte / GBIT_PER_GBYTE  # $ / (GB * 8) = $/gbit
+        cost_per_edge = cp.multiply(edge_flow_gigabits * runtime_s, edge_cost_per_gigabit)  #  gbit/s * $/gbit = $/s
+        total_cost = cp.sum(cost_per_edge)
 
-            # objective = cp.Maximize(total_throughput_out)
-            # constraints.append(total_cost <= cost_limit)
-        else:  # min cost and max throughput
-            raise NotImplementedError()
+        # sparsity constraint
+        sparsity_constraint = cp.norm1(conn)
 
-        prob = cp.Problem(objective, constraints)
-        prob.solve(solver=solver, verbose=solver_verbose)
+        prob = cp.Problem(cp.Minimize(total_cost + sparsity_penalty * sparsity_constraint), constraints)
+
+        if solver == cp.GUROBI or solver == "gurobi":
+            solver_options = {}
+            solver_options["Threads"] = os.cpu_count()
+            if save_lp_path:
+                solver_options["ResultFile"] = str(save_lp_path)
+            prob.solve(verbose=True, qcp=True, solver=cp.GUROBI)
+        else:
+            prob.solve(solver=solver, verbose=solver_verbose)
+
         if prob.status == "optimal":
-            solution = cp.pos(edge_flow_gigabits).value
             return dict(
                 src=src,
                 dst=dst,
                 gbyte_to_transfer=gbyte_to_transfer,
-                solution=solution,
+                n_instances=n_instances.value,
+                solution=edge_flow_gigabits.value,
+                cost_per_edge=cost_per_edge.value,
+                connections=conn.value,
                 cost=total_cost.value,
-                throughput=total_throughput_out.value,
+                runtime_s=runtime_s,
+                throughput=node_flow_in[sinks[0]].value * n_instances.value,
                 feasible=True,
             )
         else:
@@ -173,18 +206,26 @@ class ThroughputSolverILP(ThroughputSolver):
 
     def print_solution(self, solution):
         if solution["feasible"]:
+            throughput_grid = self.get_throughput_grid()
             sol = solution["solution"]
             cost = solution["cost"]
             throughput = solution["throughput"]
+            connections = solution["connections"]
+            n_instances = solution["n_instances"]
             regions = self.get_regions()
 
             logger.debug(f"Total cost: ${cost:.4f}")
             logger.debug(f"Total throughput: {throughput:.2f} Gbps")
+            logger.debug(f"Number of instances: {n_instances:.2f}")
+            logger.debug(f"Total runtime: {solution['runtime_s']:.2f}s")
             logger.debug("Flow matrix:")
             for i, src in enumerate(regions):
                 for j, dst in enumerate(regions):
                     if sol[i, j] > 0:
-                        logger.debug(f"\t{src} -> {dst}: {sol[i, j]:.2f} Gbps")
+                        gb_sent = solution["runtime_s"] * solution["solution"][i, j] * GBIT_PER_GBYTE
+                        logger.debug(
+                            f"\t{src} -> {dst}: {sol[i, j]:.2f} Gbps with {connections[i, j]:.1f} connections, {gb_sent:.1f}GB (link capacity = {throughput_grid[i, j]:.2f} Gbps)"
+                        )
         else:
             logger.debug("No feasible solution")
 
@@ -195,40 +236,22 @@ class ThroughputSolverILP(ThroughputSolver):
             logger.error("Graphviz is not installed. Please install it to plot the solution (sudo apt install graphviz).")
             return None
         regions = self.get_regions()
+        throughput_grid = self.get_throughput_grid()
+        cost_per_gb = solution["cost"] / solution["gbyte_to_transfer"]
         g = gv.Digraph(name="throughput_graph")
         g.attr(rankdir="LR")
-        g.attr(label=f"{solution['src']} to {solution['dst']}\n{solution['throughput']:.2f} Gbps, ${solution['cost']:.4f}")
+        g.attr(
+            label=f"{solution['src']} to {solution['dst']}\n{solution['throughput']:.2f} Gbps, ${solution['cost']:.4f}\nAverage: ${cost_per_gb:.4f}/GB"
+        )
         g.attr(labelloc="t")
         for i, src in enumerate(regions):
             for j, dst in enumerate(regions):
                 if solution["solution"][i, j] > 0:
                     link_cost = self.get_path_cost(src, dst)
+                    gb_sent = solution["runtime_s"] * solution["solution"][i, j] * GBIT_PER_GBYTE
                     g.edge(
                         src.replace(":", "/"),
                         dst.replace(":", "/"),
-                        label=f"{solution['solution'][i, j]:.2f} Gbps, ${link_cost:.2f}/GB",
+                        label=f"{solution['solution'][i, j]:.2f} Gbps (of {throughput_grid[i, j]:.2f}Gbps), ${link_cost:.4f}/GB w/ {gb_sent:.1f}GB sent w/ {solution['connections'][i, j]:.1f}c",
                     )
         return g
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--cost-path", type=str, default=str(skylark_root / "data" / "throughput" / "df_throughput_agg.csv"))
-    parser.add_argument("--src", type=str, required=True)
-    parser.add_argument("--dst", type=str, required=True)
-    parser.add_argument("--max-cost", type=float, default=None)
-    parser.add_argument("--min-throughput", type=float, default=None)
-    args = parser.parse_args()
-
-    tput = ThroughputSolverILP(args.cost_path)
-    solution = tput.solve(
-        args.src,
-        args.dst,
-        required_throughput_gbits=args.min_throughput,
-        cost_limit=args.max_cost,
-        solver=cp.GUROBI,
-        solver_verbose=False,
-    )
-    tput.print_solution(solution)
-    if solution["feasible"]:
-        tput.plot_graphviz(solution).render(filename="/tmp/throughput_graph.gv", view=True)
