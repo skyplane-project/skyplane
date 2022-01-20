@@ -1,9 +1,12 @@
 import argparse
-import atexit
 
 from loguru import logger
 from skylark import GB, MB, print_header
-from skylark.chunk import ChunkState
+
+import tempfile
+import concurrent
+import os
+from skylark.obj_store.s3_interface import S3Interface
 
 import tempfile
 import concurrent
@@ -12,8 +15,6 @@ from skylark.obj_store.s3_interface import S3Interface
 
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
-from skylark.utils.utils import Timer
-from skylark import skylark_root
 
 
 def parse_args():
@@ -68,17 +69,17 @@ def main(args):
 
     if not args.skip_upload:
         # todo implement object store support
-        #pass
+        # pass
         print("Not skipping upload...", src_bucket, dst_bucket)
 
         # TODO: fix this to get the key instead of S3Object
         matching_src_keys = list([obj.key for obj in s3_interface_src.list_objects(prefix=args.key_prefix)])
         matching_dst_keys = list([obj.key for obj in s3_interface_dst.list_objects(prefix=args.key_prefix)])
         if matching_src_keys:
-            logger.warning(f"Deleting objects from source bucket: {matching_src_keys}")
+            logger.warning(f"Deleting {len(matching_src_keys)} objects from source bucket")
             s3_interface_src.delete_objects(matching_src_keys)
         if matching_dst_keys:
-            logger.warning(f"Deleting objects from destination bucket: {matching_dst_keys}")
+            logger.warning(f"Deleting {len(matching_dst_keys)} objects from destination bucket")
             s3_interface_dst.delete_objects(matching_dst_keys)
 
         # create test objects w/ random data
@@ -93,9 +94,7 @@ def main(args):
             for i in range(args.n_chunks):
                 k = f"{args.key_prefix}/{i}"
                 futures.append(s3_interface_src.upload_object(f.name, k))
-                print("done", f.name, len(futures))
                 obj_keys.append(k)
-        print("created all futures")
         concurrent.futures.wait(futures)
     else:
         obj_keys = [f"{args.key_prefix}/{i}" for i in range(args.n_chunks)]
@@ -143,7 +142,7 @@ def main(args):
     total_bytes = args.n_chunks * args.chunk_size_mb * MB
     crs = rc.run_replication_plan(job)
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
-    stats = rc.monitor_transfer(crs, serve_web_dashboard=True)
+    stats = rc.monitor_transfer(crs, show_pbar=True)
     logger.info(f"Replication completed in {stats['total_runtime_s']:.2f}s ({stats['throughput_gbits']:.2f}Gbit/s)")
 
 

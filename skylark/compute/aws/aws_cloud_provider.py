@@ -1,17 +1,16 @@
-from functools import lru_cache
 import time
 import uuid
+from functools import lru_cache
 from typing import List, Optional
 
 import botocore
-from oslo_concurrency import lockutils
 import pandas as pd
 from loguru import logger
 
+from oslo_concurrency import lockutils
 from skylark import skylark_root
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.cloud_providers import CloudProvider
-from skylark.utils.utils import Timer
 
 
 class AWSCloudProvider(CloudProvider):
@@ -23,50 +22,36 @@ class AWSCloudProvider(CloudProvider):
         return "aws"
 
     @staticmethod
-    @lru_cache
-    def get_enabled_regions():
-        # check if the region is enabled or not
-        # use descibe-regions call to check OptInStatus
-        ec2 = AWSServer.get_boto3_resource("ec2", "us-east-1")
-        desc_regions = ec2.meta.client.describe_regions()
-        return [r["RegionName"] for r in desc_regions["Regions"]]
-
-    @staticmethod
-    def region_list(include_disabled: bool = False) -> List[str]:
+    def region_list() -> List[str]:
         all_regions = [
+            "af-south-1",
             "ap-northeast-1",
             "ap-northeast-2",
+            "ap-northeast-3",
+            "ap-east-1",
+            "ap-south-1",
             "ap-southeast-1",
             "ap-southeast-2",
+            "ap-southeast-3",
             "ca-central-1",
             "eu-central-1",
+            "eu-north-1",
+            "eu-south-1",
             "eu-west-1",
             "eu-west-2",
             "eu-west-3",
+            "me-south-1",
             "sa-east-1",
             "us-east-1",
             "us-east-2",
             "us-west-1",
             "us-west-2",
-            # "ap-northeast-3",  # dl ami not available here
-            "af-south-1",
-            # "ap-south-1",
-            # "ap-southeast-3",
-            # "eu-north-1",  # dl ami not available here
-            # "eu-south-1",
-            # "me-south-1",
         ]
-        if include_disabled:
-            return all_regions
-        else:
-            enabled_regions = AWSCloudProvider.get_enabled_regions()
-            for r in all_regions:
-                if r not in enabled_regions:
-                    logger.warning(f"Skipping region {r}")
-            return [r for r in all_regions if r in enabled_regions]
+        return all_regions
 
     @staticmethod
-    def get_transfer_cost(src_key, dst_key):
+    def get_transfer_cost(src_key, dst_key, premium_tier=True):
+        assert premium_tier, "AWS transfer cost is only available for premium tier"
         transfer_df = pd.read_csv(skylark_root / "profiles" / "aws_transfer_costs.csv").set_index(["src", "dst"])
 
         src_provider, src = src_key.split(":")
@@ -81,7 +66,7 @@ class AWSCloudProvider(CloudProvider):
                 src_rows = transfer_df.loc[src]
                 src_rows = src_rows[src_rows.index != "internet"]
                 return src_rows.max()["cost"]
-        elif dst_provider == "gcp":
+        elif dst_provider == "gcp" or dst_provider == "azure":
             return transfer_df.loc[src, "internet"]["cost"]
         else:
             raise NotImplementedError

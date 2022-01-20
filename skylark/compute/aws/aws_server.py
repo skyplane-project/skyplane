@@ -4,10 +4,10 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import boto3
-from oslo_concurrency import lockutils
 import paramiko
 from loguru import logger
 
+from oslo_concurrency import lockutils
 from skylark import key_root
 from skylark.compute.server import Server, ServerState
 from skylark.utils.cache import ignore_lru_cache
@@ -99,7 +99,7 @@ class AWSServer(Server):
         return self.tags().get("Name", None)
 
     def network_tier(self):
-        return "STANDARD"
+        return "PREMIUM"
 
     def region(self):
         return self.aws_region
@@ -117,5 +117,12 @@ class AWSServer(Server):
     def get_ssh_client_impl(self):
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(self.public_ip(), username="ubuntu", key_filename=str(self.local_keyfile), look_for_keys=False, allow_agent=False)
+        client.connect(
+            self.public_ip(),
+            username="ubuntu",
+            key_filename=str(self.local_keyfile),
+            look_for_keys=False,
+            allow_agent=False,
+            banner_timeout=200,
+        )
         return client

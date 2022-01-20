@@ -4,10 +4,9 @@ from pathlib import Path
 
 import googleapiclient.discovery
 import paramiko
-from loguru import logger
-
 from skylark import key_root
 from skylark.compute.server import Server, ServerState
+from skylark.utils.cache import ignore_lru_cache
 from skylark.utils.utils import PathLike
 
 
@@ -60,10 +59,12 @@ class GCPServer(Server):
     def get_instance_property(self, prop):
         return self.get_gcp_instance()[prop]
 
+    @ignore_lru_cache()
     def public_ip(self):
         """Get public IP for instance with GCP client"""
         return self.get_instance_property("networkInterfaces")[0]["accessConfigs"][0].get("natIP")
 
+    @ignore_lru_cache()
     def instance_class(self):
         return self.get_instance_property("machineType").split("/")[-1]
 
@@ -73,13 +74,16 @@ class GCPServer(Server):
     def instance_state(self):
         return ServerState.from_gcp_state(self.get_instance_property("status"))
 
+    @ignore_lru_cache()
     def instance_name(self):
         return self.get_instance_property("name")
 
+    @ignore_lru_cache()
     def tags(self):
         """Get labels for instance."""
         return self.get_instance_property("labels")
 
+    @ignore_lru_cache()
     def network_tier(self):
         interface = self.get_instance_property("networkInterfaces")[0]
         return interface["accessConfigs"][0]["networkTier"]
@@ -101,5 +105,6 @@ class GCPServer(Server):
             key_filename=str(self.ssh_private_key),
             passphrase=ssh_key_password,
             look_for_keys=False,
+            banner_timeout=200,
         )
         return ssh_client

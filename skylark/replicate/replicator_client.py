@@ -1,11 +1,7 @@
 import atexit
-from contextlib import closing
 from datetime import datetime
 import itertools
-import json
-from logging import log
 from functools import partial
-from re import T
 import time
 from typing import Dict, List, Optional, Tuple
 
@@ -21,10 +17,9 @@ from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server, ServerState
 from skylark.chunk import Chunk, ChunkRequest, ChunkRequestHop, ChunkState
-from skylark.obj_store.s3_interface import S3Interface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client_dashboard import ReplicatorClientDashboard
-from skylark.utils.utils import PathLike, Timer, do_parallel, wait_for
+from skylark.utils.utils import PathLike, Timer, do_parallel
 
 
 class ReplicatorClient:
@@ -219,23 +214,25 @@ class ReplicatorClient:
             "gcp",
         ], f"Only AWS, Azure, and GCP are supported, but got {job.dest_region}"
 
+        # pre-fetch instance IPs for all gateways
+        gateway_ips: Dict[Server, str] = {s: s.public_ip() for path in self.bound_paths for s in path}
+
         # make list of chunks
         chunks = []
-        print("get object sizes", job.source_bucket)
         obj_file_size_bytes = job.src_obj_sizes() if job.source_bucket else None
         for idx, obj in enumerate(job.objs):
             if obj_file_size_bytes:
                 # object store objects
                 file_size_bytes = obj_file_size_bytes[idx][1]
             else:
-                # random data 
-                file_size_bytes = job.random_chunk_size_mb * MB  
+                # random data
+                file_size_bytes = job.random_chunk_size_mb * MB
 
             chunks.append(
                 Chunk(
                     key=obj,
                     chunk_id=idx,
-                    file_offset_bytes=0, # TODO: what is this?
+                    file_offset_bytes=0,  # TODO: what is this?
                     chunk_length_bytes=file_size_bytes,
                 )
             )
@@ -267,23 +264,36 @@ class ReplicatorClient:
                 for chunk in batch:
                     cr_path = []
                     for hop_idx, hop_instance in enumerate(path_instances):
-                        # todo support object stores
-                        if hop_idx == 0:  # source gateway
-                            location = f"random_{job.random_chunk_size_mb}MB"
-                        elif hop_idx == len(path_instances) - 1:  # destination gateway
-                            location = "save_local"
+                        src_object_store_region = None
+                        src_object_store_bucket = None
+                        dst_object_store_region = None
+                        dst_object_store_bucket = None
+                        if hop_idx == 0:
+                            if job.source_bucket:  # source bucket
+                                location = "src_object_store"
+                                src_object_store_region = job.source_region
+                                src_object_store_bucket = job.source_bucket
+                            else:  # source gateway
+                                location = f"random_{job.random_chunk_size_mb}MB"
+                        elif hop_idx == len(path_instances) - 1:
+                            if job.dest_bucket:  # destination bucket
+                                location = "dst_object_store"
+                                dst_object_store_region = job.dest_region
+                                dst_object_store_bucket = job.dest_bucket
+                            else:  # destination gateway
+                                location = "save_local"
                         else:  # intermediate gateway
                             location = "relay"
+
                         cr_path.append(
                             ChunkRequestHop(
                                 hop_cloud_region=hop_instance.region_tag,
-                                hop_ip_address=hop_instance.public_ip(),
+                                hop_ip_address=gateway_ips[hop_instance],
                                 chunk_location_type=location,
-                                #src_object_store_region=src_object_store_region, 
-                                #src_object_store_bucket=src_object_store_bucket,
-                                #dst_object_store_region=dst_object_store_region,
-                                #dst_object_store_bucket=dst_object_store_bucket,
- 
+                                src_object_store_region=src_object_store_region,
+                                src_object_store_bucket=src_object_store_bucket,
+                                dst_object_store_region=dst_object_store_region,
+                                dst_object_store_bucket=dst_object_store_bucket,
                             )
                         )
                     chunk_requests_sharded[path_idx].append(ChunkRequest(chunk, cr_path))
@@ -293,10 +303,9 @@ class ReplicatorClient:
 
             def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
                 hop_instance, chunk_requests = args
-                logger.debug(f"Sending {len(chunk_requests)} chunk requests to {hop_instance.public_ip()}")
-                reply = requests.post(
-                    f"http://{hop_instance.public_ip()}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests]
-                )
+                ip = gateway_ips[hop_instance]
+                logger.debug(f"Sending {len(chunk_requests)} chunk requests to {ip}")
+                reply = requests.post(f"http://{ip}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests])
                 if reply.status_code != 200:
                     raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
 
@@ -306,32 +315,43 @@ class ReplicatorClient:
         return [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
 
     def get_chunk_status_log_df(self) -> pd.DataFrame:
-        chunk_logs = []
+        def get_chunk_status(args):
+            hop_instance, path_idx, hop_idx = args
+            reply = requests.get(f"http://{hop_instance.public_ip()}:8080/api/v1/chunk_status_log")
+            if reply.status_code != 200:
+                raise Exception(f"Failed to get chunk status from gateway instance {hop_instance.instance_name()}: {reply.text}")
+            logs = []
+            for log_entry in reply.json()["chunk_status_log"]:
+                log_entry["hop_cloud_region"] = hop_instance.region_tag
+                log_entry["path_idx"] = path_idx
+                log_entry["hop_idx"] = hop_idx
+                log_entry["time"] = datetime.fromisoformat(log_entry["time"])
+                log_entry["state"] = ChunkState.from_str(log_entry["state"])
+                logs.append(log_entry)
+            return logs
+
+        reqs = []
         for path_idx, path in enumerate(self.bound_paths):
             for hop_idx, hop_instance in enumerate(path):
-                reply = requests.get(f"http://{hop_instance.public_ip()}:8080/api/v1/chunk_status_log")
-                if reply.status_code != 200:
-                    raise Exception(f"Failed to get chunk status from gateway instance {hop_instance.instance_name()}: {reply.text}")
-                for log_entry in reply.json()["chunk_status_log"]:
-                    log_entry["hop_cloud_region"] = hop_instance.region_tag
-                    log_entry["path_idx"] = path_idx
-                    log_entry["hop_idx"] = hop_idx
-                    log_entry["time"] = datetime.fromisoformat(log_entry["time"])
-                    log_entry["state"] = ChunkState.from_str(log_entry["state"])
-                    chunk_logs.append(log_entry)
-        df = pd.DataFrame(chunk_logs)
-        return df
+                reqs.append((hop_instance, path_idx, hop_idx))
+
+        # aggregate results
+        rows = []
+        for _, result in do_parallel(get_chunk_status, reqs, n=-1):
+            rows.extend(result)
+        return pd.DataFrame(rows)
 
     def monitor_transfer(
         self,
         crs: List[ChunkRequest],
         completed_state=ChunkState.upload_complete,
-        show_pbar=True,
+        show_pbar=False,
         log_interval_s: Optional[float] = None,
-        serve_web_dashboard=True,
+        serve_web_dashboard=False,
         dash_host="0.0.0.0",
         dash_port="8080",
         time_limit_seconds: Optional[float] = None,
+        cancel_pending: bool = True,
     ) -> Dict:
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs])
         if serve_web_dashboard:
@@ -340,6 +360,23 @@ class ReplicatorClient:
             atexit.register(dash.shutdown)
             logger.info(f"Web dashboard running at {dash.dashboard_url}")
         last_log = None
+
+        # register atexit handler to cancel pending chunk requests (force shutdown gateways)
+        if cancel_pending:
+
+            def shutdown_handler():
+                def fn(s: Server):
+                    logger.warning(f"Cancelling pending chunk requests to {s.public_ip()}")
+                    try:
+                        requests.post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
+                    except requests.exceptions.ConnectionError as e:
+                        return  # ignore connection errors since server may be shutting down
+
+                do_parallel(fn, [hop for path in self.bound_paths for hop in path], n=-1)
+                logger.warning("Cancelled pending chunk requests")
+
+            atexit.register(shutdown_handler)
+
         with Timer() as t:
             with tqdm(
                 total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB, disable=not show_pbar
@@ -370,6 +407,8 @@ class ReplicatorClient:
                     if len(completed_chunk_ids) == len(crs) or time_limit_seconds is not None and t.elapsed > time_limit_seconds:
                         if serve_web_dashboard:
                             dash.shutdown()
+                        if cancel_pending:
+                            atexit.unregister(shutdown_handler)
                         return dict(
                             completed_chunk_ids=completed_chunk_ids,
                             total_runtime_s=total_runtime_s,
@@ -393,4 +432,4 @@ class ReplicatorClient:
                                 throughput_gbits=throughput_gbits,
                                 monitor_status="timed_out",
                             )
-                        time.sleep(0.25)
+                        time.sleep(0.01 if show_pbar else 0.25)

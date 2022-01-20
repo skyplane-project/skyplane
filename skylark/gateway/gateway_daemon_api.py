@@ -1,16 +1,16 @@
 import logging
 import logging.handlers
+import os
 import threading
 from pathlib import Path
 
 from flask import Flask, jsonify, request
-from werkzeug.serving import make_server
-from werkzeug import serving
+from loguru import logger
 from skylark import MB
-
 from skylark.chunk import ChunkRequest, ChunkState
 from skylark.gateway.chunk_store import ChunkStore
 from skylark.gateway.gateway_receiver import GatewayReceiver
+from werkzeug.serving import make_server
 
 
 class GatewayDaemonAPI(threading.Thread):
@@ -27,11 +27,21 @@ class GatewayDaemonAPI(threading.Thread):
     * GET /api/v1/chunk_status_log - returns list of chunk status log entries
     """
 
-    def __init__(self, chunk_store: ChunkStore, gateway_receiver: GatewayReceiver, host="0.0.0.0", port=8080, debug=False, log_dir=None):
+    def __init__(
+        self,
+        chunk_store: ChunkStore,
+        gateway_receiver: GatewayReceiver,
+        host="0.0.0.0",
+        port=8080,
+        debug=False,
+        log_dir=None,
+        daemon_cleanup_handler=None,
+    ):
         super().__init__()
         self.app = Flask("gateway_metadata_server")
         self.chunk_store = chunk_store
         self.gateway_receiver = gateway_receiver
+        self.daemon_cleanup_handler = daemon_cleanup_handler  # optional handler to run when daemon is shutting down during cleanup
 
         # load routes
         self.register_global_routes()
@@ -50,18 +60,7 @@ class GatewayDaemonAPI(threading.Thread):
             logging.getLogger("werkzeug").addHandler(logging.StreamHandler())
             logging.getLogger("werkzeug").setLevel(logging.DEBUG)
         else:
-            logging.getLogger("werkzeug").setLevel(logging.INFO)
-
-        # override werkzeug's logger to ignore requests to /api/v1/chunk_status_log
-        parent_log_request = serving.WSGIRequestHandler.log_request
-
-        def log_request(self, *args, **kwargs):
-            if self.path == "/api/v1/chunk_status_log":
-                return
-            parent_log_request(self, *args, **kwargs)
-
-        serving.WSGIRequestHandler.log_request = log_request
-
+            logging.getLogger("werkzeug").setLevel(logging.WARNING)
         self.server = make_server(host, port, self.app, threaded=True)
         self.url = "http://{}:{}".format(host, port)
 
@@ -95,8 +94,13 @@ class GatewayDaemonAPI(threading.Thread):
         # shutdown route
         @self.app.route("/api/v1/shutdown", methods=["POST"])
         def shutdown():
+            logger.warning("Shutting down gateway daemon")
+            if self.daemon_cleanup_handler is not None:
+                self.daemon_cleanup_handler()
+            logger.warning("Shutting down API")
             self.shutdown()
-            return jsonify({"status": "ok"})
+            logger.error("Shutdown complete. Hard exit.")
+            os._exit(1)
 
     def register_server_routes(self):
         # list running gateway servers w/ ports

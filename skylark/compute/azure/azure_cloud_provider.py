@@ -1,22 +1,18 @@
 import os
 import uuid
-
 from pathlib import Path
 from typing import List, Optional
 
-from azure.identity import DefaultAzureCredential
-from azure.mgmt.resource import ResourceManagementClient
-from azure.mgmt.network import NetworkManagementClient
-from azure.mgmt.compute import ComputeManagementClient
-
 import paramiko
-
 from loguru import logger
-
 from skylark import key_root
-from skylark.compute.cloud_providers import CloudProvider
 from skylark.compute.azure.azure_server import AzureServer
-from skylark.utils.utils import Timer
+from skylark.compute.cloud_providers import CloudProvider
+
+from azure.identity import DefaultAzureCredential
+from azure.mgmt.compute import ComputeManagementClient
+from azure.mgmt.network import NetworkManagementClient
+from azure.mgmt.resource import ResourceManagementClient
 
 
 class AzureCloudProvider(CloudProvider):
@@ -34,60 +30,222 @@ class AzureCloudProvider(CloudProvider):
     @staticmethod
     def region_list():
         return [
+            "australiaeast",
+            "brazilsouth",
+            "canadacentral",
+            "centralindia",
             "eastasia",
-            "southeastasia",
-            "centralus",
             "eastus",
             "eastus2",
-            "westus",
-            "northcentralus",
-            "southcentralus",
-            "northeurope",
-            "westeurope",
-            "japanwest",
-            "japaneast",
-            "brazilsouth",
-            "australiaeast",
-            "australiasoutheast",
-            "southindia",
-            "centralindia",
-            "westindia",
-            "jioindiawest",
-            "jioindiacentral",
-            "canadacentral",
-            "canadaeast",
-            "uksouth",
-            "ukwest",
-            "westcentralus",
-            "westus2",
-            "koreacentral",
-            "koreasouth",
             "francecentral",
-            "francesouth",
-            "australiacentral",
-            "australiacentral2",
-            "uaecentral",
-            "uaenorth",
-            "southafricanorth",
-            "southafricawest",
-            "switzerlandnorth",
-            "switzerlandwest",
-            "germanynorth",
             "germanywestcentral",
-            "norwaywest",
+            "japaneast",
+            "koreacentral",
+            "northcentralus",
+            "northeurope",
             "norwayeast",
-            "brazilsoutheast",
-            "westus3",
+            "southafricanorth",
             "swedencentral",
+            "switzerlandnorth",
+            "uaenorth",
+            "uksouth",
+            "westeurope",
+            "westus",
+            "westus2",
+            "westus3",
+            # D32_v4 or D32_v5 not available:
+            #   "australiacentral",
+            #   "australiasoutheast",
+            #   "canadaeast",
+            #   "centralus",
+            #   "japanwest",
+            #   "southcentralus",
+            #   "southeastasia",
+            #   "southindia",
+            #   "ukwest",
+            #   "westcentralus",
+            #   "westindia",
+            # not available due to restrictions:
+            #   "australiacentral2",
+            #   "brazilsoutheast",
+            #   "francesouth",
+            #   "germanynorth",
+            #   "jioindiacentral",
+            #   "jioindiawest",
+            #   "koreasouth",
+            #   "norwaywest",
+            #   "southafricawest",
+            #   "switzerlandwest",
+            #   "uaecentral",
         ]
+
+    @staticmethod
+    def lookup_continent(region: str) -> str:
+        lookup_dict = {
+            "oceania": {"australiaeast", "australiacentral", "australiasoutheast", "australiacentral2"},
+            "asia": {
+                "eastasia",
+                "japaneast",
+                "japanwest",
+                "koreacentral",
+                "koreasouth",
+                "southeastasia",
+                "southindia",
+                "centralindia",
+                "westindia",
+                "jioindiacentral",
+                "jioindiawest",
+            },
+            "north-america": {
+                "canadacentral",
+                "canadaeast",
+                "centralus",
+                "eastus",
+                "eastus2",
+                "northcentralus",
+                "westus",
+                "westus2",
+                "westus3",
+                "southcentralus",
+                "westcentralus",
+            },
+            "south-america": {"brazilsouth", "brazilsoutheast"},
+            "europe": {
+                "francecentral",
+                "germanywestcentral",
+                "northeurope",
+                "norwayeast",
+                "swedencentral",
+                "switzerlandnorth",
+                "switzerlandwest",
+                "westeurope",
+                "uksouth",
+                "ukwest",
+                "francesouth",
+                "germanynorth",
+                "norwaywest",
+            },
+            "africa": {"southafricanorth", "southafricawest"},
+            "middle-east": {"uaenorth", "uaecentral"},
+        }
+        for continent, regions in lookup_dict.items():
+            if region in regions:
+                return continent
+        return "unknown"
+
+    @staticmethod
+    def lookup_valid_instance(region: str, instance_name: str) -> Optional[str]:
+        # todo this should query the Azure API for available SKUs
+        available_regions = {
+            "Standard_D32_v5": [
+                "australiaeast",
+                "canadacentral",
+                "eastus",
+                "eastus2",
+                "francecentral",
+                "germanywestcentral",
+                "japaneast",
+                "koreacentral",
+                "northcentralus",
+                "northeurope",
+                "uksouth",
+                "westeurope",
+                "westus",
+                "westus2",
+                "westus3",
+            ],
+            "Standard_D32_v4": [
+                "australiaeast",
+                "brazilsouth",
+                "canadacentral",
+                "centralindia",
+                "eastasia",
+                "eastus",
+                "francecentral",
+                "germanywestcentral",
+                "japaneast",
+                "koreacentral",
+                "northcentralus",
+                "northeurope",
+                "norwayeast",
+                "southafricanorth",
+                "swedencentral",
+                "switzerlandnorth",
+                "uaenorth",
+                "uksouth",
+                "westeurope",
+                "westus",
+                "westus3",
+            ],
+        }
+        if region in available_regions["Standard_D32_v5"] and instance_name == "Standard_D32_v5":
+            return "Standard_D32_v5"
+        elif region in available_regions["Standard_D32_v4"] and instance_name == "Standard_D32_v5":
+            return "Standard_D32_v4"
+        else:
+            logger.error(f"Cannot confirm availability of {instance_name} in {region}")
+            return instance_name
 
     @staticmethod
     def get_resource_group_name(name):
         return name
 
     @staticmethod
-    def get_transfer_cost(src_key, dst_key):
-        raise NotImplementedError
+    def get_transfer_cost(src_key, dst_key, premium_tier=True):
+        """Assumes <10TB transfer tier."""
+        src_provider, src_region = src_key.split(":")
+        dst_provider, dst_region = dst_key.split(":")
+        assert src_provider == "azure"
+        if not premium_tier:
+            return NotImplementedError()
+
+        src_continent = AzureCloudProvider.lookup_continent(src_region)
+        dst_continent = AzureCloudProvider.lookup_continent(dst_region)
+
+        if dst_provider != "azure":  # internet transfer
+            # From North America, Europe to any destination
+            if src_continent in {"north-america", "europe"}:
+                return 0.0875
+            # From Asia (China excluded), Australia, MEA to any destination
+            elif src_continent in {"asia", "oceania", "middle-east", "africa"}:
+                return 0.12
+            # From South America to any destination
+            elif src_continent == "south-america":
+                return 0.181
+            else:
+                raise ValueError(f"Unknown transfer cost for {src_key} -> {dst_key}")
+        else:  # local transfer
+            # intracontinental transfer
+            if src_continent == dst_continent:
+                # Between regions within North America, Between regions within Europe
+                if src_continent in {"north-america", "europe"} and dst_continent in {"north-america", "europe"}:
+                    return 0.02
+                # Between regions within Asia, Between regions within Oceania, Between regions within Middle East and Africa
+                elif src_continent in {"asia", "oceania", "middle-east", "africa"} and dst_continent in {
+                    "asia",
+                    "oceania",
+                    "middle-east",
+                    "africa",
+                }:
+                    return 0.08
+                # Between regions within South America
+                elif src_continent == "south-america" and dst_continent == "south-america":
+                    return 0.181
+                else:
+                    raise ValueError(f"Unknown transfer cost for {src_key} -> {dst_key}")
+            # intercontinental transfer
+            else:
+                # From North America to other continents, From Europe to other continents
+                if src_continent in {"north-america", "europe"}:
+                    return 0.05
+                # From Asia to other continents, From Oceania to other continents, From Africa to other continents
+                elif src_continent in {"asia", "oceania", "middle-east", "africa"}:
+                    return 0.08
+                # From South America to other continents
+                elif src_continent == "south-america":
+                    return 0.16
+                else:
+                    raise ValueError(f"Unknown transfer cost for {src_key} -> {dst_key}")
 
     def get_instance_list(self, region: str) -> List[AzureServer]:
         credential = DefaultAzureCredential()
@@ -149,7 +307,7 @@ class AzureCloudProvider(CloudProvider):
         poller = network_client.virtual_networks.begin_create_or_update(
             resource_group, AzureServer.vnet_name(name), {"location": location, "address_space": {"address_prefixes": ["10.0.0.0/24"]}}
         )
-        vnet_result = poller.result()
+        poller.result()
 
         # Create a Network Security Group for this instance
         # NOTE: This is insecure. We should fix this soon.
@@ -218,7 +376,7 @@ class AzureCloudProvider(CloudProvider):
             AzureServer.vm_name(name),
             {
                 "location": location,
-                "hardware_profile": {"vm_size": vm_size},
+                "hardware_profile": {"vm_size": self.lookup_valid_instance(location, vm_size)},
                 "storage_profile": {
                     "image_reference": {
                         "publisher": "canonical",
@@ -238,6 +396,6 @@ class AzureCloudProvider(CloudProvider):
                 "network_profile": {"network_interfaces": [{"id": nic_result.id}]},
             },
         )
-        vm_result = poller.result()
+        poller.result()
 
         return AzureServer(self.subscription_id, resource_group)

@@ -2,16 +2,16 @@ import json
 import os
 import subprocess
 import threading
-import time
-import uuid
 from enum import Enum, auto
-from pathlib import Path, PurePath
+from pathlib import Path
 
-from loguru import logger
 import requests
+from loguru import logger
 from skylark.compute.utils import make_dozzle_command, make_netdata_command
+from skylark.utils.utils import PathLike, Timer, wait_for
 
-from skylark.utils.utils import PathLike, Timer, do_parallel, wait_for
+import configparser
+import os
 
 
 class ServerState(Enum):
@@ -139,7 +139,7 @@ class Server:
         def is_up():
             try:
                 ip = self.public_ip()
-            except Exception as e:
+            except Exception:
                 return False
             if ip is not None:
                 cmd = ["nc", "-zvw1", str(ip), "22"]
@@ -195,13 +195,24 @@ class Server:
         desc_prefix = f"Starting gateway {self.uuid()}"
         logger.debug(desc_prefix + ": Installing docker")
 
-        # increase TCP connections and enable BBR
-        net_config = "sudo sysctl -w net.ipv4.tcp_tw_reuse=1 net.core.somaxconn=1024 net.core.netdev_max_backlog=2000 net.ipv4.tcp_max_syn_backlog=2048"
+        # increase TCP connections, enable BBR optionally and raise file limits
+        sysctl_updates = {
+            "net.core.rmem_max": 2147483647,
+            "net.core.wmem_max": 2147483647,
+            "net.ipv4.tcp_rmem": "4096 87380 1073741824",
+            "net.ipv4.tcp_wmem": "4096 65536 1073741824",
+            "net.ipv4.tcp_tw_reuse": 1,
+            "net.core.somaxconn": 1024,
+            "net.core.netdev_max_backlog": 2000,
+            "net.ipv4.tcp_max_syn_backlog": 2048,
+            "fs.file-max": 1024 * 1024 * 1024,
+        }
         if use_bbr:
-            net_config += " net.core.default_qdisc=fq net.ipv4.tcp_congestion_control=bbr"
+            sysctl_updates["net.core.default_qdisc"] = "fq"
+            sysctl_updates["net.ipv4.tcp_congestion_control"] = "bbr"
         else:
-            net_config += " net.ipv4.tcp_congestion_control=cubic"
-        self.run_command(net_config)
+            sysctl_updates["net.ipv4.tcp_congestion_control"] = "cubic"
+        self.run_command("sudo sysctl -w {}".format(" ".join(f"{k}={v}" for k, v in sysctl_updates.items())))
 
         # install docker and launch monitoring
         cmd = "(command -v docker >/dev/null 2>&1 || { rm -rf get-docker.sh; curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh; }); "
@@ -214,6 +225,7 @@ class Server:
             logger.debug(desc_prefix + ": Installing docker (retry)")
             out, err = self.run_command(cmd)
             docker_version = out.strip().split("\n")[-1]
+
         assert docker_version.startswith("Success"), f"Failed to install Docker: {out}\n{err}"
 
         # launch monitoring
@@ -226,9 +238,22 @@ class Server:
         docker_out, docker_err = self.run_command(f"sudo docker pull {gateway_docker_image}")
         assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
 
+        # read AWS config file to get credentials
+        # TODO: Integrate this with updated skylark config file
+        docker_envs = ""
+        try:
+            config = configparser.RawConfigParser()
+            config.read(os.path.expanduser("~/.aws/credentials"))
+            aws_access_key_id = config.get("default", "aws_access_key_id")
+            aws_secret_access_key = config.get("default", "aws_secret_access_key")
+            docker_envs += f" -e AWS_ACCESS_KEY_ID='{aws_access_key_id}'"
+            docker_envs += f" -e AWS_SECRET_ACCESS_KEY='{aws_secret_access_key}'"
+        except Exception as e:
+            logger.error(f"Failed to read AWS credentials locally {e}")
+
         # todo add other launch flags for gateway daemon
         logger.debug(desc_prefix + f": Starting gateway container {gateway_docker_image}")
-        docker_run_flags = "-d --rm --log-driver=local --ipc=host --network=host"
+        docker_run_flags = f"-d --rm --log-driver=local --ipc=host --network=host --ulimit nofile={1024 * 1024} {docker_envs}"
         gateway_daemon_cmd = f"python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections {num_outgoing_connections}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = self.run_command(docker_launch_cmd)
@@ -245,7 +270,7 @@ class Server:
                 status_val = requests.get(api_url)
                 is_up = status_val.json().get("status") == "ok"
                 return is_up
-            except Exception as e:
+            except Exception:
                 return False
 
         try:

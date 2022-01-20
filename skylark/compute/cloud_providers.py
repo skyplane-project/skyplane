@@ -2,7 +2,6 @@ import threading
 from typing import List, Optional, Union
 
 from skylark.compute.server import Server, ServerState
-from skylark.utils.utils import Timer
 
 
 class CloudProvider:
@@ -17,18 +16,22 @@ class CloudProvider:
         raise NotImplementedError
 
     @staticmethod
-    def get_transfer_cost(src_key, dst_key):
+    def get_transfer_cost(src_key, dst_key, premium_tier=True):
         if src_key == dst_key:
             return 0.0
         src_provider, _ = src_key.split(":")
         if src_provider == "aws":
             from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 
-            return AWSCloudProvider.get_transfer_cost(src_key, dst_key)
+            return AWSCloudProvider.get_transfer_cost(src_key, dst_key, premium_tier)
         elif src_provider == "gcp":
             from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 
-            return GCPCloudProvider.get_transfer_cost(src_key, dst_key)
+            return GCPCloudProvider.get_transfer_cost(src_key, dst_key, premium_tier)
+        elif src_provider == "azure":
+            from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
+
+            return AzureCloudProvider.get_transfer_cost(src_key, dst_key, premium_tier)
         else:
             raise NotImplementedError
 

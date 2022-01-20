@@ -3,32 +3,15 @@ AWS convenience interface
 """
 
 
-import atexit
-import json
-import os
-from pathlib import Path
 import sys
-from typing import Optional
 
 import typer
 from loguru import logger
-from skylark import GB, MB, print_header
-from skylark.cli.cli_helper import (
-    copy_local_local,
-    copy_local_s3,
-    copy_s3_local,
-    deprovision_skylark_instances,
-    ls_local,
-    ls_s3,
-    parse_path,
-)
-from skylark.utils.utils import do_parallel
-from skylark.compute.aws.aws_server import AWSServer
-from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
-from skylark.replicate.replicator_client import ReplicatorClient
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
+from skylark.compute.aws.aws_server import AWSServer
+from skylark.utils.utils import do_parallel
 
-app = typer.Typer(name="skylark")
+app = typer.Typer(name="skylark-aws")
 
 # config logger
 logger.remove()
