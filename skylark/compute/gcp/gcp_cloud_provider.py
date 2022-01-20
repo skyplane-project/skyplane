@@ -8,7 +8,7 @@ import googleapiclient
 import paramiko
 from loguru import logger
 
-# from oslo_concurrency import lockutils
+from oslo_concurrency import lockutils
 from skylark import key_root
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.cloud_providers import CloudProvider

@@ -94,6 +94,8 @@ class ThroughputSolverILP(ThroughputSolver):
         aws_instance_throughput_limit=5.0,
         gcp_instance_throughput_limit=8.0,
         azure_instance_throughput_limit=16.0,
+        max_connections_per_path=64,
+        max_connections_per_node=128,
         solver=cp.GLPK,
         solver_verbose=False,
     ):
@@ -108,7 +110,8 @@ class ThroughputSolverILP(ThroughputSolver):
         edge_cost_per_gigabyte, edge_capacity_gigabits = self.get_cost_grid(), self.get_throughput_grid()
 
         # define variables
-        edge_flow_gigabits = cp.Variable((len(regions), len(regions)), boolean=False, name="edge_flow_gigabits")
+        edge_flow_gigabits = cp.Variable((len(regions), len(regions)), name="edge_flow_gigabits")
+        conn = cp.Variable((len(regions), len(regions)), name="conn")
         inv_n_instances = cp.Variable(name="n_instances")  # integer=True
         n_instances = cp.inv_pos(inv_n_instances)
         node_flow_in = cp.sum(edge_flow_gigabits, axis=0)
@@ -117,13 +120,19 @@ class ThroughputSolverILP(ThroughputSolver):
 
         constraints = []
 
+        # connection limits
+        constraints.append(conn >= 1)
+        constraints.append(conn <= max_connections_per_path)
+        constraints.append(cp.sum(conn, axis=1) <= max_connections_per_node)
+
         # instance limit
         constraints.append(inv_n_instances >= 1.0 / instance_limit)
         constraints.append(inv_n_instances <= 1)
         # constraints.append(n_instances >= 1)
 
         # flow capacity constraint
-        constraints.append(edge_flow_gigabits <= edge_capacity_gigabits)
+        adjusted_edge_capacity_gigabits = cp.multiply(edge_capacity_gigabits, conn / max_connections_per_path)
+        constraints.append(edge_flow_gigabits <= adjusted_edge_capacity_gigabits)
 
         # flow conservation
         for v in range(len(regions)):
@@ -165,13 +174,13 @@ class ThroughputSolverILP(ThroughputSolver):
         # prob.solve(solver=solver, verbose=solver_verbose)
         prob.solve(verbose=True, qcp=True, solver=cp.GUROBI)
         if prob.status == "optimal":
-            solution = cp.pos(edge_flow_gigabits).value
             return dict(
                 src=src,
                 dst=dst,
                 gbyte_to_transfer=gbyte_to_transfer,
                 n_instances=n_instances.value,
-                solution=solution,
+                solution=edge_flow_gigabits.value,
+                connections=conn.value,
                 cost=total_cost.value,
                 throughput=node_flow_in[sinks[0]].value * n_instances.value,
                 feasible=True,
@@ -184,6 +193,7 @@ class ThroughputSolverILP(ThroughputSolver):
             sol = solution["solution"]
             cost = solution["cost"]
             throughput = solution["throughput"]
+            connections = solution["connections"]
             n_instances = solution["n_instances"]
             regions = self.get_regions()
 
@@ -194,7 +204,7 @@ class ThroughputSolverILP(ThroughputSolver):
             for i, src in enumerate(regions):
                 for j, dst in enumerate(regions):
                     if sol[i, j] > 0:
-                        logger.debug(f"\t{src} -> {dst}: {sol[i, j]:.2f} Gbps")
+                        logger.debug(f"\t{src} -> {dst}: {sol[i, j]:.2f} Gbps with {connections[i, j]:.1f} connections")
         else:
             logger.debug("No feasible solution")
 
@@ -218,6 +228,6 @@ class ThroughputSolverILP(ThroughputSolver):
                     g.edge(
                         src.replace(":", "/"),
                         dst.replace(":", "/"),
-                        label=f"{solution['solution'][i, j]:.2f} Gbps, ${link_cost:.4f}/GB",
+                        label=f"{solution['solution'][i, j]:.2f} Gbps, ${link_cost:.4f}/GB w/ {solution['connections'][i, j]:.1f}c",
                     )
         return g
