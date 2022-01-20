@@ -33,6 +33,12 @@ def solve_throughput(
     ),
     solver_verbose: bool = False,
 ):
+    try:
+        import gurobipy as grb
+        solver = cp.GUROBI
+    except ImportError:
+        solver = cp.GLPK
+        logger.warning("Gurobi not installed, using GLPK instead.")
     # build problem and solve
     tput = ThroughputSolverILP(throughput_grid)
     solution = tput.solve_min_cost(
@@ -41,8 +47,9 @@ def solve_throughput(
         required_throughput_gbits=required_throughput_gbits,
         gbyte_to_transfer=gbyte_to_transfer,
         instance_limit=max_instances,
-        solver=cp.CBC,
+        solver=solver,
         solver_verbose=solver_verbose,
+        save_lp_path=skylark_root / "data" / "throughput_solver.lp",
     )
 
     # save results

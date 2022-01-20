@@ -1,8 +1,8 @@
-import argparse
+import os
 import shutil
-from tabnanny import verbose
 
 import cvxpy as cp
+import cvxpy.transforms as ct
 import graphviz as gv
 import matplotlib.pyplot as plt
 import numpy as np
@@ -95,9 +95,10 @@ class ThroughputSolverILP(ThroughputSolver):
         gcp_instance_throughput_limit=8.0,
         azure_instance_throughput_limit=16.0,
         max_connections_per_path=64,
-        max_connections_per_node=128,
+        max_connections_per_node=64,
         solver=cp.GLPK,
         solver_verbose=False,
+        save_lp_path=None,
     ):
         logger.info(f"Solving {src} -> {dst} with tput = {required_throughput_gbits} Gbps")
         regions = self.get_regions()
@@ -171,8 +172,16 @@ class ThroughputSolverILP(ThroughputSolver):
         total_cost = cost_per_second * runtime_s  # + 0.01 * n_instances
 
         prob = cp.Problem(cp.Minimize(total_cost), constraints)
-        # prob.solve(solver=solver, verbose=solver_verbose)
-        prob.solve(verbose=True, qcp=True, solver=cp.GUROBI)
+
+        if solver == cp.GUROBI or solver == 'gurobi':
+            solver_options = {}
+            solver_options['Threads'] = os.cpu_count()
+            if save_lp_path:
+                solver_options['ResultFile'] = str(save_lp_path)
+            prob.solve(verbose=True, qcp=True, solver=cp.GUROBI)
+        else:
+            prob.solve(solver=solver, verbose=solver_verbose)
+        
         if prob.status == "optimal":
             return dict(
                 src=src,
@@ -190,6 +199,7 @@ class ThroughputSolverILP(ThroughputSolver):
 
     def print_solution(self, solution):
         if solution["feasible"]:
+            throughput_grid = self.get_throughput_grid()
             sol = solution["solution"]
             cost = solution["cost"]
             throughput = solution["throughput"]
@@ -202,9 +212,10 @@ class ThroughputSolverILP(ThroughputSolver):
             logger.debug(f"Number of instances: {n_instances:.2f}")
             logger.debug("Flow matrix:")
             for i, src in enumerate(regions):
+                logger.debug(f"\t{src}: Active? {solution['is_instance_active']}")
                 for j, dst in enumerate(regions):
                     if sol[i, j] > 0:
-                        logger.debug(f"\t{src} -> {dst}: {sol[i, j]:.2f} Gbps with {connections[i, j]:.1f} connections")
+                        logger.debug(f"\t{src} -> {dst}: {sol[i, j]:.2f} Gbps with {connections[i, j]:.1f} connections (link capacity = {throughput_grid[i, j]:.2f} Gbps)")
         else:
             logger.debug("No feasible solution")
 
@@ -215,6 +226,7 @@ class ThroughputSolverILP(ThroughputSolver):
             logger.error("Graphviz is not installed. Please install it to plot the solution (sudo apt install graphviz).")
             return None
         regions = self.get_regions()
+        throughput_grid = self.get_throughput_grid()
         g = gv.Digraph(name="throughput_graph")
         g.attr(rankdir="LR")
         g.attr(
@@ -228,6 +240,6 @@ class ThroughputSolverILP(ThroughputSolver):
                     g.edge(
                         src.replace(":", "/"),
                         dst.replace(":", "/"),
-                        label=f"{solution['solution'][i, j]:.2f} Gbps, ${link_cost:.4f}/GB w/ {solution['connections'][i, j]:.1f}c",
+                        label=f"{solution['solution'][i, j]:.2f} Gbps (of {throughput_grid[i, j]:.2f}Gbps), ${link_cost:.4f}/GB w/ {solution['connections'][i, j]:.1f}c",
                     )
         return g
