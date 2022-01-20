@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 
 import cvxpy as cp
+
 # import typer
 from loguru import logger
 from skylark.replicate.solver import ThroughputSolverILP
@@ -34,6 +35,7 @@ logger.add(sys.stderr, format="{function:>20}:{line:<3} | <level>{message}</leve
 def solve_throughput(
     src: str,
     dst: str,
+    gbyte_to_transfer: float,
     required_throughput_gbits: float,
     max_instances: int,
     throughput_grid: Path = skylark_root / "profiles" / "throughput_mini.csv",
@@ -41,21 +43,36 @@ def solve_throughput(
 ):
     # build problem and solve
     tput = ThroughputSolverILP(throughput_grid)
-    solution = tput.solve(src, dst, required_throughput_gbits, None, solver=cp.CBC, solver_verbose=solver_verbose)
+    solution = tput.solve_min_cost(
+        src,
+        dst,
+        required_throughput_gbits=required_throughput_gbits,
+        gbyte_to_transfer=gbyte_to_transfer,
+        instance_limit=max_instances,
+        solver=cp.CBC,
+        solver_verbose=solver_verbose,
+    )
 
     # save results
     tput.print_solution(solution)
     if solution["feasible"]:
         g = tput.plot_graphviz(solution)
         if g is not None:
-            g.render(filename="/tmp/throughput_graph.gv")
+            g.render(filename="/tmp/throughput_graph.gv", quiet_view=True)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--src", type=str, required=True)
     parser.add_argument("--dst", type=str, required=True)
+    parser.add_argument("--gbyte-to-transfer", type=float, default=1)
     parser.add_argument("--min-throughput", type=float, default=1)
-    parser.add_argument("--num_instances", type=int, default=1)
+    parser.add_argument("--num-instances", type=int, default=1)
     args = parser.parse_args()
-    solve_throughput(args.src, args.dst, args.min_throughput, args.num_instances)
+    solve_throughput(
+        args.src,
+        args.dst,
+        args.gbyte_to_transfer,
+        args.min_throughput,
+        args.num_instances,
+    )

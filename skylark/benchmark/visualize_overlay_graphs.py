@@ -13,7 +13,9 @@ from skylark.replicate.solver import ThroughputSolverILP
 @ray.remote
 def benchmark(path, src, dst, min_throughput, gbyte_to_transfer=1):
     solver = ThroughputSolverILP(path)
-    solution = solver.solve(src, dst, required_throughput_gbits=min_throughput, gbyte_to_transfer=gbyte_to_transfer, solver=cp.GUROBI)
+    solution = solver.solve_min_cost(
+        src, dst, required_throughput_gbits=min_throughput, gbyte_to_transfer=gbyte_to_transfer, solver=cp.GUROBI
+    )
     if solution["feasible"]:
         baseline_throughput = solver.get_path_throughput(src, dst) / GB
         baseline_cost = solver.get_path_cost(src, dst) * gbyte_to_transfer
