@@ -3,7 +3,6 @@ dist/
 nb/
 Dockerfile
 .pytype/
-env/
 
 
 # Byte-compiled / optimized / DLL files
