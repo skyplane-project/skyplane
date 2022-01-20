@@ -23,7 +23,7 @@ class AWSCloudProvider(CloudProvider):
     @staticmethod
     def region_list() -> List[str]:
         all_regions = [
-            #"af-south-1",
+            "af-south-1",
             "ap-northeast-1",
             "ap-northeast-2",
             "ap-northeast-3",
@@ -95,9 +95,7 @@ class AWSCloudProvider(CloudProvider):
     def make_vpc(self, region: str, vpc_name="skylark"):
         ec2 = AWSServer.get_boto3_resource("ec2", region)
         ec2client = ec2.meta.client
-        print("region", region)
         vpcs = list(ec2.vpcs.filter(Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]).all())
-        print(region, vpcs)
 
         # find matching valid VPC
         matching_vpc = None
