@@ -21,11 +21,11 @@ class ReplicationJob:
 
     def src_obj_sizes(self):
         if self.source_region.split(":")[0] == "aws":
-            interface = S3Interface(self.source_region, self.source_bucket)
+            interface = S3Interface(self.source_region.split(":")[1], self.source_bucket)
             get_size = lambda o: interface.get_obj_size(o)
         else:
             raise NotImplementedError
-        return do_parallel(get_size, self.objs)
+        return do_parallel(get_size, self.objs, n=16, progress_bar=True, desc="Query object sizes")
 
 
 class ReplicationTopology:

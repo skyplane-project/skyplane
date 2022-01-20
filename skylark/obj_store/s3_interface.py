@@ -19,15 +19,26 @@ class S3Object(ObjectStoreObject):
 
 
 class S3Interface(ObjectStoreInterface):
-    def __init__(self, aws_region, bucket_name, use_tls=True):
+    def __init__(self, aws_region, bucket_name, use_tls=True, part_size=None, throughput_target_gbps=None):
+
         self.aws_region = self.infer_s3_region(bucket_name) if aws_region is None or aws_region == "infer" else aws_region
         self.bucket_name = bucket_name
         self.pending_downloads, self.completed_downloads = 0, 0
         self.pending_uploads, self.completed_uploads = 0, 0
+        self.s3_part_size = part_size 
+        self.s3_throughput_target_gbps = throughput_target_gbps
         event_loop_group = EventLoopGroup(num_threads=os.cpu_count(), cpu_group=None)
         host_resolver = DefaultHostResolver(event_loop_group)
         bootstrap = ClientBootstrap(event_loop_group, host_resolver)
-        credential_provider = AwsCredentialsProvider.new_default_chain(bootstrap)
+
+        # get aws auth info for docker envs
+        aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID", None)
+        aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY", None)
+        if aws_access_key_id and aws_secret_access_key:
+            credential_provider = AwsCredentialsProvider.new_static(aws_access_key_id, aws_secret_access_key)
+        else:  # use default
+            credential_provider = AwsCredentialsProvider.new_default_chain(bootstrap)
+
         self._s3_client = S3Client(
             bootstrap=bootstrap,
             region=self.aws_region,
@@ -74,17 +85,19 @@ class S3Interface(ObjectStoreInterface):
 
     def delete_objects(self, keys: List[str]):
         s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
-        s3_client.delete_objects(Bucket=self.bucket_name, Delete={"Objects": [{"Key": k} for k in keys]})
+        while keys:
+            batch, keys = keys[:1000], keys[1000:]  # take up to 1000 keys at a time
+            s3_client.delete_objects(Bucket=self.bucket_name, Delete={"Objects": [{"Key": k} for k in batch]})
 
     def get_obj_metadata(self, obj_name):
-        s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
+        s3_resource = AWSServer.get_boto3_resource("s3", self.aws_region).Bucket(self.bucket_name)
         try:
-            return s3_client.head_object(Bucket=self.bucket_name, Key=str(obj_name).lstrip("/"))
+            return s3_resource.Object(str(obj_name).lstrip("/"))
         except botocore.exceptions.ClientError as e:
             raise NoSuchObjectException(f"Object {obj_name} does not exist, or you do not have permission to access it") from e
 
     def get_obj_size(self, obj_name):
-        return self.get_obj_metadata(obj_name)["ContentLength"]
+        return self.get_obj_metadata(obj_name).content_length
 
     def exists(self, obj_name):
         try:

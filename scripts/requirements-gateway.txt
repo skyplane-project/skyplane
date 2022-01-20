@@ -11,3 +11,5 @@ loguru
 setproctitle
 tqdm
 werkzeug
+oslo.concurrency
+paramiko
