@@ -7,11 +7,11 @@ from skylark.compute.server import Server, ServerState
 from skylark.utils.cache import ignore_lru_cache
 from skylark.utils.utils import PathLike
 
-# import azure.core.exceptions
-# from azure.identity import DefaultAzureCredential
-# from azure.mgmt.compute import ComputeManagementClient
-# from azure.mgmt.network import NetworkManagementClient
-# from azure.mgmt.resource import ResourceManagementClient
+import azure.core.exceptions
+from azure.identity import DefaultAzureCredential
+from azure.mgmt.compute import ComputeManagementClient
+from azure.mgmt.network import NetworkManagementClient
+from azure.mgmt.resource import ResourceManagementClient
 
 
 class AzureServer(Server):
