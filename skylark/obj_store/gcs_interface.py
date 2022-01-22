@@ -12,18 +12,14 @@ class GCSObject(ObjectStoreObject):
     def full_path(self):
         raise NotImplementedError()
 
-
 class GCSInterface(ObjectStoreInterface):
-    def __init__(self, gcp_region, bucket_name, use_tls=True, part_size=None, throughput_target_gbps=None):
+    def __init__(self, gcp_region, bucket_name):
         # TODO: infer region?
         self.gcp_region = gcp_region
 
         self.bucket_name = bucket_name
         self.pending_downloads, self.completed_downloads = 0, 0
         self.pending_uploads, self.completed_uploads = 0, 0
-
-        self.gcs_part_size = part_size
-        self.gcs_throughput_target_gbps = throughput_target_gbps
 
         # TODO - figure out how paralllelism handled
         self._gcs_client = storage.Client()
@@ -50,15 +46,14 @@ class GCSInterface(ObjectStoreInterface):
             print(e)
             return False
 
-    def create_bucket(self):
+    def create_bucket(self, storage_class: str = "STANDARD"):
         if not self.bucket_exists():
             bucket = self._gcs_client.bucket(self.bucket_name)
-            bucket.storage_class = "COLDLINE"  # TODO: which storage class?
-            print(self.gcp_region)
+            bucket.storage_class = storage_class
             new_bucket = self._gcs_client.create_bucket(bucket, location=self.gcp_region)
         assert self.bucket_exists()
 
-    def list_objects(self, prefix="") -> Iterator[GCSObject]:
+    def list_objects(self, prefix="") -> Iterator[S3Object]:
         raise NotImplementedError()
 
     def delete_objects(self, keys: List[str]):
@@ -99,7 +94,6 @@ class GCSInterface(ObjectStoreInterface):
                 f.seek(offset)
                 f.write(chunk)
 
-        # TODO: create future?
         return self.pool.submit(_download_object_helper, 0)
 
     def upload_object(self, src_file_path, dst_object_name, content_type="infer") -> Future:
@@ -116,6 +110,4 @@ class GCSInterface(ObjectStoreInterface):
             blob = bucket.blob(dst_object_name)
             blob.upload_from_filename(src_file_path)
 
-
-        # TODO: create future?
         return self.pool.submit(_upload_object_helper)

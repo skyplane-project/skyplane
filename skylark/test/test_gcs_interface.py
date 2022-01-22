@@ -41,6 +41,3 @@ def test_gcs_interface():
         # check md5
         dl_file_md5 = hashlib.md5(open(fpath, "rb").read()).hexdigest()
         assert dl_file_md5 == file_md5
-
-
-test_gcs_interface()
