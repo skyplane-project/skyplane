@@ -2,13 +2,17 @@
 AWS convenience interface
 """
 
-
+from shlex import split
+import subprocess
 import sys
+from typing import Optional
+import questionary
 
 import typer
 from loguru import logger
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.aws.aws_server import AWSServer
+from skylark.compute.server import ServerState
 from skylark.utils.utils import do_parallel
 
 app = typer.Typer(name="skylark-aws")
@@ -30,6 +34,26 @@ def vcpu_limits(quota_code="L-1216C47A"):
     quotas = do_parallel(get_service_quota, AWSCloudProvider.region_list())
     for region, quota in quotas:
         typer.secho(f"{region}: {int(quota)}", fg="green")
+
+
+@app.command()
+def ssh(region: Optional[str] = None):
+    aws = AWSCloudProvider()
+    typer.secho("Querying AWS for instances", fg="green")
+    instances = aws.get_matching_instances(region=None)
+    if len(instances) == 0:
+        typer.secho(f"No instancess found", fg="red")
+        typer.Abort()
+
+    instance_map = {f"{i.region()}, {i.public_ip()} ({i.instance_state()})": i for i in instances}
+    choices = list(sorted(instance_map.keys()))
+    instance_name: AWSServer = questionary.select("Select an instance", choices=choices).ask()
+    if instance_name is not None and instance_name in instance_map:
+        instance = instance_map[instance_name]
+        proc = subprocess.Popen(split(f"ssh -i {str(instance.local_keyfile)} ubuntu@{instance.public_ip()}"))
+        proc.wait()
+    else:
+        logger.secho(f"No instance selected", fg="red")
 
 
 if __name__ == "__main__":
