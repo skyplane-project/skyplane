@@ -60,7 +60,7 @@ def parse_args():
 
 
 def main(args):
-    
+
     src_bucket = f"{args.bucket_prefix}-skylark-{args.src_region.split(':')[1]}"
     dst_bucket = f"{args.bucket_prefix}-skylark-{args.dest_region.split(':')[1]}"
 
@@ -68,19 +68,18 @@ def main(args):
         obj_store_interface_src = S3Interface(args.src_region.split(":")[1], src_bucket)
     elif "gcp" in args.src_region:
         obj_store_interface_src = GCSInterface(args.src_region.split(":")[1][:-2], src_bucket)
-    else: 
+    else:
         raise ValueError(f"No region in source region {args.src_region}")
 
     if "aws" in args.dest_region:
         obj_store_interface_dst = S3Interface(args.dest_region.split(":")[1], dst_bucket)
-    elif "gcp" in args.dest_region: 
+    elif "gcp" in args.dest_region:
         obj_store_interface_dst = GCSInterface(args.dest_region.split(":")[1][:-2], dst_bucket)
     else:
         raise ValueError(f"No region in destination region {args.dst_region}")
 
     obj_store_interface_src.create_bucket()
     obj_store_interface_dst.create_bucket()
-
 
     if not args.skip_upload:
         # todo implement object store support
