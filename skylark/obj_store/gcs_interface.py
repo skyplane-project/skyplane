@@ -10,16 +10,13 @@ from skylark.obj_store.object_store_interface import NoSuchObjectException, Obje
 
 
 class GCSInterface(ObjectStoreInterface):
-    def __init__(self, gcp_region, bucket_name, use_tls=True, part_size=None, throughput_target_gbps=None):
+    def __init__(self, gcp_region, bucket_name):
         # TODO: infer region?
         self.gcp_region = gcp_region
 
         self.bucket_name = bucket_name
         self.pending_downloads, self.completed_downloads = 0, 0
         self.pending_uploads, self.completed_uploads = 0, 0
-
-        self.gcs_part_size = part_size
-        self.gcs_throughput_target_gbps = throughput_target_gbps
 
         # TODO - figure out how paralllelism handled
         self._gcs_client = storage.Client()
@@ -43,11 +40,10 @@ class GCSInterface(ObjectStoreInterface):
             print(e)
             return False
 
-    def create_bucket(self):
+    def create_bucket(self, storage_class: str = "STANDARD"):
         if not self.bucket_exists():
             bucket = self._gcs_client.bucket(self.bucket_name)
-            bucket.storage_class = "COLDLINE"  # TODO: which storage class?
-            print(self.gcp_region)
+            bucket.storage_class = storage_class
             new_bucket = self._gcs_client.create_bucket(bucket, location=self.gcp_region)
         assert self.bucket_exists()
 
