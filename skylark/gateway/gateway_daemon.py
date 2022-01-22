@@ -20,6 +20,7 @@ from skylark.gateway.gateway_receiver import GatewayReceiver
 from skylark.gateway.gateway_sender import GatewaySender
 
 from skylark.obj_store.s3_interface import S3Interface
+from skylark.obj_store.gcs_interface import GCSInterface
 
 
 class GatewayDaemon:
@@ -33,7 +34,8 @@ class GatewayDaemon:
         self.chunk_store = ChunkStore(chunk_dir)
         self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store, max_pending_chunks=outgoing_connections)
         self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, n_processes=outgoing_connections)
-        self.s3_interfaces: Dict[str, S3Interface] = {}
+
+        self.obj_store_interfaces: Dict[str, ObjectStoreObject] = {}
 
         # API server
         atexit.register(self.cleanup)
@@ -43,10 +45,21 @@ class GatewayDaemon:
         self.api_server.start()
         logger.info(f"Gateway daemon API started at {self.api_server.url}")
 
-    def get_s3_interface(self, region: str, bucket: str) -> S3Interface:
-        if region not in self.s3_interfaces:
-            self.s3_interfaces[region] = S3Interface(region, bucket, use_tls=False)
-        return self.s3_interfaces[region]
+    def get_obj_store_interface(self, region: str, bucket: str) -> ObjectStoreObject:
+
+        # return cached interface
+        if region in self.obj_store_interfaces: 
+            return self.obj_store_interfaces[region]
+
+        # create new interface
+        if region.startswith("aws"):
+            self.obj_store_interfaces[region] = S3Interface(region, bucket, use_tls=False)
+        elif region.startswith("gcp"):
+            self.obj_store_interfaces[region] = GCSInterface(region, bucket)
+        else:
+            ValueError(f"Invalid region {region} - could not create interface")
+        
+        return self.obj_store_interfaces[region]
 
     def cleanup(self):
         logger.warning("Shutting down gateway daemon")
@@ -82,9 +95,9 @@ class GatewayDaemon:
                         def fn(chunk_req, dst_region, dst_bucket):
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
                             logger.info(f"Creating interface {dst_region}--{dst_bucket}")
-                            s3_interface = self.get_s3_interface(dst_region.split(":")[1], dst_bucket)
+                            obj_store_interface = self.get_obj_store_interface(dst_region.split(":")[1], dst_bucket)
                             logger.info(f"Waiting for upload {dst_bucket}:{chunk_req.chunk.key}")
-                            s3_interface.upload_object(fpath, chunk_req.chunk.key).result()
+                            obj_store_interface.upload_object(fpath, chunk_req.chunk.key).result()
                             logger.info(f"Uploaded {fpath} to {dst_bucket}:{chunk_req.chunk.key})")
                             self.chunk_store.state_finish_upload(chunk_req.chunk.chunk_id)
 
@@ -129,9 +142,9 @@ class GatewayDaemon:
                         def fn(chunk_req, src_region, src_bucket):
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
                             logger.info(f"Creating interface {src_region}--{src_bucket}")
-                            s3_interface = self.get_s3_interface(src_region.split(":")[1], src_bucket)
+                            obj_store_interface = self.get_obj_store_interface(src_region.split(":")[1], src_bucket)
                             logger.info(f"Waiting for download {src_bucket}:{chunk_req.chunk.key}")
-                            s3_interface.download_object(chunk_req.chunk.key, fpath).result()
+                            obj_store_interface.download_object(chunk_req.chunk.key, fpath).result()
                             logger.info(f"Downloaded key {chunk_req.chunk.key} to {fpath})")
                             self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
                             self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id)
