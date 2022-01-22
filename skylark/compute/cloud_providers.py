@@ -2,6 +2,7 @@ import threading
 from typing import List, Optional, Union
 
 from skylark.compute.server import Server, ServerState
+from skylark.utils.utils import do_parallel
 
 
 class CloudProvider:
@@ -49,9 +50,10 @@ class CloudProvider:
             region = [region]
         elif region is None:
             region = self.region_list()
+
+        results = do_parallel(self.get_instance_list, region, n=-1)
         matching_instances = []
-        for r in region:
-            instances = self.get_instance_list(r)
+        for r, instances in results:
             for instance in instances:
                 if not (instance_type is None or instance_type == instance.instance_class()):
                     continue

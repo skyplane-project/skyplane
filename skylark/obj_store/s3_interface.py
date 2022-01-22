@@ -25,7 +25,7 @@ class S3Interface(ObjectStoreInterface):
         self.bucket_name = bucket_name
         self.pending_downloads, self.completed_downloads = 0, 0
         self.pending_uploads, self.completed_uploads = 0, 0
-        self.s3_part_size = part_size 
+        self.s3_part_size = part_size
         self.s3_throughput_target_gbps = throughput_target_gbps
         event_loop_group = EventLoopGroup(num_threads=os.cpu_count(), cpu_group=None)
         host_resolver = DefaultHostResolver(event_loop_group)

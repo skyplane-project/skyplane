@@ -52,8 +52,6 @@ class GatewayDaemon:
         logger.warning("Shutting down gateway daemon")
         self.api_server.shutdown()
 
-
-
     def run(self):
         setproctitle.setproctitle(f"skylark-gateway-daemon")
         exit_flag = Event()
