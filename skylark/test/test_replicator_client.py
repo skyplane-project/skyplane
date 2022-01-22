@@ -7,6 +7,11 @@ import tempfile
 import concurrent
 import os
 from skylark.obj_store.s3_interface import S3Interface
+from skylark.obj_store.gcs_interface import GCSInterface
+
+import tempfile
+import concurrent
+import os
 
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
@@ -55,12 +60,26 @@ def parse_args():
 
 
 def main(args):
+
     src_bucket = f"{args.bucket_prefix}-skylark-{args.src_region.split(':')[1]}"
     dst_bucket = f"{args.bucket_prefix}-skylark-{args.dest_region.split(':')[1]}"
-    s3_interface_src = S3Interface(args.src_region.split(":")[1], src_bucket)
-    s3_interface_dst = S3Interface(args.dest_region.split(":")[1], dst_bucket)
-    s3_interface_src.create_bucket()
-    s3_interface_dst.create_bucket()
+
+    if "aws" in args.src_region:
+        obj_store_interface_src = S3Interface(args.src_region.split(":")[1], src_bucket)
+    elif "gcp" in args.src_region:
+        obj_store_interface_src = GCSInterface(args.src_region.split(":")[1][:-2], src_bucket)
+    else:
+        raise ValueError(f"No region in source region {args.src_region}")
+
+    if "aws" in args.dest_region:
+        obj_store_interface_dst = S3Interface(args.dest_region.split(":")[1], dst_bucket)
+    elif "gcp" in args.dest_region:
+        obj_store_interface_dst = GCSInterface(args.dest_region.split(":")[1][:-2], dst_bucket)
+    else:
+        raise ValueError(f"No region in destination region {args.dst_region}")
+
+    obj_store_interface_src.create_bucket()
+    obj_store_interface_dst.create_bucket()
 
     if not args.skip_upload:
         # todo implement object store support
@@ -68,14 +87,14 @@ def main(args):
         print("Not skipping upload...", src_bucket, dst_bucket)
 
         # TODO: fix this to get the key instead of S3Object
-        matching_src_keys = list([obj.key for obj in s3_interface_src.list_objects(prefix=args.key_prefix)])
-        matching_dst_keys = list([obj.key for obj in s3_interface_dst.list_objects(prefix=args.key_prefix)])
+        matching_src_keys = list([obj.key for obj in obj_store_interface_src.list_objects(prefix=args.key_prefix)])
+        matching_dst_keys = list([obj.key for obj in obj_store_interface_dst.list_objects(prefix=args.key_prefix)])
         if matching_src_keys:
             logger.warning(f"Deleting {len(matching_src_keys)} objects from source bucket")
-            s3_interface_src.delete_objects(matching_src_keys)
+            obj_store_interface_src.delete_objects(matching_src_keys)
         if matching_dst_keys:
             logger.warning(f"Deleting {len(matching_dst_keys)} objects from destination bucket")
-            s3_interface_dst.delete_objects(matching_dst_keys)
+            obj_store_interface_dst.delete_objects(matching_dst_keys)
 
         # create test objects w/ random data
         logger.info("Creating test objects")
@@ -88,7 +107,7 @@ def main(args):
             f.seek(0)
             for i in range(args.n_chunks):
                 k = f"{args.key_prefix}/{i}"
-                futures.append(s3_interface_src.upload_object(f.name, k))
+                futures.append(obj_store_interface_src.upload_object(f.name, k))
                 obj_keys.append(k)
         concurrent.futures.wait(futures)
     else:
