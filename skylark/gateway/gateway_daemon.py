@@ -140,7 +140,6 @@ class GatewayDaemon:
                         threading.Thread(target=fn, args=(chunk_req, src_region, src_bucket)).start()
 
                     elif current_hop.chunk_location_type.startswith("random_"):
-                        # update chunk state
                         self.chunk_store.state_start_download(chunk_req.chunk.chunk_id)
 
                         size_mb_match = re.search(r"random_(\d+)MB", current_hop.chunk_location_type)

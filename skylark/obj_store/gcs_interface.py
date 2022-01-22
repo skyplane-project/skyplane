@@ -3,21 +3,10 @@ import os
 from concurrent.futures import Future
 from typing import Iterator, List
 
-#import botocore.exceptions
-#from awscrt.auth import AwsCredentialsProvider
-#from awscrt.http import HttpHeaders, HttpRequest
-#from awscrt.io import ClientBootstrap, DefaultHostResolver, EventLoopGroup
-#from awscrt.s3 import S3Client, S3RequestTlsMode, S3RequestType
-
 from google.cloud import storage
 
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
-
-
-class S3Object(ObjectStoreObject):
-    def full_path(self):
-        return f"s3://{self.bucket}/{self.key}"
 
 
 class GCSInterface(ObjectStoreInterface):
@@ -43,47 +32,36 @@ class GCSInterface(ObjectStoreInterface):
         self.completed_uploads += 1
         self.pending_uploads -= 1
 
-    #def infer_s3_region(self, bucket_name: str):
-    #    s3_client = AWSServer.get_boto3_client("s3")
-    #    region = s3_client.get_bucket_location(Bucket=bucket_name).get("LocationConstraint", "us-east-1")
-    #    return region if region is not None else "us-east-1"
+    def infer_gcs_region(self, bucket_name: str):
+        raise NotImplementedError()
 
     def bucket_exists(self):
         try:
             bucket = self._gcs_client.get_bucket(self.bucket_name)
             return True
-        except Exception as e: 
+        except Exception as e:
             print(e)
             return False
 
     def create_bucket(self):
         if not self.bucket_exists():
             bucket = self._gcs_client.bucket(self.bucket_name)
-            bucket.storage_class = "COLDLINE" # TODO: which storage class?
+            bucket.storage_class = "COLDLINE"  # TODO: which storage class?
             print(self.gcp_region)
             new_bucket = self._gcs_client.create_bucket(bucket, location=self.gcp_region)
         assert self.bucket_exists()
 
-    #def list_objects(self, prefix="") -> Iterator[S3Object]:
-    #    prefix = prefix if not prefix.startswith("/") else prefix[1:]
-    #    s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
-    #    paginator = s3_client.get_paginator("list_objects_v2")
-    #    page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix)
-    #    for page in page_iterator:
-    #        for obj in page.get("Contents", []):
-    #            yield S3Object("s3", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"])
+    def list_objects(self, prefix="") -> Iterator[S3Object]:
+        raise NotImplementedError()
 
-    #def delete_objects(self, keys: List[str]):
-    #    s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
-    #    while keys:
-    #        batch, keys = keys[:1000], keys[1000:]  # take up to 1000 keys at a time
-    #        s3_client.delete_objects(Bucket=self.bucket_name, Delete={"Objects": [{"Key": k} for k in batch]})
+    def delete_objects(self, keys: List[str]):
+        raise NotImplementedError()
 
     def get_obj_metadata(self, obj_name):
         bucket = self._gcs_client.bucket(self.bucket_name)
         blob = bucket.get_blob(obj_name)
         if blob is None:
-            raise NoSuchObjectException(f"Object {obj_name} does not exist, or you do not have permission to access it") 
+            raise NoSuchObjectException(f"Object {obj_name} does not exist, or you do not have permission to access it")
         return blob
 
     def get_obj_size(self, obj_name):
@@ -115,7 +93,6 @@ class GCSInterface(ObjectStoreInterface):
         # TODO: create future?
         _on_body_download(0, chunk)
 
-
     def upload_object(self, src_file_path, dst_object_name, content_type="infer") -> Future:
         print("uploading object", src_file_path, dst_object_name)
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
@@ -128,5 +105,5 @@ class GCSInterface(ObjectStoreInterface):
         bucket = self._gcs_client.bucket(self.bucket_name)
         blob = bucket.blob(dst_object_name)
 
-        # TODO: create future? 
+        # TODO: create future?
         blob.upload_from_filename(src_file_path)

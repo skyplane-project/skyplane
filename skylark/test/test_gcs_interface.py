@@ -24,7 +24,7 @@ def test_gcs_interface():
 
         with Timer() as t:
             upload_future = gcs_interface.upload_object(fpath, obj_name)
-            #upload_future.result() # TODO: make future
+            # upload_future.result() # TODO: make future
         assert gcs_interface.get_obj_size(obj_name) == os.path.getsize(fpath)
         assert gcs_interface.exists(obj_name)
         assert not gcs_interface.exists("random_nonexistent_file")
@@ -36,9 +36,8 @@ def test_gcs_interface():
             os.remove(fpath)
         with Timer() as t:
             download_future = gcs_interface.download_object(obj_name, fpath)
-            #download_future.result() # TODO: make future
+            # download_future.result() # TODO: make future
 
         # check md5
         dl_file_md5 = hashlib.md5(open(fpath, "rb").read()).hexdigest()
         assert dl_file_md5 == file_md5
-
