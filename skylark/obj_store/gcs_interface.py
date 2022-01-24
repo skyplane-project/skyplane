@@ -43,7 +43,6 @@ class GCSInterface(ObjectStoreInterface):
             bucket = self._gcs_client.get_bucket(self.bucket_name)
             return True
         except Exception as e:
-            print(e)
             return False
 
     def create_bucket(self, storage_class: str = "STANDARD"):
@@ -53,17 +52,23 @@ class GCSInterface(ObjectStoreInterface):
             new_bucket = self._gcs_client.create_bucket(bucket, location=self.gcp_region)
         assert self.bucket_exists()
 
-    def list_objects(self, prefix="") -> Iterator[S3Object]:
-        raise NotImplementedError()
+    def list_objects(self, prefix="") -> Iterator[GCSObject]:
+        blobs = self._gcs_client.list_blobs(self.bucket_name, prefix=prefix)
+        # TODO: pagination?
+        for blob in blobs: 
+            # blob = bucket.get_blob(blob_name)
+            yield GCSObject("gcs", self.bucket_name, blob.name, blob.size, blob.updated)
 
     def delete_objects(self, keys: List[str]):
-        raise NotImplementedError()
+        for key in keys: 
+            self._gcs_client.bucket(self.bucket_name).blob(key).delete()
+            assert not self.exists(key)
 
     def get_obj_metadata(self, obj_name):
         bucket = self._gcs_client.bucket(self.bucket_name)
         blob = bucket.get_blob(obj_name)
         if blob is None:
-            raise NoSuchObjectException(f"Object {obj_name} does not exist, or you do not have permission to access it")
+            raise NoSuchObjectException(f"Object {obj_name} does not exist in bucket {self.bucket_name}, or you do not have permission to access it")
         return blob
 
     def get_obj_size(self, obj_name):
@@ -97,7 +102,6 @@ class GCSInterface(ObjectStoreInterface):
         return self.pool.submit(_download_object_helper, 0)
 
     def upload_object(self, src_file_path, dst_object_name, content_type="infer") -> Future:
-        print("uploading object", src_file_path, dst_object_name)
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
         content_len = os.path.getsize(src_file_path)
@@ -109,5 +113,6 @@ class GCSInterface(ObjectStoreInterface):
             bucket = self._gcs_client.bucket(self.bucket_name)
             blob = bucket.blob(dst_object_name)
             blob.upload_from_filename(src_file_path)
+            return True
 
         return self.pool.submit(_upload_object_helper)

@@ -12,6 +12,7 @@ from skylark.obj_store.gcs_interface import GCSInterface
 import tempfile
 import concurrent
 import os
+from shutil import copyfile
 
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
@@ -100,16 +101,27 @@ def main(args):
         logger.info("Creating test objects")
         obj_keys = []
         futures = []
+        tmp_files = []
 
         # TODO: for n_chunks > 880, get syscall error
-        with tempfile.NamedTemporaryFile() as f:
+        with tempfile.NamedTemporaryFile() as f: 
             f.write(os.urandom(int(MB * args.chunk_size_mb)))
             f.seek(0)
             for i in range(args.n_chunks):
                 k = f"{args.key_prefix}/{i}"
-                futures.append(obj_store_interface_src.upload_object(f.name, k))
+                tmp_file = f"{f.name}-{i}"
+                # need to copy, since GCP API will open file and cause to delete
+                copyfile(f.name, f"{f.name}-{i}")
+                futures.append(obj_store_interface_src.upload_object(tmp_file, k))
                 obj_keys.append(k)
+                tmp_files.append(tmp_file)
+
+        logger.info(f"Uploading {len(obj_keys)} to bucket {src_bucket}")
         concurrent.futures.wait(futures)
+
+         # cleanup temp files once done
+        for f in tmp_files:
+            os.remove(f)
     else:
         obj_keys = [f"{args.key_prefix}/{i}" for i in range(args.n_chunks)]
 

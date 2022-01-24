@@ -7,9 +7,11 @@ boto3
 flask
 google-api-python-client
 google-cloud-compute
+google-cloud-storage
 loguru
 setproctitle
 tqdm
 werkzeug
 oslo.concurrency
 paramiko
+i

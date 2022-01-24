@@ -5,6 +5,7 @@ from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.obj_store.s3_interface import S3Interface
+from skylark.obj_store.gcs_interface import GCSInterface
 from skylark.utils.utils import do_parallel
 
 
@@ -22,9 +23,11 @@ class ReplicationJob:
     def src_obj_sizes(self):
         if self.source_region.split(":")[0] == "aws":
             interface = S3Interface(self.source_region.split(":")[1], self.source_bucket)
-            get_size = lambda o: interface.get_obj_size(o)
+        if self.source_region.split(":")[0] == "gcp":
+            interface = GCSInterface(self.source_region.split(":")[1][:-2], self.source_bucket)
         else:
             raise NotImplementedError
+        get_size = lambda o: interface.get_obj_size(o)
         return do_parallel(get_size, self.objs, n=16, progress_bar=True, desc="Query object sizes")
 
 

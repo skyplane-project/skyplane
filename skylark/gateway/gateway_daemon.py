@@ -21,6 +21,7 @@ from skylark.gateway.gateway_sender import GatewaySender
 
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.obj_store.gcs_interface import GCSInterface
+from skylark.obj_store.object_store_interface import ObjectStoreInterface
 
 
 class GatewayDaemon:
@@ -35,7 +36,7 @@ class GatewayDaemon:
         self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store, max_pending_chunks=outgoing_connections)
         self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, n_processes=outgoing_connections)
 
-        self.obj_store_interfaces: Dict[str, ObjectStoreObject] = {}
+        self.obj_store_interfaces: Dict[str, ObjectStoreInterface] = {}
 
         # API server
         atexit.register(self.cleanup)
@@ -45,7 +46,7 @@ class GatewayDaemon:
         self.api_server.start()
         logger.info(f"Gateway daemon API started at {self.api_server.url}")
 
-    def get_obj_store_interface(self, region: str, bucket: str) -> ObjectStoreObject:
+    def get_obj_store_interface(self, region: str, bucket: str) -> ObjectStoreInterface:
 
         # return cached interface
         if region in self.obj_store_interfaces: 
@@ -53,9 +54,9 @@ class GatewayDaemon:
 
         # create new interface
         if region.startswith("aws"):
-            self.obj_store_interfaces[region] = S3Interface(region, bucket, use_tls=False)
+            self.obj_store_interfaces[region] = S3Interface(region.split(":")[1], bucket, use_tls=False)
         elif region.startswith("gcp"):
-            self.obj_store_interfaces[region] = GCSInterface(region, bucket)
+            self.obj_store_interfaces[region] = GCSInterface(region.split(":")[1][:-2], bucket)
         else:
             ValueError(f"Invalid region {region} - could not create interface")
         
@@ -87,15 +88,18 @@ class GatewayDaemon:
             for chunk_req in self.chunk_store.get_chunk_requests(ChunkState.downloaded):
                 if len(chunk_req.path) > 0:
                     current_hop = chunk_req.path[0]
+                    logger.info("chunks", current_hop, current_hop.chunk_location_type)
                     if current_hop.chunk_location_type == "dst_object_store":
                         self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
                         self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id)
+
+                        logger.info("dest object store", current_hop.dst_object_store_region, current_hop.dst_object_store_bucket)
 
                         # function to upload data from S3
                         def fn(chunk_req, dst_region, dst_bucket):
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
                             logger.info(f"Creating interface {dst_region}--{dst_bucket}")
-                            obj_store_interface = self.get_obj_store_interface(dst_region.split(":")[1], dst_bucket)
+                            obj_store_interface = self.get_obj_store_interface(dst_region, dst_bucket)
                             logger.info(f"Waiting for upload {dst_bucket}:{chunk_req.chunk.key}")
                             obj_store_interface.upload_object(fpath, chunk_req.chunk.key).result()
                             logger.info(f"Uploaded {fpath} to {dst_bucket}:{chunk_req.chunk.key})")
@@ -137,12 +141,13 @@ class GatewayDaemon:
 
                         src_bucket = current_hop.src_object_store_bucket
                         src_region = current_hop.src_object_store_region
+                        logger.info("source object store", src_bucket, src_region)
 
                         # function to download data from S3
                         def fn(chunk_req, src_region, src_bucket):
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
                             logger.info(f"Creating interface {src_region}--{src_bucket}")
-                            obj_store_interface = self.get_obj_store_interface(src_region.split(":")[1], src_bucket)
+                            obj_store_interface = self.get_obj_store_interface(src_region, src_bucket)
                             logger.info(f"Waiting for download {src_bucket}:{chunk_req.chunk.key}")
                             obj_store_interface.download_object(chunk_req.chunk.key, fpath).result()
                             logger.info(f"Downloaded key {chunk_req.chunk.key} to {fpath})")
