@@ -30,7 +30,7 @@ def solve_throughput(
     max_instances: int = typer.Option(1, help="Max number of instances per overlay region."),
     sparsity_penalty: float = typer.Option(0.0, help="Sparsity penalty"),
     throughput_grid: Path = typer.Option(
-        skylark_root / "profiles" / "throughput_mini.csv", "--throughput-grid", help="Throughput grid file"
+        skylark_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
     ),
     solver_verbose: bool = False,
 ):
