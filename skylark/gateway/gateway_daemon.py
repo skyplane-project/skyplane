@@ -49,7 +49,7 @@ class GatewayDaemon:
     def get_obj_store_interface(self, region: str, bucket: str) -> ObjectStoreInterface:
 
         # return cached interface
-        if region in self.obj_store_interfaces: 
+        if region in self.obj_store_interfaces:
             return self.obj_store_interfaces[region]
 
         # create new interface
@@ -59,7 +59,7 @@ class GatewayDaemon:
             self.obj_store_interfaces[region] = GCSInterface(region.split(":")[1][:-2], bucket)
         else:
             ValueError(f"Invalid region {region} - could not create interface")
-        
+
         return self.obj_store_interfaces[region]
 
     def cleanup(self):

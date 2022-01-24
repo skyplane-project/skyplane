@@ -8,9 +8,11 @@ from google.cloud import storage
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
+
 class GCSObject(ObjectStoreObject):
     def full_path(self):
         raise NotImplementedError()
+
 
 class GCSInterface(ObjectStoreInterface):
     def __init__(self, gcp_region, bucket_name):
@@ -55,12 +57,12 @@ class GCSInterface(ObjectStoreInterface):
     def list_objects(self, prefix="") -> Iterator[GCSObject]:
         blobs = self._gcs_client.list_blobs(self.bucket_name, prefix=prefix)
         # TODO: pagination?
-        for blob in blobs: 
+        for blob in blobs:
             # blob = bucket.get_blob(blob_name)
             yield GCSObject("gcs", self.bucket_name, blob.name, blob.size, blob.updated)
 
     def delete_objects(self, keys: List[str]):
-        for key in keys: 
+        for key in keys:
             self._gcs_client.bucket(self.bucket_name).blob(key).delete()
             assert not self.exists(key)
 
@@ -68,7 +70,9 @@ class GCSInterface(ObjectStoreInterface):
         bucket = self._gcs_client.bucket(self.bucket_name)
         blob = bucket.get_blob(obj_name)
         if blob is None:
-            raise NoSuchObjectException(f"Object {obj_name} does not exist in bucket {self.bucket_name}, or you do not have permission to access it")
+            raise NoSuchObjectException(
+                f"Object {obj_name} does not exist in bucket {self.bucket_name}, or you do not have permission to access it"
+            )
         return blob
 
     def get_obj_size(self, obj_name):
@@ -109,7 +113,7 @@ class GCSInterface(ObjectStoreInterface):
         if content_type == "infer":
             content_type = mimetypes.guess_type(src_file_path)[0] or "application/octet-stream"
 
-        def _upload_object_helper(): 
+        def _upload_object_helper():
             bucket = self._gcs_client.bucket(self.bucket_name)
             blob = bucket.blob(dst_object_name)
             blob.upload_from_filename(src_file_path)

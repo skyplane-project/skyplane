@@ -36,7 +36,7 @@ def test_gcs_interface():
             os.remove(fpath)
         with Timer() as t:
             download_future = gcs_interface.download_object(obj_name, fpath)
-            download_future.result() 
+            download_future.result()
 
         # check md5
         dl_file_md5 = hashlib.md5(open(fpath, "rb").read()).hexdigest()

@@ -104,7 +104,7 @@ def main(args):
         tmp_files = []
 
         # TODO: for n_chunks > 880, get syscall error
-        with tempfile.NamedTemporaryFile() as f: 
+        with tempfile.NamedTemporaryFile() as f:
             f.write(os.urandom(int(MB * args.chunk_size_mb)))
             f.seek(0)
             for i in range(args.n_chunks):
@@ -119,7 +119,7 @@ def main(args):
         logger.info(f"Uploading {len(obj_keys)} to bucket {src_bucket}")
         concurrent.futures.wait(futures)
 
-         # cleanup temp files once done
+        # cleanup temp files once done
         for f in tmp_files:
             os.remove(f)
     else:

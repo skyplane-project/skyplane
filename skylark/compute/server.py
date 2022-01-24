@@ -212,9 +212,8 @@ class Server:
             sysctl_updates["net.ipv4.tcp_congestion_control"] = "bbr"
         else:
             sysctl_updates["net.ipv4.tcp_congestion_control"] = "cubic"
-           
-        self.run_command("sudo sysctl -w {}".format(" ".join(f"{k}={v}" for k, v in sysctl_updates.items())))
 
+        self.run_command("sudo sysctl -w {}".format(" ".join(f"{k}={v}" for k, v in sysctl_updates.items())))
 
         # install docker and launch monitoring
         cmd = "(command -v docker >/dev/null 2>&1 || { rm -rf get-docker.sh; curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh; }); "
