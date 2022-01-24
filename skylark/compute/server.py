@@ -192,7 +192,7 @@ class Server:
         num_outgoing_connections=8,
         use_bbr=False,
     ):
-        desc_prefix = f"Starting gateway {self.uuid()}"
+        desc_prefix = f"Starting gateway {self.uuid()}, host: {self.public_ip()}"
         logger.debug(desc_prefix + ": Installing docker")
 
         # increase TCP connections, enable BBR optionally and raise file limits
@@ -212,6 +212,7 @@ class Server:
             sysctl_updates["net.ipv4.tcp_congestion_control"] = "bbr"
         else:
             sysctl_updates["net.ipv4.tcp_congestion_control"] = "cubic"
+
         self.run_command("sudo sysctl -w {}".format(" ".join(f"{k}={v}" for k, v in sysctl_updates.items())))
 
         # install docker and launch monitoring
@@ -257,6 +258,7 @@ class Server:
         gateway_daemon_cmd = f"python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections {num_outgoing_connections}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = self.run_command(docker_launch_cmd)
+        logger.debug(desc_prefix + f": Gateway started {start_out}")
         assert not start_err.strip(), f"Error starting gateway: {start_err}"
         gateway_container_hash = start_out.strip().split("\n")[-1][:12]
         self.gateway_api_url = f"http://{self.public_ip()}:8080/api/v1"
@@ -276,7 +278,7 @@ class Server:
         try:
             wait_for(is_ready, timeout=10, interval=0.1, desc=f"Waiting for gateway {self.uuid()} to start", leave_pbar=False)
         except Exception as e:
-            logger.error(f"Gateway {self.instance_name()} is not ready")
+            logger.error(f"Gateway {self.instance_name()} is not ready {e}")
             logs, err = self.run_command(f"sudo docker logs skylark_gateway --tail=100")
             logger.error(f"Docker logs: {logs}\nerr: {err}")
             raise e
