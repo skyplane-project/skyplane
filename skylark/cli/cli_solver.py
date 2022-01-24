@@ -49,7 +49,7 @@ def solve_throughput(
         required_throughput_gbits=required_throughput_gbits,
         gbyte_to_transfer=gbyte_to_transfer,
         instance_limit=max_instances,
-        sparsity_penalty=sparsity_penalty,
+        unused_sparsity_penalty=sparsity_penalty,
         solver=solver,
         solver_verbose=solver_verbose,
         save_lp_path=skylark_root / "data" / "throughput_solver.lp",

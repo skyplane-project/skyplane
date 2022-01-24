@@ -94,14 +94,14 @@ class ThroughputSolverILP(ThroughputSolver):
         aws_instance_throughput_limit=5.0,
         gcp_instance_throughput_limit=8.0,
         azure_instance_throughput_limit=16.0,
-        max_connections_per_path=64,
+        benchmark_throughput_connections=64,
         max_connections_per_node=64,
-        sparsity_penalty=0,
+        unused_sparsity_penalty=5e-3,
+        cost_per_instance_hr=1.54,  # m5.8xlarge
         solver=cp.GLPK,
         solver_verbose=False,
         save_lp_path=None,
     ):
-        logger.info(f"Solving {src} -> {dst} with tput = {required_throughput_gbits} Gbps")
         regions = self.get_regions()
         src_idx = regions.index(src)
         dst_idx = regions.index(dst)
@@ -112,29 +112,25 @@ class ThroughputSolverILP(ThroughputSolver):
         edge_cost_per_gigabyte, edge_capacity_gigabits = self.get_cost_grid(), self.get_throughput_grid()
 
         # define variables
-        edge_flow_gigabits = cp.Variable((len(regions), len(regions)), name="edge_flow_gigabits")
+        edge_flow_gigabits_per_conn = cp.Variable((len(regions), len(regions)), name="edge_flow_gigabits_per_conn")
         conn = cp.Variable((len(regions), len(regions)), name="conn")
-        inv_n_instances = cp.Variable(name="n_instances")  # integer=True
-        n_instances = cp.inv_pos(inv_n_instances)
+        edge_flow_gigabits = cp.multiply(edge_flow_gigabits_per_conn, conn)
+        instances_per_region = cp.Variable((len(regions)), name="instances_per_region")  # integer=True
         node_flow_in = cp.sum(edge_flow_gigabits, axis=0)
         node_flow_out = cp.sum(edge_flow_gigabits, axis=1)
-        req_tput_instance = required_throughput_gbits * inv_n_instances
 
         constraints = []
 
+        # instance limit
+        constraints.append(instances_per_region <= instance_limit)
+        constraints.append(instances_per_region >= 0)
+
         # connection limits
         constraints.append(conn >= 0)
-        constraints.append(conn <= max_connections_per_path)
-        node_conns_out = cp.sum(conn, axis=1)
-        constraints.append(node_conns_out <= max_connections_per_node)
-
-        # instance limit
-        constraints.append(inv_n_instances >= 1.0 / instance_limit)
-        constraints.append(inv_n_instances <= 1)
-        # constraints.append(n_instances >= 1)
+        constraints.append(cp.sum(conn, axis=1) <= max_connections_per_node * instances_per_region)
 
         # flow capacity constraint
-        adjusted_edge_capacity_gigabits = cp.multiply(edge_capacity_gigabits, conn / max_connections_per_path)
+        adjusted_edge_capacity_gigabits = cp.multiply(edge_capacity_gigabits, conn / benchmark_throughput_connections)
         constraints.append(edge_flow_gigabits <= adjusted_edge_capacity_gigabits)
 
         # flow conservation
@@ -142,9 +138,9 @@ class ThroughputSolverILP(ThroughputSolver):
             f_in, f_out = node_flow_in[v], node_flow_out[v]
             if v in sources:
                 constraints.append(f_in == 0)
-                constraints.append(f_out == req_tput_instance)
+                constraints.append(f_out == required_throughput_gbits)
             elif v in sinks:
-                constraints.append(f_in == req_tput_instance)
+                constraints.append(f_in == required_throughput_gbits)
             else:
                 constraints.append(f_in == f_out)
 
@@ -156,11 +152,11 @@ class ThroughputSolverILP(ThroughputSolver):
             provider = r.split(":")[0]
             f_out = node_flow_out[idx]
             if provider == "aws":
-                constraints.append(f_out <= aws_instance_throughput_limit)
+                constraints.append(f_out <= aws_instance_throughput_limit * instances_per_region[idx])
             elif provider == "gcp":
-                constraints.append(f_out <= gcp_instance_throughput_limit)
+                constraints.append(f_out <= gcp_instance_throughput_limit * instances_per_region[idx])
             elif provider == "azure":
-                constraints.append(f_out <= azure_instance_throughput_limit)
+                constraints.append(f_out <= azure_instance_throughput_limit * instances_per_region[idx])
             else:
                 raise ValueError(f"Unknown provider {provider}")
 
@@ -173,14 +169,19 @@ class ThroughputSolverILP(ThroughputSolver):
         cost_per_edge = cp.multiply(edge_flow_gigabits * runtime_s, edge_cost_per_gigabit)  #  gbit/s * $/gbit = $/s
         total_cost = cp.sum(cost_per_edge)
 
-        # sparsity constraint
-        sparsity_constraint = cp.norm1(conn)
+        # instance cost
+        per_instance_cost = cost_per_instance_hr / 3600 * runtime_s
+        instance_cost = cp.sum(instances_per_region) * per_instance_cost
 
-        prob = cp.Problem(cp.Minimize(total_cost + sparsity_penalty * sparsity_constraint), constraints)
+        # sparsity constraint
+        # todo add small penalty for using more instances than needed (prefer more compact solutions) e.g. 1x64 connections direct versus 2x32 connections direct
+        # todo just make this an ILP avoid these sparsity constraints
+
+        prob = cp.Problem(cp.Minimize(total_cost), constraints)  #  + instance_cost
 
         if solver == cp.GUROBI or solver == "gurobi":
             solver_options = {}
-            solver_options["Threads"] = os.cpu_count()
+            solver_options["Threads"] = 1
             if save_lp_path:
                 solver_options["ResultFile"] = str(save_lp_path)
             prob.solve(verbose=True, qcp=True, solver=cp.GUROBI)
@@ -237,11 +238,11 @@ class ThroughputSolverILP(ThroughputSolver):
             return None
         regions = self.get_regions()
         throughput_grid = self.get_throughput_grid()
-        cost_per_gb = solution["cost"] / solution["gbyte_to_transfer"]
+        cost_per_gb = solution["cost"] * solution["n_instances"] / solution["gbyte_to_transfer"]
         g = gv.Digraph(name="throughput_graph")
         g.attr(rankdir="LR")
         g.attr(
-            label=f"{solution['src']} to {solution['dst']}\n{solution['throughput']:.2f} Gbps, ${solution['cost']:.4f}\nAverage: ${cost_per_gb:.4f}/GB"
+            label=f"{solution['src']} to {solution['dst']}\n{solution['throughput']:.2f} Gbps, ${solution['cost']:.4f}\nAverage: ${cost_per_gb:.4f}/GB w/ {solution['n_instances']:.2f} instances"
         )
         g.attr(labelloc="t")
         for i, src in enumerate(regions):

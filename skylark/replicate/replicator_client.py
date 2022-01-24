@@ -421,9 +421,11 @@ class ReplicatorClient:
                             last_log = current_time
                             gbits_remaining = (total_bytes - completed_bytes) * 8 / GB
                             eta = int(gbits_remaining / throughput_gbits) if throughput_gbits > 0 else None
-                            logger.debug(
-                                f"{len(completed_chunk_ids)}/{len(crs)} chunks done ({completed_bytes / GB:.2f} / {total_bytes / GB:.2f}GB, {throughput_gbits:.2f}Gbit/s, ETA={str(eta) + 's' if eta is not None else 'unknown'})"
-                            )
+                            log_line = f"{len(completed_chunk_ids)}/{len(crs)} chunks done ({completed_bytes / GB:.2f} / {total_bytes / GB:.2f}GB, {throughput_gbits:.2f}Gbit/s, ETA={str(eta) + 's' if eta is not None else 'unknown'})"
+                            if show_pbar:
+                                tqdm.write(log_line)
+                            else:
+                                logger.debug(log_line)
                         elif t.elapsed > 20 and completed_bytes == 0:
                             logger.error(f"No chunks completed after {int(t.elapsed)}s! There is probably a bug, check logs. Exiting...")
                             return dict(
