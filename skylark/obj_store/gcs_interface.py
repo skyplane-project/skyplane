@@ -1,12 +1,15 @@
-import mimetypes
 import os
 from concurrent.futures import Future
 from typing import Iterator, List
 
 from google.cloud import storage
 
-from skylark.compute.aws.aws_server import AWSServer
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
+
+
+class GCSObject(ObjectStoreObject):
+    def full_path(self):
+        return f"gs://{self.bucket}/{self.key}"
 
 
 class GCSInterface(ObjectStoreInterface):
@@ -47,7 +50,7 @@ class GCSInterface(ObjectStoreInterface):
             new_bucket = self._gcs_client.create_bucket(bucket, location=self.gcp_region)
         assert self.bucket_exists()
 
-    def list_objects(self, prefix="") -> Iterator[S3Object]:
+    def list_objects(self, prefix="") -> Iterator[GCSObject]:
         raise NotImplementedError()
 
     def delete_objects(self, keys: List[str]):
@@ -93,11 +96,6 @@ class GCSInterface(ObjectStoreInterface):
         print("uploading object", src_file_path, dst_object_name)
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
-        content_len = os.path.getsize(src_file_path)
-
-        if content_type == "infer":
-            content_type = mimetypes.guess_type(src_file_path)[0] or "application/octet-stream"
-
         bucket = self._gcs_client.bucket(self.bucket_name)
         blob = bucket.blob(dst_object_name)
 

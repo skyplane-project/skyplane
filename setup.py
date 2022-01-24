@@ -16,6 +16,7 @@ setup(
         "flask",
         "google-api-python-client",
         "google-cloud-compute",
+        "google-cloud-storage",
         "loguru",
         "setproctitle",
         "tqdm",
