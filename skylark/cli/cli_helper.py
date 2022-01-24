@@ -84,11 +84,14 @@ def copy_local_local(src: Path, dst: Path):
         dst.parent.mkdir(exist_ok=True, parents=True)
         copyfile(src, dst)
 
+
 def copy_local_gcs(src: Path, dst_bucket: str, dst_key: str):
     raise NotImplementedError(f"GCS not yet supported")
 
+
 def copy_gcs_local(src_bucket: str, src_key: str, dst: Path):
     raise NotImplementedError(f"GCS not yet supported")
+
 
 def copy_local_s3(src: Path, dst_bucket: str, dst_key: str, use_tls: bool = True):
     s3 = S3Interface(None, dst_bucket, use_tls=use_tls)

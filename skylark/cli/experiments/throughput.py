@@ -19,48 +19,48 @@ from skylark.compute.server import Server
 from skylark.utils.utils import do_parallel
 from tqdm import tqdm
 
-# aws_regions = AWSCloudProvider.region_list()
-# azure_regions = AzureCloudProvider.region_list()
-# gcp_regions = GCPCloudProvider.region_list()
+aws_regions = AWSCloudProvider.region_list()
+azure_regions = AzureCloudProvider.region_list()
+gcp_regions = GCPCloudProvider.region_list()
 
-aws_regions = [
-    "eu-south-1",
-    "us-west-2",
-    "us-east-2",
-    "ap-northeast-3",
-    "eu-central-1",
-    "eu-north-1",
-    "us-west-1",
-    "sa-east-1",
-    "eu-west-2",
-    "ap-southeast-3",
-]
+# aws_regions = [
+#     "eu-south-1",
+#     "us-west-2",
+#     "us-east-2",
+#     "ap-northeast-3",
+#     "eu-central-1",
+#     "eu-north-1",
+#     "us-west-1",
+#     "sa-east-1",
+#     "eu-west-2",
+#     "ap-southeast-3",
+# ]
 
-azure_regions = [
-    "northcentralus",
-    "uksouth",
-    "swedencentral",
-    "canadacentral",
-    "australiaeast",
-    "westeurope",
-    "centralindia",
-    "francecentral",
-    "norwayeast",
-    "switzerlandnorth",
-]
+# azure_regions = [
+#     "northcentralus",
+#     "uksouth",
+#     "swedencentral",
+#     "canadacentral",
+#     "australiaeast",
+#     "westeurope",
+#     "centralindia",
+#     "francecentral",
+#     "norwayeast",
+#     "switzerlandnorth",
+# ]
 
-gcp_regions = [
-    "australia-southeast2-a",
-    "europe-west6-a",
-    "australia-southeast1-a",
-    "southamerica-west1-a",
-    "southamerica-east1-a",
-    "asia-southeast1-a",
-    "europe-west4-a",
-    "asia-southeast2-a",
-    "northamerica-northeast1-a",
-    "northamerica-northeast2-a",
-]
+# gcp_regions = [
+#     "australia-southeast2-a",
+#     "europe-west6-a",
+#     "australia-southeast1-a",
+#     "southamerica-west1-a",
+#     "southamerica-east1-a",
+#     "asia-southeast1-a",
+#     "europe-west4-a",
+#     "asia-southeast2-a",
+#     "northamerica-northeast1-a",
+#     "northamerica-northeast2-a",
+# ]
 
 
 log_info = partial(typer.secho, fg="blue")
@@ -122,7 +122,7 @@ def throughput_grid(
     enable_gcp: bool = typer.Option(True),
     # instances to provision
     aws_instance_class: str = typer.Option("m5.8xlarge", help="AWS instance class to use"),
-    azure_instance_class: str = typer.Option("Standard_D32_v4", help="Azure instance class to use"),
+    azure_instance_class: str = typer.Option("Standard_D32_v5", help="Azure instance class to use"),
     gcp_instance_class: str = typer.Option("n2-standard-32", help="GCP instance class to use"),
     # cloud options
     gcp_test_standard_network: bool = typer.Option(False, help="Test GCP standard network in addition to premium (default to false)"),

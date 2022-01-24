@@ -148,7 +148,7 @@ class Server:
             return False
 
         logger.debug(f"Waiting for {self.uuid()} to be ready")
-        wait_for(is_up, timeout=timeout, interval=interval)
+        wait_for(is_up, timeout=timeout, interval=interval, desc=f"Waiting for {self.uuid()} to be ready")
         logger.debug(f"{self.uuid()} is ready")
 
     def close_server(self):

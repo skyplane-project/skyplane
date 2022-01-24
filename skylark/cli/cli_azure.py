@@ -56,7 +56,7 @@ def get_valid_skus(
     if top_k > 0:
         sorted_top_keys = sorted_top_keys[:top_k]
     for sku in sorted_top_keys:
-        typer.secho(f"{sku} in {len(sku_regions[sku])} regions: {', '.join(sorted(sku_regions[sku]))}")
+        typer.secho(f"{sku} in {len(sku_regions[sku])} regions: {list(sorted(sku_regions[sku]))}")
 
 
 if __name__ == "__main__":
