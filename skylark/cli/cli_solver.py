@@ -44,6 +44,7 @@ def solve_throughput(
     required_throughput_gbits: float = typer.Argument(..., help="Required throughput in gbps."),
     gbyte_to_transfer: float = typer.Option(1, help="Gigabytes to transfer"),
     max_instances: int = typer.Option(1, help="Max number of instances per overlay region."),
+    instance_cost_multiplier: float = typer.Option(1, help="Instance cost multiplier."),
     throughput_grid: Path = typer.Option(skylark_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"),
     solver_verbose: bool = False,
 ):
@@ -59,6 +60,7 @@ def solve_throughput(
     )
     solution = tput.solve_min_cost(
         problem,
+        instance_cost_multipler=instance_cost_multiplier,
         solver=choose_solver(),
         solver_verbose=solver_verbose,
         save_lp_path=skylark_root / "data" / "throughput_solver.lp",

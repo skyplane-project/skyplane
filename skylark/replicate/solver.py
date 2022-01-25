@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import os
 import shutil
-from typing import Optional
+from typing import List, Optional
 
 import cvxpy as cp
 import cvxpy.transforms as ct
@@ -44,7 +44,7 @@ class ThroughputSolution:
     var_instances_per_region: Optional[np.ndarray] = None
 
     # solution values
-    throughput_achieved_gbits: Optional[np.ndarray] = None
+    throughput_achieved_gbits: Optional[List[float]] = None
     cost_egress_by_edge: Optional[np.ndarray] = None
     cost_egress: Optional[float] = None
     cost_instance: Optional[float] = None
@@ -124,6 +124,7 @@ class ThroughputSolverILP(ThroughputSolver):
     def solve_min_cost(
         self,
         p: ThroughputProblem,
+        instance_cost_multipler: float = 1.0,
         solver=cp.GLPK,
         solver_verbose=False,
         save_lp_path=None,
@@ -139,11 +140,9 @@ class ThroughputSolverILP(ThroughputSolver):
             p.const_cost_per_gb_grid = self.get_cost_grid()
 
         # define variables
-        edge_flow_gigabits = cp.Variable(
-            (len(regions), len(regions)), name="edge_flow_gigabits"
-        )  # total flow including multiple connections
+        edge_flow_gigabits = cp.Variable((len(regions), len(regions)), name="edge_flow_gigabits")
         conn = cp.Variable((len(regions), len(regions)), name="conn")
-        instances_per_region = cp.Variable((len(regions)), name="instances_per_region")
+        instances_per_region = cp.Variable((len(regions)), name="instances_per_region", integer=True)
         node_flow_in = cp.sum(edge_flow_gigabits, axis=0)
         node_flow_out = cp.sum(edge_flow_gigabits, axis=1)
 
@@ -199,7 +198,7 @@ class ThroughputSolverILP(ThroughputSolver):
         # instance cost
         per_instance_cost: float = p.cost_per_instance_hr / 3600 * runtime_s
         instance_cost = cp.sum(instances_per_region) * per_instance_cost
-        total_cost = cost_egress + instance_cost
+        total_cost = cost_egress + instance_cost * instance_cost_multipler
         prob = cp.Problem(cp.Minimize(total_cost), constraints)
 
         if solver == cp.GUROBI or solver == "gurobi":
@@ -222,7 +221,7 @@ class ThroughputSolverILP(ThroughputSolver):
                 cost_egress_by_edge=cost_per_edge.value,
                 cost_egress=cost_egress.value,
                 cost_instance=instance_cost.value,
-                cost_total=total_cost.value,
+                cost_total=instance_cost.value + cost_egress.value,
                 transfer_runtime_s=runtime_s,
             )
         else:
@@ -237,7 +236,7 @@ class ThroughputSolverILP(ThroughputSolver):
             )
             logger.debug(f"Total throughput: [{', '.join(str(round(t, 2)) for t in solution.throughput_achieved_gbits)}] Gbps")
             logger.debug(f"Total runtime: {solution.transfer_runtime_s:.2f}s")
-            region_inst_count = {regions[i]: solution.var_instances_per_region[i].round(3) for i in range(len(regions))}
+            region_inst_count = {regions[i]: int(solution.var_instances_per_region[i]) for i in range(len(regions))}
             logger.debug("Instance regions: [{}]".format(", ".join(f"{r}={c}" for r, c in region_inst_count.items() if c > 0)))
             logger.debug("Flow matrix:")
             for i, src in enumerate(regions):
@@ -270,8 +269,7 @@ class ThroughputSolverILP(ThroughputSolver):
             for j, dst in enumerate(regions):
                 if solution.var_edge_flow_gigabits[i, j] > 0:
                     link_cost = self.get_path_cost(src, dst)
-                    gb_sent = solution.transfer_runtime_s * solution.var_edge_flow_gigabits[i, j] * GBIT_PER_GBYTE
                     label = f"{solution.var_edge_flow_gigabits[i, j]:.2f} Gbps (of {solution.problem.const_throughput_grid_gbits[i, j]:.2f}Gbps), "
-                    label += f"${link_cost:.4f}/GB w/ {gb_sent:.1f}GB sent w/ {solution.var_conn[i, j]:.1f}c"
+                    label += f"\n${link_cost:.4f}/GB over {solution.var_conn[i, j]:.1f}c"
                     g.edge(src.replace(":", "/"), dst.replace(":", "/"), label=label)
         return g
