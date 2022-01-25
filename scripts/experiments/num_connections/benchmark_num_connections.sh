@@ -20,7 +20,7 @@ function benchmark_config {
     NUM_GATEWAYS=$2
     # N_CHUNKS_PER_CONNECTION * NUM_CONNECTIONS
     N_CHUNKS=$((N_CHUNKS_PER_CONNECTION * NUM_CONNECTIONS))
-    echo "skylark replicate-random $SRC_REGION $DST_REGION $INTER_REGION --chunk-size-mb $CHUNK_SIZE_MB --n-chunks $N_CHUNKS --num-gateways $NUM_GATEWAYS --num-outgoing-connections $NUM_CONNECTIONS --no-reuse-gateways --no-serve-web-dashboard"
+    echo "skylark replicate-random $SRC_REGION $DST_REGION $INTER_REGION --chunk-size-mb $CHUNK_SIZE_MB --n-chunks $N_CHUNKS --num-gateways $NUM_GATEWAYS --num-outgoing-connections $NUM_CONNECTIONS --no-reuse-gateways"
 }
 
 # log function with message argument
