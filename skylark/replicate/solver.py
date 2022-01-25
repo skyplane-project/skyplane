@@ -291,12 +291,14 @@ class ThroughputSolverILP(ThroughputSolver):
                 if solution.var_edge_flow_gigabits[i, j] > 0:
                     # add up to solution.problem.benchmarked_throughput_connections connections to an instance
                     # if more than that, add another instance for any remaining connections and continue
-                    connections_to_allocate = solution.var_conn[i, j]
+                    connections_to_allocate = np.ceil(solution.var_conn[i, j]).astype(int)
 
                     # if this edge would exceed the instance connection limit, partially add connections to current instance and increment instance
                     if connections_to_allocate + src_instance_connections > solution.problem.benchmarked_throughput_connections:
                         partial_conn = solution.problem.benchmarked_throughput_connections - src_instance_connections
                         connections_to_allocate = connections_to_allocate - partial_conn
+                        assert connections_to_allocate >= 0, f"connections_to_allocate = {connections_to_allocate}"
+                        assert partial_conn >= 0, f"partial_conn = {partial_conn}"
                         src_edges.append(
                             Edge(
                                 src_region=src,
@@ -329,13 +331,13 @@ class ThroughputSolverILP(ThroughputSolver):
         # destination instance until ingress_conn_per_instance is reached, then increment destination instance.
         # ensure the total number of destination instances is the same as the number of source instances
         dst_edges = []
-        ingress_conn_per_instance = [np.ceil(np.sum(solution.var_conn[:, i]) / n_instances[i]) for i in range(len(regions))]
+        ingress_conn_per_instance = {r: np.ceil(np.sum(solution.var_conn[:, i]) / n_instances[i]) for i, r in enumerate(regions)}
         dsts_instance_idx = {i: 0 for i in regions}
         dsts_instance_conn = {i: 0 for i in regions}
         for e in src_edges:
-            connections_to_allocate = e.connections
-            if connections_to_allocate + dsts_instance_conn[e.dst_region] > ingress_conn_per_instance[dsts_instance_idx[e.dst_region]]:
-                partial_conn = ingress_conn_per_instance[dsts_instance_idx[e.dst_region]] - dsts_instance_conn[e.dst_region]
+            connections_to_allocate = np.ceil(e.connections).astype(int)
+            if connections_to_allocate + dsts_instance_conn[e.dst_region] > ingress_conn_per_instance[e.dst_region]:
+                partial_conn = ingress_conn_per_instance[e.dst_region] - dsts_instance_conn[e.dst_region]
                 connections_to_allocate = connections_to_allocate - partial_conn
                 dst_edges.append(
                     Edge(
@@ -364,12 +366,13 @@ class ThroughputSolverILP(ThroughputSolver):
         # build ReplicationTopology
         replication_topology = ReplicationTopology()
         for e in dst_edges:
-            replication_topology.add_edge(
-                src_region=e.src_region,
-                src_instance=e.src_instance_idx,
-                dest_region=e.dst_region,
-                dest_instance=e.dst_instance_idx,
-                num_connections=e.connections,
-            )
+            if e.connections > 1:
+                replication_topology.add_edge(
+                    src_region=e.src_region,
+                    src_instance=e.src_instance_idx,
+                    dest_region=e.dst_region,
+                    dest_instance=e.dst_instance_idx,
+                    num_connections=e.connections,
+                )
 
         return replication_topology

@@ -12,7 +12,10 @@ from skylark.obj_store.gcs_interface import GCSInterface
 from skylark.utils.utils import do_parallel
 
 
-ReplicationTopologyGateway = namedtuple("ReplicationTopologyGateway", ["region", "instance_idx"])
+@dataclass
+class ReplicationTopologyGateway:
+    region: str
+    instance_idx: int
 
 
 class ReplicationTopology:
@@ -23,14 +26,9 @@ class ReplicationTopology:
     associated number of connections (e.g. 64).
     """
 
-    def __init__(
-        self,
-        topology: Optional[Dict[ReplicationTopologyGateway, List[ReplicationTopologyGateway]]] = None,
-        num_connections: Optional[Dict[Tuple[ReplicationTopologyGateway, ReplicationTopologyGateway], int]] = None,
-    ):
-        self.topology: Dict[ReplicationTopologyGateway, List[ReplicationTopologyGateway]] = topology or {}
-        self.num_connections: Dict[Tuple[ReplicationTopologyGateway, ReplicationTopologyGateway], int] = num_connections or {}
-        self.nodes: Set[ReplicationTopologyGateway] = set(self.topology.keys()) | set(v for vlist in self.topology.values() for v in vlist)
+    def __init__(self, edges: Optional[List[Tuple[ReplicationTopologyGateway, ReplicationTopologyGateway, int]]] = None):
+        self.edges: List[Tuple[ReplicationTopologyGateway, ReplicationTopologyGateway, int]] = edges or []
+        self.nodes: Set[ReplicationTopologyGateway] = set(k[0] for k in self.edges) | set(k[1] for k in self.edges)
 
     def add_edge(self, src_region: str, src_instance: int, dest_region: str, dest_instance: int, num_connections: int):
         """
@@ -38,29 +36,24 @@ class ReplicationTopology:
         """
         src_gateway = (src_region, src_instance)
         dest_gateway = (dest_region, dest_instance)
-        self.topology[src_gateway] = self.topology.get(src_gateway, []) + [dest_gateway]
-        self.num_connections[(src_gateway, dest_gateway)] = num_connections
+        self.edges.append((src_gateway, dest_gateway, int(num_connections)))
         self.nodes.add(src_gateway)
-
-    def get_edges(self, src_region: str, src_instance: int) -> Dict[ReplicationTopologyGateway, int]:
-        """
-        Returns a dict of all edges from the given instance.
-        """
-        src_gateway = (src_region, src_instance)
-        return {d: self.num_connections[(src_gateway, d)] for d in self.topology.get(src_gateway, [])}
-
-    def num_instances(self, region):
-        return len([i for i in self.nodes if i.region == region])
+        self.nodes.add(dest_gateway)
 
     def to_json(self):
         """
         Returns a JSON representation of the topology.
         """
-        out = {
-            "topology": self.topology,
-            "num_connections": self.num_connections,
-        }
-        return json.dumps(out)
+        edges = []
+        for e in self.edges:
+            edges.append(
+                {
+                    "src": {"region": e[0][0], "instance": int(e[0][1])},
+                    "dest": {"region": e[1][0], "instance": int(e[1][1])},
+                    "num_connections": int(e[2]),
+                }
+            )
+        return json.dumps(dict(replication_topology_edges=edges))
 
     @classmethod
     def from_json(cls, json_str: str):
@@ -68,8 +61,17 @@ class ReplicationTopology:
         Returns a ReplicationTopology from a JSON string.
         """
         in_dict = json.loads(json_str)
-        assert "topology" in in_dict and "num_connections" in in_dict, "Invalid JSON"
-        return cls(in_dict["topology"], in_dict["num_connections"])
+        assert "replication_topology_edges" in in_dict
+        edges = []
+        for edge in in_dict["replication_topology_edges"]:
+            edges.append(
+                (
+                    ReplicationTopologyGateway(edge["src"]["region"], edge["src"]["instance"]),
+                    ReplicationTopologyGateway(edge["dest"]["region"], edge["dest"]["instance"]),
+                    edge["num_connections"],
+                )
+            )
+        return ReplicationTopology(edges)
 
     def to_graphviz(self):
         # if dot is not installed
@@ -81,29 +83,29 @@ class ReplicationTopology:
         g = gv.Digraph(name="throughput_graph")
         g.attr(rankdir="LR")
         subgraphs = {}
-        for src_gateway, dest_gateways in self.topology.items():
-            for dest_gateway in dest_gateways:
-                # group node instances by region
-                src_region, src_instance = src_gateway
-                dest_region, dest_instance = dest_gateway
-                src_region, dest_region = src_region.replace(":", "/"), dest_region.replace(":", "/")
-                src_node = f"{src_region}x{src_instance}"
-                dest_node = f"{dest_region}x{dest_instance}"
+        for src_gateway, dest_gateway, n_connections in self.edges:
+            # group node instances by region
+            src_region, src_instance = src_gateway
+            dest_region, dest_instance = dest_gateway
+            src_region, dest_region = src_region.replace(":", "/"), dest_region.replace(":", "/")
+            src_node = f"{src_region}, {src_instance}"
+            dest_node = f"{dest_region}, {dest_instance}"
 
-                # make a subgraph for each region
-                if src_region not in subgraphs:
-                    subgraphs[src_region] = gv.Digraph(name=src_region)
-                    # subgraphs[src_region].attr(rankdir="LR")
-                if dest_region not in subgraphs:
-                    subgraphs[dest_region] = gv.Digraph(name=dest_region)
-                    # subgraphs[dst_region].attr(rankdir="LR")
+            # make a subgraph for each region
+            if src_region not in subgraphs:
+                subgraphs[src_region] = gv.Digraph(name=f"cluster_{src_region}")
+            if dest_region not in subgraphs:
+                subgraphs[dest_region] = gv.Digraph(name=f"cluster_{dest_region}")
 
-                # add nodes
-                subgraphs[src_region].node(src_node, label=src_node)
-                subgraphs[dest_region].node(dest_node, label=dest_node)
+            # add nodes
+            subgraphs[src_region].node(src_node, label=src_node, shape="box")
+            subgraphs[dest_region].node(dest_node, label=dest_node, shape="box")
 
-                # add edges
-                g.edge(src_node, dest_node, label=str(self.num_connections[(src_gateway, dest_gateway)]))
+            # add edges
+            g.edge(src_node, dest_node, label=f"{n_connections} connections")
+
+        for subgraph in subgraphs.values():
+            g.subgraph(subgraph)
 
         return g
 
