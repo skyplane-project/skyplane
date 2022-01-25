@@ -30,6 +30,9 @@ class ReplicationTopologyGateway:
             region=topology_dict["region"],
             instance_idx=topology_dict["instance_idx"],
         )
+    
+    def __hash__(self) -> int:
+        return hash(self.region) + hash(self.instance_idx)
 
 
 class ReplicationTopology:
