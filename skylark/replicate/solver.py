@@ -199,10 +199,6 @@ class ThroughputSolverILP(ThroughputSolver):
         # instance cost
         per_instance_cost: float = p.cost_per_instance_hr / 3600 * runtime_s
         instance_cost = cp.sum(instances_per_region) * per_instance_cost
-
-        # todo add small penalty for using more instances than needed (prefer more compact solutions) e.g. 1x64 connections direct versus 2x32 connections direct
-        # todo just make this an ILP avoid these sparsity constraints
-
         total_cost = cost_egress + instance_cost
         prob = cp.Problem(cp.Minimize(total_cost), constraints)
 
