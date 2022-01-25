@@ -11,10 +11,27 @@ from skylark.replicate.solver import ThroughputSolverILP
 
 
 @ray.remote
-def benchmark(path, src, dst, min_throughput, gbyte_to_transfer=1):
-    solver = ThroughputSolverILP(path)
+def benchmark(
+    src,
+    dst,
+    min_throughput,
+    gbyte_to_transfer=1,
+    instance_limit=1,
+    max_connections_per_path=64,
+    max_connections_per_node=64,
+    log_dir=None,
+):
+    solver = ThroughputSolverILP(skylark_root / "profiles" / "throughput_mini.csv")
     solution = solver.solve_min_cost(
-        src, dst, required_throughput_gbits=min_throughput, gbyte_to_transfer=gbyte_to_transfer, solver=cp.GUROBI
+        src,
+        dst,
+        required_throughput_gbits=min_throughput * instance_limit,
+        gbyte_to_transfer=gbyte_to_transfer,
+        instance_limit=instance_limit,
+        benchmark_throughput_connections=max_connections_per_path,
+        max_connections_per_node=max_connections_per_node,
+        solver=cp.GUROBI,
+        solver_verbose=False,
     )
     if solution["feasible"]:
         baseline_throughput = solver.get_path_throughput(src, dst) / GB
@@ -23,12 +40,17 @@ def benchmark(path, src, dst, min_throughput, gbyte_to_transfer=1):
             src=src,
             dst=dst,
             min_throughput=min_throughput,
+            gbyte_to_transfer=gbyte_to_transfer,
+            instance_limit=instance_limit,
+            max_connections_per_path=max_connections_per_path,
+            max_connections_per_node=max_connections_per_node,
             cost=solution["cost"],
             baseline_cost=baseline_cost,
             throughput=solution["throughput"],
             baseline_throughput=baseline_throughput,
             throughput_speedup=solution["throughput"] / baseline_throughput,
             cost_factor=solution["cost"] / baseline_cost,
+            solution=solution,
         )
     else:
         return None
@@ -36,21 +58,31 @@ def benchmark(path, src, dst, min_throughput, gbyte_to_transfer=1):
 
 def main(args):
     ray.init()
-    solver = ThroughputSolverILP(args.cost_path)
+    solver = ThroughputSolverILP(skylark_root / "profiles" / "throughput_mini.csv")
     regions = solver.get_regions()
+    # regions = np.random.choice(regions, size=6, replace=False)
 
     configs = []
     for src in regions:
         for dst in regions:
-            for min_throughput in np.linspace(0, args.max_throughput, args.num_throughputs)[1:]:
-                configs.append((src, dst, min_throughput))
+            if src != dst:
+                for instance_limit in [1, 2, 4]:
+                    for min_throughput in np.linspace(0, args.max_throughput * instance_limit, args.num_throughputs)[1:]:
+                        configs.append(
+                            dict(
+                                src=src,
+                                dst=dst,
+                                min_throughput=min_throughput,
+                                gbyte_to_transfer=args.gbyte_to_transfer,
+                                instance_limit=instance_limit,
+                                max_connections_per_path=64,
+                                max_connections_per_node=64,
+                            )
+                        )
 
     results = []
-    for src, dst, min_throughput in tqdm(configs, desc="dispatch"):
-        if src == dst:
-            continue
-        result = benchmark.remote(args.cost_path, src, dst, min_throughput, args.gbyte_to_transfer)
-        results.append(result)
+    for config in tqdm(configs, desc="dispatch"):
+        results.append(benchmark.remote(**config))
 
     # get batches of results with ray.get, update tqdm progress bar
     remaining_refs = results
@@ -63,14 +95,14 @@ def main(args):
 
     results_out = [r for r in results_out if r is not None]
     df = pd.DataFrame(results_out)
-    df.to_csv(skylark_root / "data" / "pareto.csv", index=False)
+    df.to_pickle(skylark_root / "data" / "pareto.pkl", index=False)
+    print(f"Saved {len(results_out)} results to {skylark_root / 'data' / 'pareto.pkl'}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cost-path", type=str, default=str(skylark_root / "data" / "throughput" / "df_throughput_agg.csv"))
-    parser.add_argument("--max-throughput", type=float, default=10)
-    parser.add_argument("--num-throughputs", type=int, default=10)
+    parser.add_argument("--max-throughput", type=float, default=15)
+    parser.add_argument("--num-throughputs", type=int, default=40)
     parser.add_argument("--gbyte-to-transfer", type=float, default=1)
     args = parser.parse_args()
     main(args)
