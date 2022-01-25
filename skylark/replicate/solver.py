@@ -1,17 +1,15 @@
 from dataclasses import dataclass
-import os
 import shutil
 from typing import List, Optional
 
 import cvxpy as cp
-import cvxpy.transforms as ct
 import graphviz as gv
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from loguru import logger
 
-from skylark import GB, skylark_root
+from skylark import GB
 from skylark.compute.cloud_providers import CloudProvider
 
 GBIT_PER_GBYTE = 8

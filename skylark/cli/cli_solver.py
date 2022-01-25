@@ -2,7 +2,6 @@
 AWS convenience interface
 """
 
-import argparse
 from pathlib import Path
 import sys
 
@@ -11,7 +10,6 @@ import cvxpy as cp
 import typer
 from loguru import logger
 from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP
-from skylark.utils.utils import do_parallel
 from skylark import skylark_root
 
 app = typer.Typer(name="skylark-solver")
@@ -23,12 +21,12 @@ logger.add(sys.stderr, format="{function:>20}:{line:<3} | <level>{message}</leve
 
 def choose_solver():
     try:
-        import gurobipy as _grb
+        import gurobipy as _grb  # pytype: disable=import-error
 
         return cp.GUROBI
     except ImportError:
         try:
-            import cylp as _cylp
+            import cylp as _cylp  # pytype: disable=import-error
 
             logger.warning("Gurobi not installed, using CoinOR instead.")
             return cp.CBC
