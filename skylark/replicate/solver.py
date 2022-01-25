@@ -1,6 +1,7 @@
+from collections import namedtuple
 from dataclasses import dataclass
 import shutil
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import cvxpy as cp
 import graphviz as gv
@@ -11,6 +12,7 @@ from loguru import logger
 
 from skylark import GB
 from skylark.compute.cloud_providers import CloudProvider
+from skylark.replicate.replication_plan import ReplicationTopology, ReplicationTopologyGateway
 
 GBIT_PER_GBYTE = 8
 
@@ -24,11 +26,13 @@ class ThroughputProblem:
     instance_limit: int
     const_throughput_grid_gbits: Optional[np.ndarray] = None  # if not set, load from profiles
     const_cost_per_gb_grid: Optional[np.ndarray] = None  # if not set, load from profiles
-    aws_instance_throughput_limit: float = 5
-    gcp_instance_throughput_limit: float = 8
-    azure_instance_throughput_limit: float = 12.5
+    # provider bandwidth limits (egress, ingress)
+    aws_instance_throughput_limit: Tuple[float, float] = (5, 10)
+    gcp_instance_throughput_limit: Tuple[float, float] = (8, 12.5)  # limited to 12.5 gbps in practice due to CPU limit
+    azure_instance_throughput_limit: Tuple[float, float] = (12.5, 12.5)  # limited to 12.5 gbps in practice due to CPU limit
+    # benchmarked_throughput_connections is the number of connections that the iperf3 throughput grid was run at, we assume throughput is linear up to this connection limit
     benchmarked_throughput_connections = 64
-    cost_per_instance_hr = 1.54  # m5.8xlarge
+    cost_per_instance_hr = 1.54  # based on m5.8xlarge
 
 
 @dataclass
@@ -127,6 +131,8 @@ class ThroughputSolverILP(ThroughputSolver):
         solver_verbose=False,
         save_lp_path=None,
     ):
+        logger.debug(f"Solving for problem {p}")
+
         regions = self.get_regions()
         sources = [regions.index(p.src)]
         sinks = [regions.index(p.dst)]
@@ -172,19 +178,19 @@ class ThroughputSolverILP(ThroughputSolver):
         # non-negative flow constraint
         constraints.append(edge_flow_gigabits >= 0)
 
-        # instance throughput constraints (egress)
+        # instance throughput constraints
         for idx, r in enumerate(regions):
             provider = r.split(":")[0]
-            f_out = node_flow_out[idx]
             if provider == "aws":
-                provider_instance_limit = p.aws_instance_throughput_limit
+                egress_limit, ingress_limit = p.aws_instance_throughput_limit
             elif provider == "gcp":
-                provider_instance_limit = p.gcp_instance_throughput_limit
+                egress_limit, ingress_limit = p.gcp_instance_throughput_limit
             elif provider == "azure":
-                provider_instance_limit = p.azure_instance_throughput_limit
+                egress_limit, ingress_limit = p.azure_instance_throughput_limit
             else:
                 raise ValueError(f"Unknown provider {provider}")
-            constraints.append(f_out <= provider_instance_limit * instances_per_region[idx])
+            constraints.append(node_flow_in[idx] <= ingress_limit * instances_per_region[idx])
+            constraints.append(node_flow_out[idx] <= egress_limit * instances_per_region[idx])
 
         # define objective
         transfer_size_gbit = p.gbyte_to_transfer * GBIT_PER_GBYTE
@@ -271,3 +277,99 @@ class ThroughputSolverILP(ThroughputSolver):
                     label += f"\n${link_cost:.4f}/GB over {solution.var_conn[i, j]:.1f}c"
                     g.edge(src.replace(":", "/"), dst.replace(":", "/"), label=label)
         return g
+
+    def to_replication_topology(self, solution: ThroughputSolution) -> ReplicationTopology:
+        regions = self.get_regions()
+        Edge = namedtuple("Edge", ["src_region", "src_instance_idx", "dst_region", "dst_instance_idx", "connections"])
+
+        # first assign source instances to destination regions
+        src_edges: List[Edge] = []
+        n_instances = {}
+        for i, src in enumerate(regions):
+            src_instance_idx, src_instance_connections = 0, 0
+            for j, dst in enumerate(regions):
+                if solution.var_edge_flow_gigabits[i, j] > 0:
+                    # add up to solution.problem.benchmarked_throughput_connections connections to an instance
+                    # if more than that, add another instance for any remaining connections and continue
+                    connections_to_allocate = solution.var_conn[i, j]
+
+                    # if this edge would exceed the instance connection limit, partially add connections to current instance and increment instance
+                    if connections_to_allocate + src_instance_connections > solution.problem.benchmarked_throughput_connections:
+                        partial_conn = solution.problem.benchmarked_throughput_connections - src_instance_connections
+                        connections_to_allocate = connections_to_allocate - partial_conn
+                        src_edges.append(
+                            Edge(
+                                src_region=src,
+                                src_instance_idx=src_instance_idx,
+                                dst_region=dst,
+                                dst_instance_idx=None,
+                                connections=partial_conn,
+                            )
+                        )
+                        src_instance_idx += 1
+                        src_instance_connections = 0
+
+                    # add remaining connections
+                    if connections_to_allocate > 0:
+                        src_edges.append(
+                            Edge(
+                                src_region=src,
+                                src_instance_idx=src_instance_idx,
+                                dst_region=dst,
+                                dst_instance_idx=None,
+                                connections=connections_to_allocate,
+                            )
+                        )
+                        src_instance_connections += connections_to_allocate
+            n_instances[i] = src_instance_idx + 1
+
+        # assign destination instances (currently None) to Edges
+        # ingress_conn_per_instance = np.sum(solution.var_conn, axis=0) / n_instances
+        # balance connections across instances by assigning connections from a source instance to the next
+        # destination instance until ingress_conn_per_instance is reached, then increment destination instance.
+        # ensure the total number of destination instances is the same as the number of source instances
+        dst_edges = []
+        ingress_conn_per_instance = [np.ceil(np.sum(solution.var_conn[:, i]) / n_instances[i]) for i in range(len(regions))]
+        dsts_instance_idx = {i: 0 for i in regions}
+        dsts_instance_conn = {i: 0 for i in regions}
+        for e in src_edges:
+            connections_to_allocate = e.connections
+            if connections_to_allocate + dsts_instance_conn[e.dst_region] > ingress_conn_per_instance[dsts_instance_idx[e.dst_region]]:
+                partial_conn = ingress_conn_per_instance[dsts_instance_idx[e.dst_region]] - dsts_instance_conn[e.dst_region]
+                connections_to_allocate = connections_to_allocate - partial_conn
+                dst_edges.append(
+                    Edge(
+                        src_region=e.src_region,
+                        src_instance_idx=e.src_instance_idx,
+                        dst_region=e.dst_region,
+                        dst_instance_idx=dsts_instance_idx[e.dst_region],
+                        connections=partial_conn,
+                    )
+                )
+                dsts_instance_idx[e.dst_region] += 1
+                dsts_instance_conn[e.dst_region] = 0
+
+            if connections_to_allocate > 0:
+                dst_edges.append(
+                    Edge(
+                        src_region=e.src_region,
+                        src_instance_idx=e.src_instance_idx,
+                        dst_region=e.dst_region,
+                        dst_instance_idx=dsts_instance_idx[e.dst_region],
+                        connections=connections_to_allocate,
+                    )
+                )
+                dsts_instance_conn[e.dst_region] += connections_to_allocate
+
+        # build ReplicationTopology
+        replication_topology = ReplicationTopology()
+        for e in dst_edges:
+            replication_topology.add_edge(
+                src_region=e.src_region,
+                src_instance=e.src_instance_idx,
+                dest_region=e.dst_region,
+                dest_instance=e.dst_instance_idx,
+                num_connections=e.connections,
+            )
+
+        return replication_topology

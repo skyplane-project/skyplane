@@ -45,6 +45,7 @@ def solve_throughput(
     instance_cost_multiplier: float = typer.Option(1, help="Instance cost multiplier."),
     throughput_grid: Path = typer.Option(skylark_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"),
     solver_verbose: bool = False,
+    out: Path = typer.Option(None, "--out", "-o", help="Output file for path."),
 ):
 
     # build problem and solve
@@ -71,5 +72,16 @@ def solve_throughput(
         if g is not None:
             try:
                 g.render(filename="/tmp/throughput_graph.gv", quiet_view=True, format="png")
+            except FileNotFoundError as e:
+                logger.error(f"Could not render graph: {e}")
+
+        replication_topo = tput.to_replication_topology(solution)
+        if out:
+            with open(out, "w") as f:
+                f.write(replication_topo.to_json())
+        g_rt = replication_topo.to_graphviz()
+        if g_rt is not None:
+            try:
+                g_rt.render(filename="/tmp/replication_topo.gv", quiet_view=True, format="png")
             except FileNotFoundError as e:
                 logger.error(f"Could not render graph: {e}")
