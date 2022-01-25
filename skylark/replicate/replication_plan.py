@@ -6,6 +6,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 from loguru import logger
 import graphviz as gv
+from skylark.chunk import ChunkRequest
 
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.obj_store.gcs_interface import GCSInterface
@@ -127,6 +128,9 @@ class ReplicationJob:
     dest_region: str
     dest_bucket: str
     objs: List[str]
+
+    # progress tracking via a list of chunk_requests
+    chunk_requests: Optional[List[ChunkRequest]] = None
 
     # Generates random chunks for testing on the gateways
     random_chunk_size_mb: Optional[int] = None

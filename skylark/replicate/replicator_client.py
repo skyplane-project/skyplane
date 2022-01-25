@@ -197,7 +197,7 @@ class ReplicatorClient:
 
         do_parallel(deprovision_gateway_instance, self.bound_nodes.values(), n=-1)
 
-    def run_replication_plan(self, job: ReplicationJob):
+    def run_replication_plan(self, job: ReplicationJob) -> ReplicationJob:
         assert job.source_region.split(":")[0] in [
             "aws",
             "azure",
@@ -284,45 +284,39 @@ class ReplicatorClient:
             start_instances = list(zip(self.bound_nodes.values(), chunk_requests_sharded.values()))
             do_parallel(send_chunk_requests, start_instances, n=-1)
 
-        return [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
+        job.chunk_requests = [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
+        return job
 
     def get_chunk_status_log_df(self) -> pd.DataFrame:
         def get_chunk_status(args):
-            hop_instance, path_idx, hop_idx = args
-            reply = requests.get(f"http://{hop_instance.public_ip()}:8080/api/v1/chunk_status_log")
+            node, instance = args
+            reply = requests.get(f"http://{instance.public_ip()}:8080/api/v1/chunk_status_log")
             if reply.status_code != 200:
-                raise Exception(f"Failed to get chunk status from gateway instance {hop_instance.instance_name()}: {reply.text}")
+                raise Exception(f"Failed to get chunk status from gateway instance {instance.instance_name()}: {reply.text}")
             logs = []
             for log_entry in reply.json()["chunk_status_log"]:
-                log_entry["hop_cloud_region"] = hop_instance.region_tag
-                log_entry["path_idx"] = path_idx
-                log_entry["hop_idx"] = hop_idx
+                log_entry["region"] = node.region
+                log_entry["instance_idx"] = node.instance_idx
                 log_entry["time"] = datetime.fromisoformat(log_entry["time"])
                 log_entry["state"] = ChunkState.from_str(log_entry["state"])
                 logs.append(log_entry)
             return logs
 
-        reqs = []
-        for path_idx, path in enumerate(self.bound_paths):
-            for hop_idx, hop_instance in enumerate(path):
-                reqs.append((hop_instance, path_idx, hop_idx))
-
-        # aggregate results
         rows = []
-        for _, result in do_parallel(get_chunk_status, reqs, n=-1):
+        for _, result in do_parallel(get_chunk_status, self.bound_nodes.items(), n=-1):
             rows.extend(result)
         return pd.DataFrame(rows)
 
     def monitor_transfer(
         self,
-        crs: List[ChunkRequest],
-        completed_state=ChunkState.upload_complete,
+        job: ReplicationJob,
         show_pbar=False,
         log_interval_s: Optional[float] = None,
         time_limit_seconds: Optional[float] = None,
         cancel_pending: bool = True,
     ) -> Dict:
-        total_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs])
+        assert job.chunk_requests is not None
+        total_bytes = sum([cr.chunk.chunk_length_bytes for cr in job.chunk_requests])
         last_log = None
 
         if cancel_pending:
@@ -349,14 +343,14 @@ class ReplicatorClient:
                     # count completed bytes
                     last_log_df = (
                         log_df.groupby(["chunk_id"])
-                        .apply(lambda df: df.sort_values(["path_idx", "hop_idx", "time"], ascending=False).head(1))
+                        .apply(lambda df: df.sort_values(["region", "instance_idx", "time"], ascending=False).head(1))
                         .reset_index(drop=True)
                     )
-                    is_complete_fn = (
-                        lambda row: row["state"] >= completed_state and row["hop_idx"] == len(self.bound_paths[row["path_idx"]]) - 1
-                    )
+                    is_complete_fn = lambda row: row["state"] >= ChunkState.upload_complete and row["region"] == job.dest_region
                     completed_chunk_ids = last_log_df[last_log_df.apply(is_complete_fn, axis=1)].chunk_id.values
-                    completed_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs if cr.chunk.chunk_id in completed_chunk_ids])
+                    completed_bytes = sum(
+                        [cr.chunk.chunk_length_bytes for cr in job.chunk_requests if cr.chunk.chunk_id in completed_chunk_ids]
+                    )
 
                     # update progress bar
                     pbar.update(completed_bytes * 8 - pbar.n)
@@ -364,14 +358,18 @@ class ReplicatorClient:
                     throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
                     pbar.set_description(f"Replication: average {throughput_gbits:.2f}Gbit/s")
 
-                    if len(completed_chunk_ids) == len(crs) or time_limit_seconds is not None and t.elapsed > time_limit_seconds:
+                    if (
+                        len(completed_chunk_ids) == len(job.chunk_requests)
+                        or time_limit_seconds is not None
+                        and t.elapsed > time_limit_seconds
+                    ):
                         if cancel_pending:
                             atexit.unregister(shutdown_handler)
                         return dict(
                             completed_chunk_ids=completed_chunk_ids,
                             total_runtime_s=total_runtime_s,
                             throughput_gbits=throughput_gbits,
-                            monitor_status="completed" if len(completed_chunk_ids) == len(crs) else "timed_out",
+                            monitor_status="completed" if len(completed_chunk_ids) == len(job.chunk_requests) else "timed_out",
                         )
                     else:
                         current_time = datetime.now()
@@ -379,7 +377,7 @@ class ReplicatorClient:
                             last_log = current_time
                             gbits_remaining = (total_bytes - completed_bytes) * 8 / GB
                             eta = int(gbits_remaining / throughput_gbits) if throughput_gbits > 0 else None
-                            log_line = f"{len(completed_chunk_ids)}/{len(crs)} chunks done ({completed_bytes / GB:.2f} / {total_bytes / GB:.2f}GB, {throughput_gbits:.2f}Gbit/s, ETA={str(eta) + 's' if eta is not None else 'unknown'})"
+                            log_line = f"{len(completed_chunk_ids)}/{len(job.chunk_requests)} chunks done ({completed_bytes / GB:.2f} / {total_bytes / GB:.2f}GB, {throughput_gbits:.2f}Gbit/s, ETA={str(eta) + 's' if eta is not None else 'unknown'})"
                             if show_pbar:
                                 tqdm.write(log_line)
                             else:

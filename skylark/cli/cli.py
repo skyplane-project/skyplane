@@ -145,7 +145,7 @@ def replicate_random(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
         )
     rc.provision_gateways(reuse_gateways)
-    for node, gw in rc.bound_nodes:
+    for node, gw in rc.bound_nodes.items():
         logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
 
     job = ReplicationJob(
@@ -158,10 +158,10 @@ def replicate_random(
     )
 
     total_bytes = n_chunks * chunk_size_mb * MB
-    crs = rc.run_replication_plan(job)
+    job = rc.run_replication_plan(job)
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
     stats = rc.monitor_transfer(
-        crs,
+        job,
         show_pbar=True,
         log_interval_s=log_interval_s,
         time_limit_seconds=time_limit_seconds,

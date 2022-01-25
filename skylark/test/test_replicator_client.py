@@ -154,7 +154,7 @@ def main(args):
         log_dir=args.log_dir,
         authorize_ssh_pub_key=args.copy_ssh_key,
     )
-    for node, gw in rc.bound_nodes:
+    for node, gw in rc.bound_nodes.items():
         logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
 
     # run replication, monitor progress
@@ -168,9 +168,9 @@ def main(args):
     )
 
     total_bytes = args.n_chunks * args.chunk_size_mb * MB
-    crs = rc.run_replication_plan(job)
+    job = rc.run_replication_plan(job)
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
-    stats = rc.monitor_transfer(crs, show_pbar=True)
+    stats = rc.monitor_transfer(job, show_pbar=True)
     logger.info(f"Replication completed in {stats['total_runtime_s']:.2f}s ({stats['throughput_gbits']:.2f}Gbit/s)")
 
 
