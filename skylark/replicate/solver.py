@@ -96,7 +96,6 @@ class ThroughputSolverILP(ThroughputSolver):
         azure_instance_throughput_limit=16.0,
         benchmark_throughput_connections=64,
         max_connections_per_node=64,
-        unused_sparsity_penalty=5e-3,
         cost_per_instance_hr=1.54,  # m5.8xlarge
         solver=cp.GLPK,
         solver_verbose=False,
@@ -193,13 +192,12 @@ class ThroughputSolverILP(ThroughputSolver):
                 src=src,
                 dst=dst,
                 gbyte_to_transfer=gbyte_to_transfer,
-                n_instances=n_instances.value,
                 solution=edge_flow_gigabits.value,
                 cost_per_edge=cost_per_edge.value,
                 connections=conn.value,
                 cost=total_cost.value,
                 runtime_s=runtime_s,
-                throughput=node_flow_in[sinks[0]].value * n_instances.value,
+                throughput=node_flow_in[sinks[0]].value,
                 feasible=True,
             )
         else:
