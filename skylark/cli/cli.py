@@ -108,7 +108,6 @@ def replicate_random(
     key_prefix: str = "/test/replicate_random",
     time_limit_seconds: Optional[int] = None,
     log_interval_s: float = 1.0,
-    serve_web_dashboard: bool = False,
 ):
     """Replicate objects from remote object store to another remote object store."""
     print_header()
@@ -166,7 +165,6 @@ def replicate_random(
         crs,
         show_pbar=True,
         log_interval_s=log_interval_s,
-        serve_web_dashboard=serve_web_dashboard,
         time_limit_seconds=time_limit_seconds,
     )
     stats["success"] = stats["monitor_status"] == "completed"

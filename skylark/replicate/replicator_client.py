@@ -18,7 +18,6 @@ from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server, ServerState
 from skylark.chunk import Chunk, ChunkRequest, ChunkRequestHop, ChunkState
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
-from skylark.replicate.replicator_client_dashboard import ReplicatorClientDashboard
 from skylark.utils.utils import PathLike, Timer, do_parallel
 
 
@@ -347,18 +346,10 @@ class ReplicatorClient:
         completed_state=ChunkState.upload_complete,
         show_pbar=False,
         log_interval_s: Optional[float] = None,
-        serve_web_dashboard=False,
-        dash_host="0.0.0.0",
-        dash_port="8080",
         time_limit_seconds: Optional[float] = None,
         cancel_pending: bool = True,
     ) -> Dict:
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in crs])
-        if serve_web_dashboard:
-            dash = ReplicatorClientDashboard(dash_host, dash_port)
-            dash.start()
-            atexit.register(dash.shutdown)
-            logger.info(f"Web dashboard running at {dash.dashboard_url}")
         last_log = None
 
         # register atexit handler to cancel pending chunk requests (force shutdown gateways)
@@ -383,9 +374,6 @@ class ReplicatorClient:
             ) as pbar:
                 while True:
                     log_df = self.get_chunk_status_log_df()
-                    if serve_web_dashboard:
-                        dash.update_status_df(log_df)
-
                     # count completed bytes
                     last_log_df = (
                         log_df.groupby(["chunk_id"])
@@ -405,8 +393,6 @@ class ReplicatorClient:
                     pbar.set_description(f"Replication: average {throughput_gbits:.2f}Gbit/s")
 
                     if len(completed_chunk_ids) == len(crs) or time_limit_seconds is not None and t.elapsed > time_limit_seconds:
-                        if serve_web_dashboard:
-                            dash.shutdown()
                         if cancel_pending:
                             atexit.unregister(shutdown_handler)
                         return dict(
