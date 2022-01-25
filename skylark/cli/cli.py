@@ -29,6 +29,8 @@ from loguru import logger
 from skylark import GB, MB, config_file, print_header
 from skylark.cli.cli_helper import (
     check_ulimit,
+    copy_gcs_local,
+    copy_local_gcs,
     copy_local_local,
     copy_local_s3,
     copy_s3_local,

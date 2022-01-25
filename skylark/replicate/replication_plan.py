@@ -17,6 +17,19 @@ class ReplicationTopologyGateway:
     region: str
     instance_idx: int
 
+    def to_dict(self):
+        return {
+            "region": self.region,
+            "instance_idx": self.instance_idx,
+        }
+
+    @staticmethod
+    def from_dict(topology_dict: Dict):
+        return ReplicationTopologyGateway(
+            region=topology_dict["region"],
+            instance_idx=topology_dict["instance_idx"],
+        )
+
 
 class ReplicationTopology:
     """
@@ -34,8 +47,8 @@ class ReplicationTopology:
         """
         Adds an edge to the topology.
         """
-        src_gateway = (src_region, src_instance)
-        dest_gateway = (dest_region, dest_instance)
+        src_gateway = ReplicationTopologyGateway(src_region, src_instance)
+        dest_gateway = ReplicationTopologyGateway(dest_region, dest_instance)
         self.edges.append((src_gateway, dest_gateway, int(num_connections)))
         self.nodes.add(src_gateway)
         self.nodes.add(dest_gateway)
@@ -46,13 +59,7 @@ class ReplicationTopology:
         """
         edges = []
         for e in self.edges:
-            edges.append(
-                {
-                    "src": {"region": e[0][0], "instance": int(e[0][1])},
-                    "dest": {"region": e[1][0], "instance": int(e[1][1])},
-                    "num_connections": int(e[2]),
-                }
-            )
+            edges.append({"src": e[0].to_dict(), "dest": e[1].to_dict(), "num_connections": int(e[2])})
         return json.dumps(dict(replication_topology_edges=edges))
 
     @classmethod
@@ -66,8 +73,8 @@ class ReplicationTopology:
         for edge in in_dict["replication_topology_edges"]:
             edges.append(
                 (
-                    ReplicationTopologyGateway(edge["src"]["region"], edge["src"]["instance"]),
-                    ReplicationTopologyGateway(edge["dest"]["region"], edge["dest"]["instance"]),
+                    ReplicationTopologyGateway.from_dict(edge["src"]),
+                    ReplicationTopologyGateway.from_dict(edge["dest"]),
                     edge["num_connections"],
                 )
             )
@@ -85,8 +92,8 @@ class ReplicationTopology:
         subgraphs = {}
         for src_gateway, dest_gateway, n_connections in self.edges:
             # group node instances by region
-            src_region, src_instance = src_gateway
-            dest_region, dest_instance = dest_gateway
+            src_region, src_instance = src_gateway.region, src_gateway.instance_idx
+            dest_region, dest_instance = dest_gateway.region, dest_gateway.instance_idx
             src_region, dest_region = src_region.replace(":", "/"), dest_region.replace(":", "/")
             src_node = f"{src_region}, {src_instance}"
             dest_node = f"{dest_region}, {dest_instance}"

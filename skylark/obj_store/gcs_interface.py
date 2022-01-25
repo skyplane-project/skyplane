@@ -3,7 +3,7 @@ import os
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Iterator, List
 
-from google.cloud import storage
+from google.cloud import storage  # pytype: disable=import-error
 
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
