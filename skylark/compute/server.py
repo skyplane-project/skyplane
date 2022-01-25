@@ -4,6 +4,7 @@ import subprocess
 import threading
 from enum import Enum, auto
 from pathlib import Path
+from typing import Dict
 
 import requests
 from loguru import logger
@@ -186,10 +187,10 @@ class Server:
 
     def start_gateway(
         self,
+        outgoing_ports: Dict[str, int],  # maps ip to number of connections along route
         gateway_docker_image="ghcr.io/parasj/skylark:main",
         log_viewer_port=8888,
         activity_monitor_port=8889,
-        num_outgoing_connections=8,
         use_bbr=False,
     ):
         desc_prefix = f"Starting gateway {self.uuid()}, host: {self.public_ip()}"
@@ -255,7 +256,7 @@ class Server:
         # todo add other launch flags for gateway daemon
         logger.debug(desc_prefix + f": Starting gateway container {gateway_docker_image}")
         docker_run_flags = f"-d --rm --log-driver=local --ipc=host --network=host --ulimit nofile={1024 * 1024} {docker_envs}"
-        gateway_daemon_cmd = f"python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections {num_outgoing_connections}"
+        gateway_daemon_cmd = f"python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-ports '{json.dumps(outgoing_ports)}'"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = self.run_command(docker_launch_cmd)
         logger.debug(desc_prefix + f": Gateway started {start_out}")

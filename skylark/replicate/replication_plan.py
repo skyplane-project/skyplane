@@ -53,6 +53,9 @@ class ReplicationTopology:
         self.nodes.add(src_gateway)
         self.nodes.add(dest_gateway)
 
+    def get_outgoing_paths(self, src: ReplicationTopologyGateway):
+        return {dest_gateway: num_connections for src_gateway, dest_gateway, num_connections in self.edges if src_gateway == src}
+
     def to_json(self):
         """
         Returns a JSON representation of the topology.

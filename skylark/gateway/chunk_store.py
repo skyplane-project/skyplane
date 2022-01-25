@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from loguru import logger
-from skylark.chunk import ChunkRequest, ChunkRequestHop, ChunkState
+from skylark.chunk import ChunkRequest, ChunkState
 
 
 class ChunkStore:
@@ -107,15 +107,6 @@ class ChunkStore:
         logger.debug(f"Adding chunk request {chunk_request.chunk.chunk_id}")
         self.set_chunk_state(chunk_request.chunk.chunk_id, state)
         self.chunk_requests[chunk_request.chunk.chunk_id] = chunk_request
-
-    def pop_chunk_request_path(self, chunk_id: int) -> Optional[ChunkRequestHop]:
-        if chunk_id in self.chunk_requests:
-            chunk_request = self.chunk_requests[chunk_id]
-            if len(chunk_request.path) > 0:
-                result = chunk_request.path.pop(0)
-                self.chunk_requests[chunk_id] = chunk_request
-                return result
-        return None
 
     def used_bytes(self):
         return sum(f.stat().st_size for f in self.chunk_dir.glob("*.chunk"))

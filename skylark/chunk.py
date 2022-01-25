@@ -1,38 +1,3 @@
-"""
-Documentation for chunk store data structures:
-
-A Chunk is a contiguous piece of a file (a file may be one or more chunks). A Chunk represents an atomic retyrable piece of data to make
-state management simpler. It is identified by a globally unique ID for an entire transfer. The ChunkStore maintains state (ChunkState)
-for each Chunk in addition to the path through the overlay that the Chunk will follow. As a ChunkRequest makes its way through the overlay,
-a ChunkRequestHop is popped off the path and the ChunkState is updated. ChunkState is maintained separately from the ChunkRequest in the
-ChunkStore so that ChunkRequests can be passed between Gateways.
-
-ChunkRequest:
-    chunk:
-        key: str
-        chunk_id: int
-        file_offset_bytes: int
-        chunk_len_bytes: int
-    path: List[ChunkRequestHop]
-        hop_cloud_region: str
-        hop_ip_address: str
-        chunk_location_type: str
-        src_object_store_region: str
-        src_object_store_bucket: str
-        dst_object_store_region: str
-        dst_object_store_bucket: str
-
-As compared to a ChunkRequest, the WireProtocolHeader is solely used to manage transfers over network sockets. It identifies the ID and
-length of the upcoming stream of data (contents of the Chunk) on the socket.
-
-WireProtocolHeader:
-    magic: int
-    protocol_version: int
-    chunk_id: int
-    chunk_len: int
-    n_chunks_left_on_socket: int
-"""
-
 from functools import total_ordering
 import socket
 from dataclasses import asdict, dataclass
@@ -63,43 +28,35 @@ class Chunk:
 
 
 @dataclass
-class ChunkRequestHop:
-    """A ChunkRequestHop represents metadata needed by the Gateway to route a ChunkRequest through the overlay."""
-
-    hop_cloud_region: str  # format is provider:region
-    hop_ip_address: str
-    chunk_location_type: str  # enum of {"src_object_store", "dst_object_store", "relay", "random_XMB", "save_local"}
-
-    # (optional) object store information
-    src_object_store_region: Optional[str] = None  # format is provider:region
-    src_object_store_bucket: Optional[str] = None
-    dst_object_store_region: Optional[str] = None
-    dst_object_store_bucket: Optional[str] = None
-
-    def as_dict(self):
-        return asdict(self)
-
-    @staticmethod
-    def from_dict(src_dict: Dict):
-        return ChunkRequestHop(**src_dict)
-
-
-@dataclass
 class ChunkRequest:
     """A ChunkRequest stores all local state in the Gateway pertaining to a ChunkRequest."""
 
     chunk: Chunk
-    path: List[ChunkRequestHop]
+    src_region: str
+    dst_region: str
+    src_type: str  # enum of {"object_store", "random", "read_local"}
+    dst_type: str  # enum of {"object_store", "save_local"}
+    src_random_size_mb: Optional[int] = None
+    src_object_store_bucket: Optional[str] = None
+    dst_object_store_bucket: Optional[str] = None
 
-    # todo: flags for compression, encryption, logging api, etc.
+    def __post_init__(self):
+        if self.src_type == "object_store":
+            assert self.src_object_store_bucket is not None
+        elif self.src_type == "random":
+            assert self.src_random_size_mb is not None
+        if self.dst_type == "object_store":
+            assert self.dst_object_store_bucket is not None
 
     def as_dict(self):
-        out = {"chunk": self.chunk.as_dict(), "path": [hop.as_dict() for hop in self.path]}
-        return out
+        dict_out = asdict(self)
+        dict_out["chunk"] = self.chunk.as_dict()
+        return dict_out
 
     @staticmethod
     def from_dict(in_dict: Dict):
-        return ChunkRequest(chunk=Chunk.from_dict(in_dict["chunk"]), path=[ChunkRequestHop.from_dict(hop) for hop in in_dict["path"]])
+        in_dict["chunk"] = Chunk.from_dict(in_dict["chunk"])
+        return ChunkRequest(**in_dict)
 
 
 @total_ordering
