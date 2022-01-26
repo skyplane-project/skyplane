@@ -118,11 +118,15 @@ def replicate_random(
     check_ulimit()
 
     if inter_region:
-        topo = ReplicationTopology(paths=[[src_region, inter_region, dst_region] for _ in range(num_gateways)])
-        num_conn = num_outgoing_connections
+        topo = ReplicationTopology()
+        for i in range(num_gateways):
+            topo.add_edge(src_region, i, inter_region, i, num_outgoing_connections)
+            topo.add_edge(inter_region, i, dst_region, i, num_outgoing_connections)
     else:
-        topo = ReplicationTopology(paths=[[src_region, dst_region] for _ in range(num_gateways)])
-        num_conn = num_outgoing_connections
+        topo = ReplicationTopology()
+        for i in range(num_gateways):
+            topo.add_edge(src_region, i, dst_region, i, num_outgoing_connections)
+
     rc = ReplicatorClient(
         topo,
         azure_subscription=azure_subscription,
@@ -140,29 +144,24 @@ def replicate_random(
         logger.warning(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
         )
-    rc.provision_gateways(
-        reuse_instances=reuse_gateways,
-        num_outgoing_connections=num_conn,
-    )
-    for path in rc.bound_paths:
-        logger.info(f"Provisioned path {' -> '.join(path[i].region_tag for i in range(len(path)))}")
-        for gw in path:
-            logger.info(f"\t[{gw.region_tag}] {gw.gateway_log_viewer_url}")
+    rc.provision_gateways(reuse_gateways)
+    for node, gw in rc.bound_nodes.items():
+        logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
 
     job = ReplicationJob(
         source_region=src_region,
-        source_bucket="random",
+        source_bucket=None,
         dest_region=dst_region,
-        dest_bucket="random",
+        dest_bucket=None,
         objs=[f"{key_prefix}/{i}" for i in range(n_chunks)],
         random_chunk_size_mb=chunk_size_mb,
     )
 
     total_bytes = n_chunks * chunk_size_mb * MB
-    crs = rc.run_replication_plan(job)
+    job = rc.run_replication_plan(job)
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
     stats = rc.monitor_transfer(
-        crs,
+        job,
         show_pbar=True,
         log_interval_s=log_interval_s,
         time_limit_seconds=time_limit_seconds,

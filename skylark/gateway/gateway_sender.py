@@ -13,9 +13,10 @@ from skylark.utils.utils import Timer, wait_for
 
 
 class GatewaySender:
-    def __init__(self, chunk_store: ChunkStore, n_processes=1, max_batch_size_bytes=64 * MB):
+    def __init__(self, chunk_store: ChunkStore, outgoing_ports: Dict[str, int]):
         self.chunk_store = chunk_store
-        self.n_processes = n_processes
+        self.outgoing_ports = outgoing_ports
+        self.n_processes = sum(outgoing_ports.values())
         self.processes = []
 
         # shared state
@@ -31,10 +32,17 @@ class GatewaySender:
         self.sent_chunk_ids: Dict[str, List[int]] = {}  # ip_address -> list of chunk_ids
 
     def start_workers(self):
-        for i in range(self.n_processes):
-            p = Process(target=self.worker_loop, args=(i,))
-            p.start()
-            self.processes.append(p)
+        for ip, num_connections in self.outgoing_ports.items():
+            for i in range(num_connections):
+                p = Process(
+                    target=self.worker_loop,
+                    args=(
+                        i,
+                        ip,
+                    ),
+                )
+                p.start()
+                self.processes.append(p)
 
     def stop_workers(self):
         for i in range(self.n_processes):
@@ -43,7 +51,7 @@ class GatewaySender:
             p.join()
         self.processes = []
 
-    def worker_loop(self, worker_id: int):
+    def worker_loop(self, worker_id: int, dest_ip: str):
         setproctitle.setproctitle(f"skylark-gateway-sender:{worker_id}")
         self.worker_id = worker_id
 
@@ -53,15 +61,12 @@ class GatewaySender:
             except queue.Empty:
                 continue
 
-            logger.debug(f"[sender:{self.worker_id}] Sending chunk ID {next_chunk_id}")
-            self.chunk_store.pop_chunk_request_path(next_chunk_id)
+            logger.debug(f"[sender:{self.worker_id}] Sending chunk ID {next_chunk_id} to IP {dest_ip}")
             req = self.chunk_store.get_chunk_request(next_chunk_id)
-            if len(req.path) > 0:
-                next_hop = req.path[0]
-                self.send_chunks([next_chunk_id], next_hop.hop_ip_address)
-                if next_hop.hop_ip_address not in self.sent_chunk_ids:
-                    self.sent_chunk_ids[next_hop.hop_ip_address] = []
-                self.sent_chunk_ids[next_hop.hop_ip_address].append(next_chunk_id)
+            self.send_chunks([next_chunk_id], dest_ip)
+            if dest_ip not in self.sent_chunk_ids:
+                self.sent_chunk_ids[dest_ip] = []
+            self.sent_chunk_ids[dest_ip].append(next_chunk_id)
 
         # close destination sockets
         logger.info(f"[sender:{worker_id}] exiting, closing sockets")

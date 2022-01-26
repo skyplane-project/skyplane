@@ -127,9 +127,14 @@ def main(args):
 
     # define the replication job and topology
     if args.inter_region:
-        topo = ReplicationTopology(paths=[[args.src_region, args.inter_region, args.dest_region] for _ in range(args.num_gateways)])
+        topo = ReplicationTopology()
+        for i in range(args.num_gateways):
+            topo.add_edge(args.src_region, i, args.inter_region, i, args.num_outgoing_connections)
+            topo.add_edge(args.inter_region, i, args.dst_region, i, args.num_outgoing_connections)
     else:
-        topo = ReplicationTopology(paths=[[args.src_region, args.dest_region] for _ in range(args.num_gateways)])
+        topo = ReplicationTopology()
+        for i in range(args.num_gateways):
+            topo.add_edge(args.src_region, i, args.dst_region, i, args.num_outgoing_connections)
     logger.info("Creating replication client")
     rc = ReplicatorClient(
         topo,
@@ -148,12 +153,9 @@ def main(args):
         reuse_instances=True,
         log_dir=args.log_dir,
         authorize_ssh_pub_key=args.copy_ssh_key,
-        num_outgoing_connections=args.num_outgoing_connections,
     )
-    for path in rc.bound_paths:
-        logger.info(f"Provisioned path {' -> '.join(path[i].region_tag for i in range(len(path)))}")
-        for gw in path:
-            logger.info(f"\t[{gw.region_tag}] {gw.gateway_log_viewer_url}")
+    for node, gw in rc.bound_nodes.items():
+        logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
 
     # run replication, monitor progress
     job = ReplicationJob(
@@ -166,9 +168,9 @@ def main(args):
     )
 
     total_bytes = args.n_chunks * args.chunk_size_mb * MB
-    crs = rc.run_replication_plan(job)
+    job = rc.run_replication_plan(job)
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
-    stats = rc.monitor_transfer(crs, show_pbar=True)
+    stats = rc.monitor_transfer(job, show_pbar=True)
     logger.info(f"Replication completed in {stats['total_runtime_s']:.2f}s ({stats['throughput_gbits']:.2f}Gbit/s)")
 
 

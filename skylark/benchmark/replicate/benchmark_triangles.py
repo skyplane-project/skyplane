@@ -34,11 +34,14 @@ def bench_triangle(
 
     try:
         if inter_region:
-            topo = ReplicationTopology(paths=[[src_region, inter_region, dst_region] for _ in range(num_gateways)])
-            num_conn = num_outgoing_connections
+            topo = ReplicationTopology()
+            for i in range(num_gateways):
+                topo.add_edge(src_region, i, inter_region, i, num_outgoing_connections)
+                topo.add_edge(inter_region, i, dst_region, i, num_outgoing_connections)
         else:
-            topo = ReplicationTopology(paths=[[src_region, dst_region] for _ in range(num_gateways)])
-            num_conn = num_outgoing_connections
+            topo = ReplicationTopology()
+            for i in range(num_gateways):
+                topo.add_edge(src_region, i, dst_region, i, num_outgoing_connections)
         rc = ReplicatorClient(
             topo,
             gcp_project=gcp_project,
@@ -48,15 +51,10 @@ def bench_triangle(
             gcp_use_premium_network=gcp_use_premium_network,
         )
 
-        rc.provision_gateways(
-            reuse_instances=False,
-            num_outgoing_connections=num_conn,
-        )
+        rc.provision_gateways(reuse_instances=False)
         atexit.register(rc.deprovision_gateways)
-        for path in rc.bound_paths:
-            logger.info(f"Provisioned path {' -> '.join(path[i].region_tag for i in range(len(path)))}")
-            for gw in path:
-                logger.info(f"\t[{gw.region_tag}] {gw.gateway_log_viewer_url}")
+        for node, gw in rc.bound_nodes.items():
+            logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
 
         job = ReplicationJob(
             source_region=src_region,
@@ -68,9 +66,9 @@ def bench_triangle(
         )
 
         total_bytes = n_chunks * chunk_size_mb * MB
-        crs = rc.run_replication_plan(job)
+        job = rc.run_replication_plan(job)
         logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
-        stats = rc.monitor_transfer(crs, show_pbar=False, time_limit_seconds=600)
+        stats = rc.monitor_transfer(job, show_pbar=False, time_limit_seconds=600)
         stats["success"] = True
         stats["log"] = rc.get_chunk_status_log_df()
         rc.deprovision_gateways()

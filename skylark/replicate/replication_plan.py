@@ -6,6 +6,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 from loguru import logger
 import graphviz as gv
+from skylark.chunk import ChunkRequest
 
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.obj_store.gcs_interface import GCSInterface
@@ -30,6 +31,9 @@ class ReplicationTopologyGateway:
             instance_idx=topology_dict["instance_idx"],
         )
 
+    def __hash__(self) -> int:
+        return hash(self.region) + hash(self.instance_idx)
+
 
 class ReplicationTopology:
     """
@@ -52,6 +56,9 @@ class ReplicationTopology:
         self.edges.append((src_gateway, dest_gateway, int(num_connections)))
         self.nodes.add(src_gateway)
         self.nodes.add(dest_gateway)
+
+    def get_outgoing_paths(self, src: ReplicationTopologyGateway):
+        return {dest_gateway: num_connections for src_gateway, dest_gateway, num_connections in self.edges if src_gateway == src}
 
     def to_json(self):
         """
@@ -125,15 +132,20 @@ class ReplicationJob:
     dest_bucket: str
     objs: List[str]
 
+    # progress tracking via a list of chunk_requests
+    chunk_requests: Optional[List[ChunkRequest]] = None
+
     # Generates random chunks for testing on the gateways
     random_chunk_size_mb: Optional[int] = None
 
-    def src_obj_sizes(self):
-        if self.source_region.split(":")[0] == "aws":
+    def src_obj_sizes(self) -> Dict[str, int]:
+        if self.random_chunk_size_mb is not None:
+            return {obj: self.random_chunk_size_mb for obj in self.objs}
+        elif self.source_region.split(":")[0] == "aws":
             interface = S3Interface(self.source_region.split(":")[1], self.source_bucket)
-        if self.source_region.split(":")[0] == "gcp":
+        elif self.source_region.split(":")[0] == "gcp":
             interface = GCSInterface(self.source_region.split(":")[1][:-2], self.source_bucket)
         else:
-            raise NotImplementedError
+            raise NotImplementedError(f"{self.source_region} is not supported")
         get_size = lambda o: interface.get_obj_size(o)
-        return do_parallel(get_size, self.objs, n=16, progress_bar=True, desc="Query object sizes")
+        return dict(do_parallel(get_size, self.objs, n=16, progress_bar=True, desc="Query object sizes"))
