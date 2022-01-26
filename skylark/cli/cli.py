@@ -150,9 +150,9 @@ def replicate_random(
 
     job = ReplicationJob(
         source_region=src_region,
-        source_bucket="random",
+        source_bucket=None,
         dest_region=dst_region,
-        dest_bucket="random",
+        dest_bucket=None,
         objs=[f"{key_prefix}/{i}" for i in range(n_chunks)],
         random_chunk_size_mb=chunk_size_mb,
     )

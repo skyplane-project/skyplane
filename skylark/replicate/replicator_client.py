@@ -173,22 +173,17 @@ class ReplicatorClient:
             if authorize_ssh_pub_key:
                 server.copy_public_key(authorize_ssh_pub_key)
 
-        do_parallel(setup, itertools.chain(*instances_by_region.values()), n=-1)
+        do_parallel(setup, set(itertools.chain(*instances_by_region.values())), n=-1)
 
         # bind instances to nodes
         for node in self.topology.nodes:
             self.bound_nodes[node] = instances_by_region[node.region].pop()
 
         with Timer("Install gateway package on instances"):
-            fns = []
+            args = []
             for node, server in self.bound_nodes.items():
-
-                def fn():
-                    out_map_ips = {self.bound_nodes[n].public_ip(): v for n, v in self.topology.get_outgoing_paths(node).items()}
-                    server.start_gateway(out_map_ips, gateway_docker_image=self.gateway_docker_image)
-
-                fns.append(fn)
-            do_parallel(lambda fn: fn(), fns)
+                args.append((server, {self.bound_nodes[n].public_ip(): v for n, v in self.topology.get_outgoing_paths(node).items()}))
+            do_parallel(lambda arg: arg[0].start_gateway(arg[1], gateway_docker_image=self.gateway_docker_image), args, n=-1)
 
     def deprovision_gateways(self):
         def deprovision_gateway_instance(server: Server):
@@ -218,7 +213,7 @@ class ReplicatorClient:
         for idx, obj in enumerate(job.objs):
             if obj_file_size_bytes:
                 # object store objects
-                file_size_bytes = obj_file_size_bytes[idx][1]
+                file_size_bytes = obj_file_size_bytes[obj]
             else:
                 # random data
                 file_size_bytes = job.random_chunk_size_mb * MB

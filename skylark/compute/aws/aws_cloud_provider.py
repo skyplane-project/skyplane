@@ -32,7 +32,7 @@ class AWSCloudProvider(CloudProvider):
             "ap-south-1",
             "ap-southeast-1",
             "ap-southeast-2",
-            "ap-southeast-3",
+            # "ap-southeast-3",  # too new region, not well supported
             "ca-central-1",
             "eu-central-1",
             "eu-north-1",
