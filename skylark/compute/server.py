@@ -4,6 +4,7 @@ import subprocess
 import threading
 from enum import Enum, auto
 from pathlib import Path
+from typing import Dict
 
 import requests
 from loguru import logger
@@ -148,7 +149,7 @@ class Server:
             return False
 
         logger.debug(f"Waiting for {self.uuid()} to be ready")
-        wait_for(is_up, timeout=timeout, interval=interval)
+        wait_for(is_up, timeout=timeout, interval=interval, desc=f"Waiting for {self.uuid()} to be ready")
         logger.debug(f"{self.uuid()} is ready")
 
     def close_server(self):
@@ -186,13 +187,13 @@ class Server:
 
     def start_gateway(
         self,
+        outgoing_ports: Dict[str, int],  # maps ip to number of connections along route
         gateway_docker_image="ghcr.io/parasj/skylark:main",
         log_viewer_port=8888,
         activity_monitor_port=8889,
-        num_outgoing_connections=8,
         use_bbr=False,
     ):
-        desc_prefix = f"Starting gateway {self.uuid()}"
+        desc_prefix = f"Starting gateway {self.uuid()}, host: {self.public_ip()}"
         logger.debug(desc_prefix + ": Installing docker")
 
         # increase TCP connections, enable BBR optionally and raise file limits
@@ -212,6 +213,7 @@ class Server:
             sysctl_updates["net.ipv4.tcp_congestion_control"] = "bbr"
         else:
             sysctl_updates["net.ipv4.tcp_congestion_control"] = "cubic"
+
         self.run_command("sudo sysctl -w {}".format(" ".join(f"{k}={v}" for k, v in sysctl_updates.items())))
 
         # install docker and launch monitoring
@@ -222,11 +224,14 @@ class Server:
         docker_version = out.strip().split("\n")[-1]
 
         if not docker_version.startswith("Success"):  # retry since docker install fails sometimes
+            logger.error(desc_prefix + ": Docker install failed!")
+            logger.error(desc_prefix + ": " + err)
             logger.debug(desc_prefix + ": Installing docker (retry)")
             out, err = self.run_command(cmd)
             docker_version = out.strip().split("\n")[-1]
-
-        assert docker_version.startswith("Success"), f"Failed to install Docker: {out}\n{err}"
+        assert docker_version.startswith(
+            "Success"
+        ), f"Failed to install Docker on {self.region_tag}, {self.public_ip()}: OUT {out}\nERR {err}"
 
         # launch monitoring
         logger.debug(desc_prefix + ": Starting monitoring")
@@ -254,9 +259,10 @@ class Server:
         # todo add other launch flags for gateway daemon
         logger.debug(desc_prefix + f": Starting gateway container {gateway_docker_image}")
         docker_run_flags = f"-d --rm --log-driver=local --ipc=host --network=host --ulimit nofile={1024 * 1024} {docker_envs}"
-        gateway_daemon_cmd = f"python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections {num_outgoing_connections}"
+        gateway_daemon_cmd = f"python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = self.run_command(docker_launch_cmd)
+        logger.debug(desc_prefix + f": Gateway started {start_out}")
         assert not start_err.strip(), f"Error starting gateway: {start_err}"
         gateway_container_hash = start_out.strip().split("\n")[-1][:12]
         self.gateway_api_url = f"http://{self.public_ip()}:8080/api/v1"
@@ -276,7 +282,8 @@ class Server:
         try:
             wait_for(is_ready, timeout=10, interval=0.1, desc=f"Waiting for gateway {self.uuid()} to start", leave_pbar=False)
         except Exception as e:
-            logger.error(f"Gateway {self.instance_name()} is not ready")
+            logger.error(f"Gateway {self.instance_name()} is not ready {e}")
+            logger.warning(desc_prefix + " gateway launch command: " + docker_launch_cmd)
             logs, err = self.run_command(f"sudo docker logs skylark_gateway --tail=100")
             logger.error(f"Docker logs: {logs}\nerr: {err}")
             raise e

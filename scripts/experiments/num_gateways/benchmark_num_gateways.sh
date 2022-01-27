@@ -20,7 +20,7 @@ function benchmark_config {
     NUM_GATEWAYS=$2
     N_CHUNKS=$((N_CHUNKS_PER_CONNECTION * NUM_CONNECTIONS * NUM_GATEWAYS))
     set -x
-    skylark replicate-random $SRC_REGION $DST_REGION $INTER_REGION --chunk-size-mb $CHUNK_SIZE_MB --n-chunks $N_CHUNKS --num-gateways $NUM_GATEWAYS --num-outgoing-connections $NUM_CONNECTIONS --no-serve-web-dashboard --aws-instance-class m5.4xlarge
+    skylark replicate-random $SRC_REGION $DST_REGION $INTER_REGION --chunk-size-mb $CHUNK_SIZE_MB --n-chunks $N_CHUNKS --num-gateways $NUM_GATEWAYS --num-outgoing-connections $NUM_CONNECTIONS --aws-instance-class m5.4xlarge
     set +x
 }
 

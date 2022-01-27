@@ -2,7 +2,6 @@
 AWS convenience interface
 """
 
-import argparse
 from pathlib import Path
 import sys
 
@@ -10,8 +9,7 @@ import cvxpy as cp
 
 import typer
 from loguru import logger
-from skylark.replicate.solver import ThroughputSolverILP
-from skylark.utils.utils import do_parallel
+from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP
 from skylark import skylark_root
 
 app = typer.Typer(name="skylark-solver")
@@ -21,6 +19,22 @@ logger.remove()
 logger.add(sys.stderr, format="{function:>20}:{line:<3} | <level>{message}</level>", colorize=True, enqueue=True)
 
 
+def choose_solver():
+    try:
+        import gurobipy as _grb  # pytype: disable=import-error
+
+        return cp.GUROBI
+    except ImportError:
+        try:
+            import cylp as _cylp  # pytype: disable=import-error
+
+            logger.warning("Gurobi not installed, using CoinOR instead.")
+            return cp.CBC
+        except ImportError:
+            logger.warning("Gurobi and CoinOR not installed, using GLPK instead.")
+            return cp.GLPK
+
+
 @app.command()
 def solve_throughput(
     src: str = typer.Argument(..., help="Source region, in format of provider:region."),
@@ -28,36 +42,51 @@ def solve_throughput(
     required_throughput_gbits: float = typer.Argument(..., help="Required throughput in gbps."),
     gbyte_to_transfer: float = typer.Option(1, help="Gigabytes to transfer"),
     max_instances: int = typer.Option(1, help="Max number of instances per overlay region."),
-    sparsity_penalty: float = typer.Option(0.0, help="Sparsity penalty"),
-    throughput_grid: Path = typer.Option(
-        skylark_root / "profiles" / "throughput_mini.csv", "--throughput-grid", help="Throughput grid file"
-    ),
+    instance_cost_multiplier: float = typer.Option(1, help="Instance cost multiplier."),
+    throughput_grid: Path = typer.Option(skylark_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"),
     solver_verbose: bool = False,
+    out: Path = typer.Option(None, "--out", "-o", help="Output file for path."),
+    visualize: bool = False,
 ):
-    try:
-        import gurobipy as grb
 
-        solver = cp.GUROBI
-    except ImportError:
-        solver = cp.GLPK
-        logger.warning("Gurobi not installed, using GLPK instead.")
     # build problem and solve
     tput = ThroughputSolverILP(throughput_grid)
-    solution = tput.solve_min_cost(
+    problem = ThroughputProblem(
         src,
         dst,
-        required_throughput_gbits=required_throughput_gbits,
-        gbyte_to_transfer=gbyte_to_transfer,
-        instance_limit=max_instances,
-        sparsity_penalty=sparsity_penalty,
-        solver=solver,
+        required_throughput_gbits,
+        gbyte_to_transfer,
+        max_instances,
+    )
+    solution = tput.solve_min_cost(
+        problem,
+        instance_cost_multipler=instance_cost_multiplier,
+        solver=choose_solver(),
         solver_verbose=solver_verbose,
         save_lp_path=skylark_root / "data" / "throughput_solver.lp",
     )
 
     # save results
     tput.print_solution(solution)
-    if solution["feasible"]:
-        g = tput.plot_graphviz(solution)
-        if g is not None:
-            g.render(filename="/tmp/throughput_graph.gv", quiet_view=True, format="png")
+    if solution.is_feasible:
+        replication_topo = tput.to_replication_topology(solution)
+        if out:
+            with open(out, "w") as f:
+                f.write(replication_topo.to_json())
+        if visualize:
+            g = tput.plot_graphviz(solution)
+            if g is not None:
+                try:
+                    for f in Path("/tmp/throughput_graph.gv.*").glob("*"):
+                        f.unlink()
+                    g.render(filename="/tmp/throughput_graph.gv", quiet_view=True, format="pdf")
+                except FileNotFoundError as e:
+                    logger.error(f"Could not render graph: {e}")
+            g_rt = replication_topo.to_graphviz()
+            if g_rt is not None:
+                try:
+                    for f in Path("/tmp/replication_topo.gv.*").glob("*"):
+                        f.unlink()
+                    g_rt.render(filename="/tmp/replication_topo.gv", quiet_view=True, format="pdf")
+                except FileNotFoundError as e:
+                    logger.error(f"Could not render graph: {e}")
