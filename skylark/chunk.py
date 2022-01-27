@@ -4,6 +4,8 @@ from dataclasses import asdict, dataclass
 from enum import Enum, auto
 from typing import Dict, List, Optional
 
+from loguru import logger
+
 
 @dataclass
 class Chunk:
@@ -114,10 +116,10 @@ class WireProtocolHeader:
         assert len(data) == WireProtocolHeader.length_bytes(), f"{len(data)} != {WireProtocolHeader.length_bytes()}"
         magic = int.from_bytes(data[:8], byteorder="big")
         if magic != WireProtocolHeader.magic_hex():
-            raise ValueError("Invalid magic number")
+            raise ValueError(f"Invalid magic number, got {magic:x} but expected {WireProtocolHeader.magic_hex():x}")
         version = int.from_bytes(data[8:12], byteorder="big")
         if version != WireProtocolHeader.protocol_version():
-            raise ValueError("Invalid protocol version")
+            raise ValueError(f"Invalid protocol version, got {version} but expected {WireProtocolHeader.protocol_version()}")
         chunk_id = int.from_bytes(data[12:20], byteorder="big")
         chunk_len = int.from_bytes(data[20:28], byteorder="big")
         n_chunks_left_on_socket = int.from_bytes(data[28:36], byteorder="big")
