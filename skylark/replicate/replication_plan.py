@@ -149,9 +149,9 @@ class ReplicationTopology:
 @dataclass
 class ReplicationJob:
     source_region: str
-    source_bucket: str
+    source_bucket: Optional[str]
     dest_region: str
-    dest_bucket: str
+    dest_bucket: Optional[str]
     objs: List[str]
 
     # progress tracking via a list of chunk_requests
