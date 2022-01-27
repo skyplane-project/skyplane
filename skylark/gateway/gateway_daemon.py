@@ -21,6 +21,7 @@ from skylark.gateway.gateway_sender import GatewaySender
 
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.obj_store.gcs_interface import GCSInterface
+from skylark.obj_store.azure_interface import AzureInterface
 from skylark.obj_store.object_store_interface import ObjectStoreInterface
 
 
@@ -57,6 +58,8 @@ class GatewayDaemon:
             self.obj_store_interfaces[region] = S3Interface(region.split(":")[1], bucket, use_tls=False)
         elif region.startswith("gcp"):
             self.obj_store_interfaces[region] = GCSInterface(region.split(":")[1][:-2], bucket)
+        elif region.startswith("azure"):
+            self.obj_store_interfaces[region] = AzureInterface(region.split(":")[1][:-2], bucket)
         else:
             ValueError(f"Invalid region {region} - could not create interface")
 

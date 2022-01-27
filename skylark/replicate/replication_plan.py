@@ -9,6 +9,7 @@ import graphviz as gv
 
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.obj_store.gcs_interface import GCSInterface
+from skylark.obj_store.azure_interface import AzureInterface
 from skylark.utils.utils import do_parallel
 
 
@@ -133,6 +134,8 @@ class ReplicationJob:
             interface = S3Interface(self.source_region.split(":")[1], self.source_bucket)
         if self.source_region.split(":")[0] == "gcp":
             interface = GCSInterface(self.source_region.split(":")[1][:-2], self.source_bucket)
+        if self.source_region.split(":")[0] == "azure":
+            interface = AzureInterface(self.source_region.split(":")[1][:-2], self.source_bucket)
         else:
             raise NotImplementedError
         get_size = lambda o: interface.get_obj_size(o)
