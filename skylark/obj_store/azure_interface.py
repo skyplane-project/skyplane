@@ -29,7 +29,7 @@ class AzureInterface(ObjectStoreInterface):
         self.pending_uploads, self.completed_uploads = 0, 0
 
         # Connection strings are stored in azure_keys.py
-        self._connect_str = azure_storage_credentials[self.azure_region]['connection_string']
+        self._connect_str = azure_storage_credentials[self.azure_region]["connection_string"]
         # Create the BlobServiceClient object which will be used to create a container client
         self.blob_service_client = BlobServiceClient.from_connection_string(self._connect_str)
 
