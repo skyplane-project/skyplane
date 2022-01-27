@@ -29,14 +29,14 @@ class AzureInterface(ObjectStoreInterface):
         # created after the application is launched in a console or with Visual Studio,
         # the shell or application needs to be closed and reloaded to take the
         # environment variable into account.
-        self._connect_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
+        self._connect_str = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
         # Create the BlobServiceClient object which will be used to create a container client
         self.blob_service_client = BlobServiceClient.from_connection_string(_connect_str)
 
         self.container_client = None
 
-        # TODO:: Figure this out, since azure by default has 15 workers 
-        self.pool = ThreadPoolExecutor(max_workers=1) 
+        # TODO:: Figure this out, since azure by default has 15 workers
+        self.pool = ThreadPoolExecutor(max_workers=1)
         self.max_concurrency = 24
 
     def _on_done_download(self, **kwargs):
@@ -47,15 +47,15 @@ class AzureInterface(ObjectStoreInterface):
         self.completed_uploads += 1
         self.pending_uploads -= 1
 
-    def container_exists(self): # More like "is container empty?"
-       # Get a client to interact with a specific container - though it may not yet exist
-        if (self.container_client is None):
+    def container_exists(self):  # More like "is container empty?"
+        # Get a client to interact with a specific container - though it may not yet exist
+        if self.container_client is None:
             self.container_client = self.blob_service_client.get_container_client(self.container_name)
         try:
             for blob in self.container_client.list_blobs():
                 typer.secho("Found blob(s): ", blob.name)
-            except ResourceNotFoundError:
-                return False
+        except ResourceNotFoundError:
+            return False
 
     def create_container(self):
         try:
@@ -69,7 +69,7 @@ class AzureInterface(ObjectStoreInterface):
         return self.create_container()
 
     def delete_container(self):
-        if (self.container_client is None):
+        if self.container_client is None:
             self.container_client = self.blob_service_client.get_container_client(self.container_name)
         try:
             self.container_client.delete_container()
@@ -80,7 +80,7 @@ class AzureInterface(ObjectStoreInterface):
         return self.delete_container()
 
     def list_objects(self, prefix="") -> Iterator[AzureObject]:
-        if (self.container_client is None):
+        if self.container_client is None:
             self.container_client = self.blob_service_client.get_container_client(self.container_name)
         blobs = self.container_client.list_blobs()
         for blob in blobs:
@@ -91,12 +91,12 @@ class AzureInterface(ObjectStoreInterface):
             blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=obj_name)
             blob_client.delete_blob()
 
-    def get_obj_metadata(self, obj_name): # Not Tested
+    def get_obj_metadata(self, obj_name):  # Not Tested
         blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=obj_name)
-       try:
-           return blob_client.get_blob_properties()
-       except ResourceNotFoundError:
-           typer.secho("No blob found.")
+        try:
+            return blob_client.get_blob_properties()
+        except ResourceNotFoundError:
+            typer.secho("No blob found.")
 
     def get_obj_size(self, obj_name):
         return self.get_obj_metadata(obj_name).size
@@ -109,11 +109,11 @@ class AzureInterface(ObjectStoreInterface):
             typer.secho("Undefined Behavior.")
             exit(-1)
 
-    '''
+    """
     stream = blob_client.download_blob()
     for chunk in stream.chunks():
         # Reading data in chunks to avoid loading all into memory at once
-    '''
+    """
 
     def download_object(self, src_object_name, dst_file_path) -> Future:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
@@ -135,7 +135,7 @@ class AzureInterface(ObjectStoreInterface):
         os.path.getsize(src_file_path)
 
         # Don't know what this does
-        if content_type == "infer": 
+        if content_type == "infer":
             content_type = mimetypes.guess_type(src_file_path)[0] or "application/octet-stream"
 
         def _upload_object_helper():
