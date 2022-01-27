@@ -77,7 +77,7 @@ def main(args):
     elif "gcp" in args.dest_region:
         obj_store_interface_dst = GCSInterface(args.dest_region.split(":")[1][:-2], dst_bucket)
     else:
-        raise ValueError(f"No region in destination region {args.dst_region}")
+        raise ValueError(f"No region in destination region {args.dest_region}")
 
     obj_store_interface_src.create_bucket()
     obj_store_interface_dst.create_bucket()
@@ -130,11 +130,11 @@ def main(args):
         topo = ReplicationTopology()
         for i in range(args.num_gateways):
             topo.add_edge(args.src_region, i, args.inter_region, i, args.num_outgoing_connections)
-            topo.add_edge(args.inter_region, i, args.dst_region, i, args.num_outgoing_connections)
+            topo.add_edge(args.inter_region, i, args.dest_region, i, args.num_outgoing_connections)
     else:
         topo = ReplicationTopology()
         for i in range(args.num_gateways):
-            topo.add_edge(args.src_region, i, args.dst_region, i, args.num_outgoing_connections)
+            topo.add_edge(args.src_region, i, args.dest_region, i, args.num_outgoing_connections)
     logger.info("Creating replication client")
     rc = ReplicatorClient(
         topo,
