@@ -71,7 +71,7 @@ def main(args):
     elif "gcp" in args.src_region:
         obj_store_interface_src = GCSInterface(args.src_region.split(":")[1][:-2], src_bucket)
     elif "azure" in args.src_region:
-        obj_store_interface_src = AzureInterface(args.src_region.split(":")[1][:-2], src_bucket)
+        obj_store_interface_src = AzureInterface(args.src_region.split(":")[1], src_bucket)
     else:
         raise ValueError(f"No region in source region {args.src_region}")
 
@@ -80,7 +80,7 @@ def main(args):
     elif "gcp" in args.dest_region:
         obj_store_interface_dst = GCSInterface(args.dest_region.split(":")[1][:-2], dst_bucket)
     elif "azure" in args.dest_region:
-        obj_store_interface_dst = AzureInterface(args.dest_region.split(":")[1][:-2], dst_bucket)
+        obj_store_interface_dst = AzureInterface(args.dest_region.split(":")[1], dst_bucket)
     else:
         raise ValueError(f"No region in destination region {args.dest_region}")
 

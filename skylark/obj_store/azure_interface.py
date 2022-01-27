@@ -62,7 +62,9 @@ class AzureInterface(ObjectStoreInterface):
             self.container_client = self.blob_service_client.create_container(self.container_name)
             self.properties = self.container_client.get_container_properties()
         except ResourceExistsError:
-            typer.secho("Container already exists. Exiting")
+            self.delete_container()
+            typer.secho("==>Container already exists. Deletion started. Try restarting after sufficient gap")
+            typer.secho("==> Alternatively use a diff bucket name with `--bucket-prefix`")
             exit(-1)
 
     def create_bucket(self):
