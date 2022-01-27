@@ -8,6 +8,7 @@ import concurrent
 import os
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.obj_store.gcs_interface import GCSInterface
+from skylark.obj_store.azure_interface import AzureInterface
 
 import tempfile
 import concurrent
@@ -69,6 +70,8 @@ def main(args):
         obj_store_interface_src = S3Interface(args.src_region.split(":")[1], src_bucket)
     elif "gcp" in args.src_region:
         obj_store_interface_src = GCSInterface(args.src_region.split(":")[1][:-2], src_bucket)
+    elif "azure" in args.src_region:
+        obj_store_interface_src = AzureInterface(args.src_region.split(":")[1][:-2], src_bucket)
     else:
         raise ValueError(f"No region in source region {args.src_region}")
 
@@ -76,6 +79,8 @@ def main(args):
         obj_store_interface_dst = S3Interface(args.dest_region.split(":")[1], dst_bucket)
     elif "gcp" in args.dest_region:
         obj_store_interface_dst = GCSInterface(args.dest_region.split(":")[1][:-2], dst_bucket)
+    elif "azure" in args.dest_region:
+        obj_store_interface_dst = AzureInterface(args.dest_region.split(":")[1][:-2], dst_bucket)
     else:
         raise ValueError(f"No region in destination region {args.dst_region}")
 
