@@ -137,10 +137,6 @@ class AzureInterface(ObjectStoreInterface):
         dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
         os.path.getsize(src_file_path)
 
-        # Don't know what this does
-        if content_type == "infer":
-            content_type = mimetypes.guess_type(src_file_path)[0] or "application/octet-stream"
-
         def _upload_object_helper():
             blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=dst_object_name)
             with open(src_file_path, "rb") as data:

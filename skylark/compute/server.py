@@ -4,6 +4,7 @@ import subprocess
 import threading
 from enum import Enum, auto
 from pathlib import Path
+from typing import Dict
 
 import requests
 from loguru import logger
@@ -186,10 +187,10 @@ class Server:
 
     def start_gateway(
         self,
+        outgoing_ports: Dict[str, int],  # maps ip to number of connections along route
         gateway_docker_image="ghcr.io/parasj/skylark:main",
         log_viewer_port=8888,
         activity_monitor_port=8889,
-        num_outgoing_connections=8,
         use_bbr=False,
     ):
         desc_prefix = f"Starting gateway {self.uuid()}, host: {self.public_ip()}"
@@ -197,15 +198,24 @@ class Server:
 
         # increase TCP connections, enable BBR optionally and raise file limits
         sysctl_updates = {
-            "net.core.rmem_max": 2147483647,
-            "net.core.wmem_max": 2147483647,
-            "net.ipv4.tcp_rmem": "4096 87380 1073741824",
-            "net.ipv4.tcp_wmem": "4096 65536 1073741824",
-            "net.ipv4.tcp_tw_reuse": 1,
-            "net.core.somaxconn": 1024,
-            "net.core.netdev_max_backlog": 2000,
-            "net.ipv4.tcp_max_syn_backlog": 2048,
-            "fs.file-max": 1024 * 1024 * 1024,
+            # congestion control window
+            # "net.core.rmem_max": 2147483647,
+            # "net.core.wmem_max": 2147483647,
+            # "net.ipv4.tcp_rmem": "'4096 87380 1073741824'",
+            # "net.ipv4.tcp_wmem": "'4096 65536 1073741824'",
+            # increase max number of TCP connections
+            # "net.ipv4.tcp_tw_reuse": 0,
+            # "net.ipv4.tcp_tw_recycle": 0,
+            "net.core.somaxconn": 65535,
+            "net.core.netdev_max_backlog": 4096,
+            "net.ipv4.tcp_max_syn_backlog": 32768,
+            # "net.ipv4.tcp_syn_retries": 1,
+            # "net.ipv4.tcp_synack_retries": 1,
+            # "net.ipv4.tcp_fin_timeout": 5,
+            # "net.ipv4.tcp_syncookies": 0,
+            "net.ipv4.ip_local_port_range": "'12000 65535'",
+            # increase file limit
+            "fs.file-max": 1048576,
         }
         if use_bbr:
             sysctl_updates["net.core.default_qdisc"] = "fq"
@@ -223,11 +233,14 @@ class Server:
         docker_version = out.strip().split("\n")[-1]
 
         if not docker_version.startswith("Success"):  # retry since docker install fails sometimes
+            logger.error(desc_prefix + ": Docker install failed!")
+            logger.error(desc_prefix + ": " + err)
             logger.debug(desc_prefix + ": Installing docker (retry)")
             out, err = self.run_command(cmd)
             docker_version = out.strip().split("\n")[-1]
-
-        assert docker_version.startswith("Success"), f"Failed to install Docker: {out}\n{err}"
+        assert docker_version.startswith(
+            "Success"
+        ), f"Failed to install Docker on {self.region_tag}, {self.public_ip()}: OUT {out}\nERR {err}"
 
         # launch monitoring
         logger.debug(desc_prefix + ": Starting monitoring")
@@ -255,7 +268,7 @@ class Server:
         # todo add other launch flags for gateway daemon
         logger.debug(desc_prefix + f": Starting gateway container {gateway_docker_image}")
         docker_run_flags = f"-d --rm --log-driver=local --ipc=host --network=host --ulimit nofile={1024 * 1024} {docker_envs}"
-        gateway_daemon_cmd = f"python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-connections {num_outgoing_connections}"
+        gateway_daemon_cmd = f"python /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = self.run_command(docker_launch_cmd)
         logger.debug(desc_prefix + f": Gateway started {start_out}")
@@ -279,6 +292,7 @@ class Server:
             wait_for(is_ready, timeout=10, interval=0.1, desc=f"Waiting for gateway {self.uuid()} to start", leave_pbar=False)
         except Exception as e:
             logger.error(f"Gateway {self.instance_name()} is not ready {e}")
+            logger.warning(desc_prefix + " gateway launch command: " + docker_launch_cmd)
             logs, err = self.run_command(f"sudo docker logs skylark_gateway --tail=100")
             logger.error(f"Docker logs: {logs}\nerr: {err}")
             raise e

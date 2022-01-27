@@ -1,11 +1,13 @@
 from dataclasses import dataclass
-from collections import namedtuple
+import dataclasses
 import json
 import shutil
 from typing import Dict, List, Optional, Set, Tuple
 
 from loguru import logger
 import graphviz as gv
+from skylark import MB
+from skylark.chunk import ChunkRequest
 
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.obj_store.gcs_interface import GCSInterface
@@ -16,20 +18,17 @@ from skylark.utils.utils import do_parallel
 @dataclass
 class ReplicationTopologyGateway:
     region: str
-    instance_idx: int
+    instance: int
 
     def to_dict(self):
-        return {
-            "region": self.region,
-            "instance_idx": self.instance_idx,
-        }
+        return dataclasses.asdict(self)
 
     @staticmethod
     def from_dict(topology_dict: Dict):
-        return ReplicationTopologyGateway(
-            region=topology_dict["region"],
-            instance_idx=topology_dict["instance_idx"],
-        )
+        return ReplicationTopologyGateway(**topology_dict)
+
+    def __hash__(self) -> int:
+        return hash(self.region) + hash(self.instance)
 
 
 class ReplicationTopology:
@@ -53,6 +52,35 @@ class ReplicationTopology:
         self.edges.append((src_gateway, dest_gateway, int(num_connections)))
         self.nodes.add(src_gateway)
         self.nodes.add(dest_gateway)
+
+    def get_outgoing_paths(self, src: ReplicationTopologyGateway):
+        return {dest_gateway: num_connections for src_gateway, dest_gateway, num_connections in self.edges if src_gateway == src}
+
+    def source_instances(self) -> Set[ReplicationTopologyGateway]:
+        nodes = set(k[0] for k in self.edges)
+        for _, dest, _ in self.edges:
+            if dest in nodes:
+                nodes.remove(dest)
+        return nodes
+
+    def sink_instances(self) -> Set[ReplicationTopologyGateway]:
+        nodes = set(k[1] for k in self.edges)
+        for src, _, _ in self.edges:
+            if src in nodes:
+                nodes.remove(src)
+        return nodes
+
+    def source_region(self) -> str:
+        instances = list(self.source_instances())
+        assert all(
+            i.region == instances[0].region for i in instances
+        ), f"All source instances must be in the same region, but found {instances}"
+        return instances[0].region
+
+    def sink_region(self) -> str:
+        instances = list(self.sink_instances())
+        assert all(i.region == instances[0].region for i in instances), "All sink instances must be in the same region"
+        return instances[0].region
 
     def to_json(self):
         """
@@ -93,8 +121,8 @@ class ReplicationTopology:
         subgraphs = {}
         for src_gateway, dest_gateway, n_connections in self.edges:
             # group node instances by region
-            src_region, src_instance = src_gateway.region, src_gateway.instance_idx
-            dest_region, dest_instance = dest_gateway.region, dest_gateway.instance_idx
+            src_region, src_instance = src_gateway.region, src_gateway.instance
+            dest_region, dest_instance = dest_gateway.region, dest_gateway.instance
             src_region, dest_region = src_region.replace(":", "/"), dest_region.replace(":", "/")
             src_node = f"{src_region}, {src_instance}"
             dest_node = f"{dest_region}, {dest_instance}"
@@ -102,12 +130,14 @@ class ReplicationTopology:
             # make a subgraph for each region
             if src_region not in subgraphs:
                 subgraphs[src_region] = gv.Digraph(name=f"cluster_{src_region}")
+                subgraphs[src_region].attr(label=src_region)
             if dest_region not in subgraphs:
                 subgraphs[dest_region] = gv.Digraph(name=f"cluster_{dest_region}")
+                subgraphs[dest_region].attr(label=dest_region)
 
             # add nodes
-            subgraphs[src_region].node(src_node, label=src_node, shape="box")
-            subgraphs[dest_region].node(dest_node, label=dest_node, shape="box")
+            subgraphs[src_region].node(src_node, label=str(src_instance), shape="box")
+            subgraphs[dest_region].node(dest_node, label=str(dest_instance), shape="box")
 
             # add edges
             g.edge(src_node, dest_node, label=f"{n_connections} connections")
@@ -121,22 +151,27 @@ class ReplicationTopology:
 @dataclass
 class ReplicationJob:
     source_region: str
-    source_bucket: str
+    source_bucket: Optional[str]
     dest_region: str
-    dest_bucket: str
+    dest_bucket: Optional[str]
     objs: List[str]
+
+    # progress tracking via a list of chunk_requests
+    chunk_requests: Optional[List[ChunkRequest]] = None
 
     # Generates random chunks for testing on the gateways
     random_chunk_size_mb: Optional[int] = None
 
-    def src_obj_sizes(self):
-        if self.source_region.split(":")[0] == "aws":
+    def src_obj_sizes(self) -> Dict[str, int]:
+        if self.random_chunk_size_mb is not None:
+            return {obj: self.random_chunk_size_mb * MB for obj in self.objs}
+        elif self.source_region.split(":")[0] == "aws":
             interface = S3Interface(self.source_region.split(":")[1], self.source_bucket)
-        if self.source_region.split(":")[0] == "gcp":
+        elif self.source_region.split(":")[0] == "gcp":
             interface = GCSInterface(self.source_region.split(":")[1][:-2], self.source_bucket)
         if self.source_region.split(":")[0] == "azure":
             interface = AzureInterface(self.source_region.split(":")[1][:-2], self.source_bucket)
         else:
-            raise NotImplementedError
+            raise NotImplementedError(f"{self.source_region} is not supported")
         get_size = lambda o: interface.get_obj_size(o)
-        return do_parallel(get_size, self.objs, n=16, progress_bar=True, desc="Query object sizes")
+        return dict(do_parallel(get_size, self.objs, n=16, progress_bar=True, desc="Query object sizes"))

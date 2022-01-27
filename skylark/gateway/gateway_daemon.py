@@ -1,5 +1,6 @@
 import argparse
 import atexit
+import json
 import os
 import re
 import signal
@@ -26,17 +27,25 @@ from skylark.obj_store.object_store_interface import ObjectStoreInterface
 
 
 class GatewayDaemon:
-    def __init__(self, chunk_dir: PathLike, debug=False, log_dir: Optional[PathLike] = None, outgoing_connections=1):
+    def __init__(
+        self,
+        region: str,
+        outgoing_ports: Dict[str, int],
+        chunk_dir: PathLike,
+        max_incoming_ports=64,
+        debug=False,
+        log_dir: Optional[PathLike] = None,
+    ):
         if log_dir is not None:
             log_dir = Path(log_dir)
             log_dir.mkdir(exist_ok=True)
             logger.remove()
             logger.add(log_dir / "gateway_daemon.log", rotation="10 MB", enqueue=True)
             logger.add(sys.stderr, colorize=True, format="{function:>15}:{line:<3} {level:<8} {message}", level="DEBUG", enqueue=True)
+        self.region = region
         self.chunk_store = ChunkStore(chunk_dir)
-        self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store, max_pending_chunks=outgoing_connections)
-        self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, n_processes=outgoing_connections)
-
+        self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store, max_pending_chunks=max_incoming_ports)
+        self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, outgoing_ports=outgoing_ports)
         self.obj_store_interfaces: Dict[str, ObjectStoreInterface] = {}
 
         # API server
@@ -48,7 +57,6 @@ class GatewayDaemon:
         logger.info(f"Gateway daemon API started at {self.api_server.url}")
 
     def get_obj_store_interface(self, region: str, bucket: str) -> ObjectStoreInterface:
-
         # return cached interface
         if region in self.obj_store_interfaces:
             return self.obj_store_interfaces[region]
@@ -89,120 +97,98 @@ class GatewayDaemon:
         while not exit_flag.is_set():
             # queue object uploads and relays
             for chunk_req in self.chunk_store.get_chunk_requests(ChunkState.downloaded):
-                if len(chunk_req.path) > 0:
-                    current_hop = chunk_req.path[0]
-                    logger.info("chunks", current_hop, current_hop.chunk_location_type)
-                    if current_hop.chunk_location_type == "dst_object_store":
-                        self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
-                        self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id)
+                if self.region == chunk_req.dst_region and chunk_req.dst_type == "save_local":  # do nothing, save to ChunkStore
+                    logger.info(f"Save local {chunk_req.chunk.chunk_id}")
+                    self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
+                    self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id)
+                    self.chunk_store.state_finish_upload(chunk_req.chunk.chunk_id)
+                elif self.region == chunk_req.dst_region and chunk_req.dst_type == "object_store":
+                    self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
+                    self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id)
 
-                        logger.info("dest object store", current_hop.dst_object_store_region, current_hop.dst_object_store_bucket)
-
-                        # function to upload data from S3
-                        def fn(chunk_req, dst_region, dst_bucket):
-                            fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
-                            logger.info(f"Creating interface {dst_region}--{dst_bucket}")
-                            obj_store_interface = self.get_obj_store_interface(dst_region, dst_bucket)
-                            logger.info(f"Waiting for upload {dst_bucket}:{chunk_req.chunk.key}")
-                            obj_store_interface.upload_object(fpath, chunk_req.chunk.key).result()
-                            logger.info(f"Uploaded {fpath} to {dst_bucket}:{chunk_req.chunk.key})")
-                            self.chunk_store.state_finish_upload(chunk_req.chunk.chunk_id)
-
-                        # start in seperate thread
-                        threading.Thread(
-                            target=fn, args=(chunk_req, current_hop.dst_object_store_region, current_hop.dst_object_store_bucket)
-                        ).start()
-
-                    elif (
-                        current_hop.chunk_location_type == "relay"
-                        or current_hop.chunk_location_type.startswith("random_")
-                        or current_hop.chunk_location_type == "src_object_store"
-                    ):
-                        logger.info(f"Queuing chunk {chunk_req.chunk.chunk_id} for relay")
-                        self.gateway_sender.queue_request(chunk_req)
-                        self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
-                    elif current_hop.chunk_location_type == "save_local":  # do nothing, save to ChunkStore
-                        logger.info(f"Save local {chunk_req.chunk.chunk_id}")
-                        self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
-                        self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id)
+                    # function to upload data to object store
+                    def fn(chunk_req, dst_region, dst_bucket):
+                        fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
+                        logger.info(f"Creating interface {dst_region}--{dst_bucket}")
+                        obj_store_interface = self.get_obj_store_interface(dst_region, dst_bucket)
+                        logger.info(f"Waiting for upload {dst_bucket}:{chunk_req.chunk.key}")
+                        obj_store_interface.upload_object(fpath, chunk_req.chunk.key).result()
+                        logger.info(f"Uploaded {fpath} to {dst_bucket}:{chunk_req.chunk.key})")
                         self.chunk_store.state_finish_upload(chunk_req.chunk.chunk_id)
-                    else:
-                        logger.error(f"Unknown chunk location type {current_hop.chunk_location_type}")
-                        self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
-                        raise ValueError(f"Unknown or incorrect chunk_location_type {current_hop.chunk_location_type}")
+
+                    # start in seperate thread
+                    threading.Thread(target=fn, args=(chunk_req, chunk_req.dst_region, chunk_req.dst_object_store_bucket)).start()
+                elif self.region != chunk_req.dst_region:
+                    logger.info(f"Queuing chunk {chunk_req.chunk.chunk_id} for relay")
+                    self.gateway_sender.queue_request(chunk_req)
+                    self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
                 else:
-                    logger.error(f"Ready to upload chunk {chunk_req.chunk.chunk_id} has no hops")
+                    self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
+                    raise ValueError(f"No upload handler for ChunkRequest: {chunk_req}")
 
             # queue object store downloads and relays (if space is available)
             # todo ensure space is available
             for chunk_req in self.chunk_store.get_chunk_requests(ChunkState.registered):
-                if len(chunk_req.path) > 0:
-                    current_hop = chunk_req.path[0]
-                    if current_hop.chunk_location_type == "src_object_store":
+                if self.region == chunk_req.src_region and chunk_req.src_type == "read_local":  # do nothing, read from local ChunkStore
+                    logger.info(f"Read local {chunk_req.chunk.chunk_id}")
+                    self.chunk_store.state_start_download(chunk_req.chunk.chunk_id)
+                    self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id)
+                elif self.region == chunk_req.src_region and chunk_req.src_type == "random":
+                    logger.debug(f"Generating chunk {chunk_req.chunk.chunk_id}")
+                    self.chunk_store.state_start_download(chunk_req.chunk.chunk_id)
+                    size_mb = chunk_req.src_random_size_mb
 
-                        self.chunk_store.state_start_download(chunk_req.chunk.chunk_id)
+                    # function to write random data file
+                    def fn(chunk_req, size_mb):
+                        fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
+                        os.system(f"fallocate -l {size_mb * MB} {fpath}")
+                        chunk_req.chunk.chunk_length_bytes = os.path.getsize(fpath)
+                        self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
+                        self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id)
+                        logger.debug(f"Generated chunk {chunk_req.chunk.chunk_id}")
 
-                        src_bucket = current_hop.src_object_store_bucket
-                        src_region = current_hop.src_object_store_region
-                        logger.info("source object store", src_bucket, src_region)
+                    # generate random data in seperate thread
+                    threading.Thread(target=fn, args=(chunk_req, size_mb)).start()
+                elif self.region == chunk_req.src_region and chunk_req.src_type == "object_store":
+                    self.chunk_store.state_start_download(chunk_req.chunk.chunk_id)
 
-                        # function to download data from S3
-                        def fn(chunk_req, src_region, src_bucket):
-                            fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
-                            logger.info(f"Creating interface {src_region}--{src_bucket}")
-                            obj_store_interface = self.get_obj_store_interface(src_region, src_bucket)
-                            logger.info(f"Waiting for download {src_bucket}:{chunk_req.chunk.key}")
-                            obj_store_interface.download_object(chunk_req.chunk.key, fpath).result()
-                            logger.info(f"Downloaded key {chunk_req.chunk.key} to {fpath})")
-                            self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
-                            self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id)
+                    # function to download data from source object store
+                    def fn(chunk_req, src_region, src_bucket):
+                        fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
+                        logger.info(f"Creating interface {src_region}--{src_bucket}")
+                        obj_store_interface = self.get_obj_store_interface(src_region, src_bucket)
+                        logger.info(f"Waiting for download {src_bucket}:{chunk_req.chunk.key}")
+                        obj_store_interface.download_object(chunk_req.chunk.key, fpath).result()
+                        logger.info(f"Downloaded key {chunk_req.chunk.key} to {fpath})")
+                        self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
+                        self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id)
 
-                        # start in seperate thread
-                        threading.Thread(target=fn, args=(chunk_req, src_region, src_bucket)).start()
-
-                    elif current_hop.chunk_location_type.startswith("random_"):
-                        self.chunk_store.state_start_download(chunk_req.chunk.chunk_id)
-
-                        size_mb_match = re.search(r"random_(\d+)MB", current_hop.chunk_location_type)
-                        assert size_mb_match is not None
-                        size_mb = int(size_mb_match.group(1))
-
-                        # function to write random data file
-                        def fn(chunk_req, size_mb):
-                            fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
-                            os.system(f"fallocate -l {size_mb * MB} {fpath}")
-                            chunk_req.chunk.chunk_length_bytes = os.path.getsize(fpath)
-                            self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
-                            self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id)
-
-                        # generate random data in seperate thread
-                        threading.Thread(target=fn, args=(chunk_req, size_mb)).start()
-                    elif (
-                        current_hop.chunk_location_type == "relay"
-                        or current_hop.chunk_location_type == "save_local"
-                        or current_hop.chunk_location_type == "dst_object_store"
-                    ):
-                        # do nothing, waiting for chunk to be be ready_to_upload
-                        continue
-                    else:
-                        is_store = current_hop.chunk_location_type == "src_object_store"
-                        logger.error(f"Unknown chunk location type {current_hop.chunk_location_type}, {is_store}")
-                        self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
-                        raise ValueError(f"Unknown or incorrect chunk_location_type {current_hop.chunk_location_type}")
+                    # start in seperate thread
+                    threading.Thread(target=fn, args=(chunk_req, chunk_req.src_region, chunk_req.src_object_store_bucket)).start()
+                elif self.region != chunk_req.src_region:  # do nothing, waiting for chunk to be be ready_to_upload
+                    continue
                 else:
-                    logger.error(f"Registered chunk {chunk_req.chunk.chunk_id} has no hops")
+                    self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
+                    raise ValueError(f"No download handler for ChunkRequest: {chunk_req}")
 
 
 if __name__ == "__main__":
     print_header()
     parser = argparse.ArgumentParser(description="Skylark Gateway Daemon")
+    parser.add_argument("--region", type=str, required=True, help="Region tag (provider:region")
+    parser.add_argument(
+        "--outgoing-ports", type=str, required=True, help="JSON encoded path mapping destination ip to number of outgoing ports"
+    )
     parser.add_argument("--chunk-dir", type=Path, default="/dev/shm/skylark/chunks", help="Directory to store chunks")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode for Flask")
     parser.add_argument("--log-dir", type=Path, default=Path("/var/log/skylark"), help="Directory to write logs to")
-    parser.add_argument("--outgoing-connections", type=int, default=1, help="Number of outgoing connections to make to the next relay")
     args = parser.parse_args()
 
     daemon = GatewayDaemon(
-        chunk_dir=args.chunk_dir, debug=args.debug, log_dir=Path(args.log_dir), outgoing_connections=args.outgoing_connections
+        region=args.region,
+        outgoing_ports=json.loads(args.outgoing_ports),
+        chunk_dir=args.chunk_dir,
+        debug=args.debug,
+        log_dir=Path(args.log_dir),
     )
     daemon.run()
