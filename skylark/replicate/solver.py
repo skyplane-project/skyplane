@@ -158,7 +158,9 @@ class ThroughputSolverILP(ThroughputSolver):
 
         # connection limits
         constraints.append(conn >= 0)
-        constraints.append(cp.sum(conn, axis=1) <= instances_per_region * p.benchmarked_throughput_connections)
+        constraints.append(cp.sum(conn, axis=1) <= instances_per_region * p.benchmarked_throughput_connections)  # egress
+        for i in range(len(regions)):
+            constraints.append(cp.sum(conn[:, i]) <= instances_per_region[i] * p.benchmarked_throughput_connections)  # ingress
 
         # flow capacity constraint
         adjusted_edge_capacity_gigabits = cp.multiply(p.const_throughput_grid_gbits, conn / p.benchmarked_throughput_connections)
@@ -275,10 +277,12 @@ class ThroughputSolverILP(ThroughputSolver):
                     link_cost = self.get_path_cost(src, dst)
                     label = f"{solution.var_edge_flow_gigabits[i, j]:.2f} Gbps (of {solution.problem.const_throughput_grid_gbits[i, j]:.2f}Gbps), "
                     label += f"\n${link_cost:.4f}/GB over {solution.var_conn[i, j]:.1f}c"
-                    g.edge(src.replace(":", "/"), dst.replace(":", "/"), label=label)
+                    src_label = f"{src.replace(':', '/')}x{solution.var_instances_per_region[i]:.1f}"
+                    dst_label = f"{dst.replace(':', '/')}x{solution.var_instances_per_region[j]:.1f}"
+                    g.edge(src_label, dst_label, label=label)
         return g
 
-    def to_replication_topology(self, solution: ThroughputSolution) -> ReplicationTopology:
+    def to_replication_topology(self, solution: ThroughputSolution, ingress_hard_limit=64, egress_hard_limit=64) -> ReplicationTopology:
         regions = self.get_regions()
         Edge = namedtuple("Edge", ["src_region", "src_instance_idx", "dst_region", "dst_instance_idx", "connections"])
 
@@ -289,79 +293,52 @@ class ThroughputSolverILP(ThroughputSolver):
             src_instance_idx, src_instance_connections = 0, 0
             for j, dst in enumerate(regions):
                 if solution.var_edge_flow_gigabits[i, j] > 0:
-                    # add up to solution.problem.benchmarked_throughput_connections connections to an instance
-                    # if more than that, add another instance for any remaining connections and continue
-                    connections_to_allocate = np.ceil(solution.var_conn[i, j]).astype(int)
-
-                    # if this edge would exceed the instance connection limit, partially add connections to current instance and increment instance
-                    if connections_to_allocate + src_instance_connections > solution.problem.benchmarked_throughput_connections:
-                        partial_conn = solution.problem.benchmarked_throughput_connections - src_instance_connections
-                        connections_to_allocate = connections_to_allocate - partial_conn
-                        assert connections_to_allocate >= 0, f"connections_to_allocate = {connections_to_allocate}"
-                        assert partial_conn >= 0, f"partial_conn = {partial_conn}"
-                        src_edges.append(
-                            Edge(
-                                src_region=src,
-                                src_instance_idx=src_instance_idx,
-                                dst_region=dst,
-                                dst_instance_idx=None,
-                                connections=partial_conn,
-                            )
-                        )
-                        src_instance_idx += 1
-                        src_instance_connections = 0
-
-                    # add remaining connections
-                    if connections_to_allocate > 0:
-                        src_edges.append(
-                            Edge(
-                                src_region=src,
-                                src_instance_idx=src_instance_idx,
-                                dst_region=dst,
-                                dst_instance_idx=None,
-                                connections=connections_to_allocate,
-                            )
-                        )
-                        src_instance_connections += connections_to_allocate
+                    connections_to_allocate = np.rint(solution.var_conn[i, j]).astype(int)
+                    while connections_to_allocate > 0:
+                        # if this edge would exceed the instance connection limit, partially add connections to current instance and increment instance
+                        if connections_to_allocate + src_instance_connections > egress_hard_limit:
+                            partial_conn = egress_hard_limit - src_instance_connections
+                            connections_to_allocate -= partial_conn
+                            assert connections_to_allocate >= 0, f"connections_to_allocate = {connections_to_allocate}"
+                            assert partial_conn >= 0, f"partial_conn = {partial_conn}"
+                            if partial_conn > 0:
+                                src_edges.append(Edge(src, src_instance_idx, dst, None, partial_conn))
+                                logger.warning(f"{src}:{src_instance_idx}:{src_instance_connections}c -> {dst} (partial): {partial_conn}c of {connections_to_allocate}c remaining")
+                            src_instance_idx += 1
+                            src_instance_connections = 0
+                        else:
+                            partial_conn = connections_to_allocate
+                            connections_to_allocate = 0
+                            src_edges.append(Edge(src, src_instance_idx, dst, None, partial_conn))
+                            logger.warning(f"{src}:{src_instance_idx}:{src_instance_connections}c -> {dst}: {partial_conn}c of {connections_to_allocate}c remaining")
+                            src_instance_connections += partial_conn
             n_instances[i] = src_instance_idx + 1
 
+        logger.warning("")
         # assign destination instances (currently None) to Edges
-        # ingress_conn_per_instance = np.sum(solution.var_conn, axis=0) / n_instances
-        # balance connections across instances by assigning connections from a source instance to the next
-        # destination instance until ingress_conn_per_instance is reached, then increment destination instance.
-        # ensure the total number of destination instances is the same as the number of source instances
         dst_edges = []
-        ingress_conn_per_instance = {r: np.ceil(np.sum(solution.var_conn[:, i]) / n_instances[i]) for i, r in enumerate(regions)}
         dsts_instance_idx = {i: 0 for i in regions}
         dsts_instance_conn = {i: 0 for i in regions}
         for e in src_edges:
-            connections_to_allocate = np.ceil(e.connections).astype(int)
-            if connections_to_allocate + dsts_instance_conn[e.dst_region] > ingress_conn_per_instance[e.dst_region]:
-                partial_conn = ingress_conn_per_instance[e.dst_region] - dsts_instance_conn[e.dst_region]
-                connections_to_allocate = connections_to_allocate - partial_conn
-                dst_edges.append(
-                    Edge(
-                        src_region=e.src_region,
-                        src_instance_idx=e.src_instance_idx,
-                        dst_region=e.dst_region,
-                        dst_instance_idx=dsts_instance_idx[e.dst_region],
-                        connections=partial_conn,
+            connections_to_allocate = np.rint(e.connections).astype(int)
+            while connections_to_allocate > 0:
+                if connections_to_allocate + dsts_instance_conn[e.dst_region] > ingress_hard_limit:
+                    partial_conn = ingress_hard_limit - dsts_instance_conn[e.dst_region]
+                    connections_to_allocate = connections_to_allocate - partial_conn
+                    if partial_conn > 0:
+                        dst_edges.append(
+                            Edge(e.src_region, e.src_instance_idx, e.dst_region, dsts_instance_idx[e.dst_region], partial_conn)
+                        )
+                        logger.warning(f"{e.src_region}:{e.src_instance_idx}:{dsts_instance_conn[e.dst_region]}c -> {e.dst_region}:{dsts_instance_idx[e.dst_region]}:{dsts_instance_conn[e.dst_region]}c (partial): {partial_conn}c of {connections_to_allocate}c remaining")
+                    dsts_instance_idx[e.dst_region] += 1
+                    dsts_instance_conn[e.dst_region] = 0
+                else:
+                    dst_edges.append(
+                        Edge(e.src_region, e.src_instance_idx, e.dst_region, dsts_instance_idx[e.dst_region], connections_to_allocate)
                     )
-                )
-                dsts_instance_idx[e.dst_region] += 1
-                dsts_instance_conn[e.dst_region] = 0
-
-            if connections_to_allocate > 0:
-                dst_edges.append(
-                    Edge(
-                        src_region=e.src_region,
-                        src_instance_idx=e.src_instance_idx,
-                        dst_region=e.dst_region,
-                        dst_instance_idx=dsts_instance_idx[e.dst_region],
-                        connections=connections_to_allocate,
-                    )
-                )
-                dsts_instance_conn[e.dst_region] += connections_to_allocate
+                    logger.warning(f"{e.src_region}:{e.src_instance_idx}:{dsts_instance_conn[e.dst_region]}c -> {e.dst_region}:{dsts_instance_idx[e.dst_region]}:{dsts_instance_conn[e.dst_region]}c: {connections_to_allocate}c remaining")
+                    dsts_instance_conn[e.dst_region] += connections_to_allocate
+                    connections_to_allocate = 0
 
         # build ReplicationTopology
         replication_topology = ReplicationTopology()

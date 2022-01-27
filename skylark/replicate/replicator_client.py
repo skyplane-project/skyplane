@@ -212,12 +212,9 @@ class ReplicatorClient:
         obj_file_size_bytes = job.src_obj_sizes() if job.source_bucket else None
         for idx, obj in enumerate(job.objs):
             if obj_file_size_bytes:
-                # object store objects
                 file_size_bytes = obj_file_size_bytes[obj]
             else:
-                # random data
                 file_size_bytes = job.random_chunk_size_mb * MB
-
             chunks.append(
                 Chunk(
                     key=obj,
@@ -228,9 +225,10 @@ class ReplicatorClient:
             )
 
         # partition chunks into roughly equal-sized batches (by bytes)
-        src_instances = [s for n, s in self.bound_nodes.items() if n.region == job.source_region]
+        src_instances = [self.bound_nodes[n] for n in self.topology.source_instances()]
         chunk_lens = [c.chunk_length_bytes for c in chunks]
         approx_bytes_per_connection = sum(chunk_lens) / len(src_instances)
+        assert sum(chunk_lens) > 0, f"No chunks to replicate, got {chunk_lens}"
         batch_bytes = 0
         chunk_batches = []
         current_batch = []
@@ -265,9 +263,8 @@ class ReplicatorClient:
                         )
                     )
 
-        # send chunk requests to start gateways in parallel
         with Timer("Dispatch chunk requests"):
-
+            # send chunk requests to start gateways in parallel
             def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
                 hop_instance, chunk_requests = args
                 ip = gateway_ips[hop_instance]
@@ -276,7 +273,7 @@ class ReplicatorClient:
                 if reply.status_code != 200:
                     raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
 
-            start_instances = list(zip(self.bound_nodes.values(), chunk_requests_sharded.values()))
+            start_instances = list(zip(src_instances, chunk_requests_sharded.values()))
             do_parallel(send_chunk_requests, start_instances, n=-1)
 
         job.chunk_requests = [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
@@ -291,7 +288,7 @@ class ReplicatorClient:
             logs = []
             for log_entry in reply.json()["chunk_status_log"]:
                 log_entry["region"] = node.region
-                log_entry["instance_idx"] = node.instance_idx
+                log_entry["instance"] = node.instance
                 log_entry["time"] = datetime.fromisoformat(log_entry["time"])
                 log_entry["state"] = ChunkState.from_str(log_entry["state"])
                 logs.append(log_entry)
@@ -338,7 +335,7 @@ class ReplicatorClient:
                     # count completed bytes
                     last_log_df = (
                         log_df.groupby(["chunk_id"])
-                        .apply(lambda df: df.sort_values(["region", "instance_idx", "time"], ascending=False).head(1))
+                        .apply(lambda df: df.sort_values(["region", "instance", "time"], ascending=False).head(1))
                         .reset_index(drop=True)
                     )
                     is_complete_fn = lambda row: row["state"] >= ChunkState.upload_complete and row["region"] == job.dest_region
