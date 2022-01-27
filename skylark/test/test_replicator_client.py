@@ -77,7 +77,7 @@ def main(args):
     elif "gcp" in args.dest_region:
         obj_store_interface_dst = GCSInterface(args.dest_region.split(":")[1][:-2], dst_bucket)
     else:
-        raise ValueError(f"No region in destination region {args.dst_region}")
+        raise ValueError(f"No region in destination region {args.dest_region}")
 
     obj_store_interface_src.create_bucket()
     obj_store_interface_dst.create_bucket()

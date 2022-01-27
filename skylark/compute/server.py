@@ -199,10 +199,10 @@ class Server:
         # increase TCP connections, enable BBR optionally and raise file limits
         sysctl_updates = {
             # congestion control window
-            "net.core.rmem_max": 2147483647,
-            "net.core.wmem_max": 2147483647,
-            "net.ipv4.tcp_rmem": "'4096 87380 1073741824'",
-            "net.ipv4.tcp_wmem": "'4096 65536 1073741824'",
+            # "net.core.rmem_max": 2147483647,
+            # "net.core.wmem_max": 2147483647,
+            # "net.ipv4.tcp_rmem": "'4096 87380 1073741824'",
+            # "net.ipv4.tcp_wmem": "'4096 65536 1073741824'",
             # increase max number of TCP connections
             # "net.ipv4.tcp_tw_reuse": 0,
             # "net.ipv4.tcp_tw_recycle": 0,
