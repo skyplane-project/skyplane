@@ -84,6 +84,10 @@ def cp(src: str, dst: str):
         copy_local_gcs(Path(path_src), bucket_dst, path_dst)
     elif provider_src == "gcs" and provider_dst == "local":
         copy_gcs_local(bucket_src, path_src, Path(path_dst))
+    elif provider_src == "local" and provider_dst == "azure":
+        copy_local_azure(Path(path_src), bucket_dst, path_dst)
+    elif provider_src == "azure" and provider_dst == "local":
+        copy_azure_local(bucket_src, path_src, Path(path_dst))
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
 
