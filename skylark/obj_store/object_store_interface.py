@@ -22,6 +22,9 @@ class ObjectStoreInterface:
     def create_bucket(self):
         raise NotImplementedError
 
+    def delete_bucket(self):
+        raise NotImplementedError
+
     def list_objects(self, prefix=""):
         raise NotImplementedError
 

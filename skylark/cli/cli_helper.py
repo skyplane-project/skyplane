@@ -140,6 +140,14 @@ def copy_gcs_local(src_bucket: str, src_key: str, dst: Path):
             pbar.update(obj_mapping[op].size)
 
 
+def copy_local_azure(src: Path, dst_bucket: str, dst_key: str):
+    raise NotImplementedError(f"Azure not yet supported")
+
+
+def copy_azure_local(src_bucket: str, src_key: str, dst: Path):
+    raise NotImplementedError(f"Azure not yet supported")
+
+
 def copy_local_s3(src: Path, dst_bucket: str, dst_key: str, use_tls: bool = True):
     s3 = S3Interface(None, dst_bucket, use_tls=use_tls)
     ops: List[concurrent.futures.Future] = []
