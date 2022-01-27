@@ -130,11 +130,11 @@ def main(args):
         topo = ReplicationTopology()
         for i in range(args.num_gateways):
             topo.add_edge(args.src_region, i, args.inter_region, i, args.num_outgoing_connections)
-            topo.add_edge(args.inter_region, i, args.dst_region, i, args.num_outgoing_connections)
+            topo.add_edge(args.inter_region, i, args.dest_region, i, args.num_outgoing_connections)
     else:
         topo = ReplicationTopology()
         for i in range(args.num_gateways):
-            topo.add_edge(args.src_region, i, args.dst_region, i, args.num_outgoing_connections)
+            topo.add_edge(args.src_region, i, args.dest_region, i, args.num_outgoing_connections)
     logger.info("Creating replication client")
     rc = ReplicatorClient(
         topo,

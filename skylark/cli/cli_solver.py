@@ -69,24 +69,27 @@ def solve_throughput(
     # save results
     tput.print_solution(solution)
     if solution.is_feasible:
+        if visualize:
+            g = tput.plot_graphviz(solution)
+            if g is not None:
+                try:
+                    for f in Path("/tmp/").glob("throughput_graph.gv*"):
+                        f.unlink()
+                    g.render(filename="/tmp/throughput_graph.gv", quiet_view=True, format="pdf")
+                    g.render(filename="/tmp/throughput_graph.gv", format="png")
+                except FileNotFoundError as e:
+                    logger.error(f"Could not render graph: {e}")
         replication_topo = tput.to_replication_topology(solution)
         if out:
             with open(out, "w") as f:
                 f.write(replication_topo.to_json())
         if visualize:
-            g = tput.plot_graphviz(solution)
-            if g is not None:
-                try:
-                    for f in Path("/tmp/throughput_graph.gv.*").glob("*"):
-                        f.unlink()
-                    g.render(filename="/tmp/throughput_graph.gv", quiet_view=True, format="pdf")
-                except FileNotFoundError as e:
-                    logger.error(f"Could not render graph: {e}")
             g_rt = replication_topo.to_graphviz()
             if g_rt is not None:
                 try:
-                    for f in Path("/tmp/replication_topo.gv.*").glob("*"):
+                    for f in Path("/tmp/").glob("replication_topo.gv*"):
                         f.unlink()
                     g_rt.render(filename="/tmp/replication_topo.gv", quiet_view=True, format="pdf")
+                    g_rt.render(filename="/tmp/replication_topo.gv", format="png")
                 except FileNotFoundError as e:
                     logger.error(f"Could not render graph: {e}")
