@@ -6,6 +6,7 @@ from typing import Iterator, List
 
 import os, uuid, time
 from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient, __version__, BlobBlock
+from skylark.obj_store.azure_keys import azure_storage_credentials
 
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 from azure.core.exceptions import HttpResponseError, ResourceExistsError, ResourceNotFoundError
@@ -20,19 +21,15 @@ class AzureInterface(ObjectStoreInterface):
     def __init__(self, azure_region, container_name):
         # TODO: the azure region should get corresponding os.getenv()
         self.azure_region = azure_region
+        assert self.azure_region in azure_storage_credentials
 
         self.container_name = container_name
         self.bucket_name = self.container_name  # For compatibility
         self.pending_downloads, self.completed_downloads = 0, 0
         self.pending_uploads, self.completed_uploads = 0, 0
 
-        # Retrieve the connection string for use with the application. The storage
-        # connection string is stored in an environment variable on the machine
-        # running the application called AZURE_STORAGE_CONNECTION_STRING. If the environment variable is
-        # created after the application is launched in a console or with Visual Studio,
-        # the shell or application needs to be closed and reloaded to take the
-        # environment variable into account.
-        self._connect_str = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+        # Connection strings are stored in azure_keys.py
+        self._connect_str = azure_storage_credentials[self.azure_region]['connection_string']
         # Create the BlobServiceClient object which will be used to create a container client
         self.blob_service_client = BlobServiceClient.from_connection_string(self._connect_str)
 
