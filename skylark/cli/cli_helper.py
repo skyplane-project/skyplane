@@ -85,6 +85,7 @@ def copy_local_local(src: Path, dst: Path):
         dst.parent.mkdir(exist_ok=True, parents=True)
         copyfile(src, dst)
 
+
 # TODO: probably shoudl merge this with the s3 function (duplicate code)
 def copy_local_gcs(src: Path, dst_bucket: str, dst_key: str):
     gcs = GCSInterface(None, dst_bucket)
@@ -97,7 +98,7 @@ def copy_local_gcs(src: Path, dst_bucket: str, dst_key: str):
                 total_size += _copy(child, os.path.join(dst_key, child.name))
             return total_size
         else:
-            future = gcp.upload_object(path, dst_key)
+            future = gcs.upload_object(path, dst_key)
             ops.append(future)
             path_mapping[future] = path
             return path.stat().st_size
@@ -109,6 +110,7 @@ def copy_local_gcs(src: Path, dst_bucket: str, dst_key: str):
         for op in concurrent.futures.as_completed(ops):
             op.result()
             pbar.update(path_mapping[op].stat().st_size)
+
 
 # TODO: probably shoudl merge this with the s3 function (duplicate code)
 def copy_gcs_local(src_bucket: str, src_key: str, dst: Path):
