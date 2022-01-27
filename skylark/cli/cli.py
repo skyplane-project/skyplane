@@ -34,6 +34,8 @@ from skylark.cli.cli_helper import (
     copy_local_local,
     copy_local_s3,
     copy_s3_local,
+    copy_gcs_local,
+    copy_local_gcs,
     deprovision_skylark_instances,
     load_config,
     ls_local,
@@ -80,9 +82,9 @@ def cp(src: str, dst: str):
         copy_local_s3(Path(path_src), bucket_dst, path_dst)
     elif provider_src == "s3" and provider_dst == "local":
         copy_s3_local(bucket_src, path_src, Path(path_dst))
-    elif provider_src == "local" and provider_dst == "gcs":
+    elif provider_src == "local" and provider_dst == "gs":
         copy_local_gcs(Path(path_src), bucket_dst, path_dst)
-    elif provider_src == "gcs" and provider_dst == "local":
+    elif provider_src == "gs" and provider_dst == "local":
         copy_gcs_local(bucket_src, path_src, Path(path_dst))
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
