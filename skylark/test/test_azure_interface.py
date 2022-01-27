@@ -8,9 +8,9 @@ from skylark.utils.utils import Timer
 
 
 def test_azure_interface():
-    azure_interface = AzureInterface(f"us-east1", f"sky-us-east-1", True)
-    assert azure_interface.bucket_name == "sky-us-east-1"
-    assert azure_interface.gcp_region == "us-east1"
+    azure_interface = AzureInterface(f"us-east1", f"sky-us-east-2")
+    assert azure_interface.bucket_name == "sky-us-east-2"
+    assert azure_interface.azure_region == "us-east1"
     azure_interface.create_bucket()
 
     # generate file and upload
@@ -41,3 +41,13 @@ def test_azure_interface():
         # check md5
         dl_file_md5 = hashlib.md5(open(fpath, "rb").read()).hexdigest()
         assert dl_file_md5 == file_md5
+
+    # Clean Up Azure
+    azure_interface.delete_objects([obj_name])
+    assert not azure_interface.exists(obj_name)
+    azure_interface.delete_bucket()
+    assert not azure_interface.container_exists()
+
+
+if __name__ == "__main__":
+    test_azure_interface()

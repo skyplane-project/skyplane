@@ -1,5 +1,6 @@
 import mimetypes
 import os
+import typer
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Iterator, List
 
@@ -7,6 +8,7 @@ import os, uuid, time
 from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient, __version__, BlobBlock
 
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
+from azure.core.exceptions import HttpResponseError, ResourceExistsError, ResourceNotFoundError
 
 
 class AzureObject(ObjectStoreObject):
@@ -20,6 +22,7 @@ class AzureInterface(ObjectStoreInterface):
         self.azure_region = azure_region
 
         self.container_name = container_name
+        self.bucket_name = self.container_name  # For compatibility
         self.pending_downloads, self.completed_downloads = 0, 0
         self.pending_uploads, self.completed_uploads = 0, 0
 
@@ -31,7 +34,7 @@ class AzureInterface(ObjectStoreInterface):
         # environment variable into account.
         self._connect_str = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
         # Create the BlobServiceClient object which will be used to create a container client
-        self.blob_service_client = BlobServiceClient.from_connection_string(_connect_str)
+        self.blob_service_client = BlobServiceClient.from_connection_string(self._connect_str)
 
         self.container_client = None
 
@@ -53,7 +56,7 @@ class AzureInterface(ObjectStoreInterface):
             self.container_client = self.blob_service_client.get_container_client(self.container_name)
         try:
             for blob in self.container_client.list_blobs():
-                typer.secho("Found blob(s): ", blob.name)
+                return True
         except ResourceNotFoundError:
             return False
 
@@ -62,7 +65,7 @@ class AzureInterface(ObjectStoreInterface):
             self.container_client = self.blob_service_client.create_container(self.container_name)
             self.properties = self.container_client.get_container_properties()
         except ResourceExistsError:
-            typer.secho("Container already exists.")
+            typer.secho("Container already exists. Exiting")
             exit(-1)
 
     def create_bucket(self):
@@ -88,7 +91,7 @@ class AzureInterface(ObjectStoreInterface):
 
     def delete_objects(self, keys: List[str]):
         for key in keys:
-            blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=obj_name)
+            blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=key)
             blob_client.delete_blob()
 
     def get_obj_metadata(self, obj_name):  # Not Tested
@@ -104,10 +107,10 @@ class AzureInterface(ObjectStoreInterface):
     def exists(self, obj_name):
         blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=obj_name)
         try:
-            blob_client.exists()
-        except:
-            typer.secho("Undefined Behavior.")
-            exit(-1)
+            blob_client.get_blob_properties()
+            return True
+        except ResourceNotFoundError:
+            return False
 
     """
     stream = blob_client.download_blob()
