@@ -70,7 +70,9 @@ class ReplicationTopology:
 
     def source_region(self) -> str:
         instances = list(self.source_instances())
-        assert all(i.region == instances[0].region for i in instances), f"All source instances must be in the same region, but found {instances}"
+        assert all(
+            i.region == instances[0].region for i in instances
+        ), f"All source instances must be in the same region, but found {instances}"
         return instances[0].region
 
     def sink_region(self) -> str:

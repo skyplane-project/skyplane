@@ -303,14 +303,18 @@ class ThroughputSolverILP(ThroughputSolver):
                             assert partial_conn >= 0, f"partial_conn = {partial_conn}"
                             if partial_conn > 0:
                                 src_edges.append(Edge(src, src_instance_idx, dst, None, partial_conn))
-                                logger.warning(f"{src}:{src_instance_idx}:{src_instance_connections}c -> {dst} (partial): {partial_conn}c of {connections_to_allocate}c remaining")
+                                logger.warning(
+                                    f"{src}:{src_instance_idx}:{src_instance_connections}c -> {dst} (partial): {partial_conn}c of {connections_to_allocate}c remaining"
+                                )
                             src_instance_idx += 1
                             src_instance_connections = 0
                         else:
                             partial_conn = connections_to_allocate
                             connections_to_allocate = 0
                             src_edges.append(Edge(src, src_instance_idx, dst, None, partial_conn))
-                            logger.warning(f"{src}:{src_instance_idx}:{src_instance_connections}c -> {dst}: {partial_conn}c of {connections_to_allocate}c remaining")
+                            logger.warning(
+                                f"{src}:{src_instance_idx}:{src_instance_connections}c -> {dst}: {partial_conn}c of {connections_to_allocate}c remaining"
+                            )
                             src_instance_connections += partial_conn
             n_instances[i] = src_instance_idx + 1
 
@@ -329,14 +333,18 @@ class ThroughputSolverILP(ThroughputSolver):
                         dst_edges.append(
                             Edge(e.src_region, e.src_instance_idx, e.dst_region, dsts_instance_idx[e.dst_region], partial_conn)
                         )
-                        logger.warning(f"{e.src_region}:{e.src_instance_idx}:{dsts_instance_conn[e.dst_region]}c -> {e.dst_region}:{dsts_instance_idx[e.dst_region]}:{dsts_instance_conn[e.dst_region]}c (partial): {partial_conn}c of {connections_to_allocate}c remaining")
+                        logger.warning(
+                            f"{e.src_region}:{e.src_instance_idx}:{dsts_instance_conn[e.dst_region]}c -> {e.dst_region}:{dsts_instance_idx[e.dst_region]}:{dsts_instance_conn[e.dst_region]}c (partial): {partial_conn}c of {connections_to_allocate}c remaining"
+                        )
                     dsts_instance_idx[e.dst_region] += 1
                     dsts_instance_conn[e.dst_region] = 0
                 else:
                     dst_edges.append(
                         Edge(e.src_region, e.src_instance_idx, e.dst_region, dsts_instance_idx[e.dst_region], connections_to_allocate)
                     )
-                    logger.warning(f"{e.src_region}:{e.src_instance_idx}:{dsts_instance_conn[e.dst_region]}c -> {e.dst_region}:{dsts_instance_idx[e.dst_region]}:{dsts_instance_conn[e.dst_region]}c: {connections_to_allocate}c remaining")
+                    logger.warning(
+                        f"{e.src_region}:{e.src_instance_idx}:{dsts_instance_conn[e.dst_region]}c -> {e.dst_region}:{dsts_instance_idx[e.dst_region]}:{dsts_instance_conn[e.dst_region]}c: {connections_to_allocate}c remaining"
+                    )
                     dsts_instance_conn[e.dst_region] += connections_to_allocate
                     connections_to_allocate = 0
 
