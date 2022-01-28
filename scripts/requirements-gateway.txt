@@ -10,6 +10,7 @@ google-api-python-client
 google-cloud-compute
 google-cloud-storage
 setproctitle
+termcolor
 tqdm
 werkzeug
 oslo.concurrency

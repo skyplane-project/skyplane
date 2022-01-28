@@ -88,9 +88,7 @@ def main(args):
     obj_store_interface_dst.create_bucket()
 
     if not args.skip_upload:
-        # todo implement object store support
-        # pass
-        print("Not skipping upload...", src_bucket, dst_bucket)
+        logger.info(f"Not skipping upload, source bucket is {src_bucket}, destination bucket is {dst_bucket}")
 
         # TODO: fix this to get the key instead of S3Object
         matching_src_keys = list([obj.key for obj in obj_store_interface_src.list_objects(prefix=args.key_prefix)])
