@@ -5,7 +5,7 @@ from typing import List, Optional
 
 import botocore
 import pandas as pd
-from loguru import logger
+from skylark.utils import logger
 
 from oslo_concurrency import lockutils
 from skylark import skylark_root

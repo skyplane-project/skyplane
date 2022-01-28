@@ -1,6 +1,6 @@
 import argparse
 
-from loguru import logger
+from skylark.utils import logger
 from tqdm import tqdm
 
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider

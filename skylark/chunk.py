@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass
 from enum import Enum, auto
 from typing import Dict, List, Optional
 
-from loguru import logger
+from skylark.utils import logger
 
 
 @dataclass

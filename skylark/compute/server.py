@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict
 
 import requests
-from loguru import logger
+from skylark.utils import logger
 from skylark.compute.utils import make_dozzle_command, make_netdata_command
 from skylark.utils.utils import PathLike, Timer, wait_for
 
@@ -268,11 +268,11 @@ class Server:
         # todo add other launch flags for gateway daemon
         logger.debug(desc_prefix + f": Starting gateway container {gateway_docker_image}")
         docker_run_flags = f"-d --rm --log-driver=local --ipc=host --network=host --ulimit nofile={1024 * 1024} {docker_envs}"
-        gateway_daemon_cmd = f"python -u /pkg/skylark/gateway/gateway_daemon.py --debug --chunk-dir /dev/shm/skylark/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag}"
+        gateway_daemon_cmd = f"python -u /pkg/skylark/gateway/gateway_daemon.py --chunk-dir /dev/shm/skylark/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = self.run_command(docker_launch_cmd)
-        logger.debug(desc_prefix + f": Gateway started {start_out}")
-        assert not start_err.strip(), f"Error starting gateway: {start_err}"
+        logger.debug(desc_prefix + f": Gateway started {start_out.strip()}")
+        assert not start_err.strip(), f"Error starting gateway: {start_err.strip()}"
         gateway_container_hash = start_out.strip().split("\n")[-1][:12]
         self.gateway_api_url = f"http://{self.public_ip()}:8080/api/v1"
         self.gateway_log_viewer_url = f"http://{self.public_ip()}:8888/container/{gateway_container_hash}"

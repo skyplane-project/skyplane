@@ -5,7 +5,7 @@ import re
 import sys
 import os
 
-from loguru import logger
+from skylark.utils import logger
 from tqdm import tqdm
 import questionary
 

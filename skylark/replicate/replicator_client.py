@@ -6,7 +6,7 @@ import time
 from typing import Dict, List, Optional, Tuple
 
 import requests
-from loguru import logger
+from skylark.utils import logger
 from tqdm import tqdm
 import pandas as pd
 from skylark import GB, KB, MB

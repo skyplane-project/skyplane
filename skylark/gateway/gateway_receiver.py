@@ -7,7 +7,7 @@ from multiprocessing import Event, Manager, Process, Value
 from typing import Tuple
 
 import setproctitle
-from loguru import logger
+from skylark.utils import logger
 from skylark import GB, MB
 from skylark.chunk import WireProtocolHeader
 from skylark.gateway.chunk_store import ChunkStore

@@ -5,7 +5,7 @@ import threading
 from pathlib import Path
 
 from flask import Flask, jsonify, request
-from loguru import logger
+from skylark.utils import logger
 from skylark import MB
 from skylark.chunk import ChunkRequest, ChunkState
 from skylark.gateway.chunk_store import ChunkStore
@@ -33,8 +33,6 @@ class GatewayDaemonAPI(threading.Thread):
         gateway_receiver: GatewayReceiver,
         host="0.0.0.0",
         port=8080,
-        debug=False,
-        log_dir=None,
         daemon_cleanup_handler=None,
     ):
         super().__init__()
@@ -49,18 +47,7 @@ class GatewayDaemonAPI(threading.Thread):
         self.register_request_routes()
 
         # make server
-        self.log_dir = log_dir
-        if log_dir is not None:
-            log_dir = Path(log_dir)
-            handler = logging.handlers.RotatingFileHandler(log_dir / "gateway_daemon_api.log", maxBytes=1 * MB)
-            logging.getLogger("werkzeug").addHandler(handler)
-        if debug:
-            self.app.config["JSONIFY_PRETTYPRINT_REGULAR"] = True
-            self.app.config["TESTING"] = True
-            logging.getLogger("werkzeug").addHandler(logging.StreamHandler())
-            logging.getLogger("werkzeug").setLevel(logging.DEBUG)
-        else:
-            logging.getLogger("werkzeug").setLevel(logging.WARNING)
+        logging.getLogger("werkzeug").setLevel(logging.WARNING)
         self.server = make_server(host, port, self.app, threaded=True)
         self.url = "http://{}:{}".format(host, port)
 
