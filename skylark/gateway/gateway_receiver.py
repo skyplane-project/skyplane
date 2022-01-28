@@ -8,7 +8,7 @@ from typing import Tuple
 
 import setproctitle
 from skylark.utils import logger
-from skylark import GB, MB, KB
+from skylark import GB, MB
 from skylark.chunk import WireProtocolHeader
 from skylark.gateway.chunk_store import ChunkStore
 from skylark.utils.utils import Timer

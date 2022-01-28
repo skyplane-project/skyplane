@@ -4,12 +4,10 @@ AWS convenience interface
 
 from shlex import split
 import subprocess
-import sys
 from typing import Optional
 import questionary
 
 import typer
-from skylark.utils import logger
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.utils.utils import do_parallel

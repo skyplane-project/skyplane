@@ -5,11 +5,11 @@ import os
 import signal
 import sys
 import threading
-from multiprocessing import Event, Lock
+from multiprocessing import Event
 from os import PathLike
 from pathlib import Path
 from threading import BoundedSemaphore
-from typing import Dict, Optional
+from typing import Dict
 
 import setproctitle
 from skylark.utils import logger

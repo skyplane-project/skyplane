@@ -3,7 +3,6 @@ AWS convenience interface
 """
 
 from pathlib import Path
-import sys
 
 import cvxpy as cp
 

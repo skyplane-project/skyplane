@@ -12,7 +12,7 @@ from skylark.utils import logger
 
 from skylark import GB
 from skylark.compute.cloud_providers import CloudProvider
-from skylark.replicate.replication_plan import ReplicationTopology, ReplicationTopologyGateway
+from skylark.replicate.replication_plan import ReplicationTopology
 
 GBIT_PER_GBYTE = 8
 

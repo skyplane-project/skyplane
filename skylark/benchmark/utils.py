@@ -1,4 +1,3 @@
-import sys
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from skylark.utils import logger

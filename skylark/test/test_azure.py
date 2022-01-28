@@ -1,5 +1,5 @@
 import os, uuid, time
-from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient, __version__, BlobBlock
+from azure.storage.blob import BlobServiceClient, __version__
 
 try:
     print("Azure Blob Storage v" + __version__)

@@ -62,7 +62,7 @@ class GatewaySender:
                 continue
 
             logger.debug(f"[sender:{self.worker_id}] Sending chunk ID {next_chunk_id} to IP {dest_ip}")
-            req = self.chunk_store.get_chunk_request(next_chunk_id)
+            self.chunk_store.get_chunk_request(next_chunk_id)
             self.send_chunks([next_chunk_id], dest_ip)
             if dest_ip not in self.sent_chunk_ids:
                 self.sent_chunk_ids[dest_ip] = []
