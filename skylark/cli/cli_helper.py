@@ -217,7 +217,10 @@ def check_ulimit(hard_limit=1024 * 1024 * 2, soft_limit=1024 * 1024):
             subprocess.check_call(["sudo", "prlimit", "--pid", str(os.getpid()), f"--nofile={soft_limit}:{hard_limit}"])
             new_limit = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
             if new_limit < soft_limit:
-                typer.secho(f"Failed to increase ulimit to {soft_limit}, please set manually. Current limit is {new_limit}", fg="red")
+                typer.secho(
+                    f"Failed to increase ulimit to {soft_limit}, please set manually with 'ulimit -n {soft_limit}'. Current limit is {new_limit}",
+                    fg="red",
+                )
                 typer.Abort()
             else:
                 typer.secho(f"Successfully increased ulimit to {new_limit}", fg="green")

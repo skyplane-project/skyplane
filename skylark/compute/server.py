@@ -8,7 +8,7 @@ from typing import Dict
 
 import requests
 from skylark.utils import logger
-from skylark.compute.utils import make_dozzle_command, make_netdata_command
+from skylark.compute.utils import make_dozzle_command, make_netdata_command, make_sysctl_tcp_tuning_command
 from skylark.utils.utils import PathLike, Timer, wait_for
 
 import configparser
@@ -200,20 +200,7 @@ class Server:
         logger.debug(desc_prefix + ": Installing docker")
 
         # increase TCP connections, enable BBR optionally and raise file limits
-        sysctl_updates = {
-            "net.core.rmem_max": 134217728,  # from 212992
-            "net.core.wmem_max": 134217728,  # from 212992
-            "net.ipv4.tcp_rmem": "4096 87380 67108864",  # from "4096 131072 6291456"
-            "net.ipv4.tcp_wmem": "4096 65536 67108864",  # from "4096 16384 4194304"
-            "net.core.somaxconn": 65535,
-            "fs.file-max": 1024 * 1024 * 1024,
-        }
-        if use_bbr:
-            sysctl_updates["net.core.default_qdisc"] = "fq"
-            sysctl_updates["net.ipv4.tcp_congestion_control"] = "bbr"
-        else:
-            sysctl_updates["net.ipv4.tcp_congestion_control"] = "cubic"
-        check_stderr(self.run_command("sudo sysctl -w {}".format(" ".join(f'"{k}={v}"' for k, v in sysctl_updates.items()))))
+        check_stderr(self.run_command(make_sysctl_tcp_tuning_command(cc="bbr" if use_bbr else "cubic")))
 
         # install docker and launch monitoring
         cmd = "(command -v docker >/dev/null 2>&1 || { rm -rf get-docker.sh; curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh; }); "

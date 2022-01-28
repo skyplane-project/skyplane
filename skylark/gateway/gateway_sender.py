@@ -133,6 +133,8 @@ class GatewaySender:
             logger.debug(f"[sender:{self.worker_id}] about to start sending chunk data {chunk_id}")
             with Timer() as t:
                 sock.sendall(chunk_data)
-            logger.debug(f"[sender:{self.worker_id}] finished sending chunk data {chunk_id} at {chunk.chunk_length_bytes * 8 / t.elapsed / MB}Mbps")
+            logger.debug(
+                f"[sender:{self.worker_id}] finished sending chunk data {chunk_id} at {chunk.chunk_length_bytes * 8 / t.elapsed / MB}Mbps"
+            )
             self.chunk_store.state_finish_upload(chunk_id)
             chunk_file_path.unlink()

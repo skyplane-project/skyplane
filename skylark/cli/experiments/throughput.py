@@ -16,6 +16,7 @@ from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server
+from skylark.compute.utils import make_sysctl_tcp_tuning_command
 from skylark.utils.utils import do_parallel
 from tqdm import tqdm
 
@@ -135,7 +136,7 @@ def throughput_grid(
 ):
     def check_stderr(tup):
         assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
-    
+
     config = load_config()
     gcp_project = gcp_project or config.get("gcp_project_id")
     azure_subscription = azure_subscription or config.get("azure_subscription_id")
@@ -198,17 +199,8 @@ def throughput_grid(
 
     # setup instances
     def setup(server: Server):
-        sysctl_updates = {
-            "net.core.rmem_max": 134217728,  # from 212992
-            "net.core.wmem_max": 134217728,  # from 212992
-            "net.ipv4.tcp_rmem": "4096 87380 67108864",  # from "4096 131072 6291456"
-            "net.ipv4.tcp_wmem": "4096 65536 67108864",  # from "4096 16384 4194304"
-            "net.core.somaxconn": 65535,
-            "fs.file-max": 1024 * 1024 * 1024,
-            "net.ipv4.tcp_congestion_control": "cubic",
-        }
-        check_stderr(server.run_command("sudo sysctl -w {}".format(" ".join(f"\"{k}={v}\"" for k, v in sysctl_updates.items()))))
-        server.run_command("(sudo apt-get update && sudo apt-get install -y iperf3); pkill iperf3; iperf3 -s -D -J")
+        check_stderr(server.run_command("(sudo apt-get update && sudo apt-get install -y iperf3); pkill iperf3; iperf3 -s -D -J"))
+        check_stderr(server.run_command(make_sysctl_tcp_tuning_command(cc="cubic")))
 
     do_parallel(setup, instance_list, progress_bar=True, n=-1, desc="Setup")
 

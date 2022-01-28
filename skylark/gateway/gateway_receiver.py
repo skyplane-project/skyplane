@@ -110,7 +110,9 @@ class GatewayReceiver:
                     chunk_data += data
                     chunk_data_size -= len(data)
                     chunk_received_size += len(data)
-                    logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} received {chunk_received_size} / {chunk_header.chunk_len} bytes")
+                    logger.debug(
+                        f"[receiver:{server_port}]:{chunk_header.chunk_id} received {chunk_received_size} / {chunk_header.chunk_len} bytes"
+                    )
 
                 with chunk_file_path.open("wb") as f:
                     f.write(chunk_data)
