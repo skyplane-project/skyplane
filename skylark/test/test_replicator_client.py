@@ -160,8 +160,8 @@ def main(args):
 
     # Getting configs
     config = load_config()
-    gcp_project = gcp_project or config.get("gcp_project_id")
-    azure_subscription = azure_subscription or config.get("azure_subscription_id")
+    gcp_project = args.gcp_project or config.get("gcp_project_id")
+    azure_subscription = args.azure_subscription or config.get("azure_subscription_id")
     logger.debug(f"Loaded gcp_project: {gcp_project}, azure_subscription: {azure_subscription}")
     rc = ReplicatorClient(
         topo,
