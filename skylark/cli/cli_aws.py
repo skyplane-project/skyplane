@@ -9,16 +9,12 @@ from typing import Optional
 import questionary
 
 import typer
-from loguru import logger
+from skylark.utils import logger
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.utils.utils import do_parallel
 
 app = typer.Typer(name="skylark-aws")
-
-# config logger
-logger.remove()
-logger.add(sys.stderr, format="{function:>20}:{line:<3} | <level>{message}</level>", colorize=True, enqueue=True)
 
 
 @app.command()
@@ -52,7 +48,7 @@ def ssh(region: Optional[str] = None):
         proc = subprocess.Popen(split(f"ssh -i {str(instance.local_keyfile)} ubuntu@{instance.public_ip()}"))
         proc.wait()
     else:
-        logger.secho(f"No instance selected", fg="red")
+        typer.secho(f"No instance selected", fg="red")
 
 
 if __name__ == "__main__":

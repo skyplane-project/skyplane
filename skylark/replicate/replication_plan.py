@@ -4,7 +4,7 @@ import json
 import shutil
 from typing import Dict, List, Optional, Set, Tuple
 
-from loguru import logger
+from skylark.utils import logger
 import graphviz as gv
 from skylark import MB
 from skylark.chunk import ChunkRequest

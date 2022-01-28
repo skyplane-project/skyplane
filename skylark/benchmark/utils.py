@@ -1,7 +1,7 @@
 import sys
 from typing import Dict, Iterable, List, Optional, Tuple
 
-from loguru import logger
+from skylark.utils import logger
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider

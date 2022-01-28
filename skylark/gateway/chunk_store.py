@@ -5,7 +5,7 @@ from os import PathLike
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from loguru import logger
+from skylark.utils import logger
 from skylark.chunk import ChunkRequest, ChunkState
 
 

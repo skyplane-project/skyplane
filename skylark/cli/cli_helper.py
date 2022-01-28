@@ -9,7 +9,7 @@ from shutil import copyfile
 from typing import Dict, List, Optional
 
 import typer
-from loguru import logger
+from skylark.utils import logger
 from skylark import config_file
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider

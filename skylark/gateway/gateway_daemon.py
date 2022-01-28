@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import setproctitle
-from loguru import logger
+from skylark.utils import logger
 from skylark import MB, print_header
 from skylark.chunk import ChunkState
 from skylark.gateway.chunk_store import ChunkStore
@@ -32,15 +32,7 @@ class GatewayDaemon:
         outgoing_ports: Dict[str, int],
         chunk_dir: PathLike,
         max_incoming_ports=64,
-        debug=False,
-        log_dir: Optional[PathLike] = None,
     ):
-        if log_dir is not None:
-            log_dir = Path(log_dir)
-            log_dir.mkdir(exist_ok=True)
-            logger.remove()
-            logger.add(log_dir / "gateway_daemon.log", rotation="10 MB", enqueue=True)
-            logger.add(sys.stderr, colorize=True, format="{function:>15}:{line:<3} {level:<8} {message}", level="DEBUG", enqueue=True)
         self.region = region
         self.chunk_store = ChunkStore(chunk_dir)
         self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store, max_pending_chunks=max_incoming_ports)
@@ -49,9 +41,7 @@ class GatewayDaemon:
 
         # API server
         atexit.register(self.cleanup)
-        self.api_server = GatewayDaemonAPI(
-            self.chunk_store, self.gateway_receiver, debug=debug, log_dir=log_dir, daemon_cleanup_handler=self.cleanup
-        )
+        self.api_server = GatewayDaemonAPI(self.chunk_store, self.gateway_receiver, daemon_cleanup_handler=self.cleanup)
         self.api_server.start()
         logger.info(f"Gateway daemon API started at {self.api_server.url}")
 
@@ -177,15 +167,7 @@ if __name__ == "__main__":
         "--outgoing-ports", type=str, required=True, help="JSON encoded path mapping destination ip to number of outgoing ports"
     )
     parser.add_argument("--chunk-dir", type=Path, default="/dev/shm/skylark/chunks", help="Directory to store chunks")
-    parser.add_argument("--debug", action="store_true", help="Enable debug mode for Flask")
-    parser.add_argument("--log-dir", type=Path, default=Path("/var/log/skylark"), help="Directory to write logs to")
     args = parser.parse_args()
 
-    daemon = GatewayDaemon(
-        region=args.region,
-        outgoing_ports=json.loads(args.outgoing_ports),
-        chunk_dir=args.chunk_dir,
-        debug=args.debug,
-        log_dir=Path(args.log_dir),
-    )
+    daemon = GatewayDaemon(region=args.region, outgoing_ports=json.loads(args.outgoing_ports), chunk_dir=args.chunk_dir)
     daemon.run()

@@ -5,7 +5,7 @@ from typing import Dict, Optional
 
 import boto3
 import paramiko
-from loguru import logger
+from skylark.utils import logger
 
 from oslo_concurrency import lockutils
 from skylark import key_root

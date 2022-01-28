@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Union
 
-from loguru import logger
+from skylark.utils import logger
 from tqdm import tqdm
 
 PathLike = Union[str, Path]

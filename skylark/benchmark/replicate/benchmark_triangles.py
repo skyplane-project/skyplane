@@ -4,7 +4,7 @@ import pickle
 from pathlib import Path
 
 import typer
-from loguru import logger
+from skylark.utils import logger
 from skylark import GB, MB, skylark_root
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient

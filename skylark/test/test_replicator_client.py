@@ -1,6 +1,6 @@
 import argparse
 
-from loguru import logger
+from skylark.utils import logger
 from skylark import GB, MB, print_header
 
 import tempfile

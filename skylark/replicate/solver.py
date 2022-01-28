@@ -8,7 +8,7 @@ import graphviz as gv
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from loguru import logger
+from skylark.utils import logger
 
 from skylark import GB
 from skylark.compute.cloud_providers import CloudProvider

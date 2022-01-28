@@ -25,11 +25,13 @@ import skylark.cli.cli_azure
 import skylark.cli.cli_solver
 import skylark.cli.experiments
 import typer
-from loguru import logger
+from skylark.utils import logger
 from skylark import GB, MB, config_file, print_header
 from skylark.cli.cli_helper import (
     check_ulimit,
+    copy_azure_local,
     copy_gcs_local,
+    copy_local_azure,
     copy_local_gcs,
     copy_local_local,
     copy_local_s3,
@@ -50,10 +52,6 @@ app.add_typer(skylark.cli.experiments.app, name="experiments")
 app.add_typer(skylark.cli.cli_aws.app, name="aws")
 app.add_typer(skylark.cli.cli_azure.app, name="azure")
 app.add_typer(skylark.cli.cli_solver.app, name="solver")
-
-# config logger
-logger.remove()
-logger.add(sys.stderr, format="{function:>20}:{line:<3} | <level>{message}</level>", enqueue=True)
 
 
 @app.command()
