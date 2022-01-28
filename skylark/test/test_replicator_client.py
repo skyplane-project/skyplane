@@ -94,7 +94,7 @@ def main(args):
         # TODO: fix this to get the key instead of S3Object
         matching_src_keys = list([obj.key for obj in obj_store_interface_src.list_objects(prefix=args.key_prefix)])
         if matching_src_keys and not args.skip_upload:
-            print("[WARN]\t" + f"Deleting {len(matching_src_keys)} objects from source bucket")
+            logger.warning(f"Deleting {len(matching_src_keys)} objects from source bucket")
             obj_store_interface_src.delete_objects(matching_src_keys)
 
         # create test objects w/ random data
@@ -121,7 +121,7 @@ def main(args):
 
         matching_dst_keys = list([obj.key for obj in obj_store_interface_dst.list_objects(prefix=args.key_prefix)])
         if matching_dst_keys:
-            print("[WARN]\t" + f"Deleting {len(matching_dst_keys)} objects from destination bucket")
+            logger.warning(f"Deleting {len(matching_dst_keys)} objects from destination bucket")
             obj_store_interface_dst.delete_objects(matching_dst_keys)
 
         # cleanup temp files once done

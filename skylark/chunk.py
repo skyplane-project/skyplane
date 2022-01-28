@@ -5,7 +5,6 @@ from enum import Enum, auto
 from typing import Dict, Optional
 
 
-
 @dataclass
 class Chunk:
     """A Chunk is a contiguous piece of a file (a file may be one or more chunks)."""

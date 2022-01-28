@@ -121,18 +121,19 @@ class GatewaySender:
             chunk = self.chunk_store.get_chunk_request(chunk_id).chunk
 
             # send chunk header
-            logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sending chunk header")
-            chunk.to_wire_header(n_chunks_left_on_socket=len(chunk_ids) - idx - 1).to_socket(sock)
-            logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent chunk header")
+            header = chunk.to_wire_header(n_chunks_left_on_socket=len(chunk_ids) - idx - 1)
+            header.to_socket(sock)
 
             # send chunk data
             chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
             assert chunk_file_path.exists(), f"chunk file {chunk_file_path} does not exist"
-            with open(chunk_file_path, "rb") as fd:
-                chunk_data = fd.read()
-            logger.debug(f"[sender:{self.worker_id}] about to start sending chunk data {chunk_id}")
+            # with Timer() as t:
+            #     with open(chunk_file_path, "rb") as fd:
+            #         chunk_data = fd.read()
+            #     sock.sendall(chunk_data)
             with Timer() as t:
-                sock.sendall(chunk_data)
+                with open(chunk_file_path, "rb") as fd:
+                    sock.sendfile(fd)
             logger.debug(
                 f"[sender:{self.worker_id}] finished sending chunk data {chunk_id} at {chunk.chunk_length_bytes * 8 / t.elapsed / MB}Mbps"
             )
