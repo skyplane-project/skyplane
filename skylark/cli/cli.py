@@ -284,7 +284,7 @@ def deprovision(azure_subscription: Optional[str] = None, gcp_project: Optional[
 
 @app.command()
 def init(
-    azure_tenant_id: str = typer.Option(None, envvar="AZURE_TENANT_ID", prompt="Azure tenant ID"),
+        azure_tenant_id: str = typer.Option(None, envvar="AZURE_TENANT_ID", prompt="`Azure tenant ID` can be got from `az ad sp create-for-rbac -n api://skylark --sdk-auth  > ~/azure.json`"),
     azure_client_id: str = typer.Option(None, envvar="AZURE_CLIENT_ID", prompt="Azure client ID"),
     azure_client_secret: str = typer.Option(None, envvar="AZURE_CLIENT_SECRET", prompt="Azure client secret"),
     azure_subscription_id: str = typer.Option(None, envvar="AZURE_SUBSCRIPTION_ID", prompt="Azure subscription ID"),
