@@ -18,6 +18,22 @@ from shutil import copyfile
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
 
+from skylark.cli.cli_helper import (
+    check_ulimit,
+    copy_gcs_local,
+    copy_local_gcs,
+    copy_local_local,
+    copy_local_s3,
+    copy_s3_local,
+    copy_gcs_local,
+    copy_local_gcs,
+    deprovision_skylark_instances,
+    load_config,
+    ls_local,
+    ls_s3,
+    parse_path,
+)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run a replication job")
@@ -39,8 +55,8 @@ def parse_args():
     parser.add_argument("--bucket-prefix", default="sarah", help="Prefix for bucket to avoid naming collision")
 
     # gateway provisioning
-    parser.add_argument("--gcp-project", default="skylark-333700", help="GCP project ID")
-    parser.add_argument("--azure-subscription", default="", help="Azure subscription")
+    parser.add_argument("--gcp-project", default=None, help="GCP project ID")
+    parser.add_argument("--azure-subscription", default=None, help="Azure subscription")
     parser.add_argument("--gateway-docker-image", default="ghcr.io/parasj/skylark:main", help="Docker image for gateway instances")
     parser.add_argument("--aws-instance-class", default="m5.4xlarge", help="AWS instance class")
     parser.add_argument("--azure-instance-class", default="Standard_D2_v5", help="Azure instance class")
@@ -141,6 +157,12 @@ def main(args):
         for i in range(args.num_gateways):
             topo.add_edge(args.src_region, i, args.dest_region, i, args.num_outgoing_connections)
     logger.info("Creating replication client")
+
+    # Getting configs
+    config = load_config()
+    gcp_project = gcp_project or config.get("gcp_project_id")
+    azure_subscription = azure_subscription or config.get("azure_subscription_id")
+    logger.debug(f"Loaded gcp_project: {gcp_project}, azure_subscription: {azure_subscription}")
     rc = ReplicatorClient(
         topo,
         gcp_project=args.gcp_project,
