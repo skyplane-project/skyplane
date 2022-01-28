@@ -2,7 +2,6 @@ import logging
 import logging.handlers
 import os
 import threading
-from pathlib import Path
 
 from flask import Flask, jsonify, request
 from skylark.utils import logger

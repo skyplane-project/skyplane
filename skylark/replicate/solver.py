@@ -318,7 +318,6 @@ class ThroughputSolverILP(ThroughputSolver):
                             src_instance_connections += partial_conn
             n_instances[i] = src_instance_idx + 1
 
-        logger.warning("")
         # assign destination instances (currently None) to Edges
         dst_edges = []
         dsts_instance_idx = {i: 0 for i in regions}
