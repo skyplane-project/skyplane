@@ -1,14 +1,14 @@
 import os
-import typer
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Iterator, List
 
-import os
+import typer
+from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
+
+# from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
 from skylark.obj_store.azure_keys import azure_storage_credentials
-
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
-from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
 
 
 class AzureObject(ObjectStoreObject):
@@ -17,7 +17,7 @@ class AzureObject(ObjectStoreObject):
 
 
 class AzureInterface(ObjectStoreInterface):
-    def __init__(self, azure_region, container_name):
+    def __init__(self, azure_region, container_name, account_url):
         # TODO: the azure region should get corresponding os.getenv()
         self.azure_region = azure_region
         assert self.azure_region in azure_storage_credentials
@@ -29,14 +29,13 @@ class AzureInterface(ObjectStoreInterface):
 
         # Connection strings are stored in azure_keys.py
         self._connect_str = azure_storage_credentials[self.azure_region]["connection_string"]
-        # Create the BlobServiceClient object which will be used to create a container client
         self.blob_service_client = BlobServiceClient.from_connection_string(self._connect_str)
+        # self.azure_default_credential = DefaultAzureCredential()
+        # self.blob_service_client = BlobServiceClient(account_url=account_url, credential=self.azure_default_credential)
 
-        self.container_client = None
-
-        # TODO:: Figure this out, since azure by default has 15 workers
-        self.pool = ThreadPoolExecutor(max_workers=1)
+        self.pool = ThreadPoolExecutor(max_workers=1)  # TODO: Figure this out, since azure by default has 15 workers
         self.max_concurrency = 24
+        self.container_client = None
 
     def _on_done_download(self, **kwargs):
         self.completed_downloads += 1

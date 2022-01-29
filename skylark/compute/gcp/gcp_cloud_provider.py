@@ -213,13 +213,7 @@ class GCPCloudProvider(CloudProvider):
             time.sleep(time_intervals.pop(0))
 
     def provision_instance(
-        self,
-        region,
-        instance_class,
-        name=None,
-        premium_network=False,
-        uname=os.environ.get("USER"),
-        tags={"skylark": "true"},
+        self, region, instance_class, name=None, premium_network=False, uname=os.environ.get("USER"), tags={"skylark": "true"}
     ) -> GCPServer:
         assert not region.startswith("gcp:"), "Region should be GCP region"
         if name is None:
@@ -246,11 +240,7 @@ class GCPCloudProvider(CloudProvider):
                 {
                     "network": "global/networks/default",
                     "accessConfigs": [
-                        {
-                            "name": "External NAT",
-                            "type": "ONE_TO_ONE_NAT",
-                            "networkTier": "PREMIUM" if premium_network else "STANDARD",
-                        }
+                        {"name": "External NAT", "type": "ONE_TO_ONE_NAT", "networkTier": "PREMIUM" if premium_network else "STANDARD"}
                     ],
                 }
             ],

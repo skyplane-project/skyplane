@@ -260,11 +260,7 @@ class AWSCloudProvider(CloudProvider):
                     BlockDeviceMappings=[
                         {
                             "DeviceName": "/dev/sda1",
-                            "Ebs": {
-                                "DeleteOnTermination": True,
-                                "VolumeSize": ebs_volume_size,
-                                "VolumeType": "gp2",
-                            },
+                            "Ebs": {"DeleteOnTermination": True, "VolumeSize": ebs_volume_size, "VolumeType": "gp2"},
                         }
                     ],
                     NetworkInterfaces=[

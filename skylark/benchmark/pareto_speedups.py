@@ -12,14 +12,7 @@ from skylark.replicate.solver import ThroughputSolverILP
 
 @ray.remote
 def benchmark(
-    src,
-    dst,
-    min_throughput,
-    gbyte_to_transfer=1,
-    instance_limit=1,
-    max_connections_per_path=64,
-    max_connections_per_node=64,
-    log_dir=None,
+    src, dst, min_throughput, gbyte_to_transfer=1, instance_limit=1, max_connections_per_path=64, max_connections_per_node=64, log_dir=None
 ):
     solver = ThroughputSolverILP(skylark_root / "profiles" / "throughput_mini.csv")
     solution = solver.solve_min_cost(

@@ -34,13 +34,7 @@ class GatewaySender:
     def start_workers(self):
         for ip, num_connections in self.outgoing_ports.items():
             for i in range(num_connections):
-                p = Process(
-                    target=self.worker_loop,
-                    args=(
-                        i,
-                        ip,
-                    ),
-                )
+                p = Process(target=self.worker_loop, args=(i, ip))
                 p.start()
                 self.processes.append(p)
 

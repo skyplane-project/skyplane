@@ -86,11 +86,7 @@ def start_iperf3_client(arg_pair: Tuple[Server, Server], iperf3_log_dir: Path, i
             f.write(stderr)
         log_error(f"{tag} stderr: {stderr}")
 
-    out_rec = dict(
-        tag=tag,
-        stdout_path=str(iperf3_log_dir / f"{tag}.stdout"),
-        stderr_path=str(iperf3_log_dir / f"{tag}.stderr"),
-    )
+    out_rec = dict(tag=tag, stdout_path=str(iperf3_log_dir / f"{tag}.stdout"), stderr_path=str(iperf3_log_dir / f"{tag}.stderr"))
     try:
         result = json.loads(stdout)
     except json.JSONDecodeError as e:

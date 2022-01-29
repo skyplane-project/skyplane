@@ -25,14 +25,7 @@ class GatewayDaemonAPI(threading.Thread):
     * GET /api/v1/chunk_status_log - returns list of chunk status log entries
     """
 
-    def __init__(
-        self,
-        chunk_store: ChunkStore,
-        gateway_receiver: GatewayReceiver,
-        host="0.0.0.0",
-        port=8080,
-        daemon_cleanup_handler=None,
-    ):
+    def __init__(self, chunk_store: ChunkStore, gateway_receiver: GatewayReceiver, host="0.0.0.0", port=8080, daemon_cleanup_handler=None):
         super().__init__()
         self.app = Flask("gateway_metadata_server")
         self.chunk_store = chunk_store
