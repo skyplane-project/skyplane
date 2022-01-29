@@ -1,13 +1,14 @@
 import os
-import typer
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Iterator, List
 
-import os
-from azure.storage.blob import BlobServiceClient
-
-from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
+
+# from azure.identity import DefaultAzureCredential
+from azure.storage.blob import BlobServiceClient
+from skylark.utils import logger
+from skylark.obj_store.azure_keys import azure_storage_credentials
+from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
 
 class AzureObject(ObjectStoreObject):
@@ -19,27 +20,22 @@ class AzureInterface(ObjectStoreInterface):
     def __init__(self, azure_region, container_name):
         # TODO: the azure region should get corresponding os.getenv()
         self.azure_region = azure_region
+        assert self.azure_region in azure_storage_credentials
 
         self.container_name = container_name
         self.bucket_name = self.container_name  # For compatibility
         self.pending_downloads, self.completed_downloads = 0, 0
         self.pending_uploads, self.completed_uploads = 0, 0
 
-        # Retrieve the connection string for use with the application. The storage
-        # connection string is stored in an environment variable on the machine
-        # running the application called AZURE_STORAGE_CONNECTION_STRING. If the environment variable is
-        # created after the application is launched in a console or with Visual Studio,
-        # the shell or application needs to be closed and reloaded to take the
-        # environment variable into account.
-        self._connect_str = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-        # Create the BlobServiceClient object which will be used to create a container client
+        # Connection strings are stored in azure_keys.py
+        self._connect_str = azure_storage_credentials[self.azure_region]["connection_string"]
         self.blob_service_client = BlobServiceClient.from_connection_string(self._connect_str)
+        # self.azure_default_credential = DefaultAzureCredential()
+        # self.blob_service_client = BlobServiceClient(account_url=account_url, credential=self.azure_default_credential)
 
-        self.container_client = None
-
-        # TODO:: Figure this out, since azure by default has 15 workers
-        self.pool = ThreadPoolExecutor(max_workers=1)
+        self.pool = ThreadPoolExecutor(max_workers=1)  # TODO: Figure this out, since azure by default has 15 workers
         self.max_concurrency = 24
+        self.container_client = None
 
     def _on_done_download(self, **kwargs):
         self.completed_downloads += 1
@@ -64,7 +60,9 @@ class AzureInterface(ObjectStoreInterface):
             self.container_client = self.blob_service_client.create_container(self.container_name)
             self.properties = self.container_client.get_container_properties()
         except ResourceExistsError:
-            typer.secho("Container already exists. Exiting")
+            self.delete_container()
+            logger.warning("==>Container already exists. Deletion started. Try restarting after sufficient gap")
+            logger.warning("==> Alternatively use a diff bucket name with `--bucket-prefix`")
             exit(-1)
 
     def create_bucket(self):
@@ -76,7 +74,7 @@ class AzureInterface(ObjectStoreInterface):
         try:
             self.container_client.delete_container()
         except ResourceNotFoundError:
-            typer.secho("Container doesn't exists. Unable to delete")
+            logger.warning("Container doesn't exists. Unable to delete")
 
     def delete_bucket(self):
         return self.delete_container()

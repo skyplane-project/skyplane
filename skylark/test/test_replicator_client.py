@@ -1,4 +1,5 @@
 import argparse
+from skylark.obj_store.object_store_interface import ObjectStoreInterface
 
 from skylark.utils import logger
 from skylark import GB, MB, print_header
@@ -17,6 +18,8 @@ from shutil import copyfile
 
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
+
+from skylark.cli.cli_helper import load_config
 
 
 def parse_args():
@@ -39,8 +42,8 @@ def parse_args():
     parser.add_argument("--bucket-prefix", default="sarah", help="Prefix for bucket to avoid naming collision")
 
     # gateway provisioning
-    parser.add_argument("--gcp-project", default="skylark-333700", help="GCP project ID")
-    parser.add_argument("--azure-subscription", default="", help="Azure subscription")
+    parser.add_argument("--gcp-project", default=None, help="GCP project ID")
+    parser.add_argument("--azure-subscription", default=None, help="Azure subscription")
     parser.add_argument("--gateway-docker-image", default="ghcr.io/parasj/skylark:main", help="Docker image for gateway instances")
     parser.add_argument("--aws-instance-class", default="m5.4xlarge", help="AWS instance class")
     parser.add_argument("--azure-instance-class", default="Standard_D2_v5", help="Azure instance class")
@@ -62,29 +65,11 @@ def parse_args():
 
 
 def main(args):
-
     src_bucket = f"{args.bucket_prefix}-skylark-{args.src_region.split(':')[1]}"
     dst_bucket = f"{args.bucket_prefix}-skylark-{args.dest_region.split(':')[1]}"
-
-    if "aws" in args.src_region:
-        obj_store_interface_src = S3Interface(args.src_region.split(":")[1], src_bucket)
-    elif "gcp" in args.src_region:
-        obj_store_interface_src = GCSInterface(args.src_region.split(":")[1][:-2], src_bucket)
-    elif "azure" in args.src_region:
-        obj_store_interface_src = AzureInterface(args.src_region.split(":")[1][:-2], src_bucket)
-    else:
-        raise ValueError(f"No region in source region {args.src_region}")
-
-    if "aws" in args.dest_region:
-        obj_store_interface_dst = S3Interface(args.dest_region.split(":")[1], dst_bucket)
-    elif "gcp" in args.dest_region:
-        obj_store_interface_dst = GCSInterface(args.dest_region.split(":")[1][:-2], dst_bucket)
-    elif "azure" in args.dest_region:
-        obj_store_interface_dst = AzureInterface(args.dest_region.split(":")[1][:-2], dst_bucket)
-    else:
-        raise ValueError(f"No region in destination region {args.dest_region}")
-
+    obj_store_interface_src = ObjectStoreInterface.create(args.src_region, src_bucket)
     obj_store_interface_src.create_bucket()
+    obj_store_interface_dst = ObjectStoreInterface.create(args.dest_region, dst_bucket)
     obj_store_interface_dst.create_bucket()
 
     # TODO: fix this to get the key instead of S3Object
@@ -141,6 +126,12 @@ def main(args):
         for i in range(args.num_gateways):
             topo.add_edge(args.src_region, i, args.dest_region, i, args.num_outgoing_connections)
     logger.info("Creating replication client")
+
+    # Getting configs
+    config = load_config()
+    gcp_project = args.gcp_project or config.get("gcp_project_id")
+    azure_subscription = args.azure_subscription or config.get("azure_subscription_id")
+    logger.debug(f"Loaded gcp_project: {gcp_project}, azure_subscription: {azure_subscription}")
     rc = ReplicatorClient(
         topo,
         gcp_project=args.gcp_project,
