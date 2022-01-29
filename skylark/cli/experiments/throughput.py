@@ -46,16 +46,17 @@ def start_iperf3_client(arg_pair: Tuple[Server, Server], iperf3_log_dir: Path, i
     out_rec = dict(tag=tag, stdout_path=str(iperf3_log_dir / f"{tag}.stdout"), stderr_path=str(iperf3_log_dir / f"{tag}.stderr"))
     try:
         result = json.loads(stdout)
-    except json.JSONDecodeError as e:
+        out_rec["throughput_sent"] = result["end"]["sum_sent"]["bits_per_second"]
+        out_rec["throughput_recieved"] = result["end"]["sum_received"]["bits_per_second"]
+        out_rec["cpu_utilization"] = result["end"]["cpu_utilization_percent"]["host_total"]
+        out_rec["success"] = True
+    except Exception as e:
+        logger.exception(e)
         logger.error(f"({instance_src.region_tag} -> {instance_dst.region_tag}) iperf3 client failed: {stdout} {stderr}")
         out_rec["success"] = False
         out_rec["exception"] = str(e)
+        out_rec["raw_output"] = str(stdout)
         return out_rec
-
-    out_rec["throughput_sent"] = result["end"]["sum_sent"]["bits_per_second"]
-    out_rec["throughput_recieved"] = result["end"]["sum_received"]["bits_per_second"]
-    out_rec["cpu_utilization"] = result["end"]["cpu_utilization_percent"]["host_total"]
-    out_rec["success"] = True
 
     instance_src.close_server()
     instance_dst.close_server()
