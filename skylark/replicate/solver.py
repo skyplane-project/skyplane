@@ -124,12 +124,7 @@ class ThroughputSolver:
 
 class ThroughputSolverILP(ThroughputSolver):
     def solve_min_cost(
-        self,
-        p: ThroughputProblem,
-        instance_cost_multipler: float = 1.0,
-        solver=cp.GLPK,
-        solver_verbose=False,
-        save_lp_path=None,
+        self, p: ThroughputProblem, instance_cost_multipler: float = 1.0, solver=cp.GLPK, solver_verbose=False, save_lp_path=None
     ):
         logger.debug(f"Solving for problem {p}")
 

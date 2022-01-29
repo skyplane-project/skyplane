@@ -62,10 +62,7 @@ class ReplicatorClient:
             do_parallel(lambda fn: fn(), jobs)
 
     def provision_gateways(
-        self,
-        reuse_instances=False,
-        log_dir: Optional[PathLike] = None,
-        authorize_ssh_pub_key: Optional[PathLike] = None,
+        self, reuse_instances=False, log_dir: Optional[PathLike] = None, authorize_ssh_pub_key: Optional[PathLike] = None
     ):
         regions_to_provision = [node.region for node in self.topology.nodes]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
@@ -215,14 +212,7 @@ class ReplicatorClient:
                 file_size_bytes = obj_file_size_bytes[obj]
             else:
                 file_size_bytes = job.random_chunk_size_mb * MB
-            chunks.append(
-                Chunk(
-                    key=obj,
-                    chunk_id=idx,
-                    file_offset_bytes=0,  # TODO: what is this?
-                    chunk_length_bytes=file_size_bytes,
-                )
-            )
+            chunks.append(Chunk(key=obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes))  # TODO: what is this?
 
         # partition chunks into roughly equal-sized batches (by bytes)
         src_instances = [self.bound_nodes[n] for n in self.topology.source_instances()]

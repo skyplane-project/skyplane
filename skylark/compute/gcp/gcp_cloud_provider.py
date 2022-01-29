@@ -61,6 +61,40 @@ class GCPCloudProvider(CloudProvider):
         ]
 
     @staticmethod
+    def region_list_standard():
+        regions_with_standard = [
+            "asia-east1",
+            "asia-east2",
+            "asia-northeast1",
+            "asia-northeast3",
+            "asia-south1",
+            "asia-southeast1",
+            "asia-southeast2",
+            "australia-southeast1",
+            "us-west1",
+            "us-west2",
+            "us-west3",
+            "us-west4",
+            "us-central1",
+            "us-east1",
+            "us-east4",
+            "northamerica-northeast1",
+            "southamerica-east1",
+            "europe-north1",
+            "europe-west1",
+            "europe-west2",
+            "europe-west3",
+            "europe-west4",
+            "europe-west6",
+        ]
+        availability_zones = []
+        for r in GCPCloudProvider.region_list():
+            parsed_region, parsed_zone = r.rsplit("-", 1)
+            if parsed_region in regions_with_standard:
+                availability_zones.append(r)
+        return availability_zones
+
+    @staticmethod
     def get_transfer_cost(src_key, dst_key, premium_tier=True):
         src_provider, src = src_key.split(":")
         dst_provider, dst = dst_key.split(":")
@@ -213,13 +247,7 @@ class GCPCloudProvider(CloudProvider):
             time.sleep(time_intervals.pop(0))
 
     def provision_instance(
-        self,
-        region,
-        instance_class,
-        name=None,
-        premium_network=False,
-        uname=os.environ.get("USER"),
-        tags={"skylark": "true"},
+        self, region, instance_class, name=None, premium_network=False, uname=os.environ.get("USER"), tags={"skylark": "true"}
     ) -> GCPServer:
         assert not region.startswith("gcp:"), "Region should be GCP region"
         if name is None:
@@ -246,11 +274,7 @@ class GCPCloudProvider(CloudProvider):
                 {
                     "network": "global/networks/default",
                     "accessConfigs": [
-                        {
-                            "name": "External NAT",
-                            "type": "ONE_TO_ONE_NAT",
-                            "networkTier": "PREMIUM" if premium_network else "STANDARD",
-                        }
+                        {"name": "External NAT", "type": "ONE_TO_ONE_NAT", "networkTier": "PREMIUM" if premium_network else "STANDARD"}
                     ],
                 }
             ],
