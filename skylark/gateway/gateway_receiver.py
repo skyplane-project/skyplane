@@ -15,7 +15,7 @@ from skylark.utils.utils import Timer
 
 
 class GatewayReceiver:
-    def __init__(self, chunk_store: ChunkStore, write_back_block_size=32 * MB, max_pending_chunks=1):
+    def __init__(self, chunk_store: ChunkStore, write_back_block_size=4 * MB, max_pending_chunks=1):
         self.chunk_store = chunk_store
         self.write_back_block_size = write_back_block_size
         self.max_pending_chunks = max_pending_chunks
@@ -103,16 +103,12 @@ class GatewayReceiver:
             with Timer() as t:
                 chunk_data_size = chunk_header.chunk_len
                 chunk_received_size = 0
-                chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_header.chunk_id)
-                chunk_data = b""
-                while chunk_data_size > 0:
-                    data = conn.recv(min(chunk_data_size, self.write_back_block_size))
-                    chunk_data += data
-                    chunk_data_size -= len(data)
-                    chunk_received_size += len(data)
-
-                with chunk_file_path.open("wb") as f:
-                    f.write(chunk_data)
+                with self.chunk_store.get_chunk_file_path(chunk_header.chunk_id).open("wb") as f:
+                    while chunk_data_size > 0:
+                        data = conn.recv(min(chunk_data_size, self.write_back_block_size))
+                        f.write(data)
+                        chunk_data_size -= len(data)
+                        chunk_received_size += len(data)
             logger.info(
                 f"[receiver:{server_port}]:{chunk_header.chunk_id} in {t.elapsed:.2f} seconds ({chunk_received_size * 8 / t.elapsed / GB:.2f}Gbps)"
             )
