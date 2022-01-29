@@ -96,10 +96,12 @@ def replicate_random(
     src_region: str,
     dst_region: str,
     inter_region: Optional[str] = typer.Argument(None),
-    num_gateways: int = 1,
-    num_outgoing_connections: int = 16,
-    total_transfer_size_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB (across n_chunks chunks)"),
-    n_chunks: int = 512,
+    num_gateways: int = typer.Option(1, "--num-gateways", "-n", help="Number of gateways"),
+    num_outgoing_connections: int = typer.Option(
+        64, "--num-outgoing-connections", "-c", help="Number of outgoing connections between each gateway"
+    ),
+    total_transfer_size_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB."),
+    chunk_size_mb: int = typer.Option(8, "--chunk-size-mb", help="Chunk size in MB."),
     reuse_gateways: bool = True,
     azure_subscription: Optional[str] = None,
     gcp_project: Optional[str] = None,
@@ -151,9 +153,9 @@ def replicate_random(
     for node, gw in rc.bound_nodes.items():
         logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
 
-    if total_transfer_size_mb % n_chunks != 0:
-        logger.warning(f"total_transfer_size_mb ({total_transfer_size_mb}) is not a multiple of n_chunks ({n_chunks})")
-    chunk_size_mb = total_transfer_size_mb // n_chunks
+    if total_transfer_size_mb % chunk_size_mb != 0:
+        logger.warning(f"total_transfer_size_mb ({total_transfer_size_mb}) is not a multiple of chunk_size_mb ({chunk_size_mb})")
+    n_chunks = int(total_transfer_size_mb / chunk_size_mb)
     job = ReplicationJob(
         source_region=src_region,
         source_bucket=None,

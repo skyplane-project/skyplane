@@ -200,21 +200,17 @@ def copy_s3_local(src_bucket: str, src_key: str, dst: Path):
             pbar.update(obj_mapping[op].size)
 
 
-# utility functions
-
-
-def check_ulimit(hard_limit=1024 * 1024 * 2, soft_limit=1024 * 1024):
+def check_ulimit(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
     current_limit_soft, current_limit_hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-    typer.secho(f"Current soft limit: {current_limit_soft}, current hard limit: {current_limit_hard}", fg="yellow")
-    if current_limit_soft < soft_limit:
-        typer.secho(f"Warning: ulimit is set to {current_limit_soft}, which is less than the recommended minimum of {soft_limit}", fg="red")
-        if typer.confirm("sudo required; Do you want to increase the limit?"):
-            os.system(f"sudo sysctl -w fs.file-max={hard_limit}")
-            new_limit = subprocess.check_output(["sysctl", "-n", "fs.file-max"]).decode("utf-8").strip()
-            typer.secho(f"New system limit: {new_limit}", fg="green")
-
-            # set soft and hard limit
-            subprocess.check_call(["sudo", "prlimit", "--pid", str(os.getpid()), f"--nofile={soft_limit}:{hard_limit}"])
+    if current_limit_hard < hard_limit:
+        typer.secho(
+            f"Warning: hard file limit is set to {current_limit_hard}, which is less than the recommended minimum of {hard_limit}", fg="red"
+        )
+        increase_hard_limit = ["sudo", "sysctl", "-w", f"fs.file-max={hard_limit}"]
+        typer.secho(f"Will run the following commands:")
+        typer.secho(f"    {' '.join(increase_hard_limit)}", fg="yellow")
+        if typer.confirm("sudo required; Do you want to increase the limit?", default=True):
+            subprocess.check_output(increase_hard_limit)
             new_limit = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
             if new_limit < soft_limit:
                 typer.secho(
@@ -224,6 +220,12 @@ def check_ulimit(hard_limit=1024 * 1024 * 2, soft_limit=1024 * 1024):
                 typer.Abort()
             else:
                 typer.secho(f"Successfully increased ulimit to {new_limit}", fg="green")
+    if current_limit_soft < soft_limit:
+        increase_soft_limit = ["sudo", "prlimit", "--pid", str(os.getpid()), f"--nofile={soft_limit}:{hard_limit}"]
+        logger.warning(
+            f"Warning: soft file limit is set to {current_limit_soft}, increasing for process with `{' '.join(increase_soft_limit)}`"
+        )
+        subprocess.check_output(increase_soft_limit)
 
 
 def deprovision_skylark_instances(azure_subscription: Optional[str] = None, gcp_project_id: Optional[str] = None):
