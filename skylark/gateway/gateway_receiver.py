@@ -3,7 +3,7 @@ import signal
 import socket
 import time
 from contextlib import closing
-from multiprocessing import Event, Manager, Process, Value
+from multiprocessing import Event, Process, Value
 from typing import Tuple
 
 import setproctitle
@@ -15,13 +15,10 @@ from skylark.utils.utils import Timer
 
 
 class GatewayReceiver:
-    def __init__(self, chunk_store: ChunkStore, write_back_block_size=1 * MB, max_pending_chunks=1):
+    def __init__(self, chunk_store: ChunkStore, write_back_block_size=32 * MB, max_pending_chunks=1):
         self.chunk_store = chunk_store
         self.write_back_block_size = write_back_block_size
         self.max_pending_chunks = max_pending_chunks
-
-        # shared state
-        self.manager = Manager()
         self.server_processes = []
         self.server_ports = []
 
@@ -45,10 +42,12 @@ class GatewayReceiver:
 
                 sock.listen()
                 started_event.set()
+                logger.info(f"[receiver:{socket_port}] Waiting for connection")
                 conn, addr = sock.accept()
+                logger.info(f"[receiver:{socket_port}] Accepted connection from {addr}")
                 while True:
                     if exit_flag.value == 1:
-                        logger.warning(f"[server:{socket_port}] Exiting on signal")
+                        logger.warning(f"[receiver:{socket_port}] Exiting on signal")
                         conn.close()
                         return
                     self.recv_chunks(conn, addr)
@@ -58,7 +57,7 @@ class GatewayReceiver:
         started_event.wait()
         self.server_processes.append(p)
         self.server_ports.append(port.value)
-        logger.info(f"[server] Started server (port = {port.value})")
+        logger.info(f"[receiver:{port.value}] Started server)")
         return port.value
 
     def stop_server(self, port: int):
@@ -75,7 +74,7 @@ class GatewayReceiver:
             matched_process.terminate()
             self.server_processes.remove(matched_process)
             self.server_ports.remove(port)
-        logger.warning(f"[server] Stopped server (port = {port})")
+        logger.warning(f"[server:{port}] Stopped server")
         return port
 
     def stop_servers(self):
@@ -89,38 +88,34 @@ class GatewayReceiver:
         chunks_received = []
         while True:
             # receive header and write data to file
+            logger.debug(f"[receiver:{server_port}] Blocking for next header")
             chunk_header = WireProtocolHeader.from_socket(conn)
-            logger.debug(f"[server:{server_port}] Got chunk header {chunk_header.chunk_id}: {chunk_header}")
+            logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} Got chunk header {chunk_header}")
             self.chunk_store.state_start_download(chunk_header.chunk_id)
 
             # block until we have enough space to write the chunk
             while self.chunk_store.remaining_bytes() < chunk_header.chunk_len * self.max_pending_chunks:
-                logger.warning(f"[server:{server_port}] Waiting for space to write chunk {chunk_header.chunk_id}")
+                logger.warning(f"[receiver:{server_port}]:{chunk_header.chunk_id} Waiting for space to write chunk ")
                 time.sleep(0.01)  # todo should use inotify
 
             # get data
+            logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} wire header length {chunk_header.chunk_len}")
             with Timer() as t:
                 chunk_data_size = chunk_header.chunk_len
                 chunk_received_size = 0
-                chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_header.chunk_id)
-
-                with chunk_file_path.open("wb") as f:
+                with self.chunk_store.get_chunk_file_path(chunk_header.chunk_id).open("wb") as f:
                     while chunk_data_size > 0:
                         data = conn.recv(min(chunk_data_size, self.write_back_block_size))
                         f.write(data)
                         chunk_data_size -= len(data)
                         chunk_received_size += len(data)
-                    logger.debug(
-                        f"[receiver:{server_port}] {chunk_header.chunk_id} chunk received {chunk_received_size}/{chunk_header.chunk_len}"
-                    )
-
+            logger.info(
+                f"[receiver:{server_port}]:{chunk_header.chunk_id} in {t.elapsed:.2f} seconds ({chunk_received_size * 8 / t.elapsed / GB:.2f}Gbps)"
+            )
             # todo check hash
             self.chunk_store.state_finish_download(chunk_header.chunk_id, t.elapsed)
             chunks_received.append(chunk_header.chunk_id)
-            logger.info(
-                f"[receiver:{server_port}] Received chunk {chunk_header.chunk_id} in {t.elapsed:.2f} seconds ({chunk_received_size * 8 / t.elapsed / GB:.2f}Gbps)"
-            )
 
             if chunk_header.n_chunks_left_on_socket == 0:
-                logger.debug(f"[receiver:{server_port}] End of stream reached, closing connection and waiting for another")
+                logger.debug(f"[receiver:{server_port}] End of stream reached")
                 return

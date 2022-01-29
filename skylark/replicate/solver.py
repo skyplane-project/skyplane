@@ -12,7 +12,7 @@ from skylark.utils import logger
 
 from skylark import GB
 from skylark.compute.cloud_providers import CloudProvider
-from skylark.replicate.replication_plan import ReplicationTopology, ReplicationTopologyGateway
+from skylark.replicate.replication_plan import ReplicationTopology
 
 GBIT_PER_GBYTE = 8
 
@@ -318,7 +318,6 @@ class ThroughputSolverILP(ThroughputSolver):
                             src_instance_connections += partial_conn
             n_instances[i] = src_instance_idx + 1
 
-        logger.warning("")
         # assign destination instances (currently None) to Edges
         dst_edges = []
         dsts_instance_idx = {i: 0 for i in regions}

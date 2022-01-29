@@ -8,7 +8,7 @@ import termcolor
 def log(msg, LEVEL="INFO", color="white", *args, **kwargs):
     if args or kwargs:
         msg = msg.format(*args, **kwargs)
-    level_prefix = ("[" + LEVEL.upper() + "] ").ljust(7)
+    level_prefix = ("[" + LEVEL.upper() + "]").ljust(7)
     time = datetime.now().strftime("%H:%M:%S")
     print(f"{time} {level_prefix} {termcolor.colored(msg, color)}", flush=True, file=sys.stderr)
 

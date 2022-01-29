@@ -8,7 +8,7 @@ from typing import Dict
 
 import requests
 from skylark.utils import logger
-from skylark.compute.utils import make_dozzle_command, make_netdata_command
+from skylark.compute.utils import make_dozzle_command, make_netdata_command, make_sysctl_tcp_tuning_command
 from skylark.utils.utils import PathLike, Timer, wait_for
 
 import configparser
@@ -193,37 +193,14 @@ class Server:
         activity_monitor_port=8889,
         use_bbr=False,
     ):
+        def check_stderr(tup):
+            assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
+
         desc_prefix = f"Starting gateway {self.uuid()}, host: {self.public_ip()}"
         logger.debug(desc_prefix + ": Installing docker")
 
         # increase TCP connections, enable BBR optionally and raise file limits
-        sysctl_updates = {
-            # congestion control window
-            # "net.core.rmem_max": 2147483647,
-            # "net.core.wmem_max": 2147483647,
-            # "net.ipv4.tcp_rmem": "'4096 87380 1073741824'",
-            # "net.ipv4.tcp_wmem": "'4096 65536 1073741824'",
-            # increase max number of TCP connections
-            # "net.ipv4.tcp_tw_reuse": 0,
-            # "net.ipv4.tcp_tw_recycle": 0,
-            "net.core.somaxconn": 65535,
-            "net.core.netdev_max_backlog": 4096,
-            "net.ipv4.tcp_max_syn_backlog": 32768,
-            # "net.ipv4.tcp_syn_retries": 1,
-            # "net.ipv4.tcp_synack_retries": 1,
-            # "net.ipv4.tcp_fin_timeout": 5,
-            # "net.ipv4.tcp_syncookies": 0,
-            "net.ipv4.ip_local_port_range": "'12000 65535'",
-            # increase file limit
-            "fs.file-max": 1048576,
-        }
-        if use_bbr:
-            sysctl_updates["net.core.default_qdisc"] = "fq"
-            sysctl_updates["net.ipv4.tcp_congestion_control"] = "bbr"
-        else:
-            sysctl_updates["net.ipv4.tcp_congestion_control"] = "cubic"
-
-        self.run_command("sudo sysctl -w {}".format(" ".join(f"{k}={v}" for k, v in sysctl_updates.items())))
+        check_stderr(self.run_command(make_sysctl_tcp_tuning_command(cc="bbr" if use_bbr else "cubic")))
 
         # install docker and launch monitoring
         cmd = "(command -v docker >/dev/null 2>&1 || { rm -rf get-docker.sh; curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh; }); "
@@ -244,8 +221,8 @@ class Server:
 
         # launch monitoring
         logger.debug(desc_prefix + ": Starting monitoring")
-        out, err = self.run_command(make_dozzle_command(log_viewer_port))
-        out, err = self.run_command(make_netdata_command(activity_monitor_port, netdata_hostname=self.public_ip()))
+        self.run_command(make_dozzle_command(log_viewer_port))
+        self.run_command(make_netdata_command(activity_monitor_port, netdata_hostname=self.public_ip()))
 
         # launch gateway
         logger.debug(desc_prefix + ": Pulling docker image")

@@ -2,9 +2,7 @@ from functools import total_ordering
 import socket
 from dataclasses import asdict, dataclass
 from enum import Enum, auto
-from typing import Dict, List, Optional
-
-from skylark.utils import logger
+from typing import Dict, Optional
 
 
 @dataclass

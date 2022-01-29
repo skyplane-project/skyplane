@@ -93,7 +93,6 @@ def bench_triangle(
         if k not in ["log", "completed_chunk_ids"]:
             logger.info(f"\t{k}: {v}")
 
-    # compute hash of src_region, dst_region, inter_region, num_gateways, num_outgoing_connections, chunk_size_mb, n_chunks
     arg_hash = hash((src_region, dst_region, inter_region, num_gateways, num_outgoing_connections, chunk_size_mb, n_chunks))
     with open(result_dir / f"{arg_hash}.pkl", "wb") as f:
         pickle.dump(stats, f)

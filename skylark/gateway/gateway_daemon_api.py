@@ -2,11 +2,9 @@ import logging
 import logging.handlers
 import os
 import threading
-from pathlib import Path
 
 from flask import Flask, jsonify, request
 from skylark.utils import logger
-from skylark import MB
 from skylark.chunk import ChunkRequest, ChunkState
 from skylark.gateway.chunk_store import ChunkStore
 from skylark.gateway.gateway_receiver import GatewayReceiver
