@@ -283,7 +283,7 @@ def deprovision(azure_subscription: Optional[str] = None, gcp_project: Optional[
 
 @app.command()
 def init(
-        azure_tenant_id: str = typer.Option(None, envvar="AZURE_TENANT_ID", prompt="`Azure tenant ID` can be got from `az ad sp create-for-rbac -n api://skylark --sdk-auth  > ~/azure.json`"),
+    azure_tenant_id: str = typer.Option(None, envvar="AZURE_TENANT_ID", prompt="`Azure tenant ID"),
     azure_client_id: str = typer.Option(None, envvar="AZURE_CLIENT_ID", prompt="Azure client ID"),
     azure_client_secret: str = typer.Option(None, envvar="AZURE_CLIENT_SECRET", prompt="Azure client secret"),
     azure_subscription_id: str = typer.Option(None, envvar="AZURE_SUBSCRIPTION_ID", prompt="Azure subscription ID"),
@@ -330,6 +330,7 @@ def init(
     out_config["aws_secret_access_key"] = aws_secret_key
 
     # Azure config
+    typer.secho("Azure config can be generated using: az ad sp create-for-rbac -n api://skylark --sdk-auth", fg=typer.colors.GREEN)
     if azure_tenant_id is not None or len(azure_tenant_id) > 0:
         logger.info(f"Setting Azure tenant ID to {azure_tenant_id}")
         out_config["azure_tenant_id"] = azure_tenant_id

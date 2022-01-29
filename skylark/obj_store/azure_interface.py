@@ -3,8 +3,8 @@ import typer
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Iterator, List
 
-import os, uuid, time
-from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient, __version__, BlobBlock
+import os
+from azure.storage.blob import BlobServiceClient
 from skylark.obj_store.azure_keys import azure_storage_credentials
 
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
