@@ -2,11 +2,11 @@ import os
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Iterator, List
 
-import typer
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
 
 # from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
+from skylark.utils import logger
 from skylark.obj_store.azure_keys import azure_storage_credentials
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
@@ -17,7 +17,7 @@ class AzureObject(ObjectStoreObject):
 
 
 class AzureInterface(ObjectStoreInterface):
-    def __init__(self, azure_region, container_name, account_url):
+    def __init__(self, azure_region, container_name):
         # TODO: the azure region should get corresponding os.getenv()
         self.azure_region = azure_region
         assert self.azure_region in azure_storage_credentials
@@ -61,8 +61,8 @@ class AzureInterface(ObjectStoreInterface):
             self.properties = self.container_client.get_container_properties()
         except ResourceExistsError:
             self.delete_container()
-            typer.secho("==>Container already exists. Deletion started. Try restarting after sufficient gap")
-            typer.secho("==> Alternatively use a diff bucket name with `--bucket-prefix`")
+            logger.warning("==>Container already exists. Deletion started. Try restarting after sufficient gap")
+            logger.warning("==> Alternatively use a diff bucket name with `--bucket-prefix`")
             exit(-1)
 
     def create_bucket(self):
@@ -74,7 +74,7 @@ class AzureInterface(ObjectStoreInterface):
         try:
             self.container_client.delete_container()
         except ResourceNotFoundError:
-            typer.secho("Container doesn't exists. Unable to delete")
+            logger.warning("Container doesn't exists. Unable to delete")
 
     def delete_bucket(self):
         return self.delete_container()

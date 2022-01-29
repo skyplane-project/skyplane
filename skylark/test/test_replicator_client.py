@@ -65,13 +65,11 @@ def parse_args():
 
 
 def main(args):
-
     src_bucket = f"{args.bucket_prefix}-skylark-{args.src_region.split(':')[1]}"
     dst_bucket = f"{args.bucket_prefix}-skylark-{args.dest_region.split(':')[1]}"
-
-    obj_store_interface_src = ObjectStoreInterface.create(args.src_region, args.src_bucket)
+    obj_store_interface_src = ObjectStoreInterface.create(args.src_region, src_bucket)
     obj_store_interface_src.create_bucket()
-    obj_store_interface_dst = ObjectStoreInterface.create(args.dest_region, args.dest_bucket)
+    obj_store_interface_dst = ObjectStoreInterface.create(args.dest_region, dst_bucket)
     obj_store_interface_dst.create_bucket()
 
     # TODO: fix this to get the key instead of S3Object
