@@ -20,9 +20,6 @@ from skylark.gateway.gateway_daemon_api import GatewayDaemonAPI
 from skylark.gateway.gateway_receiver import GatewayReceiver
 from skylark.gateway.gateway_sender import GatewaySender
 
-from skylark.obj_store.s3_interface import S3Interface
-from skylark.obj_store.gcs_interface import GCSInterface
-from skylark.obj_store.azure_interface import AzureInterface
 from skylark.obj_store.object_store_interface import ObjectStoreInterface
 from skylark.utils.utils import Timer
 
@@ -55,14 +52,7 @@ class GatewayDaemon:
         key = f"{region}:{bucket}"
         if key not in self.obj_store_interfaces:
             logger.warning(f"[gateway_daemon] ObjectStoreInferface not cached for {key}")
-            if region.startswith("aws"):
-                self.obj_store_interfaces[key] = S3Interface(region.split(":")[1], bucket, use_tls=False)
-            elif region.startswith("gcp"):
-                self.obj_store_interfaces[key] = GCSInterface(region.split(":")[1][:-2], bucket)
-            elif region.startswith("azure"):
-                self.obj_store_interfaces[key] = AzureInterface(region.split(":")[1], bucket)
-            else:
-                ValueError(f"Invalid region {region} - could not create interface")
+            self.obj_store_interfaces[key] = ObjectStoreInterface.create(region, bucket)
         return self.obj_store_interfaces[key]
 
     def cleanup(self):

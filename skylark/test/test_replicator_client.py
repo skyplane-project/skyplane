@@ -1,4 +1,5 @@
 import argparse
+from skylark.obj_store.object_store_interface import ObjectStoreInterface
 
 from skylark.utils import logger
 from skylark import GB, MB, print_header
@@ -70,25 +71,9 @@ def main(args):
     src_bucket = f"{args.bucket_prefix}-skylark-{args.src_region.split(':')[1]}"
     dst_bucket = f"{args.bucket_prefix}-skylark-{args.dest_region.split(':')[1]}"
 
-    if "aws" in args.src_region:
-        obj_store_interface_src = S3Interface(args.src_region.split(":")[1], src_bucket)
-    elif "gcp" in args.src_region:
-        obj_store_interface_src = GCSInterface(args.src_region.split(":")[1][:-2], src_bucket)
-    elif "azure" in args.src_region:
-        obj_store_interface_src = AzureInterface(args.src_region.split(":")[1], src_bucket)
-    else:
-        raise ValueError(f"No region in source region {args.src_region}")
-
-    if "aws" in args.dest_region:
-        obj_store_interface_dst = S3Interface(args.dest_region.split(":")[1], dst_bucket)
-    elif "gcp" in args.dest_region:
-        obj_store_interface_dst = GCSInterface(args.dest_region.split(":")[1][:-2], dst_bucket)
-    elif "azure" in args.dest_region:
-        obj_store_interface_dst = AzureInterface(args.dest_region.split(":")[1], dst_bucket)
-    else:
-        raise ValueError(f"No region in destination region {args.dest_region}")
-
+    obj_store_interface_src = ObjectStoreInterface.create(args.src_region, args.src_bucket)
     obj_store_interface_src.create_bucket()
+    obj_store_interface_dst = ObjectStoreInterface.create(args.dest_region, args.dest_bucket)
     obj_store_interface_dst.create_bucket()
 
     # TODO: fix this to get the key instead of S3Object

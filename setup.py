@@ -11,7 +11,7 @@ setup(
         "azure-mgmt-compute",
         "azure-mgmt-network",
         "azure-identity",
-        "azure-storage-blob",
+        "azure-storage-blob>=12.0.0",
         "awscrt",
         "boto3",
         "flask",
