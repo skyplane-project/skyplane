@@ -3,20 +3,15 @@ AWS convenience interface
 """
 
 from pathlib import Path
-import sys
 
 import cvxpy as cp
 
 import typer
-from loguru import logger
+from skylark.utils import logger
 from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP
 from skylark import skylark_root
 
 app = typer.Typer(name="skylark-solver")
-
-# config logger
-logger.remove()
-logger.add(sys.stderr, format="{function:>20}:{line:<3} | <level>{message}</level>", colorize=True, enqueue=True)
 
 
 def choose_solver():

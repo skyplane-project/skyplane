@@ -1,4 +1,3 @@
-import mimetypes
 import os
 import typer
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -9,7 +8,7 @@ from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient, _
 from skylark.obj_store.azure_keys import azure_storage_credentials
 
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
-from azure.core.exceptions import HttpResponseError, ResourceExistsError, ResourceNotFoundError
+from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
 
 
 class AzureObject(ObjectStoreObject):
@@ -97,8 +96,8 @@ class AzureInterface(ObjectStoreInterface):
         blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=obj_name)
         try:
             return blob_client.get_blob_properties()
-        except ResourceNotFoundError:
-            typer.secho("No blob found.")
+        except ResourceNotFoundError as e:
+            raise NoSuchObjectException(f"Object {obj_name} does not exist, or you do not have permission to access it") from e
 
     def get_obj_size(self, obj_name):
         return self.get_obj_metadata(obj_name).size
@@ -110,12 +109,6 @@ class AzureInterface(ObjectStoreInterface):
             return True
         except ResourceNotFoundError:
             return False
-
-    """
-    stream = blob_client.download_blob()
-    for chunk in stream.chunks():
-        # Reading data in chunks to avoid loading all into memory at once
-    """
 
     def download_object(self, src_object_name, dst_file_path) -> Future:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)

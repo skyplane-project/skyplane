@@ -1,7 +1,6 @@
-import sys
 from typing import Dict, Iterable, List, Optional, Tuple
 
-from loguru import logger
+from skylark.utils import logger
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
@@ -128,23 +127,3 @@ def provision(
     )
     do_parallel(init, all_instances, progress_bar=True, desc="Provisioning init")
     return aws_instances, azure_instances, gcp_instances  # pytype: disable=bad-return-type
-
-
-class RedirectStdStreams(object):
-    """https://stackoverflow.com/a/6796752"""
-
-    def __init__(self, stdout=None, stderr=None):
-        self._stdout = stdout or sys.stdout
-        self._stderr = stderr or sys.stderr
-
-    def __enter__(self):
-        self.old_stdout, self.old_stderr = sys.stdout, sys.stderr
-        self.old_stdout.flush()
-        self.old_stderr.flush()
-        sys.stdout, sys.stderr = self._stdout, self._stderr
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self._stdout.flush()
-        self._stderr.flush()
-        sys.stdout = self.old_stdout
-        sys.stderr = self.old_stderr

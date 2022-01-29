@@ -3,7 +3,7 @@ from datetime import datetime
 import json
 from typing import List, Tuple
 
-from loguru import logger
+from skylark.utils import logger
 from tqdm import tqdm
 
 from skylark import skylark_root

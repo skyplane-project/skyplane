@@ -4,7 +4,7 @@ import pickle
 from pathlib import Path
 
 import typer
-from loguru import logger
+from skylark.utils import logger
 from skylark import GB, MB, skylark_root
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
@@ -93,7 +93,6 @@ def bench_triangle(
         if k not in ["log", "completed_chunk_ids"]:
             logger.info(f"\t{k}: {v}")
 
-    # compute hash of src_region, dst_region, inter_region, num_gateways, num_outgoing_connections, chunk_size_mb, n_chunks
     arg_hash = hash((src_region, dst_region, inter_region, num_gateways, num_outgoing_connections, chunk_size_mb, n_chunks))
     with open(result_dir / f"{arg_hash}.pkl", "wb") as f:
         pickle.dump(stats, f)

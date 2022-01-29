@@ -16,6 +16,7 @@ from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server
+from skylark.compute.utils import make_sysctl_tcp_tuning_command
 from skylark.utils.utils import do_parallel
 from tqdm import tqdm
 
@@ -133,6 +134,9 @@ def throughput_grid(
     iperf3_runtime: int = typer.Option(5, help="Runtime for iperf3 in seconds"),
     iperf3_connections: int = typer.Option(64, help="Number of connections to test"),
 ):
+    def check_stderr(tup):
+        assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
+
     config = load_config()
     gcp_project = gcp_project or config.get("gcp_project_id")
     azure_subscription = azure_subscription or config.get("azure_subscription_id")
@@ -195,14 +199,8 @@ def throughput_grid(
 
     # setup instances
     def setup(server: Server):
-        sysctl_updates = {
-            "net.core.rmem_max": 2147483647,
-            "net.core.wmem_max": 2147483647,
-            "net.ipv4.tcp_rmem": "4096 87380 1073741824",
-            "net.ipv4.tcp_wmem": "4096 65536 1073741824",
-        }
-        server.run_command("sudo sysctl -w {}".format(" ".join(f"{k}={v}" for k, v in sysctl_updates.items())))
-        server.run_command("(sudo apt-get update && sudo apt-get install -y iperf3); pkill iperf3; iperf3 -s -D -J")
+        check_stderr(server.run_command("(sudo apt-get update && sudo apt-get install -y iperf3); pkill iperf3; iperf3 -s -D -J"))
+        check_stderr(server.run_command(make_sysctl_tcp_tuning_command(cc="cubic")))
 
     do_parallel(setup, instance_list, progress_bar=True, n=-1, desc="Setup")
 

@@ -3,23 +3,17 @@ AWS convenience interface
 """
 
 
-import sys
 from collections import defaultdict
 from typing import List
 
 import typer
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
-from loguru import logger
 from skylark.cli.cli_helper import load_config
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.utils.utils import do_parallel
 
 app = typer.Typer(name="skylark-azure")
-
-# config logger
-logger.remove()
-logger.add(sys.stderr, format="{function:>20}:{line:<3} | <level>{message}</level>", colorize=True, enqueue=True)
 
 
 @app.command()

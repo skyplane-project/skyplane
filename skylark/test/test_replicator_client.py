@@ -1,6 +1,6 @@
 import argparse
 
-from loguru import logger
+from skylark.utils import logger
 from skylark import GB, MB, print_header
 
 import tempfile
@@ -103,20 +103,15 @@ def main(args):
     obj_store_interface_src.create_bucket()
     obj_store_interface_dst.create_bucket()
 
+    # TODO: fix this to get the key instead of S3Object
     if not args.skip_upload:
-        # todo implement object store support
-        # pass
-        print("Not skipping upload...", src_bucket, dst_bucket)
+        logger.info(f"Not skipping upload, source bucket is {src_bucket}, destination bucket is {dst_bucket}")
 
         # TODO: fix this to get the key instead of S3Object
         matching_src_keys = list([obj.key for obj in obj_store_interface_src.list_objects(prefix=args.key_prefix)])
-        matching_dst_keys = list([obj.key for obj in obj_store_interface_dst.list_objects(prefix=args.key_prefix)])
-        if matching_src_keys:
+        if matching_src_keys and not args.skip_upload:
             logger.warning(f"Deleting {len(matching_src_keys)} objects from source bucket")
             obj_store_interface_src.delete_objects(matching_src_keys)
-        if matching_dst_keys:
-            logger.warning(f"Deleting {len(matching_dst_keys)} objects from destination bucket")
-            obj_store_interface_dst.delete_objects(matching_dst_keys)
 
         # create test objects w/ random data
         logger.info("Creating test objects")
@@ -139,6 +134,11 @@ def main(args):
 
         logger.info(f"Uploading {len(obj_keys)} to bucket {src_bucket}")
         concurrent.futures.wait(futures)
+
+        matching_dst_keys = list([obj.key for obj in obj_store_interface_dst.list_objects(prefix=args.key_prefix)])
+        if matching_dst_keys:
+            logger.warning(f"Deleting {len(matching_dst_keys)} objects from destination bucket")
+            obj_store_interface_dst.delete_objects(matching_dst_keys)
 
         # cleanup temp files once done
         for f in tmp_files:
@@ -191,13 +191,12 @@ def main(args):
         dest_region=args.dest_region,
         dest_bucket=dst_bucket,
         objs=obj_keys,
-        random_chunk_size_mb=args.chunk_size_mb,
     )
 
     total_bytes = args.n_chunks * args.chunk_size_mb * MB
     job = rc.run_replication_plan(job)
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
-    stats = rc.monitor_transfer(job, show_pbar=True)
+    stats = rc.monitor_transfer(job, show_pbar=True, cancel_pending=False)
     logger.info(f"Replication completed in {stats['total_runtime_s']:.2f}s ({stats['throughput_gbits']:.2f}Gbit/s)")
 
 
