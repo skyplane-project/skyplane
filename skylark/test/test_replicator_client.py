@@ -154,21 +154,13 @@ def main(args):
 
     # provision the gateway instances
     logger.info("Provisioning gateway instances")
-    rc.provision_gateways(
-        reuse_instances=True,
-        log_dir=args.log_dir,
-        authorize_ssh_pub_key=args.copy_ssh_key,
-    )
+    rc.provision_gateways(reuse_instances=True, log_dir=args.log_dir, authorize_ssh_pub_key=args.copy_ssh_key)
     for node, gw in rc.bound_nodes.items():
         logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
 
     # run replication, monitor progress
     job = ReplicationJob(
-        source_region=args.src_region,
-        source_bucket=src_bucket,
-        dest_region=args.dest_region,
-        dest_bucket=dst_bucket,
-        objs=obj_keys,
+        source_region=args.src_region, source_bucket=src_bucket, dest_region=args.dest_region, dest_bucket=dst_bucket, objs=obj_keys
     )
 
     total_bytes = args.n_chunks * args.chunk_size_mb * MB

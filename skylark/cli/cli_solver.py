@@ -46,13 +46,7 @@ def solve_throughput(
 
     # build problem and solve
     tput = ThroughputSolverILP(throughput_grid)
-    problem = ThroughputProblem(
-        src,
-        dst,
-        required_throughput_gbits,
-        gbyte_to_transfer,
-        max_instances,
-    )
+    problem = ThroughputProblem(src, dst, required_throughput_gbits, gbyte_to_transfer, max_instances)
     solution = tput.solve_min_cost(
         problem,
         instance_cost_multipler=instance_cost_multiplier,

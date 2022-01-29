@@ -27,13 +27,7 @@ from skylark.utils.utils import Timer
 
 
 class GatewayDaemon:
-    def __init__(
-        self,
-        region: str,
-        outgoing_ports: Dict[str, int],
-        chunk_dir: PathLike,
-        max_incoming_ports=64,
-    ):
+    def __init__(self, region: str, outgoing_ports: Dict[str, int], chunk_dir: PathLike, max_incoming_ports=64):
         self.region = region
         self.chunk_store = ChunkStore(chunk_dir)
         self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store, max_pending_chunks=max_incoming_ports)

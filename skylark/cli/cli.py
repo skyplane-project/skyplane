@@ -168,12 +168,7 @@ def replicate_random(
     total_bytes = n_chunks * chunk_size_mb * MB
     job = rc.run_replication_plan(job)
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
-    stats = rc.monitor_transfer(
-        job,
-        show_pbar=True,
-        log_interval_s=log_interval_s,
-        time_limit_seconds=time_limit_seconds,
-    )
+    stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
     stats["success"] = stats["monitor_status"] == "completed"
     stats["log"] = rc.get_chunk_status_log_df()
 
@@ -257,11 +252,7 @@ def replicate_json(
     job = rc.run_replication_plan(job)
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
     stats = rc.monitor_transfer(
-        job,
-        show_pbar=True,
-        log_interval_s=log_interval_s,
-        time_limit_seconds=time_limit_seconds,
-        cancel_pending=False,
+        job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds, cancel_pending=False
     )
     stats["success"] = stats["monitor_status"] == "completed"
     stats["log"] = rc.get_chunk_status_log_df()

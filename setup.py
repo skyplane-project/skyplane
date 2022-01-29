@@ -41,9 +41,5 @@ setup(
         ],
         "test": ["black", "ipython", "jupyter_console", "pytest", "pytype"],
     },
-    entry_points={
-        "console_scripts": [
-            "skylark=skylark.cli.cli:app",
-        ]
-    },
+    entry_points={"console_scripts": ["skylark=skylark.cli.cli:app"]},
 )
