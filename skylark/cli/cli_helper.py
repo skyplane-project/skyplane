@@ -139,12 +139,12 @@ def copy_objstore_local(object_interface: ObjectStoreObject, src_bucket: str, sr
 def copy_local_gcs(src: Path, dst_bucket: str, dst_key: str):
     gcs = GCSInterface(None, dst_bucket)
     return copy_local_objstore(gcs, src, dst_bucket, dst_key)
-    
+
 
 def copy_gcs_local(src_bucket: str, src_key: str, dst: Path):
     gcs = GCSInterface(None, src_bucket)
     return copy_objstore_local(gcs, src_bucket, src_key, dst)
-    
+
 
 def copy_local_azure(src: Path, dst_bucket: str, dst_key: str):
     azure = AzureInterface(None, src_bucket)
