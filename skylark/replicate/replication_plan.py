@@ -3,14 +3,16 @@ import dataclasses
 import json
 import shutil
 from typing import Dict, List, Optional, Set, Tuple
+from skylark.obj_store.object_store_interface import ObjectStoreInterface
 
-from loguru import logger
+from skylark.utils import logger
 import graphviz as gv
 from skylark import MB
 from skylark.chunk import ChunkRequest
 
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.obj_store.gcs_interface import GCSInterface
+from skylark.obj_store.azure_interface import AzureInterface
 from skylark.utils.utils import do_parallel
 
 
@@ -164,11 +166,6 @@ class ReplicationJob:
     def src_obj_sizes(self) -> Dict[str, int]:
         if self.random_chunk_size_mb is not None:
             return {obj: self.random_chunk_size_mb * MB for obj in self.objs}
-        elif self.source_region.split(":")[0] == "aws":
-            interface = S3Interface(self.source_region.split(":")[1], self.source_bucket)
-        elif self.source_region.split(":")[0] == "gcp":
-            interface = GCSInterface(self.source_region.split(":")[1][:-2], self.source_bucket)
-        else:
-            raise NotImplementedError(f"{self.source_region} is not supported")
+        interface = ObjectStoreInterface.create(self.source_region, self.source_bucket)
         get_size = lambda o: interface.get_obj_size(o)
         return dict(do_parallel(get_size, self.objs, n=16, progress_bar=True, desc="Query object sizes"))

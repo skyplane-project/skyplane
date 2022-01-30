@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import paramiko
-from loguru import logger
+from skylark.utils import logger
 from skylark import key_root
 from skylark.compute.azure.azure_server import AzureServer
 from skylark.compute.cloud_providers import CloudProvider
@@ -277,11 +277,7 @@ class AzureCloudProvider(CloudProvider):
     # This code, along with some code in azure_server.py, is based on
     # https://github.com/ucbrise/mage-scripts/blob/main/azure_cloud.py.
     def provision_instance(
-        self,
-        location: str,
-        vm_size: str,
-        name: Optional[str] = None,
-        uname: str = os.environ.get("USER"),
+        self, location: str, vm_size: str, name: Optional[str] = None, uname: str = os.environ.get("USER")
     ) -> AzureServer:
         assert ":" not in location, "invalid colon in Azure location"
         if name is None:
@@ -383,7 +379,7 @@ class AzureCloudProvider(CloudProvider):
                         "offer": "0001-com-ubuntu-server-focal",
                         "sku": "20_04-lts",
                         "version": "latest",
-                    },
+                    }
                 },
                 "os_profile": {
                     "computer_name": AzureServer.vm_name(name),

@@ -12,14 +12,7 @@ from skylark.replicate.solver import ThroughputSolverILP
 
 @ray.remote
 def benchmark(
-    src,
-    dst,
-    min_throughput,
-    gbyte_to_transfer=1,
-    instance_limit=1,
-    max_connections_per_path=64,
-    max_connections_per_node=64,
-    log_dir=None,
+    src, dst, min_throughput, gbyte_to_transfer=1, instance_limit=1, max_connections_per_path=64, max_connections_per_node=64, log_dir=None
 ):
     solver = ThroughputSolverILP(skylark_root / "profiles" / "throughput_mini.csv")
     solution = solver.solve_min_cost(
@@ -58,9 +51,9 @@ def benchmark(
 
 def main(args):
     ray.init()
-    solver = ThroughputSolverILP(skylark_root / "profiles" / "throughput_mini.csv")
+    solver = ThroughputSolverILP(skylark_root / "profiles" / "throughput.csv")
     regions = solver.get_regions()
-    # regions = np.random.choice(regions, size=6, replace=False)
+    regions = np.random.choice(regions, size=6, replace=False)
 
     configs = []
     for src in regions:

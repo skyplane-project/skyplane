@@ -2,7 +2,6 @@ import json
 import os
 import sys
 from datetime import datetime, timezone
-from functools import partial
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -16,56 +15,15 @@ from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server
+from skylark.compute.utils import make_sysctl_tcp_tuning_command
 from skylark.utils.utils import do_parallel
+from skylark.utils import logger
 from tqdm import tqdm
 
-aws_regions = AWSCloudProvider.region_list()
-azure_regions = AzureCloudProvider.region_list()
-gcp_regions = GCPCloudProvider.region_list()
-
-# aws_regions = [
-#     "eu-south-1",
-#     "us-west-2",
-#     "us-east-2",
-#     "ap-northeast-3",
-#     "eu-central-1",
-#     "eu-north-1",
-#     "us-west-1",
-#     "sa-east-1",
-#     "eu-west-2",
-#     "ap-southeast-3",
-# ]
-
-# azure_regions = [
-#     "northcentralus",
-#     "uksouth",
-#     "swedencentral",
-#     "canadacentral",
-#     "australiaeast",
-#     "westeurope",
-#     "centralindia",
-#     "francecentral",
-#     "norwayeast",
-#     "switzerlandnorth",
-# ]
-
-# gcp_regions = [
-#     "australia-southeast2-a",
-#     "europe-west6-a",
-#     "australia-southeast1-a",
-#     "southamerica-west1-a",
-#     "southamerica-east1-a",
-#     "asia-southeast1-a",
-#     "europe-west4-a",
-#     "asia-southeast2-a",
-#     "northamerica-northeast1-a",
-#     "northamerica-northeast2-a",
-# ]
-
-
-log_info = partial(typer.secho, fg="blue")
-log_success = partial(typer.secho, fg="green")
-log_error = partial(typer.secho, fg="red")
+all_aws_regions = AWSCloudProvider.region_list()
+all_azure_regions = AzureCloudProvider.region_list()
+all_gcp_regions = GCPCloudProvider.region_list()
+all_gcp_regions_standard = GCPCloudProvider.region_list_standard()
 
 
 def start_iperf3_client(arg_pair: Tuple[Server, Server], iperf3_log_dir: Path, iperf3_runtime: int, iperf3_connections: int):
@@ -83,25 +41,22 @@ def start_iperf3_client(arg_pair: Tuple[Server, Server], iperf3_log_dir: Path, i
     if stderr:
         with (iperf3_log_dir / f"{tag}.stderr").open("w") as f:
             f.write(stderr)
-        log_error(f"{tag} stderr: {stderr}")
+        logger.error(f"{tag} stderr: {stderr}")
 
-    out_rec = dict(
-        tag=tag,
-        stdout_path=str(iperf3_log_dir / f"{tag}.stdout"),
-        stderr_path=str(iperf3_log_dir / f"{tag}.stderr"),
-    )
+    out_rec = dict(tag=tag, stdout_path=str(iperf3_log_dir / f"{tag}.stdout"), stderr_path=str(iperf3_log_dir / f"{tag}.stderr"))
     try:
         result = json.loads(stdout)
-    except json.JSONDecodeError as e:
-        log_error(f"({instance_src.region_tag} -> {instance_dst.region_tag}) iperf3 client failed: {stdout} {stderr}")
+        out_rec["throughput_sent"] = result["end"]["sum_sent"]["bits_per_second"]
+        out_rec["throughput_recieved"] = result["end"]["sum_received"]["bits_per_second"]
+        out_rec["cpu_utilization"] = result["end"]["cpu_utilization_percent"]["host_total"]
+        out_rec["success"] = True
+    except Exception as e:
+        logger.exception(e)
+        logger.error(f"({instance_src.region_tag} -> {instance_dst.region_tag}) iperf3 client failed: {stdout} {stderr}")
         out_rec["success"] = False
         out_rec["exception"] = str(e)
+        out_rec["raw_output"] = str(stdout)
         return out_rec
-
-    out_rec["throughput_sent"] = result["end"]["sum_sent"]["bits_per_second"]
-    out_rec["throughput_recieved"] = result["end"]["sum_received"]["bits_per_second"]
-    out_rec["cpu_utilization"] = result["end"]["cpu_utilization_percent"]["host_total"]
-    out_rec["success"] = True
 
     instance_src.close_server()
     instance_dst.close_server()
@@ -114,29 +69,32 @@ def throughput_grid(
     ),
     copy_resume_file: bool = typer.Option(True, help="Copy the resume file to the output CSV. Default is True."),
     # regions
-    aws_region_list: List[str] = typer.Option(aws_regions, "-aws"),
-    azure_region_list: List[str] = typer.Option(azure_regions, "-azure"),
-    gcp_region_list: List[str] = typer.Option(gcp_regions, "-gcp"),
+    aws_region_list: List[str] = typer.Option(all_aws_regions, "-aws"),
+    azure_region_list: List[str] = typer.Option(all_azure_regions, "-azure"),
+    gcp_region_list: List[str] = typer.Option(all_gcp_regions, "-gcp"),
+    gcp_standard_region_list: List[str] = typer.Option(all_gcp_regions_standard, "-gcp-standard"),
     enable_aws: bool = typer.Option(True),
     enable_azure: bool = typer.Option(True),
     enable_gcp: bool = typer.Option(True),
+    enable_gcp_standard: bool = typer.Option(True),
     # instances to provision
     aws_instance_class: str = typer.Option("m5.8xlarge", help="AWS instance class to use"),
     azure_instance_class: str = typer.Option("Standard_D32_v5", help="Azure instance class to use"),
     gcp_instance_class: str = typer.Option("n2-standard-32", help="GCP instance class to use"),
     # cloud options
-    gcp_test_standard_network: bool = typer.Option(False, help="Test GCP standard network in addition to premium (default to false)"),
-    azure_test_standard_network: bool = typer.Option(False, help="Test Azure standard network in addition to premium (default to false)"),
     gcp_project: Optional[str] = None,
     azure_subscription: Optional[str] = None,
     # iperf3 options
     iperf3_runtime: int = typer.Option(5, help="Runtime for iperf3 in seconds"),
     iperf3_connections: int = typer.Option(64, help="Number of connections to test"),
 ):
+    def check_stderr(tup):
+        assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
+
     config = load_config()
     gcp_project = gcp_project or config.get("gcp_project_id")
     azure_subscription = azure_subscription or config.get("azure_subscription_id")
-    log_info(f"Loaded from config file: gcp_project={gcp_project}, azure_subscription={azure_subscription}")
+    logger.debug(f"Loaded from config file: gcp_project={gcp_project}, azure_subscription={azure_subscription}")
 
     if resume:
         index_key = [
@@ -159,19 +117,37 @@ def throughput_grid(
     azure_region_list = azure_region_list if enable_azure else []
     gcp_region_list = gcp_region_list if enable_gcp else []
     if not enable_aws and not enable_azure and not enable_gcp:
-        log_error("At least one of -aws, -azure, -gcp must be enabled.")
+        logger.error("At least one of -aws, -azure, -gcp must be enabled.")
         typer.Abort()
-    if not all(r in aws_regions for r in aws_region_list):
-        log_error(f"Invalid AWS region list: {aws_region_list}")
+
+    # validate AWS regions
+    if not enable_aws:
+        aws_region_list = []
+    elif not all(r in all_aws_regions for r in aws_region_list):
+        logger.error(f"Invalid AWS region list: {aws_region_list}")
         typer.Abort()
-    if not all(r in azure_regions for r in azure_region_list):
-        log_error(f"Invalid Azure region list: {azure_region_list}")
+
+    # validate Azure regions
+    if not enable_azure:
+        azure_region_list = []
+    elif not all(r in all_azure_regions for r in azure_region_list):
+        logger.error(f"Invalid Azure region list: {azure_region_list}")
         typer.Abort()
-    if not all(r in gcp_regions for r in gcp_region_list):
-        log_error(f"Invalid GCP region list: {gcp_region_list}")
+
+    # validate GCP regions
+    assert not enable_gcp_standard or enable_gcp, f"GCP is disabled but GCP standard is enabled"
+    if not enable_gcp:
+        gcp_region_list = []
+    elif not all(r in all_gcp_regions for r in gcp_region_list):
+        logger.error(f"Invalid GCP region list: {gcp_region_list}")
         typer.Abort()
-    assert not gcp_test_standard_network, "GCP standard network is not supported yet"
-    assert not azure_test_standard_network, "Azure standard network is not supported yet"
+
+    # validate GCP standard instances
+    if not enable_gcp_standard:
+        gcp_standard_region_list = []
+    if not all(r in all_gcp_regions_standard for r in gcp_standard_region_list):
+        logger.error(f"Invalid GCP standard region list: {gcp_standard_region_list}")
+        typer.Abort()
 
     # provision servers
     aws = AWSCloudProvider()
@@ -187,22 +163,36 @@ def throughput_grid(
         aws_instance_class=aws_instance_class,
         azure_instance_class=azure_instance_class,
         gcp_instance_class=gcp_instance_class,
-        gcp_use_premium_network=not gcp_test_standard_network,
+        gcp_use_premium_network=True,
     )
     instance_list: List[Server] = [i for ilist in aws_instances.values() for i in ilist]
     instance_list.extend([i for ilist in azure_instances.values() for i in ilist])
     instance_list.extend([i for ilist in gcp_instances.values() for i in ilist])
 
+    # provision standard tier servers
+    _, _, gcp_standard_instances = provision(
+        aws=aws,
+        azure=azure,
+        gcp=gcp,
+        aws_regions_to_provision=[],
+        azure_regions_to_provision=[],
+        gcp_regions_to_provision=gcp_standard_region_list,
+        aws_instance_class=aws_instance_class,
+        azure_instance_class=azure_instance_class,
+        gcp_instance_class=gcp_instance_class,
+        gcp_use_premium_network=False,
+    )
+    instance_list.extend([i for ilist in gcp_standard_instances.values() for i in ilist])
+
     # setup instances
     def setup(server: Server):
-        sysctl_updates = {
-            "net.core.rmem_max": 2147483647,
-            "net.core.wmem_max": 2147483647,
-            "net.ipv4.tcp_rmem": "4096 87380 1073741824",
-            "net.ipv4.tcp_wmem": "4096 65536 1073741824",
-        }
-        server.run_command("sudo sysctl -w {}".format(" ".join(f"{k}={v}" for k, v in sysctl_updates.items())))
-        server.run_command("(sudo apt-get update && sudo apt-get install -y iperf3); pkill iperf3; iperf3 -s -D -J")
+        check_stderr(server.run_command("echo 'debconf debconf/frontend select Noninteractive' | sudo debconf-set-selections"))
+        check_stderr(
+            server.run_command(
+                "(sudo apt-get update && sudo apt-get install -y dialog apt-utils && sudo apt-get install -y iperf3); pkill iperf3; iperf3 -s -D -J"
+            )
+        )
+        check_stderr(server.run_command(make_sysctl_tcp_tuning_command(cc="cubic")))
 
     do_parallel(setup, instance_list, progress_bar=True, n=-1, desc="Setup")
 
@@ -210,7 +200,6 @@ def throughput_grid(
     instance_pairs_all = [(i1, i2) for i1 in instance_list for i2 in instance_list if i1 != i2]
     instance_pairs = []
     for i1, i2 in instance_pairs_all:
-        # ["iperf3_connections", "iperf3_runtime", "src_instance_class", "dst_instance_class", "src_tier", "dst_tier", "src_region",  "dst_region"]
         exp_key = (
             iperf3_connections,
             iperf3_runtime,
@@ -222,7 +211,7 @@ def throughput_grid(
             i2.region_tag,
         )
         if exp_key in resume_keys:
-            log_success(f"Key already in resume set: {exp_key}")
+            logger.info(f"Key already in resume set: {exp_key}")
         else:
             instance_pairs.append((i1, i2))
     groups = split_list(instance_pairs)
@@ -231,31 +220,35 @@ def throughput_grid(
     experiment_tag_words = os.popen("bash scripts/utils/get_random_word_hash.sh").read().strip()
     timestamp = datetime.now(timezone.utc).strftime("%Y.%m.%d_%H.%M")
     experiment_tag = f"{timestamp}_{experiment_tag_words}_{iperf3_runtime}s_{iperf3_connections}c"
+    data_dir = skylark_root / "data"
+    log_dir = data_dir / "logs" / "throughput_grid" / f"{experiment_tag}"
+    raw_iperf3_log_dir = log_dir / "raw_iperf3_logs"
+
+    # ask for confirmation
     typer.secho(f"\nExperiment configuration: (total pairs = {len(instance_pairs)})", fg="red", bold=True)
     for group_idx, group in enumerate(groups):
         typer.secho(f"\tGroup {group_idx}: ({len(group)} items)", fg="green", bold=True)
         for instance_pair in group:
-            typer.secho(f"\t{instance_pair[0].region_tag} -> {instance_pair[1].region_tag}")
+            typer.secho(
+                f"\t{instance_pair[0].region_tag}:{instance_pair[0].network_tier()} -> {instance_pair[1].region_tag}:{instance_pair[1].network_tier()}"
+            )
     gbyte_sent = len(instance_pairs) * 5.0 / 8 * iperf3_runtime
     typer.secho(f"\niperf_runtime={iperf3_runtime}, iperf3_connections={iperf3_connections}", fg="blue")
     typer.secho(f"Approximate runtime: {len(groups) * (10 + iperf3_runtime)}s (assuming 10s startup time)", fg="blue")
     typer.secho(f"Approximate data to send: {gbyte_sent:.2f}GB (assuming 5Gbps)", fg="blue")
     typer.secho(f"Approximate cost: ${gbyte_sent * 0.1:.2f} (assuming $0.10/GB)", fg="red")
+    logger.debug(f"Experiment tag: {experiment_tag}")
+    logger.debug(f"Log directory: {log_dir}")
     sys.stdout.flush()
     sys.stderr.flush()
     if not questionary.confirm(f"Launch experiment {experiment_tag}?", default=False).ask():
-        log_error("Exiting")
+        logger.error("Exiting")
         sys.exit(1)
 
     # make experiment directory
-    data_dir = skylark_root / "data"
-    log_dir = data_dir / "logs" / "throughput_grid" / f"{experiment_tag}"
-    log_dir.mkdir(exist_ok=True, parents=True)
-    raw_iperf3_log_dir = log_dir / "raw_iperf3_logs"
+    logger.debug(f"Raw iperf3 log directory: {raw_iperf3_log_dir}")
     raw_iperf3_log_dir.mkdir(exist_ok=True, parents=True)
-    log_info(f"Experiment tag: {experiment_tag}")
-    log_info(f"Log directory: {log_dir}")
-    log_info(f"Raw iperf3 log directory: {raw_iperf3_log_dir}")
+    log_dir.mkdir(exist_ok=True, parents=True)
 
     # define iperf3 client function
     def client_fn(instance_pair):
@@ -279,7 +272,7 @@ def throughput_grid(
         tqdm.write(f"{result_rec['tag']}: {result_rec.get('throughput_sent', 0.) / GB:.2f}Gbps")
         return result_rec
 
-    # run experiments
+    # run experiment
     new_througput_results = []
     output_file = log_dir / "throughput.csv"
     with tqdm(total=len(instance_pairs), desc="Total throughput evaluation") as pbar:
@@ -292,9 +285,9 @@ def throughput_grid(
             tqdm.write(f"Saving intermediate results to {output_file}")
             df = pd.DataFrame(new_througput_results)
             if resume and copy_resume_file:
-                log_info(f"Copying old CSV entries from {resume}")
+                logger.debug(f"Copying old CSV entries from {resume}")
                 df = df.append(pd.read_csv(resume))
             df.to_csv(output_file, index=False)
 
-    log_success(f"Experiment complete: {experiment_tag}")
-    log_success(f"Results saved to {output_file}")
+    logger.info(f"Experiment complete: {experiment_tag}")
+    logger.info(f"Results saved to {output_file}")

@@ -16,7 +16,6 @@ Current support:
 import atexit
 import json
 import os
-import sys
 from pathlib import Path
 from typing import Optional
 
@@ -25,11 +24,13 @@ import skylark.cli.cli_azure
 import skylark.cli.cli_solver
 import skylark.cli.experiments
 import typer
-from loguru import logger
+from skylark.utils import logger
 from skylark import GB, MB, config_file, print_header
 from skylark.cli.cli_helper import (
     check_ulimit,
+    copy_azure_local,
     copy_gcs_local,
+    copy_local_azure,
     copy_local_gcs,
     copy_local_local,
     copy_local_s3,
@@ -50,10 +51,6 @@ app.add_typer(skylark.cli.experiments.app, name="experiments")
 app.add_typer(skylark.cli.cli_aws.app, name="aws")
 app.add_typer(skylark.cli.cli_azure.app, name="azure")
 app.add_typer(skylark.cli.cli_solver.app, name="solver")
-
-# config logger
-logger.remove()
-logger.add(sys.stderr, format="{function:>20}:{line:<3} | <level>{message}</level>", enqueue=True)
 
 
 @app.command()
@@ -99,10 +96,12 @@ def replicate_random(
     src_region: str,
     dst_region: str,
     inter_region: Optional[str] = typer.Argument(None),
-    num_gateways: int = 1,
-    num_outgoing_connections: int = 16,
-    total_transfer_size_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB (across n_chunks chunks)"),
-    n_chunks: int = 512,
+    num_gateways: int = typer.Option(1, "--num-gateways", "-n", help="Number of gateways"),
+    num_outgoing_connections: int = typer.Option(
+        64, "--num-outgoing-connections", "-c", help="Number of outgoing connections between each gateway"
+    ),
+    total_transfer_size_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB."),
+    chunk_size_mb: int = typer.Option(8, "--chunk-size-mb", help="Chunk size in MB."),
     reuse_gateways: bool = True,
     azure_subscription: Optional[str] = None,
     gcp_project: Optional[str] = None,
@@ -154,9 +153,9 @@ def replicate_random(
     for node, gw in rc.bound_nodes.items():
         logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
 
-    if total_transfer_size_mb % n_chunks != 0:
-        logger.warning(f"total_transfer_size_mb ({total_transfer_size_mb}) is not a multiple of n_chunks ({n_chunks})")
-    chunk_size_mb = total_transfer_size_mb // n_chunks
+    if total_transfer_size_mb % chunk_size_mb != 0:
+        logger.warning(f"total_transfer_size_mb ({total_transfer_size_mb}) is not a multiple of chunk_size_mb ({chunk_size_mb})")
+    n_chunks = int(total_transfer_size_mb / chunk_size_mb)
     job = ReplicationJob(
         source_region=src_region,
         source_bucket=None,
@@ -169,12 +168,7 @@ def replicate_random(
     total_bytes = n_chunks * chunk_size_mb * MB
     job = rc.run_replication_plan(job)
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
-    stats = rc.monitor_transfer(
-        job,
-        show_pbar=True,
-        log_interval_s=log_interval_s,
-        time_limit_seconds=time_limit_seconds,
-    )
+    stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
     stats["success"] = stats["monitor_status"] == "completed"
     stats["log"] = rc.get_chunk_status_log_df()
 
@@ -258,11 +252,7 @@ def replicate_json(
     job = rc.run_replication_plan(job)
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
     stats = rc.monitor_transfer(
-        job,
-        show_pbar=True,
-        log_interval_s=log_interval_s,
-        time_limit_seconds=time_limit_seconds,
-        cancel_pending=False,
+        job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds, cancel_pending=False
     )
     stats["success"] = stats["monitor_status"] == "completed"
     stats["log"] = rc.get_chunk_status_log_df()
@@ -284,7 +274,7 @@ def deprovision(azure_subscription: Optional[str] = None, gcp_project: Optional[
 
 @app.command()
 def init(
-    azure_tenant_id: str = typer.Option(None, envvar="AZURE_TENANT_ID", prompt="Azure tenant ID"),
+    azure_tenant_id: str = typer.Option(None, envvar="AZURE_TENANT_ID", prompt="`Azure tenant ID"),
     azure_client_id: str = typer.Option(None, envvar="AZURE_CLIENT_ID", prompt="Azure client ID"),
     azure_client_secret: str = typer.Option(None, envvar="AZURE_CLIENT_SECRET", prompt="Azure client secret"),
     azure_subscription_id: str = typer.Option(None, envvar="AZURE_SUBSCRIPTION_ID", prompt="Azure subscription ID"),
@@ -331,6 +321,7 @@ def init(
     out_config["aws_secret_access_key"] = aws_secret_key
 
     # Azure config
+    typer.secho("Azure config can be generated using: az ad sp create-for-rbac -n api://skylark --sdk-auth", fg=typer.colors.GREEN)
     if azure_tenant_id is not None or len(azure_tenant_id) > 0:
         logger.info(f"Setting Azure tenant ID to {azure_tenant_id}")
         out_config["azure_tenant_id"] = azure_tenant_id

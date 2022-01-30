@@ -5,7 +5,7 @@ from typing import List, Optional
 
 import botocore
 import pandas as pd
-from loguru import logger
+from skylark.utils import logger
 
 from oslo_concurrency import lockutils
 from skylark import skylark_root
@@ -260,11 +260,7 @@ class AWSCloudProvider(CloudProvider):
                     BlockDeviceMappings=[
                         {
                             "DeviceName": "/dev/sda1",
-                            "Ebs": {
-                                "DeleteOnTermination": True,
-                                "VolumeSize": ebs_volume_size,
-                                "VolumeType": "gp2",
-                            },
+                            "Ebs": {"DeleteOnTermination": True, "VolumeSize": ebs_volume_size, "VolumeType": "gp2"},
                         }
                     ],
                     NetworkInterfaces=[

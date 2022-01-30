@@ -11,14 +11,16 @@ setup(
         "azure-mgmt-compute",
         "azure-mgmt-network",
         "azure-identity",
+        "azure-storage-blob>=12.0.0",
         "awscrt",
         "boto3",
         "flask",
         "google-api-python-client",
         "google-cloud-compute",
         "google-cloud-storage",
-        "loguru",
+        "numpy",
         "setproctitle",
+        "termcolor",
         "tqdm",
         "werkzeug",
     ],
@@ -30,7 +32,6 @@ setup(
             "cvxpy",
             "graphviz",
             "matplotlib",
-            "numpy",
             "oslo.concurrency",
             "paramiko",
             "pandas",
@@ -40,9 +41,5 @@ setup(
         ],
         "test": ["black", "ipython", "jupyter_console", "pytest", "pytype"],
     },
-    entry_points={
-        "console_scripts": [
-            "skylark=skylark.cli.cli:app",
-        ]
-    },
+    entry_points={"console_scripts": ["skylark=skylark.cli.cli:app"]},
 )

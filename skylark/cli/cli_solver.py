@@ -3,20 +3,15 @@ AWS convenience interface
 """
 
 from pathlib import Path
-import sys
 
 import cvxpy as cp
 
 import typer
-from loguru import logger
+from skylark.utils import logger
 from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP
 from skylark import skylark_root
 
 app = typer.Typer(name="skylark-solver")
-
-# config logger
-logger.remove()
-logger.add(sys.stderr, format="{function:>20}:{line:<3} | <level>{message}</level>", colorize=True, enqueue=True)
 
 
 def choose_solver():
@@ -51,13 +46,7 @@ def solve_throughput(
 
     # build problem and solve
     tput = ThroughputSolverILP(throughput_grid)
-    problem = ThroughputProblem(
-        src,
-        dst,
-        required_throughput_gbits,
-        gbyte_to_transfer,
-        max_instances,
-    )
+    problem = ThroughputProblem(src, dst, required_throughput_gbits, gbyte_to_transfer, max_instances)
     solution = tput.solve_min_cost(
         problem,
         instance_cost_multipler=instance_cost_multiplier,

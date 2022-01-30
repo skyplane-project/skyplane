@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from loguru import logger
+from skylark.utils import logger
 
 from skylark.chunk import Chunk, ChunkRequest, ChunkRequestHop, ChunkState
 from skylark.gateway.gateway_daemon import GatewayDaemon
@@ -23,12 +23,7 @@ if __name__ == "__main__":
 
     # make chunk request
     file_size_bytes = src_obj_interface.get_obj_size(obj)
-    chunk = Chunk(
-        key=obj,
-        chunk_id=0,
-        file_offset_bytes=0,
-        chunk_length_bytes=file_size_bytes,
-    )
+    chunk = Chunk(key=obj, chunk_id=0, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
     src_path = ChunkRequestHop(
         hop_cloud_region="aws:us-east-1",
         hop_ip_address="localhost",

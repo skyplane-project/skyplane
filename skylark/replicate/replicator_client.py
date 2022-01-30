@@ -6,7 +6,7 @@ import time
 from typing import Dict, List, Optional, Tuple
 
 import requests
-from loguru import logger
+from skylark.utils import logger
 from tqdm import tqdm
 import pandas as pd
 from skylark import GB, KB, MB
@@ -62,10 +62,7 @@ class ReplicatorClient:
             do_parallel(lambda fn: fn(), jobs)
 
     def provision_gateways(
-        self,
-        reuse_instances=False,
-        log_dir: Optional[PathLike] = None,
-        authorize_ssh_pub_key: Optional[PathLike] = None,
+        self, reuse_instances=False, log_dir: Optional[PathLike] = None, authorize_ssh_pub_key: Optional[PathLike] = None
     ):
         regions_to_provision = [node.region for node in self.topology.nodes]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
@@ -215,14 +212,7 @@ class ReplicatorClient:
                 file_size_bytes = obj_file_size_bytes[obj]
             else:
                 file_size_bytes = job.random_chunk_size_mb * MB
-            chunks.append(
-                Chunk(
-                    key=obj,
-                    chunk_id=idx,
-                    file_offset_bytes=0,  # TODO: what is this?
-                    chunk_length_bytes=file_size_bytes,
-                )
-            )
+            chunks.append(Chunk(key=obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes))  # TODO: what is this?
 
         # partition chunks into roughly equal-sized batches (by bytes)
         src_instances = [self.bound_nodes[n] for n in self.topology.source_instances()]
@@ -311,6 +301,9 @@ class ReplicatorClient:
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in job.chunk_requests])
         last_log = None
 
+        sinks = self.topology.sink_instances()
+        sink_regions = set(s.region for s in sinks)
+
         if cancel_pending:
             # register atexit handler to cancel pending chunk requests (force shutdown gateways)
             def shutdown_handler():
@@ -332,14 +325,14 @@ class ReplicatorClient:
             ) as pbar:
                 while True:
                     log_df = self.get_chunk_status_log_df()
-                    # count completed bytes
-                    last_log_df = (
-                        log_df.groupby(["chunk_id"])
-                        .apply(lambda df: df.sort_values(["region", "instance", "time"], ascending=False).head(1))
-                        .reset_index(drop=True)
+                    is_complete_rec = (
+                        lambda row: row["state"] == ChunkState.upload_complete
+                        and row["instance"] in [s.instance for s in sinks]
+                        and row["region"] in [s.region for s in sinks]
                     )
-                    is_complete_fn = lambda row: row["state"] >= ChunkState.upload_complete and row["region"] == job.dest_region
-                    completed_chunk_ids = last_log_df[last_log_df.apply(is_complete_fn, axis=1)].chunk_id.values
+                    sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
+                    completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region"].unique()) == set(sink_regions))
+                    completed_chunk_ids = completed_status[completed_status].index
                     completed_bytes = sum(
                         [cr.chunk.chunk_length_bytes for cr in job.chunk_requests if cr.chunk.chunk_id in completed_chunk_ids]
                     )

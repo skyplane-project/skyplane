@@ -8,11 +8,11 @@ import graphviz as gv
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from loguru import logger
+from skylark.utils import logger
 
 from skylark import GB
 from skylark.compute.cloud_providers import CloudProvider
-from skylark.replicate.replication_plan import ReplicationTopology, ReplicationTopologyGateway
+from skylark.replicate.replication_plan import ReplicationTopology
 
 GBIT_PER_GBYTE = 8
 
@@ -124,12 +124,7 @@ class ThroughputSolver:
 
 class ThroughputSolverILP(ThroughputSolver):
     def solve_min_cost(
-        self,
-        p: ThroughputProblem,
-        instance_cost_multipler: float = 1.0,
-        solver=cp.GLPK,
-        solver_verbose=False,
-        save_lp_path=None,
+        self, p: ThroughputProblem, instance_cost_multipler: float = 1.0, solver=cp.GLPK, solver_verbose=False, save_lp_path=None
     ):
         logger.debug(f"Solving for problem {p}")
 
@@ -318,7 +313,6 @@ class ThroughputSolverILP(ThroughputSolver):
                             src_instance_connections += partial_conn
             n_instances[i] = src_instance_idx + 1
 
-        logger.warning("")
         # assign destination instances (currently None) to Edges
         dst_edges = []
         dsts_instance_idx = {i: 0 for i in regions}

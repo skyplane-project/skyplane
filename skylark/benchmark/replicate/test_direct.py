@@ -3,7 +3,7 @@ import json
 import time
 from datetime import datetime
 
-from loguru import logger
+from skylark.utils import logger
 
 from skylark import skylark_root
 from skylark.benchmark.utils import provision

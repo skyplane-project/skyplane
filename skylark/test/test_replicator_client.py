@@ -1,6 +1,7 @@
 import argparse
+from skylark.obj_store.object_store_interface import ObjectStoreInterface
 
-from loguru import logger
+from skylark.utils import logger
 from skylark import GB, MB, print_header
 
 import tempfile
@@ -17,6 +18,8 @@ from shutil import copyfile
 
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
+
+from skylark.cli.cli_helper import load_config
 
 
 def parse_args():
@@ -39,8 +42,8 @@ def parse_args():
     parser.add_argument("--bucket-prefix", default="sarah", help="Prefix for bucket to avoid naming collision")
 
     # gateway provisioning
-    parser.add_argument("--gcp-project", default="skylark-333700", help="GCP project ID")
-    parser.add_argument("--azure-subscription", default="", help="Azure subscription")
+    parser.add_argument("--gcp-project", default=None, help="GCP project ID")
+    parser.add_argument("--azure-subscription", default=None, help="Azure subscription")
     parser.add_argument("--gateway-docker-image", default="ghcr.io/parasj/skylark:main", help="Docker image for gateway instances")
     parser.add_argument("--aws-instance-class", default="m5.4xlarge", help="AWS instance class")
     parser.add_argument("--azure-instance-class", default="Standard_D2_v5", help="Azure instance class")
@@ -62,45 +65,22 @@ def parse_args():
 
 
 def main(args):
-
     src_bucket = f"{args.bucket_prefix}-skylark-{args.src_region.split(':')[1]}"
     dst_bucket = f"{args.bucket_prefix}-skylark-{args.dest_region.split(':')[1]}"
-
-    if "aws" in args.src_region:
-        obj_store_interface_src = S3Interface(args.src_region.split(":")[1], src_bucket)
-    elif "gcp" in args.src_region:
-        obj_store_interface_src = GCSInterface(args.src_region.split(":")[1][:-2], src_bucket)
-    elif "azure" in args.src_region:
-        obj_store_interface_src = AzureInterface(args.src_region.split(":")[1][:-2], src_bucket)
-    else:
-        raise ValueError(f"No region in source region {args.src_region}")
-
-    if "aws" in args.dest_region:
-        obj_store_interface_dst = S3Interface(args.dest_region.split(":")[1], dst_bucket)
-    elif "gcp" in args.dest_region:
-        obj_store_interface_dst = GCSInterface(args.dest_region.split(":")[1][:-2], dst_bucket)
-    elif "azure" in args.dest_region:
-        obj_store_interface_dst = AzureInterface(args.dest_region.split(":")[1][:-2], dst_bucket)
-    else:
-        raise ValueError(f"No region in destination region {args.dest_region}")
-
+    obj_store_interface_src = ObjectStoreInterface.create(args.src_region, src_bucket)
     obj_store_interface_src.create_bucket()
+    obj_store_interface_dst = ObjectStoreInterface.create(args.dest_region, dst_bucket)
     obj_store_interface_dst.create_bucket()
 
+    # TODO: fix this to get the key instead of S3Object
     if not args.skip_upload:
-        # todo implement object store support
-        # pass
-        print("Not skipping upload...", src_bucket, dst_bucket)
+        logger.info(f"Not skipping upload, source bucket is {src_bucket}, destination bucket is {dst_bucket}")
 
         # TODO: fix this to get the key instead of S3Object
         matching_src_keys = list([obj.key for obj in obj_store_interface_src.list_objects(prefix=args.key_prefix)])
-        matching_dst_keys = list([obj.key for obj in obj_store_interface_dst.list_objects(prefix=args.key_prefix)])
-        if matching_src_keys:
+        if matching_src_keys and not args.skip_upload:
             logger.warning(f"Deleting {len(matching_src_keys)} objects from source bucket")
             obj_store_interface_src.delete_objects(matching_src_keys)
-        if matching_dst_keys:
-            logger.warning(f"Deleting {len(matching_dst_keys)} objects from destination bucket")
-            obj_store_interface_dst.delete_objects(matching_dst_keys)
 
         # create test objects w/ random data
         logger.info("Creating test objects")
@@ -124,6 +104,11 @@ def main(args):
         logger.info(f"Uploading {len(obj_keys)} to bucket {src_bucket}")
         concurrent.futures.wait(futures)
 
+        matching_dst_keys = list([obj.key for obj in obj_store_interface_dst.list_objects(prefix=args.key_prefix)])
+        if matching_dst_keys:
+            logger.warning(f"Deleting {len(matching_dst_keys)} objects from destination bucket")
+            obj_store_interface_dst.delete_objects(matching_dst_keys)
+
         # cleanup temp files once done
         for f in tmp_files:
             os.remove(f)
@@ -141,6 +126,12 @@ def main(args):
         for i in range(args.num_gateways):
             topo.add_edge(args.src_region, i, args.dest_region, i, args.num_outgoing_connections)
     logger.info("Creating replication client")
+
+    # Getting configs
+    config = load_config()
+    gcp_project = args.gcp_project or config.get("gcp_project_id")
+    azure_subscription = args.azure_subscription or config.get("azure_subscription_id")
+    logger.debug(f"Loaded gcp_project: {gcp_project}, azure_subscription: {azure_subscription}")
     rc = ReplicatorClient(
         topo,
         gcp_project=args.gcp_project,
@@ -154,28 +145,19 @@ def main(args):
 
     # provision the gateway instances
     logger.info("Provisioning gateway instances")
-    rc.provision_gateways(
-        reuse_instances=True,
-        log_dir=args.log_dir,
-        authorize_ssh_pub_key=args.copy_ssh_key,
-    )
+    rc.provision_gateways(reuse_instances=True, log_dir=args.log_dir, authorize_ssh_pub_key=args.copy_ssh_key)
     for node, gw in rc.bound_nodes.items():
         logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
 
     # run replication, monitor progress
     job = ReplicationJob(
-        source_region=args.src_region,
-        source_bucket=src_bucket,
-        dest_region=args.dest_region,
-        dest_bucket=dst_bucket,
-        objs=obj_keys,
-        random_chunk_size_mb=args.chunk_size_mb,
+        source_region=args.src_region, source_bucket=src_bucket, dest_region=args.dest_region, dest_bucket=dst_bucket, objs=obj_keys
     )
 
     total_bytes = args.n_chunks * args.chunk_size_mb * MB
     job = rc.run_replication_plan(job)
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
-    stats = rc.monitor_transfer(job, show_pbar=True)
+    stats = rc.monitor_transfer(job, show_pbar=True, cancel_pending=False)
     logger.info(f"Replication completed in {stats['total_runtime_s']:.2f}s ({stats['throughput_gbits']:.2f}Gbit/s)")
 
 
