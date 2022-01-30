@@ -17,6 +17,7 @@ from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.obj_store.object_store_interface import ObjectStoreObject
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.obj_store.gcs_interface import GCSInterface
+from skylark.obj_store.azure_interface import AzureInterface
 from skylark.utils.utils import do_parallel
 from tqdm import tqdm
 
@@ -45,7 +46,11 @@ def parse_path(path: str):
         if match is None:
             raise ValueError(f"Invalid Azure path: {path}")
         account, container, blob_path = match.groups()
-        return "azure", account, container, blob_path
+        return "azure", account, container
+    elif path.startswith("azure://"):
+        bucket_name = path[8:]
+        region = path[8:].split("-", 2)[-1]
+        return "azure", bucket_name, region
     elif is_plausible_local_path(path):
         return "local", None, path
     return path
@@ -147,12 +152,14 @@ def copy_gcs_local(src_bucket: str, src_key: str, dst: Path):
 
 
 def copy_local_azure(src: Path, dst_bucket: str, dst_key: str):
-    azure = AzureInterface(None, src_bucket)
+    # Note that dst_key is infact azure region
+    azure = AzureInterface(dst_key, dst_bucket)
     return copy_local_objstore(azure, src, dst_bucket, dst_key)
 
 
 def copy_azure_local(src_bucket: str, src_key: str, dst: Path):
-    azure = AzureInterface(None, src_bucket)
+    # Note that src_key is infact azure region
+    azure = AzureInterface(src_key, src_bucket)
     return copy_objstore_local(azure, src_bucket, src_key, dst)
 
 
