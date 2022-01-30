@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1
 FROM coinor/cylp
 
+# alias python to python3
+RUN ln -s /usr/bin/python3 /usr/bin/python && ln -s /usr/bin/pip3 /usr/bin/pip
+
 # # install CoinOR
 # ARG DEBIAN_FRONTEND="noninteractive"
 # ENV TZ="America/Los_Angeles"
@@ -32,8 +35,5 @@ RUN --mount=type=cache,target=/root/.cache/pip pip3 install --no-cache-dir --com
 WORKDIR /pkg
 COPY . .
 RUN pip3 install -e .
-
-# alias python to python3
-RUN ln -s /usr/bin/python3 /usr/bin/python
 
 CMD ["python3", "skylark/gateway/gateway_daemon.py"]
