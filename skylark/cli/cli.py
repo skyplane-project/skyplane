@@ -56,6 +56,11 @@ app.add_typer(skylark.cli.cli_solver.app, name="solver")
 @app.command()
 def ls(directory: str):
     """List objects in the object store."""
+    config = load_config()
+    gcp_project = config.get("gcp_project_id")
+    azure_subscription = config.get("azure_subscription_id")
+    logger.debug(f"Loaded gcp_project: {gcp_project}, azure_subscription: {azure_subscription}")
+    check_ulimit()
     provider, bucket, key = parse_path(directory)
     if provider == "local":
         for path in ls_local(Path(directory)):
@@ -69,6 +74,11 @@ def ls(directory: str):
 def cp(src: str, dst: str):
     """Copy objects from the object store to the local filesystem."""
     print_header()
+    config = load_config()
+    gcp_project = config.get("gcp_project_id")
+    azure_subscription = config.get("azure_subscription_id")
+    logger.debug(f"Loaded gcp_project: {gcp_project}, azure_subscription: {azure_subscription}")
+    check_ulimit()
 
     provider_src, bucket_src, path_src = parse_path(src)
     provider_dst, bucket_dst, path_dst = parse_path(dst)
