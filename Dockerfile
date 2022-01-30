@@ -10,6 +10,13 @@ RUN echo '*                hard    nofile          1048576' >> /etc/security/lim
 RUN echo 'root             soft    nofile          1048576' >> /etc/security/limits.conf
 RUN echo 'root             hard    nofile          1048576' >> /etc/security/limits.conf
 
+# install apt packages
+RUN --mount=type=cache,target=/var/cache/apt apt update \
+    && apt-get install --no-install-recommends -y git wget ca-certificates build-essential rsync \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# install gateway
 COPY scripts/requirements-gateway.txt /tmp/requirements-gateway.txt
 RUN --mount=type=cache,target=/root/.cache/pip pip install --no-cache-dir --compile -r /tmp/requirements-gateway.txt && rm -r /tmp/requirements-gateway.txt
 
