@@ -1,16 +1,18 @@
 # An unique identifier for the head node and workers of this cluster.
 cluster_name: skylark-control-plane
-upscaling_speed: 1.0
+upscaling_speed: 3
+max_workers: 20
 
 # This executes all commands on all nodes in the docker container,
 # and opens all the necessary ports to support the Ray cluster.
 # Empty string means disabled.
 docker:
-    image: "ghcr.io/parasj/skylark:sha256-16e617b9ba44b7d351f3f33b129c3fb8498d556ed3eb5d31df624d5afe3cc7de.sig"
-    container_name: "skylark_gateway"
+    image: DOCKERIMAGEHERE
+    container_name: "skylark_image"
     pull_before_run: True
     run_options:   # Extra options to pass into "docker run"
         - --ulimit nofile=65536:65536
+        - --rm
 
 idle_timeout_minutes: 5
 
@@ -29,13 +31,15 @@ available_node_types:
     # Demand information can be found at https://aws.amazon.com/ec2/spot/instance-advisor/
     # http://boto3.readthedocs.io/en/latest/reference/services/ec2.html#EC2.ServiceResource.create_instances
     ray.head.default:
+        min_workers: 1
+        max_workers: 1
         node_config:
             InstanceType: c5.24xlarge
             ImageId: ami-0892d3c7ee96c0bf7
             KeyName: skylark-us-west-2
     ray.worker.default_c5.24xlarge_spot:
-        min_workers: 1
-        max_workers: 10
+        min_workers: 2
+        max_workers: 20
         node_config:
             InstanceType: c5.24xlarge
             ImageId: ami-0892d3c7ee96c0bf7
@@ -44,44 +48,23 @@ available_node_types:
                 MarketType: spot
     ray.worker.default_c5.18xlarge_spot:
         min_workers: 0
-        max_workers: 10
+        max_workers: 20
         node_config:
             InstanceType: c5.18xlarge
             ImageId: ami-0892d3c7ee96c0bf7
             KeyName: skylark-us-west-2
             InstanceMarketOptions:
                 MarketType: spot
-    ray.worker.default_c5.12xlarge_spot:
-        min_workers: 0
-        max_workers: 10
-        node_config:
-            InstanceType: c5.12xlarge
-            ImageId: ami-0892d3c7ee96c0bf7
-            KeyName: skylark-us-west-2
-            InstanceMarketOptions:
-                MarketType: spot
-    ray.worker.default_c5.9xlarge_spot:
-        min_workers: 0
-        max_workers: 10
-        node_config:
-            InstanceType: c5.9xlarge
-            ImageId: ami-0892d3c7ee96c0bf7
-            KeyName: skylark-us-west-2
-            InstanceMarketOptions:
-                MarketType: spot
 
 head_node_type: ray.head.default
-# file_mounts: {
-#     # "~/skylark": "/pkg"
-# }
-# rsync_filter:
-#     - ".gitignore"
 initialization_commands:
-    - sudo apt-get --only-upgrade install rsync
+    - sudo apt-get --only-upgrade install -y rsync openssh-client
     - command -v docker >/dev/null 2>&1 || { curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh && sudo usermod -aG docker $USER && sudo systemctl restart docker -f; }
+    - if [ -z "$(docker ps -q)" ]; then echo "No docker containers running"; else docker kill $(docker ps -q); fi
+    - which ssh
 setup_commands:
-    - sudo apt-get update
-    - sudo apt-get install --no-install-recommends -y git wget ca-certificates build-essential gcc g++ gfortran pkg-config libblas-dev liblapack-dev coinor-libcbc-dev libz-dev
-    - pip intall numpy
-    - pip install cylp
+    - docker image ls
+    # - apt-get update && apt-get install --no-install-recommends -y git wget ca-certificates build-essential gcc g++ gfortran pkg-config libblas-dev liblapack-dev coinor-libcbc-dev libz-dev && pip install numpy && pip install cylp
+    - apt-get update && apt-get install --no-install-recommends -y openssh-client
+    - pip3 install ray[default]
     - ls /pkg
