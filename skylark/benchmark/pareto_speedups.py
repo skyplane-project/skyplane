@@ -51,9 +51,9 @@ def benchmark(
 
 def main(args):
     ray.init()
-    solver = ThroughputSolverILP(skylark_root / "profiles" / "throughput_mini.csv")
+    solver = ThroughputSolverILP(skylark_root / "profiles" / "throughput.csv")
     regions = solver.get_regions()
-    # regions = np.random.choice(regions, size=6, replace=False)
+    regions = np.random.choice(regions, size=6, replace=False)
 
     configs = []
     for src in regions:
