@@ -1,6 +1,9 @@
 from collections import namedtuple
 from dataclasses import dataclass
+from functools import lru_cache
+import io
 import shutil
+from turtle import st
 from typing import List, Optional, Tuple
 
 import cvxpy as cp
@@ -26,6 +29,7 @@ class ThroughputProblem:
     instance_limit: int
     const_throughput_grid_gbits: Optional[np.ndarray] = None  # if not set, load from profiles
     const_cost_per_gb_grid: Optional[np.ndarray] = None  # if not set, load from profiles
+    const_instance_cost_multipler: float = 1.0
     # provider bandwidth limits (egress, ingress)
     aws_instance_throughput_limit: Tuple[float, float] = (5, 10)
     gcp_instance_throughput_limit: Tuple[float, float] = (8, 12.5)  # limited to 12.5 gbps in practice due to CPU limit
@@ -41,9 +45,9 @@ class ThroughputSolution:
     is_feasible: bool
 
     # solution variables
-    var_edge_flow_gigabits: Optional[np.ndarray] = None
-    var_conn: Optional[np.ndarray] = None
-    var_instances_per_region: Optional[np.ndarray] = None
+    compressed_var_edge_flow_gigabits: Optional[bytes] = None  # compressed npz
+    compressed_var_conn: Optional[bytes] = None  # compressed npz
+    compressed_var_instances_per_region: Optional[bytes] = None  # compressed npz
 
     # solution values
     throughput_achieved_gbits: Optional[List[float]] = None
@@ -53,21 +57,55 @@ class ThroughputSolution:
     cost_total: Optional[float] = None
     transfer_runtime_s: Optional[float] = None
 
+    # estimated values of baseline throughput, cost, and speedup
+    baseline_throughput_gbits: Optional[float] = None
+    baseline_cost: Optional[float] = None
+
+    @lru_cache(maxsize=1)
+    def var_edge_flow_gigabits(self) -> Optional[np.ndarray]:
+        if self.compressed_var_edge_flow_gigabits is None:
+            return None
+        return self.decompress_npz(self.compressed_var_edge_flow_gigabits)
+
+    @lru_cache(maxsize=1)
+    def var_conn(self) -> Optional[np.ndarray]:
+        if self.compressed_var_conn is None:
+            return None
+        return self.decompress_npz(self.compressed_var_conn)
+
+    @lru_cache(maxsize=1)
+    def var_instances_per_region(self) -> Optional[np.ndarray]:
+        if self.compressed_var_instances_per_region is None:
+            return None
+        return self.decompress_npz(self.compressed_var_instances_per_region)
+
+    @staticmethod
+    def compress_npz(array: np.ndarray) -> bytes:
+        with io.BytesIO() as f:
+            np.savez_compressed(f, array)
+            return f.getvalue()
+
+    @staticmethod
+    def decompress_npz(data: bytes) -> np.ndarray:
+        with io.BytesIO(data) as f:
+            return np.load(f)["arr_0"]
+
 
 class ThroughputSolver:
-    def __init__(self, df_path, default_throughput=0.0):
-        self.df = pd.read_csv(df_path).set_index(["src_region", "dst_region"])
+    def __init__(self, df_path, default_throughput=1e-6):
+        self.df = pd.read_csv(df_path).set_index(["src_region", "dst_region", "src_tier", "dst_tier"]).sort_index()
         self.default_throughput = default_throughput
 
-    def get_path_throughput(self, src, dst):
+    def get_path_throughput(self, src, dst, src_tier="PREMIUM", dst_tier="PREMIUM") -> float:
         if src == dst:
             return self.default_throughput
-        elif (src, dst) not in self.df.index:
-            return None
-        return self.df.loc[(src, dst), "throughput_sent"]
+        elif (src, dst, src_tier, dst_tier) not in self.df.index:
+            logger.warning(f"No throughput data for {src} -> {dst} ({src_tier} -> {dst_tier})")
+            return self.default_throughput
+        return float(self.df.loc[(src, dst, src_tier, dst_tier), "throughput_received"].values[0])
 
-    def get_path_cost(self, src, dst):
-        return CloudProvider.get_transfer_cost(src, dst)
+    def get_path_cost(self, src, dst, premium_tier=True):
+        return CloudProvider.get_transfer_cost(src, dst, premium_tier=premium_tier)
 
     def get_regions(self):
         return list(sorted(set(list(self.df.index.levels[0].unique()) + list(self.df.index.levels[1].unique()))))
@@ -77,7 +115,7 @@ class ThroughputSolver:
         data_grid = np.zeros((len(regions), len(regions)))
         for i, src in enumerate(regions):
             for j, dst in enumerate(regions):
-                data_grid[i, j] = self.get_path_throughput(src, dst) if self.get_path_throughput(src, dst) is not None else 0
+                data_grid[i, j] = self.get_path_throughput(src, dst, src_tier="PREMIUM", dst_tier="PREMIUM")
         data_grid = data_grid / GB
         return data_grid.round(4)
 
@@ -123,14 +161,21 @@ class ThroughputSolver:
 
 
 class ThroughputSolverILP(ThroughputSolver):
-    def solve_min_cost(
-        self, p: ThroughputProblem, instance_cost_multipler: float = 1.0, solver=cp.GLPK, solver_verbose=False, save_lp_path=None
-    ):
-        logger.debug(f"Solving for problem {p}")
+    def get_baseline_throughput_and_cost(self, p: ThroughputProblem, src_idx: int, dst_idx: int) -> Tuple[float, float]:
+        throughput = max(p.instance_limit * p.const_throughput_grid_gbits[src_idx, dst_idx], 1e-6)
+        transfer_s = p.gbyte_to_transfer * GBIT_PER_GBYTE / throughput
+        cost = p.cost_per_instance_hr * p.instance_limit * transfer_s / 3600
+        return throughput, cost
 
+    def solve_min_cost(self, p: ThroughputProblem, solver=cp.GLPK, solver_verbose=False, save_lp_path=None):
         regions = self.get_regions()
-        sources = [regions.index(p.src)]
-        sinks = [regions.index(p.dst)]
+        try:
+            sources = [regions.index(p.src)]
+            sinks = [regions.index(p.dst)]
+        except ValueError as e:
+            logger.error(f"{p.src} or {p.dst} not in regions")
+            logger.error(f"regions: {regions}")
+            raise e
 
         # define constants
         if p.const_throughput_grid_gbits is None:
@@ -199,7 +244,7 @@ class ThroughputSolverILP(ThroughputSolver):
         # instance cost
         per_instance_cost: float = p.cost_per_instance_hr / 3600 * runtime_s
         instance_cost = cp.sum(instances_per_region) * per_instance_cost
-        total_cost = cost_egress + instance_cost * instance_cost_multipler
+        total_cost = cost_egress + instance_cost * p.const_instance_cost_multipler
         prob = cp.Problem(cp.Minimize(total_cost), constraints)
 
         if solver == cp.GUROBI or solver == "gurobi":
@@ -211,23 +256,27 @@ class ThroughputSolverILP(ThroughputSolver):
         else:
             prob.solve(solver=solver, verbose=solver_verbose)
 
+        baseline_throughput, baseline_cost = self.get_baseline_throughput_and_cost(p, sources[0], sinks[0])
         if prob.status == "optimal":
             return ThroughputSolution(
                 problem=p,
                 is_feasible=True,
-                var_edge_flow_gigabits=edge_flow_gigabits.value.round(6),
-                var_conn=conn.value.round(6),
-                var_instances_per_region=instances_per_region.value,
+                compressed_var_edge_flow_gigabits=ThroughputSolution.compress_npz(edge_flow_gigabits.value.round(4)),
+                compressed_var_conn=ThroughputSolution.compress_npz(conn.value.round(4)),
+                compressed_var_instances_per_region=ThroughputSolution.compress_npz(instances_per_region.value.astype(int)),
                 throughput_achieved_gbits=[node_flow_in[i].value for i in sinks],
                 cost_egress_by_edge=cost_per_edge.value,
                 cost_egress=cost_egress.value,
                 cost_instance=instance_cost.value,
                 cost_total=instance_cost.value + cost_egress.value,
                 transfer_runtime_s=runtime_s,
+                baseline_throughput_gbits=baseline_throughput,
+                baseline_cost=baseline_cost,
             )
         else:
-            logger.warning(f"Solver status: {prob.status}")
-            return ThroughputSolution(problem=p, is_feasible=False)
+            return ThroughputSolution(
+                problem=p, is_feasible=False, baseline_throughput_gbits=baseline_throughput, baseline_cost=baseline_cost
+            )
 
     def print_solution(self, solution: ThroughputSolution):
         if solution.is_feasible:
@@ -237,14 +286,14 @@ class ThroughputSolverILP(ThroughputSolver):
             )
             logger.debug(f"Total throughput: [{', '.join(str(round(t, 2)) for t in solution.throughput_achieved_gbits)}] Gbps")
             logger.debug(f"Total runtime: {solution.transfer_runtime_s:.2f}s")
-            region_inst_count = {regions[i]: int(solution.var_instances_per_region[i]) for i in range(len(regions))}
+            region_inst_count = {regions[i]: int(solution.var_instances_per_region()[i]) for i in range(len(regions))}
             logger.debug("Instance regions: [{}]".format(", ".join(f"{r}={c}" for r, c in region_inst_count.items() if c > 0)))
             logger.debug("Flow matrix:")
             for i, src in enumerate(regions):
                 for j, dst in enumerate(regions):
-                    if solution.var_edge_flow_gigabits[i, j] > 0:
-                        gb_sent = solution.transfer_runtime_s * solution.var_edge_flow_gigabits[i, j] * GBIT_PER_GBYTE
-                        s = f"\t{src} -> {dst}: {solution.var_edge_flow_gigabits[i, j]:.2f} Gbps with {solution.var_conn[i, j]:.1f} connections, "
+                    if solution.var_edge_flow_gigabits()[i, j] > 0:
+                        gb_sent = solution.transfer_runtime_s * solution.var_edge_flow_gigabits()[i, j] * GBIT_PER_GBYTE
+                        s = f"\t{src} -> {dst}: {solution.var_edge_flow_gigabits()[i, j]:.2f} Gbps with {solution.var_conn()[i, j]:.1f} connections, "
                         s += f"{gb_sent:.1f}GB (link capacity = {solution.problem.const_throughput_grid_gbits[i, j]:.2f} Gbps)"
                         logger.debug(s)
         else:
@@ -268,12 +317,12 @@ class ThroughputSolverILP(ThroughputSolver):
         g.attr(labelloc="t")
         for i, src in enumerate(regions):
             for j, dst in enumerate(regions):
-                if solution.var_edge_flow_gigabits[i, j] > 0:
+                if solution.var_edge_flow_gigabits()[i, j] > 0:
                     link_cost = self.get_path_cost(src, dst)
-                    label = f"{solution.var_edge_flow_gigabits[i, j]:.2f} Gbps (of {solution.problem.const_throughput_grid_gbits[i, j]:.2f}Gbps), "
-                    label += f"\n${link_cost:.4f}/GB over {solution.var_conn[i, j]:.1f}c"
-                    src_label = f"{src.replace(':', '/')}x{solution.var_instances_per_region[i]:.1f}"
-                    dst_label = f"{dst.replace(':', '/')}x{solution.var_instances_per_region[j]:.1f}"
+                    label = f"{solution.var_edge_flow_gigabits()[i, j]:.2f} Gbps (of {solution.problem.const_throughput_grid_gbits[i, j]:.2f}Gbps), "
+                    label += f"\n${link_cost:.4f}/GB over {solution.var_conn()[i, j]:.1f}c"
+                    src_label = f"{src.replace(':', '/')}x{solution.var_instances_per_region()[i]:.1f}"
+                    dst_label = f"{dst.replace(':', '/')}x{solution.var_instances_per_region()[j]:.1f}"
                     g.edge(src_label, dst_label, label=label)
         return g
 
@@ -287,8 +336,8 @@ class ThroughputSolverILP(ThroughputSolver):
         for i, src in enumerate(regions):
             src_instance_idx, src_instance_connections = 0, 0
             for j, dst in enumerate(regions):
-                if solution.var_edge_flow_gigabits[i, j] > 0:
-                    connections_to_allocate = np.rint(solution.var_conn[i, j]).astype(int)
+                if solution.var_edge_flow_gigabits()[i, j] > 0:
+                    connections_to_allocate = np.rint(solution.var_conn()[i, j]).astype(int)
                     while connections_to_allocate > 0:
                         # if this edge would exceed the instance connection limit, partially add connections to current instance and increment instance
                         if connections_to_allocate + src_instance_connections > egress_hard_limit:

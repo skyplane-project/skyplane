@@ -11,6 +11,7 @@ docker:
     container_name: "skylark_image"
     pull_before_run: True
     run_options:   # Extra options to pass into "docker run"
+        - -v /home/ubuntu/.aws:/root/.aws
         - --ulimit nofile=65536:65536
         - --rm
 
@@ -37,6 +38,12 @@ available_node_types:
             InstanceType: c5.2xlarge
             ImageId: ami-0892d3c7ee96c0bf7
             KeyName: skylark-us-west-2
+            BlockDeviceMappings:
+                - DeviceName: /dev/sda1
+                  Ebs:
+                      VolumeSize: 500
+                      VolumeType: gp2
+                      DeleteOnTermination: true
     ray.worker.default_c5.24xlarge_spot:
         min_workers: 0
         max_workers: 20
@@ -57,6 +64,11 @@ available_node_types:
                 MarketType: spot
 
 head_node_type: ray.head.default
+
+# mount aws credentials file
+file_mounts:
+    "/home/ubuntu/.aws": "/home/ubuntu/.aws"
+
 initialization_commands:
     - command -v docker >/dev/null 2>&1 || { curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh && sudo usermod -aG docker $USER && sudo systemctl restart docker -f; }
     - if [ -z "$(docker ps -q)" ]; then echo "No docker containers running"; else docker kill $(docker ps -q); fi
