@@ -230,9 +230,9 @@ class ThroughputSolverILP(ThroughputSolver):
             return ThroughputSolution(
                 problem=p,
                 is_feasible=True,
-                compressed_var_edge_flow_gigabits=ThroughputSolution.compress_npz(edge_flow_gigabits.value.round(4)),
-                compressed_var_conn=ThroughputSolution.compress_npz(conn.value.round(4)),
-                compressed_var_instances_per_region=ThroughputSolution.compress_npz(instances_per_region.value.astype(int)),
+                var_edge_flow_gigabits=edge_flow_gigabits.value.round(4),
+                var_conn=conn.value.round(4),
+                var_instances_per_region=instances_per_region.value.astype(int),
                 throughput_achieved_gbits=[node_flow_in[i].value for i in sinks],
                 cost_egress_by_edge=cost_per_edge.value,
                 cost_egress=cost_egress.value,
@@ -287,12 +287,12 @@ class ThroughputSolverILP(ThroughputSolver):
         g.attr(labelloc="t")
         for i, src in enumerate(regions):
             for j, dst in enumerate(regions):
-                if solution.var_edge_flow_gigabits()[i, j] > 0:
+                if solution.var_edge_flow_gigabits[i, j] > 0:
                     link_cost = self.get_path_cost(src, dst)
                     label = f"{solution.var_edge_flow_gigabits()[i, j]:.2f} Gbps (of {solution.problem.const_throughput_grid_gbits[i, j]:.2f}Gbps), "
-                    label += f"\n${link_cost:.4f}/GB over {solution.var_conn()[i, j]:.1f}c"
-                    src_label = f"{src.replace(':', '/')}x{solution.var_instances_per_region()[i]:.1f}"
-                    dst_label = f"{dst.replace(':', '/')}x{solution.var_instances_per_region()[j]:.1f}"
+                    label += f"\n${link_cost:.4f}/GB over {solution.var_conn[i, j]:.1f}c"
+                    src_label = f"{src.replace(':', '/')}x{solution.var_instances_per_region[i]:.1f}"
+                    dst_label = f"{dst.replace(':', '/')}x{solution.var_instances_per_region[j]:.1f}"
                     g.edge(src_label, dst_label, label=label)
         return g
 
@@ -306,8 +306,8 @@ class ThroughputSolverILP(ThroughputSolver):
         for i, src in enumerate(regions):
             src_instance_idx, src_instance_connections = 0, 0
             for j, dst in enumerate(regions):
-                if solution.var_edge_flow_gigabits()[i, j] > 0:
-                    connections_to_allocate = np.rint(solution.var_conn()[i, j]).astype(int)
+                if solution.var_edge_flow_gigabits[i, j] > 0:
+                    connections_to_allocate = np.rint(solution.var_conn[i, j]).astype(int)
                     while connections_to_allocate > 0:
                         # if this edge would exceed the instance connection limit, partially add connections to current instance and increment instance
                         if connections_to_allocate + src_instance_connections > egress_hard_limit:
