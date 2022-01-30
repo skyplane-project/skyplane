@@ -6,7 +6,7 @@ upscaling_speed: 1.0
 # and opens all the necessary ports to support the Ray cluster.
 # Empty string means disabled.
 docker:
-    image: "ghcr.io/parasj/skylark:main"
+    image: "ghcr.io/parasj/skylark:sha256-16e617b9ba44b7d351f3f33b129c3fb8498d556ed3eb5d31df624d5afe3cc7de.sig"
     container_name: "skylark_gateway"
     pull_before_run: True
     run_options:   # Extra options to pass into "docker run"
@@ -71,14 +71,17 @@ available_node_types:
                 MarketType: spot
 
 head_node_type: ray.head.default
-file_mounts: {
-#     "~/skylark": "/pkg"
-}
+# file_mounts: {
+#     # "~/skylark": "/pkg"
+# }
 # rsync_filter:
 #     - ".gitignore"
 initialization_commands:
-    - rm -rf ~/.bashrc
+    - sudo apt-get --only-upgrade install rsync
     - command -v docker >/dev/null 2>&1 || { curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh && sudo usermod -aG docker $USER && sudo systemctl restart docker -f; }
-    - sudo docker pull ghcr.io/parasj/skylark:main
 setup_commands:
+    - sudo apt-get update
+    - sudo apt-get install --no-install-recommends -y git wget ca-certificates build-essential gcc g++ gfortran pkg-config libblas-dev liblapack-dev coinor-libcbc-dev libz-dev
+    - pip intall numpy
+    - pip install cylp
     - ls /pkg

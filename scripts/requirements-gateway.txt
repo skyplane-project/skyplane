@@ -6,6 +6,7 @@ azure-storage-blob
 awscrt
 boto3
 flask
+numpy
 google-api-python-client
 google-cloud-compute
 google-cloud-storage
