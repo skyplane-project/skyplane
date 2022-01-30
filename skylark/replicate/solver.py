@@ -1,21 +1,19 @@
+import io
+import shutil
 from collections import namedtuple
 from dataclasses import dataclass
 from functools import lru_cache
-import io
-import shutil
-from turtle import st
 from typing import List, Optional, Tuple
 
 import cvxpy as cp
-import graphviz as gv
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from skylark.utils import logger
 
 from skylark import GB
 from skylark.compute.cloud_providers import CloudProvider
 from skylark.replicate.replication_plan import ReplicationTopology
+from skylark.utils import logger
 
 GBIT_PER_GBYTE = 8
 
@@ -45,9 +43,9 @@ class ThroughputSolution:
     is_feasible: bool
 
     # solution variables
-    compressed_var_edge_flow_gigabits: Optional[bytes] = None  # compressed npz
-    compressed_var_conn: Optional[bytes] = None  # compressed npz
-    compressed_var_instances_per_region: Optional[bytes] = None  # compressed npz
+    var_edge_flow_gigabits: Optional[np.ndarray] = None
+    var_conn: Optional[np.ndarray] = None
+    var_instances_per_region: Optional[np.ndarray] = None
 
     # solution values
     throughput_achieved_gbits: Optional[List[float]] = None
@@ -60,35 +58,6 @@ class ThroughputSolution:
     # estimated values of baseline throughput, cost, and speedup
     baseline_throughput_gbits: Optional[float] = None
     baseline_cost: Optional[float] = None
-
-    @lru_cache(maxsize=1)
-    def var_edge_flow_gigabits(self) -> Optional[np.ndarray]:
-        if self.compressed_var_edge_flow_gigabits is None:
-            return None
-        return self.decompress_npz(self.compressed_var_edge_flow_gigabits)
-
-    @lru_cache(maxsize=1)
-    def var_conn(self) -> Optional[np.ndarray]:
-        if self.compressed_var_conn is None:
-            return None
-        return self.decompress_npz(self.compressed_var_conn)
-
-    @lru_cache(maxsize=1)
-    def var_instances_per_region(self) -> Optional[np.ndarray]:
-        if self.compressed_var_instances_per_region is None:
-            return None
-        return self.decompress_npz(self.compressed_var_instances_per_region)
-
-    @staticmethod
-    def compress_npz(array: np.ndarray) -> bytes:
-        with io.BytesIO() as f:
-            np.savez_compressed(f, array)
-            return f.getvalue()
-
-    @staticmethod
-    def decompress_npz(data: bytes) -> np.ndarray:
-        with io.BytesIO(data) as f:
-            return np.load(f)["arr_0"]
 
 
 class ThroughputSolver:
@@ -286,26 +255,27 @@ class ThroughputSolverILP(ThroughputSolver):
             )
             logger.debug(f"Total throughput: [{', '.join(str(round(t, 2)) for t in solution.throughput_achieved_gbits)}] Gbps")
             logger.debug(f"Total runtime: {solution.transfer_runtime_s:.2f}s")
-            region_inst_count = {regions[i]: int(solution.var_instances_per_region()[i]) for i in range(len(regions))}
+            region_inst_count = {regions[i]: int(solution.var_instances_per_region[i]) for i in range(len(regions))}
             logger.debug("Instance regions: [{}]".format(", ".join(f"{r}={c}" for r, c in region_inst_count.items() if c > 0)))
             logger.debug("Flow matrix:")
             for i, src in enumerate(regions):
                 for j, dst in enumerate(regions):
-                    if solution.var_edge_flow_gigabits()[i, j] > 0:
-                        gb_sent = solution.transfer_runtime_s * solution.var_edge_flow_gigabits()[i, j] * GBIT_PER_GBYTE
-                        s = f"\t{src} -> {dst}: {solution.var_edge_flow_gigabits()[i, j]:.2f} Gbps with {solution.var_conn()[i, j]:.1f} connections, "
+                    if solution.var_edge_flow_gigabits[i, j] > 0:
+                        gb_sent = solution.transfer_runtime_s * solution.var_edge_flow_gigabits[i, j] * GBIT_PER_GBYTE
+                        s = f"\t{src} -> {dst}: {solution.var_edge_flow_gigabits[i, j]:.2f} Gbps with {solution.var_conn[i, j]:.1f} connections, "
                         s += f"{gb_sent:.1f}GB (link capacity = {solution.problem.const_throughput_grid_gbits[i, j]:.2f} Gbps)"
                         logger.debug(s)
         else:
             logger.debug("No feasible solution")
 
-    def plot_graphviz(self, solution: ThroughputSolution) -> gv.Digraph:
+    def plot_graphviz(self, solution: ThroughputSolution):
         # if dot is not installed
         has_dot = shutil.which("dot") is not None
         if not has_dot:
             logger.error("Graphviz is not installed. Please install it to plot the solution (sudo apt install graphviz).")
             return None
 
+        import graphviz as gv
         regions = self.get_regions()
         g = gv.Digraph(name="throughput_graph")
         g.attr(rankdir="LR")

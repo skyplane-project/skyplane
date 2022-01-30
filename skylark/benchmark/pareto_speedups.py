@@ -3,12 +3,10 @@ from datetime import datetime
 import uuid
 import boto3
 import pickle
-import pickle
 from typing import List
 
 import cvxpy as cp
 import numpy as np
-import pandas as pd
 import ray
 from tqdm import tqdm
 
@@ -26,8 +24,7 @@ def benchmark(p: ThroughputProblem, throughput_path: str) -> ThroughputSolution:
 
 
 def main(args):
-    ray.init()
-    # ray.init(address="auto")
+    ray.init(address="auto")
 
     # save dir
     timestamp = datetime.now().strftime("%Y.%m.%d_%H.%M")
@@ -39,13 +36,12 @@ def main(args):
 
     solver = ThroughputSolverILP(args.throughput_path)
     regions = solver.get_regions()
-    regions = np.random.choice(regions, size=3, replace=False)
 
     problems = []
     for src in regions:
         for dst in regions:
             if src != dst:
-                for instance_limit in [1, 2, 4]:
+                for instance_limit in [1, 2, 4, 8]:
                     for min_throughput in np.linspace(0, args.max_throughput * instance_limit, args.num_throughputs):
                         if min_throughput > 0:
                             problems.append(
@@ -57,6 +53,8 @@ def main(args):
                                     instance_limit=instance_limit,
                                 )
                             )
+    # shuffle problems
+    np.random.shuffle(problems)
 
     results = []
     for problem in tqdm(problems, desc="dispatch"):
@@ -83,6 +81,7 @@ def main(args):
                 with open(out_fname, "wb") as f:
                     pickle.dump(results_out, f)
                 s3.upload_file(str(out_fname), relative_out_fname)
+                out_fname.unlink()
                 print(f"Saved {len(results_out)} results to s3://{args.bucket}/{out_fname}")
                 results_out = []
                 file_idx += 1
@@ -94,6 +93,7 @@ def main(args):
         with open(out_fname, "wb") as f:
             pickle.dump(results_out, f)
         s3.upload_file(str(out_fname), relative_out_fname)
+        out_fname.unlink()
         print(f"Saved {len(results_out)} results to s3://{args.bucket}/{out_fname}")
 
 
@@ -101,7 +101,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--throughput-path", type=str, default=skylark_root / "profiles" / "throughput.csv")
     parser.add_argument("--max-throughput", type=float, default=12.5)
-    parser.add_argument("--num-throughputs", type=int, default=50)
+    parser.add_argument("--num-throughputs", type=int, default=100)
     parser.add_argument("--gbyte-to-transfer", type=float, default=1)
     parser.add_argument("--bucket", type=str, default="skylark-optimizer-results")
     args = parser.parse_args()
