@@ -132,7 +132,7 @@ class AzureInterface(ObjectStoreInterface):
             blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=dst_object_name)
             with open(src_file_path, "rb") as data:
                 # max_concurrency useless for small files
-                blob_client.upload_blob(data= data, overwrite=True, max_concurrency=self.max_concurrency)
+                blob_client.upload_blob(data=data, overwrite=True, max_concurrency=self.max_concurrency)
             return True
 
         return self.pool.submit(_upload_object_helper)

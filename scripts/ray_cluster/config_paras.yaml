@@ -1,7 +1,7 @@
 # An unique identifier for the head node and workers of this cluster.
 cluster_name: skylark-control-plane
-upscaling_speed: 3
-max_workers: 20
+upscaling_speed: 100
+max_workers: 50
 
 # This executes all commands on all nodes in the docker container,
 # and opens all the necessary ports to support the Ray cluster.
@@ -12,7 +12,6 @@ docker:
     pull_before_run: True
     run_options:   # Extra options to pass into "docker run"
         - --ulimit nofile=65536:65536
-        - --rm
 
 idle_timeout_minutes: 5
 
@@ -34,16 +33,20 @@ available_node_types:
         min_workers: 1
         max_workers: 1
         node_config:
-            InstanceType: c5.2xlarge
-            ImageId: ami-0892d3c7ee96c0bf7
-            KeyName: skylark-us-west-2
+            InstanceType: c5.24xlarge
+            ImageId: ami-0a0a2849f3390a302
+            BlockDeviceMappings:
+                - DeviceName: /dev/sda1
+                  Ebs:
+                      VolumeSize: 500
+                      VolumeType: gp2
+                      DeleteOnTermination: true
     ray.worker.default_c5.24xlarge_spot:
-        min_workers: 0
-        max_workers: 20
+        min_workers: 10
+        max_workers: 44
         node_config:
             InstanceType: c5.24xlarge
-            ImageId: ami-0892d3c7ee96c0bf7
-            KeyName: skylark-us-west-2
+            ImageId: ami-0a0a2849f3390a302
             InstanceMarketOptions:
                 MarketType: spot
     ray.worker.default_c5.18xlarge_spot:
@@ -58,10 +61,11 @@ available_node_types:
 
 head_node_type: ray.head.default
 initialization_commands:
+    - pip install ray[default]
     - command -v docker >/dev/null 2>&1 || { curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh && sudo usermod -aG docker $USER && sudo systemctl restart docker -f; }
     - if [ -z "$(docker ps -q)" ]; then echo "No docker containers running"; else docker kill $(docker ps -q); fi
 setup_commands:
     # - apt-get update && apt-get install --no-install-recommends -y git wget ca-certificates build-essential gcc g++ gfortran pkg-config libblas-dev liblapack-dev coinor-libcbc-dev libz-dev && pip install numpy && pip install cylp
     - apt-get update && apt-get install --no-install-recommends -y openssh-client
-    - pip3 install ray[default]
-    - ls /pkg
+    - pip install ray[default]
+    - pip install -e '.[all]'

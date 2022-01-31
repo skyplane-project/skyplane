@@ -54,6 +54,11 @@ class ThroughputSolution:
     cost_total: Optional[float] = None
     transfer_runtime_s: Optional[float] = None
 
+    # baseline
+    baseline_throughput_achieved_gbits: Optional[float] = None
+    baseline_cost_egress: Optional[float] = None
+    baseline_cost_instance: Optional[float] = None
+    baseline_cost_total: Optional[float] = None
 
 
 class ThroughputSolver:
@@ -92,6 +97,14 @@ class ThroughputSolver:
                 assert cost is not None and cost >= 0, f"Cost for {src} -> {dst} is {cost}"
                 data_grid[i, j] = cost
         return data_grid.round(2)
+
+    def get_baseline_throughput_and_cost(self, p: ThroughputProblem) -> Tuple[float, float]:
+        src, dst = p.src, p.dst
+        throughput = max(p.instance_limit * self.get_path_throughput(src, dst) / GB, 1e-6)
+        transfer_s = p.gbyte_to_transfer * GBIT_PER_GBYTE / throughput
+        instance_cost = p.cost_per_instance_hr * p.instance_limit * transfer_s / 3600
+        egress_cost = p.gbyte_to_transfer * self.get_path_cost(src, dst)
+        return throughput, egress_cost, instance_cost
 
     def plot_throughput_grid(self, data_grid, title="Throughput (Gbps)"):
         for i in range(data_grid.shape[0]):
@@ -213,6 +226,7 @@ class ThroughputSolverILP(ThroughputSolver):
         else:
             prob.solve(solver=solver, verbose=solver_verbose)
 
+        baseline_throughput, baseline_egress_cost, baseline_instance_cost = self.get_baseline_throughput_and_cost(p)
         if prob.status == "optimal":
             return ThroughputSolution(
                 problem=p,
@@ -226,9 +240,21 @@ class ThroughputSolverILP(ThroughputSolver):
                 cost_instance=instance_cost.value,
                 cost_total=instance_cost.value + cost_egress.value,
                 transfer_runtime_s=runtime_s,
+                baseline_throughput_achieved_gbits=baseline_throughput,
+                baseline_cost_egress=baseline_egress_cost,
+                baseline_cost_instance=baseline_instance_cost,
+                baseline_cost_total=baseline_egress_cost + baseline_instance_cost,
             )
         else:
-            return ThroughputSolution(problem=p, is_feasible=False, extra_data=dict(status=prob.status))
+            return ThroughputSolution(
+                problem=p,
+                is_feasible=False,
+                extra_data=dict(status=prob.status),
+                baseline_throughput_achieved_gbits=baseline_throughput,
+                baseline_cost_egress=baseline_egress_cost,
+                baseline_cost_instance=baseline_instance_cost,
+                baseline_cost_total=baseline_egress_cost + baseline_instance_cost,
+            )
 
     def print_solution(self, solution: ThroughputSolution):
         if solution.is_feasible:
