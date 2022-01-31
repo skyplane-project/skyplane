@@ -205,7 +205,7 @@ class ThroughputSolverILP(ThroughputSolver):
             solver_options["Threads"] = 1
             if save_lp_path:
                 solver_options["ResultFile"] = str(save_lp_path)
-            prob.solve(verbose=True, qcp=True, solver=cp.GUROBI)
+            prob.solve(verbose=solver_verbose, qcp=True, solver=cp.GUROBI)
         else:
             prob.solve(solver=solver, verbose=solver_verbose)
 

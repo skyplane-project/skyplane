@@ -82,6 +82,9 @@ def main(args):
         refs = [benchmark.remote(prob, throughput_path) for prob in batch]
         results = get_futures(refs)
 
+        n_feasible, n_infeasible = len([r for r in results if r.is_feasible]), len([r for r in results if not r.is_feasible])
+        logger.info(f"Got {len(results)} results, {n_feasible} feasible, {n_infeasible} infeasible")
+
         # save results for batch
         with tempfile.NamedTemporaryFile(mode="wb", delete=True) as f:
             logger.info(f"{batch_idx}/{len(batches)}] Saving solutions for batch {batch_idx} to temp file {f.name}")
@@ -100,6 +103,6 @@ if __name__ == "__main__":
     parser.add_argument("--gbyte-to-transfer", type=float, default=1)
     parser.add_argument("--bucket", type=str, default="skylark-optimizer-results")
     parser.add_argument("--ray-ip", type=str, default=None)
-    parser.add_argument("--batch-size", type=int, default=256)
+    parser.add_argument("--batch-size", type=int, default=1024 * 4)
     args = parser.parse_args()
     main(args)
