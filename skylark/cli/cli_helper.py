@@ -17,6 +17,7 @@ from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.obj_store.object_store_interface import ObjectStoreObject
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.obj_store.gcs_interface import GCSInterface
+from skylark.obj_store.azure_interface import AzureInterface
 from skylark.utils.utils import do_parallel
 from tqdm import tqdm
 
@@ -45,7 +46,11 @@ def parse_path(path: str):
         if match is None:
             raise ValueError(f"Invalid Azure path: {path}")
         account, container, blob_path = match.groups()
-        return "azure", account, container, blob_path
+        return "azure", account, container
+    elif path.startswith("azure://"):
+        bucket_name = path[8:]
+        region = path[8:].split("-", 2)[-1]
+        return "azure", bucket_name, region
     elif is_plausible_local_path(path):
         return "local", None, path
     return path
@@ -86,9 +91,7 @@ def copy_local_local(src: Path, dst: Path):
         copyfile(src, dst)
 
 
-# TODO: probably shoudl merge this with the s3 function (duplicate code)
-def copy_local_gcs(src: Path, dst_bucket: str, dst_key: str):
-    gcs = GCSInterface(None, dst_bucket)
+def copy_local_objstore(object_interface: ObjectStoreObject, src: Path, dst_bucket: str, dst_key: str):
     ops: List[concurrent.futures.Future] = []
     path_mapping: Dict[concurrent.futures.Future, Path] = {}
 
@@ -98,7 +101,7 @@ def copy_local_gcs(src: Path, dst_bucket: str, dst_key: str):
                 total_size += _copy(child, os.path.join(dst_key, child.name))
             return total_size
         else:
-            future = gcs.upload_object(path, dst_key)
+            future = object_interface.upload_object(path, dst_key)
             ops.append(future)
             path_mapping[future] = path
             return path.stat().st_size
@@ -112,22 +115,20 @@ def copy_local_gcs(src: Path, dst_bucket: str, dst_key: str):
             pbar.update(path_mapping[op].stat().st_size)
 
 
-# TODO: probably shoudl merge this with the s3 function (duplicate code)
-def copy_gcs_local(src_bucket: str, src_key: str, dst: Path):
-    gcs = GCSInterface(None, src_bucket)
+def copy_objstore_local(object_interface: ObjectStoreObject, src_bucket: str, src_key: str, dst: Path):
     ops: List[concurrent.futures.Future] = []
     obj_mapping: Dict[concurrent.futures.Future, ObjectStoreObject] = {}
 
     # copy single object
     def _copy(src_obj: ObjectStoreObject, dst: Path):
         dst.parent.mkdir(exist_ok=True, parents=True)
-        future = gcs.download_object(src_obj.key, dst)
+        future = object_interface.download_object(src_obj.key, dst)
         ops.append(future)
         obj_mapping[future] = src_obj
         return src_obj.size
 
     total_bytes = 0.0
-    for obj in gcs.list_objects(prefix=src_key):
+    for obj in object_interface.list_objects(prefix=src_key):
         sub_key = obj.key[len(src_key) :]
         sub_key = sub_key.lstrip("/")
         dest_path = dst / sub_key
@@ -140,20 +141,26 @@ def copy_gcs_local(src_bucket: str, src_key: str, dst: Path):
             pbar.update(obj_mapping[op].size)
 
 
+def copy_local_gcs(src: Path, dst_bucket: str, dst_key: str):
+    gcs = GCSInterface(None, dst_bucket)
+    return copy_local_objstore(gcs, src, dst_bucket, dst_key)
+
+
+def copy_gcs_local(src_bucket: str, src_key: str, dst: Path):
+    gcs = GCSInterface(None, src_bucket)
+    return copy_objstore_local(gcs, src_bucket, src_key, dst)
+
+
 def copy_local_azure(src: Path, dst_bucket: str, dst_key: str):
-    raise NotImplementedError(f"Azure not yet supported")
+    # Note that dst_key is infact azure region
+    azure = AzureInterface(dst_key, dst_bucket)
+    return copy_local_objstore(azure, src, dst_bucket, dst_key)
 
 
 def copy_azure_local(src_bucket: str, src_key: str, dst: Path):
-    raise NotImplementedError(f"Azure not yet supported")
-
-
-def copy_local_azure(src: Path, dst_bucket: str, dst_key: str):
-    raise NotImplementedError(f"Azure not yet supported")
-
-
-def copy_azure_local(src_bucket: str, src_key: str, dst: Path):
-    raise NotImplementedError(f"Azure not yet supported")
+    # Note that src_key is infact azure region
+    azure = AzureInterface(src_key, src_bucket)
+    return copy_objstore_local(azure, src_bucket, src_key, dst)
 
 
 def copy_local_s3(src: Path, dst_bucket: str, dst_key: str, use_tls: bool = True):
