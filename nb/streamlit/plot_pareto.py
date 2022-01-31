@@ -1,3 +1,4 @@
+import pickle
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -14,15 +15,32 @@ plt.style.use("seaborn-bright")
 plt.set_cmap("plasma")
 
 @st.cache
-def load_df():
-    df = pd.read_parquet(data_dir / "df_sweep.parquet")
+def download_and_parse_data():
+    out_fname = data_dir / "pareto_data.df.parquet"
+    if not out_fname.exists():
+        print("Parsing data, this will take some time...")
+        rows = []
+        for file in (data_dir / "pareto_data").glob("*.pkl"):
+            with open(file, "rb") as f:
+                for i in pickle.load(f):
+                    x = i.__dict__.copy()
+                    for k, v in x['problem'].__dict__.items():
+                        x[f"problem_{k}"] = v
+                    del x['problem']
+                    rows.append(x)
+        df = pd.DataFrame(rows)
+
+        df_save = df.copy()
+        df_save = df.drop(columns=["var_edge_flow_gigabits", "var_conn", "var_instances_per_region", "cost_egress_by_edge"])
+        df_save.to_parquet(out_fname)
+    df = pd.from_parquet(out_fname)
     df = df.drop(columns=["problem_const_throughput_grid_gbits", "problem_const_cost_per_gb_grid"]).dropna()
     df['throughput_achieved_gbits'] = df['throughput_achieved_gbits'].apply(lambda x: x[0])
     df["problem_src_region"] = df["problem_src"].apply(lambda x: x.split("-")[0])
     df["problem_dst_region"] = df["problem_dst"].apply(lambda x: x.split("-")[0])
     return df
 
-df = load_df()
+df = download_and_parse_data()
 
 # select rows where throughput_achieved_gbits >= baseline_throughput_gbits
 df = df[df["throughput_achieved_gbits"] >= df["baseline_throughput_gbits"]]
