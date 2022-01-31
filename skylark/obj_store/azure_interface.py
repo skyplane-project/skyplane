@@ -34,7 +34,7 @@ class AzureInterface(ObjectStoreInterface):
         # self.blob_service_client = BlobServiceClient(account_url=account_url, credential=self.azure_default_credential)
 
         self.pool = ThreadPoolExecutor(max_workers=1)  # TODO: Figure this out, since azure by default has 15 workers
-        self.max_concurrency = 24
+        self.max_concurrency = 1
         self.container_client = None
 
     def _on_done_download(self, **kwargs):
@@ -131,7 +131,8 @@ class AzureInterface(ObjectStoreInterface):
         def _upload_object_helper():
             blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=dst_object_name)
             with open(src_file_path, "rb") as data:
-                blob_client.upload_blob(data)
+                # max_concurrency useless for small files
+                blob_client.upload_blob(data= data, overwrite=True, max_concurrency=self.max_concurrency)
             return True
 
         return self.pool.submit(_upload_object_helper)
