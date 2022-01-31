@@ -136,7 +136,9 @@ class ThroughputSolverILP(ThroughputSolver):
         cost = p.cost_per_instance_hr * p.instance_limit * transfer_s / 3600
         return throughput, cost
 
-    def solve_min_cost(self, p: ThroughputProblem, solver=cp.GLPK, solver_verbose=False, save_lp_path=None):
+    def solve_min_cost(
+        self, p: ThroughputProblem, solver=cp.GLPK, solver_verbose=False, save_lp_path=None, throughput_grid=None, cost_grid=None
+    ):
         regions = self.get_regions()
         try:
             sources = [regions.index(p.src)]
@@ -148,9 +150,9 @@ class ThroughputSolverILP(ThroughputSolver):
 
         # define constants
         if p.const_throughput_grid_gbits is None:
-            p.const_throughput_grid_gbits = self.get_throughput_grid()
+            p.const_throughput_grid_gbits = self.get_throughput_grid() if throughput_grid is None else throughput_grid
         if p.const_cost_per_gb_grid is None:
-            p.const_cost_per_gb_grid = self.get_cost_grid()
+            p.const_cost_per_gb_grid = self.get_cost_grid() if cost_grid is None else cost_grid
 
         # define variables
         edge_flow_gigabits = cp.Variable((len(regions), len(regions)), name="edge_flow_gigabits")
@@ -221,7 +223,12 @@ class ThroughputSolverILP(ThroughputSolver):
             solver_options["Threads"] = 1
             if save_lp_path:
                 solver_options["ResultFile"] = str(save_lp_path)
-            prob.solve(verbose=True, qcp=True, solver=cp.GUROBI)
+            prob.solve(verbose=True, qcp=True, solver=cp.GUROBI, **solver_options)
+        elif solver == cp.CBC or solver == "cbc":
+            solver_options = {}
+            solver_options["numberThreads"] = 1
+            solver_options["allowableGap"] = 1e-5
+            prob.solve(solver=solver, verbose=solver_verbose, **solver_options)
         else:
             prob.solve(solver=solver, verbose=solver_verbose)
 
@@ -276,6 +283,7 @@ class ThroughputSolverILP(ThroughputSolver):
             return None
 
         import graphviz as gv
+
         regions = self.get_regions()
         g = gv.Digraph(name="throughput_graph")
         g.attr(rankdir="LR")

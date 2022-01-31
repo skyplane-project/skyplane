@@ -1,5 +1,6 @@
 import argparse
 from datetime import datetime
+import tempfile
 import uuid
 import boto3
 import pickle
@@ -14,17 +15,17 @@ from skylark import GB, skylark_root
 from skylark.replicate.solver import ThroughputProblem, ThroughputSolution, ThroughputSolverILP
 
 
-@ray.remote
-def benchmark(p: ThroughputProblem, throughput_path: str) -> ThroughputSolution:
+@ray.remote(num_cpus=1)
+def benchmark(p: ThroughputProblem, throughput_path: str, throughput_grid=None, cost_grid=None) -> ThroughputSolution:
     solver = ThroughputSolverILP(throughput_path)
-    solution = solver.solve_min_cost(p=p, solver=cp.CBC, solver_verbose=False)
+    solution = solver.solve_min_cost(p=p, solver=cp.CBC, solver_verbose=False, throughput_grid=throughput_grid, cost_grid=cost_grid)
     solution.problem.const_throughput_grid_gbits = None
     solution.problem.const_cost_per_gb_grid = None
     return solution
 
 
 def main(args):
-    ray.init(address="auto")
+    ray.init(address=args.ray_ip)
 
     # save dir
     timestamp = datetime.now().strftime("%Y.%m.%d_%H.%M")
@@ -36,6 +37,8 @@ def main(args):
 
     solver = ThroughputSolverILP(args.throughput_path)
     regions = solver.get_regions()
+    throughput_grid_ref = ray.put(solver.get_throughput_grid())
+    cost_grid_ref = ray.put(solver.get_cost_grid())
 
     problems = []
     for src in regions:
@@ -56,45 +59,30 @@ def main(args):
     # shuffle problems
     np.random.shuffle(problems)
 
-    results = []
-    for problem in tqdm(problems, desc="dispatch"):
-        results.append(benchmark.remote(problem, args.throughput_path))
+    with tqdm(total=len(problems), desc="Solve") as pbar:
+        n_feasible, n_infeasible, n_pending = 0, 0, len(problems)
+        for batch_idx, batch in enumerate([problems[i : i + args.batch_size] for i in range(0, len(problems), args.batch_size)]):
+            # dispatch and wait
+            refs = [benchmark.remote(p, args.throughput_path, throughput_grid_ref, cost_grid_ref) for p in batch]
+            ready_refs, remaining_refs = ray.wait(refs, num_returns=1)
+            while remaining_refs:
+                ready_refs, remaining_refs = ray.wait(remaining_refs, num_returns=min(len(remaining_refs), 8))
+                pbar.update(len(ready_refs))
 
-    # get batches of results with ray.get, update tqdm progress bar
-    n_feasible, n_infeasible = 0, 0
-    remaining_refs = results
-    results_out = []
-    with tqdm(total=len(results), desc="Solve") as pbar:
-        while remaining_refs:
-            ready_refs, remaining_refs = ray.wait(remaining_refs, num_returns=1)
-            sol: List[ThroughputSolution] = ray.get(ready_refs)
-            results_out.extend(sol)
-            pbar.update(len(ready_refs))
-            n_feasible += len([s for s in sol if s.is_feasible])
-            n_infeasible += len([s for s in sol if not s.is_feasible])
-            pbar.set_postfix(feasible=n_feasible, infeasible=n_infeasible)
+            # retrieve solutions
+            solutions = ray.get(refs)
+            n_pending -= len(solutions)
+            n_feasible += len([s for s in solutions if s.is_feasible])
+            n_infeasible += len([s for s in solutions if not s.is_feasible])
+            pbar.set_postfix(feasible=f"{n_feasible}/{n_feasible + n_infeasible}", remaining=n_pending)
 
-            # save results to output periodically
-            if len(results_out) > 500:
-                out_fname = out_dir / f"{file_idx}.pkl"
-                relative_out_fname = str(out_fname.relative_to(skylark_root))
-                with open(out_fname, "wb") as f:
-                    pickle.dump(results_out, f)
-                s3.upload_file(str(out_fname), relative_out_fname)
-                out_fname.unlink()
-                print(f"Saved {len(results_out)} results to s3://{args.bucket}/{out_fname}")
-                results_out = []
-                file_idx += 1
-
-    # save remaining results
-    if len(results_out) > 0:
-        out_fname = out_dir / f"{file_idx}.pkl"
-        relative_out_fname = str(out_fname.relative_to(skylark_root))
-        with open(out_fname, "wb") as f:
-            pickle.dump(results_out, f)
-        s3.upload_file(str(out_fname), relative_out_fname)
-        out_fname.unlink()
-        print(f"Saved {len(results_out)} results to s3://{args.bucket}/{out_fname}")
+            # save results for batch
+            with tempfile.NamedTemporaryFile(mode="wb", delete=True) as f:
+                pickle.dump(solutions, f)
+                f.flush()
+                s3_out_path = f"pareto_data/{experiment_tag}/{batch_idx}.pkl"
+                s3.upload_file(str(f.name), s3_out_path)
+                tqdm.write(f"Saved batch to s3://{args.bucket}/{s3_out_path}")
 
 
 if __name__ == "__main__":
@@ -104,5 +92,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-throughputs", type=int, default=100)
     parser.add_argument("--gbyte-to-transfer", type=float, default=1)
     parser.add_argument("--bucket", type=str, default="skylark-optimizer-results")
+    parser.add_argument("--batch-size", type=int, default=1024 * 16)
+    parser.add_argument("--ray-ip", type=str, default=None)
     args = parser.parse_args()
     main(args)

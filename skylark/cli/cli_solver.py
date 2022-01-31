@@ -50,10 +50,7 @@ def solve_throughput(
         src, dst, required_throughput_gbits, gbyte_to_transfer, max_instances, const_instance_cost_multipler=instance_cost_multiplier
     )
     solution = tput.solve_min_cost(
-        problem,
-        solver=choose_solver(),
-        solver_verbose=solver_verbose,
-        save_lp_path=skylark_root / "data" / "throughput_solver.lp",
+        problem, solver=choose_solver(), solver_verbose=solver_verbose, save_lp_path=skylark_root / "data" / "throughput_solver.lp"
     )
 
     # save results

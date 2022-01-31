@@ -2,7 +2,7 @@
 
 # An unique identifier for the head node and workers of this cluster.
 cluster_name: skylark-control-plane
-upscaling_speed: 3
+upscaling_speed: 40
 max_workers: 40
 
 # This executes all commands on all nodes in the docker container,
@@ -46,7 +46,7 @@ available_node_types:
                       VolumeType: gp2
                       DeleteOnTermination: true
     ray.worker.default_c5.24xlarge_spot:
-        min_workers: 0
+        min_workers: 5
         max_workers: 40
         node_config:
             InstanceType: c5.24xlarge
