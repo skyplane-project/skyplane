@@ -33,7 +33,7 @@ class AzureInterface(ObjectStoreInterface):
         # self.azure_default_credential = DefaultAzureCredential()
         # self.blob_service_client = BlobServiceClient(account_url=account_url, credential=self.azure_default_credential)
 
-        self.pool = ThreadPoolExecutor(max_workers=1)  # TODO: Figure this out, since azure by default has 15 workers
+        self.pool = ThreadPoolExecutor(max_workers=256)  # TODO: Figure this out, since azure by default has 15 workers
         self.max_concurrency = 1
         self.container_client = None
 
