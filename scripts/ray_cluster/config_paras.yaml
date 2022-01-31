@@ -1,9 +1,7 @@
-# ray submit --start --stop data/ray_cluster_configs/config_paras_with_docker.yaml skylark/benchmark/pareto_speedups.py
-
 # An unique identifier for the head node and workers of this cluster.
 cluster_name: skylark-control-plane
-upscaling_speed: 40
-max_workers: 40
+upscaling_speed: 3
+max_workers: 20
 
 # This executes all commands on all nodes in the docker container,
 # and opens all the necessary ports to support the Ray cluster.
@@ -13,8 +11,6 @@ docker:
     container_name: "skylark_image"
     pull_before_run: True
     run_options:   # Extra options to pass into "docker run"
-        # - -v /tmp/ray_tmp_mount/skylark-control-plane/tmp/.aws/credentials:/root/.aws
-        # - -v /tmp/ray_tmp_mount/skylark-control-plane/tmp/config.json:/pkg/data/config.json
         - --ulimit nofile=65536:65536
         - --rm
 
@@ -27,45 +23,45 @@ provider:
     cache_stopped_nodes: False # If not present, the default is True.
 
 # How Ray will authenticate with newly launched nodes.
-# auth:
-#     ssh_user: ubuntu
-#     ssh_private_key: /home/ubuntu/skylark/data/keys/aws/skylark-us-west-2.pem
+auth:
+    ssh_user: ubuntu
+    ssh_private_key: /home/ubuntu/skylark/data/keys/aws/skylark-us-west-2.pem
 
 available_node_types:
     # Demand information can be found at https://aws.amazon.com/ec2/spot/instance-advisor/
     # http://boto3.readthedocs.io/en/latest/reference/services/ec2.html#EC2.ServiceResource.create_instances
     ray.head.default:
+        min_workers: 1
+        max_workers: 1
         node_config:
-            InstanceType: c5.24xlarge
-            ImageId: ami-0a0a2849f3390a302
-            # KeyName: skylark-us-west-2
-            BlockDeviceMappings:
-                - DeviceName: /dev/sda1
-                  Ebs:
-                      VolumeSize: 500
-                      VolumeType: gp2
-                      DeleteOnTermination: true
+            InstanceType: c5.2xlarge
+            ImageId: ami-0892d3c7ee96c0bf7
+            KeyName: skylark-us-west-2
     ray.worker.default_c5.24xlarge_spot:
-        min_workers: 5
-        max_workers: 40
+        min_workers: 0
+        max_workers: 20
         node_config:
             InstanceType: c5.24xlarge
-            ImageId: ami-0a0a2849f3390a302
-            # KeyName: skylark-us-west-2
+            ImageId: ami-0892d3c7ee96c0bf7
+            KeyName: skylark-us-west-2
+            InstanceMarketOptions:
+                MarketType: spot
+    ray.worker.default_c5.18xlarge_spot:
+        min_workers: 0
+        max_workers: 20
+        node_config:
+            InstanceType: c5.18xlarge
+            ImageId: ami-0892d3c7ee96c0bf7
+            KeyName: skylark-us-west-2
             InstanceMarketOptions:
                 MarketType: spot
 
 head_node_type: ray.head.default
-
-file_mounts:
-    "~/.aws": "~/.aws/"
-    "/pkg/data/config.json": "data/config.json"
-
 initialization_commands:
-    - pip install ray[all]
     - command -v docker >/dev/null 2>&1 || { curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh && sudo usermod -aG docker $USER && sudo systemctl restart docker -f; }
     - if [ -z "$(docker ps -q)" ]; then echo "No docker containers running"; else docker kill $(docker ps -q); fi
 setup_commands:
+    # - apt-get update && apt-get install --no-install-recommends -y git wget ca-certificates build-essential gcc g++ gfortran pkg-config libblas-dev liblapack-dev coinor-libcbc-dev libz-dev && pip install numpy && pip install cylp
     - apt-get update && apt-get install --no-install-recommends -y openssh-client
-    - pip install ray[all]
-    - pip install -e '.[all]'
+    - pip3 install ray[default]
+    - ls /pkg
