@@ -86,7 +86,12 @@ class GatewayDaemon:
                         fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
                         obj_store_interface = self.get_obj_store_interface(dst_region, dst_bucket)
                         with self.ul_pool_semaphore:
-                            obj_store_interface.upload_object(fpath, chunk_req.chunk.key).result()
+                            with Timer() as t:
+                                obj_store_interface.upload_object(fpath, chunk_req.chunk.key).result()
+
+                        mbps = chunk_req.chunk.chunk_length_bytes / t.elapsed / MB * 8
+                        logger.info(f"[gateway_daemon] Uploaded {chunk_req.chunk.key} at {mbps:.2f}Mbps")
+                        logger.info(f"Pending upload: {obj_store_interface.pending_uploads}, uploaded: {obj_store_interface.completed_uploads}")
                         self.chunk_store.state_finish_upload(chunk_req.chunk.chunk_id)
 
                     # start in seperate thread
@@ -131,6 +136,7 @@ class GatewayDaemon:
                                 obj_store_interface.download_object(chunk_req.chunk.key, fpath).result()
                         mbps = chunk_req.chunk.chunk_length_bytes / t.elapsed / MB * 8
                         logger.info(f"[gateway_daemon] Downloaded {chunk_req.chunk.key} at {mbps:.2f}Mbps")
+                        #logger.info(f"Pending download: {obj_store_interface.pending_downloads}, downloads: {obj_store_interface.completed_downloads}")
                         self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
                         self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id)
 

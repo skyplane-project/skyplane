@@ -24,28 +24,28 @@ class AWSCloudProvider(CloudProvider):
     @staticmethod
     def region_list() -> List[str]:
         all_regions = [
-            "af-south-1",
-            "ap-northeast-1",
-            "ap-northeast-2",
-            "ap-northeast-3",
-            "ap-east-1",
-            "ap-south-1",
-            "ap-southeast-1",
-            "ap-southeast-2",
-            # "ap-southeast-3",  # too new region, not well supported
-            "ca-central-1",
-            "eu-central-1",
-            "eu-north-1",
-            "eu-south-1",
-            "eu-west-1",
-            "eu-west-2",
-            "eu-west-3",
-            "me-south-1",
-            "sa-east-1",
+            #"af-south-1",
+            #"ap-northeast-1",
+            #"ap-northeast-2",
+            #"ap-northeast-3",
+            #"ap-east-1",
+            #"ap-south-1",
+            #"ap-southeast-1",
+            #"ap-southeast-2",
+            ## "ap-southeast-3",  # too new region, not well supported
+            #"ca-central-1",
+            #"eu-central-1",
+            #"eu-north-1",
+            #"eu-south-1",
+            #"eu-west-1",
+            #"eu-west-2",
+            #"eu-west-3",
+            #"me-south-1",
+            #"sa-east-1",
             "us-east-1",
             "us-east-2",
             "us-west-1",
-            "us-west-2",
+            #"us-west-2",
         ]
         return all_regions
 
@@ -245,7 +245,6 @@ class AWSCloudProvider(CloudProvider):
         # catch botocore.exceptions.ClientError: "An error occurred (RequestLimitExceeded) when calling the RunInstances operation (reached max retries: 4): Request limit exceeded." and retry
         for i in range(4):
             try:
-                print("region", region)
                 instance = ec2.create_instances(
                     ImageId=self.get_ubuntu_ami_id(region),
                     InstanceType=instance_class,
@@ -275,7 +274,6 @@ class AWSCloudProvider(CloudProvider):
                     ],
                 )
             except botocore.exceptions.ClientError as e:
-                print("error region", region)
                 if not "RequestLimitExceeded" in str(e):
                     raise e
                 else:
