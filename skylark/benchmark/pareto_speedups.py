@@ -105,34 +105,6 @@ def main(args):
                 logger.info(f"[{batch_idx}/{len(batches)}] Saved batch to s3://{args.bucket}/{s3_out_path}")
     ray.shutdown()
 
-                    # update stats
-                    n_feasible += len([s for s in new_sols if s.is_feasible])
-                    n_infeasible += len([s for s in new_sols if not s.is_feasible])
-                    n_pending = len(problems) - n_feasible - n_infeasible
-
-                    # compute ETA
-                    seconds_per_problem = t.elapsed / (n_feasible + n_infeasible)
-                    remaining_seconds = seconds_per_problem * n_pending
-
-                    # print progress
-                    percent_done = 100 * (n_feasible + n_infeasible) / len(problems)
-                    tqdm.write(f"{percent_done:.1f}% ({n_feasible + n_infeasible}) done out of {len(problems)}) w/ {n_feasible}/{n_infeasible} feasible, ETA: {timedelta(seconds=remaining_seconds)} at {1. / seconds_per_problem:.1f} problems/sec")
-
-                # save results for batch
-                with tempfile.NamedTemporaryFile(mode="wb", delete=True) as f:
-                    tqdm.write(f"{batch_idx}/{len(batches)}] Saving solutions for batch {batch_idx} to temp file {f.name}")
-                    pickle.dump(solutions, f)
-                    f.flush()
-                    s3_out_path = f"pareto_data/{experiment_tag}/{batch_idx}.pkl"
-                    s3.upload_file(str(f.name), s3_out_path)
-                    tqdm.write(f"{batch_idx}/{len(batches)}] Saved batch to s3://{args.bucket}/{s3_out_path}")
-
-                # cleanup
-                tqdm.write(f"{batch_idx}/{len(batches)}] Cleaning up ray")
-                ray.shutdown()
-    
-    logger.info(f"Solved {n_feasible} feasible, {n_infeasible} infeasible, {n_pending} pending")
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
