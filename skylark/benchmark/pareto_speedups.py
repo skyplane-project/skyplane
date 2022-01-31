@@ -1,20 +1,19 @@
 import argparse
-from datetime import datetime
 import pickle
-from datetime import datetime, timedelta
 import tempfile
 import uuid
+from datetime import datetime
 
 import boto3
 import cvxpy as cp
 import numpy as np
 import ray
-from tqdm import tqdm
-
 from skylark import GB, skylark_root
-from skylark.replicate.solver import ThroughputProblem, ThroughputSolution, ThroughputSolverILP
+from skylark.replicate.solver import (ThroughputProblem, ThroughputSolution,
+                                      ThroughputSolverILP)
 from skylark.utils import logger
 from skylark.utils.utils import Timer
+from tqdm import tqdm
 
 
 def get_futures(futures, desc="Jobs", progress_bar=True):
@@ -31,7 +30,7 @@ def get_futures(futures, desc="Jobs", progress_bar=True):
 
 
 @ray.remote
-def benchmark(p: ThroughputProblem, throughput_path: str):
+def benchmark(p: ThroughputProblem, throughput_path: str) -> ThroughputSolution:
     solver = ThroughputSolverILP(throughput_path)
     solution = solver.solve_min_cost(
         p=p,
