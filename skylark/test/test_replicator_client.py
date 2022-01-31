@@ -35,7 +35,7 @@ def parse_args():
     # object information
     parser.add_argument("--key-prefix", default="/test/direct_replication", help="S3 key prefix for all objects")
     parser.add_argument("--chunk-size-mb", default=128, type=int, help="Chunk size in MB")
-    parser.add_argument("--n-chunks", default=16, type=int, help="Number of chunks in bucket")
+    parser.add_argument("--n-chunks", default=512, type=int, help="Number of chunks in bucket")
     parser.add_argument("--skip-upload", action="store_true", help="Skip uploading objects to S3")
 
     # bucket namespace

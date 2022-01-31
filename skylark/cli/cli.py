@@ -193,8 +193,10 @@ def replicate_json(
     size_total_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB (across n_chunks chunks)"),
     n_chunks: int = 512,
     # bucket options
-    use_random_data: bool = True,
+    use_random_data: bool = typer.Option(False, "--random-data", help="Use random data"),
     bucket_prefix: str = "skylark",
+    source_bucket: str = typer.Option(None, "--source-bucket", help="Source bucket url"),
+    dest_bucket: str = typer.Option(None, "--dest-bucket", help="Destination bucket url"),
     key_prefix: str = "/test/replicate_random",
     # gateway provisioning options
     reuse_gateways: bool = True,
@@ -202,7 +204,7 @@ def replicate_json(
     # cloud provider specific options
     azure_subscription: Optional[str] = None,
     gcp_project: Optional[str] = None,
-    aws_instance_class: str = "m5.8xlarge",
+    aws_instance_class: str = "m5.4xlarge",
     azure_instance_class: str = "Standard_D32_v5",
     gcp_instance_class: Optional[str] = "n2-standard-32",
     gcp_use_premium_network: bool = True,
@@ -256,7 +258,16 @@ def replicate_json(
             random_chunk_size_mb=chunk_size_mb,
         )
     else:
-        raise NotImplementedError()
+        # TODO: Don't hardcode n_chunks 
+        # TODO: Don't hardcode obj keys
+        job = ReplicationJob(
+            source_region=topo.source_region(),
+            source_bucket=source_bucket,
+            dest_region=topo.sink_region(),
+            dest_bucket=dest_bucket,
+            objs=[f"{key_prefix}/{i}" for i in range(n_chunks)],
+            random_chunk_size_mb=chunk_size_mb,
+        )
 
     total_bytes = n_chunks * chunk_size_mb * MB
     job = rc.run_replication_plan(job)
