@@ -90,6 +90,7 @@ class GCSInterface(ObjectStoreInterface):
         src_object_name = src_object_name if src_object_name[0] != "/" else src_object_name
 
         def _download_object_helper(offset, **kwargs):
+
             bucket = self._gcs_client.bucket(self.bucket_name)
             blob = bucket.blob(src_object_name)
             chunk = blob.download_as_string()

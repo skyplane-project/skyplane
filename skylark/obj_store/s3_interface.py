@@ -1,6 +1,6 @@
 import mimetypes
 import os
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future
 from typing import Iterator, List
 
 import botocore.exceptions
@@ -47,8 +47,6 @@ class S3Interface(ObjectStoreInterface):
             part_size=None,
             tls_mode=S3RequestTlsMode.ENABLED if use_tls else S3RequestTlsMode.DISABLED,
         )
-
-        self.pool = ThreadPoolExecutor(max_workers=64)
 
     def _on_done_download(self, **kwargs):
         self.completed_downloads += 1
@@ -112,25 +110,23 @@ class S3Interface(ObjectStoreInterface):
     def download_object(self, src_object_name, dst_file_path) -> Future:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = "/" + src_object_name if src_object_name[0] != "/" else src_object_name
-        def _download_object_helper(offset, **kwargs):
-            download_headers = HttpHeaders([("host", self.bucket_name + ".s3." + self.aws_region + ".amazonaws.com")])
-            request = HttpRequest("GET", src_object_name, download_headers)
+        download_headers = HttpHeaders([("host", self.bucket_name + ".s3." + self.aws_region + ".amazonaws.com")])
+        request = HttpRequest("GET", src_object_name, download_headers)
 
-            def _on_body_download(offset, chunk, **kwargs):
-                if not os.path.exists(dst_file_path):
-                    open(dst_file_path, "a").close()
-                with open(dst_file_path, "rb+") as f:
-                    f.seek(offset)
-                    f.write(chunk)
+        def _on_body_download(offset, chunk, **kwargs):
+            if not os.path.exists(dst_file_path):
+                open(dst_file_path, "a").close()
+            with open(dst_file_path, "rb+") as f:
+                f.seek(offset)
+                f.write(chunk)
 
-            return self._s3_client.make_request(
-                recv_filepath=dst_file_path,
-                request=request,
-                type=S3RequestType.GET_OBJECT,
-                on_done=self._on_done_download,
-                on_body=_on_body_download,
-            ).finished_future.result()
-        return self.pool.submit(_download_object_helper, 0)
+        return self._s3_client.make_request(
+            recv_filepath=dst_file_path,
+            request=request,
+            type=S3RequestType.GET_OBJECT,
+            on_done=self._on_done_download,
+            on_body=_on_body_download,
+        ).finished_future
 
     def upload_object(self, src_file_path, dst_object_name, content_type="infer") -> Future:
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)

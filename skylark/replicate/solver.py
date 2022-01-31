@@ -98,6 +98,14 @@ class ThroughputSolver:
                 data_grid[i, j] = cost
         return data_grid.round(2)
 
+    def get_baseline_throughput_and_cost(self, p: ThroughputProblem) -> Tuple[float, float]:
+        src, dst = p.src, p.dst
+        throughput = max(p.instance_limit * self.get_path_throughput(src, dst) / GB, 1e-6)
+        transfer_s = p.gbyte_to_transfer * GBIT_PER_GBYTE / throughput
+        instance_cost = p.cost_per_instance_hr * p.instance_limit * transfer_s / 3600
+        egress_cost = p.gbyte_to_transfer * self.get_path_cost(src, dst)
+        return throughput, egress_cost, instance_cost
+    
     def plot_throughput_grid(self, data_grid, title="Throughput (Gbps)"):
         for i in range(data_grid.shape[0]):
             for j in range(data_grid.shape[1]):
@@ -130,13 +138,6 @@ class ThroughputSolver:
 
 
 class ThroughputSolverILP(ThroughputSolver):
-    def get_baseline_throughput_and_cost(self, p: ThroughputProblem) -> Tuple[float, float]:
-        src, dst = p.src, p.dst
-        throughput = max(p.instance_limit * self.get_path_throughput(src, dst) / GB, 1e-6)
-        transfer_s = p.gbyte_to_transfer * GBIT_PER_GBYTE / throughput
-        instance_cost = p.cost_per_instance_hr * p.instance_limit * transfer_s / 3600
-        egress_cost = p.gbyte_to_transfer * self.get_path_cost(src, dst)
-        return throughput, egress_cost, instance_cost
 
     def solve_min_cost(
         self, p: ThroughputProblem, instance_cost_multipler: float = 1.0, solver=cp.GLPK, solver_verbose=False, save_lp_path=None
@@ -226,7 +227,7 @@ class ThroughputSolverILP(ThroughputSolver):
         else:
             prob.solve(solver=solver, verbose=solver_verbose)
 
-        baseline_throughput, baseline_egress_cost, baseline_instance_cost = self.get_baseline_throughput_and_cost(prob)
+        baseline_throughput, baseline_egress_cost, baseline_instance_cost = self.get_baseline_throughput_and_cost(p)
         if prob.status == "optimal":
             return ThroughputSolution(
                 problem=p,
