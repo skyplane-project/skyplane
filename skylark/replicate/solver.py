@@ -1,7 +1,7 @@
 from collections import namedtuple
 from dataclasses import dataclass
 import shutil
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import cvxpy as cp
 import graphviz as gv
@@ -39,6 +39,7 @@ class ThroughputProblem:
 class ThroughputSolution:
     problem: ThroughputProblem
     is_feasible: bool
+    extra_data: Optional[Dict] = None
 
     # solution variables
     var_edge_flow_gigabits: Optional[np.ndarray] = None
@@ -52,6 +53,7 @@ class ThroughputSolution:
     cost_instance: Optional[float] = None
     cost_total: Optional[float] = None
     transfer_runtime_s: Optional[float] = None
+
 
 
 class ThroughputSolver:
@@ -205,7 +207,9 @@ class ThroughputSolverILP(ThroughputSolver):
             solver_options["Threads"] = 1
             if save_lp_path:
                 solver_options["ResultFile"] = str(save_lp_path)
-            prob.solve(verbose=solver_verbose, qcp=True, solver=cp.GUROBI)
+            if not solver_verbose:
+                solver_options["OutputFlag"] = 0
+            prob.solve(verbose=solver_verbose, qcp=True, solver=cp.GUROBI, reoptimize=True)
         else:
             prob.solve(solver=solver, verbose=solver_verbose)
 
@@ -224,8 +228,7 @@ class ThroughputSolverILP(ThroughputSolver):
                 transfer_runtime_s=runtime_s,
             )
         else:
-            logger.warning(f"Solver status: {prob.status}")
-            return ThroughputSolution(problem=p, is_feasible=False)
+            return ThroughputSolution(problem=p, is_feasible=False, extra_data=dict(status=prob.status))
 
     def print_solution(self, solution: ThroughputSolution):
         if solution.is_feasible:
