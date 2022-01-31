@@ -222,7 +222,8 @@ class Server:
         # launch monitoring
         logger.debug(desc_prefix + ": Starting monitoring")
         self.run_command(make_dozzle_command(log_viewer_port))
-        self.run_command(make_netdata_command(activity_monitor_port, netdata_hostname=self.public_ip()))
+        # disable netdata for benchmarking
+        # self.run_command(make_netdata_command(activity_monitor_port, netdata_hostname=self.public_ip()))
 
         # launch gateway
         logger.debug(desc_prefix + ": Pulling docker image")

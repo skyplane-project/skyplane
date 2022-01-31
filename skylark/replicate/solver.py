@@ -125,6 +125,13 @@ class ThroughputSolver:
 
 
 class ThroughputSolverILP(ThroughputSolver):
+    def get_baseline_throughput_and_cost(self, p: ThroughputProblem, src_idx: int, dst_idx: int) -> Tuple[float, float]:
+        throughput = max(p.instance_limit * p.const_throughput_grid_gbits[src_idx, dst_idx], 1e-6)
+        transfer_s = p.gbyte_to_transfer * GBIT_PER_GBYTE / throughput
+        instance_cost = p.cost_per_instance_hr * p.instance_limit * transfer_s / 3600
+        egress_cost = p.gbyte_to_transfer * p.const_cost_per_gb_grid[src_idx, dst_idx]
+        return throughput, instance_cost + egress_cost
+
     def solve_min_cost(
         self, p: ThroughputProblem, instance_cost_multipler: float = 1.0, solver=cp.GLPK, solver_verbose=False, save_lp_path=None
     ):
