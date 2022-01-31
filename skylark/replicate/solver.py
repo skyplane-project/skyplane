@@ -1,18 +1,19 @@
+import io
+import shutil
 from collections import namedtuple
 from dataclasses import dataclass
-import shutil
+from functools import lru_cache
 from typing import List, Optional, Tuple
 
 import cvxpy as cp
-import graphviz as gv
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from skylark.utils import logger
 
 from skylark import GB
 from skylark.compute.cloud_providers import CloudProvider
 from skylark.replicate.replication_plan import ReplicationTopology
+from skylark.utils import logger
 
 GBIT_PER_GBYTE = 8
 
@@ -26,6 +27,7 @@ class ThroughputProblem:
     instance_limit: int
     const_throughput_grid_gbits: Optional[np.ndarray] = None  # if not set, load from profiles
     const_cost_per_gb_grid: Optional[np.ndarray] = None  # if not set, load from profiles
+    const_instance_cost_multipler: float = 1.0
     # provider bandwidth limits (egress, ingress)
     aws_instance_throughput_limit: Tuple[float, float] = (5, 10)
     gcp_instance_throughput_limit: Tuple[float, float] = (8, 12.5)  # limited to 12.5 gbps in practice due to CPU limit
@@ -53,21 +55,26 @@ class ThroughputSolution:
     cost_total: Optional[float] = None
     transfer_runtime_s: Optional[float] = None
 
+    # estimated values of baseline throughput, cost, and speedup
+    baseline_throughput_gbits: Optional[float] = None
+    baseline_cost: Optional[float] = None
+
 
 class ThroughputSolver:
-    def __init__(self, df_path, default_throughput=0.0):
-        self.df = pd.read_csv(df_path).set_index(["src_region", "dst_region"])
+    def __init__(self, df_path, default_throughput=1e-6):
+        self.df = pd.read_csv(df_path).set_index(["src_region", "dst_region", "src_tier", "dst_tier"]).sort_index()
         self.default_throughput = default_throughput
 
-    def get_path_throughput(self, src, dst):
+    def get_path_throughput(self, src, dst, src_tier="PREMIUM", dst_tier="PREMIUM") -> float:
         if src == dst:
             return self.default_throughput
-        elif (src, dst) not in self.df.index:
-            return None
-        return self.df.loc[(src, dst), "throughput_sent"]
+        elif (src, dst, src_tier, dst_tier) not in self.df.index:
+            logger.warning(f"No throughput data for {src} -> {dst} ({src_tier} -> {dst_tier})")
+            return self.default_throughput
+        return float(self.df.loc[(src, dst, src_tier, dst_tier), "throughput_received"].values[0])
 
-    def get_path_cost(self, src, dst):
-        return CloudProvider.get_transfer_cost(src, dst)
+    def get_path_cost(self, src, dst, premium_tier=True):
+        return CloudProvider.get_transfer_cost(src, dst, premium_tier=premium_tier)
 
     def get_regions(self):
         return list(sorted(set(list(self.df.index.levels[0].unique()) + list(self.df.index.levels[1].unique()))))
@@ -77,7 +84,7 @@ class ThroughputSolver:
         data_grid = np.zeros((len(regions), len(regions)))
         for i, src in enumerate(regions):
             for j, dst in enumerate(regions):
-                data_grid[i, j] = self.get_path_throughput(src, dst) if self.get_path_throughput(src, dst) is not None else 0
+                data_grid[i, j] = self.get_path_throughput(src, dst, src_tier="PREMIUM", dst_tier="PREMIUM")
         data_grid = data_grid / GB
         return data_grid.round(4)
 
@@ -123,20 +130,29 @@ class ThroughputSolver:
 
 
 class ThroughputSolverILP(ThroughputSolver):
-    def solve_min_cost(
-        self, p: ThroughputProblem, instance_cost_multipler: float = 1.0, solver=cp.GLPK, solver_verbose=False, save_lp_path=None
-    ):
-        logger.debug(f"Solving for problem {p}")
+    def get_baseline_throughput_and_cost(self, p: ThroughputProblem, src_idx: int, dst_idx: int) -> Tuple[float, float]:
+        throughput = max(p.instance_limit * p.const_throughput_grid_gbits[src_idx, dst_idx], 1e-6)
+        transfer_s = p.gbyte_to_transfer * GBIT_PER_GBYTE / throughput
+        cost = p.cost_per_instance_hr * p.instance_limit * transfer_s / 3600
+        return throughput, cost
 
+    def solve_min_cost(
+        self, p: ThroughputProblem, solver=cp.GLPK, solver_verbose=False, save_lp_path=None, throughput_grid=None, cost_grid=None
+    ):
         regions = self.get_regions()
-        sources = [regions.index(p.src)]
-        sinks = [regions.index(p.dst)]
+        try:
+            sources = [regions.index(p.src)]
+            sinks = [regions.index(p.dst)]
+        except ValueError as e:
+            logger.error(f"{p.src} or {p.dst} not in regions")
+            logger.error(f"regions: {regions}")
+            raise e
 
         # define constants
         if p.const_throughput_grid_gbits is None:
-            p.const_throughput_grid_gbits = self.get_throughput_grid()
+            p.const_throughput_grid_gbits = self.get_throughput_grid() if throughput_grid is None else throughput_grid
         if p.const_cost_per_gb_grid is None:
-            p.const_cost_per_gb_grid = self.get_cost_grid()
+            p.const_cost_per_gb_grid = self.get_cost_grid() if cost_grid is None else cost_grid
 
         # define variables
         edge_flow_gigabits = cp.Variable((len(regions), len(regions)), name="edge_flow_gigabits")
@@ -199,7 +215,7 @@ class ThroughputSolverILP(ThroughputSolver):
         # instance cost
         per_instance_cost: float = p.cost_per_instance_hr / 3600 * runtime_s
         instance_cost = cp.sum(instances_per_region) * per_instance_cost
-        total_cost = cost_egress + instance_cost * instance_cost_multipler
+        total_cost = cost_egress + instance_cost * p.const_instance_cost_multipler
         prob = cp.Problem(cp.Minimize(total_cost), constraints)
 
         if solver == cp.GUROBI or solver == "gurobi":
@@ -207,27 +223,36 @@ class ThroughputSolverILP(ThroughputSolver):
             solver_options["Threads"] = 1
             if save_lp_path:
                 solver_options["ResultFile"] = str(save_lp_path)
-            prob.solve(verbose=True, qcp=True, solver=cp.GUROBI)
+            prob.solve(verbose=True, qcp=True, solver=cp.GUROBI, **solver_options)
+        elif solver == cp.CBC or solver == "cbc":
+            solver_options = {}
+            solver_options["numberThreads"] = 1
+            solver_options["allowableGap"] = 1e-5
+            prob.solve(solver=solver, verbose=solver_verbose, **solver_options)
         else:
             prob.solve(solver=solver, verbose=solver_verbose)
 
+        baseline_throughput, baseline_cost = self.get_baseline_throughput_and_cost(p, sources[0], sinks[0])
         if prob.status == "optimal":
             return ThroughputSolution(
                 problem=p,
                 is_feasible=True,
-                var_edge_flow_gigabits=edge_flow_gigabits.value.round(6),
-                var_conn=conn.value.round(6),
-                var_instances_per_region=instances_per_region.value,
+                var_edge_flow_gigabits=edge_flow_gigabits.value.round(4),
+                var_conn=conn.value.round(4),
+                var_instances_per_region=instances_per_region.value.astype(int),
                 throughput_achieved_gbits=[node_flow_in[i].value for i in sinks],
                 cost_egress_by_edge=cost_per_edge.value,
                 cost_egress=cost_egress.value,
                 cost_instance=instance_cost.value,
                 cost_total=instance_cost.value + cost_egress.value,
                 transfer_runtime_s=runtime_s,
+                baseline_throughput_gbits=baseline_throughput,
+                baseline_cost=baseline_cost,
             )
         else:
-            logger.warning(f"Solver status: {prob.status}")
-            return ThroughputSolution(problem=p, is_feasible=False)
+            return ThroughputSolution(
+                problem=p, is_feasible=False, baseline_throughput_gbits=baseline_throughput, baseline_cost=baseline_cost
+            )
 
     def print_solution(self, solution: ThroughputSolution):
         if solution.is_feasible:
@@ -250,12 +275,14 @@ class ThroughputSolverILP(ThroughputSolver):
         else:
             logger.debug("No feasible solution")
 
-    def plot_graphviz(self, solution: ThroughputSolution) -> gv.Digraph:
+    def plot_graphviz(self, solution: ThroughputSolution):
         # if dot is not installed
         has_dot = shutil.which("dot") is not None
         if not has_dot:
             logger.error("Graphviz is not installed. Please install it to plot the solution (sudo apt install graphviz).")
             return None
+
+        import graphviz as gv
 
         regions = self.get_regions()
         g = gv.Digraph(name="throughput_graph")
@@ -270,7 +297,7 @@ class ThroughputSolverILP(ThroughputSolver):
             for j, dst in enumerate(regions):
                 if solution.var_edge_flow_gigabits[i, j] > 0:
                     link_cost = self.get_path_cost(src, dst)
-                    label = f"{solution.var_edge_flow_gigabits[i, j]:.2f} Gbps (of {solution.problem.const_throughput_grid_gbits[i, j]:.2f}Gbps), "
+                    label = f"{solution.var_edge_flow_gigabits()[i, j]:.2f} Gbps (of {solution.problem.const_throughput_grid_gbits[i, j]:.2f}Gbps), "
                     label += f"\n${link_cost:.4f}/GB over {solution.var_conn[i, j]:.1f}c"
                     src_label = f"{src.replace(':', '/')}x{solution.var_instances_per_region[i]:.1f}"
                     dst_label = f"{dst.replace(':', '/')}x{solution.var_instances_per_region[j]:.1f}"
