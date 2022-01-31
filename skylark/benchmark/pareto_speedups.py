@@ -9,8 +9,7 @@ import cvxpy as cp
 import numpy as np
 import ray
 from skylark import GB, skylark_root
-from skylark.replicate.solver import (ThroughputProblem, ThroughputSolution,
-                                      ThroughputSolverILP)
+from skylark.replicate.solver import ThroughputProblem, ThroughputSolution, ThroughputSolverILP
 from skylark.utils import logger
 from skylark.utils.utils import Timer
 from tqdm import tqdm
@@ -53,7 +52,7 @@ def main(args):
     solver = ThroughputSolverILP(throughput_path)
     regions = solver.get_regions()
     regions = np.random.choice(regions, size=6, replace=False)
-    
+
     logger.info("Building problem...")
     problems = []
     for src in regions:
@@ -87,12 +86,14 @@ def main(args):
             n_feasible, n_infeasible = len([r for r in results if r.is_feasible]), len([r for r in results if not r.is_feasible])
             count += len(results)
             logger.info(f"[{batch_idx}/{len(batches)}] Got {len(results)} results, {n_feasible} feasible, {n_infeasible} infeasible")
-            
+
             seconds_per_problem = t.elapsed / count
             eta = seconds_per_problem * (len(problems) - count)
             eta_h, eta_s = divmod(eta, 3600)
             eta_m, eta_s = divmod(eta_s, 60)
-            logger.info(f"[{batch_idx}/{len(batches)}] Current ETA: {int(eta_h)}:{int(eta_m)}:{int(eta_s)} ({1. / seconds_per_problem:.2f} problems/s)")
+            logger.info(
+                f"[{batch_idx}/{len(batches)}] Current ETA: {int(eta_h)}:{int(eta_m)}:{int(eta_s)} ({1. / seconds_per_problem:.2f} problems/s)"
+            )
 
             # save results for batch
             with tempfile.NamedTemporaryFile(mode="wb", delete=True) as f:

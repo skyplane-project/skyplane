@@ -105,7 +105,7 @@ class ThroughputSolver:
         instance_cost = p.cost_per_instance_hr * p.instance_limit * transfer_s / 3600
         egress_cost = p.gbyte_to_transfer * self.get_path_cost(src, dst)
         return throughput, egress_cost, instance_cost
-    
+
     def plot_throughput_grid(self, data_grid, title="Throughput (Gbps)"):
         for i in range(data_grid.shape[0]):
             for j in range(data_grid.shape[1]):
@@ -138,7 +138,6 @@ class ThroughputSolver:
 
 
 class ThroughputSolverILP(ThroughputSolver):
-
     def solve_min_cost(
         self, p: ThroughputProblem, instance_cost_multipler: float = 1.0, solver=cp.GLPK, solver_verbose=False, save_lp_path=None
     ):

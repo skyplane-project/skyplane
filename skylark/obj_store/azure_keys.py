@@ -19,18 +19,16 @@ azure_storage_credentials = {
         "name": "skycentralus",
         "connection_string": "DefaultEndpointsProtocol=https;AccountName=skycentralus;AccountKey=CRybVbNnJ0HFq6qZP7/llBXOls5X+vLZR5DL/Za9Taxj24urkfrSGrVy55tZne5zAXg/MWbZ1N+YC5RWWjfUiA==;EndpointSuffix=core.windows.net",
     },
-    "eastus":{
-        "name":"skypremiumblockuseast",
+    "eastus": {
+        "name": "skypremiumblockuseast",
         "connection_string": "DefaultEndpointsProtocol=https;AccountName=skypremiumblockuseast;AccountKey=lCJszpbQ33Q49geu+tVNO7nqKFtQMdrSOmmk9rmLcLSWB5Tt9CSsl5JLUXrEoHz9/gYlvBDUdrB8BN3FWwK7xQ==;EndpointSuffix=core.windows.net",
     },
-    "skypremiumfileuseast":{
-        "name":"skypremiumfileuseast",
-        "connection_string":"DefaultEndpointsProtocol=https;AccountName=skypremiumfileuseast;AccountKey=dFEPqWjniwzunO5TkvW5Y4Ds8YK3OvWEtrT2HIH3UTPC+oETPcZufBHoZyhJkfupwHd0247rKyFUDZsj7RI62g==;EndpointSuffix=core.windows.net",
+    "skypremiumfileuseast": {
+        "name": "skypremiumfileuseast",
+        "connection_string": "DefaultEndpointsProtocol=https;AccountName=skypremiumfileuseast;AccountKey=dFEPqWjniwzunO5TkvW5Y4Ds8YK3OvWEtrT2HIH3UTPC+oETPcZufBHoZyhJkfupwHd0247rKyFUDZsj7RI62g==;EndpointSuffix=core.windows.net",
     },
-    "skypremiumpageuseast":{
-        "name":"skypremiumpageuseast",
-        "connection_string":"DefaultEndpointsProtocol=https;AccountName=skypremiumpageuseast;AccountKey=pWuLQGXSAmM358jRMi94rcPAu0NQSYDSjk0+vl7fyNEAXpvdb3bclimBnDxpb2lsBfTrwTa7diWjSz62THbsMg==;EndpointSuffix=core.windows.net",
+    "skypremiumpageuseast": {
+        "name": "skypremiumpageuseast",
+        "connection_string": "DefaultEndpointsProtocol=https;AccountName=skypremiumpageuseast;AccountKey=pWuLQGXSAmM358jRMi94rcPAu0NQSYDSjk0+vl7fyNEAXpvdb3bclimBnDxpb2lsBfTrwTa7diWjSz62THbsMg==;EndpointSuffix=core.windows.net",
     },
-
-
 }
