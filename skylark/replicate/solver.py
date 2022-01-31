@@ -1,7 +1,7 @@
 from collections import namedtuple
 from dataclasses import dataclass
 import shutil
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import cvxpy as cp
 import graphviz as gv
@@ -39,6 +39,7 @@ class ThroughputProblem:
 class ThroughputSolution:
     problem: ThroughputProblem
     is_feasible: bool
+    extra_data: Optional[Dict] = None
 
     # solution variables
     var_edge_flow_gigabits: Optional[np.ndarray] = None
@@ -54,17 +55,18 @@ class ThroughputSolution:
     transfer_runtime_s: Optional[float] = None
 
 
+
 class ThroughputSolver:
     def __init__(self, df_path, default_throughput=0.0):
-        self.df = pd.read_csv(df_path).set_index(["src_region", "dst_region"])
+        self.df = pd.read_csv(df_path).set_index(["src_region", "dst_region", "src_tier", "dst_tier"]).sort_index()
         self.default_throughput = default_throughput
 
-    def get_path_throughput(self, src, dst):
+    def get_path_throughput(self, src, dst, src_tier="PREMIUM", dst_tier="PREMIUM"):
         if src == dst:
             return self.default_throughput
-        elif (src, dst) not in self.df.index:
+        elif (src, dst, src_tier, dst_tier) not in self.df.index:
             return None
-        return self.df.loc[(src, dst), "throughput_sent"]
+        return self.df.loc[(src, dst, src_tier, dst_tier), "throughput_sent"].values[0]
 
     def get_path_cost(self, src, dst):
         return CloudProvider.get_transfer_cost(src, dst)
@@ -126,8 +128,6 @@ class ThroughputSolverILP(ThroughputSolver):
     def solve_min_cost(
         self, p: ThroughputProblem, instance_cost_multipler: float = 1.0, solver=cp.GLPK, solver_verbose=False, save_lp_path=None
     ):
-        logger.debug(f"Solving for problem {p}")
-
         regions = self.get_regions()
         sources = [regions.index(p.src)]
         sinks = [regions.index(p.dst)]
@@ -207,7 +207,9 @@ class ThroughputSolverILP(ThroughputSolver):
             solver_options["Threads"] = 1
             if save_lp_path:
                 solver_options["ResultFile"] = str(save_lp_path)
-            prob.solve(verbose=True, qcp=True, solver=cp.GUROBI)
+            if not solver_verbose:
+                solver_options["OutputFlag"] = 0
+            prob.solve(verbose=solver_verbose, qcp=True, solver=cp.GUROBI, reoptimize=True)
         else:
             prob.solve(solver=solver, verbose=solver_verbose)
 
@@ -226,8 +228,7 @@ class ThroughputSolverILP(ThroughputSolver):
                 transfer_runtime_s=runtime_s,
             )
         else:
-            logger.warning(f"Solver status: {prob.status}")
-            return ThroughputSolution(problem=p, is_feasible=False)
+            return ThroughputSolution(problem=p, is_feasible=False, extra_data=dict(status=prob.status))
 
     def print_solution(self, solution: ThroughputSolution):
         if solution.is_feasible:
