@@ -45,6 +45,7 @@ from skylark.cli.cli_helper import (
 )
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
+from skylark.obj_store.object_store_interface import ObjectStoreInterface
 
 app = typer.Typer(name="skylark")
 app.add_typer(skylark.cli.experiments.app, name="experiments")
@@ -260,16 +261,22 @@ def replicate_json(
         job = rc.run_replication_plan(job)
         total_bytes = n_chunks * chunk_size_mb * MB
     else:
-        # TODO: Don't hardcode n_chunks 
-        # TODO: Don't hardcode obj keys
+
+        # get object keys with prefix 
+        objs = ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(key_prefix)
+        obj_keys = list([obj.key for obj in objs])
+
+        # create replication job
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=source_bucket,
             dest_region=topo.sink_region(),
             dest_bucket=dest_bucket,
-            objs=[f"{key_prefix}/{i}" for i in range(n_chunks)],
+            objs=obj_keys,
         )
         job = rc.run_replication_plan(job)
+
+        # query chunk sizes
         total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
 
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
