@@ -37,7 +37,7 @@ class GatewayDaemon:
         self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, outgoing_ports=outgoing_ports)
         print(outgoing_ports)
 
-        self.obj_store_conn = GatewayObjStoreConn(chunk_store=self.chunk_store, max_conn=128)
+        self.obj_store_conn = GatewayObjStoreConn(chunk_store=self.chunk_store, max_conn=32)
         #self.obj_store_interfaces: Dict[str, ObjectStoreInterface] = {}
 
         # Download thread pool

@@ -1,4 +1,5 @@
 import queue
+import threading
 import socket
 from multiprocessing import Event, Manager, Process, Value
 from typing import Dict, List, Optional
@@ -69,11 +70,14 @@ class GatewayObjStoreConn:
             p.join()
         self.processes = []
 
+    def download(region, bucket, fpath, key):
+        obj_store_interface = self.get_obj_store_interface(region, bucket)
+
     def worker_loop(self, worker_id: int):
         setproctitle.setproctitle(f"skylark-gateway-sender:{worker_id}")
         self.worker_id = worker_id
 
-
+       
         while not self.exit_flags[worker_id].is_set():
             try:
                 request = self.worker_queue.get_nowait()
@@ -94,27 +98,49 @@ class GatewayObjStoreConn:
 
                 self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id)
 
-                obj_store_interface = self.get_obj_store_interface(region, bucket)
-                obj_store_interface.upload_object(fpath, chunk_req.chunk.key).result()
+                logger.debug(f"[obj_store:{self.worker_id}] Start upload {chunk_req.chunk.chunk_id} to {bucket}")
+                def upload(region, bucket, fpath, key, chunk_id):
+                    obj_store_interface = self.get_obj_store_interface(region, bucket)
+                    obj_store_interface.upload_object(fpath, key).result()
+                    self.chunk_store.state_finish_upload(chunk_id)
+                    logger.debug(f"[obj_store:{self.worker_id}] Uploaded {chunk_id} to {bucket}")
 
-                logger.debug(f"[obj_store:{self.worker_id}] Uploaded {chunk_req.chunk.chunk_id} to {bucket}")
-                self.chunk_store.state_finish_upload(chunk_req.chunk.chunk_id)
+                threading.Thread(target=upload, args=(region, bucket, fpath, chunk_req.chunk.key, chunk_req.chunk.chunk_id)).start()
+
+                #obj_store_interface = self.get_obj_store_interface(region, bucket)
+
+                #futures.append(obj_store_interface.upload_object(fpath, chunk_req.chunk.key)) #.result()
+
+                #logger.debug(f"[obj_store:{self.worker_id}] Uploaded {chunk_req.chunk.chunk_id} to {bucket}")
+                #self.chunk_store.state_finish_upload(chunk_req.chunk.chunk_id)
 
             elif req_type == "download":
                 assert chunk_req.src_type == "object_store"
                 # TODO: download from object store
                 region = chunk_req.src_region
                 bucket = chunk_req.src_object_store_bucket
+                    
+                logger.debug(f"[obj_store:{self.worker_id}] Starting download {chunk_req.chunk.chunk_id} from {bucket}")
+                def download(region, bucket, fpath, key, chunk_id):
+                    obj_store_interface = self.get_obj_store_interface(region, bucket)
+                    obj_store_interface.download_object(key, fpath).result()
+                    self.chunk_store.state_finish_download(chunk_id)
+                    logger.debug(f"[obj_store:{self.worker_id}] Downloaded {chunk_id} from {bucket}")
 
-                obj_store_interface = self.get_obj_store_interface(region, bucket)
-                obj_store_interface.download_object(chunk_req.chunk.key, fpath).result()
+                # wait for request to return in sepearte thread, so we can update chunk state
+                threading.Thread(target=download, args=(region, bucket, fpath, chunk_req.chunk.key, chunk_req.chunk.chunk_id)).start()
 
-                logger.debug(f"[obj_store:{self.worker_id}] Downloaded {chunk_req.chunk.chunk_id} from {bucket}")
-                self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id)
+
+                #obj_store_interface = self.get_obj_store_interface(region, bucket)
+                #obj_store_interface.download_object(chunk_req.chunk.key, fpath) #.result()
+
+                #logger.debug(f"[obj_store:{self.worker_id}] Downloaded {chunk_req.chunk.chunk_id} from {bucket}")
+                #self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id)
             else: 
                 raise ValueError(f"Invalid location for chunk req, {req_type}: {chunk_req.src_type}->{chunk_req.dst_type}")
 
 
+        wait(futures)
 
         # close destination sockets
         logger.info(f"[sender:{worker_id}] exiting")
