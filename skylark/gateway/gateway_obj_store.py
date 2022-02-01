@@ -22,17 +22,12 @@ class ObjStoreRequest:
     chunk_req: ChunkRequest
     req_type: str
 
-
-
-
-
 class GatewayObjStoreConn:
     def __init__(self, chunk_store, max_conn=32):
 
         self.chunk_store = chunk_store
         self.n_processes = max_conn
         self.processes = []
-        #self.processes = concurrent.futures.ProcessPoolExecutor(max_conn)
 
         # shared state
         self.manager = Manager()
@@ -44,9 +39,6 @@ class GatewayObjStoreConn:
         self.worker_id: Optional[int] = None
         self.obj_store_interfaces: Dict[str, ObjectStoreInterface] = {}
 
-        # TODO: fill these out? 
-        self.uploaded_chunk_ids: List[int] = []
-        self.downloaded_chunk_ids: List[int] = []
 
     # interact with object store
     def get_obj_store_interface(self, region: str, bucket: str) -> ObjectStoreInterface:
@@ -57,7 +49,6 @@ class GatewayObjStoreConn:
         return self.obj_store_interfaces[key]
 
     def start_workers(self):
-        print("creating workers object store")
         for i in range(self.n_processes):
             p = Process(target=self.worker_loop, args=(i,))
             p.start()
@@ -92,7 +83,6 @@ class GatewayObjStoreConn:
            
             if req_type == "upload":
                 assert chunk_req.dst_type == "object_store"
-                # TODO: upload to object store
                 region = chunk_req.dst_region
                 bucket = chunk_req.dst_object_store_bucket
 
@@ -102,21 +92,16 @@ class GatewayObjStoreConn:
                 def upload(region, bucket, fpath, key, chunk_id):
                     obj_store_interface = self.get_obj_store_interface(region, bucket)
                     obj_store_interface.upload_object(fpath, key).result()
+
+                    # update chunk state
                     self.chunk_store.state_finish_upload(chunk_id)
                     logger.debug(f"[obj_store:{self.worker_id}] Uploaded {chunk_id} to {bucket}")
 
+                # wait for upload in seperate thread
                 threading.Thread(target=upload, args=(region, bucket, fpath, chunk_req.chunk.key, chunk_req.chunk.chunk_id)).start()
-
-                #obj_store_interface = self.get_obj_store_interface(region, bucket)
-
-                #futures.append(obj_store_interface.upload_object(fpath, chunk_req.chunk.key)) #.result()
-
-                #logger.debug(f"[obj_store:{self.worker_id}] Uploaded {chunk_req.chunk.chunk_id} to {bucket}")
-                #self.chunk_store.state_finish_upload(chunk_req.chunk.chunk_id)
 
             elif req_type == "download":
                 assert chunk_req.src_type == "object_store"
-                # TODO: download from object store
                 region = chunk_req.src_region
                 bucket = chunk_req.src_object_store_bucket
                     
@@ -124,23 +109,17 @@ class GatewayObjStoreConn:
                 def download(region, bucket, fpath, key, chunk_id):
                     obj_store_interface = self.get_obj_store_interface(region, bucket)
                     obj_store_interface.download_object(key, fpath).result()
+
+                    # update chunk state
                     self.chunk_store.state_finish_download(chunk_id)
                     logger.debug(f"[obj_store:{self.worker_id}] Downloaded {chunk_id} from {bucket}")
 
                 # wait for request to return in sepearte thread, so we can update chunk state
                 threading.Thread(target=download, args=(region, bucket, fpath, chunk_req.chunk.key, chunk_req.chunk.chunk_id)).start()
 
-
-                #obj_store_interface = self.get_obj_store_interface(region, bucket)
-                #obj_store_interface.download_object(chunk_req.chunk.key, fpath) #.result()
-
-                #logger.debug(f"[obj_store:{self.worker_id}] Downloaded {chunk_req.chunk.chunk_id} from {bucket}")
-                #self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id)
             else: 
                 raise ValueError(f"Invalid location for chunk req, {req_type}: {chunk_req.src_type}->{chunk_req.dst_type}")
 
-
-        wait(futures)
 
         # close destination sockets
         logger.info(f"[sender:{worker_id}] exiting")

@@ -193,7 +193,7 @@ def replicate_json(
     size_total_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB (across n_chunks chunks)"),
     n_chunks: int = typer.Option(512, "--n-chunks", "-n", help="Number of chunks"),
     # bucket options
-    use_random_data: bool = typer.Option(False, "--random-data", help="Use random data"),
+    use_random_data: bool = False,
     bucket_prefix: str = "skylark",
     source_bucket: str = typer.Option(None, "--source-bucket", help="Source bucket url"),
     dest_bucket: str = typer.Option(None, "--dest-bucket", help="Destination bucket url"),
@@ -204,7 +204,7 @@ def replicate_json(
     # cloud provider specific options
     azure_subscription: Optional[str] = None,
     gcp_project: Optional[str] = None,
-    aws_instance_class: str = "m5.4xlarge",
+    aws_instance_class: str = "m5.8xlarge",
     azure_instance_class: str = "Standard_D32_v5",
     gcp_instance_class: Optional[str] = "n2-standard-32",
     gcp_use_premium_network: bool = True,

@@ -40,7 +40,6 @@ class ChunkRequest:
     src_object_store_bucket: Optional[str] = None
     dst_object_store_bucket: Optional[str] = None
 
-
     def __post_init__(self):
         if self.src_type == "object_store":
             assert self.src_object_store_bucket is not None
