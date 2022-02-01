@@ -245,7 +245,6 @@ class AWSCloudProvider(CloudProvider):
         # catch botocore.exceptions.ClientError: "An error occurred (RequestLimitExceeded) when calling the RunInstances operation (reached max retries: 4): Request limit exceeded." and retry
         for i in range(4):
             try:
-                print("region", region)
                 instance = ec2.create_instances(
                     ImageId=self.get_ubuntu_ami_id(region),
                     InstanceType=instance_class,
@@ -275,7 +274,6 @@ class AWSCloudProvider(CloudProvider):
                     ],
                 )
             except botocore.exceptions.ClientError as e:
-                print("error region", region)
                 if not "RequestLimitExceeded" in str(e):
                     raise e
                 else:
