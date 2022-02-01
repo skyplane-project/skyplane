@@ -1,3 +1,4 @@
+from tkinter import font
 import matplotlib.pyplot as plt
 from questionary import checkbox
 import streamlit as st
@@ -154,7 +155,8 @@ with plt.style.context(style):
         for i, thresh in enumerate(cost_threshold_ranges):
             df_group = df.query("cost_increase <= @thresh")
             df_group = df_group[df_group["throughput_speedup"] >= 1.001]
-            df_group = df_group[df_group["throughput_speedup"] <= df_group.throughput_speedup.quantile(float(max_flier))]
+            if outliers is False:
+                df_group = df_group[df_group["throughput_speedup"] <= df_group.throughput_speedup.quantile(float(max_flier))]
             max_speedup = df_group.groupby(["problem_src", "problem_dst"])["throughput_speedup"].max().sort_values(ascending=False).clip(lower=1)
             label = f"{thresh:.2f}x"
             ax.boxplot(
@@ -167,10 +169,10 @@ with plt.style.context(style):
                 widths=0.5,
                 showfliers=outliers,
             )
-    axs[0].set_xlabel("Throughput speedup")
-    axs[1].set_xlabel("Throughput speedup (with outliers)")
-    axs[0].set_ylabel("Cost increase")
-    axs[1].set_ylabel("Cost increase")
+    axs[0].set_xlabel("Throughput speedup (excluding top 0.5%)", fontsize=8)
+    axs[1].set_xlabel("Throughput speedup (all destination pairs)", fontsize=8)
+    axs[0].set_ylabel("Cost increase", fontsize=8)
+    axs[1].set_ylabel("Cost increase", fontsize=8)
     fig.set_facecolor("white")
     fig.tight_layout()
     st.pyplot(fig, bbox_inches="tight")
