@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 from questionary import checkbox
 import streamlit as st
-from zmq import PROTOCOL_ERROR_ZMTP_KEY_EXCHANGE
 from nb.streamlit.common import load_data
 from skylark import skylark_root
 import numpy as np
