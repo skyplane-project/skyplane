@@ -5,7 +5,7 @@ from typing import Optional
 import paramiko
 from paramiko import PasswordRequiredException
 from skylark import key_root
-from skylark.cli.cli_helper import load_config
+from skylark.config import load_config
 from skylark.compute.server import Server, ServerState
 from skylark.utils.cache import ignore_lru_cache
 from skylark.utils.utils import PathLike

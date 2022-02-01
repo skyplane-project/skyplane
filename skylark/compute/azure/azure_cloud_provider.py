@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import paramiko
-from skylark.cli.cli_helper import load_config
+from skylark.config import load_config
 from skylark.utils import logger
 from skylark import key_root
 from skylark.compute.azure.azure_server import AzureServer
