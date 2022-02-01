@@ -65,7 +65,7 @@ class GatewayObjStoreConn:
         obj_store_interface = self.get_obj_store_interface(region, bucket)
 
     def worker_loop(self, worker_id: int):
-        setproctitle.setproctitle(f"skylark-gateway-sender:{worker_id}")
+        setproctitle.setproctitle(f"skylark-gateway-obj-store:{worker_id}")
         self.worker_id = worker_id
 
        
@@ -122,7 +122,7 @@ class GatewayObjStoreConn:
 
 
         # close destination sockets
-        logger.info(f"[sender:{worker_id}] exiting")
+        logger.info(f"[obj_store:{worker_id}] exiting")
 
         # TODO: wait for uploads to finish (check chunk exists)
        

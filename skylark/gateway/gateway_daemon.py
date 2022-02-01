@@ -83,7 +83,7 @@ class GatewayDaemon:
                 elif self.region == chunk_req.dst_region and chunk_req.dst_type == "object_store":
                     self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
                     self.obj_store_conn.queue_request(chunk_req, "upload")
-               elif self.region != chunk_req.dst_region:
+                elif self.region != chunk_req.dst_region:
                     self.gateway_sender.queue_request(chunk_req)
                     self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
                 else:
