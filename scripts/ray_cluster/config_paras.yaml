@@ -13,7 +13,7 @@ docker:
     run_options:   # Extra options to pass into "docker run"
         - --ulimit nofile=65536:65536
 
-idle_timeout_minutes: 5
+idle_timeout_minutes: 15
 
 provider:
     type: aws
@@ -36,7 +36,7 @@ available_node_types:
                       VolumeType: gp2
                       DeleteOnTermination: true
     ray.worker.default_c5.24xlarge_spot:
-        min_workers: 5
+        min_workers: 40
         max_workers: 40
         node_config:
             InstanceType: c5.24xlarge
