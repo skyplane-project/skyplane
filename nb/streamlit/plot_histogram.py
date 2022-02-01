@@ -168,9 +168,12 @@ with plt.style.context(style):
                 widths=0.5,
                 showfliers=outliers,
             )
-        # ax.set_xlabel("Throughput speedup over direct path")
-        # ax.set_ylabel("Cost increase")
+    axs[0].set_xlabel("Throughput speedup")
+    axs[1].set_xlabel("Throughput speedup (with outliers)")
+    axs[0].set_ylabel("Cost increase")
+    axs[1].set_ylabel("Cost increase")
     fig.set_facecolor("white")
+    fig.tight_layout()
     st.pyplot(fig, bbox_inches="tight")
     f = f"all_speedups_boxplot_{float(max_flier):.2f}_outliers{outliers}.pdf"
     fig.savefig(str(out_dir / f), dpi=300, bbox_inches="tight")
