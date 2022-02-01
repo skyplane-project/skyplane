@@ -7,16 +7,28 @@ redundancy: locally-redundant storage (LRS)
 Routing Preferance: Microsoft Network Routing
 """
 azure_storage_credentials = {
-    "eastus": {
+    "eastusnonpremium": {
         "name": "skyeastus",
-        "connection_string": "DefaultEndpointsProtocol=https;AccountName=skyuseast;AccountKey=BgxPfOR5GB+0SR7B+qIgSly1Ih+M2xfOhtqxornE18N+2MyULBqH1QG7lmro/+o3UncwUuc8m4AduqFY3sC7UA==;EndpointSuffix=core.windows.net",
+        "connection_string": "DefaultEndpointsProtocol=https;AccountName=skyeastus;AccountKey=fHkWsVpW5LCdiOJEtPLfWcx1qvb3aXVu1+19RfQi7nndaWwek0ZvvMFtYD9eZe2i/3j0+gEIuvu4lC2OMmIeZQ==;EndpointSuffix=core.windows.net",
     },
     "westus": {
         "name": "skyuswest",
-        "connection_string": "DefaultEndpointsProtocol=https;AccountName=skyuswest;AccountKey=vvBaJdH8ndD65f5VGuUTUSiHzKse82+ogr+1qfaEAXFjtcgm7WAol78eHPNE4liSE/79QrfoMxz3MtgA0iIXNw==;EndpointSuffix=core.windows.net",
+        "connection_string": "DefaultEndpointsProtocol=https;AccountName=skywestus;AccountKey=WJtmHYayszZMHyzl2OQPyAG+VHlfh0n7RDEimZ4cDbuvT6SlrwcbbvC/zf6EvXF0dc0+DV8KABtXDj/Ro83qYg==;EndpointSuffix=core.windows.net",
     },
     "centralus": {
         "name": "skycentralus",
-        "connection_string": "DefaultEndpointsProtocol=https;AccountName=skycentralus;AccountKey=xSIiDWw10JZHuS6reLJdzmebxBwctRwpd/hNOJ4C/ciKvy2ez57oRN7ZF5A3ETY495A2wcO+Lutf0feyEdWU2A==;EndpointSuffix=core.windows.net",
+        "connection_string": "DefaultEndpointsProtocol=https;AccountName=skycentralus;AccountKey=CRybVbNnJ0HFq6qZP7/llBXOls5X+vLZR5DL/Za9Taxj24urkfrSGrVy55tZne5zAXg/MWbZ1N+YC5RWWjfUiA==;EndpointSuffix=core.windows.net",
+    },
+    "eastus": {
+        "name": "skypremiumblockuseast",
+        "connection_string": "DefaultEndpointsProtocol=https;AccountName=skypremiumblockuseast;AccountKey=lCJszpbQ33Q49geu+tVNO7nqKFtQMdrSOmmk9rmLcLSWB5Tt9CSsl5JLUXrEoHz9/gYlvBDUdrB8BN3FWwK7xQ==;EndpointSuffix=core.windows.net",
+    },
+    "skypremiumfileuseast": {
+        "name": "skypremiumfileuseast",
+        "connection_string": "DefaultEndpointsProtocol=https;AccountName=skypremiumfileuseast;AccountKey=dFEPqWjniwzunO5TkvW5Y4Ds8YK3OvWEtrT2HIH3UTPC+oETPcZufBHoZyhJkfupwHd0247rKyFUDZsj7RI62g==;EndpointSuffix=core.windows.net",
+    },
+    "skypremiumpageuseast": {
+        "name": "skypremiumpageuseast",
+        "connection_string": "DefaultEndpointsProtocol=https;AccountName=skypremiumpageuseast;AccountKey=pWuLQGXSAmM358jRMi94rcPAu0NQSYDSjk0+vl7fyNEAXpvdb3bclimBnDxpb2lsBfTrwTa7diWjSz62THbsMg==;EndpointSuffix=core.windows.net",
     },
 }
