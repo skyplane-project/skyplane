@@ -26,7 +26,7 @@ class GCSInterface(ObjectStoreInterface):
         self._gcs_client = storage.Client()
 
         # TODO: set number of threads
-        self.pool = ThreadPoolExecutor(max_workers=16)
+        self.pool = ThreadPoolExecutor(max_workers=256)
 
     def _on_done_download(self, **kwargs):
         self.completed_downloads += 1

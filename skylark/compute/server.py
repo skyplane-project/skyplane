@@ -222,7 +222,8 @@ class Server:
         # launch monitoring
         logger.debug(desc_prefix + ": Starting monitoring")
         self.run_command(make_dozzle_command(log_viewer_port))
-        self.run_command(make_netdata_command(activity_monitor_port, netdata_hostname=self.public_ip()))
+        # disable netdata for benchmarking
+        # self.run_command(make_netdata_command(activity_monitor_port, netdata_hostname=self.public_ip()))
 
         # launch gateway
         logger.debug(desc_prefix + ": Pulling docker image")
@@ -248,6 +249,8 @@ class Server:
         gateway_daemon_cmd = f"python -u /pkg/skylark/gateway/gateway_daemon.py --chunk-dir /dev/shm/skylark/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = self.run_command(docker_launch_cmd)
+        print(start_out)
+        print(start_err)
         logger.debug(desc_prefix + f": Gateway started {start_out.strip()}")
         assert not start_err.strip(), f"Error starting gateway: {start_err.strip()}"
         gateway_container_hash = start_out.strip().split("\n")[-1][:12]

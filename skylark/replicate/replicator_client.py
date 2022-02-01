@@ -206,6 +206,7 @@ class ReplicatorClient:
 
         # make list of chunks
         chunks = []
+        print(job.source_bucket, job.objs[0])
         obj_file_size_bytes = job.src_obj_sizes() if job.source_bucket else None
         for idx, obj in enumerate(job.objs):
             if obj_file_size_bytes:
@@ -217,6 +218,12 @@ class ReplicatorClient:
         # partition chunks into roughly equal-sized batches (by bytes)
         src_instances = [self.bound_nodes[n] for n in self.topology.source_instances()]
         chunk_lens = [c.chunk_length_bytes for c in chunks]
+        new_chunk_lens = int(len(chunk_lens)/len(src_instances)) * len(src_instances)
+        if len(chunk_lens) != new_chunk_lens:
+            dropped_chunks = len(chunk_lens) - new_chunk_lens
+            logger.warn(f"Dropping {dropped_chunks} chunks to be evenly distributed")
+            chunk_lens = chunk_lens[:new_chunk_lens]
+            
         approx_bytes_per_connection = sum(chunk_lens) / len(src_instances)
         assert sum(chunk_lens) > 0, f"No chunks to replicate, got {chunk_lens}"
         batch_bytes = 0
