@@ -206,6 +206,7 @@ class ReplicatorClient:
 
         # make list of chunks
         chunks = []
+        print(job.source_bucket, job.objs[0])
         obj_file_size_bytes = job.src_obj_sizes() if job.source_bucket else None
         for idx, obj in enumerate(job.objs):
             if obj_file_size_bytes:
