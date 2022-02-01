@@ -1,7 +1,6 @@
 import mimetypes
 import os
 from concurrent.futures import Future, ThreadPoolExecutor
-from concurrent.futures import ProcessPoolExecutor
 from typing import Iterator, List
 
 from google.cloud import storage  # pytype: disable=import-error
@@ -23,11 +22,11 @@ class GCSInterface(ObjectStoreInterface):
         self.pending_downloads, self.completed_downloads = 0, 0
         self.pending_uploads, self.completed_uploads = 0, 0
 
-        #self._gcs_client = storage.Client()
+        # TODO - figure out how paralllelism handled
+        self._gcs_client = storage.Client()
 
         # TODO: set number of threads
-        #self.pool = ThreadPoolExecutor(max_workers=16)
-        self.pool = ProcessPoolExecutor(max_workers=16)
+        self.pool = ThreadPoolExecutor(max_workers=256)
 
     def _on_done_download(self, **kwargs):
         self.completed_downloads += 1
@@ -67,8 +66,7 @@ class GCSInterface(ObjectStoreInterface):
             assert not self.exists(key)
 
     def get_obj_metadata(self, obj_name):
-        gcs_client = storage.Client()
-        bucket = gcs_client.bucket(self.bucket_name)
+        bucket = self._gcs_client.bucket(self.bucket_name)
         blob = bucket.get_blob(obj_name)
         if blob is None:
             raise NoSuchObjectException(
@@ -86,41 +84,25 @@ class GCSInterface(ObjectStoreInterface):
         except NoSuchObjectException:
             return False
 
-    def _download_object_helper(self, src_object_name, dst_file_path, offset, **kwargs):
-
-        gcs_client = storage.Client()
-        bucket = gcs_client.bucket(self.bucket_name)
-        blob = bucket.blob(src_object_name)
-        chunk = blob.download_as_string()
-
-        # write file
-        if not os.path.exists(dst_file_path):
-            open(dst_file_path, "a").close()
-        with open(dst_file_path, "rb+") as f:
-            f.seek(offset)
-            f.write(chunk)
-
-
     # todo: implement range request for download
     def download_object(self, src_object_name, dst_file_path) -> Future:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = src_object_name if src_object_name[0] != "/" else src_object_name
-        return self.pool.submit(self._download_object_helper, src_object_name, dst_file_path, 0)
 
-        #def _download_object_helper(offset, **kwargs):
+        def _download_object_helper(offset, **kwargs):
 
-        #    bucket = self._gcs_client.bucket(self.bucket_name)
-        #    blob = bucket.blob(src_object_name)
-        #    chunk = blob.download_as_string()
+            bucket = self._gcs_client.bucket(self.bucket_name)
+            blob = bucket.blob(src_object_name)
+            chunk = blob.download_as_string()
 
-        #    # write file
-        #    if not os.path.exists(dst_file_path):
-        #        open(dst_file_path, "a").close()
-        #    with open(dst_file_path, "rb+") as f:
-        #        f.seek(offset)
-        #        f.write(chunk)
+            # write file
+            if not os.path.exists(dst_file_path):
+                open(dst_file_path, "a").close()
+            with open(dst_file_path, "rb+") as f:
+                f.seek(offset)
+                f.write(chunk)
 
-        #return self.pool.submit(_download_object_helper, 0)
+        return self.pool.submit(_download_object_helper, 0)
 
     def upload_object(self, src_file_path, dst_object_name, content_type="infer") -> Future:
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
