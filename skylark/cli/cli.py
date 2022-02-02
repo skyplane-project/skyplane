@@ -249,6 +249,8 @@ def replicate_json(
         logger.warning(f"total_transfer_size_mb ({size_total_mb}) is not a multiple of n_chunks ({n_chunks})")
     chunk_size_mb = size_total_mb // n_chunks
 
+    print("REGION", topo.source_region())
+
     if use_random_data:
         job = ReplicationJob(
             source_region=topo.source_region(),
@@ -263,6 +265,7 @@ def replicate_json(
     else:
 
         # get object keys with prefix 
+        print("REGION", topo.source_region())
         objs = ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(key_prefix)
         obj_keys = list([obj.key for obj in objs])
 
