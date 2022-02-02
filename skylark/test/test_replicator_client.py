@@ -30,7 +30,6 @@ def parse_args():
     parser.add_argument("--inter-region", default=None, help="AWS region of intermediate bucket")
     parser.add_argument("--dest-region", default="aws:us-west-1", help="AWS region of destination bucket")
     parser.add_argument("--num-gateways", default=1, type=int, help="Number of gateways to use")
-    parser.add_argument("--num-outgoing-connections", default=16, type=int, help="Number of outgoing connections from a gateway")
 
     # object information
     parser.add_argument("--key-prefix", default="/test/direct_replication", help="S3 key prefix for all objects")

@@ -110,7 +110,7 @@ class ChunkStore:
         self.chunk_requests[chunk_request.chunk.chunk_id] = chunk_request
 
     def used_bytes(self):
-        return sum(f.stat().st_size for f in self.chunk_dir.glob("*.chunk"))
+        return sum(f.stat().st_size for f in self.chunk_dir.glob("*.chunk") if os.path.exists(f))
 
     def remaining_bytes(self):
         return self.chunk_store_max_size - self.used_bytes()
