@@ -98,7 +98,7 @@ class GatewayObjStoreConn:
                     # update chunk state
                     self.chunk_store.state_finish_upload(chunk_id)
 
-                    # delete chunk 
+                    # delete chunk
                     chunk_file_path.unlink()
 
                     logger.debug(f"[obj_store:{self.worker_id}] Uploaded {chunk_id} to {bucket}")
