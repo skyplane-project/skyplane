@@ -309,10 +309,10 @@ class ThroughputSolverILP(ThroughputSolver):
                     g.edge(src_label, dst_label, label=label)
         return g
 
-    def to_replication_topology(self, solution: ThroughputSolution) -> ReplicationTopology:
+    def to_replication_topology(self, solution: ThroughputSolution, scale_to_capacity=True) -> ReplicationTopology:
         regions = self.get_regions()
         Edge = namedtuple("Edge", ["src_region", "src_instance_idx", "dst_region", "dst_instance_idx", "connections"])
-        
+
         # compute connections to target per instance
         average_egress_conns = [np.ceil(solution.var_conn[i, :].sum() / solution.var_instances_per_region[i]) for i in range(len(regions))]
         average_ingress_conns = [np.ceil(solution.var_conn[:, i].sum() / solution.var_instances_per_region[i]) for i in range(len(regions))]
@@ -379,6 +379,18 @@ class ThroughputSolverILP(ThroughputSolver):
                     )
                     dsts_instance_conn[e.dst_region] += connections_to_allocate
                     connections_to_allocate = 0
+
+        # scale connections up to saturate links
+        if scale_to_capacity:
+            conns_egress: Dict[(str, int), int] = {}
+            conns_ingress: Dict[(str, int), int] = {}
+            for e in dst_edges:
+                conns_egress[(e.src_region, e.src_instance_idx)] = e.connections + conns_egress.get((e.src_region, e.src_instance_idx), 0)
+                conns_ingress[(e.dst_region, e.dst_instance_idx)] = e.connections + conns_ingress.get((e.dst_region, e.dst_instance_idx), 0)
+            bottleneck_capacity = max(list(conns_egress.values()) + list(conns_ingress.values()))
+            scale_factor = 64 / bottleneck_capacity
+            logger.warning(f"Scaling connections by {scale_factor:.2f}x")
+            dst_edges = [e._replace(connections=int(e.connections * scale_factor)) for e in dst_edges]
 
         # build ReplicationTopology
         replication_topology = ReplicationTopology()
