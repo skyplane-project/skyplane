@@ -9,7 +9,8 @@ import concurrent
 import os
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.obj_store.gcs_interface import GCSInterface
-#from skylark.obj_store.azure_interface import AzureInterface
+
+# from skylark.obj_store.azure_interface import AzureInterface
 
 import tempfile
 import concurrent
@@ -19,7 +20,7 @@ from shutil import copyfile
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
 
-from skylark.cli.cli_helper import load_config
+from skylark.config import load_config
 
 
 def parse_args():

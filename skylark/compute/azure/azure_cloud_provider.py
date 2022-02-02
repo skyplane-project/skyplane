@@ -1,27 +1,41 @@
+from multiprocessing import BoundedSemaphore
 import os
 import uuid
 from pathlib import Path
 from typing import List, Optional
 
 import paramiko
+from skylark.config import load_config
 from skylark.utils import logger
 from skylark import key_root
 from skylark.compute.azure.azure_server import AzureServer
 from skylark.compute.cloud_providers import CloudProvider
 
-from azure.identity import DefaultAzureCredential
+from azure.identity import DefaultAzureCredential, ClientSecretCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.resource import ResourceManagementClient
 
 
 class AzureCloudProvider(CloudProvider):
-    def __init__(self, azure_subscription, key_root=key_root / "azure"):
+    def __init__(self, azure_subscription, key_root=key_root / "azure", read_credential=True):
         super().__init__()
-        self.subscription_id = azure_subscription
+        if read_credential:
+            config = load_config()
+            self.subscription_id = azure_subscription if azure_subscription is not None else config["azure_subscription_id"]
+            self.credential = ClientSecretCredential(
+                tenant_id=config["azure_tenant_id"],
+                client_id=config["azure_client_id"],
+                client_secret=config["azure_client_secret"],
+            )
+        else:
+            self.credential = DefaultAzureCredential()
+            self.subscription_id = azure_subscription
         key_root.mkdir(parents=True, exist_ok=True)
         self.private_key_path = key_root / "azure_key"
         self.public_key_path = key_root / "azure_key.pub"
+
+        self.provisioning_semaphore = BoundedSemaphore(5)
 
     @property
     def name(self):
@@ -248,7 +262,7 @@ class AzureCloudProvider(CloudProvider):
                     raise ValueError(f"Unknown transfer cost for {src_key} -> {dst_key}")
 
     def get_instance_list(self, region: str) -> List[AzureServer]:
-        credential = DefaultAzureCredential()
+        credential = self.credential
         resource_client = ResourceManagementClient(credential, self.subscription_id)
         resource_group_list_iterator = resource_client.resource_groups.list(filter="tagName eq 'skylark' and tagValue eq 'true'")
 
@@ -280,6 +294,7 @@ class AzureCloudProvider(CloudProvider):
         self, location: str, vm_size: str, name: Optional[str] = None, uname: str = os.environ.get("USER")
     ) -> AzureServer:
         assert ":" not in location, "invalid colon in Azure location"
+
         if name is None:
             name = f"skylark-azure-{str(uuid.uuid4()).replace('-', '')}"
 
@@ -287,7 +302,7 @@ class AzureCloudProvider(CloudProvider):
             pub_key = f.read()
 
         # Prepare for making Microsoft Azure API calls
-        credential = DefaultAzureCredential()
+        credential = self.credential
         compute_client = ComputeManagementClient(credential, self.subscription_id)
         network_client = NetworkManagementClient(credential, self.subscription_id)
         resource_client = ResourceManagementClient(credential, self.subscription_id)
@@ -367,31 +382,32 @@ class AzureCloudProvider(CloudProvider):
         nic_result = poller.result()
 
         # Create the VM
-        poller = compute_client.virtual_machines.begin_create_or_update(
-            resource_group,
-            AzureServer.vm_name(name),
-            {
-                "location": location,
-                "hardware_profile": {"vm_size": self.lookup_valid_instance(location, vm_size)},
-                "storage_profile": {
-                    "image_reference": {
-                        "publisher": "canonical",
-                        "offer": "0001-com-ubuntu-server-focal",
-                        "sku": "20_04-lts",
-                        "version": "latest",
-                    }
-                },
-                "os_profile": {
-                    "computer_name": AzureServer.vm_name(name),
-                    "admin_username": uname,
-                    "linux_configuration": {
-                        "disable_password_authentication": True,
-                        "ssh": {"public_keys": [{"path": f"/home/{uname}/.ssh/authorized_keys", "key_data": pub_key}]},
+        with self.provisioning_semaphore:
+            poller = compute_client.virtual_machines.begin_create_or_update(
+                resource_group,
+                AzureServer.vm_name(name),
+                {
+                    "location": location,
+                    "hardware_profile": {"vm_size": self.lookup_valid_instance(location, vm_size)},
+                    "storage_profile": {
+                        "image_reference": {
+                            "publisher": "canonical",
+                            "offer": "0001-com-ubuntu-server-focal",
+                            "sku": "20_04-lts",
+                            "version": "latest",
+                        }
                     },
+                    "os_profile": {
+                        "computer_name": AzureServer.vm_name(name),
+                        "admin_username": uname,
+                        "linux_configuration": {
+                            "disable_password_authentication": True,
+                            "ssh": {"public_keys": [{"path": f"/home/{uname}/.ssh/authorized_keys", "key_data": pub_key}]},
+                        },
+                    },
+                    "network_profile": {"network_interfaces": [{"id": nic_result.id}]},
                 },
-                "network_profile": {"network_interfaces": [{"id": nic_result.id}]},
-            },
-        )
-        poller.result()
+            )
+            poller.result()
 
         return AzureServer(self.subscription_id, resource_group)

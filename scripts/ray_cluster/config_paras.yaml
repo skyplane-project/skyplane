@@ -1,7 +1,7 @@
 # An unique identifier for the head node and workers of this cluster.
 cluster_name: skylark-control-plane
-upscaling_speed: 100
-max_workers: 50
+upscaling_speed: 40
+max_workers: 40
 
 # This executes all commands on all nodes in the docker container,
 # and opens all the necessary ports to support the Ray cluster.
@@ -13,7 +13,7 @@ docker:
     run_options:   # Extra options to pass into "docker run"
         - --ulimit nofile=65536:65536
 
-idle_timeout_minutes: 5
+idle_timeout_minutes: 15
 
 provider:
     type: aws
@@ -21,20 +21,14 @@ provider:
     availability_zone: us-west-2a,us-west-2b,us-west-2c
     cache_stopped_nodes: False # If not present, the default is True.
 
-# How Ray will authenticate with newly launched nodes.
-auth:
-    ssh_user: ubuntu
-    ssh_private_key: /home/ubuntu/skylark/data/keys/aws/skylark-us-west-2.pem
-
 available_node_types:
     # Demand information can be found at https://aws.amazon.com/ec2/spot/instance-advisor/
     # http://boto3.readthedocs.io/en/latest/reference/services/ec2.html#EC2.ServiceResource.create_instances
     ray.head.default:
-        min_workers: 1
-        max_workers: 1
         node_config:
             InstanceType: c5.24xlarge
             ImageId: ami-0a0a2849f3390a302
+            # KeyName: skylark-us-west-2
             BlockDeviceMappings:
                 - DeviceName: /dev/sda1
                   Ebs:
@@ -42,30 +36,22 @@ available_node_types:
                       VolumeType: gp2
                       DeleteOnTermination: true
     ray.worker.default_c5.24xlarge_spot:
-        min_workers: 10
-        max_workers: 44
+        min_workers: 40
+        max_workers: 40
         node_config:
             InstanceType: c5.24xlarge
             ImageId: ami-0a0a2849f3390a302
-            InstanceMarketOptions:
-                MarketType: spot
-    ray.worker.default_c5.18xlarge_spot:
-        min_workers: 0
-        max_workers: 20
-        node_config:
-            InstanceType: c5.18xlarge
-            ImageId: ami-0892d3c7ee96c0bf7
-            KeyName: skylark-us-west-2
+            # KeyName: skylark-us-west-2
             InstanceMarketOptions:
                 MarketType: spot
 
 head_node_type: ray.head.default
+
 initialization_commands:
     - pip install ray[default]
     - command -v docker >/dev/null 2>&1 || { curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh && sudo usermod -aG docker $USER && sudo systemctl restart docker -f; }
     - if [ -z "$(docker ps -q)" ]; then echo "No docker containers running"; else docker kill $(docker ps -q); fi
 setup_commands:
-    # - apt-get update && apt-get install --no-install-recommends -y git wget ca-certificates build-essential gcc g++ gfortran pkg-config libblas-dev liblapack-dev coinor-libcbc-dev libz-dev && pip install numpy && pip install cylp
     - apt-get update && apt-get install --no-install-recommends -y openssh-client
     - pip install ray[default]
     - pip install -e '.[all]'
