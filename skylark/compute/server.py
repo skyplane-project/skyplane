@@ -196,6 +196,7 @@ class Server:
     ):
         self.wait_for_ready()
         time.sleep(2)
+
         def check_stderr(tup):
             assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
 

@@ -18,7 +18,15 @@ from azure.mgmt.resource import ResourceManagementClient
 
 
 class AzureServer(Server):
-    def __init__(self, subscription_id: Optional[str], name: str, key_root: PathLike = key_root / "azure", log_dir=None, ssh_private_key=None, read_credential=True):
+    def __init__(
+        self,
+        subscription_id: Optional[str],
+        name: str,
+        key_root: PathLike = key_root / "azure",
+        log_dir=None,
+        ssh_private_key=None,
+        read_credential=True,
+    ):
         if read_credential:
             config = load_config()
             self.subscription_id = subscription_id if subscription_id is not None else config["azure_subscription_id"]

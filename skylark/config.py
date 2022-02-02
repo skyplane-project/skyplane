@@ -4,6 +4,7 @@ from skylark import config_file
 
 from skylark.utils import logger
 
+
 def load_config():
     if config_file.exists():
         try:
