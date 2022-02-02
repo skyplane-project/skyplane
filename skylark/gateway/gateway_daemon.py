@@ -37,8 +37,7 @@ class GatewayDaemon:
         self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, outgoing_ports=outgoing_ports)
         print(outgoing_ports)
 
-        self.obj_store_conn = GatewayObjStoreConn(chunk_store=self.chunk_store, max_conn=32)
-        #self.obj_store_interfaces: Dict[str, ObjectStoreInterface] = {}
+        self.obj_store_conn = GatewayObjStoreConn(chunk_store=self.chunk_store, max_conn=16)
 
         # Download thread pool
         self.dl_pool_semaphore = BoundedSemaphore(value=128)
@@ -80,6 +79,11 @@ class GatewayDaemon:
                     self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
                     self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id)
                     self.chunk_store.state_finish_upload(chunk_req.chunk.chunk_id)
+
+                    # delete (TODO: remove this later)
+                    chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id)
+                    chunk_file_path.unlink()
+
                 elif self.region == chunk_req.dst_region and chunk_req.dst_type == "object_store":
                     self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
                     self.obj_store_conn.queue_request(chunk_req, "upload")

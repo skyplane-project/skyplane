@@ -1,22 +1,43 @@
 import os
 from pathlib import Path
+from typing import Optional
 
 import paramiko
+from paramiko import PasswordRequiredException
 from skylark import key_root
+from skylark.config import load_config
 from skylark.compute.server import Server, ServerState
 from skylark.utils.cache import ignore_lru_cache
 from skylark.utils.utils import PathLike
 
 import azure.core.exceptions
-from azure.identity import DefaultAzureCredential
+from azure.identity import DefaultAzureCredential, ClientSecretCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.resource import ResourceManagementClient
 
 
 class AzureServer(Server):
-    def __init__(self, subscription_id: str, name: str, key_root: PathLike = key_root / "azure", log_dir=None, ssh_private_key=None):
-        self.subscription_id = subscription_id
+    def __init__(
+        self,
+        subscription_id: Optional[str],
+        name: str,
+        key_root: PathLike = key_root / "azure",
+        log_dir=None,
+        ssh_private_key=None,
+        read_credential=True,
+    ):
+        if read_credential:
+            config = load_config()
+            self.subscription_id = subscription_id if subscription_id is not None else config["azure_subscription_id"]
+            self.credential = ClientSecretCredential(
+                tenant_id=config["azure_tenant_id"],
+                client_id=config["azure_client_id"],
+                client_secret=config["azure_client_secret"],
+            )
+        else:
+            self.credential = DefaultAzureCredential()
+            self.subscription_id = subscription_id
         self.name = name
         self.location = None
 
@@ -65,7 +86,7 @@ class AzureServer(Server):
         return AzureServer.vm_name(name) + "-nic"
 
     def get_resource_group(self):
-        credential = DefaultAzureCredential()
+        credential = self.credential
         resource_client = ResourceManagementClient(credential, self.subscription_id)
         rg = resource_client.resource_groups.get(self.name)
 
@@ -77,7 +98,7 @@ class AzureServer(Server):
         return rg
 
     def get_virtual_machine(self):
-        credential = DefaultAzureCredential()
+        credential = self.credential
         compute_client = ComputeManagementClient(credential, self.subscription_id)
         vm = compute_client.virtual_machines.get(self.name, AzureServer.vm_name(self.name))
 
@@ -98,7 +119,7 @@ class AzureServer(Server):
         return f"{self.subscription_id}:{self.region_tag}:{self.name}"
 
     def instance_state(self) -> ServerState:
-        credential = DefaultAzureCredential()
+        credential = self.credential
         compute_client = ComputeManagementClient(credential, self.subscription_id)
         vm_instance_view = compute_client.virtual_machines.instance_view(self.name, AzureServer.vm_name(self.name))
         statuses = vm_instance_view.statuses
@@ -109,7 +130,7 @@ class AzureServer(Server):
 
     @ignore_lru_cache()
     def public_ip(self):
-        credential = DefaultAzureCredential()
+        credential = self.credential
         network_client = NetworkManagementClient(credential, self.subscription_id)
         public_ip = network_client.public_ip_addresses.get(self.name, AzureServer.ip_name(self.name))
 
@@ -138,7 +159,7 @@ class AzureServer(Server):
         return "PREMIUM"
 
     def terminate_instance_impl(self):
-        credential = DefaultAzureCredential()
+        credential = self.credential
         resource_client = ResourceManagementClient(credential, self.subscription_id)
         _ = self.get_resource_group()  # for the sanity checks
         poller = resource_client.resource_groups.begin_delete(self.name)

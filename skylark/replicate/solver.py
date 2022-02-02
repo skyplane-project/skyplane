@@ -28,11 +28,13 @@ class ThroughputProblem:
     const_cost_per_gb_grid: Optional[np.ndarray] = None  # if not set, load from profiles
     # provider bandwidth limits (egress, ingress)
     aws_instance_throughput_limit: Tuple[float, float] = (5, 10)
-    gcp_instance_throughput_limit: Tuple[float, float] = (8, 12.5)  # limited to 12.5 gbps in practice due to CPU limit
+    gcp_instance_throughput_limit: Tuple[float, float] = (7, 12.5)  # limited to 12.5 gbps in practice due to CPU limit
     azure_instance_throughput_limit: Tuple[float, float] = (12.5, 12.5)  # limited to 12.5 gbps in practice due to CPU limit
     # benchmarked_throughput_connections is the number of connections that the iperf3 throughput grid was run at, we assume throughput is linear up to this connection limit
     benchmarked_throughput_connections = 64
-    cost_per_instance_hr = 1.54  # based on m5.8xlarge
+    cost_per_instance_hr = 0.54  # based on m5.8xlarge spot
+    instance_cost_multiplier = 1.0
+    instance_provision_time_s = 0.0
 
 
 @dataclass
@@ -138,9 +140,7 @@ class ThroughputSolver:
 
 
 class ThroughputSolverILP(ThroughputSolver):
-    def solve_min_cost(
-        self, p: ThroughputProblem, instance_cost_multipler: float = 1.0, solver=cp.GLPK, solver_verbose=False, save_lp_path=None
-    ):
+    def solve_min_cost(self, p: ThroughputProblem, solver=cp.GLPK, solver_verbose=False, save_lp_path=None):
         regions = self.get_regions()
         sources = [regions.index(p.src)]
         sinks = [regions.index(p.dst)]
@@ -210,9 +210,9 @@ class ThroughputSolverILP(ThroughputSolver):
         cost_egress = cp.sum(cost_per_edge)
 
         # instance cost
-        per_instance_cost: float = p.cost_per_instance_hr / 3600 * runtime_s
+        per_instance_cost: float = p.cost_per_instance_hr / 3600 * (runtime_s + p.instance_provision_time_s)
         instance_cost = cp.sum(instances_per_region) * per_instance_cost
-        total_cost = cost_egress + instance_cost * instance_cost_multipler
+        total_cost = cost_egress + instance_cost * p.instance_cost_multiplier
         prob = cp.Problem(cp.Minimize(total_cost), constraints)
 
         if solver == cp.GUROBI or solver == "gurobi":
@@ -222,7 +222,12 @@ class ThroughputSolverILP(ThroughputSolver):
                 solver_options["ResultFile"] = str(save_lp_path)
             if not solver_verbose:
                 solver_options["OutputFlag"] = 0
-            prob.solve(verbose=solver_verbose, qcp=True, solver=cp.GUROBI, reoptimize=True)
+            prob.solve(verbose=solver_verbose, qcp=True, solver=cp.GUROBI, reoptimize=True, **solver_options)
+        elif solver == cp.CBC or solver == "cbc":
+            solver_options = {}
+            solver_options["maximumSeconds"] = 60
+            solver_options["numberThreads"] = 1
+            prob.solve(verbose=solver_verbose, solver=cp.CBC, **solver_options)
         else:
             prob.solve(solver=solver, verbose=solver_verbose)
 
@@ -304,9 +309,15 @@ class ThroughputSolverILP(ThroughputSolver):
                     g.edge(src_label, dst_label, label=label)
         return g
 
-    def to_replication_topology(self, solution: ThroughputSolution, ingress_hard_limit=64, egress_hard_limit=64) -> ReplicationTopology:
+    def to_replication_topology(self, solution: ThroughputSolution) -> ReplicationTopology:
         regions = self.get_regions()
         Edge = namedtuple("Edge", ["src_region", "src_instance_idx", "dst_region", "dst_instance_idx", "connections"])
+        
+        # compute connections to target per instance
+        average_egress_conns = [np.ceil(solution.var_conn[i, :].sum() / solution.var_instances_per_region[i]) for i in range(len(regions))]
+        average_ingress_conns = [np.ceil(solution.var_conn[:, i].sum() / solution.var_instances_per_region[i]) for i in range(len(regions))]
+        # average_egress_conns = [64 for i in range(len(regions))]
+        # average_ingress_conns = [64 for i in range(len(regions))]
 
         # first assign source instances to destination regions
         src_edges: List[Edge] = []
@@ -318,8 +329,8 @@ class ThroughputSolverILP(ThroughputSolver):
                     connections_to_allocate = np.rint(solution.var_conn[i, j]).astype(int)
                     while connections_to_allocate > 0:
                         # if this edge would exceed the instance connection limit, partially add connections to current instance and increment instance
-                        if connections_to_allocate + src_instance_connections > egress_hard_limit:
-                            partial_conn = egress_hard_limit - src_instance_connections
+                        if connections_to_allocate + src_instance_connections > average_egress_conns[i]:
+                            partial_conn = average_egress_conns[i] - src_instance_connections
                             connections_to_allocate -= partial_conn
                             assert connections_to_allocate >= 0, f"connections_to_allocate = {connections_to_allocate}"
                             assert partial_conn >= 0, f"partial_conn = {partial_conn}"
@@ -347,8 +358,8 @@ class ThroughputSolverILP(ThroughputSolver):
         for e in src_edges:
             connections_to_allocate = np.rint(e.connections).astype(int)
             while connections_to_allocate > 0:
-                if connections_to_allocate + dsts_instance_conn[e.dst_region] > ingress_hard_limit:
-                    partial_conn = ingress_hard_limit - dsts_instance_conn[e.dst_region]
+                if connections_to_allocate + dsts_instance_conn[e.dst_region] > average_ingress_conns[regions.index(e.dst_region)]:
+                    partial_conn = average_ingress_conns[regions.index(e.dst_region)] - dsts_instance_conn[e.dst_region]
                     connections_to_allocate = connections_to_allocate - partial_conn
                     if partial_conn > 0:
                         dst_edges.append(

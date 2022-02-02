@@ -10,6 +10,7 @@ import typer
 from skylark.utils import logger
 from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP
 from skylark import skylark_root
+from skylark.utils.utils import Timer
 
 app = typer.Typer(name="skylark-solver")
 
@@ -37,7 +38,6 @@ def solve_throughput(
     required_throughput_gbits: float = typer.Argument(..., help="Required throughput in gbps."),
     gbyte_to_transfer: float = typer.Option(1, help="Gigabytes to transfer"),
     max_instances: int = typer.Option(1, help="Max number of instances per overlay region."),
-    instance_cost_multiplier: float = typer.Option(1, help="Instance cost multiplier."),
     throughput_grid: Path = typer.Option(skylark_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"),
     solver_verbose: bool = False,
     out: Path = typer.Option(None, "--out", "-o", help="Output file for path."),
@@ -46,14 +46,20 @@ def solve_throughput(
 
     # build problem and solve
     tput = ThroughputSolverILP(throughput_grid)
-    problem = ThroughputProblem(src, dst, required_throughput_gbits, gbyte_to_transfer, max_instances)
-    solution = tput.solve_min_cost(
-        problem,
-        instance_cost_multipler=instance_cost_multiplier,
-        solver=choose_solver(),
-        solver_verbose=solver_verbose,
-        save_lp_path=skylark_root / "data" / "throughput_solver.lp",
+    problem = ThroughputProblem(
+        src=src,
+        dst=dst,
+        required_throughput_gbits=required_throughput_gbits,
+        gbyte_to_transfer=gbyte_to_transfer,
+        instance_limit=max_instances,
     )
+    with Timer("Solve throughput problem"):
+        solution = tput.solve_min_cost(
+            problem,
+            solver=choose_solver(),
+            solver_verbose=solver_verbose,
+            save_lp_path=skylark_root / "data" / "throughput_solver.lp",
+        )
 
     # save results
     tput.print_solution(solution)

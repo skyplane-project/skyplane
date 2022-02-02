@@ -43,7 +43,7 @@ class ChunkStore:
         old_status = self.chunk_status.get(chunk_id)
         self.chunk_status[chunk_id] = new_status
         self.chunk_status_log.append({"chunk_id": chunk_id, "state": new_status, "time": datetime.utcnow()})
-        #logger.info(f"[chunk_store]:{chunk_id} state change from {old_status} to {new_status}")
+        # logger.info(f"[chunk_store]:{chunk_id} state change from {old_status} to {new_status}")
 
     def get_chunk_status_log(self) -> List[Dict]:
         return list(self.chunk_status_log)
@@ -110,7 +110,7 @@ class ChunkStore:
         self.chunk_requests[chunk_request.chunk.chunk_id] = chunk_request
 
     def used_bytes(self):
-        return sum(f.stat().st_size for f in self.chunk_dir.glob("*.chunk"))
+        return sum(f.stat().st_size for f in self.chunk_dir.glob("*.chunk") if os.path.exists(f))
 
     def remaining_bytes(self):
         return self.chunk_store_max_size - self.used_bytes()

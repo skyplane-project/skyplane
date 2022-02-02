@@ -9,7 +9,8 @@ import concurrent
 import os
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.obj_store.gcs_interface import GCSInterface
-#from skylark.obj_store.azure_interface import AzureInterface
+
+# from skylark.obj_store.azure_interface import AzureInterface
 
 import tempfile
 import concurrent
@@ -19,7 +20,7 @@ from shutil import copyfile
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
 
-from skylark.cli.cli_helper import load_config
+from skylark.config import load_config
 
 
 def parse_args():
@@ -30,7 +31,6 @@ def parse_args():
     parser.add_argument("--inter-region", default=None, help="AWS region of intermediate bucket")
     parser.add_argument("--dest-region", default="aws:us-west-1", help="AWS region of destination bucket")
     parser.add_argument("--num-gateways", default=1, type=int, help="Number of gateways to use")
-    parser.add_argument("--num-outgoing-connections", default=16, type=int, help="Number of outgoing connections from a gateway")
 
     # object information
     parser.add_argument("--key-prefix", default="/test/direct_replication", help="S3 key prefix for all objects")
