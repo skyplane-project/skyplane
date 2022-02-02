@@ -10,6 +10,7 @@ import typer
 from skylark.utils import logger
 from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP
 from skylark import skylark_root
+from skylark.utils.utils import Timer
 
 app = typer.Typer(name="skylark-solver")
 
@@ -52,12 +53,13 @@ def solve_throughput(
         gbyte_to_transfer=gbyte_to_transfer,
         instance_limit=max_instances,
     )
-    solution = tput.solve_min_cost(
-        problem,
-        solver=choose_solver(),
-        solver_verbose=solver_verbose,
-        save_lp_path=skylark_root / "data" / "throughput_solver.lp",
-    )
+    with Timer("Solve throughput problem"):
+        solution = tput.solve_min_cost(
+            problem,
+            solver=choose_solver(),
+            solver_verbose=solver_verbose,
+            save_lp_path=skylark_root / "data" / "throughput_solver.lp",
+        )
 
     # save results
     tput.print_solution(solution)

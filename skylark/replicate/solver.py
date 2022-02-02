@@ -309,9 +309,15 @@ class ThroughputSolverILP(ThroughputSolver):
                     g.edge(src_label, dst_label, label=label)
         return g
 
-    def to_replication_topology(self, solution: ThroughputSolution, ingress_hard_limit=64, egress_hard_limit=64) -> ReplicationTopology:
+    def to_replication_topology(self, solution: ThroughputSolution) -> ReplicationTopology:
         regions = self.get_regions()
         Edge = namedtuple("Edge", ["src_region", "src_instance_idx", "dst_region", "dst_instance_idx", "connections"])
+        
+        # compute connections to target per instance
+        average_egress_conns = [np.ceil(solution.var_conn[i, :].sum() / solution.var_instances_per_region[i]) for i in range(len(regions))]
+        average_ingress_conns = [np.ceil(solution.var_conn[:, i].sum() / solution.var_instances_per_region[i]) for i in range(len(regions))]
+        # average_egress_conns = [64 for i in range(len(regions))]
+        # average_ingress_conns = [64 for i in range(len(regions))]
 
         # first assign source instances to destination regions
         src_edges: List[Edge] = []
@@ -323,8 +329,8 @@ class ThroughputSolverILP(ThroughputSolver):
                     connections_to_allocate = np.rint(solution.var_conn[i, j]).astype(int)
                     while connections_to_allocate > 0:
                         # if this edge would exceed the instance connection limit, partially add connections to current instance and increment instance
-                        if connections_to_allocate + src_instance_connections > egress_hard_limit:
-                            partial_conn = egress_hard_limit - src_instance_connections
+                        if connections_to_allocate + src_instance_connections > average_egress_conns[i]:
+                            partial_conn = average_egress_conns[i] - src_instance_connections
                             connections_to_allocate -= partial_conn
                             assert connections_to_allocate >= 0, f"connections_to_allocate = {connections_to_allocate}"
                             assert partial_conn >= 0, f"partial_conn = {partial_conn}"
@@ -352,8 +358,8 @@ class ThroughputSolverILP(ThroughputSolver):
         for e in src_edges:
             connections_to_allocate = np.rint(e.connections).astype(int)
             while connections_to_allocate > 0:
-                if connections_to_allocate + dsts_instance_conn[e.dst_region] > ingress_hard_limit:
-                    partial_conn = ingress_hard_limit - dsts_instance_conn[e.dst_region]
+                if connections_to_allocate + dsts_instance_conn[e.dst_region] > average_ingress_conns[regions.index(e.dst_region)]:
+                    partial_conn = average_ingress_conns[regions.index(e.dst_region)] - dsts_instance_conn[e.dst_region]
                     connections_to_allocate = connections_to_allocate - partial_conn
                     if partial_conn > 0:
                         dst_edges.append(
