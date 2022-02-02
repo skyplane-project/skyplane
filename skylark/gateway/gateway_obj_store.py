@@ -93,9 +93,14 @@ class GatewayObjStoreConn:
                 def upload(region, bucket, fpath, key, chunk_id):
                     obj_store_interface = self.get_obj_store_interface(region, bucket)
                     obj_store_interface.upload_object(fpath, key).result()
+                    chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
 
                     # update chunk state
                     self.chunk_store.state_finish_upload(chunk_id)
+
+                    # delete chunk 
+                    chunk_file_path.unlink()
+
                     logger.debug(f"[obj_store:{self.worker_id}] Uploaded {chunk_id} to {bucket}")
 
                 # wait for upload in seperate thread
