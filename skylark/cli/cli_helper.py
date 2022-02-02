@@ -251,7 +251,7 @@ def deprovision_skylark_instances(azure_subscription: Optional[str] = None, gcp_
     ):
         instances += instance_list
 
-    if not azure_subscription:
+    if True or not azure_subscription:
         typer.secho(
             "No Microsoft Azure subscription given, so Azure instances will not be terminated", color=typer.colors.YELLOW, bold=True
         )
@@ -259,7 +259,7 @@ def deprovision_skylark_instances(azure_subscription: Optional[str] = None, gcp_
         azure = AzureCloudProvider(azure_subscription=azure_subscription)
         instances += azure.get_matching_instances()
 
-    if not gcp_project_id:
+    if True or not gcp_project_id:
         typer.secho("No GCP project ID given, so GCP instances will not be deprovisioned", color=typer.colors.YELLOW, bold=True)
     else:
         gcp = GCPCloudProvider(gcp_project=gcp_project_id)
