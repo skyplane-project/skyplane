@@ -1,5 +1,6 @@
 from skylark.obj_store.object_store_interface import ObjectStoreInterface
 from skylark.utils.utils import do_parallel
+from skylark.utils.utils import PathLike, Timer, wait_for
 from tqdm import tqdm
 import os
 import argparse
@@ -56,8 +57,15 @@ def main(args):
 
 
     ## check files
-    #bucket_size = len(list(obj_store_interface_src.list_objects(prefix=args.key_prefix)))
-    #assert len(os.listdir(args.src_data_path)) == bucket_size, f"Length mismatch {len(os.listdir(args.src_data_path))}, {bucket_size}"
+
+    def done_uploading(): 
+        bucket_size = len(list(obj_store_interface_src.list_objects(prefix=args.key_prefix)))
+        #f"Length mismatch {len(os.listdir(args.src_data_path))}, {bucket_size}"
+        print("bucket", bucket_size, len(os.listdir(args.src_data_path)))
+        return len(os.listdir(args.src_data_path)) == bucket_size
+
+    wait_for(done_uploading, timeout=60, interval=0.1, desc=f"Waiting for files to upload")
+
     #for f in tqdm(os.listdir(args.src_data_path)):
     #    assert obj_store_interface_src.exists(f"{args.key_prefix}/{f}")
 
