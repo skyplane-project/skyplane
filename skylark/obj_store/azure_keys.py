@@ -35,7 +35,7 @@ azure_storage_credentials = {
         "name": "sskylarkkoreacentral",
         "connection_string": "DefaultEndpointsProtocol=https;AccountName=sskylarkkoreacentral;AccountKey=8/grA82LGRkki1kPOuZ9HX/+3KIkiw8vPRTrVZls5AyGLSsl6xSDiFDqu2UKtMfU+20S+1f9A3CmUvQTk+KfNg==;EndpointSuffix=core.windows.net",
     },
-    "germanywest":{
+    "germanywestcentral":{
         "name": "skylarkgermanywest",
         "connection_string": "DefaultEndpointsProtocol=https;AccountName=skylarkgermanywest;AccountKey=Oo5IHd3Qb4IeAO17IQO9Mkq30eGxlRzNibZEDfi8jTo2303QFdgl8+t0cCsap3lh8iOF3qnRf63RE2fSYk/nXA==;EndpointSuffix=core.windows.net",
     }
