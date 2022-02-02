@@ -60,9 +60,9 @@ instance_choices = sorted(df["problem_instance_limit"].unique())
 
 st.sidebar.subheader("Filter by source region")
 st.sidebar.write(f"Sources: {', '.join(src_regions_choices)}")
-src_prefix = st.sidebar.text_input("Source region prefix", "")
+src_prefix = st.sidebar.text_input("Source region prefix", "azure:")
 st.sidebar.subheader("Filter by destination region")
-dst_prefix = st.sidebar.text_input("Destination region prefix", "")
+dst_prefix = st.sidebar.text_input("Destination region prefix", "azure:")
 st.sidebar.subheader("Filter by instance limit")
 instance_limit = st.sidebar.selectbox("Instance limit", instance_choices)
 

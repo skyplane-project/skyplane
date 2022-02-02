@@ -80,105 +80,107 @@ label_map = {
     'azure': 'Azure',
 }
 
-st.header("Source to Destination grouped histogram")
-with plt.style.context(style):
-    fig, axs = plt.subplots(3, 3, sharex=True, sharey=True, figsize=(plot_width, plot_height * 3))
-    for ((src_provider, dst_provider), df_group), ax in zip(df.groupby(["src_provider", "dst_provider"]), axs.flatten()):
-        if ignore_speedup_one:
-            df_group = df_group[df_group["throughput_speedup"] >= 1.01]
-        max_speedup = df_group.query("cost_increase < @cost_threshold").groupby(["problem_src", "problem_dst"])["throughput_speedup"].max().sort_values(ascending=False)
-        max_speedup = max_speedup.clip(lower=1, upper=xmax)
-        ax.hist(max_speedup, bins=np.linspace(1, xmax, bins), histtype="stepfilled")
-        ax.set_title(f"{label_map[src_provider]} to {label_map[dst_provider]}")
-        ax.set_xlim(1, xmax)
-        ax.set_xscale("log" if log_x else "linear")
-        ax.set_yscale("log" if log_y else "linear")
-    axs[2][1].set_xlabel("Throughput speedup")
-    axs[1][0].set_ylabel("Count")
-    fig.set_facecolor("white")
-    st.pyplot(fig, bbox_inches="tight")
-    f = f"src_to_dst_histogram_{cost_threshold:.2f}.pdf"
-    fig.savefig(str(out_dir / f), dpi=300, bbox_inches="tight")
-    st.download_button("Download PDF: " + f, (out_dir / f).read_bytes(), file_name=f)
+if st.checkbox("Enable plots", True):
+    st.header("Source to Destination grouped histogram")
+    with plt.style.context(style):
+        fig, axs = plt.subplots(3, 3, sharex=True, sharey=True, figsize=(plot_width, plot_height * 3))
+        for ((src_provider, dst_provider), df_group), ax in zip(df.groupby(["src_provider", "dst_provider"]), axs.flatten()):
+            if ignore_speedup_one:
+                df_group = df_group[df_group["throughput_speedup"] >= 1.01]
+            max_speedup = df_group.query("cost_increase < @cost_threshold").groupby(["problem_src", "problem_dst"])["throughput_speedup"].max().sort_values(ascending=False)
+            max_speedup = max_speedup.clip(lower=1, upper=xmax)
+            ax.hist(max_speedup, bins=np.linspace(1, xmax, bins), histtype="stepfilled")
+            ax.set_title(f"{label_map[src_provider]} to {label_map[dst_provider]}")
+            ax.set_xlim(1, xmax)
+            ax.set_xscale("log" if log_x else "linear")
+            ax.set_yscale("log" if log_y else "linear")
+        axs[2][1].set_xlabel("Throughput speedup")
+        axs[1][0].set_ylabel("Count")
+        fig.set_facecolor("white")
+        st.pyplot(fig, bbox_inches="tight")
+        f = f"src_to_dst_histogram_{cost_threshold:.2f}.pdf"
+        fig.savefig(str(out_dir / f), dpi=300, bbox_inches="tight")
+        st.download_button("Download PDF: " + f, (out_dir / f).read_bytes(), file_name=f)
 
-st.header("Source grouped histogram")
-with plt.style.context(style):
-    fig, axs = plt.subplots(1, 3, sharex=True, sharey=True, figsize=(plot_width, plot_height))
-    for (src_provider, df_group), ax in zip(df.groupby('src_provider'), axs):
-        if ignore_speedup_one:
-            df_group = df_group[df_group["throughput_speedup"] >= 1.01]
-        max_speedup = df_group.query("cost_increase < @cost_threshold").groupby(["problem_src", "problem_dst"])["throughput_speedup"].max().sort_values(ascending=False)
-        max_speedup = max_speedup.clip(lower=1, upper=xmax)  # set range of plot
-        ax.hist(max_speedup, bins=np.linspace(1, xmax, bins), histtype="stepfilled")
-        ax.set_title(f"Source: {label_map[src_provider]}")
-        ax.set_xlim(1, xmax)
-        ax.set_xscale("log" if log_x else "linear")
-        ax.set_yscale("log" if log_y else "linear")
-    axs[1].set_xlabel("Throughput speedup")
-    axs[0].set_ylabel("Count")
-    fig.set_facecolor("white")
-    st.pyplot(fig, bbox_inches="tight")
-    f = f"src_histogram_{cost_threshold:.2f}.pdf"
-    fig.savefig(str(out_dir / f), dpi=300, bbox_inches="tight")
-    st.download_button("Download PDF: " + f, (out_dir / f).read_bytes(), file_name=f)
+    st.header("Source grouped histogram")
+    with plt.style.context(style):
+        fig, axs = plt.subplots(1, 3, sharex=True, sharey=True, figsize=(plot_width, plot_height))
+        for (src_provider, df_group), ax in zip(df.groupby('src_provider'), axs):
+            if ignore_speedup_one:
+                df_group = df_group[df_group["throughput_speedup"] >= 1.01]
+            max_speedup = df_group.query("cost_increase < @cost_threshold").groupby(["problem_src", "problem_dst"])["throughput_speedup"].max().sort_values(ascending=False)
+            max_speedup = max_speedup.clip(lower=1, upper=xmax)  # set range of plot
+            ax.hist(max_speedup, bins=np.linspace(1, xmax, bins), histtype="stepfilled")
+            ax.set_title(f"Source: {label_map[src_provider]}")
+            ax.set_xlim(1, xmax)
+            ax.set_xscale("log" if log_x else "linear")
+            ax.set_yscale("log" if log_y else "linear")
+        axs[1].set_xlabel("Throughput speedup")
+        axs[0].set_ylabel("Count")
+        fig.set_facecolor("white")
+        st.pyplot(fig, bbox_inches="tight")
+        f = f"src_histogram_{cost_threshold:.2f}.pdf"
+        fig.savefig(str(out_dir / f), dpi=300, bbox_inches="tight")
+        st.download_button("Download PDF: " + f, (out_dir / f).read_bytes(), file_name=f)
 
-st.header("Destination grouped histogram")
-with plt.style.context(style):
-    fig, axs = plt.subplots(1, 3, sharex=True, sharey=True, figsize=(plot_width, plot_height))
-    for (dst_provider, df_group), ax in zip(df.groupby('dst_provider'), axs):
-        if ignore_speedup_one:
-            df_group = df_group[df_group["throughput_speedup"] >= 1.01]
-        max_speedup = df_group.query("cost_increase < @cost_threshold").groupby(["problem_src", "problem_dst"])["throughput_speedup"].max().sort_values(ascending=False)
-        max_speedup = max_speedup.clip(lower=1, upper=xmax)  # set range of plot
-        ax.hist(max_speedup, bins=np.linspace(1, xmax, bins), histtype="stepfilled")
-        ax.set_title(f"Destination: {label_map[dst_provider]}")
-        ax.set_xlim(1, xmax)
-        ax.set_xscale("log" if log_x else "linear")
-        ax.set_yscale("log" if log_y else "linear")
-    axs[1].set_xlabel("Throughput speedup")
-    axs[0].set_ylabel("Count")
-    fig.set_facecolor("white")
-    st.pyplot(fig, bbox_inches="tight")
-    f = f"dst_histogram_{cost_threshold:.2f}.pdf"
-    fig.savefig(str(out_dir / f), dpi=300, bbox_inches="tight")
-    st.download_button("Download PDF: " + f, (out_dir / f).read_bytes(), file_name=f)
+    st.header("Destination grouped histogram")
+    with plt.style.context(style):
+        fig, axs = plt.subplots(1, 3, sharex=True, sharey=True, figsize=(plot_width, plot_height))
+        for (dst_provider, df_group), ax in zip(df.groupby('dst_provider'), axs):
+            if ignore_speedup_one:
+                df_group = df_group[df_group["throughput_speedup"] >= 1.01]
+            max_speedup = df_group.query("cost_increase < @cost_threshold").groupby(["problem_src", "problem_dst"])["throughput_speedup"].max().sort_values(ascending=False)
+            max_speedup = max_speedup.clip(lower=1, upper=xmax)  # set range of plot
+            ax.hist(max_speedup, bins=np.linspace(1, xmax, bins), histtype="stepfilled")
+            ax.set_title(f"Destination: {label_map[dst_provider]}")
+            ax.set_xlim(1, xmax)
+            ax.set_xscale("log" if log_x else "linear")
+            ax.set_yscale("log" if log_y else "linear")
+        axs[1].set_xlabel("Throughput speedup")
+        axs[0].set_ylabel("Count")
+        fig.set_facecolor("white")
+        st.pyplot(fig, bbox_inches="tight")
+        f = f"dst_histogram_{cost_threshold:.2f}.pdf"
+        fig.savefig(str(out_dir / f), dpi=300, bbox_inches="tight")
+        st.download_button("Download PDF: " + f, (out_dir / f).read_bytes(), file_name=f)
 
 
-# box and whisker plots with bars at cost_threshold in [1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0]
-st.header("Distribution of all speedups at different cost thresholds")
-cost_threshold_ranges = [1.10, 1.25, 1.5, 2.0]
-whis = st.number_input("whis", 1., 100., 2., 0.25)
-max_flier = st.text_input("max_flier", ".995")
-with plt.style.context(style):
-    fig, axs = plt.subplots(2, 1, figsize=(plot_height * 2, plot_height * 2))
-    for ax, outliers  in zip(axs, [False, True]):
-        for i, thresh in enumerate(cost_threshold_ranges):
-            df_group = df.query("cost_increase <= @thresh")
-            df_group = df_group[df_group["throughput_speedup"] >= 1.001]
-            if outliers is False:
-                df_group = df_group[df_group["throughput_speedup"] <= df_group.throughput_speedup.quantile(float(max_flier))]
-            max_speedup = df_group.groupby(["problem_src", "problem_dst"])["throughput_speedup"].max().sort_values(ascending=False).clip(lower=1)
-            label = f"{thresh:.2f}x"
-            ax.boxplot(
-                max_speedup,
-                notch=False,
-                vert=False,
-                whis=whis,
-                positions=[i],
-                labels=[label],
-                widths=0.5,
-                showfliers=outliers,
-            )
-    axs[0].set_xlabel("Throughput speedup (excluding top 0.5%)", fontsize=8)
-    axs[1].set_xlabel("Throughput speedup (all destination pairs)", fontsize=8)
-    axs[0].set_ylabel("Cost increase", fontsize=8)
-    axs[1].set_ylabel("Cost increase", fontsize=8)
-    fig.set_facecolor("white")
-    fig.tight_layout()
-    st.pyplot(fig, bbox_inches="tight")
-    f = f"all_speedups_boxplot_{float(max_flier):.2f}_outliers{outliers}.pdf"
-    fig.savefig(str(out_dir / f), dpi=300, bbox_inches="tight")
-    st.download_button("Download PDF: " + f, (out_dir / f).read_bytes(), file_name=f)
+    # box and whisker plots with bars at cost_threshold in [1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0]
+    st.header("Distribution of all speedups at different cost thresholds")
+    cost_threshold_ranges = [1.10, 1.25, 1.5, 2.0]
+    whis = st.number_input("whis", 1., 100., 2., 0.25)
+    max_flier = st.text_input("max_flier", ".995")
+    with plt.style.context(style):
+        fig, axs = plt.subplots(2, 1, figsize=(plot_height * 2, plot_height * 2))
+        for ax, outliers  in zip(axs, [False, True]):
+            for i, thresh in enumerate(cost_threshold_ranges):
+                df_group = df.query("cost_increase <= @thresh")
+                df_group = df_group[df_group["throughput_speedup"] >= 1.001]
+                if outliers is False:
+                    df_group = df_group[df_group["throughput_speedup"] <= df_group.throughput_speedup.quantile(float(max_flier))]
+                max_speedup = df_group.groupby(["problem_src", "problem_dst"])["throughput_speedup"].max().sort_values(ascending=False).clip(lower=1)
+                label = f"{thresh:.2f}x"
+                ax.boxplot(
+                    max_speedup,
+                    notch=False,
+                    vert=False,
+                    whis=whis,
+                    positions=[i],
+                    labels=[label],
+                    widths=0.5,
+                    showfliers=outliers,
+                )
+        axs[0].set_xlabel("Throughput speedup (excluding top 0.5%)", fontsize=8)
+        axs[1].set_xlabel("Throughput speedup (all destination pairs)", fontsize=8)
+        axs[0].set_ylabel("Cost increase", fontsize=8)
+        axs[1].set_ylabel("Cost increase", fontsize=8)
+        fig.set_facecolor("white")
+        fig.tight_layout()
+        st.pyplot(fig, bbox_inches="tight")
+        f = f"all_speedups_boxplot_{float(max_flier):.2f}_outliers{outliers}.pdf"
+        fig.savefig(str(out_dir / f), dpi=300, bbox_inches="tight")
+        st.download_button("Download PDF: " + f, (out_dir / f).read_bytes(), file_name=f)
 
-max_speedup = df.query("cost_increase < @cost_threshold").groupby(["problem_src", "problem_dst"])["throughput_speedup"].max().sort_values(ascending=False)
+cols = st.multiselect("Columns", df.columns, ["throughput_speedup", "throughput_achieved_gbits", "baseline_throughput_achieved_gbits"])
+max_speedup = df.query("cost_increase < @cost_threshold").groupby(["problem_src", "problem_dst"])[cols].max().sort_values(ascending=False, by="throughput_speedup")
 st.dataframe(max_speedup.head(20))
