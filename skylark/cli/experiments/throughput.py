@@ -10,7 +10,7 @@ import questionary
 import typer
 from skylark import GB, skylark_root
 from skylark.benchmark.utils import provision, split_list
-from skylark.cli.cli_helper import load_config
+from skylark.config import load_config
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider

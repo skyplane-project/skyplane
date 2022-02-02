@@ -27,9 +27,9 @@ class S3Interface(ObjectStoreInterface):
         self.pending_uploads, self.completed_uploads = 0, 0
         self.s3_part_size = part_size
         self.s3_throughput_target_gbps = throughput_target_gbps
-        #num_threads=os.cpu_count()
-        #num_threads=256
-        num_threads=4 #256
+        # num_threads=os.cpu_count()
+        # num_threads=256
+        num_threads = 4  # 256
         event_loop_group = EventLoopGroup(num_threads=num_threads, cpu_group=None)
         host_resolver = DefaultHostResolver(event_loop_group)
         bootstrap = ClientBootstrap(event_loop_group, host_resolver)

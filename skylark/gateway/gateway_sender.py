@@ -45,11 +45,9 @@ class GatewaySender:
             p.join()
         self.processes = []
 
-
     def worker_loop(self, worker_id: int, dest_ip: str):
         setproctitle.setproctitle(f"skylark-gateway-sender:{worker_id}")
         self.worker_id = worker_id
-
 
         while not self.exit_flags[worker_id].is_set():
             try:
@@ -93,10 +91,6 @@ class GatewaySender:
 
     def queue_request(self, chunk_request: ChunkRequest):
         self.worker_queue.put(chunk_request.chunk.chunk_id)
-
-
-
-
 
     # send chunks to other instances
     def send_chunks(self, chunk_ids: List[int], dst_host: str):

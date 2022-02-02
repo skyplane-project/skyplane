@@ -1,4 +1,5 @@
 import json
+import time
 import os
 import subprocess
 import threading
@@ -193,6 +194,9 @@ class Server:
         activity_monitor_port=8889,
         use_bbr=False,
     ):
+        self.wait_for_ready()
+        time.sleep(2)
+
         def check_stderr(tup):
             assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
 
@@ -248,6 +252,9 @@ class Server:
         docker_run_flags = f"-d --rm --log-driver=local --ipc=host --network=host --ulimit nofile={1024 * 1024} {docker_envs}"
         gateway_daemon_cmd = f"python -u /pkg/skylark/gateway/gateway_daemon.py --chunk-dir /dev/shm/skylark/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
+        test_command = "echo 'test'"
+        start_out, start_err = self.run_command(test_command)
+        print(start_out, start_err)
         start_out, start_err = self.run_command(docker_launch_cmd)
         print(start_out)
         print(start_err)

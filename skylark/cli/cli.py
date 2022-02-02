@@ -38,11 +38,11 @@ from skylark.cli.cli_helper import (
     copy_gcs_local,
     copy_local_gcs,
     deprovision_skylark_instances,
-    load_config,
     ls_local,
     ls_s3,
     parse_path,
 )
+from skylark.config import load_config
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
 from skylark.obj_store.object_store_interface import ObjectStoreInterface
@@ -160,6 +160,7 @@ def replicate_random(
         logger.warning(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
         )
+    # rc.provision_gateways(reuse_gateways, log_dir="/tmp/log_skylark") for debugging and writing log back to local machine at the dir provided
     rc.provision_gateways(reuse_gateways)
     for node, gw in rc.bound_nodes.items():
         logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
@@ -262,7 +263,7 @@ def replicate_json(
         total_bytes = n_chunks * chunk_size_mb * MB
     else:
 
-        # get object keys with prefix 
+        # get object keys with prefix
         objs = ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(key_prefix)
         obj_keys = list([obj.key for obj in objs])
 
