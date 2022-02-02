@@ -4,8 +4,11 @@
 #src="gcp:europe-north1-a"
 #dest="gcp:us-west4-a"
 
-src="aws:ap-northeast-2"
-dest="gcp:us-central1-a"
+#src="aws:us-east-1"
+#dest="gcp:us-west4-a"
+
+src="gcp:europe-north1-a"
+dest="gcp:us-west4-a"
 
 bucket_prefix="sarah"
 src_bucket=(${src//:/ })
@@ -14,17 +17,16 @@ dest_bucket=(${dest//:/ })
 dest_bucket=${bucket_prefix}-skylark-${dest_bucket[1]}
 echo $src_bucket
 echo $dest_bucket
-max_instance=16
+max_instance=8
 experiment=${src//[:]/-}_${dest//[:]/-}_${max_instance}
 filename=data/plan/${experiment}.json
-throughput=100
 echo $filename
 
 # setup credentials 
 export GOOGLE_APPLICATION_CREDENTIALS="/home/ubuntu/skylark/skylark-sarah-7f8b82af365f.json"
 
-## creats buckets + bucket data and sets env variables
-python setup_bucket.py --key-prefix "fake_imagenet" --bucket-prefix "sarah" --gcp-project skylark-sarah --src-data-path ../fake_imagenet/ --src-region ${src} --dest-region ${dest}
+# creats buckets + bucket data and sets env variables
+#python setup_bucket.py --key-prefix "fake_imagenet" --bucket-prefix ${bucket_prefix} --gcp-project skylark-sarah --src-data-path ../fake_imagenet/ --src-region ${src} --dest-region ${dest}
 
 
 # TODO:artificially increase the number of chunks 
@@ -33,11 +35,17 @@ python setup_bucket.py --key-prefix "fake_imagenet" --bucket-prefix "sarah" --gc
 source scripts/pack_docker.sh;
 
 ## create plan
-skylark solver solve-throughput ${src} ${dest} 1 -o ${filename} --max-instances ${max_instance};
+#throughput=$(( max_instance*5 ))
+throughput=25
+echo ${throughput}
+skylark solver solve-throughput ${src} ${dest} ${throughput}  -o ${filename} --max-instances ${max_instance};
 
 # make exp directory 
 mkdir -p data/results
 mkdir -p data/results/${experiment}
+
+# save copy of plan
+cp ${filename} data/results/${experiment}
 
 # run replication (random)
 skylark replicate-json ${filename} \

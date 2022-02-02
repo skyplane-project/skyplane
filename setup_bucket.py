@@ -4,7 +4,7 @@ from skylark.utils.utils import PathLike, Timer, wait_for
 from tqdm import tqdm
 import os
 import argparse
-
+from multiprocessing import Pool
 from concurrent.futures import wait
 
 import ctypes
@@ -32,6 +32,10 @@ def parse_args():
 
     return args
 
+def upload(region, bucket, path, key):
+    obj_store = ObjectStoreInterface.create(region, bucket)
+    obj_store.upload_object(path, key).result()
+
 
 def main(args):
     src_bucket = f"{args.bucket_prefix}-skylark-{args.src_region.split(':')[1]}"
@@ -45,15 +49,19 @@ def main(args):
     obj_store_interface_dst = ObjectStoreInterface.create(args.dest_region, dst_bucket)
     obj_store_interface_dst.create_bucket()
 
-    futures = []
-    for f in tqdm(os.listdir(args.src_data_path)):
-        futures.append(
-            obj_store_interface_src.upload_object(os.path.join(args.src_data_path, f), f"{args.key_prefix}/{f}")
-        )
-        if len(futures) > 500: # wait, or else awscrt errors
-            print("waiting for completion")
-            wait(futures) 
-            futures = []
+    p = Pool(32*4)
+    p.starmap(upload, [(args.src_region, src_bucket, os.path.join(args.src_data_path, f), f"{args.key_prefix}/{f}") for f in os.listdir(args.src_data_path)])
+    p.close()
+
+    #futures = []
+    #for f in tqdm(os.listdir(args.src_data_path)):
+    #    futures.append(
+    #        obj_store_interface_src.upload_object(os.path.join(args.src_data_path, f), f"{args.key_prefix}/{f}")
+    #    )
+    #    if len(futures) > 500: # wait, or else awscrt errors
+    #        print("waiting for completion")
+    #        wait(futures) 
+    #        futures = []
 
 
     ## check files
