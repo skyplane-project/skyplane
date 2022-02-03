@@ -34,7 +34,12 @@ def parse_args():
 
 def upload(region, bucket, path, key):
     obj_store = ObjectStoreInterface.create(region, bucket)
-    obj_store.upload_object(path, key).result()
+
+    # TODO: make sure is actually same file 
+    if obj_store.exists(key): return 0
+
+    obj_store_interface_src.upload_object(path, key).result()
+    return 1
 
 
 def main(args):
@@ -49,22 +54,28 @@ def main(args):
     obj_store_interface_dst = ObjectStoreInterface.create(args.dest_region, dst_bucket)
     obj_store_interface_dst.create_bucket()
 
-    p = Pool(32*4)
-    p.starmap(upload, [(args.src_region, src_bucket, os.path.join(args.src_data_path, f), f"{args.key_prefix}/{f}") for f in os.listdir(args.src_data_path)])
-    p.close()
+    print("running upload... (note: may need to chunk)")
 
-    #futures = []
+    ## TODO: chunkify
+    #p = Pool(16)
+    #uploaded = p.starmap(upload, [(args.src_region, src_bucket, os.path.join(args.src_data_path, f), f"{args.key_prefix}/{f}") for f in os.listdir(args.src_data_path)])
+    #p.close()
+    #print(f"uploaded {sum(uploaded)} files to {src_bucket}")
+
+    futures = []
+    for f in tqdm(os.listdir(args.src_data_path)):
+        futures.append(
+            obj_store_interface_src.upload_object(os.path.join(args.src_data_path, f), f"{args.key_prefix}/{f}")
+        )
+        if len(futures) > 500: # wait, or else awscrt errors
+            print("waiting for completion")
+            wait(futures) 
+            futures = []
+
+
+    ### check files
     #for f in tqdm(os.listdir(args.src_data_path)):
-    #    futures.append(
-    #        obj_store_interface_src.upload_object(os.path.join(args.src_data_path, f), f"{args.key_prefix}/{f}")
-    #    )
-    #    if len(futures) > 500: # wait, or else awscrt errors
-    #        print("waiting for completion")
-    #        wait(futures) 
-    #        futures = []
-
-
-    ## check files
+    #    assert obj_store_interface_src.exists(f"{args.key_prefix}/{f}")
 
     def done_uploading(): 
         bucket_size = len(list(obj_store_interface_src.list_objects(prefix=args.key_prefix)))
@@ -72,11 +83,9 @@ def main(args):
         print("bucket", bucket_size, len(os.listdir(args.src_data_path)))
         return len(os.listdir(args.src_data_path)) == bucket_size
 
-    wait_for(done_uploading, timeout=60, interval=0.1, desc=f"Waiting for files to upload")
+    ##wait_for(done_uploading, timeout=60, interval=0.1, desc=f"Waiting for files to upload")
 
-    #for f in tqdm(os.listdir(args.src_data_path)):
-    #    assert obj_store_interface_src.exists(f"{args.key_prefix}/{f}")
-
+    
 
 
 
