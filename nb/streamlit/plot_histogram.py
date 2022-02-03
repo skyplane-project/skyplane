@@ -1,4 +1,5 @@
 from tkinter import font
+from typing import Dict
 import matplotlib.pyplot as plt
 from questionary import checkbox
 import streamlit as st
@@ -79,6 +80,35 @@ label_map = {
     'gcp': 'GCP',
     'azure': 'Azure',
 }
+
+def geomean(x):
+    return np.exp(np.mean(np.log(x)))
+
+st.write(f"Geometric mean throughput speedup: {geomean(df['throughput_speedup'].values):.2f}")
+
+geomeans = {}
+for src_region, df_src in df.groupby("problem_src"):
+    geomeans[src_region] = geomean(df_src["throughput_speedup"].values)
+for k, v in sorted(geomeans.items(), key=lambda x: x[1], reverse=True):
+    st.write(f"{k}: {v:.2f}")
+st.header("Sorted geomean by source")
+with plt.style.context(style):
+    fig, axs = plt.subplots(1, 3, sharex=True, sharey=True, figsize=(plot_width, plot_height))
+    for i, (src_provider, src_df) in enumerate(df.groupby('src_provider')):
+        # get top 5 source regions for provider in geomeans
+        src_geomeans = sorted([(k, v) for k, v in geomeans.items() if k.startswith(src_provider)], key=lambda i: i[1], reverse=True)
+        # plot bar plot with for top 5 source regions
+        src_geomeans: Dict[str, float] = dict(src_geomeans[:5])
+        axs[i].bar(range(len(src_geomeans)), [v for k, v in src_geomeans.items()], align='center')
+        axs[i].set_title(label_map[src_provider])
+    st.pyplot(fig)
+
+st.subheader("Dests")
+geomeans_dst = {}
+for dst_region, df_dst in df.groupby("problem_dst"):
+    geomeans_dst[dst_region] = geomean(df_dst["throughput_speedup"].values)
+for k, v in sorted(geomeans_dst.items(), key=lambda x: x[1], reverse=True):
+    st.write(f"{k}: {v:.2f}")
 
 if st.checkbox("Enable plots", True):
     st.header("Source to Destination grouped histogram")
