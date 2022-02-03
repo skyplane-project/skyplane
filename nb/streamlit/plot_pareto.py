@@ -58,16 +58,19 @@ instance_choices = sorted(df["problem_instance_limit"].unique())
 # Filter results to a single src, dest pair
 ########
 
-st.sidebar.subheader("Filter by source region")
-st.sidebar.write(f"Sources: {', '.join(src_regions_choices)}")
-src_prefix = st.sidebar.text_input("Source region prefix", "azure:")
-st.sidebar.subheader("Filter by destination region")
-dst_prefix = st.sidebar.text_input("Destination region prefix", "azure:")
+src_dest_pairs = [f"{src} to {dst}" for src, dst in df.groupby(["problem_src", "problem_dst"]).groups.keys()]
+src_dest_pairs_choices = st.multiselect("Select src, dest pairs", src_dest_pairs, default=src_dest_pairs[0])
+df = df.loc[(df["problem_src"] + " to " + df["problem_dst"]).map(str).isin(src_dest_pairs_choices)]
+# st.sidebar.subheader("Filter by source region")
+# st.sidebar.write(f"Sources: {', '.join(src_regions_choices)}")
+# src_prefix = st.sidebar.text_input("Source region prefix", "azure:")
+# st.sidebar.subheader("Filter by destination region")
+# dst_prefix = st.sidebar.text_input("Destination region prefix", "azure:")
 st.sidebar.subheader("Filter by instance limit")
 instance_limit = st.sidebar.selectbox("Instance limit", instance_choices)
 
-df = df[df["problem_src"].str.startswith(src_prefix)]
-df = df[df["problem_dst"].str.startswith(dst_prefix)]
+# df = df[df["problem_src"].str.startswith(src_prefix)]
+# df = df[df["problem_dst"].str.startswith(dst_prefix)]
 df = df[df["problem_instance_limit"] == instance_limit]
 st.sidebar.info(f"Filtered to {len(df)} rows")
 
@@ -104,7 +107,7 @@ fig.set_facecolor("white")
 st.pyplot(fig, bbox_inches="tight")
 
 st.write("Throughput speedup versus cost increase")
-fig, ax = plt.subplots(figsize=(8, 6))
+fig, ax = plt.subplots(figsize=(6, 5))
 for (src_region, dst_region), df_grouped in df.groupby(["problem_src", "problem_dst"]):
     df_grouped["throughput_speedup"] = df_grouped["throughput_achieved_gbits"] / df_grouped["baseline_throughput_achieved_gbits"]
     df_grouped["cost_increase"] = df_grouped["cost_total"] / min(df_grouped["cost_total"])
@@ -119,10 +122,10 @@ for (src_region, dst_region), df_grouped in df.groupby(["problem_src", "problem_
     label = "{} to {}".format(src_region, dst_region)
     ax.plot(x, y, label=label, alpha=0.8)
 if st.checkbox("Show legend (speedup)", value=True):
-    ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.6), ncol=3)
-ax.set_xlabel("Throughput speedup (x)")
-ax.set_ylabel("Cost increase (x)")
+    ax.legend()
+ax.set_xlabel("Throughput speedup (x)", fontsize=12, fontweight="bold")
+ax.set_ylabel("Cost increase (x)", fontsize=12, fontweight="bold")
 fig.set_facecolor("white")
 st.pyplot(fig, bbox_inches="tight")
-
+fig.savefig("throughput_speedup_versus_cost_increase.pdf")
 
