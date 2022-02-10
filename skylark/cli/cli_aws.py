@@ -112,7 +112,6 @@ def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
 
         atexit.register(exit)
 
-        # monitor transfer each second
         last_status = None
         while last_status != "SUCCESS":
             task_execution_response = ds_client_src.describe_task_execution(TaskExecutionArn=task_execution_arn)
