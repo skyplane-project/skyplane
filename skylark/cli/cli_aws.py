@@ -4,14 +4,12 @@ AWS convenience interface
 
 import atexit
 import json
-from shlex import split
 import subprocess
-import botocore
-import tempfile
 import time
+from shlex import split
 from typing import Optional
-import questionary
 
+import questionary
 import typer
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.aws.aws_server import AWSServer
@@ -39,7 +37,7 @@ def vcpu_limits(quota_code="L-1216C47A"):
 def ssh(region: Optional[str] = None):
     aws = AWSCloudProvider()
     typer.secho("Querying AWS for instances", fg="green")
-    instances = aws.get_matching_instances(region=None)
+    instances = aws.get_matching_instances(region=region)
     if len(instances) == 0:
         typer.secho(f"No instancess found", fg="red")
         typer.Abort()
@@ -107,8 +105,10 @@ def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
         task_execution_arn = exec_response["TaskExecutionArn"]
 
         def exit():
-            ds_client_src.cancel_task_execution(TaskExecutionArn=task_execution_arn)
-            typer.secho("Cancelling task", fg="red")
+            task_execution_response = ds_client_src.describe_task_execution(TaskExecutionArn=task_execution_arn)
+            if task_execution_response["Status"] != "SUCCESS":
+                ds_client_src.cancel_task_execution(TaskExecutionArn=task_execution_arn)
+                typer.secho("Cancelling task", fg="red")
 
         atexit.register(exit)
 
