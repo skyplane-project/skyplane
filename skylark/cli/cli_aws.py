@@ -137,11 +137,11 @@ def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
             time.sleep(5)
 
     task_execution_response = ds_client_dst.describe_task_execution(TaskExecutionArn=task_execution_arn)
-    transfer_size = task_execution_response["BytesTransferred"]
-    transfer_duration_ms = task_execution_response["Result"]["TransferDuration"]
-    gbps = transfer_size * 8 / transfer_duration_ms / 1000 / GB
+    transfer_size_gb = task_execution_response["BytesTransferred"] / GB
+    transfer_duration = task_execution_response["Result"]["TransferDuration"] / 1000
+    gbps = transfer_size_gb * 8 / transfer_duration
     typer.secho(f"DataSync response: {task_execution_response}", fg="green")
-    typer.secho(json.dumps(dict(transfer_size=transfer_size, transfer_duration_ms=transfer_duration_ms, gbps=gbps)), fg="white")
+    typer.secho(json.dumps(dict(transfer_size_gb=transfer_size_gb, transfer_duration=transfer_duration, gbps=gbps, total_runtime_s=t.elapsed)), fg="white")
 
 
 if __name__ == "__main__":
