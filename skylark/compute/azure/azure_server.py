@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Optional
 
 import paramiko
-from paramiko import PasswordRequiredException
 from skylark import key_root
 from skylark.config import load_config
 from skylark.compute.server import Server, ServerState

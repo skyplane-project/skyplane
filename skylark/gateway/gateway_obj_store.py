@@ -1,18 +1,12 @@
 import queue
 import threading
-import socket
 from multiprocessing import Event, Manager, Process, Value
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
-import requests
 import setproctitle
 from skylark.utils import logger
-from skylark import MB
 from skylark.chunk import ChunkRequest
-from skylark.gateway.chunk_store import ChunkStore
-from skylark.utils.utils import Timer, wait_for
 
-import concurrent.futures
 from skylark.obj_store.object_store_interface import ObjectStoreInterface
 
 from dataclasses import dataclass
@@ -63,7 +57,7 @@ class GatewayObjStoreConn:
         self.processes = []
 
     def download(region, bucket, fpath, key):
-        obj_store_interface = self.get_obj_store_interface(region, bucket)
+        self.get_obj_store_interface(region, bucket)
 
     def worker_loop(self, worker_id: int):
         setproctitle.setproctitle(f"skylark-gateway-obj-store:{worker_id}")

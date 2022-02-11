@@ -2,7 +2,7 @@ import mimetypes
 import os
 from typing import Iterator, List
 
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future
 import botocore.exceptions
 from awscrt.auth import AwsCredentialsProvider
 from awscrt.http import HttpHeaders, HttpRequest

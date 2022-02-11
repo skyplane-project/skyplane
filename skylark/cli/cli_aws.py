@@ -11,6 +11,7 @@ from typing import Optional
 
 import questionary
 import typer
+from skylark import GB
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.obj_store.s3_interface import S3Interface
@@ -94,43 +95,53 @@ def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
     )
     dst_s3_arn = dst_response["LocationArn"]
 
-    create_task_response = ds_client_src.create_task(
-        SourceLocationArn=src_s3_arn,
-        DestinationLocationArn=dst_s3_arn,
-    )
-    task_arn = create_task_response["TaskArn"]
+    try:
+        create_task_response = ds_client_dst.create_task(
+            SourceLocationArn=src_s3_arn,
+            DestinationLocationArn=dst_s3_arn,
+            Name=f"{src_bucket}-{dst_bucket}-{path}",
+            Options={"BytesPerSecond": -1, "OverwriteMode": "ALWAYS", "TransferMode": "ALL", "VerifyMode": "NONE"},
+        )
+        task_arn = create_task_response["TaskArn"]
+    except ds_client_dst.exceptions.InvalidRequestException:
+        typer.secho(f"Region not supported: {src_region} to {dst_region}", fg="red")
+        raise typer.Abort()
 
     with Timer() as t:
-        exec_response = ds_client_src.start_task_execution(TaskArn=task_arn)
+        exec_response = ds_client_dst.start_task_execution(TaskArn=task_arn)
         task_execution_arn = exec_response["TaskExecutionArn"]
 
         def exit():
-            task_execution_response = ds_client_src.describe_task_execution(TaskExecutionArn=task_execution_arn)
+            task_execution_response = ds_client_dst.describe_task_execution(TaskExecutionArn=task_execution_arn)
             if task_execution_response["Status"] != "SUCCESS":
-                ds_client_src.cancel_task_execution(TaskExecutionArn=task_execution_arn)
+                ds_client_dst.cancel_task_execution(TaskExecutionArn=task_execution_arn)
                 typer.secho("Cancelling task", fg="red")
 
         atexit.register(exit)
 
         last_status = None
         while last_status != "SUCCESS":
-            task_execution_response = ds_client_src.describe_task_execution(TaskExecutionArn=task_execution_arn)
+            task_execution_response = ds_client_dst.describe_task_execution(TaskExecutionArn=task_execution_arn)
             last_status = task_execution_response["Status"]
             metadata = {
                 k: v
                 for k, v in task_execution_response.items()
                 if k
                 in [
-                    "EstimatedFilesToTransfer",
                     "EstimatedBytesToTransfer",
-                    "FilesTransferred",
                     "BytesWritten",
-                    "BytesTransferred",
                     "Result",
                 ]
             }
             typer.secho(f"{int(t.elapsed)}s\tStatus: {last_status}, {metadata}", fg="green")
             time.sleep(5)
+
+    task_execution_response = ds_client_dst.describe_task_execution(TaskExecutionArn=task_execution_arn)
+    transfer_size = task_execution_response["BytesTransferred"]
+    transfer_duration_ms = task_execution_response["Result"]["TransferDuration"]
+    gbps = transfer_size * 8 / transfer_duration_ms / 1000 / GB
+    typer.secho(f"DataSync response: {task_execution_response}", fg="green")
+    typer.secho(json.dumps(dict(transfer_size=transfer_size, transfer_duration_ms=transfer_duration_ms, gbps=gbps)), fg="white")
 
 
 if __name__ == "__main__":

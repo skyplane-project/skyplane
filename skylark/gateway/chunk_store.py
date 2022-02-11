@@ -40,7 +40,7 @@ class ChunkStore:
         return self.chunk_status[chunk_id] if chunk_id in self.chunk_status else None
 
     def set_chunk_state(self, chunk_id: int, new_status: ChunkState):
-        old_status = self.chunk_status.get(chunk_id)
+        self.chunk_status.get(chunk_id)
         self.chunk_status[chunk_id] = new_status
         self.chunk_status_log.append({"chunk_id": chunk_id, "state": new_status, "time": datetime.utcnow()})
         # logger.info(f"[chunk_store]:{chunk_id} state change from {old_status} to {new_status}")
