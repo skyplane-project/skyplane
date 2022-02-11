@@ -56,9 +56,6 @@ class GatewayObjStoreConn:
             p.join()
         self.processes = []
 
-    def download(region, bucket, fpath, key):
-        self.get_obj_store_interface(region, bucket)
-
     def worker_loop(self, worker_id: int):
         setproctitle.setproctitle(f"skylark-gateway-obj-store:{worker_id}")
         self.worker_id = worker_id

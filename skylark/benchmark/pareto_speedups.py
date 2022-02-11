@@ -19,7 +19,6 @@ from tqdm import tqdm
 def get_futures(futures, desc="Jobs", batch_size=64, timeout_s=None):
     results = []
     last_result_time = time.time()
-    len(futures)
     with tqdm(total=len(futures), desc=desc) as pbar:
         while len(futures):
             done_results, futures = ray.wait(futures, num_returns=min(len(futures), batch_size), timeout=5)
