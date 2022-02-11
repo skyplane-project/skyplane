@@ -10,9 +10,6 @@ import graphviz as gv
 from skylark import MB
 from skylark.chunk import ChunkRequest
 
-from skylark.obj_store.s3_interface import S3Interface
-from skylark.obj_store.gcs_interface import GCSInterface
-from skylark.obj_store.azure_interface import AzureInterface
 from skylark.utils.utils import do_parallel
 
 

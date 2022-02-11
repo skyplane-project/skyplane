@@ -213,7 +213,7 @@ class ReplicatorClient:
                 file_size_bytes = obj_file_size_bytes[obj]
             else:
                 file_size_bytes = job.random_chunk_size_mb * MB
-            chunks.append(Chunk(key=obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes))  
+            chunks.append(Chunk(key=obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes))
 
         # partition chunks into roughly equal-sized batches (by bytes)
         src_instances = [self.bound_nodes[n] for n in self.topology.source_instances()]
@@ -240,7 +240,9 @@ class ReplicatorClient:
         if current_batch:  # add remaining chunks to the smallest batch by total bytes
             smallest_batch = min(chunk_batches, key=lambda b: sum([c.chunk_length_bytes for c in b]))
             smallest_batch.extend(current_batch)
-        assert (len(chunk_batches) == (len(src_instances)-1)) or (len(chunk_batches) == len(src_instances)), f"{len(chunk_batches)} batches, expected {len(src_instances)}"
+        assert (len(chunk_batches) == (len(src_instances) - 1)) or (
+            len(chunk_batches) == len(src_instances)
+        ), f"{len(chunk_batches)} batches, expected {len(src_instances)}"
 
         # make list of ChunkRequests
         chunk_requests_sharded: Dict[int, List[ChunkRequest]] = {}

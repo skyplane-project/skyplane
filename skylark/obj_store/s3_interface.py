@@ -2,7 +2,7 @@ import mimetypes
 import os
 from typing import Iterator, List
 
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future
 import botocore.exceptions
 from awscrt.auth import AwsCredentialsProvider
 from awscrt.http import HttpHeaders, HttpRequest
@@ -59,7 +59,8 @@ class S3Interface(ObjectStoreInterface):
         self.completed_uploads += 1
         self.pending_uploads -= 1
 
-    def infer_s3_region(self, bucket_name: str):
+    @staticmethod
+    def infer_s3_region(bucket_name: str):
         s3_client = AWSServer.get_boto3_client("s3")
         region = s3_client.get_bucket_location(Bucket=bucket_name).get("LocationConstraint", "us-east-1")
         return region if region is not None else "us-east-1"

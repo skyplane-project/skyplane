@@ -11,8 +11,6 @@ from pathlib import Path
 from threading import BoundedSemaphore
 from typing import Dict
 
-from multiprocessing import Process
-import concurrent.futures
 
 import setproctitle
 from skylark.utils import logger
@@ -25,8 +23,6 @@ from skylark.gateway.gateway_sender import GatewaySender
 
 from skylark.gateway.gateway_obj_store import GatewayObjStoreConn
 
-from skylark.obj_store.object_store_interface import ObjectStoreInterface
-from skylark.utils.utils import Timer
 
 
 class GatewayDaemon:
