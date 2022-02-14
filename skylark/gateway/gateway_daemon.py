@@ -24,7 +24,6 @@ from skylark.gateway.gateway_sender import GatewaySender
 from skylark.gateway.gateway_obj_store import GatewayObjStoreConn
 
 
-
 class GatewayDaemon:
     def __init__(self, region: str, outgoing_ports: Dict[str, int], chunk_dir: PathLike, max_incoming_ports=64):
         self.region = region

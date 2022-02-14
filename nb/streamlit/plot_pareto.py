@@ -128,4 +128,3 @@ ax.set_ylabel("Cost increase (x)", fontsize=12, fontweight="bold")
 fig.set_facecolor("white")
 st.pyplot(fig, bbox_inches="tight")
 fig.savefig("throughput_speedup_versus_cost_increase.pdf")
-

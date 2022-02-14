@@ -58,11 +58,11 @@ col1, col2 = st.sidebar.columns(2)
 log_x = col1.checkbox("Log x-axis")
 log_y = col2.checkbox("Log y-axis")
 col1, col2 = st.sidebar.columns(2)
-xmax = col1.slider("X-axis max", 1., 10., 5., 0.5)
+xmax = col1.slider("X-axis max", 1.0, 10.0, 5.0, 0.5)
 bins = col2.slider("Histogram Bins", 10, 100, 15, 5)
 col1, col2 = st.sidebar.columns(2)
-plot_width = col1.slider("Plot width", 1., 20., 7.5, .25)
-plot_height = col2.slider("Plot height", 1., 20., 1.75, .25)
+plot_width = col1.slider("Plot width", 1.0, 20.0, 7.5, 0.25)
+plot_height = col2.slider("Plot height", 1.0, 20.0, 1.75, 0.25)
 
 src_regions_choices = sorted(df["problem_src"].unique())
 dst_regions_choices = sorted(df["problem_dst"].unique())
@@ -81,13 +81,15 @@ st.sidebar.info(f"Filtered to {len(df)} rows")
 
 
 label_map = {
-    'aws': 'AWS',
-    'gcp': 'GCP',
-    'azure': 'Azure',
+    "aws": "AWS",
+    "gcp": "GCP",
+    "azure": "Azure",
 }
+
 
 def geomean(x):
     return np.exp(np.mean(np.log(x)))
+
 
 st.write(f"Geometric mean throughput speedup: {geomean(df['throughput_speedup'].values):.2f}")
 
@@ -177,30 +179,32 @@ if st.checkbox("Enable plots", True):
     st.header("Distribution of all speedups at different cost thresholds")
     cost_threshold_ranges = [1.10, 1.25, 1.5, 2.0]
     col1, col2, col3, col4, col5 = st.columns(5)
-    whis = col1.number_input("whis", 1., 100., 4., 0.25)
+    whis = col1.number_input("whis", 1.0, 100.0, 4.0, 0.25)
     max_flier = col2.text_input("max_flier", ".99")
     mode = col3.radio("mode", ["intracloud", "intercloud", "both"], 2)
-    providers = ['aws', 'azure', 'gcp']
+    providers = ["aws", "azure", "gcp"]
     src_providers = col4.multiselect("Source cloud:", providers, providers)
     dst_providers = col5.multiselect("Dest cloud:", providers, providers)
     with plt.style.context(style):
         fig, axs = plt.subplots(2, 1, figsize=(plot_height * 2, plot_height * 2))
-        for ax, outliers  in zip(axs, [False, True]):
+        for ax, outliers in zip(axs, [False, True]):
             for i, thresh in enumerate(cost_threshold_ranges):
                 df_group = df.query("cost_increase <= @thresh")
                 df_group = df_group[df_group["throughput_speedup"] >= 1.001]
-                
+
                 if mode == "intracloud":
                     df_group = df_group[df_group["src_provider"] == df_group["dst_provider"]]
                 elif mode == "intercloud":
                     df_group = df_group[df_group["src_provider"] != df_group["dst_provider"]]
-                
+
                 df_group = df_group[df_group["src_provider"].isin(src_providers)]
                 df_group = df_group[df_group["dst_provider"].isin(dst_providers)]
 
                 if outliers is False:
                     df_group = df_group[df_group["throughput_speedup"] <= df_group.throughput_speedup.quantile(float(max_flier))]
-                max_speedup = df_group.groupby(["problem_src", "problem_dst"])["throughput_speedup"].max().sort_values(ascending=False).clip(lower=1)
+                max_speedup = (
+                    df_group.groupby(["problem_src", "problem_dst"])["throughput_speedup"].max().sort_values(ascending=False).clip(lower=1)
+                )
                 label = f"{thresh:.2f}x"
                 ax.boxplot(
                     max_speedup,
@@ -224,5 +228,10 @@ if st.checkbox("Enable plots", True):
         st.download_button("Download PDF: " + f, (out_dir / f).read_bytes(), file_name=f)
 
 cols = st.multiselect("Columns", df.columns, ["throughput_speedup", "throughput_achieved_gbits", "baseline_throughput_achieved_gbits"])
-max_speedup = df.query("cost_increase < @cost_threshold").groupby(["problem_src", "problem_dst"])[cols].max().sort_values(ascending=False, by="throughput_speedup")
+max_speedup = (
+    df.query("cost_increase < @cost_threshold")
+    .groupby(["problem_src", "problem_dst"])[cols]
+    .max()
+    .sort_values(ascending=False, by="throughput_speedup")
+)
 st.dataframe(max_speedup.head(20))
