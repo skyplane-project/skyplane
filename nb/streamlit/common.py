@@ -61,11 +61,12 @@ def load_data_impl(source_bucket_path, source_bucket_experiment_tag, out_dir, ou
 
 def load_data(default_experiment_tag="2022.02.01_02.25_d20ccd26-93dd-483d-976b-91204e97c417"):
     st.sidebar.subheader(f"Select experiment")
-    source_bucket_path = st.sidebar.text_input("S3 bucket prefix", "s3://skylark-optimizer-results/pareto_data")
-    source_bucket_experiment_tag = st.sidebar.text_input("Experiment tag", default_experiment_tag)
+    col1, col2, col3 = st.sidebar.columns(3)
+    source_bucket_path = col1.text_input("S3 prefix", "s3://skylark-optimizer-results/pareto_data")
+    source_bucket_experiment_tag = col2.text_input("Experiment tag", default_experiment_tag)
     out_dir = data_dir / 'pareto_raw_data' / source_bucket_experiment_tag
     out_fname = out_dir / "pareto_data.parquet"
     out_dir.mkdir(exist_ok=True, parents=True)
-    st.sidebar.button("Recompute dataframe", on_click=lambda: Path(out_fname).unlink(missing_ok=True))
+    col3.button("Recompute dataframe", on_click=lambda: Path(out_fname).unlink(missing_ok=True))
     df = load_data_impl(source_bucket_path, source_bucket_experiment_tag, out_dir, out_fname).copy()
     return df, out_dir
