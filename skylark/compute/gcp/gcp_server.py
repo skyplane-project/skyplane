@@ -57,7 +57,11 @@ class GCPServer(Server):
         raise ValueError(f"No instance found with name {self.gcp_instance_name}, {instances}")
 
     def get_instance_property(self, prop):
-        return self.get_gcp_instance()[prop]
+        instance = self.get_gcp_instance()
+        if prop in instance:
+            return instance[prop]
+        else:
+            return None
 
     @ignore_lru_cache()
     def public_ip(self):
@@ -81,7 +85,7 @@ class GCPServer(Server):
     @ignore_lru_cache()
     def tags(self):
         """Get labels for instance."""
-        return self.get_instance_property("labels")
+        return self.get_instance_property("labels") or {}
 
     @ignore_lru_cache()
     def network_tier(self):
