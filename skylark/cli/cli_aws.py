@@ -135,14 +135,19 @@ def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
             }
             typer.secho(f"{int(t.elapsed)}s\tStatus: {last_status}, {metadata}", fg="green")
             time.sleep(5)
+            if int(t.elapsed) > 300:
+                typer.secho(
+                    "The process might have errored out. One way to solve this is to delete the objects if they exist already, and restart the transfer",
+                    fg="yellow",
+                )
 
     task_execution_response = ds_client_dst.describe_task_execution(TaskExecutionArn=task_execution_arn)
     transfer_size_gb = task_execution_response["BytesTransferred"] / GB
-    transfer_duration = task_execution_response["Result"]["TransferDuration"] / 1000
-    gbps = transfer_size_gb * 8 / transfer_duration
+    transfer_duration_s = task_execution_response["Result"]["TransferDuration"] / 1000
+    gbps = transfer_size_gb * 8 / transfer_duration_s
     typer.secho(f"DataSync response: {task_execution_response}", fg="green")
     typer.secho(
-        json.dumps(dict(transfer_size_gb=transfer_size_gb, transfer_duration=transfer_duration, gbps=gbps, total_runtime_s=t.elapsed)),
+        json.dumps(dict(transfer_size_gb=transfer_size_gb, transfer_duration_s=transfer_duration_s, gbps=gbps, total_runtime_s=t.elapsed)),
         fg="white",
     )
 
