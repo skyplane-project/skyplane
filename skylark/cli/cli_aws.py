@@ -135,10 +135,10 @@ def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
             }
             typer.secho(f"{int(t.elapsed)}s\tStatus: {last_status}, {metadata}", fg="green")
             time.sleep(5)
-            if int(t.elapsed) > 300:
+            if ((int(t.elapsed) > 300) and last_status == "LAUNCHING"):
                 typer.secho(
                     "The process might have errored out. One way to solve this is to delete the objects if they exist already, and restart the transfer",
-                    fg="yellow",
+                    fg="red",
                 )
 
     task_execution_response = ds_client_dst.describe_task_execution(TaskExecutionArn=task_execution_arn)
