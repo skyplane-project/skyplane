@@ -112,7 +112,7 @@ class GatewaySender:
         sock = self.destination_sockets[dst_host]
 
         for idx, chunk_id in enumerate(chunk_ids):
-            self.chunk_store.state_start_upload(chunk_id)
+            self.chunk_store.state_start_upload(chunk_id, f"sender:{self.worker_id}")
             chunk = self.chunk_store.get_chunk_request(chunk_id).chunk
 
             # send chunk header
@@ -129,5 +129,5 @@ class GatewaySender:
             logger.debug(
                 f"[sender:{self.worker_id}] finished sending chunk data {chunk_id} at {chunk.chunk_length_bytes * 8 / t.elapsed / MB}Mbps"
             )
-            self.chunk_store.state_finish_upload(chunk_id)
+            self.chunk_store.state_finish_upload(chunk_id, f"sender:{self.worker_id}")
             chunk_file_path.unlink()

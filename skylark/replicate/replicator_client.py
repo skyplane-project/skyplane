@@ -335,6 +335,7 @@ class ReplicatorClient:
             ) as pbar:
                 while True:
                     log_df = self.get_chunk_status_log_df()
+                    log_df.to_pickle("/tmp/chunk_status_log.pkl")
                     is_complete_rec = (
                         lambda row: row["state"] == ChunkState.upload_complete
                         and row["instance"] in [s.instance for s in sinks]
