@@ -34,11 +34,9 @@ def parse_args():
 
 def upload(region, bucket, path, key):
     obj_store = ObjectStoreInterface.create(region, bucket)
-
     # TODO: make sure is actually same file 
     if obj_store.exists(key): return 0
-
-    obj_store_interface_src.upload_object(path, key).result()
+    obj_store.upload_object(path, key).result()
     return 1
 
 
