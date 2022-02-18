@@ -119,7 +119,7 @@ class AWSServer(Server):
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         client.connect(
             self.public_ip(),
-            username="ubuntu",
+            username="ec2-user",
             key_filename=str(self.local_keyfile),
             look_for_keys=False,
             allow_agent=False,
