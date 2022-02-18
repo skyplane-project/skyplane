@@ -229,7 +229,7 @@ class AWSCloudProvider(CloudProvider):
         for i in range(4):
             try:
                 instance = ec2.create_instances(
-                    ImageId="resolve:ssm:/aws/service/bottlerocket/aws-k8s-1.21/x86_64/latest/image_id",
+                    ImageId="resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended",
                     InstanceType=instance_class,
                     MinCount=1,
                     MaxCount=1,
