@@ -47,14 +47,14 @@ def main(args):
     dst_bucket = f"{args.bucket_prefix}-skylark-{args.dest_region.split(':')[1]}"
     os.system(f"SRC_BUCKET={src_bucket}")
     os.system(f"DEST_BUCKET={dst_bucket}")
-    print(src_bucket)
-    print(dst_bucket)
+    print(f"Src bucket: {src_bucket}")
+    print(f"Dst bucket: {dst_bucket}")
     obj_store_interface_src = ObjectStoreInterface.create(args.src_region, src_bucket)
     obj_store_interface_src.create_bucket()
     obj_store_interface_dst = ObjectStoreInterface.create(args.dest_region, dst_bucket)
     obj_store_interface_dst.create_bucket()
 
-    print("running upload... (note: may need to chunk)")
+    print("running upload... (note: no further chunking occuring)")
 
     ## TODO: chunkify
     #p = Pool(16)

@@ -16,7 +16,7 @@ dest=$2
 
 #key_prefix="synthetic-fake-imagenet/4_16384"
 key_prefix="fake_imagenet"
-bucket_prefix="experiments"
+bucket_prefix="exps"
 src_bucket=(${src//:/ })
 src_bucket=${bucket_prefix}-skylark-${src_bucket[1]}
 dest_bucket=(${dest//:/ })
@@ -29,10 +29,10 @@ filename=data/plan/${experiment}.json
 echo $filename
 
 # setup credentials 
-export GOOGLE_APPLICATION_CREDENTIALS="/home/ubuntu/skylark/skylark-sarah-7f8b82af365f.json"
+export GOOGLE_APPLICATION_CREDENTIALS="/home/ubuntu/.skylark-shishir-42be5f375b7a.json"
 
 # creats buckets + bucket data and sets env variables
-python setup_bucket.py --key-prefix ${key_prefix} --bucket-prefix ${bucket_prefix} --gcp-project skylark-sarah --src-data-path ../${key_prefix}/ --src-region ${src} --dest-region ${dest}
+python scripts/setup_bucket.py --key-prefix ${key_prefix} --bucket-prefix ${bucket_prefix} --gcp-project skylark-shishir --src-data-path ../${key_prefix}/ --src-region ${src} --dest-region ${dest}
 
 
 # TODO:artificially increase the number of chunks 
@@ -63,7 +63,7 @@ cp ${filename} data/results/${experiment}
 
 # run replication (obj store)
 skylark replicate-json ${filename} \
-    --gcp-project skylark-sarah \
+    --gcp-project skylark-shishir \
     --source-bucket $src_bucket \
     --dest-bucket $dest_bucket \
     --key-prefix ${key_prefix} > data/results/${experiment}/obj-store-logs.txt
