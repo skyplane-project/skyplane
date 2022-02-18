@@ -196,7 +196,6 @@ def replicate_json(
     n_chunks: int = typer.Option(512, "--n-chunks", "-n", help="Number of chunks"),
     # bucket options
     use_random_data: bool = False,
-    bucket_prefix: str = "skylark",
     source_bucket: str = typer.Option(None, "--source-bucket", help="Source bucket url"),
     dest_bucket: str = typer.Option(None, "--dest-bucket", help="Destination bucket url"),
     key_prefix: str = "/test/replicate_random",
@@ -250,8 +249,6 @@ def replicate_json(
         logger.warning(f"total_transfer_size_mb ({size_total_mb}) is not a multiple of n_chunks ({n_chunks})")
     chunk_size_mb = size_total_mb // n_chunks
 
-    print("REGION", topo.source_region())
-
     if use_random_data:
         job = ReplicationJob(
             source_region=topo.source_region(),
@@ -264,7 +261,6 @@ def replicate_json(
         job = rc.run_replication_plan(job)
         total_bytes = n_chunks * chunk_size_mb * MB
     else:
-
         # get object keys with prefix
         objs = ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(key_prefix)
         obj_keys = list([obj.key for obj in objs])
@@ -281,6 +277,10 @@ def replicate_json(
 
         # query chunk sizes
         total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
+
+        # create destination bucket if it doesn't exist
+        dst_interface = ObjectStoreInterface.create(topo.sink_region(), dest_bucket)
+        dst_interface.create_bucket()
 
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
     stats = rc.monitor_transfer(
