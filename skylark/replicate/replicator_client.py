@@ -330,13 +330,13 @@ class ReplicatorClient:
             # register atexit handler to cancel pending chunk requests (force shutdown gateways)
             def shutdown_handler():
                 def fn(s: Server):
-                    write_profile_fn()
                     logger.warning(f"Cancelling pending chunk requests to {s.public_ip()}")
                     try:
                         requests.post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
                     except requests.exceptions.ConnectionError as e:
                         return  # ignore connection errors since server may be shutting down
 
+                write_profile_fn()
                 do_parallel(fn, self.bound_nodes.values(), n=-1)
                 logger.warning("Cancelled pending chunk requests")
 
