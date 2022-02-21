@@ -209,7 +209,6 @@ class ReplicatorClient:
 
         # make list of chunks
         chunks = []
-        print(job.source_bucket, job.objs[0])
         obj_file_size_bytes = job.src_obj_sizes() if job.source_bucket else None
         for idx, obj in enumerate(job.objs):
             if obj_file_size_bytes:
@@ -318,6 +317,15 @@ class ReplicatorClient:
         sinks = self.topology.sink_instances()
         sink_regions = set(s.region for s in sinks)
 
+        def write_profile_fn():
+            if write_profile:
+                traceevent = status_df_to_traceevent(self.get_chunk_status_log_df())
+                tmp_log_dir.mkdir(exist_ok=True)
+                profile_out = tmp_log_dir / f"traceevent_{uuid.uuid4()}.json"
+                with open(profile_out, "w") as f:
+                    json.dump(traceevent, f)
+                logger.debug(f"Wrote profile to {profile_out}, visualize using `about://tracing` in Chrome")
+
         if cancel_pending:
             # register atexit handler to cancel pending chunk requests (force shutdown gateways)
             def shutdown_handler():
@@ -330,6 +338,7 @@ class ReplicatorClient:
 
                 do_parallel(fn, self.bound_nodes.values(), n=-1)
                 logger.warning("Cancelled pending chunk requests")
+                write_profile_fn()
 
             atexit.register(shutdown_handler)
 
@@ -365,13 +374,7 @@ class ReplicatorClient:
                     ):
                         if cancel_pending:
                             atexit.unregister(shutdown_handler)
-                        if write_profile:
-                            traceevent = status_df_to_traceevent(log_df)
-                            tmp_log_dir.mkdir(exist_ok=True)
-                            profile_out = tmp_log_dir / f"traceevent_{uuid.uuid4()}.json"
-                            with open(profile_out, "w") as f:
-                                json.dump(traceevent, f)
-                            logger.info(f"Wrote profile to {profile_out}")
+                        write_profile_fn()
                         return dict(
                             completed_chunk_ids=completed_chunk_ids,
                             total_runtime_s=total_runtime_s,
