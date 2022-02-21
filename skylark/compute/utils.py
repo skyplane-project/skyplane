@@ -6,7 +6,7 @@ def make_dozzle_command(port):
         -p {log_viewer_port}:8080 \
         --volume=/var/run/docker.sock:/var/run/docker.sock \
         amir20/dozzle:latest"""
-    return cmd.format(log_viewer_port=port)
+    return "nohup {} > /dev/null 2>&1 &".format(cmd.format(log_viewer_port=port))
 
 
 def make_sysctl_tcp_tuning_command(cc="cubic"):

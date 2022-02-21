@@ -264,7 +264,7 @@ class AWSCloudProvider(CloudProvider):
                     raise e
                 else:
                     logger.warning(f"RequestLimitExceeded, retrying ({i})")
-                    time.sleep(random.random() * 1) 
+                    time.sleep(random.random() * 1)
                     continue
             instance[0].wait_until_running()
             server = AWSServer(f"aws:{region}", instance[0].id)
