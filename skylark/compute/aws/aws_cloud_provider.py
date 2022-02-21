@@ -1,3 +1,4 @@
+import random
 import time
 import uuid
 from functools import lru_cache
@@ -228,8 +229,9 @@ class AWSCloudProvider(CloudProvider):
 
         for i in range(4):
             try:
+                # todo instance-initiated-shutdown-behavior terminate
                 instance = ec2.create_instances(
-                    ImageId="resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended",
+                    ImageId="resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id",
                     InstanceType=instance_class,
                     MinCount=1,
                     MaxCount=1,
@@ -255,14 +257,14 @@ class AWSCloudProvider(CloudProvider):
                             "DeleteOnTermination": True,
                         }
                     ],
-                    UserData="[settings.host-containers.admin]\nenabled = true\n",
                 )
             except botocore.exceptions.ClientError as e:
                 if not "RequestLimitExceeded" in str(e):
+                    logger.error(f"Failed to provision instance (attempt {i}): {e}")
                     raise e
                 else:
                     logger.warning(f"RequestLimitExceeded, retrying ({i})")
-                    time.sleep(1)
+                    time.sleep(random.random() * 1) 
                     continue
             instance[0].wait_until_running()
             server = AWSServer(f"aws:{region}", instance[0].id)
