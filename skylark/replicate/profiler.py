@@ -4,6 +4,8 @@ from skylark.chunk import ChunkState
 
 def status_df_to_traceevent(log_df) -> List[Dict]:
     events = []
+    valid_states = [ChunkState.download_in_progress, ChunkState.downloaded, ChunkState.upload_in_progress, ChunkState.upload_complete]
+    log_df = log_df[log_df["state"].isin(valid_states)]
     start_time = log_df.time.min()
     for _, row in log_df.iterrows():
         if row["receiver_id"] == "random":
