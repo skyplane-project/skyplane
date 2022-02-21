@@ -5,6 +5,7 @@ Dockerfile
 .pytype/
 env/
 profiles/
+.git/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
