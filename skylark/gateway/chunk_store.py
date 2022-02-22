@@ -1,4 +1,3 @@
-import os
 from datetime import datetime
 from multiprocessing import Manager
 from os import PathLike
