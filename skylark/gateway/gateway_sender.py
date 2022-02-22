@@ -71,12 +71,13 @@ class GatewaySender:
         def wait_for_chunks():
             cr_status = {}
             for ip, ip_chunk_ids in self.sent_chunk_ids.items():
-                response = requests.get(f"http://{ip}:8080/api/v1/chunk_requests")
+                response = requests.get(f"http://{ip}:8080/api/v1/incomplete_chunk_requests")
                 assert response.status_code == 200, f"{response.status_code} {response.text}"
                 host_state = response.json()["chunk_requests"]
                 for chunk_id in ip_chunk_ids:
-                    cr_status[chunk_id] = host_state[chunk_id]["state"]
-            return all(status == "downloaded" for status in cr_status.values())
+                    if chunk_id in host_state:
+                        cr_status[chunk_id] = host_state[chunk_id]["state"]
+            return all(status not in ["registered", "download_in_progress"] for status in cr_status.values())
 
         logger.info(f"[sender:{worker_id}] waiting for chunks to reach state 'downloaded'")
         wait_for(wait_for_chunks)

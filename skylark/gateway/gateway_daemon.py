@@ -9,6 +9,7 @@ from multiprocessing import Event
 from os import PathLike
 from pathlib import Path
 from threading import BoundedSemaphore
+import time
 from typing import Dict
 
 
@@ -26,11 +27,11 @@ from skylark.gateway.gateway_obj_store import GatewayObjStoreConn
 
 class GatewayDaemon:
     def __init__(self, region: str, outgoing_ports: Dict[str, int], chunk_dir: PathLike, max_incoming_ports=64):
+        # todo max_incoming_ports should be configurable rather than static
         self.region = region
         self.chunk_store = ChunkStore(chunk_dir)
         self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store, max_pending_chunks=max_incoming_ports)
         self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, outgoing_ports=outgoing_ports)
-        print(outgoing_ports)
 
         self.obj_store_conn = GatewayObjStoreConn(chunk_store=self.chunk_store, max_conn=8)
 
@@ -74,11 +75,7 @@ class GatewayDaemon:
                     self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
                     self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id, "save_local")
                     self.chunk_store.state_finish_upload(chunk_req.chunk.chunk_id, "save_local")
-
-                    # delete (TODO: remove this later)
-                    chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id)
-                    chunk_file_path.unlink()
-
+                    self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).unlink()
                 elif self.region == chunk_req.dst_region and chunk_req.dst_type == "object_store":
                     self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
                     self.obj_store_conn.queue_request(chunk_req, "upload")
@@ -90,7 +87,6 @@ class GatewayDaemon:
                     raise ValueError(f"No upload handler for ChunkRequest: {chunk_req}")
 
             # queue object store downloads and relays (if space is available)
-            # todo ensure space is available
             for chunk_req in self.chunk_store.get_chunk_requests(ChunkState.registered):
                 if self.region == chunk_req.src_region and chunk_req.src_type == "read_local":  # do nothing, read from local ChunkStore
                     self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, "read_local")
@@ -101,6 +97,9 @@ class GatewayDaemon:
 
                     # function to write random data file
                     def fn(chunk_req, size_mb):
+                        while self.chunk_store.remaining_bytes() < size_mb * MB * sum(self.gateway_sender.outgoing_ports.values()):
+                            logger.debug(f"[gateway_daemon:random]:{chunk_req.chunk.chunk_id} Waiting for space")
+                            time.sleep(0.1)
                         fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
                         with self.dl_pool_semaphore:
                             os.system(f"fallocate -l {size_mb * MB} {fpath}")
@@ -126,7 +125,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--outgoing-ports", type=str, required=True, help="JSON encoded path mapping destination ip to number of outgoing ports"
     )
-    parser.add_argument("--chunk-dir", type=Path, default="/dev/shm/skylark/chunks", help="Directory to store chunks")
+    parser.add_argument("--chunk-dir", type=Path, default="/tmp/skylark/chunks", help="Directory to store chunks")
     args = parser.parse_args()
 
     daemon = GatewayDaemon(region=args.region, outgoing_ports=json.loads(args.outgoing_ports), chunk_dir=args.chunk_dir)

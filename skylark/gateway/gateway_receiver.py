@@ -15,7 +15,7 @@ from skylark.utils.utils import Timer
 
 
 class GatewayReceiver:
-    def __init__(self, chunk_store: ChunkStore, write_back_block_size=1 * MB, max_pending_chunks=1):
+    def __init__(self, chunk_store: ChunkStore, write_back_block_size=4 * MB, max_pending_chunks=1):
         self.chunk_store = chunk_store
         self.write_back_block_size = write_back_block_size
         self.max_pending_chunks = max_pending_chunks
@@ -96,10 +96,10 @@ class GatewayReceiver:
             chunk_header = WireProtocolHeader.from_socket(conn)
             logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} Got chunk header {chunk_header}")
 
-            # block until we have enough space to write the chunk
+            # wait for space
             while self.chunk_store.remaining_bytes() < chunk_header.chunk_len * self.max_pending_chunks:
-                logger.warning(f"[receiver:{server_port}]:{chunk_header.chunk_id} Waiting for space to write chunk ")
-                time.sleep(0.01)  # todo should use inotify
+                logger.debug(f"[receiver:{server_port}] Waiting for space")
+                time.sleep(0.1)
 
             # get data
             self.chunk_store.state_start_download(chunk_header.chunk_id, f"receiver:{self.worker_id}")

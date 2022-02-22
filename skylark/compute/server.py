@@ -211,15 +211,19 @@ class Server:
         use_bbr=False,
     ):
         self.wait_for_ready()
-        time.sleep(2)
 
         def check_stderr(tup):
             assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
 
         desc_prefix = f"Starting gateway {self.uuid()}, host: {self.public_ip()}"
 
-        # increase TCP connections, enable BBR optionally and raise file limits
+        # disable iptables firewall
         self.run_command("sudo /sbin/iptables -A INPUT -j ACCEPT")
+        # make chunk dir
+        self.run_command(
+            "sudo umount -f /skylark; sudo mount -t tmpfs -o size=$(($(free -b  | head -n2 | tail -n1 | awk '{print $2}')/2)) tmpfs /skylark"
+        )
+        # increase TCP connections, enable BBR optionally and raise file limits
         check_stderr(self.run_command(make_sysctl_tcp_tuning_command(cc="bbr" if use_bbr else "cubic")))
         self.install_docker()
         self.run_command(make_dozzle_command(log_viewer_port))
@@ -241,8 +245,10 @@ class Server:
             docker_out, docker_err = self.run_command(f"sudo docker pull {gateway_docker_image}")
             assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
         logger.debug(f"{desc_prefix}: Starting gateway container")
-        docker_run_flags = f"-d --rm --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024} {docker_envs}"
-        gateway_daemon_cmd = f"python -u /pkg/skylark/gateway/gateway_daemon.py --chunk-dir /dev/shm/skylark/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag}"
+        docker_run_flags = (
+            f"-d --rm --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024} {docker_envs}"
+        )
+        gateway_daemon_cmd = f"python -u /pkg/skylark/gateway/gateway_daemon.py --chunk-dir /skylark/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = self.run_command(docker_launch_cmd)
         logger.debug(desc_prefix + f": Gateway started {start_out.strip()}")

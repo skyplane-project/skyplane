@@ -3,6 +3,7 @@ from datetime import datetime
 from multiprocessing import Manager
 from os import PathLike
 from pathlib import Path
+import subprocess
 from typing import Dict, List, Optional
 
 from skylark.utils import logger
@@ -18,9 +19,6 @@ class ChunkStore:
         for chunk_file in self.chunk_dir.glob("*.chunk"):
             logger.warning(f"Deleting existing chunk file {chunk_file}")
             chunk_file.unlink()
-
-        self.chunk_store_max_size = os.statvfs(self.chunk_dir).f_frsize * os.statvfs(self.chunk_dir).f_bfree
-        logger.info(f"Chunk directory {self.chunk_dir} can have max size {self.chunk_store_max_size} bytes")
 
         # multiprocess-safe concurrent structures
         self.manager = Manager()
@@ -111,8 +109,5 @@ class ChunkStore:
         self.set_chunk_state(chunk_request.chunk.chunk_id, state)
         self.chunk_requests[chunk_request.chunk.chunk_id] = chunk_request
 
-    def used_bytes(self):
-        return sum(f.stat().st_size for f in self.chunk_dir.glob("*.chunk") if os.path.exists(f))
-
     def remaining_bytes(self):
-        return self.chunk_store_max_size - self.used_bytes()
+        return int(subprocess.check_output(["df", "-k", "--output=avail", self.chunk_dir]).decode().strip().split()[-1]) * 1024
