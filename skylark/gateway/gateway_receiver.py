@@ -23,6 +23,9 @@ class GatewayReceiver:
         self.server_ports = []
         self.next_gateway_worker_id = 0
 
+        # private state per worker
+        self.worker_id = None
+
     def start_server(self):
         # todo a good place to add backpressure?
         started_event = Event()
@@ -98,7 +101,6 @@ class GatewayReceiver:
 
             # wait for space
             while self.chunk_store.remaining_bytes() < chunk_header.chunk_len * self.max_pending_chunks:
-                logger.debug(f"[receiver:{server_port}] Waiting for space")
                 time.sleep(0.1)
 
             # get data

@@ -29,6 +29,7 @@ class GatewayDaemon:
     def __init__(self, region: str, outgoing_ports: Dict[str, int], chunk_dir: PathLike, max_incoming_ports=64):
         # todo max_incoming_ports should be configurable rather than static
         self.region = region
+        self.max_incoming_ports = max_incoming_ports
         self.chunk_store = ChunkStore(chunk_dir)
         self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store, max_pending_chunks=max_incoming_ports)
         self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, outgoing_ports=outgoing_ports)
@@ -92,23 +93,21 @@ class GatewayDaemon:
                     self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, "read_local")
                     self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, "read_local")
                 elif self.region == chunk_req.src_region and chunk_req.src_type == "random":
-                    self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, "random")
                     size_mb = chunk_req.src_random_size_mb
+                    if self.chunk_store.remaining_bytes() >= size_mb * MB * self.max_incoming_ports:
 
-                    # function to write random data file
-                    def fn(chunk_req, size_mb):
-                        while self.chunk_store.remaining_bytes() < size_mb * MB * sum(self.gateway_sender.outgoing_ports.values()):
-                            logger.debug(f"[gateway_daemon:random]:{chunk_req.chunk.chunk_id} Waiting for space")
-                            time.sleep(0.1)
-                        fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
-                        with self.dl_pool_semaphore:
-                            os.system(f"fallocate -l {size_mb * MB} {fpath}")
-                        chunk_req.chunk.chunk_length_bytes = os.path.getsize(fpath)
-                        self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
-                        self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, "random")
+                        def fn(chunk_req, size_mb):
+                            while self.chunk_store.remaining_bytes() < size_mb * MB * self.max_incoming_ports:
+                                time.sleep(0.1)
+                            self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, "random")
+                            fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
+                            with self.dl_pool_semaphore:
+                                os.system(f"fallocate -l {size_mb * MB} {fpath}")
+                            chunk_req.chunk.chunk_length_bytes = os.path.getsize(fpath)
+                            self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
+                            self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, "random")
 
-                    # generate random data in seperate thread
-                    threading.Thread(target=fn, args=(chunk_req, size_mb)).start()
+                        threading.Thread(target=fn, args=(chunk_req, size_mb)).start()
                 elif self.region == chunk_req.src_region and chunk_req.src_type == "object_store":
                     self.obj_store_conn.queue_request(chunk_req, "download")
                 elif self.region != chunk_req.src_region:  # do nothing, waiting for chunk to be be ready_to_upload
@@ -116,6 +115,7 @@ class GatewayDaemon:
                 else:
                     self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
                     raise ValueError(f"No download handler for ChunkRequest: {chunk_req}")
+            time.sleep(0.1)  # yield
 
 
 if __name__ == "__main__":

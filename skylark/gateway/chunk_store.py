@@ -48,14 +48,14 @@ class ChunkStore:
     def get_chunk_status_log(self) -> List[Dict]:
         return list(self.chunk_status_log)
 
-    def state_start_download(self, chunk_id: int, receiver_id: Optional[int] = None):
+    def state_start_download(self, chunk_id: int, receiver_id: Optional[str] = None):
         state = self.get_chunk_state(chunk_id)
         if state in [ChunkState.registered, ChunkState.download_in_progress]:
             self.set_chunk_state(chunk_id, ChunkState.download_in_progress, {"receiver_id": receiver_id})
         else:
             raise ValueError(f"Invalid transition start_download from {self.get_chunk_state(chunk_id)}")
 
-    def state_finish_download(self, chunk_id: int, receiver_id: Optional[int] = None):
+    def state_finish_download(self, chunk_id: int, receiver_id: Optional[str] = None):
         # todo log runtime to statistics store
         state = self.get_chunk_state(chunk_id)
         if state in [ChunkState.download_in_progress, ChunkState.downloaded]:
@@ -70,14 +70,14 @@ class ChunkStore:
         else:
             raise ValueError(f"Invalid transition upload_queued from {self.get_chunk_state(chunk_id)}")
 
-    def state_start_upload(self, chunk_id: int, sender_id: Optional[int] = None):
+    def state_start_upload(self, chunk_id: int, sender_id: Optional[str] = None):
         state = self.get_chunk_state(chunk_id)
         if state in [ChunkState.upload_queued, ChunkState.upload_in_progress]:
             self.set_chunk_state(chunk_id, ChunkState.upload_in_progress, {"sender_id": sender_id})
         else:
             raise ValueError(f"Invalid transition start_upload from {self.get_chunk_state(chunk_id)}")
 
-    def state_finish_upload(self, chunk_id: int, sender_id: Optional[int] = None):
+    def state_finish_upload(self, chunk_id: int, sender_id: Optional[str] = None):
         # todo log runtime to statistics store
         state = self.get_chunk_state(chunk_id)
         if state in [ChunkState.upload_in_progress, ChunkState.upload_complete]:

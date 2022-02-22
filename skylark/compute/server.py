@@ -10,7 +10,7 @@ from typing import Dict
 import requests
 from skylark.utils import logger
 from skylark.compute.utils import make_dozzle_command, make_sysctl_tcp_tuning_command
-from skylark.utils.utils import PathLike, Timer, wait_for
+from skylark.utils.utils import PathLike, Timer, retry_backoff, wait_for
 
 import configparser
 import os
@@ -190,18 +190,10 @@ class Server:
         cmd = "(command -v docker >/dev/null 2>&1 || { rm -rf get-docker.sh; curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh; }); "
         cmd += "{ sudo docker stop $(docker ps -a -q); sudo docker kill $(sudo docker ps -a -q); sudo docker rm -f $(sudo docker ps -a -q); }; "
         cmd += f"(docker --version && echo 'Success, Docker installed' || echo 'Failed to install Docker'); "
-        for i in range(4):
-            out, err = self.run_command(cmd)
-            docker_version = out.strip().split("\n")[-1]
-            if not docker_version.startswith("Success"):  # retry since docker install fails sometimes
-                logger.error(f"Docker install failed, retrying! (attempt {i}): {out} {err}")
-                out, err = self.run_command(cmd)
-                docker_version = out.strip().split("\n")[-1]
-            else:
-                if not docker_version.startswith("Success"):
-                    raise Exception(f"Failed to install Docker on {self.region_tag}, {self.public_ip()}: OUT {out}\nERR {err}")
-                else:
-                    return
+        out, err = self.run_command(cmd)
+        docker_version = out.strip().split("\n")[-1]
+        if not docker_version.startswith("Success"):
+            raise RuntimeError(f"Failed to install Docker on {self.region_tag}, {self.public_ip()}: OUT {out}\nERR {err}")
 
     def start_gateway(
         self,
@@ -217,15 +209,9 @@ class Server:
 
         desc_prefix = f"Starting gateway {self.uuid()}, host: {self.public_ip()}"
 
-        # disable iptables firewall
-        self.run_command("sudo /sbin/iptables -A INPUT -j ACCEPT")
-        # make chunk dir
-        self.run_command(
-            "sudo umount -f /skylark; sudo mount -t tmpfs -o size=$(($(free -b  | head -n2 | tail -n1 | awk '{print $2}')/2)) tmpfs /skylark"
-        )
         # increase TCP connections, enable BBR optionally and raise file limits
         check_stderr(self.run_command(make_sysctl_tcp_tuning_command(cc="bbr" if use_bbr else "cubic")))
-        self.install_docker()
+        retry_backoff(self.install_docker, exception_class=RuntimeError)
         self.run_command(make_dozzle_command(log_viewer_port))
 
         # read AWS config file to get credentials
@@ -248,6 +234,7 @@ class Server:
         docker_run_flags = (
             f"-d --rm --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024} {docker_envs}"
         )
+        docker_run_flags += " --mount type=tmpfs,dst=/skylark,tmpfs-size=$(($(free -b  | head -n2 | tail -n1 | awk '{print $2}')/2))"
         gateway_daemon_cmd = f"python -u /pkg/skylark/gateway/gateway_daemon.py --chunk-dir /skylark/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = self.run_command(docker_launch_cmd)
@@ -258,7 +245,6 @@ class Server:
         gateway_container_hash = start_out.strip().split("\n")[-1][:12]
         self.gateway_api_url = f"http://{self.public_ip()}:8080/api/v1"
         self.gateway_log_viewer_url = f"http://{self.public_ip()}:8888/container/{gateway_container_hash}"
-        self.gateway_htop_url = f"http://{self.public_ip()}:8889"
 
         # wait for gateways to start (check status API)
         def is_ready():

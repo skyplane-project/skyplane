@@ -9,7 +9,7 @@ from skylark.utils import logger
 from skylark import MB
 from skylark.chunk import ChunkRequest
 from skylark.gateway.chunk_store import ChunkStore
-from skylark.utils.utils import Timer, wait_for
+from skylark.utils.utils import Timer, retry_backoff, wait_for
 
 
 class GatewaySender:
@@ -98,7 +98,8 @@ class GatewaySender:
         """Send list of chunks to gateway server, pipelining small chunks together into a single socket stream."""
         # notify server of upcoming ChunkRequests
         chunk_reqs = [self.chunk_store.get_chunk_request(chunk_id) for chunk_id in chunk_ids]
-        response = requests.post(f"http://{dst_host}:8080/api/v1/chunk_requests", json=[c.as_dict() for c in chunk_reqs])
+        post_req = lambda: requests.post(f"http://{dst_host}:8080/api/v1/chunk_requests", json=[c.as_dict() for c in chunk_reqs])
+        response = retry_backoff(post_req, exception_class=requests.exceptions.ConnectionError)
         assert response.status_code == 200 and response.json()["status"] == "ok"
 
         # contact server to set up socket connection
