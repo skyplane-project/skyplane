@@ -57,6 +57,7 @@ class ReplicatorClient:
                 jobs.append(partial(self.aws.add_ip_to_security_group, r))
         if self.azure is not None:
             jobs.append(self.azure.create_ssh_key)
+            jobs.append(self.azure.set_up_resource_group)
         if self.gcp is not None:
             jobs.append(self.gcp.create_ssh_key)
             jobs.append(self.gcp.configure_default_network)
