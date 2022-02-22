@@ -136,7 +136,9 @@ class WireProtocolHeader:
     @staticmethod
     def from_socket(sock: socket.socket):
         num_bytes = WireProtocolHeader.length_bytes()
-        header_bytes = sock.recv(num_bytes)
+        header_bytes = b""
+        while len(header_bytes) < num_bytes:
+            header_bytes += sock.recv(num_bytes - len(header_bytes))
         assert len(header_bytes) == num_bytes, f"{len(header_bytes)} != {num_bytes}"
         return WireProtocolHeader.from_bytes(header_bytes)
 
