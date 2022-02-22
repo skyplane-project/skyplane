@@ -255,6 +255,7 @@ class GCPCloudProvider(CloudProvider):
         compute = GCPServer.get_gcp_client("compute", "v1")
         with open(os.path.expanduser(self.public_key_path)) as f:
             pub_key = f.read()
+
         req_body = {
             "name": name,
             "machineType": f"zones/{region}/machineTypes/{instance_class}",
@@ -264,7 +265,7 @@ class GCPCloudProvider(CloudProvider):
                     "boot": True,
                     "autoDelete": True,
                     "initializeParams": {
-                        "sourceImage": "projects/ubuntu-os-cloud/global/images/family/ubuntu-1804-lts",
+                        "sourceImage": "projects/cos-cloud/global/images/family/cos-stable",
                         "diskType": f"zones/{region}/diskTypes/pd-standard",
                         "diskSizeGb": "100",
                     },
@@ -279,10 +280,15 @@ class GCPCloudProvider(CloudProvider):
                 }
             ],
             "serviceAccounts": [{"email": "default", "scopes": ["https://www.googleapis.com/auth/cloud-platform"]}],
-            "metadata": {"items": [{"key": "ssh-keys", "value": f"{uname}:{pub_key}\n"}]},
+            "metadata": {
+                "items": [
+                    {"key": "ssh-keys", "value": f"{uname}:{pub_key}\n"},
+                ]
+            },
         }
         result = compute.instances().insert(project=self.gcp_project, zone=region, body=req_body).execute()
         self.wait_for_operation_to_complete(region, result["name"])
         server = GCPServer(f"gcp:{region}", self.gcp_project, name)
         server.wait_for_ready()
+        server.run_command("sudo /sbin/iptables -A INPUT -j ACCEPT")
         return server
