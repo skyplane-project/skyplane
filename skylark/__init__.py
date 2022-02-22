@@ -4,6 +4,7 @@ from pathlib import Path
 skylark_root = Path(__file__).parent.parent
 key_root = skylark_root / "data" / "keys"
 config_file = skylark_root / "data" / "config.json"
+tmp_log_dir = Path("/tmp/skylark")
 
 # header
 def print_header():
