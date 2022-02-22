@@ -32,7 +32,7 @@ echo $filename
 export GOOGLE_APPLICATION_CREDENTIALS="/home/ubuntu/skylark/skylark-sarah-7f8b82af365f.json"
 
 # creats buckets + bucket data and sets env variables
-python setup_bucket.py --key-prefix ${key_prefix} --bucket-prefix ${bucket_prefix} --gcp-project skylark-sarah --src-data-path ../${key_prefix}/ --src-region ${src} --dest-region ${dest}
+python scripts/setup_bucket.py --key-prefix ${key_prefix} --bucket-prefix ${bucket_prefix} --gcp-project skylark-sarah --src-data-path ../${key_prefix}/ --src-region ${src} --dest-region ${dest}
 
 
 # TODO:artificially increase the number of chunks 
