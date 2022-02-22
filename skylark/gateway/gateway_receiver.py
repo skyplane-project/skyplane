@@ -15,7 +15,7 @@ from skylark.utils.utils import Timer
 
 
 class GatewayReceiver:
-    def __init__(self, chunk_store: ChunkStore, write_back_block_size=32 * MB, max_pending_chunks=1):
+    def __init__(self, chunk_store: ChunkStore, write_back_block_size=1 * MB, max_pending_chunks=1):
         self.chunk_store = chunk_store
         self.write_back_block_size = write_back_block_size
         self.max_pending_chunks = max_pending_chunks

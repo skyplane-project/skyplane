@@ -219,6 +219,7 @@ class Server:
         desc_prefix = f"Starting gateway {self.uuid()}, host: {self.public_ip()}"
 
         # increase TCP connections, enable BBR optionally and raise file limits
+        self.run_command("sudo /sbin/iptables -A INPUT -j ACCEPT")
         check_stderr(self.run_command(make_sysctl_tcp_tuning_command(cc="bbr" if use_bbr else "cubic")))
         self.install_docker()
         self.run_command(make_dozzle_command(log_viewer_port))
