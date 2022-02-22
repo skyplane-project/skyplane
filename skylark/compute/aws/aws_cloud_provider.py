@@ -1,7 +1,4 @@
-import random
-import time
 import uuid
-from functools import lru_cache
 from typing import List, Optional
 
 import botocore
@@ -12,6 +9,7 @@ from oslo_concurrency import lockutils
 from skylark import skylark_root
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.cloud_providers import CloudProvider
+from skylark.utils.utils import retry_backoff
 
 
 class AWSCloudProvider(CloudProvider):
@@ -227,47 +225,40 @@ class AWSCloudProvider(CloudProvider):
         subnets = list(vpc.subnets.all())
         assert len(subnets) > 0, "No subnets found"
 
-        for i in range(4):
-            try:
-                # todo instance-initiated-shutdown-behavior terminate
-                instance = ec2.create_instances(
-                    ImageId="resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id",
-                    InstanceType=instance_class,
-                    MinCount=1,
-                    MaxCount=1,
-                    KeyName=f"skylark-{region}",
-                    TagSpecifications=[
-                        {
-                            "ResourceType": "instance",
-                            "Tags": [{"Key": "Name", "Value": name}] + [{"Key": k, "Value": v} for k, v in tags.items()],
-                        }
-                    ],
-                    BlockDeviceMappings=[
-                        {
-                            "DeviceName": "/dev/sda1",
-                            "Ebs": {"DeleteOnTermination": True, "VolumeSize": ebs_volume_size, "VolumeType": "gp2"},
-                        }
-                    ],
-                    NetworkInterfaces=[
-                        {
-                            "DeviceIndex": 0,
-                            "Groups": [self.get_security_group(region).group_id],
-                            "SubnetId": subnets[0].id,
-                            "AssociatePublicIpAddress": True,
-                            "DeleteOnTermination": True,
-                        }
-                    ],
-                )
-            except botocore.exceptions.ClientError as e:
-                if not "RequestLimitExceeded" in str(e):
-                    logger.error(f"Failed to provision instance (attempt {i}): {e}")
-                    raise e
-                else:
-                    logger.warning(f"RequestLimitExceeded, retrying ({i})")
-                    time.sleep(random.random() * 1)
-                    continue
-            instance[0].wait_until_running()
-            server = AWSServer(f"aws:{region}", instance[0].id)
-            server.wait_for_ready()
-            return server
-        raise Exception("Failed to provision instance")
+        def start_instance():
+            # todo instance-initiated-shutdown-behavior terminate
+            return ec2.create_instances(
+                ImageId="resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id",
+                InstanceType=instance_class,
+                MinCount=1,
+                MaxCount=1,
+                KeyName=f"skylark-{region}",
+                TagSpecifications=[
+                    {
+                        "ResourceType": "instance",
+                        "Tags": [{"Key": "Name", "Value": name}] + [{"Key": k, "Value": v} for k, v in tags.items()],
+                    }
+                ],
+                BlockDeviceMappings=[
+                    {
+                        "DeviceName": "/dev/sda1",
+                        "Ebs": {"DeleteOnTermination": True, "VolumeSize": ebs_volume_size, "VolumeType": "gp2"},
+                    }
+                ],
+                NetworkInterfaces=[
+                    {
+                        "DeviceIndex": 0,
+                        "Groups": [self.get_security_group(region).group_id],
+                        "SubnetId": subnets[0].id,
+                        "AssociatePublicIpAddress": True,
+                        "DeleteOnTermination": True,
+                    }
+                ],
+            )
+
+        instance = retry_backoff(start_instance, initial_backoff=1)
+        assert len(instance) == 1, f"Expected 1 instance, got {len(instance)}"
+        instance[0].wait_until_running()
+        server = AWSServer(f"aws:{region}", instance[0].id)
+        server.wait_for_ready()
+        return server

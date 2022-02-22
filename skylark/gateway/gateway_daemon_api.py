@@ -2,6 +2,7 @@ import logging
 import logging.handlers
 import os
 import threading
+from typing import Dict
 
 from flask import Flask, jsonify, request
 from skylark.utils import logger
@@ -107,7 +108,7 @@ class GatewayDaemonAPI(threading.Thread):
             state_name = state.name if state is not None else "unknown"
             return {"req": chunk_req.as_dict(), "state": state_name}
 
-        def get_chunk_reqs(state=None):
+        def get_chunk_reqs(state=None) -> Dict[int, Dict]:
             out = {}
             for chunk_req in self.chunk_store.get_chunk_requests(state):
                 out[chunk_req.chunk.chunk_id] = make_chunk_req_payload(chunk_req)
@@ -136,6 +137,10 @@ class GatewayDaemonAPI(threading.Thread):
                 return jsonify({"chunk_requests": get_chunk_reqs(state)})
             else:
                 return jsonify({"chunk_requests": get_chunk_reqs()})
+
+        @self.app.route("/api/v1/incomplete_chunk_requests", methods=["GET"])
+        def get_incomplete_chunk_requests():
+            return jsonify({"chunk_requests": {k: v for k, v in get_chunk_reqs().items() if v["state"] != "upload_complete"}})
 
         # lookup chunk request given chunk worker_id
         @self.app.route("/api/v1/chunk_requests/<int:chunk_id>", methods=["GET"])

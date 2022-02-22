@@ -349,7 +349,6 @@ class ReplicatorClient:
             ) as pbar:
                 while True:
                     log_df = self.get_chunk_status_log_df()
-                    log_df.to_pickle("/tmp/chunk_status_log.pkl")
                     is_complete_rec = (
                         lambda row: row["state"] == ChunkState.upload_complete
                         and row["instance"] in [s.instance for s in sinks]
@@ -401,4 +400,4 @@ class ReplicatorClient:
                                 throughput_gbits=throughput_gbits,
                                 monitor_status="timed_out",
                             )
-                        time.sleep(0.01 if show_pbar else 0.25)
+                        time.sleep(0.25 if show_pbar else 0.25)

@@ -100,7 +100,7 @@ class ThroughputSolver:
                 data_grid[i, j] = cost
         return data_grid.round(2)
 
-    def get_baseline_throughput_and_cost(self, p: ThroughputProblem) -> Tuple[float, float]:
+    def get_baseline_throughput_and_cost(self, p: ThroughputProblem) -> Tuple[float, float, float]:
         src, dst = p.src, p.dst
         throughput = max(p.instance_limit * self.get_path_throughput(src, dst) / GB, 1e-6)
         transfer_s = p.gbyte_to_transfer * GBIT_PER_GBYTE / throughput
@@ -382,8 +382,8 @@ class ThroughputSolverILP(ThroughputSolver):
 
         # scale connections up to saturate links
         if scale_to_capacity:
-            conns_egress: Dict[(str, int), int] = {}
-            conns_ingress: Dict[(str, int), int] = {}
+            conns_egress: Dict[Tuple[str, int], int] = {}
+            conns_ingress: Dict[Tuple[str, int], int] = {}
             for e in dst_edges:
                 conns_egress[(e.src_region, e.src_instance_idx)] = e.connections + conns_egress.get((e.src_region, e.src_instance_idx), 0)
                 conns_ingress[(e.dst_region, e.dst_instance_idx)] = e.connections + conns_ingress.get((e.dst_region, e.dst_instance_idx), 0)

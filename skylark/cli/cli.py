@@ -163,7 +163,7 @@ def replicate_random(
     # rc.provision_gateways(reuse_gateways, log_dir="/tmp/log_skylark") for debugging and writing log back to local machine at the dir provided
     rc.provision_gateways(reuse_gateways)
     for node, gw in rc.bound_nodes.items():
-        logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
+        logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}, {gw.gateway_api_url}/incomplete_chunk_requests")
 
     if total_transfer_size_mb % chunk_size_mb != 0:
         logger.warning(f"total_transfer_size_mb ({total_transfer_size_mb}) is not a multiple of chunk_size_mb ({chunk_size_mb})")
