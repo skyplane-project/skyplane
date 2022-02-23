@@ -16,7 +16,7 @@ dest=$2
 
 #key_prefix="synthetic-fake-imagenet/4_16384"
 key_prefix="fake_imagenet"
-bucket_prefix="exps222"
+bucket_prefix="exps"
 src_bucket=(${src//:/ })
 src_bucket=${bucket_prefix}-skylark-${src_bucket[1]}
 dest_bucket=(${dest//:/ })
@@ -32,7 +32,7 @@ echo $filename
 export GOOGLE_APPLICATION_CREDENTIALS="/home/ubuntu/.skylark-shishir-42be5f375b7a.json"
 
 # creats buckets + bucket data and sets env variables
-#python scripts/setup_bucket.py --key-prefix ${key_prefix} --bucket-prefix ${bucket_prefix} --gcp-project skylark-shishir --src-data-path ../${key_prefix}/ --src-region ${src} --dest-region ${dest}
+python scripts/setup_bucket.py --key-prefix ${key_prefix} --bucket-prefix ${bucket_prefix} --gcp-project skylark-shishir --src-data-path ../${key_prefix}/ --src-region ${src} --dest-region ${dest}
 
 
 # TODO:artificially increase the number of chunks 

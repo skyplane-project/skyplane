@@ -1,11 +1,10 @@
 import os
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Iterator, List
-
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
-
-# from azure.identity import DefaultAzureCredential
+from azure.identity import DefaultAzureCredential, ClientSecretCredential
 from azure.storage.blob import BlobServiceClient
+from skylark.config import load_config
 from skylark.utils import logger
 from skylark.obj_store.azure_keys import azure_storage_credentials
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
@@ -20,20 +19,24 @@ class AzureInterface(ObjectStoreInterface):
     def __init__(self, azure_region, container_name):
         # TODO: the azure region should get corresponding os.getenv()
         self.azure_region = azure_region
-        assert self.azure_region in azure_storage_credentials
-
         self.container_name = container_name
         self.bucket_name = self.container_name  # For compatibility
         self.pending_downloads, self.completed_downloads = 0, 0
         self.pending_uploads, self.completed_uploads = 0, 0
-
-        # Connection strings are stored in azure_keys.py
+        # Authenticate
+        config = load_config()
+        self.subscription_id = config["azure_subscription_id"]
+        self.credential = ClientSecretCredential(
+            tenant_id=config["azure_tenant_id"],
+            client_id=config["azure_client_id"],
+            client_secret=config["azure_client_secret"],
+        )
+        # Create a blob service client
         self._connect_str = azure_storage_credentials[self.azure_region]["connection_string"]
-        self.blob_service_client = BlobServiceClient.from_connection_string(self._connect_str)
-        # self.azure_default_credential = DefaultAzureCredential()
-        # self.blob_service_client = BlobServiceClient(account_url=account_url, credential=self.azure_default_credential)
+        self.account_url = "https://{}.blob.core.windows.net".format("skylark" + self.azure_region)
+        self.blob_service_client = BlobServiceClient(account_url=self.account_url, credential=self.credential)
 
-        self.pool = ThreadPoolExecutor(max_workers=256)  # TODO: Figure this out, since azure by default has 15 workers
+        self.pool = ThreadPoolExecutor(max_workers=256)  # TODO: This might need some tuning
         self.max_concurrency = 1
         self.container_client = None
         if not self.container_exists():
