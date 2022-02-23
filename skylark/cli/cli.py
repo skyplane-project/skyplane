@@ -284,7 +284,7 @@ def replicate_json(
 
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
     stats = rc.monitor_transfer(
-        job, show_pbar=False, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds, cancel_pending=False
+        job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds, cancel_pending=False
     )
     stats["success"] = stats["monitor_status"] == "completed"
     stats["log"] = rc.get_chunk_status_log_df()
