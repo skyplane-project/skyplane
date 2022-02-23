@@ -14,6 +14,7 @@ setup(
         "azure-storage-blob>=12.0.0",
         "awscrt",
         "boto3",
+        "click>=7.1.2",
         "flask",
         "google-api-python-client",
         "google-cloud-compute",
