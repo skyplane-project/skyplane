@@ -40,7 +40,6 @@ class AzureInterface(ObjectStoreInterface):
             self.create_container()
             logger.info(f"==> Creating Azure container {self.container_name}")
 
-
     def _on_done_download(self, **kwargs):
         self.completed_downloads += 1
         self.pending_downloads -= 1

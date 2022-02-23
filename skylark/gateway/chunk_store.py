@@ -55,7 +55,7 @@ class ChunkStore:
                     self.chunk_status_log.append(elem)
                 except:
                     break
-        
+
         return list(self.chunk_status_log)
 
     def state_start_download(self, chunk_id: int, receiver_id: Optional[str] = None):
