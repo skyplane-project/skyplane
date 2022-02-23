@@ -11,6 +11,8 @@ from skylark.gateway.chunk_store import ChunkStore
 from skylark.gateway.gateway_receiver import GatewayReceiver
 from werkzeug.serving import make_server
 
+from skylark.utils.utils import Timer
+
 
 class GatewayDaemonAPI(threading.Thread):
     """
@@ -178,8 +180,4 @@ class GatewayDaemonAPI(threading.Thread):
         # list chunk status log
         @self.app.route("/api/v1/chunk_status_log", methods=["GET"])
         def get_chunk_status_log():
-            log = self.chunk_store.get_chunk_status_log()
-            for entry in log:
-                entry["time"] = entry["time"].isoformat()
-                entry["state"] = entry["state"].name
-            return jsonify({"chunk_status_log": log})
+            return jsonify({"chunk_status_log": self.chunk_store.get_chunk_status_log()})
