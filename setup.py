@@ -19,6 +19,7 @@ setup(
         "google-api-python-client",
         "google-cloud-compute",
         "google-cloud-storage",
+        "grpcio-status>=1.33.2",
         "numpy",
         "setproctitle",
         "termcolor",
