@@ -17,8 +17,9 @@ This package represents both components as a single binary. Docker builds a sing
         * (2) Create a Personal Access Token at https://github.com/settings/tokens/new with "write:packages" permissions
         * (3) Run `echo <PERSONAL_ACCESS_TOKEN> | sudo docker login ghcr.io -u <GITHUB_USERNAME> --password-stdin`
 * AWS:
-	* (1) Configure AWS by running `aws configure` and input the necessary information. See https://docs.aws.amazon.com/powershell/latest/userguide/pstools-appendix-sign-up.html. 
-	* (2) Ensure that you have a sufficient AWS vCPU limit in any regions you intend to use
+	* (1) Install AWS CLI with `sudo apt install awscli`
+	* (2) Configure AWS by running `aws configure` and input the necessary information. See https://docs.aws.amazon.com/powershell/latest/userguide/pstools-appendix-sign-up.html. 
+	* (3) Ensure that you have a sufficient AWS vCPU limit in any regions you intend to use
 
 ### Building and deploying the gateway
 
