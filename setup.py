@@ -23,6 +23,7 @@ setup(
         "numpy",
         "setproctitle",
         "termcolor",
+        "testresources",
         "tqdm",
         "werkzeug",
     ],
