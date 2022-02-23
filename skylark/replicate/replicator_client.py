@@ -400,4 +400,4 @@ class ReplicatorClient:
                                 throughput_gbits=throughput_gbits,
                                 monitor_status="timed_out",
                             )
-                        time.sleep(0.25 if show_pbar else 0.25)
+                    time.sleep(0.01 if show_pbar else 0.25)
