@@ -36,6 +36,10 @@ class AzureInterface(ObjectStoreInterface):
         self.pool = ThreadPoolExecutor(max_workers=256)  # TODO: Figure this out, since azure by default has 15 workers
         self.max_concurrency = 1
         self.container_client = None
+        if not self.container_exists():
+            self.create_container()
+            logger.info(f"==> Creating Azure container {self.container_name}")
+
 
     def _on_done_download(self, **kwargs):
         self.completed_downloads += 1
@@ -60,10 +64,9 @@ class AzureInterface(ObjectStoreInterface):
             self.container_client = self.blob_service_client.create_container(self.container_name)
             self.properties = self.container_client.get_container_properties()
         except ResourceExistsError:
-            self.delete_container()
-            logger.warning("==>Container already exists. Deletion started. Try restarting after sufficient gap")
-            logger.warning("==> Alternatively use a diff bucket name with `--bucket-prefix`")
-            exit(-1)
+            logger.warning("==> Container might already exist, in which case blobs are re-written")
+            # logger.warning("==> Alternatively use a diff bucket name with `--bucket-prefix`")
+            return
 
     def create_bucket(self):
         return self.create_container()
