@@ -6,7 +6,6 @@ from azure.identity import DefaultAzureCredential, ClientSecretCredential
 from azure.storage.blob import BlobServiceClient
 from skylark.config import load_config
 from skylark.utils import logger
-from skylark.obj_store.azure_keys import azure_storage_credentials
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
 
@@ -32,7 +31,6 @@ class AzureInterface(ObjectStoreInterface):
             client_secret=config["azure_client_secret"],
         )
         # Create a blob service client
-        self._connect_str = azure_storage_credentials[self.azure_region]["connection_string"]
         self.account_url = "https://{}.blob.core.windows.net".format("skylark" + self.azure_region)
         self.blob_service_client = BlobServiceClient(account_url=self.account_url, credential=self.credential)
 

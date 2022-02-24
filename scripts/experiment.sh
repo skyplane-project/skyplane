@@ -15,8 +15,8 @@ src=$1
 dest=$2
 
 #key_prefix="synthetic-fake-imagenet/4_16384"
-key_prefix="fake_imagenet"
-bucket_prefix="exps"
+key_prefix="data"
+bucket_prefix="expsdata"
 src_bucket=(${src//:/ })
 src_bucket=${bucket_prefix}-skylark-${src_bucket[1]}
 dest_bucket=(${dest//:/ })
