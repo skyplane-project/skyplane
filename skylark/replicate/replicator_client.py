@@ -392,7 +392,7 @@ class ReplicatorClient:
                                 tqdm.write(log_line)
                             else:
                                 logger.debug(log_line)
-                        elif t.elapsed > 180 and completed_bytes == 0:
+                        elif t.elapsed > 600 and completed_bytes == 0:
                             logger.error(f"No chunks completed after {int(t.elapsed)}s! There is probably a bug, check logs. Exiting...")
                             return dict(
                                 completed_chunk_ids=completed_chunk_ids,
