@@ -75,7 +75,7 @@ class ReplicatorClient:
             jobs.append(self.gcp.configure_default_firewall)
         with Timer(f"Cloud SSH key initialization"):
             do_parallel(lambda fn: fn(), jobs)
-        
+
         # reuse existing AWS instances
         if reuse_instances:
             if self.aws is not None:
