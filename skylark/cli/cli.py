@@ -134,11 +134,13 @@ def replicate_random(
     check_ulimit()
 
     if inter_region:
+        assert inter_region not in [src_region, dst_region] and src_region != dst_region
         topo = ReplicationTopology()
         for i in range(num_gateways):
             topo.add_edge(src_region, i, inter_region, i, num_outgoing_connections)
             topo.add_edge(inter_region, i, dst_region, i, num_outgoing_connections)
     else:
+        assert src_region != dst_region
         topo = ReplicationTopology()
         for i in range(num_gateways):
             topo.add_edge(src_region, i, dst_region, i, num_outgoing_connections)
@@ -160,7 +162,6 @@ def replicate_random(
         logger.warning(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
         )
-    # rc.provision_gateways(reuse_gateways, log_dir="/tmp/log_skylark") for debugging and writing log back to local machine at the dir provided
     rc.provision_gateways(reuse_gateways)
     for node, gw in rc.bound_nodes.items():
         logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
@@ -196,7 +197,6 @@ def replicate_json(
     n_chunks: int = typer.Option(512, "--n-chunks", "-n", help="Number of chunks"),
     # bucket options
     use_random_data: bool = False,
-    bucket_prefix: str = "skylark",
     source_bucket: str = typer.Option(None, "--source-bucket", help="Source bucket url"),
     dest_bucket: str = typer.Option(None, "--dest-bucket", help="Destination bucket url"),
     key_prefix: str = "/test/replicate_random",

@@ -1,6 +1,4 @@
-import time
 import uuid
-from functools import lru_cache
 from typing import List, Optional
 
 import botocore
@@ -11,6 +9,7 @@ from oslo_concurrency import lockutils
 from skylark import skylark_root
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.cloud_providers import CloudProvider
+from skylark.utils.utils import retry_backoff
 
 
 class AWSCloudProvider(CloudProvider):
@@ -24,28 +23,28 @@ class AWSCloudProvider(CloudProvider):
     @staticmethod
     def region_list() -> List[str]:
         all_regions = [
-            # "af-south-1",
+            "af-south-1",
             "ap-northeast-1",
             "ap-northeast-2",
             "ap-northeast-3",
-            # "ap-east-1",
+            "ap-east-1",
             "ap-south-1",
             "ap-southeast-1",
             "ap-southeast-2",
-            # "ap-southeast-3",  # too new region, not well supported
             "ca-central-1",
             "eu-central-1",
             "eu-north-1",
-            # "eu-south-1",
+            "eu-south-1",
             "eu-west-1",
             "eu-west-2",
             "eu-west-3",
-            # "me-south-1",
+            "me-south-1",
             "sa-east-1",
             "us-east-1",
             "us-east-2",
             "us-west-1",
             "us-west-2",
+            # "ap-southeast-3",  # too new region, not well supported
         ]
         return all_regions
 
@@ -206,17 +205,6 @@ class AWSCloudProvider(CloudProvider):
 
         return fn()
 
-    @lru_cache()
-    def get_ubuntu_ami_id(self, region: str) -> str:
-        client = AWSServer.get_boto3_resource("ec2", region)
-        images = client.images.filter(
-            Owners=["099720109477"], Filters=[{"Name": "name", "Values": ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]}]
-        )
-        images = sorted(images, key=lambda i: i.creation_date, reverse=True)  # get newest image
-        if len(images) == 0:
-            raise Exception(f"No Ubuntu AMI found in {region}")
-        return images[0].id
-
     def provision_instance(
         self,
         region: str,
@@ -229,60 +217,49 @@ class AWSCloudProvider(CloudProvider):
         assert not region.startswith("aws:"), "Region should be AWS region"
         if name is None:
             name = f"skylark-aws-{str(uuid.uuid4()).replace('-', '')}"
-        # if ami_id is None:
-        #     ami_id = self.get_ubuntu_ami_id(region)
         ec2 = AWSServer.get_boto3_resource("ec2", region)
         AWSServer.ensure_keyfile_exists(region)
 
-        # set instance storage to 128GB EBS
-        # use security group named default
-        # use vpc named skylark
         vpc = self.get_vpc(region)
         assert vpc is not None, "No VPC found"
         subnets = list(vpc.subnets.all())
         assert len(subnets) > 0, "No subnets found"
 
-        # catch botocore.exceptions.ClientError: "An error occurred (RequestLimitExceeded) when calling the RunInstances operation (reached max retries: 4): Request limit exceeded." and retry
-        for i in range(4):
-            try:
-                instance = ec2.create_instances(
-                    ImageId=self.get_ubuntu_ami_id(region),
-                    InstanceType=instance_class,
-                    MinCount=1,
-                    MaxCount=1,
-                    KeyName=f"skylark-{region}",
-                    TagSpecifications=[
-                        {
-                            "ResourceType": "instance",
-                            "Tags": [{"Key": "Name", "Value": name}] + [{"Key": k, "Value": v} for k, v in tags.items()],
-                        }
-                    ],
-                    BlockDeviceMappings=[
-                        {
-                            "DeviceName": "/dev/sda1",
-                            "Ebs": {"DeleteOnTermination": True, "VolumeSize": ebs_volume_size, "VolumeType": "gp2"},
-                        }
-                    ],
-                    NetworkInterfaces=[
-                        {
-                            "DeviceIndex": 0,
-                            "Groups": [self.get_security_group(region).group_id],
-                            "SubnetId": subnets[0].id,
-                            "AssociatePublicIpAddress": True,
-                            "DeleteOnTermination": True,
-                        }
-                    ],
-                )
-            except botocore.exceptions.ClientError as e:
-                if not "RequestLimitExceeded" in str(e):
-                    logger.error(f"Error provisioning instance in region {region}")
-                    raise e
-                else:
-                    logger.warning(f"RequestLimitExceeded, retrying ({i})")
-                    time.sleep(1)
-                    continue
-            instance[0].wait_until_running()
-            server = AWSServer(f"aws:{region}", instance[0].id)
-            server.wait_for_ready()
-            return server
-        raise Exception("Failed to provision instance")
+        def start_instance():
+            # todo instance-initiated-shutdown-behavior terminate
+            return ec2.create_instances(
+                ImageId="resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id",
+                InstanceType=instance_class,
+                MinCount=1,
+                MaxCount=1,
+                KeyName=f"skylark-{region}",
+                TagSpecifications=[
+                    {
+                        "ResourceType": "instance",
+                        "Tags": [{"Key": "Name", "Value": name}] + [{"Key": k, "Value": v} for k, v in tags.items()],
+                    }
+                ],
+                BlockDeviceMappings=[
+                    {
+                        "DeviceName": "/dev/sda1",
+                        "Ebs": {"DeleteOnTermination": True, "VolumeSize": ebs_volume_size, "VolumeType": "gp2"},
+                    }
+                ],
+                NetworkInterfaces=[
+                    {
+                        "DeviceIndex": 0,
+                        "Groups": [self.get_security_group(region).group_id],
+                        "SubnetId": subnets[0].id,
+                        "AssociatePublicIpAddress": True,
+                        "DeleteOnTermination": True,
+                    }
+                ],
+            )
+
+        instance = retry_backoff(start_instance, initial_backoff=1)
+        assert len(instance) == 1, f"Expected 1 instance, got {len(instance)}"
+        instance[0].wait_until_running()
+        server = AWSServer(f"aws:{region}", instance[0].id)
+        server.wait_for_ready()
+        return server
+>>>>>>> main

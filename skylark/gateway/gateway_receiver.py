@@ -15,19 +15,24 @@ from skylark.utils.utils import Timer
 
 
 class GatewayReceiver:
-    def __init__(self, chunk_store: ChunkStore, write_back_block_size=32 * MB, max_pending_chunks=1):
+    def __init__(self, chunk_store: ChunkStore, write_back_block_size=4 * MB, max_pending_chunks=1):
         self.chunk_store = chunk_store
         self.write_back_block_size = write_back_block_size
         self.max_pending_chunks = max_pending_chunks
         self.server_processes = []
         self.server_ports = []
+        self.next_gateway_worker_id = 0
+
+        # private state per worker
+        self.worker_id = None
 
     def start_server(self):
         # todo a good place to add backpressure?
         started_event = Event()
         port = Value("i", 0)
 
-        def server_worker():
+        def server_worker(worker_id: int):
+            self.worker_id = worker_id
             with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
                 sock.bind(("0.0.0.0", 0))
                 socket_port = sock.getsockname()[1]
@@ -52,7 +57,9 @@ class GatewayReceiver:
                         return
                     self.recv_chunks(conn, addr)
 
-        p = Process(target=server_worker)
+        gateway_id = self.next_gateway_worker_id
+        self.next_gateway_worker_id += 1
+        p = Process(target=server_worker, args=(gateway_id,))
         p.start()
         started_event.wait()
         self.server_processes.append(p)
@@ -91,14 +98,13 @@ class GatewayReceiver:
             logger.debug(f"[receiver:{server_port}] Blocking for next header")
             chunk_header = WireProtocolHeader.from_socket(conn)
             logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} Got chunk header {chunk_header}")
-            self.chunk_store.state_start_download(chunk_header.chunk_id)
 
-            # block until we have enough space to write the chunk
+            # wait for space
             while self.chunk_store.remaining_bytes() < chunk_header.chunk_len * self.max_pending_chunks:
-                logger.warning(f"[receiver:{server_port}]:{chunk_header.chunk_id} Waiting for space to write chunk ")
-                time.sleep(0.01)  # todo should use inotify
+                time.sleep(0.1)
 
             # get data
+            self.chunk_store.state_start_download(chunk_header.chunk_id, f"receiver:{self.worker_id}")
             logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} wire header length {chunk_header.chunk_len}")
             with Timer() as t:
                 chunk_data_size = chunk_header.chunk_len
@@ -113,7 +119,7 @@ class GatewayReceiver:
                 f"[receiver:{server_port}]:{chunk_header.chunk_id} in {t.elapsed:.2f} seconds ({chunk_received_size * 8 / t.elapsed / GB:.2f}Gbps)"
             )
             # todo check hash
-            self.chunk_store.state_finish_download(chunk_header.chunk_id, t.elapsed)
+            self.chunk_store.state_finish_download(chunk_header.chunk_id, f"receiver:{self.worker_id}")
             chunks_received.append(chunk_header.chunk_id)
 
             if chunk_header.n_chunks_left_on_socket == 0:

@@ -2,14 +2,17 @@ import atexit
 from datetime import datetime
 import itertools
 from functools import partial
+import json
 import time
 from typing import Dict, List, Optional, Tuple
+import uuid
 
 import requests
+from skylark.replicate.profiler import status_df_to_traceevent
 from skylark.utils import logger
 from tqdm import tqdm
 import pandas as pd
-from skylark import GB, KB, MB
+from skylark import GB, KB, MB, tmp_log_dir
 
 from skylark.benchmark.utils import refresh_instance_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
@@ -54,6 +57,7 @@ class ReplicatorClient:
                 jobs.append(partial(self.aws.add_ip_to_security_group, r))
         if self.azure is not None:
             jobs.append(self.azure.create_ssh_key)
+            jobs.append(self.azure.set_up_resource_group)
         if self.gcp is not None:
             jobs.append(self.gcp.create_ssh_key)
             jobs.append(self.gcp.configure_default_network)
@@ -206,7 +210,6 @@ class ReplicatorClient:
 
         # make list of chunks
         chunks = []
-        print(job.source_bucket, job.objs[0])
         obj_file_size_bytes = job.src_obj_sizes() if job.source_bucket else None
         for idx, obj in enumerate(job.objs):
             if obj_file_size_bytes:
@@ -306,6 +309,7 @@ class ReplicatorClient:
         log_interval_s: Optional[float] = None,
         time_limit_seconds: Optional[float] = None,
         cancel_pending: bool = True,
+        write_profile: bool = True,
     ) -> Dict:
         assert job.chunk_requests is not None
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in job.chunk_requests])
@@ -313,6 +317,15 @@ class ReplicatorClient:
 
         sinks = self.topology.sink_instances()
         sink_regions = set(s.region for s in sinks)
+
+        def write_profile_fn():
+            if write_profile:
+                traceevent = status_df_to_traceevent(self.get_chunk_status_log_df())
+                tmp_log_dir.mkdir(exist_ok=True)
+                profile_out = tmp_log_dir / f"traceevent_{uuid.uuid4()}.json"
+                with open(profile_out, "w") as f:
+                    json.dump(traceevent, f)
+                logger.debug(f"Wrote profile to {profile_out}, visualize using `about://tracing` in Chrome")
 
         if cancel_pending:
             # register atexit handler to cancel pending chunk requests (force shutdown gateways)
@@ -324,6 +337,7 @@ class ReplicatorClient:
                     except requests.exceptions.ConnectionError as e:
                         return  # ignore connection errors since server may be shutting down
 
+                write_profile_fn()
                 do_parallel(fn, self.bound_nodes.values(), n=-1)
                 logger.warning("Cancelled pending chunk requests")
 
@@ -360,6 +374,7 @@ class ReplicatorClient:
                     ):
                         if cancel_pending:
                             atexit.unregister(shutdown_handler)
+                        write_profile_fn()
                         return dict(
                             completed_chunk_ids=completed_chunk_ids,
                             total_runtime_s=total_runtime_s,
@@ -377,7 +392,7 @@ class ReplicatorClient:
                                 tqdm.write(log_line)
                             else:
                                 logger.debug(log_line)
-                        elif t.elapsed > 20 and completed_bytes == 0:
+                        elif t.elapsed > 600 and completed_bytes == 0:
                             logger.error(f"No chunks completed after {int(t.elapsed)}s! There is probably a bug, check logs. Exiting...")
                             return dict(
                                 completed_chunk_ids=completed_chunk_ids,
@@ -385,4 +400,4 @@ class ReplicatorClient:
                                 throughput_gbits=throughput_gbits,
                                 monitor_status="timed_out",
                             )
-                        time.sleep(0.01 if show_pbar else 0.25)
+                    time.sleep(0.01 if show_pbar else 0.25)

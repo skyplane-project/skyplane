@@ -1,12 +1,14 @@
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Union
+from typing import Callable, Iterable, List, Tuple, Union, TypeVar
 
 from skylark.utils import logger
 from tqdm import tqdm
 
 PathLike = Union[str, Path]
+T = TypeVar("T")
+R = TypeVar("R")
 
 
 class Timer:
@@ -32,7 +34,7 @@ class Timer:
             return self.end - self.start
 
 
-def wait_for(fn, timeout=60, interval=0.25, progress_bar=False, desc="Waiting", leave_pbar=True):
+def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, progress_bar=False, desc="Waiting", leave_pbar=True) -> bool:
     # wait for fn to return True
     start = time.time()
     with tqdm(desc=desc, leave=leave_pbar, disable=not progress_bar) as pbar:
@@ -45,7 +47,9 @@ def wait_for(fn, timeout=60, interval=0.25, progress_bar=False, desc="Waiting", 
         raise Exception(f"Timeout waiting for {desc}")
 
 
-def do_parallel(func, args_list, n=-1, progress_bar=False, leave_pbar=True, desc=None, arg_fmt=None):
+def do_parallel(
+    func: Callable[[T], R], args_list: Iterable[T], n=-1, progress_bar=False, leave_pbar=True, desc=None, arg_fmt=None
+) -> List[Tuple[T, R]]:
     """Run list of jobs in parallel with tqdm progress bar"""
     args_list = list(args_list)
     if len(args_list) == 0:
@@ -70,3 +74,27 @@ def do_parallel(func, args_list, n=-1, progress_bar=False, leave_pbar=True, desc
                 pbar.set_description(f"{desc} ({str(arg_fmt(args))})" if desc else str(arg_fmt(args)))
                 pbar.update()
         return results
+
+
+def retry_backoff(
+    fn: Callable[[], R],
+    max_retries=4,
+    initial_backoff=0.1,
+    exception_class=Exception,
+) -> R:
+    """Retry fn until it does not raise an exception.
+    If it fails, sleep for a bit and try again.
+    Double the backoff time each time.
+    If it fails max_retries times, raise the last exception.
+    """
+    backoff = initial_backoff
+    for i in range(max_retries):
+        try:
+            return fn()
+        except exception_class as e:
+            if i == max_retries - 1:
+                raise e
+            else:
+                logger.warning(f"Retrying {fn.__name__} due to {e} (attempt {i + 1}/{max_retries})")
+                time.sleep(backoff)
+                backoff *= 2

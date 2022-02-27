@@ -12,7 +12,7 @@ from skylark.utils import logger
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
-from skylark.obj_store.object_store_interface import ObjectStoreObject
+from skylark.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.obj_store.gcs_interface import GCSInterface
 from skylark.obj_store.azure_interface import AzureInterface
@@ -89,7 +89,7 @@ def copy_local_local(src: Path, dst: Path):
         copyfile(src, dst)
 
 
-def copy_local_objstore(object_interface: ObjectStoreObject, src: Path, dst_bucket: str, dst_key: str):
+def copy_local_objstore(object_interface: ObjectStoreInterface, src: Path, dst_bucket: str, dst_key: str):
     ops: List[concurrent.futures.Future] = []
     path_mapping: Dict[concurrent.futures.Future, Path] = {}
 
@@ -113,7 +113,7 @@ def copy_local_objstore(object_interface: ObjectStoreObject, src: Path, dst_buck
             pbar.update(path_mapping[op].stat().st_size)
 
 
-def copy_objstore_local(object_interface: ObjectStoreObject, src_bucket: str, src_key: str, dst: Path):
+def copy_objstore_local(object_interface: ObjectStoreInterface, src_bucket: str, src_key: str, dst: Path):
     ops: List[concurrent.futures.Future] = []
     obj_mapping: Dict[concurrent.futures.Future, ObjectStoreObject] = {}
 

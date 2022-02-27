@@ -48,7 +48,7 @@ def ssh(region: Optional[str] = None):
     instance_name: AWSServer = questionary.select("Select an instance", choices=choices).ask()
     if instance_name is not None and instance_name in instance_map:
         instance = instance_map[instance_name]
-        proc = subprocess.Popen(split(f"ssh -i {str(instance.local_keyfile)} ubuntu@{instance.public_ip()}"))
+        proc = subprocess.Popen(split(f"ssh -i {str(instance.local_keyfile)} ec2-user@{instance.public_ip()}"))
         proc.wait()
     else:
         typer.secho(f"No instance selected", fg="red")
@@ -135,7 +135,7 @@ def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
             }
             typer.secho(f"{int(t.elapsed)}s\tStatus: {last_status}, {metadata}", fg="green")
             time.sleep(5)
-            if ((int(t.elapsed) > 300) and last_status == "LAUNCHING"):
+            if (int(t.elapsed) > 300) and last_status == "LAUNCHING":
                 typer.secho(
                     "The process might have errored out. One way to solve this is to delete the objects if they exist already, and restart the transfer",
                     fg="red",
