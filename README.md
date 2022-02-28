@@ -14,10 +14,21 @@ This package represents both components as a single binary. Docker builds a sing
     * **Ensure you have authenticated your Github account with Docker**: https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-to-the-container-registry
     * TLDR:
         * (1) Install docker with `curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh`
-        * (1) Create a Personal Access Token at https://github.com/settings/tokens/new with "write:packages" permissions
-        * (2) Run `echo <PERSONAL_ACCESS_TOKEN> | sudo docker login ghcr.io -u <GITHUB_USERNAME> --password-stdin`
+        * (2) Create a Personal Access Token at https://github.com/settings/tokens/new with "write:packages" permissions
+        * (3) Run `echo <PERSONAL_ACCESS_TOKEN> | sudo docker login ghcr.io -u <GITHUB_USERNAME> --password-stdin`
+* AWS:
+	* (1) Install AWS CLI with `sudo apt install awscli`
+	* (2) Configure AWS by running `aws configure` and input the necessary information. See https://docs.aws.amazon.com/powershell/latest/userguide/pstools-appendix-sign-up.html. 
+	* (3) Ensure that you have a sufficient AWS vCPU limit in any regions you intend to use
 
 ### Building and deploying the gateway
+
+First, clone and enter the skylark directory:
+```
+$ git clone https://github.com/parasj/skylark
+$ cd skylark
+```
+
 To run a sample replication, first build a new version of the GatewayDaemon Docker image and push it to ghcr.io (ensure you are authenticated as above):
 
 ```
@@ -56,16 +67,12 @@ SKYLARK_DOCKER_IMAGE=ghcr.io/parasj/skylark:local-PotRzrFT
 
 </details>
 
-The script will export the new image (ghcr.io/parasj/skylark:local-PotRzrFT) to an environment variable (`SKYLARK_DOCKER_IMAGE`). Ensure you use `source` so the environment variable is published to your shell.
+The script will export the new image (ghcr.io/parasj/skylark:local-PotRzrFT in this example) to an environment variable (`SKYLARK_DOCKER_IMAGE`). Ensure you use `source` so the environment variable is published to your shell.
 
 ### Running a replication job
 We then run the ReplicatorClient with that new Docker image (stored in `$SKYLARK_DOCKER_IMAGE`):
 ```
-$ skylark replicate-random aws:us-east-1 aws:us-west-1 \
-   --chunk-size-mb 16 \
-   --n-chunks 2048 \
-   --num-gateways 1 \
-   --num-outgoing-connections 32
+$ skylark replicate-random aws:us-east-1 aws:us-west-1 
 ```
 <details>
 <summary>skylark replicate-random result</summary>
@@ -118,7 +125,7 @@ $ skylark replicate-random aws:ap-northeast-1 aws:eu-central-1 --inter-region aw
 
 When done, stop all instances started by Skylark by running:
 
-```skyklark deprovision [--gcp-project GCP_PROJECT_ID]```
+```skyklark deprovision```
 
 <details>
 <summary>skylark deprovision result</summary>
