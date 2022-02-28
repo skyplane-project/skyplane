@@ -262,4 +262,3 @@ class AWSCloudProvider(CloudProvider):
         server = AWSServer(f"aws:{region}", instance[0].id)
         server.wait_for_ready()
         return server
->>>>>>> main
