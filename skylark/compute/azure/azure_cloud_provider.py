@@ -16,6 +16,8 @@ from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.resource import ResourceManagementClient
 
+from skylark.utils.utils import do_parallel
+
 
 class AzureCloudProvider(CloudProvider):
     def __init__(self, azure_subscription, key_root=key_root / "azure", read_credential=True):
@@ -263,18 +265,18 @@ class AzureCloudProvider(CloudProvider):
 
     def get_instance_list(self, region: str) -> List[AzureServer]:
         credential = self.credential
-        resource_client = ResourceManagementClient(credential, self.subscription_id)
-        resource_group_list_iterator = resource_client.resource_groups.list(filter="tagName eq 'skylark' and tagValue eq 'true'")
+        compute_client = ComputeManagementClient(credential, self.subscription_id)
 
         server_list = []
-        for resource_group in resource_group_list_iterator:
-            if resource_group.location == region:
-                s = AzureServer(self.subscription_id, resource_group.name)
+        for vm in compute_client.virtual_machines.list(AzureServer.resource_group_name):
+            if vm.tags.get("skylark", None) == "true" and AzureServer.is_valid_vm_name(vm.name) and vm.location == region:
+                name = AzureServer.base_name_from_vm_name(vm.name)
+                s = AzureServer(self.subscription_id, name)
                 if s.is_valid():
                     server_list.append(s)
                 else:
                     logger.warning(
-                        f"Warning: malformed Azure resource group {resource_group.name} found and ignored. You should go to the Microsoft Azure portal, investigate this manually, and delete any orphaned resources that may be allocated."
+                        f"Warning: malformed Azure instance {name} found and ignored. You should go to the Microsoft Azure portal, investigate this manually, and delete any orphaned resources that may be allocated."
                     )
         return server_list
 
@@ -287,6 +289,33 @@ class AzureCloudProvider(CloudProvider):
             key.write_private_key_file(self.private_key_path, password="skylark")
             with open(self.public_key_path, "w") as f:
                 f.write(f"{key.get_name()} {key.get_base64()}\n")
+
+    def set_up_resource_group(self, clean_up_orphans=True):
+        credential = self.credential
+        resource_client = ResourceManagementClient(credential, self.subscription_id)
+        if resource_client.resource_groups.check_existence(AzureServer.resource_group_name):
+            # Resource group already exists.
+            # Take this moment to search for orphaned resources and clean them up...
+            network_client = NetworkManagementClient(credential, self.subscription_id)
+            if clean_up_orphans:
+                instances_to_terminate = []
+                for vnet in network_client.virtual_networks.list(AzureServer.resource_group_name):
+                    if vnet.tags.get("skylark", None) == "true" and AzureServer.is_valid_vnet_name(vnet.name):
+                        name = AzureServer.base_name_from_vnet_name(vnet.name)
+                        s = AzureServer(self.subscription_id, name, assume_exists=False)
+                        if not s.is_valid():
+                            logger.warning(f"Cleaning up orphaned Azure resources for {name}...")
+                            instances_to_terminate.append(s)
+
+                if len(instances_to_terminate) > 0:
+                    logger.info(f"Cleaning up {len(instances_to_terminate)} orphaned Azure resources...")
+                    do_parallel(lambda i: i.terminate_instance_impl(), instances_to_terminate)
+                    logger.info("Done cleaning up orphaned Azure resources")
+            return
+        rg_result = resource_client.resource_groups.create_or_update(
+            AzureServer.resource_group_name, {"location": AzureServer.resource_group_location, "tags": {"skylark": "true"}}
+        )
+        assert rg_result.name == AzureServer.resource_group_name
 
     # This code, along with some code in azure_server.py, is based on
     # https://github.com/ucbrise/mage-scripts/blob/main/azure_cloud.py.
@@ -305,18 +334,18 @@ class AzureCloudProvider(CloudProvider):
         credential = self.credential
         compute_client = ComputeManagementClient(credential, self.subscription_id)
         network_client = NetworkManagementClient(credential, self.subscription_id)
-        resource_client = ResourceManagementClient(credential, self.subscription_id)
 
-        # Create a resource group for this instance
-        resource_group = name
-        if resource_client.resource_groups.check_existence(resource_group):
-            raise RuntimeError('Cannot spawn instance "{0}": instance already exists'.format(name))
-        rg_result = resource_client.resource_groups.create_or_update(resource_group, {"location": location, "tags": {"skylark": "true"}})
-        assert rg_result.name == resource_group
+        # Use the common resource group for this instance
+        resource_group = AzureServer.resource_group_name
+
+        # TODO: On future requests to create resources, check if a resource
+        # with that name already exists, and fail the operation if so
 
         # Create a Virtual Network for this instance
         poller = network_client.virtual_networks.begin_create_or_update(
-            resource_group, AzureServer.vnet_name(name), {"location": location, "address_space": {"address_prefixes": ["10.0.0.0/24"]}}
+            resource_group,
+            AzureServer.vnet_name(name),
+            {"location": location, "tags": {"skylark": "true"}, "address_space": {"address_prefixes": ["10.0.0.0/24"]}},
         )
         poller.result()
 
@@ -327,6 +356,7 @@ class AzureCloudProvider(CloudProvider):
             AzureServer.nsg_name(name),
             {
                 "location": location,
+                "tags": {"skylark": "true"},
                 "security_rules": [
                     {
                         "name": name + "-allow-all",
@@ -346,26 +376,28 @@ class AzureCloudProvider(CloudProvider):
         nsg_result = poller.result()
 
         # Create a subnet for this instance with the above Network Security Group
-        poller = network_client.subnets.begin_create_or_update(
+        subnet_poller = network_client.subnets.begin_create_or_update(
             resource_group,
             AzureServer.vnet_name(name),
             AzureServer.subnet_name(name),
             {"address_prefix": "10.0.0.0/26", "network_security_group": {"id": nsg_result.id}},
         )
-        subnet_result = poller.result()
 
         # Create a public IPv4 address for this instance
-        poller = network_client.public_ip_addresses.begin_create_or_update(
+        ip_poller = network_client.public_ip_addresses.begin_create_or_update(
             resource_group,
             AzureServer.ip_name(name),
             {
                 "location": location,
+                "tags": {"skylark": "true"},
                 "sku": {"name": "Standard"},
                 "public_ip_allocation_method": "Static",
                 "public_ip_address_version": "IPV4",
             },
         )
-        public_ip_result = poller.result()
+
+        subnet_result = subnet_poller.result()
+        public_ip_result = ip_poller.result()
 
         # Create a NIC for this instance, with accelerated networking enabled
         poller = network_client.network_interfaces.begin_create_or_update(
@@ -373,6 +405,7 @@ class AzureCloudProvider(CloudProvider):
             AzureServer.nic_name(name),
             {
                 "location": location,
+                "tags": {"skylark": "true"},
                 "ip_configurations": [
                     {"name": name + "-ip", "subnet": {"id": subnet_result.id}, "public_ip_address": {"id": public_ip_result.id}}
                 ],
@@ -388,6 +421,7 @@ class AzureCloudProvider(CloudProvider):
                 AzureServer.vm_name(name),
                 {
                     "location": location,
+                    "tags": {"skylark": "true"},
                     "hardware_profile": {"vm_size": self.lookup_valid_instance(location, vm_size)},
                     "storage_profile": {
                         "image_reference": {
@@ -395,7 +429,8 @@ class AzureCloudProvider(CloudProvider):
                             "offer": "0001-com-ubuntu-server-focal",
                             "sku": "20_04-lts",
                             "version": "latest",
-                        }
+                        },
+                        "os_disk": {"create_option": "FromImage", "delete_option": "Delete"},
                     },
                     "os_profile": {
                         "computer_name": AzureServer.vm_name(name),
@@ -410,4 +445,4 @@ class AzureCloudProvider(CloudProvider):
             )
             poller.result()
 
-        return AzureServer(self.subscription_id, resource_group)
+        return AzureServer(self.subscription_id, name)

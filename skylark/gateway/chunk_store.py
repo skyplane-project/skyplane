@@ -1,8 +1,9 @@
-import os
 from datetime import datetime
-from multiprocessing import Manager
+from multiprocessing import Lock, Manager, Queue
 from os import PathLike
 from pathlib import Path
+from queue import Empty
+import subprocess
 from typing import Dict, List, Optional
 
 from skylark.utils import logger
@@ -19,16 +20,13 @@ class ChunkStore:
             logger.warning(f"Deleting existing chunk file {chunk_file}")
             chunk_file.unlink()
 
-        self.chunk_store_max_size = os.statvfs(self.chunk_dir).f_frsize * os.statvfs(self.chunk_dir).f_bfree
-        logger.info(f"Chunk directory {self.chunk_dir} can have max size {self.chunk_store_max_size} bytes")
-
         # multiprocess-safe concurrent structures
         self.manager = Manager()
         self.chunk_requests: Dict[int, ChunkRequest] = self.manager.dict()
         self.chunk_status: Dict[int, ChunkState] = self.manager.dict()
 
         # state log
-        self.chunk_status_log: List[Dict] = self.manager.list()
+        self.chunk_status_queue: Queue[Dict] = Queue()
 
     def get_chunk_file_path(self, chunk_id: int) -> Path:
         return self.chunk_dir / f"{chunk_id:05d}.chunk"
@@ -39,27 +37,36 @@ class ChunkStore:
     def get_chunk_state(self, chunk_id: int) -> Optional[ChunkState]:
         return self.chunk_status[chunk_id] if chunk_id in self.chunk_status else None
 
-    def set_chunk_state(self, chunk_id: int, new_status: ChunkState):
+    def set_chunk_state(self, chunk_id: int, new_status: ChunkState, log_metadata: Optional[Dict] = None):
         self.chunk_status.get(chunk_id)
         self.chunk_status[chunk_id] = new_status
-        self.chunk_status_log.append({"chunk_id": chunk_id, "state": new_status, "time": datetime.utcnow()})
-        # logger.info(f"[chunk_store]:{chunk_id} state change from {old_status} to {new_status}")
+        rec = {"chunk_id": chunk_id, "state": new_status.name, "time": str(datetime.utcnow().isoformat())}
+        if log_metadata is not None:
+            rec.update(log_metadata)
+        self.chunk_status_queue.put(rec)
 
-    def get_chunk_status_log(self) -> List[Dict]:
-        return list(self.chunk_status_log)
+    def drain_chunk_status_queue(self) -> List[Dict]:
+        out_events = []
+        while True:
+            try:
+                elem = self.chunk_status_queue.get_nowait()
+                out_events.append(elem)
+            except Empty:
+                break
+        return out_events
 
-    def state_start_download(self, chunk_id: int):
+    def state_start_download(self, chunk_id: int, receiver_id: Optional[str] = None):
         state = self.get_chunk_state(chunk_id)
         if state in [ChunkState.registered, ChunkState.download_in_progress]:
-            self.set_chunk_state(chunk_id, ChunkState.download_in_progress)
+            self.set_chunk_state(chunk_id, ChunkState.download_in_progress, {"receiver_id": receiver_id})
         else:
             raise ValueError(f"Invalid transition start_download from {self.get_chunk_state(chunk_id)}")
 
-    def state_finish_download(self, chunk_id: int, runtime_s: Optional[float] = None):
+    def state_finish_download(self, chunk_id: int, receiver_id: Optional[str] = None):
         # todo log runtime to statistics store
         state = self.get_chunk_state(chunk_id)
         if state in [ChunkState.download_in_progress, ChunkState.downloaded]:
-            self.set_chunk_state(chunk_id, ChunkState.downloaded)
+            self.set_chunk_state(chunk_id, ChunkState.downloaded, {"receiver_id": receiver_id})
         else:
             raise ValueError(f"Invalid transition finish_download from {self.get_chunk_state(chunk_id)}")
 
@@ -70,18 +77,18 @@ class ChunkStore:
         else:
             raise ValueError(f"Invalid transition upload_queued from {self.get_chunk_state(chunk_id)}")
 
-    def state_start_upload(self, chunk_id: int):
+    def state_start_upload(self, chunk_id: int, sender_id: Optional[str] = None):
         state = self.get_chunk_state(chunk_id)
         if state in [ChunkState.upload_queued, ChunkState.upload_in_progress]:
-            self.set_chunk_state(chunk_id, ChunkState.upload_in_progress)
+            self.set_chunk_state(chunk_id, ChunkState.upload_in_progress, {"sender_id": sender_id})
         else:
             raise ValueError(f"Invalid transition start_upload from {self.get_chunk_state(chunk_id)}")
 
-    def state_finish_upload(self, chunk_id: int, runtime_s: Optional[float] = None):
+    def state_finish_upload(self, chunk_id: int, sender_id: Optional[str] = None):
         # todo log runtime to statistics store
         state = self.get_chunk_state(chunk_id)
         if state in [ChunkState.upload_in_progress, ChunkState.upload_complete]:
-            self.set_chunk_state(chunk_id, ChunkState.upload_complete)
+            self.set_chunk_state(chunk_id, ChunkState.upload_complete, {"sender_id": sender_id})
         else:
             raise ValueError(f"Invalid transition finish_upload from {self.get_chunk_state(chunk_id)}")
 
@@ -109,8 +116,5 @@ class ChunkStore:
         self.set_chunk_state(chunk_request.chunk.chunk_id, state)
         self.chunk_requests[chunk_request.chunk.chunk_id] = chunk_request
 
-    def used_bytes(self):
-        return sum(f.stat().st_size for f in self.chunk_dir.glob("*.chunk") if os.path.exists(f))
-
     def remaining_bytes(self):
-        return self.chunk_store_max_size - self.used_bytes()
+        return int(subprocess.check_output(["df", "-k", "--output=avail", self.chunk_dir]).decode().strip().split()[-1]) * 1024

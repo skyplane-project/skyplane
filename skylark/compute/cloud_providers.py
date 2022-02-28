@@ -1,4 +1,3 @@
-import threading
 from typing import List, Optional, Union
 
 from skylark.compute.server import Server, ServerState
@@ -6,8 +5,6 @@ from skylark.utils.utils import do_parallel
 
 
 class CloudProvider:
-    ns = threading.local()
-
     @property
     def name(self):
         raise NotImplementedError

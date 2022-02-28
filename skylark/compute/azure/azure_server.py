@@ -17,6 +17,9 @@ from azure.mgmt.resource import ResourceManagementClient
 
 
 class AzureServer(Server):
+    resource_group_name = "skylark"
+    resource_group_location = "westus2"
+
     def __init__(
         self,
         subscription_id: Optional[str],
@@ -25,6 +28,7 @@ class AzureServer(Server):
         log_dir=None,
         ssh_private_key=None,
         read_credential=True,
+        assume_exists=True,
     ):
         if read_credential:
             config = load_config()
@@ -40,10 +44,12 @@ class AzureServer(Server):
         self.name = name
         self.location = None
 
-        resource_group = self.get_resource_group()
-
-        self.location = resource_group.location
-        region_tag = f"azure:{self.location}"
+        if assume_exists:
+            vm = self.get_virtual_machine()
+            self.location = vm.location
+            region_tag = f"azure:{self.location}"
+        else:
+            region_tag = "azure:UNKNOWN"
 
         super().__init__(region_tag, log_dir=log_dir)
 
@@ -61,6 +67,15 @@ class AzureServer(Server):
         return name + "-vnet"
 
     @staticmethod
+    def is_valid_vnet_name(name):
+        return name.endswith("-vnet")
+
+    @staticmethod
+    def base_name_from_vnet_name(name):
+        assert AzureServer.is_valid_vnet_name(name)
+        return name[:-5]
+
+    @staticmethod
     def nsg_name(name):
         return name + "-nsg"
 
@@ -73,8 +88,13 @@ class AzureServer(Server):
         return name + "-vm"
 
     @staticmethod
-    def wdisk_name(name):
-        return AzureServer.vm_name(name) + "-wdisk"
+    def is_valid_vm_name(name):
+        return name.endswith("-vm")
+
+    @staticmethod
+    def base_name_from_vm_name(name):
+        assert AzureServer.is_valid_vm_name(name)
+        return name[:-3]
 
     @staticmethod
     def ip_name(name):
@@ -87,11 +107,11 @@ class AzureServer(Server):
     def get_resource_group(self):
         credential = self.credential
         resource_client = ResourceManagementClient(credential, self.subscription_id)
-        rg = resource_client.resource_groups.get(self.name)
+        rg = resource_client.resource_groups.get(AzureServer.resource_group_name)
 
         # Sanity checks
-        assert self.location is None or rg.location == self.location
-        assert rg.name == self.name
+        assert rg.name == AzureServer.resource_group_name
+        assert rg.location == AzureServer.resource_group_location
         assert rg.tags.get("skylark", None) == "true"
 
         return rg
@@ -99,18 +119,18 @@ class AzureServer(Server):
     def get_virtual_machine(self):
         credential = self.credential
         compute_client = ComputeManagementClient(credential, self.subscription_id)
-        vm = compute_client.virtual_machines.get(self.name, AzureServer.vm_name(self.name))
+        vm = compute_client.virtual_machines.get(AzureServer.resource_group_name, AzureServer.vm_name(self.name))
 
         # Sanity checks
-        assert vm.location == self.location
+        assert self.location is None or vm.location == self.location
         assert vm.name == AzureServer.vm_name(self.name)
 
         return vm
 
     def is_valid(self):
         try:
-            _ = self.get_virtual_machine()
-            return True
+            vm = self.get_virtual_machine()
+            return vm.provisioning_state == "Succeeded"
         except azure.core.exceptions.ResourceNotFoundError:
             return False
 
@@ -120,7 +140,7 @@ class AzureServer(Server):
     def instance_state(self) -> ServerState:
         credential = self.credential
         compute_client = ComputeManagementClient(credential, self.subscription_id)
-        vm_instance_view = compute_client.virtual_machines.instance_view(self.name, AzureServer.vm_name(self.name))
+        vm_instance_view = compute_client.virtual_machines.instance_view(AzureServer.resource_group_name, AzureServer.vm_name(self.name))
         statuses = vm_instance_view.statuses
         for status in statuses:
             if status.code.startswith("PowerState"):
@@ -131,7 +151,7 @@ class AzureServer(Server):
     def public_ip(self):
         credential = self.credential
         network_client = NetworkManagementClient(credential, self.subscription_id)
-        public_ip = network_client.public_ip_addresses.get(self.name, AzureServer.ip_name(self.name))
+        public_ip = network_client.public_ip_addresses.get(AzureServer.resource_group_name, AzureServer.ip_name(self.name))
 
         # Sanity checks
         assert public_ip.location == self.location
@@ -151,18 +171,35 @@ class AzureServer(Server):
 
     @ignore_lru_cache()
     def tags(self):
-        resource_group = self.get_resource_group()
-        return resource_group.tags
+        vm = self.get_virtual_machine()
+        return vm.tags
 
     def network_tier(self):
         return "PREMIUM"
 
     def terminate_instance_impl(self):
         credential = self.credential
-        resource_client = ResourceManagementClient(credential, self.subscription_id)
-        _ = self.get_resource_group()  # for the sanity checks
-        poller = resource_client.resource_groups.begin_delete(self.name)
-        _ = poller.result()
+        compute_client = ComputeManagementClient(credential, self.subscription_id)
+        network_client = NetworkManagementClient(credential, self.subscription_id)
+
+        vm_poller = compute_client.virtual_machines.begin_delete(AzureServer.resource_group_name, self.vm_name(self.name))
+        _ = vm_poller.result()
+
+        nic_poller = network_client.network_interfaces.begin_delete(AzureServer.resource_group_name, self.nic_name(self.name))
+        _ = nic_poller.result()
+
+        ip_poller = network_client.public_ip_addresses.begin_delete(AzureServer.resource_group_name, self.ip_name(self.name))
+        subnet_poller = network_client.subnets.begin_delete(
+            AzureServer.resource_group_name, self.vnet_name(self.name), self.subnet_name(self.name)
+        )
+        _ = ip_poller.result()
+        _ = subnet_poller.result()
+
+        nsg_poller = network_client.network_security_groups.begin_delete(AzureServer.resource_group_name, self.nsg_name(self.name))
+        _ = nsg_poller.result()
+
+        vnet_poller = network_client.virtual_networks.begin_delete(AzureServer.resource_group_name, self.vnet_name(self.name))
+        _ = vnet_poller.result()
 
     def get_ssh_client_impl(self, uname=os.environ.get("USER"), ssh_key_password="skylark"):
         """Return paramiko client that connects to this instance."""

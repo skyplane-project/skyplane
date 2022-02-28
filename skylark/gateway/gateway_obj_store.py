@@ -4,6 +4,7 @@ from multiprocessing import Event, Manager, Process, Value
 from typing import Dict, Optional
 
 import setproctitle
+from skylark.gateway.chunk_store import ChunkStore
 from skylark.utils import logger
 from skylark.chunk import ChunkRequest
 
@@ -19,8 +20,7 @@ class ObjStoreRequest:
 
 
 class GatewayObjStoreConn:
-    def __init__(self, chunk_store, max_conn=32):
-
+    def __init__(self, chunk_store: ChunkStore, max_conn=32):
         self.chunk_store = chunk_store
         self.n_processes = max_conn
         self.processes = []
@@ -57,6 +57,7 @@ class GatewayObjStoreConn:
         self.processes = []
 
     def worker_loop(self, worker_id: int):
+        # todo should this use processes instead of threads?
         setproctitle.setproctitle(f"skylark-gateway-obj-store:{worker_id}")
         self.worker_id = worker_id
 
@@ -77,7 +78,7 @@ class GatewayObjStoreConn:
                 region = chunk_req.dst_region
                 bucket = chunk_req.dst_object_store_bucket
 
-                self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id)
+                self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
 
                 logger.debug(f"[obj_store:{self.worker_id}] Start upload {chunk_req.chunk.chunk_id} to {bucket}")
 
@@ -87,7 +88,7 @@ class GatewayObjStoreConn:
                     chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
 
                     # update chunk state
-                    self.chunk_store.state_finish_upload(chunk_id)
+                    self.chunk_store.state_finish_upload(chunk_id, f"obj_store:{self.worker_id}")
 
                     # delete chunk
                     chunk_file_path.unlink()
@@ -102,6 +103,8 @@ class GatewayObjStoreConn:
                 region = chunk_req.src_region
                 bucket = chunk_req.src_object_store_bucket
 
+                self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
+
                 logger.debug(f"[obj_store:{self.worker_id}] Starting download {chunk_req.chunk.chunk_id} from {bucket}")
 
                 def download(region, bucket, fpath, key, chunk_id):
@@ -109,7 +112,7 @@ class GatewayObjStoreConn:
                     obj_store_interface.download_object(key, fpath).result()
 
                     # update chunk state
-                    self.chunk_store.state_finish_download(chunk_id)
+                    self.chunk_store.state_finish_download(chunk_id, f"obj_store:{self.worker_id}")
                     logger.debug(f"[obj_store:{self.worker_id}] Downloaded {chunk_id} from {bucket}")
 
                 # wait for request to return in sepearte thread, so we can update chunk state

@@ -1,9 +1,13 @@
 import logging
 import logging.handlers
+from multiprocessing import Process
 import os
+import signal
 import threading
+from typing import Dict, List
 
 from flask import Flask, jsonify, request
+import setproctitle
 from skylark.utils import logger
 from skylark.chunk import ChunkRequest, ChunkState
 from skylark.gateway.chunk_store import ChunkStore
@@ -38,9 +42,15 @@ class GatewayDaemonAPI(threading.Thread):
         self.register_request_routes()
 
         # make server
+        self.host = host
+        self.port = port
+        self.url = "http://{}:{}".format(host, port)
+
+        # chunk status log
+        self.chunk_status_log: List[Dict] = []
+        self.chunk_status_log_lock = threading.Lock()
         logging.getLogger("werkzeug").setLevel(logging.WARNING)
         self.server = make_server(host, port, self.app, threaded=True)
-        self.url = "http://{}:{}".format(host, port)
 
     def run(self):
         self.server.serve_forever()
@@ -107,7 +117,7 @@ class GatewayDaemonAPI(threading.Thread):
             state_name = state.name if state is not None else "unknown"
             return {"req": chunk_req.as_dict(), "state": state_name}
 
-        def get_chunk_reqs(state=None):
+        def get_chunk_reqs(state=None) -> Dict[int, Dict]:
             out = {}
             for chunk_req in self.chunk_store.get_chunk_requests(state):
                 out[chunk_req.chunk.chunk_id] = make_chunk_req_payload(chunk_req)
@@ -136,6 +146,10 @@ class GatewayDaemonAPI(threading.Thread):
                 return jsonify({"chunk_requests": get_chunk_reqs(state)})
             else:
                 return jsonify({"chunk_requests": get_chunk_reqs()})
+
+        @self.app.route("/api/v1/incomplete_chunk_requests", methods=["GET"])
+        def get_incomplete_chunk_requests():
+            return jsonify({"chunk_requests": {k: v for k, v in get_chunk_reqs().items() if v["state"] != "upload_complete"}})
 
         # lookup chunk request given chunk worker_id
         @self.app.route("/api/v1/chunk_requests/<int:chunk_id>", methods=["GET"])
@@ -173,8 +187,6 @@ class GatewayDaemonAPI(threading.Thread):
         # list chunk status log
         @self.app.route("/api/v1/chunk_status_log", methods=["GET"])
         def get_chunk_status_log():
-            log = self.chunk_store.get_chunk_status_log()
-            for entry in log:
-                entry["time"] = entry["time"].isoformat()
-                entry["state"] = entry["state"].name
-            return jsonify({"chunk_status_log": log})
+            with self.chunk_status_log_lock:
+                self.chunk_status_log.extend(self.chunk_store.drain_chunk_status_queue())
+                return jsonify({"chunk_status_log": self.chunk_status_log})
