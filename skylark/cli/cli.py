@@ -197,7 +197,7 @@ def replicate_json(
     use_random_data: bool = False,
     source_bucket: str = typer.Option(None, "--source-bucket", help="Source bucket url"),
     dest_bucket: str = typer.Option(None, "--dest-bucket", help="Destination bucket url"),
-    key_prefix: str = "/test/replicate_random",
+    key_prefix: str = "/",
     # gateway provisioning options
     reuse_gateways: bool = True,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),

@@ -50,21 +50,6 @@ class ReplicatorClient:
         self.gcp = GCPCloudProvider(gcp_project) if gcp_instance_class != "None" and gcp_project is not None else None
         self.bound_nodes: Dict[ReplicationTopologyGateway, Server] = {}
 
-        # init clouds
-        jobs = []
-        if self.aws is not None:
-            for r in self.aws.region_list():
-                jobs.append(partial(self.aws.add_ip_to_security_group, r))
-        if self.azure is not None:
-            jobs.append(self.azure.create_ssh_key)
-            jobs.append(self.azure.set_up_resource_group)
-        if self.gcp is not None:
-            jobs.append(self.gcp.create_ssh_key)
-            jobs.append(self.gcp.configure_default_network)
-            jobs.append(self.gcp.configure_default_firewall)
-        with Timer(f"Cloud SSH key initialization"):
-            do_parallel(lambda fn: fn(), jobs)
-
     def provision_gateways(
         self, reuse_instances=False, log_dir: Optional[PathLike] = None, authorize_ssh_pub_key: Optional[PathLike] = None
     ):
@@ -76,6 +61,20 @@ class ReplicatorClient:
         assert len(aws_regions_to_provision) == 0 or self.aws is not None, "AWS not enabled"
         assert len(azure_regions_to_provision) == 0 or self.azure is not None, "Azure not enabled"
         assert len(gcp_regions_to_provision) == 0 or self.gcp is not None, "GCP not enabled"
+
+        # init clouds
+        jobs = []
+        for r in set(aws_regions_to_provision):
+            jobs.append(partial(self.aws.add_ip_to_security_group, r.split(":")[1]))
+        if azure_regions_to_provision:
+            jobs.append(self.azure.create_ssh_key)
+            jobs.append(self.azure.set_up_resource_group)
+        if gcp_regions_to_provision:
+            jobs.append(self.gcp.create_ssh_key)
+            jobs.append(self.gcp.configure_default_network)
+            jobs.append(self.gcp.configure_default_firewall)
+        with Timer(f"Cloud SSH key initialization"):
+            do_parallel(lambda fn: fn(), jobs)
 
         # reuse existing AWS instances
         if reuse_instances:
