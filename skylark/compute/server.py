@@ -1,7 +1,6 @@
 import json
 import os
 import subprocess
-import threading
 from enum import Enum, auto
 from pathlib import Path
 from typing import Dict
@@ -13,6 +12,8 @@ from skylark.utils.utils import PathLike, Timer, retry_backoff, wait_for
 
 import configparser
 import os
+
+from skylark import config_file
 
 
 class ServerState(Enum):
@@ -67,8 +68,6 @@ class ServerState(Enum):
 class Server:
     """Abstract server class to support basic SSH operations"""
 
-    ns = threading.local()
-
     def __init__(self, region_tag, log_dir=None):
         self.region_tag = region_tag  # format provider:region
         self.command_log = []
@@ -96,10 +95,10 @@ class Server:
 
     @property
     def ssh_client(self):
-        """Create SSH client and cache (one connection per thread using threadlocal)"""
-        if not hasattr(self, "client"):
-            self.client = self.get_ssh_client_impl()
-        return self.client
+        """Create SSH client and cache."""
+        if not hasattr(self, "_ssh_client"):
+            self._ssh_client = self.get_ssh_client_impl()
+        return self._ssh_client
 
     @property
     def provider(self) -> str:
@@ -151,9 +150,6 @@ class Server:
         wait_for(is_up, timeout=timeout, interval=interval, desc=f"Waiting for {self.uuid()} to be ready")
 
     def close_server(self):
-        if hasattr(self.ns, "client"):
-            self.ns.client.close()
-            del self.ns.client
         self.flush_command_log()
 
     def flush_command_log(self):
@@ -255,9 +251,12 @@ class Server:
 
         try:
             wait_for(is_ready, timeout=10, interval=0.1, desc=f"Waiting for gateway {self.uuid()} to start", leave_pbar=False)
-        except Exception as e:
+        except TimeoutError as e:
             logger.error(f"Gateway {self.instance_name()} is not ready {e}")
             logger.warning(desc_prefix + " gateway launch command: " + docker_launch_cmd)
             logs, err = self.run_command(f"sudo docker logs skylark_gateway --tail=100")
             logger.error(f"Docker logs: {logs}\nerr: {err}")
+
+            out, err = self.run_command(docker_launch_cmd.replace(" -d ", " "))
+            logger.error(f"Relaunching gateway in foreground\nout: {out}\nerr: {err}")
             raise e

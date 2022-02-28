@@ -16,6 +16,8 @@ from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.resource import ResourceManagementClient
 
+from skylark.utils.utils import do_parallel
+
 
 class AzureCloudProvider(CloudProvider):
     def __init__(self, azure_subscription, key_root=key_root / "azure", read_credential=True):
@@ -296,15 +298,19 @@ class AzureCloudProvider(CloudProvider):
             # Take this moment to search for orphaned resources and clean them up...
             network_client = NetworkManagementClient(credential, self.subscription_id)
             if clean_up_orphans:
-                logger.info("Searching for orphaned Azure resources...")
+                instances_to_terminate = []
                 for vnet in network_client.virtual_networks.list(AzureServer.resource_group_name):
                     if vnet.tags.get("skylark", None) == "true" and AzureServer.is_valid_vnet_name(vnet.name):
                         name = AzureServer.base_name_from_vnet_name(vnet.name)
                         s = AzureServer(self.subscription_id, name, assume_exists=False)
                         if not s.is_valid():
                             logger.warning(f"Cleaning up orphaned Azure resources for {name}...")
-                            s.terminate_instance_impl()
-                logger.info("Done cleaning up orphaned Azure resources")
+                            instances_to_terminate.append(s)
+
+                if len(instances_to_terminate) > 0:
+                    logger.info(f"Cleaning up {len(instances_to_terminate)} orphaned Azure resources...")
+                    do_parallel(lambda i: i.terminate_instance_impl(), instances_to_terminate)
+                    logger.info("Done cleaning up orphaned Azure resources")
             return
         rg_result = resource_client.resource_groups.create_or_update(
             AzureServer.resource_group_name, {"location": AzureServer.resource_group_location, "tags": {"skylark": "true"}}

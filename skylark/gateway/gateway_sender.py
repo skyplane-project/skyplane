@@ -105,7 +105,7 @@ class GatewaySender:
         # contact server to set up socket connection
         if self.destination_ports.get(dst_host) is None:
             response = requests.post(f"http://{dst_host}:8080/api/v1/servers")
-            assert response.status_code == 200
+            assert response.status_code == 200, f"{response.status_code} {response.text}"
             self.destination_ports[dst_host] = int(response.json()["server_port"])
             self.destination_sockets[dst_host] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.destination_sockets[dst_host].connect((dst_host, self.destination_ports[dst_host]))
