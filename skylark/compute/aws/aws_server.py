@@ -1,5 +1,4 @@
 import os
-import threading
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -16,8 +15,6 @@ from skylark.utils.cache import ignore_lru_cache
 class AWSServer(Server):
     """AWS Server class to support basic SSH operations"""
 
-    ns = threading.local()
-
     def __init__(self, region_tag, instance_id, log_dir=None):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "aws"
@@ -31,11 +28,7 @@ class AWSServer(Server):
 
     @classmethod
     def get_boto3_session(cls, aws_region) -> boto3.Session:
-        # cache in thead-local storage
-        key = f"{aws_region}_boto3_session"
-        if not hasattr(cls.ns, key):
-            setattr(cls.ns, key, boto3.Session(region_name=aws_region))
-        return getattr(cls.ns, key)
+        return boto3.Session(region_name=aws_region)
 
     @classmethod
     def get_boto3_resource(cls, service_name, aws_region=None):

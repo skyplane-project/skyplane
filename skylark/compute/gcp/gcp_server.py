@@ -37,10 +37,7 @@ class GCPServer(Server):
 
     @classmethod
     def get_gcp_client(cls, service_name="compute", version="v1"):
-        ns_key = f"gcp_{service_name}_v{version}"
-        if not hasattr(cls.ns, ns_key):
-            setattr(cls.ns, ns_key, googleapiclient.discovery.build("compute", "v1"))
-        return getattr(cls.ns, ns_key)
+        return googleapiclient.discovery.build(service_name, version)
 
     @staticmethod
     def gcp_instances(gcp_project, gcp_region):

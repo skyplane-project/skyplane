@@ -317,7 +317,7 @@ class ReplicatorClient:
         sinks = self.topology.sink_instances()
         sink_regions = set(s.region for s in sinks)
 
-        def write_profile_fn():
+        def shutdown_handler():
             if write_profile:
                 traceevent = status_df_to_traceevent(self.get_chunk_status_log_df())
                 tmp_log_dir.mkdir(exist_ok=True)
@@ -326,20 +326,15 @@ class ReplicatorClient:
                     json.dump(traceevent, f)
                 logger.debug(f"Wrote profile to {profile_out}, visualize using `about://tracing` in Chrome")
 
+            def fn(s: Server):
+                try:
+                    requests.post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
+                except:
+                    return  # ignore connection errors since server may be shutting down
+
+            do_parallel(fn, self.bound_nodes.values(), n=-1)
+
         if cancel_pending:
-            # register atexit handler to cancel pending chunk requests (force shutdown gateways)
-            def shutdown_handler():
-                def fn(s: Server):
-                    logger.warning(f"Cancelling pending chunk requests to {s.public_ip()}")
-                    try:
-                        requests.post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
-                    except requests.exceptions.ConnectionError as e:
-                        return  # ignore connection errors since server may be shutting down
-
-                write_profile_fn()
-                do_parallel(fn, self.bound_nodes.values(), n=-1)
-                logger.warning("Cancelled pending chunk requests")
-
             atexit.register(shutdown_handler)
 
         with Timer() as t:
@@ -373,7 +368,7 @@ class ReplicatorClient:
                     ):
                         if cancel_pending:
                             atexit.unregister(shutdown_handler)
-                        write_profile_fn()
+                        shutdown_handler()
                         return dict(
                             completed_chunk_ids=completed_chunk_ids,
                             total_runtime_s=total_runtime_s,

@@ -183,8 +183,6 @@ def replicate_random(
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
     stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
     stats["success"] = stats["monitor_status"] == "completed"
-    stats["log"] = rc.get_chunk_status_log_df()
-
     out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
     typer.echo(f"\n{json.dumps(out_json)}")
     return 0 if stats["success"] else 1
@@ -287,8 +285,6 @@ def replicate_json(
         job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds, cancel_pending=False
     )
     stats["success"] = stats["monitor_status"] == "completed"
-    stats["log"] = rc.get_chunk_status_log_df()
-
     out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
     typer.echo(f"\n{json.dumps(out_json)}")
     return 0 if stats["success"] else 1
