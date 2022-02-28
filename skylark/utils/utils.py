@@ -44,7 +44,7 @@ def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, progress_bar=Fal
                 return True
             pbar.update(interval)
             time.sleep(interval)
-        raise Exception(f"Timeout waiting for {desc}")
+        raise TimeoutError(f"Timeout waiting for {desc}")
 
 
 def do_parallel(
