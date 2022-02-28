@@ -15,7 +15,6 @@ from skylark.gateway.gateway_receiver import GatewayReceiver
 from werkzeug.serving import make_server
 
 
-class GatewayDaemonAPI:
 class GatewayDaemonAPI(threading.Thread):
     """
     API documentation:
