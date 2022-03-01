@@ -215,20 +215,10 @@ class Server:
         # TODO: Integrate this with updated skylark config file
         # copy config file
         config = config_file.read_text()[:-2] + "}"
-        config = json.dumps(config) # Convert to JSON string and remove trailing comma/new-line
-        self.run_command(f"mkdir -p /opt; echo \"{config}\" | sudo tee /opt/{config_file.name} > /dev/null")
+        config = json.dumps(config)  # Convert to JSON string and remove trailing comma/new-line
+        self.run_command(f'mkdir -p /opt; echo "{config}" | sudo tee /opt/{config_file.name} > /dev/null')
 
-
-        docker_envs = ""
-        try:
-            config = configparser.RawConfigParser()
-            config.read(os.path.expanduser("~/.aws/credentials"))
-            aws_access_key_id = config.get("default", "aws_access_key_id")
-            aws_secret_access_key = config.get("default", "aws_secret_access_key")
-            docker_envs += f" -e AWS_ACCESS_KEY_ID='{aws_access_key_id}'"
-            docker_envs += f" -e AWS_SECRET_ACCESS_KEY='{aws_secret_access_key}'"
-        except Exception as e:
-            logger.error(f"Failed to read AWS credentials locally {e}")
+        docker_envs = ""  # If needed, add environment variables to docker command
 
         with Timer(f"{desc_prefix}: Docker pull"):
             docker_out, docker_err = self.run_command(f"sudo docker pull {gateway_docker_image}")
