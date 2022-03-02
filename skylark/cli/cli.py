@@ -113,7 +113,7 @@ def replicate_random(
     ),
     total_transfer_size_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB."),
     chunk_size_mb: int = typer.Option(8, "--chunk-size-mb", help="Chunk size in MB."),
-    reuse_gateways: bool = True,
+    reuse_gateways: bool = False,
     azure_subscription: Optional[str] = None,
     gcp_project: Optional[str] = None,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
@@ -199,7 +199,7 @@ def replicate_json(
     dest_bucket: str = typer.Option(None, "--dest-bucket", help="Destination bucket url"),
     key_prefix: str = "/",
     # gateway provisioning options
-    reuse_gateways: bool = True,
+    reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
     # cloud provider specific options
     azure_subscription: Optional[str] = None,
