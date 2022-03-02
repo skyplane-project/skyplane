@@ -309,6 +309,7 @@ class ReplicatorClient:
         time_limit_seconds: Optional[float] = None,
         cancel_pending: bool = True,
         write_profile: bool = True,
+        copy_gateway_logs: bool = True,
     ) -> Dict:
         assert job.chunk_requests is not None
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in job.chunk_requests])
@@ -318,12 +319,19 @@ class ReplicatorClient:
         sink_regions = set(s.region for s in sinks)
 
         def shutdown_handler():
+            transfer_dir = tmp_log_dir / f"transfer_{datetime.now().isoformat()}"
+            transfer_dir.mkdir(exist_ok=True, parents=True)
+            if copy_gateway_logs:
+                for instance in self.bound_nodes.values():
+                    stdout, stderr = instance.run_command("sudo docker logs -t skylark_gateway")
+                    log_out = transfer_dir / f"gateway_{instance.uuid()}.log"
+                    log_out.write_text(stdout + "\n" + stderr)
+                logger.debug(f"Wrote gateway logs to {transfer_dir}")
             if write_profile:
                 traceevent = status_df_to_traceevent(self.get_chunk_status_log_df())
-                tmp_log_dir.mkdir(exist_ok=True)
-                profile_out = tmp_log_dir / f"traceevent_{uuid.uuid4()}.json"
-                with open(profile_out, "w") as f:
-                    json.dump(traceevent, f)
+                profile_out = transfer_dir / f"traceevent_{uuid.uuid4()}.json"
+                profile_out.parent.mkdir(parents=True, exist_ok=True)
+                profile_out.write_text(json.dumps(traceevent))
                 logger.debug(f"Wrote profile to {profile_out}, visualize using `about://tracing` in Chrome")
 
             def fn(s: Server):
