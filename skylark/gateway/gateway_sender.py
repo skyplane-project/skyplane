@@ -1,5 +1,6 @@
 import queue
 import socket
+import ssl
 from multiprocessing import Event, Manager, Process, Value
 from typing import Dict, List, Optional
 
@@ -13,11 +14,20 @@ from skylark.utils.utils import Timer, retry_backoff, wait_for
 
 
 class GatewaySender:
-    def __init__(self, chunk_store: ChunkStore, outgoing_ports: Dict[str, int]):
+    def __init__(self, chunk_store: ChunkStore, outgoing_ports: Dict[str, int], use_tls: bool = True):
         self.chunk_store = chunk_store
         self.outgoing_ports = outgoing_ports
         self.n_processes = sum(outgoing_ports.values())
         self.processes = []
+
+        # SSL context
+        if use_tls:
+            self.ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+            self.ssl_context.check_hostname = False
+            self.ssl_context.verify_mode = ssl.CERT_NONE
+            logger.info(f"Using {str(ssl.OPENSSL_VERSION)}")
+        else:
+            self.ssl_context = None
 
         # shared state
         self.manager = Manager()
@@ -107,9 +117,13 @@ class GatewaySender:
             response = requests.post(f"http://{dst_host}:8080/api/v1/servers")
             assert response.status_code == 200, f"{response.status_code} {response.text}"
             self.destination_ports[dst_host] = int(response.json()["server_port"])
-            self.destination_sockets[dst_host] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.destination_sockets[dst_host].connect((dst_host, self.destination_ports[dst_host]))
-            self.destination_sockets[dst_host].setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect((dst_host, self.destination_ports[dst_host]))
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            if self.ssl_context is not None:
+                self.destination_sockets[dst_host] = self.ssl_context.wrap_socket(sock)
+            else:
+                self.destination_sockets[dst_host] = sock
             logger.info(f"[sender:{self.worker_id}] started new server connection to {dst_host}:{self.destination_ports[dst_host]}")
         sock = self.destination_sockets[dst_host]
 
