@@ -8,7 +8,7 @@ def status_df_to_traceevent(log_df) -> List[Dict]:
     log_df = log_df[log_df["state"].isin(valid_states)]
     start_time = log_df.time.min()
     for _, row in log_df.iterrows():
-        if row["receiver_id"] == "random":
+        if "receiver_id" in row and row["receiver_id"] == "random":
             continue
         if row["state"] == ChunkState.download_in_progress:
             events.append(
