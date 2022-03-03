@@ -302,7 +302,7 @@ def deprovision(azure_subscription: Optional[str] = None, gcp_project: Optional[
 
 @app.command()
 def init(
-    azure_tenant_id: str = typer.Option(None, envvar="AZURE_TENANT_ID", prompt="`Azure tenant ID"),
+    azure_tenant_id: str = typer.Option(None, envvar="AZURE_TENANT_ID", prompt="Azure tenant ID"),
     azure_client_id: str = typer.Option(None, envvar="AZURE_CLIENT_ID", prompt="Azure client ID"),
     azure_client_secret: str = typer.Option(None, envvar="AZURE_CLIENT_SECRET", prompt="Azure client secret"),
     azure_subscription_id: str = typer.Option(None, envvar="AZURE_SUBSCRIPTION_ID", prompt="Azure subscription ID"),
@@ -318,8 +318,6 @@ def init(
     gcp_project: str = typer.Option(None, envvar="GCP_PROJECT_ID", prompt="GCP project ID"),
 ):
     out_config = {}
-    if config_file.exists():
-        typer.confirm("Config file already exists. Overwrite?", abort=True)
 
     # AWS config
     def load_aws_credentials():
@@ -345,6 +343,10 @@ def init(
     if aws_secret_key is None:
         aws_secret_key = typer.prompt("AWS secret key")
         assert aws_secret_key is not None and aws_secret_key != ""
+
+    if config_file.exists():
+        typer.confirm("Config file already exists. Overwrite?", abort=True)
+
     out_config["aws_access_key_id"] = aws_access_key
     out_config["aws_secret_access_key"] = aws_secret_key
 
