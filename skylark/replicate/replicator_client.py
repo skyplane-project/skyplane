@@ -3,6 +3,7 @@ from datetime import datetime
 import itertools
 from functools import partial
 import json
+import pickle
 import time
 from typing import Dict, List, Optional, Tuple
 import uuid
@@ -308,7 +309,9 @@ class ReplicatorClient:
         log_interval_s: Optional[float] = None,
         time_limit_seconds: Optional[float] = None,
         cancel_pending: bool = True,
+        save_log: bool = True,
         write_profile: bool = True,
+        copy_gateway_logs: bool = True,
     ) -> Dict:
         assert job.chunk_requests is not None
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in job.chunk_requests])
@@ -318,12 +321,23 @@ class ReplicatorClient:
         sink_regions = set(s.region for s in sinks)
 
         def shutdown_handler():
+            transfer_dir = tmp_log_dir / f"transfer_{datetime.now().isoformat()}"
+            transfer_dir.mkdir(exist_ok=True, parents=True)
+            if save_log:
+                (transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
+            if copy_gateway_logs:
+                for instance in self.bound_nodes.values():
+                    stdout, stderr = instance.run_command("sudo docker logs -t skylark_gateway")
+                    log_out = transfer_dir / f"gateway_{instance.uuid()}.log"
+                    log_out.write_text(stdout + "\n" + stderr)
+                logger.debug(f"Wrote gateway logs to {transfer_dir}")
             if write_profile:
-                traceevent = status_df_to_traceevent(self.get_chunk_status_log_df())
-                tmp_log_dir.mkdir(exist_ok=True)
-                profile_out = tmp_log_dir / f"traceevent_{uuid.uuid4()}.json"
-                with open(profile_out, "w") as f:
-                    json.dump(traceevent, f)
+                chunk_status_df = self.get_chunk_status_log_df()
+                (transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
+                traceevent = status_df_to_traceevent(chunk_status_df)
+                profile_out = transfer_dir / f"traceevent_{uuid.uuid4()}.json"
+                profile_out.parent.mkdir(parents=True, exist_ok=True)
+                profile_out.write_text(json.dumps(traceevent))
                 logger.debug(f"Wrote profile to {profile_out}, visualize using `about://tracing` in Chrome")
 
             def fn(s: Server):

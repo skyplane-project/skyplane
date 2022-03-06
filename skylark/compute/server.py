@@ -4,8 +4,8 @@ import subprocess
 from enum import Enum, auto
 from pathlib import Path
 from typing import Dict
-
 import requests
+from skylark import config_file
 from skylark.utils import logger
 from skylark.compute.utils import make_dozzle_command, make_sysctl_tcp_tuning_command
 from skylark.utils.utils import PathLike, Timer, retry_backoff, wait_for
@@ -209,16 +209,12 @@ class Server:
 
         # read AWS config file to get credentials
         # TODO: Integrate this with updated skylark config file
-        docker_envs = ""
-        try:
-            config = configparser.RawConfigParser()
-            config.read(os.path.expanduser("~/.aws/credentials"))
-            aws_access_key_id = config.get("default", "aws_access_key_id")
-            aws_secret_access_key = config.get("default", "aws_secret_access_key")
-            docker_envs += f" -e AWS_ACCESS_KEY_ID='{aws_access_key_id}'"
-            docker_envs += f" -e AWS_SECRET_ACCESS_KEY='{aws_secret_access_key}'"
-        except Exception as e:
-            logger.error(f"Failed to read AWS credentials locally {e}")
+        # copy config file
+        config = config_file.read_text()[:-2] + "}"
+        config = json.dumps(config)  # Convert to JSON string and remove trailing comma/new-line
+        self.run_command(f'mkdir -p /opt; echo "{config}" | sudo tee /opt/{config_file.name} > /dev/null')
+
+        docker_envs = ""  # If needed, add environment variables to docker command
 
         with Timer(f"{desc_prefix}: Docker pull"):
             docker_out, docker_err = self.run_command(f"sudo docker pull {gateway_docker_image}")
@@ -228,6 +224,7 @@ class Server:
             f"-d --rm --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024} {docker_envs}"
         )
         docker_run_flags += " --mount type=tmpfs,dst=/skylark,tmpfs-size=$(($(free -b  | head -n2 | tail -n1 | awk '{print $2}')/2))"
+        docker_run_flags += f" -v /opt/{config_file.name}:/pkg/data/{config_file.name}"
         gateway_daemon_cmd = f"python -u /pkg/skylark/gateway/gateway_daemon.py --chunk-dir /skylark/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = self.run_command(docker_launch_cmd)

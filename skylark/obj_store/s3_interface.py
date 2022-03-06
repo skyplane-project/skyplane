@@ -10,6 +10,7 @@ from awscrt.io import ClientBootstrap, DefaultHostResolver, EventLoopGroup
 from awscrt.s3 import S3Client, S3RequestTlsMode, S3RequestType
 
 from skylark.compute.aws.aws_server import AWSServer
+from skylark.config import load_config
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
 
@@ -33,10 +34,10 @@ class S3Interface(ObjectStoreInterface):
         event_loop_group = EventLoopGroup(num_threads=num_threads, cpu_group=None)
         host_resolver = DefaultHostResolver(event_loop_group)
         bootstrap = ClientBootstrap(event_loop_group, host_resolver)
-
-        # get aws auth info for docker envs
-        aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID", None)
-        aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY", None)
+        # Authenticate
+        config = load_config()
+        aws_access_key_id = config["aws_access_key_id"]
+        aws_secret_access_key = config["aws_secret_access_key"]
         if aws_access_key_id and aws_secret_access_key:
             credential_provider = AwsCredentialsProvider.new_static(aws_access_key_id, aws_secret_access_key)
         else:  # use default

@@ -1,3 +1,7 @@
+#!/bin/bash
+
+set -xe
+
 #src="aws:us-east-1"
 #dest="aws:us-west-1"
 

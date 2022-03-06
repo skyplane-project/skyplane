@@ -8,7 +8,8 @@ from multiprocessing import Pool
 from concurrent.futures import wait
 
 import ctypes
-libgcc_s = ctypes.CDLL('libgcc_s.so.1')
+
+libgcc_s = ctypes.CDLL("libgcc_s.so.1")
 
 
 def parse_args():
@@ -32,10 +33,12 @@ def parse_args():
 
     return args
 
+
 def upload(region, bucket, path, key):
     obj_store = ObjectStoreInterface.create(region, bucket)
-    # TODO: make sure is actually same file 
-    if obj_store.exists(key): return 0
+    # TODO: make sure is actually same file
+    if obj_store.exists(key):
+        return 0
     obj_store.upload_object(path, key).result()
     return 1
 
@@ -55,41 +58,31 @@ def main(args):
     print("running upload... (note: may need to chunk)")
 
     ## TODO: chunkify
-    #p = Pool(16)
-    #uploaded = p.starmap(upload, [(args.src_region, src_bucket, os.path.join(args.src_data_path, f), f"{args.key_prefix}/{f}") for f in os.listdir(args.src_data_path)])
-    #p.close()
-    #print(f"uploaded {sum(uploaded)} files to {src_bucket}")
+    # p = Pool(16)
+    # uploaded = p.starmap(upload, [(args.src_region, src_bucket, os.path.join(args.src_data_path, f), f"{args.key_prefix}/{f}") for f in os.listdir(args.src_data_path)])
+    # p.close()
+    # print(f"uploaded {sum(uploaded)} files to {src_bucket}")
 
     futures = []
     for f in tqdm(os.listdir(args.src_data_path)):
-        futures.append(
-            obj_store_interface_src.upload_object(os.path.join(args.src_data_path, f), f"{args.key_prefix}/{f}")
-        )
-        if len(futures) > 500: # wait, or else awscrt errors
+        futures.append(obj_store_interface_src.upload_object(os.path.join(args.src_data_path, f), f"{args.key_prefix}/{f}"))
+        if len(futures) > 500:  # wait, or else awscrt errors
             print("waiting for completion")
-            wait(futures) 
+            wait(futures)
             futures = []
 
-
     ### check files
-    #for f in tqdm(os.listdir(args.src_data_path)):
+    # for f in tqdm(os.listdir(args.src_data_path)):
     #    assert obj_store_interface_src.exists(f"{args.key_prefix}/{f}")
 
-    def done_uploading(): 
+    def done_uploading():
         bucket_size = len(list(obj_store_interface_src.list_objects(prefix=args.key_prefix)))
-        #f"Length mismatch {len(os.listdir(args.src_data_path))}, {bucket_size}"
+        # f"Length mismatch {len(os.listdir(args.src_data_path))}, {bucket_size}"
         print("bucket", bucket_size, len(os.listdir(args.src_data_path)))
         return len(os.listdir(args.src_data_path)) == bucket_size
 
     ##wait_for(done_uploading, timeout=60, interval=0.1, desc=f"Waiting for files to upload")
 
-    
-
-
-
-
-
 
 if __name__ == "__main__":
     main(parse_args())
- 
