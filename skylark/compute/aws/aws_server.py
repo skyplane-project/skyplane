@@ -62,7 +62,7 @@ class AWSServer(Server):
                 if key_name in keys_in_region:
                     logger.warning(f"Deleting key {key_name} in region {aws_region}")
                     ec2_client.delete_key_pair(KeyName=key_name)
-                key_pair = ec2.create_key_pair(KeyName=f"skylark-{aws_region}", KeyType='rsa')
+                key_pair = ec2.create_key_pair(KeyName=f"skylark-{aws_region}", KeyType="rsa")
                 with local_key_file.open("w") as f:
                     key_str = key_pair.key_material
                     if not key_str.endswith("\n"):
