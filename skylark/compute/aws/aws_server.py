@@ -62,15 +62,18 @@ class AWSServer(Server):
                 if key_name in keys_in_region:
                     logger.warning(f"Deleting key {key_name} in region {aws_region}")
                     ec2_client.delete_key_pair(KeyName=key_name)
-                key_pair = ec2.create_key_pair(KeyName=f"skylark-{aws_region}")
+                key_pair = ec2.create_key_pair(KeyName=f"skylark-{aws_region}", KeyType='rsa')
                 with local_key_file.open("w") as f:
-                    f.write(key_pair.key_material)
+                    key_str = key_pair.key_material
+                    if not key_str.endswith("\n"):
+                        key_str += "\n"
+                    f.write(key_str)
                     f.flush()  # sometimes generates keys with zero bytes, so we flush to ensure it's written
                 os.chmod(local_key_file, 0o600)
+                logger.info(f"Created key file {local_key_file}")
 
         if not local_key_file.exists():
             create_keyfile()
-            logger.info(f"Created key file {local_key_file}")
         return local_key_file
 
     @ignore_lru_cache()
@@ -113,7 +116,7 @@ class AWSServer(Server):
         client.connect(
             self.public_ip(),
             username="ec2-user",
-            key_filename=str(self.local_keyfile),
+            pkey=paramiko.RSAKey.from_private_key_file(self.local_keyfile),
             look_for_keys=False,
             allow_agent=False,
             banner_timeout=200,
