@@ -75,7 +75,12 @@ class AWSCloudProvider(CloudProvider):
         ec2 = AWSServer.get_boto3_resource("ec2", region)
         valid_states = ["pending", "running", "stopped", "stopping"]
         instances = ec2.instances.filter(Filters=[{"Name": "instance-state-name", "Values": valid_states}])
-        instance_ids = [i.id for i in instances]
+        try:
+            instance_ids = [i.id for i in instances]
+        except botocore.exceptions.ClientError as e:
+            logger.error(f"error provisioning in {region}: {e}")
+            return []
+
         return [AWSServer(f"aws:{region}", i) for i in instance_ids]
 
     def get_security_group(self, region: str, vpc_name="skylark", sg_name="skylark"):
