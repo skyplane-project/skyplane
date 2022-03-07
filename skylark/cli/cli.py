@@ -190,13 +190,6 @@ def replicate_random(
     typer.echo(f"\n{json.dumps(out_json)}")
     return 0 if stats["success"] else 1
 
-#def get_size_data(conn):
-
-
-def provision_gateways(conn):
-    rc, reuse_gateways = conn.recv()
-    rc.provision_gateways(reuse_gateways)
-
 
 def query_object_store(conn):
     topo, source_bucket, key_prefix = conn.recv()
@@ -257,28 +250,13 @@ def replicate_json(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
         )
     
-    import time
-    start = time.time()
-    
     if not use_random_data:
         parent_conn, child_conn = multiprocessing.Pipe()
         query_process = multiprocessing.Process(target=query_object_store, args=(child_conn,))#Process(target=query_object_store, args=(
         parent_conn.send([topo, source_bucket, key_prefix])
         query_process.start()
-    
 
-    provision_start = time.time()
     rc.provision_gateways(reuse_gateways)
-    #prov_process = multiprocessing.Process(target=provision_gateways, args=(rc, reuse_gateways))
-    provision_end = time.time()
-    print("BENCHMARKING provision time: " + str(provision_end - provision_start))
-
-    #parent_conn, child_conn = multiprocessing.Pipe()
-    #prov_process = multiprocessing.Process(target=provision_gateways, args=(child_conn,))
-    #parent_conn.send([rc, reuse_gateways])
-    #provision_gateways(rc, reuse_gateways)
-    #prov_process.start()
-    #prov_process.join()
     for node, gw in rc.bound_nodes.items():
         logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
 
@@ -304,17 +282,6 @@ def replicate_json(
         # get object keys with prefix
         query_process.join()
         obj_keys = parent_conn.recv()
-        start_query = time.time()
-
-        #objs = ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(key_prefix)
-        #obj_keys = list([obj.key for obj in objs])
-        end_query = time.time()
-        print("BENCHMARKING query time: " + str(end_query - start_query)) 
-
-        end = time.time()
-        print("BENCHMARKING E2E: " + str(end - start))
-        #objs = ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(key_prefix)
-        #obj_keys = list([obj.key for obj in objs])
 
         # create replication job
         job = ReplicationJob(
