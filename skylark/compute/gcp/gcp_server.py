@@ -96,16 +96,19 @@ class GCPServer(Server):
         compute = self.get_gcp_client()
         compute.instances().delete(project=self.gcp_project, zone=self.gcp_region, instance=self.instance_name()).execute()
 
-    def get_ssh_client_impl(self, uname=os.environ.get("USER"), ssh_key_password="skylark"):
+    def get_ssh_client_impl(self, uname="skylark", ssh_key_password="skylark"):
         """Return paramiko client that connects to this instance."""
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh_client.connect(
             hostname=self.public_ip(),
             username=uname,
-            key_filename=str(self.ssh_private_key),
-            passphrase=ssh_key_password,
+            pkey=paramiko.RSAKey.from_private_key_file(str(self.ssh_private_key), password=ssh_key_password),
             look_for_keys=False,
             banner_timeout=200,
         )
         return ssh_client
+
+    def get_ssh_cmd(self, uname="skylark", ssh_key_password="skylark"):
+        # todo can we include the key password inline?
+        return f"ssh -i {self.ssh_private_key} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no {uname}@{self.public_ip()}"

@@ -247,7 +247,7 @@ class GCPCloudProvider(CloudProvider):
             time.sleep(time_intervals.pop(0))
 
     def provision_instance(
-        self, region, instance_class, name=None, premium_network=False, uname=os.environ.get("USER"), tags={"skylark": "true"}
+        self, region, instance_class, name=None, premium_network=False, uname="skylark", tags={"skylark": "true"}
     ) -> GCPServer:
         assert not region.startswith("gcp:"), "Region should be GCP region"
         if name is None:
