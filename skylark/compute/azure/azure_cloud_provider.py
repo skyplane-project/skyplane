@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import paramiko
-from skylark.config import load_config
+from skylark.config import SkylarkConfig
 from skylark.utils import logger
 from skylark import key_root
 from skylark.compute.azure.azure_server import AzureServer
@@ -20,19 +20,13 @@ from skylark.utils.utils import do_parallel
 
 
 class AzureCloudProvider(CloudProvider):
-    def __init__(self, azure_subscription, key_root=key_root / "azure", read_credential=True):
+    def __init__(self, key_root=key_root / "azure"):
         super().__init__()
-        if read_credential:
-            config = load_config()
-            self.subscription_id = azure_subscription if azure_subscription is not None else config["azure_subscription_id"]
-            self.credential = ClientSecretCredential(
-                tenant_id=config["azure_tenant_id"],
-                client_id=config["azure_client_id"],
-                client_secret=config["azure_client_secret"],
-            )
-        else:
-            self.credential = DefaultAzureCredential()
-            self.subscription_id = azure_subscription
+        config = SkylarkConfig().load()
+        assert config.azure_enabled, "Azure cloud provider is not enabled in the config file."
+        self.credential = DefaultAzureCredential()
+        self.subscription_id = config.azure_subscription_id
+
         key_root.mkdir(parents=True, exist_ok=True)
         self.private_key_path = key_root / "azure_key"
         self.public_key_path = key_root / "azure_key.pub"
@@ -213,6 +207,7 @@ class AzureCloudProvider(CloudProvider):
         dst_provider, dst_region = dst_key.split(":")
         assert src_provider == "azure"
         if not premium_tier:
+            # TODO: tracked in https://github.com/parasj/skylark/issues/59
             return NotImplementedError()
 
         src_continent = AzureCloudProvider.lookup_continent(src_region)
@@ -271,7 +266,7 @@ class AzureCloudProvider(CloudProvider):
         for vm in compute_client.virtual_machines.list(AzureServer.resource_group_name):
             if vm.tags.get("skylark", None) == "true" and AzureServer.is_valid_vm_name(vm.name) and vm.location == region:
                 name = AzureServer.base_name_from_vm_name(vm.name)
-                s = AzureServer(self.subscription_id, name)
+                s = AzureServer(name)
                 if s.is_valid():
                     server_list.append(s)
                 else:
@@ -302,7 +297,7 @@ class AzureCloudProvider(CloudProvider):
                 for vnet in network_client.virtual_networks.list(AzureServer.resource_group_name):
                     if vnet.tags.get("skylark", None) == "true" and AzureServer.is_valid_vnet_name(vnet.name):
                         name = AzureServer.base_name_from_vnet_name(vnet.name)
-                        s = AzureServer(self.subscription_id, name, assume_exists=False)
+                        s = AzureServer(name, assume_exists=False)
                         if not s.is_valid():
                             logger.warning(f"Cleaning up orphaned Azure resources for {name}...")
                             instances_to_terminate.append(s)
@@ -445,4 +440,4 @@ class AzureCloudProvider(CloudProvider):
             )
             poller.result()
 
-        return AzureServer(self.subscription_id, name)
+        return AzureServer(name)

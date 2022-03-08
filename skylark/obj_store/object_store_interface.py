@@ -12,30 +12,30 @@ class ObjectStoreObject:
     last_modified: str
 
     def full_path(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
 
 class ObjectStoreInterface:
     def bucket_exists(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def create_bucket(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def delete_bucket(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def list_objects(self, prefix=""):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def get_obj_size(self, obj_name):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def download_object(self, src_object_name, dst_file_path):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def upload_object(self, src_file_path, dst_object_name, content_type="infer"):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @staticmethod
     def create(region_tag: str, bucket: str):

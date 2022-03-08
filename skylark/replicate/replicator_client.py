@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Tuple
 import uuid
 
 import requests
+from skylark.config import SkylarkConfig
 from skylark.replicate.profiler import status_df_to_traceevent
 from skylark.utils import logger
 from tqdm import tqdm
@@ -29,26 +30,24 @@ class ReplicatorClient:
     def __init__(
         self,
         topology: ReplicationTopology,
-        azure_subscription: Optional[str],
-        gcp_project: Optional[str],
         gateway_docker_image: str = "ghcr.io/parasj/skylark:latest",
         aws_instance_class: Optional[str] = "m5.4xlarge",  # set to None to disable AWS
         azure_instance_class: Optional[str] = "Standard_D2_v5",  # set to None to disable Azure
         gcp_instance_class: Optional[str] = "n2-standard-16",  # set to None to disable GCP
         gcp_use_premium_network: bool = True,
     ):
+        config = SkylarkConfig.load()
         self.topology = topology
         self.gateway_docker_image = gateway_docker_image
         self.aws_instance_class = aws_instance_class
         self.azure_instance_class = azure_instance_class
-        self.azure_subscription = azure_subscription
         self.gcp_instance_class = gcp_instance_class
         self.gcp_use_premium_network = gcp_use_premium_network
 
         # provisioning
-        self.aws = AWSCloudProvider() if aws_instance_class != "None" else None
-        self.azure = AzureCloudProvider(azure_subscription) if azure_instance_class != "None" and azure_subscription is not None else None
-        self.gcp = GCPCloudProvider(gcp_project) if gcp_instance_class != "None" and gcp_project is not None else None
+        self.aws = AWSCloudProvider() if aws_instance_class != "None" and config.aws_enabled else None
+        self.azure = AzureCloudProvider() if azure_instance_class != "None" and config.azure_enabled else None
+        self.gcp = GCPCloudProvider() if gcp_instance_class != "None" and config.gcp_enabled else None
         self.bound_nodes: Dict[ReplicationTopologyGateway, Server] = {}
 
     def provision_gateways(

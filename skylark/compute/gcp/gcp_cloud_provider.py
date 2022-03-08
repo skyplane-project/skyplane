@@ -6,6 +6,7 @@ from typing import List
 
 import googleapiclient
 import paramiko
+from skylark.config import SkylarkConfig
 from skylark.utils import logger
 
 from oslo_concurrency import lockutils
@@ -17,9 +18,11 @@ from skylark.compute.server import Server
 
 
 class GCPCloudProvider(CloudProvider):
-    def __init__(self, gcp_project, key_root=key_root / "gcp"):
+    def __init__(self, key_root=key_root / "gcp"):
         super().__init__()
-        self.gcp_project = gcp_project
+        config = SkylarkConfig.load()
+        assert config.gcp_enabled, "GCP is not enabled in the config"
+        self.gcp_project = config.gcp_project_id
         key_root.mkdir(parents=True, exist_ok=True)
         self.private_key_path = key_root / "gcp-cert.pem"
         self.public_key_path = key_root / "gcp-cert.pub"

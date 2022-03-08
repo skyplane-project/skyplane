@@ -63,11 +63,6 @@ def parse_args():
 
 
 def main(args):
-    config = load_config()
-    gcp_project = args.gcp_project or config.get("gcp_project_id")
-    azure_subscription = args.azure_subscription or config.get("azure_subscription_id")
-    logger.debug(f"Loaded gcp_project: {gcp_project}, azure_subscription: {azure_subscription}")
-
     src_bucket = f"{args.bucket_prefix}-skylark-{args.src_region.split(':')[1]}"
     dst_bucket = f"{args.bucket_prefix}-skylark-{args.dest_region.split(':')[1]}"
     obj_store_interface_src = ObjectStoreInterface.create(args.src_region, src_bucket)
@@ -133,8 +128,6 @@ def main(args):
     # Getting configs
     rc = ReplicatorClient(
         topo,
-        gcp_project=gcp_project,
-        azure_subscription=azure_subscription,
         gateway_docker_image=args.gateway_docker_image,
         aws_instance_class=args.aws_instance_class,
         azure_instance_class=args.azure_instance_class,

@@ -4,7 +4,7 @@ from typing import Optional
 
 import paramiko
 from skylark import key_root
-from skylark.config import load_config
+from skylark.config import SkylarkConfig, load_config
 from skylark.compute.server import Server, ServerState
 from skylark.utils.cache import ignore_lru_cache
 from skylark.utils.utils import PathLike
@@ -22,25 +22,16 @@ class AzureServer(Server):
 
     def __init__(
         self,
-        subscription_id: Optional[str],
         name: str,
         key_root: PathLike = key_root / "azure",
         log_dir=None,
         ssh_private_key=None,
-        read_credential=True,
         assume_exists=True,
     ):
-        if read_credential:
-            config = load_config()
-            self.subscription_id = subscription_id if subscription_id is not None else config["azure_subscription_id"]
-            self.credential = ClientSecretCredential(
-                tenant_id=config["azure_tenant_id"],
-                client_id=config["azure_client_id"],
-                client_secret=config["azure_client_secret"],
-            )
-        else:
-            self.credential = DefaultAzureCredential()
-            self.subscription_id = subscription_id
+        config = SkylarkConfig.load()
+        assert config.azure_enabled, "Azure is not enabled in the config"
+        self.credential = DefaultAzureCredential()
+        self.subscription_id = config.azure_subscription_id
         self.name = name
         self.location = None
 

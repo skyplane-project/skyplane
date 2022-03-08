@@ -66,10 +66,8 @@ class AWSCloudProvider(CloudProvider):
                 src_rows = transfer_df.loc[src]
                 src_rows = src_rows[src_rows.index != "internet"]
                 return src_rows.max()["cost"]
-        elif dst_provider == "gcp" or dst_provider == "azure":
-            return transfer_df.loc[src, "internet"]["cost"]
         else:
-            raise NotImplementedError
+            return transfer_df.loc[src, "internet"]["cost"]
 
     def get_instance_list(self, region: str) -> List[AWSServer]:
         ec2 = AWSServer.get_boto3_resource("ec2", region)

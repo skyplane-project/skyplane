@@ -1,10 +1,20 @@
+import os
+
 from pathlib import Path
 
 # paths
 skylark_root = Path(__file__).parent.parent
-key_root = skylark_root / "data" / "keys"
-config_file = skylark_root / "data" / "config.json"
+config_root = Path("~/.skylark").expanduser()
+config_root.mkdir(exist_ok=True)
+
+if "SKYLARK_CONFIG" in os.environ:
+    config_path = Path(os.environ["SKYLARK_CONFIG"]).expanduser()
+else:
+    config_path = config_root / "config"
+
+key_root = config_root / "keys"
 tmp_log_dir = Path("/tmp/skylark")
+tmp_log_dir.mkdir(exist_ok=True)
 
 # header
 def print_header():

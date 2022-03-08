@@ -7,7 +7,9 @@ from pathlib import Path
 from shutil import copyfile
 from typing import Dict, List, Optional
 
+import boto3
 import typer
+from skylark.config import SkylarkConfig
 from skylark.utils import logger
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
@@ -241,7 +243,8 @@ def check_ulimit(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
         subprocess.check_output(increase_soft_limit)
 
 
-def deprovision_skylark_instances(azure_subscription: Optional[str] = None, gcp_project_id: Optional[str] = None):
+def deprovision_skylark_instances():
+    config = SkylarkConfig.load()
     instances = []
 
     aws = AWSCloudProvider()
@@ -250,22 +253,149 @@ def deprovision_skylark_instances(azure_subscription: Optional[str] = None, gcp_
     ):
         instances += instance_list
 
-    if not azure_subscription:
-        typer.secho(
-            "No Microsoft Azure subscription given, so Azure instances will not be terminated", color=typer.colors.YELLOW, bold=True
-        )
-    else:
-        azure = AzureCloudProvider(azure_subscription=azure_subscription)
+    if config.azure_enabled:
+        azure = AzureCloudProvider()
         instances += azure.get_matching_instances()
 
-    if not gcp_project_id:
-        typer.secho("No GCP project ID given, so GCP instances will not be deprovisioned", color=typer.colors.YELLOW, bold=True)
-    else:
-        gcp = GCPCloudProvider(gcp_project=gcp_project_id)
+    if config.gcp_enabled:
+        gcp = GCPCloudProvider()
         instances += gcp.get_matching_instances()
 
     if instances:
-        typer.secho(f"Deprovisioning {len(instances)} instances", color=typer.colors.YELLOW, bold=True)
+        typer.secho(f"Deprovisioning {len(instances)} instances", fg="yellow", bold=True)
         do_parallel(lambda instance: instance.terminate_instance(), instances, progress_bar=True, desc="Deprovisioning")
     else:
-        typer.secho("No instances to deprovision, exiting...", color=typer.colors.YELLOW, bold=True)
+        typer.secho("No instances to deprovision, exiting...", fg="yellow", bold=True)
+
+
+def load_aws_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkConfig:
+    if force_init:
+        typer.secho("    AWS credentials will be re-initialized", fg="red")
+        config.aws_enabled = False
+        config.aws_access_key_id = None
+        config.aws_secret_access_key = None
+
+    if config.aws_enabled and config.aws_access_key_id is not None and config.aws_secret_access_key is not None:
+        typer.secho("    AWS credentials already configured! To reconfigure AWS, run `skylark init --reinit-aws`.", fg="blue")
+        return config
+
+    # get AWS credentials from boto3
+    session = boto3.Session()
+    credentials = session.get_credentials()
+    credentials = credentials.get_frozen_credentials()
+    if credentials.access_key is None or credentials.secret_key is None:
+        typer.secho("    AWS credentials not found in boto3 session, please use the AWS CLI to set them via `aws configure`", fg="red")
+        typer.secho("    https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html", fg="red")
+        typer.secho("    Disabling AWS support", fg="blue")
+        config.aws_enabled = False
+        config.aws_access_key_id = None
+        config.aws_secret_access_key = None
+        return config
+
+    typer.secho(f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials.access_key[-6:]}]", fg="blue")
+    config.aws_enabled = True
+    config.aws_access_key_id = credentials.access_key
+    config.aws_secret_access_key = credentials.secret_key
+    return config
+
+
+def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkConfig:
+    if force_init:
+        typer.secho("    Azure credentials will be re-initialized", fg="red")
+        config.azure_enabled = False
+        config.azure_tenant_id = None
+        config.azure_client_id = None
+        config.azure_client_secret = None
+        config.azure_subscription_id = None
+
+    if (
+        config.azure_enabled
+        and config.azure_tenant_id is not None
+        and config.azure_client_id is not None
+        and config.azure_client_secret is not None
+        and not force_init
+    ):
+        typer.secho("    Azure credentials already configured! To reconfigure Azure, run `skylark init --reinit-azure`.", fg="blue")
+        return config
+
+    # get Azure credentials from Azure default credential provider
+    azure_tenant_id = os.environ.get("AZURE_TENANT_ID", config.azure_tenant_id)
+    azure_client_id = os.environ.get("AZURE_CLIENT_ID", config.azure_client_id)
+    azure_client_secret = os.environ.get("AZURE_CLIENT_SECRET", config.azure_client_secret)
+    azure_subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID", config.azure_subscription_id)
+
+    # prompt for missing credentials
+    if not azure_tenant_id or not azure_client_id or not azure_client_secret or not azure_subscription_id:
+        typer.secho(
+            "    Azure credentials not found in environment variables, please use the Azure CLI to set them via `az login`", fg="red"
+        )
+        typer.secho("    Azure config can be generated using: az ad sp create-for-rbac -n api://skylark --sdk-auth", fg="red")
+        if not typer.confirm("    Do you want to manually enter your service principal keys?", default=False):
+            typer.secho("    Disabling Azure support in Skylark", fg="blue")
+            config.azure_enabled = False
+            config.azure_tenant_id = None
+            config.azure_client_id = None
+            config.azure_client_secret = None
+            return config
+
+        if not azure_tenant_id:
+            azure_tenant_id = typer.prompt("    Azure tenant ID")
+        if not azure_client_id:
+            azure_client_id = typer.prompt("    Azure client ID")
+        if not azure_client_secret:
+            azure_client_secret = typer.prompt("    Azure client secret")
+        if not azure_subscription_id:
+            azure_subscription_id = typer.prompt("    Azure subscription ID")
+
+    config.azure_enabled = True
+    config.azure_tenant_id = azure_tenant_id
+    config.azure_client_id = azure_client_id
+    config.azure_client_secret = azure_client_secret
+    config.azure_subscription_id = azure_subscription_id
+    return config
+
+
+def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkConfig:
+    if force_init:
+        typer.secho("    GCP credentials will be re-initialized", fg="red")
+        config.gcp_enabled = False
+        config.gcp_application_credentials_file = None
+        config.gcp_project_id = None
+
+    if config.gcp_enabled and config.gcp_project_id is not None and config.gcp_application_credentials_file is not None:
+        typer.secho("    GCP already configured! To reconfigure GCP, run `skylark init --reinit-gcp`.", fg="blue")
+        return config
+
+    # load from environment variables
+    gcp_application_credentials_file = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", config.gcp_application_credentials_file)
+    if not gcp_application_credentials_file:
+        typer.secho(
+            "    GCP credentials not found in environment variables, please use the GCP CLI to set them via `gcloud auth application-default login`",
+            fg="red",
+        )
+        typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red")
+        if not typer.confirm("    Do you want to manually enter your service account key?", default=False):
+            typer.secho("    Disabling GCP support in Skylark", fg="blue")
+            config.gcp_enabled = False
+            config.gcp_project_id = None
+            config.gcp_application_credentials_file = None
+            return config
+        gcp_application_credentials_file = typer.prompt("    GCP application credentials file path")
+
+    # check if the file exists
+    gcp_application_credentials_file = Path(gcp_application_credentials_file).expanduser().resolve()
+    if not gcp_application_credentials_file.exists():
+        typer.secho(f"    GCP application credentials file not found at {gcp_application_credentials_file}", fg="red")
+        typer.secho("    Disabling GCP support in Skylark", fg="blue")
+        config.gcp_enabled = False
+        config.gcp_project_id = None
+        config.gcp_application_credentials_file = None
+        return config
+
+    config.gcp_enabled = True
+    config.gcp_application_credentials_file = str(gcp_application_credentials_file)
+    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT", config.gcp_project_id)
+    if not project_id:
+        project_id = typer.prompt("    GCP project ID")
+    config.gcp_project_id = project_id
+    return config

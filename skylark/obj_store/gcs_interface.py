@@ -10,7 +10,7 @@ from skylark.obj_store.object_store_interface import NoSuchObjectException, Obje
 
 class GCSObject(ObjectStoreObject):
     def full_path(self):
-        raise NotImplementedError()
+        return os.path.join(f"gs://{self.bucket}", self.key)
 
 
 class GCSInterface(ObjectStoreInterface):
@@ -37,7 +37,8 @@ class GCSInterface(ObjectStoreInterface):
         self.pending_uploads -= 1
 
     def infer_gcs_region(self, bucket_name: str):
-        raise NotImplementedError()
+        bucket = self._gcs_client.get_bucket(bucket_name)
+        return bucket.location
 
     def bucket_exists(self):
         try:
