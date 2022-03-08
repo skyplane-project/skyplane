@@ -188,6 +188,7 @@ class ReplicatorClient:
     def deprovision_gateways(self):
         def deprovision_gateway_instance(server: Server):
             if server.instance_state() == ServerState.RUNNING:
+                logger.warning(f"Deprovisioning {server.uuid()}")
                 server.terminate_instance()
 
         do_parallel(deprovision_gateway_instance, self.bound_nodes.values(), n=-1)

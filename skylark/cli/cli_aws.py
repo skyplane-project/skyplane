@@ -41,7 +41,7 @@ def ssh(region: Optional[str] = None):
     instances = aws.get_matching_instances(region=region)
     if len(instances) == 0:
         typer.secho(f"No instances found", fg="red")
-        typer.Abort()
+        raise typer.Abort()
 
     instance_map = {f"{i.region()}, {i.public_ip()} ({i.instance_state()})": i for i in instances}
     choices = list(sorted(instance_map.keys()))

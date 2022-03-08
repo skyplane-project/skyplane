@@ -38,6 +38,15 @@ class SkylarkConfig:
             config = SkylarkConfig()
 
         # set environment variables
+        if config.aws_enabled:
+            # todo load AWS credentials from CLI
+            os.environ["AWS_ACCESS_KEY_ID"] = config.aws_access_key_id
+            os.environ["AWS_SECRET_ACCESS_KEY"] = config.aws_secret_access_key
+        if config.azure_enabled:
+            if config.azure_tenant_id and config.azure_client_id and config.azure_client_secret:
+                os.environ["AZURE_TENANT_ID"] = config.azure_tenant_id
+                os.environ["AZURE_CLIENT_ID"] = config.azure_client_id
+                os.environ["AZURE_CLIENT_SECRET"] = config.azure_client_secret
         if config.gcp_enabled:
             os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = config.gcp_application_credentials_file
 

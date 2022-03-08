@@ -232,7 +232,7 @@ def check_ulimit(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
                     f"Failed to increase ulimit to {soft_limit}, please set manually with 'ulimit -n {soft_limit}'. Current limit is {new_limit}",
                     fg="red",
                 )
-                typer.Abort()
+                raise typer.Abort()
             else:
                 typer.secho(f"Successfully increased ulimit to {new_limit}", fg="green")
     if current_limit_soft < soft_limit:
@@ -247,19 +247,19 @@ def deprovision_skylark_instances():
     config = SkylarkConfig.load()
     instances = []
 
-    aws = AWSCloudProvider()
-    for _, instance_list in do_parallel(
-        aws.get_matching_instances, aws.region_list(), progress_bar=True, leave_pbar=False, desc="Retrieve AWS instances"
-    ):
-        instances += instance_list
-
+    query_jobs = []
+    if config.aws_enabled:
+        aws = AWSCloudProvider()
+        for region in aws.region_list():
+            query_jobs.append(lambda: aws.get_matching_instances(region))
     if config.azure_enabled:
-        azure = AzureCloudProvider()
-        instances += azure.get_matching_instances()
-
+        query_jobs.append(lambda: AzureCloudProvider().get_matching_instances())
     if config.gcp_enabled:
-        gcp = GCPCloudProvider()
-        instances += gcp.get_matching_instances()
+        query_jobs.append(lambda: GCPCloudProvider().get_matching_instances())
+
+    # query in parallel
+    for _, instance_list in do_parallel(lambda f: f(), query_jobs, progress_bar=True, desc="Query instances", arg_fmt=None):
+        instances.extend(instance_list)
 
     if instances:
         typer.secho(f"Deprovisioning {len(instances)} instances", fg="yellow", bold=True)

@@ -113,21 +113,21 @@ def throughput_grid(
     gcp_region_list = gcp_region_list if enable_gcp else []
     if not enable_aws and not enable_azure and not enable_gcp:
         logger.error("At least one of -aws, -azure, -gcp must be enabled.")
-        typer.Abort()
+        raise typer.Abort()
 
     # validate AWS regions
     if not enable_aws:
         aws_region_list = []
     elif not all(r in all_aws_regions for r in aws_region_list):
         logger.error(f"Invalid AWS region list: {aws_region_list}")
-        typer.Abort()
+        raise typer.Abort()
 
     # validate Azure regions
     if not enable_azure:
         azure_region_list = []
     elif not all(r in all_azure_regions for r in azure_region_list):
         logger.error(f"Invalid Azure region list: {azure_region_list}")
-        typer.Abort()
+        raise typer.Abort()
 
     # validate GCP regions
     assert not enable_gcp_standard or enable_gcp, f"GCP is disabled but GCP standard is enabled"
@@ -135,14 +135,14 @@ def throughput_grid(
         gcp_region_list = []
     elif not all(r in all_gcp_regions for r in gcp_region_list):
         logger.error(f"Invalid GCP region list: {gcp_region_list}")
-        typer.Abort()
+        raise typer.Abort()
 
     # validate GCP standard instances
     if not enable_gcp_standard:
         gcp_standard_region_list = []
     if not all(r in all_gcp_regions_standard for r in gcp_standard_region_list):
         logger.error(f"Invalid GCP standard region list: {gcp_standard_region_list}")
-        typer.Abort()
+        raise typer.Abort()
 
     # provision servers
     aws = AWSCloudProvider()
