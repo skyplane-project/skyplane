@@ -122,3 +122,6 @@ class AWSServer(Server):
             banner_timeout=200,
         )
         return client
+
+    def get_ssh_cmd(self):
+        return f"ssh -i {self.local_keyfile} ec2-user@{self.public_ip()}"
