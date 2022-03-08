@@ -40,7 +40,7 @@ def ssh(region: Optional[str] = None):
     typer.secho("Querying AWS for instances", fg="green")
     instances = aws.get_matching_instances(region=region)
     if len(instances) == 0:
-        typer.secho(f"No instancess found", fg="red")
+        typer.secho(f"No instances found", fg="red")
         typer.Abort()
 
     instance_map = {f"{i.region()}, {i.public_ip()} ({i.instance_state()})": i for i in instances}
@@ -48,7 +48,8 @@ def ssh(region: Optional[str] = None):
     instance_name: AWSServer = questionary.select("Select an instance", choices=choices).ask()
     if instance_name is not None and instance_name in instance_map:
         instance = instance_map[instance_name]
-        proc = subprocess.Popen(split(f"ssh -i {str(instance.local_keyfile)} ec2-user@{instance.public_ip()}"))
+        cmd = instance.get_ssh_cmd()
+        proc = subprocess.Popen(split(cmd))
         proc.wait()
     else:
         typer.secho(f"No instance selected", fg="red")
