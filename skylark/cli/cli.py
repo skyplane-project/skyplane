@@ -175,6 +175,11 @@ def replicate_random(
     stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
     stats["success"] = stats["monitor_status"] == "completed"
     out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
+
+    if not reuse_gateways:
+        atexit.unregister(rc.deprovision_gateways)
+        rc.deprovision_gateways()
+
     typer.echo(f"\n{json.dumps(out_json)}")
     return 0 if stats["success"] else 1
 
@@ -231,8 +236,6 @@ def replicate_json(
         logger.warning(f"total_transfer_size_mb ({size_total_mb}) is not a multiple of n_chunks ({n_chunks})")
     chunk_size_mb = size_total_mb // n_chunks
 
-    print("REGION", topo.source_region())
-
     if use_random_data:
         job = ReplicationJob(
             source_region=topo.source_region(),
@@ -269,6 +272,12 @@ def replicate_json(
     )
     stats["success"] = stats["monitor_status"] == "completed"
     out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
+    
+    # deprovision
+    if not reuse_gateways:
+        atexit.unregister(rc.deprovision_gateways)
+        rc.deprovision_gateways()
+
     typer.echo(f"\n{json.dumps(out_json)}")
     return 0 if stats["success"] else 1
 
