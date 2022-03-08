@@ -15,14 +15,8 @@ app = typer.Typer(name="skylark-gcp")
 
 
 @app.command()
-def ssh(
-    region: Optional[str] = None,
-    gcp_project: str = typer.Option("", "--gcp-project", help="GCP project ID"),
-):
-    config = load_config()
-    gcp_project = gcp_project or config.get("gcp_project_id")
-    typer.secho(f"Loaded from config file: gcp_project={gcp_project}", fg="blue")
-    gcp = GCPCloudProvider(gcp_project)
+def ssh(region: Optional[str] = None):
+    gcp = GCPCloudProvider()
     typer.secho("Querying GCP for instances", fg="green")
     instances = gcp.get_matching_instances(region=region)
     if len(instances) == 0:
