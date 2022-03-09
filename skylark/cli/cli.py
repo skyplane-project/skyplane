@@ -17,10 +17,8 @@ import atexit
 import json
 import os
 from pathlib import Path
-import pprint
 from typing import Optional
 
-import boto3
 import skylark.cli.cli_aws
 import skylark.cli.cli_azure
 import skylark.cli.cli_gcp

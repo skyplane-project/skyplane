@@ -26,21 +26,6 @@ class AWSServer(Server):
     def uuid(self):
         return f"{self.region_tag}:{self.instance_id}"
 
-    @classmethod
-    def get_boto3_session(cls, aws_region) -> boto3.Session:
-        return boto3.Session(region_name=aws_region)
-
-    @classmethod
-    def get_boto3_resource(cls, service_name, aws_region=None):
-        return cls.get_boto3_session(aws_region).resource(service_name, region_name=aws_region)
-
-    @classmethod
-    def get_boto3_client(cls, service_name, aws_region=None):
-        if aws_region is None:
-            return cls.get_boto3_session(aws_region).client(service_name)
-        else:
-            return cls.get_boto3_session(aws_region).client(service_name, region_name=aws_region)
-
     def get_boto3_instance_resource(self):
         ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
         return ec2.Instance(self.instance_id)

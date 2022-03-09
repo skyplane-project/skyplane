@@ -4,56 +4,40 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from azure.common.credentials import DefaultAzureCredential
 from skylark.utils import logger
 import configparser
 
 from skylark import config_path
 
 
-def load_config():
-    raise NotImplementedError()
-
 
 @dataclass
 class SkylarkConfig:
-    aws_enabled: bool = False
-    aws_access_key_id: Optional[str] = None
-    aws_secret_access_key: Optional[str] = None
+    aws_config_mode: str = "disabled"  # disabled, iam_manual
+    aws_access_key_id: Optional[str] = None  # iam_manual
+    aws_secret_access_key: Optional[str] = None  # iam_manual
 
-    azure_enabled: bool = False
-    azure_tenant_id: Optional[str] = None
-    azure_client_id: Optional[str] = None
-    azure_client_secret: Optional[str] = None
+    azure_config_mode: str = "disabled"  # disabled, cli_auto
     azure_subscription_id: Optional[str] = None
 
-    gcp_enabled: bool = False
+    gcp_config_mode: str = "disabled"  # disabled or service_account_file
     gcp_project_id: Optional[str] = None
-    gcp_application_credentials_file: Optional[str] = None
+    gcp_application_credentials_file: Optional[str] = None  # service_account_file
+
+    @property
+    def aws_enabled(self) -> bool:
+        return self.aws_config_mode != "disabled"
+    
+    @property
+    def azure_enabled(self) -> bool:
+        return self.azure_config_mode != "disabled"
+    
+    @property
+    def gcp_enabled(self) -> bool:
+        return self.gcp_config_mode != "disabled"
 
     @staticmethod
-    def load() -> "SkylarkConfig":
-        if config_path.exists():
-            config = SkylarkConfig.load_from_config_file(config_path)
-        else:
-            config = SkylarkConfig()
-
-        # set environment variables
-        if config.aws_enabled:
-            # todo load AWS credentials from CLI
-            os.environ["AWS_ACCESS_KEY_ID"] = config.aws_access_key_id
-            os.environ["AWS_SECRET_ACCESS_KEY"] = config.aws_secret_access_key
-        if config.azure_enabled:
-            if config.azure_tenant_id and config.azure_client_id and config.azure_client_secret:
-                os.environ["AZURE_TENANT_ID"] = config.azure_tenant_id
-                os.environ["AZURE_CLIENT_ID"] = config.azure_client_id
-                os.environ["AZURE_CLIENT_SECRET"] = config.azure_client_secret
-        if config.gcp_enabled:
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = config.gcp_application_credentials_file
-
-        return config
-
-    @staticmethod
-    @functools.lru_cache
     def load_from_config_file(path=config_path) -> "SkylarkConfig":
         path = Path(config_path)
         config = configparser.ConfigParser()
@@ -63,7 +47,6 @@ class SkylarkConfig:
         config.read(path)
 
         if "aws" in config:
-            aws_enabled = True
             aws_access_key_id = config.get("aws", "access_key_id")
             aws_secret_access_key = config.get("aws", "secret_access_key")
         else:
@@ -113,31 +96,30 @@ class SkylarkConfig:
         if path.exists():
             config.read(os.path.expanduser(path))
 
-        if self.aws_enabled:
-            if "aws" not in config:
-                config.add_section("aws")
+        if "aws" not in config:
+            config.add_section("aws")
+        config.set("aws", "config_mode", self.aws_config_mode)
+        if self.aws_config_mode == "iam_manual":
             config.set("aws", "access_key_id", self.aws_access_key_id)
             config.set("aws", "secret_access_key", self.aws_secret_access_key)
-        else:
-            config.remove_section("aws")
 
-        if self.azure_enabled:
-            if "azure" not in config:
-                config.add_section("azure")
+        if "azure" not in config:
+            config.add_section("azure")
+        config.set("azure", "config_mode", self.azure_config_mode)
+        if self.azure_config_mode == "cli_auto":
+            config.set("azure", "subscription_id", self.azure_subscription_id)
+        elif self.azure_config_mode == "ad_manual":
             config.set("azure", "tenant_id", self.azure_tenant_id)
             config.set("azure", "client_id", self.azure_client_id)
             config.set("azure", "client_secret", self.azure_client_secret)
             config.set("azure", "subscription_id", self.azure_subscription_id)
-        else:
-            config.remove_section("azure")
 
-        if self.gcp_enabled:
-            if "gcp" not in config:
-                config.add_section("gcp")
+        if "gcp" not in config:
+            config.add_section("gcp")
+        config.set("gcp", "config_mode", self.gcp_config_mode)
+        if self.gcp_config_mode == "service_account_file":
             config.set("gcp", "project_id", self.gcp_project_id)
             config.set("gcp", "application_credentials_file", self.gcp_application_credentials_file)
-        else:
-            config.remove_section("gcp")
 
         with path.open("w") as f:
             config.write(f)

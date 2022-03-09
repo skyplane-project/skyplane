@@ -271,11 +271,12 @@ def deprovision_skylark_instances():
 def load_aws_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkConfig:
     if force_init:
         typer.secho("    AWS credentials will be re-initialized", fg="red")
-        config.aws_enabled = False
+        config.aws_config_mode = "disabled"
         config.aws_access_key_id = None
         config.aws_secret_access_key = None
 
-    if config.aws_enabled and config.aws_access_key_id is not None and config.aws_secret_access_key is not None:
+    aws_configured_iam = config.aws_config_mode == "iam_manual" and config.aws_access_key_id and config.aws_secret_access_key
+    if aws_configured_iam:
         typer.secho("    AWS credentials already configured! To reconfigure AWS, run `skylark init --reinit-aws`.", fg="blue")
         return config
 
@@ -287,13 +288,13 @@ def load_aws_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
         typer.secho("    AWS credentials not found in boto3 session, please use the AWS CLI to set them via `aws configure`", fg="red")
         typer.secho("    https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html", fg="red")
         typer.secho("    Disabling AWS support", fg="blue")
-        config.aws_enabled = False
+        config.aws_config_mode = "disabled"
         config.aws_access_key_id = None
         config.aws_secret_access_key = None
         return config
 
     typer.secho(f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials.access_key[-6:]}]", fg="blue")
-    config.aws_enabled = True
+    config.aws_config_mode = "iam_manual"
     config.aws_access_key_id = credentials.access_key
     config.aws_secret_access_key = credentials.secret_key
     return config
@@ -302,56 +303,22 @@ def load_aws_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
 def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkConfig:
     if force_init:
         typer.secho("    Azure credentials will be re-initialized", fg="red")
-        config.azure_enabled = False
-        config.azure_tenant_id = None
-        config.azure_client_id = None
-        config.azure_client_secret = None
+        config.azure_config_mode = "disabled"
         config.azure_subscription_id = None
 
-    if (
-        config.azure_enabled
-        and config.azure_tenant_id is not None
-        and config.azure_client_id is not None
-        and config.azure_client_secret is not None
-        and not force_init
-    ):
+    azure_configured_cli = config.azure_config_mode == "cli_auto" and config.azure_subscription_id
+    if azure_configured_cli:
         typer.secho("    Azure credentials already configured! To reconfigure Azure, run `skylark init --reinit-azure`.", fg="blue")
         return config
 
-    # get Azure credentials from Azure default credential provider
-    azure_tenant_id = os.environ.get("AZURE_TENANT_ID", config.azure_tenant_id)
-    azure_client_id = os.environ.get("AZURE_CLIENT_ID", config.azure_client_id)
-    azure_client_secret = os.environ.get("AZURE_CLIENT_SECRET", config.azure_client_secret)
-    azure_subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID", config.azure_subscription_id)
+    # check if DefaultAzureCredential is available
+    cred = DefaultAzureCredential(exclude_shared_token_cache_credential=True)
+    
 
-    # prompt for missing credentials
-    if not azure_tenant_id or not azure_client_id or not azure_client_secret or not azure_subscription_id:
-        typer.secho(
-            "    Azure credentials not found in environment variables, please use the Azure CLI to set them via `az login`", fg="red"
-        )
-        typer.secho("    Azure config can be generated using: az ad sp create-for-rbac -n api://skylark --sdk-auth", fg="red")
-        if not typer.confirm("    Do you want to manually enter your service principal keys?", default=False):
-            typer.secho("    Disabling Azure support in Skylark", fg="blue")
-            config.azure_enabled = False
-            config.azure_tenant_id = None
-            config.azure_client_id = None
-            config.azure_client_secret = None
-            return config
-
-        if not azure_tenant_id:
-            azure_tenant_id = typer.prompt("    Azure tenant ID")
-        if not azure_client_id:
-            azure_client_id = typer.prompt("    Azure client ID")
-        if not azure_client_secret:
-            azure_client_secret = typer.prompt("    Azure client secret")
-        if not azure_subscription_id:
-            azure_subscription_id = typer.prompt("    Azure subscription ID")
-
-    config.azure_enabled = True
-    config.azure_tenant_id = azure_tenant_id
-    config.azure_client_id = azure_client_id
-    config.azure_client_secret = azure_client_secret
-    config.azure_subscription_id = azure_subscription_id
+    # typer.secho(
+    #     "    Azure credentials not found in environment variables, please use the Azure CLI to set them via `az login`", fg="red"
+    # )
+    # typer.secho("    Azure config can be generated using: az ad sp create-for-rbac -n api://skylark --sdk-auth", fg="red")
     return config
 
 

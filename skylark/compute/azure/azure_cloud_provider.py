@@ -5,16 +5,14 @@ from pathlib import Path
 from typing import List, Optional
 
 import paramiko
+from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.config import SkylarkConfig
 from skylark.utils import logger
 from skylark import key_root
 from skylark.compute.azure.azure_server import AzureServer
 from skylark.compute.cloud_providers import CloudProvider
 
-from azure.identity import DefaultAzureCredential, ClientSecretCredential
-from azure.mgmt.compute import ComputeManagementClient
-from azure.mgmt.network import NetworkManagementClient
-from azure.mgmt.resource import ResourceManagementClient
+from azure.mgmt.compute.models import ResourceIdentityType
 
 from skylark.utils.utils import do_parallel
 
@@ -24,8 +22,7 @@ class AzureCloudProvider(CloudProvider):
         super().__init__()
         config = SkylarkConfig().load()
         assert config.azure_enabled, "Azure cloud provider is not enabled in the config file."
-        self.credential = DefaultAzureCredential()
-        self.subscription_id = config.azure_subscription_id
+        self.auth = AzureAuthentication(config.subscription_id)
 
         key_root.mkdir(parents=True, exist_ok=True)
         self.private_key_path = key_root / "azure_key"
@@ -259,9 +256,7 @@ class AzureCloudProvider(CloudProvider):
                     raise ValueError(f"Unknown transfer cost for {src_key} -> {dst_key}")
 
     def get_instance_list(self, region: str) -> List[AzureServer]:
-        credential = self.credential
-        compute_client = ComputeManagementClient(credential, self.subscription_id)
-
+        compute_client = self.auth.get_compute_client()
         server_list = []
         for vm in compute_client.virtual_machines.list(AzureServer.resource_group_name):
             if vm.tags.get("skylark", None) == "true" and AzureServer.is_valid_vm_name(vm.name) and vm.location == region:
@@ -286,12 +281,11 @@ class AzureCloudProvider(CloudProvider):
                 f.write(f"{key.get_name()} {key.get_base64()}\n")
 
     def set_up_resource_group(self, clean_up_orphans=True):
-        credential = self.credential
-        resource_client = ResourceManagementClient(credential, self.subscription_id)
+        resource_client = self.auth.get_resource_client()
         if resource_client.resource_groups.check_existence(AzureServer.resource_group_name):
             # Resource group already exists.
             # Take this moment to search for orphaned resources and clean them up...
-            network_client = NetworkManagementClient(credential, self.subscription_id)
+            network_client = self.auth.get_network_client()
             if clean_up_orphans:
                 instances_to_terminate = []
                 for vnet in network_client.virtual_networks.list(AzureServer.resource_group_name):
@@ -326,9 +320,8 @@ class AzureCloudProvider(CloudProvider):
             pub_key = f.read()
 
         # Prepare for making Microsoft Azure API calls
-        credential = self.credential
-        compute_client = ComputeManagementClient(credential, self.subscription_id)
-        network_client = NetworkManagementClient(credential, self.subscription_id)
+        compute_client = self.auth.get_compute_client()
+        network_client = self.auth.get_network_client()
 
         # Use the common resource group for this instance
         resource_group = AzureServer.resource_group_name
@@ -436,8 +429,27 @@ class AzureCloudProvider(CloudProvider):
                         },
                     },
                     "network_profile": {"network_interfaces": [{"id": nic_result.id}]},
+                    # give VM managed identity w/ system assigned identity
+                    "identity": {"type": ResourceIdentityType.system_assigned},
                 },
             )
-            poller.result()
+            vm_result = poller.result()
+
+        # Assign roles to system MSI, see https://docs.microsoft.com/en-us/samples/azure-samples/compute-python-msi-vm/compute-python-msi-vm/#role-assignment
+        # todo only grant storage-blob-data-reader and storage-blob-data-writer for specified buckets
+        auth_client = self.auth.get_authorization_client()
+        role_name = 'Contributor'
+        roles = list(auth_client.role_definitions.list(resource_group, filter="roleName eq '{}'".format(role_name)))
+        assert len(roles) == 1
+
+        # Add RG scope to the MSI identities:
+        role_assignment = auth_client.role_assignments.create(
+            resource_group,
+            uuid.uuid4(),  # Role assignment random name
+            {
+                'role_definition_id': roles[0].id,
+                'principal_id': vm_result.identity.principal_id
+            }
+        )
 
         return AzureServer(name)

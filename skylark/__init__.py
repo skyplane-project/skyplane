@@ -2,6 +2,8 @@ import os
 
 from pathlib import Path
 
+from skylark.config import SkylarkConfig
+
 # paths
 skylark_root = Path(__file__).parent.parent
 config_root = Path("~/.skylark").expanduser()
@@ -36,3 +38,10 @@ def print_header():
 KB = 1024
 MB = 1024 * 1024
 GB = 1024 * 1024 * 1024
+
+
+# cloud config
+if config_path.exists():
+    cloud_config = SkylarkConfig.load_from_config_file(config_path)
+else:
+    cloud_config = SkylarkConfig()  # empty config

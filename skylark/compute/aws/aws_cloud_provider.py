@@ -3,6 +3,7 @@ from typing import List, Optional
 
 import botocore
 import pandas as pd
+from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.utils import logger
 
 from oslo_concurrency import lockutils
@@ -13,8 +14,9 @@ from skylark.utils.utils import retry_backoff
 
 
 class AWSCloudProvider(CloudProvider):
-    def __init__(self):
+    def __init__(self, auth: AWSAuthentication):
         super().__init__()
+        self.auth: AWSAuthentication = auth
 
     @property
     def name(self):
@@ -70,7 +72,7 @@ class AWSCloudProvider(CloudProvider):
             return transfer_df.loc[src, "internet"]["cost"]
 
     def get_instance_list(self, region: str) -> List[AWSServer]:
-        ec2 = AWSServer.get_boto3_resource("ec2", region)
+        ec2 = self.auth.get_boto3_client("ec2", region)
         valid_states = ["pending", "running", "stopped", "stopping"]
         instances = ec2.instances.filter(Filters=[{"Name": "instance-state-name", "Values": valid_states}])
         try:
@@ -82,7 +84,7 @@ class AWSCloudProvider(CloudProvider):
         return [AWSServer(f"aws:{region}", i) for i in instance_ids]
 
     def get_security_group(self, region: str, vpc_name="skylark", sg_name="skylark"):
-        ec2 = AWSServer.get_boto3_resource("ec2", region)
+        ec2 = self.auth.get_boto3_resource("ec2", region)
         vpcs = list(ec2.vpcs.filter(Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]).all())
         assert len(vpcs) == 1, f"Found {len(vpcs)} vpcs with name {vpc_name}"
         sgs = [sg for sg in vpcs[0].security_groups.all() if sg.group_name == sg_name]
@@ -90,7 +92,7 @@ class AWSCloudProvider(CloudProvider):
         return sgs[0]
 
     def get_vpc(self, region: str, vpc_name="skylark"):
-        ec2 = AWSServer.get_boto3_resource("ec2", region)
+        ec2 = self.auth.get_boto3_resource("ec2", region)
         vpcs = list(ec2.vpcs.filter(Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]).all())
         if len(vpcs) == 0:
             return None
@@ -98,7 +100,7 @@ class AWSCloudProvider(CloudProvider):
             return vpcs[0]
 
     def make_vpc(self, region: str, vpc_name="skylark"):
-        ec2 = AWSServer.get_boto3_resource("ec2", region)
+        ec2 = self.auth.get_boto3_resource("ec2", region)
         ec2client = ec2.meta.client
         vpcs = list(ec2.vpcs.filter(Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]).all())
 
@@ -152,7 +154,7 @@ class AWSCloudProvider(CloudProvider):
     def delete_vpc(self, region: str, vpcid: str):
         """Delete VPC, from https://gist.github.com/vernhart/c6a0fc94c0aeaebe84e5cd6f3dede4ce"""
         logger.warning(f"[{region}] Deleting VPC {vpcid}")
-        ec2 = AWSServer.get_boto3_resource("ec2", region)
+        ec2 = self.auth.get_boto3_resource("ec2", region)
         ec2client = ec2.meta.client
         vpc = ec2.Vpc(vpcid)
         # detach and delete all gateways associated with the vpc
@@ -221,7 +223,7 @@ class AWSCloudProvider(CloudProvider):
         assert not region.startswith("aws:"), "Region should be AWS region"
         if name is None:
             name = f"skylark-aws-{str(uuid.uuid4()).replace('-', '')}"
-        ec2 = AWSServer.get_boto3_resource("ec2", region)
+        ec2 = self.auth.get_boto3_resource("ec2", region)
         AWSServer.ensure_keyfile_exists(region)
 
         vpc = self.get_vpc(region)

@@ -4,16 +4,13 @@ from typing import Optional
 
 import paramiko
 from skylark import key_root
+from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.config import SkylarkConfig, load_config
 from skylark.compute.server import Server, ServerState
 from skylark.utils.cache import ignore_lru_cache
 from skylark.utils.utils import PathLike
 
 import azure.core.exceptions
-from azure.identity import DefaultAzureCredential, ClientSecretCredential
-from azure.mgmt.compute import ComputeManagementClient
-from azure.mgmt.network import NetworkManagementClient
-from azure.mgmt.resource import ResourceManagementClient
 
 
 class AzureServer(Server):
@@ -30,8 +27,7 @@ class AzureServer(Server):
     ):
         config = SkylarkConfig.load()
         assert config.azure_enabled, "Azure is not enabled in the config"
-        self.credential = DefaultAzureCredential()
-        self.subscription_id = config.azure_subscription_id
+        self.auth = AzureAuthentication(config.azure_subscription_id)
         self.name = name
         self.location = None
 
@@ -96,8 +92,7 @@ class AzureServer(Server):
         return AzureServer.vm_name(name) + "-nic"
 
     def get_resource_group(self):
-        credential = self.credential
-        resource_client = ResourceManagementClient(credential, self.subscription_id)
+        resource_client = self.auth.get_resource_client()
         rg = resource_client.resource_groups.get(AzureServer.resource_group_name)
 
         # Sanity checks
@@ -108,8 +103,7 @@ class AzureServer(Server):
         return rg
 
     def get_virtual_machine(self):
-        credential = self.credential
-        compute_client = ComputeManagementClient(credential, self.subscription_id)
+        compute_client = self.auth.get_compute_client()
         vm = compute_client.virtual_machines.get(AzureServer.resource_group_name, AzureServer.vm_name(self.name))
 
         # Sanity checks
@@ -129,8 +123,7 @@ class AzureServer(Server):
         return f"{self.subscription_id}:{self.region_tag}:{self.name}"
 
     def instance_state(self) -> ServerState:
-        credential = self.credential
-        compute_client = ComputeManagementClient(credential, self.subscription_id)
+        compute_client = self.auth.get_compute_client()
         vm_instance_view = compute_client.virtual_machines.instance_view(AzureServer.resource_group_name, AzureServer.vm_name(self.name))
         statuses = vm_instance_view.statuses
         for status in statuses:
@@ -140,8 +133,7 @@ class AzureServer(Server):
 
     @ignore_lru_cache()
     def public_ip(self):
-        credential = self.credential
-        network_client = NetworkManagementClient(credential, self.subscription_id)
+        network_client = self.auth.get_network_client()
         public_ip = network_client.public_ip_addresses.get(AzureServer.resource_group_name, AzureServer.ip_name(self.name))
 
         # Sanity checks
@@ -169,9 +161,8 @@ class AzureServer(Server):
         return "PREMIUM"
 
     def terminate_instance_impl(self):
-        credential = self.credential
-        compute_client = ComputeManagementClient(credential, self.subscription_id)
-        network_client = NetworkManagementClient(credential, self.subscription_id)
+        compute_client = self.auth.get_compute_client()
+        network_client = self.auth.get_network_client()
 
         vm_poller = compute_client.virtual_machines.begin_delete(AzureServer.resource_group_name, self.vm_name(self.name))
         _ = vm_poller.result()

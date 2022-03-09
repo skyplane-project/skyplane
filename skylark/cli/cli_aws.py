@@ -12,6 +12,7 @@ from typing import Optional
 import questionary
 import typer
 from skylark import GB
+from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.obj_store.s3_interface import S3Interface
@@ -23,9 +24,10 @@ app = typer.Typer(name="skylark-aws")
 @app.command()
 def vcpu_limits(quota_code="L-1216C47A"):
     """List the vCPU limits for each region."""
+    aws_auth = AWSAuthentication()
 
     def get_service_quota(region):
-        service_quotas = AWSServer.get_boto3_client("service-quotas", region)
+        service_quotas = aws_auth.get_boto3_client("service-quotas", region)
         response = service_quotas.get_service_quota(ServiceCode="ec2", QuotaCode=quota_code)
         return response["Quota"]["Value"]
 
@@ -57,10 +59,11 @@ def ssh(region: Optional[str] = None):
 
 @app.command()
 def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
+    aws_auth = AWSAuthentication()
     src_region = S3Interface.infer_s3_region(src_bucket)
     dst_region = S3Interface.infer_s3_region(dst_bucket)
 
-    iam_client = AWSServer.get_boto3_client("iam", "us-east-1")
+    iam_client = aws_auth.get_boto3_client("iam", "us-east-1")
     try:
         response = iam_client.get_role(RoleName="datasync-role")
         typer.secho("IAM role exists datasync-role", fg="green")
@@ -81,14 +84,14 @@ def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
     iam_arn = response["Role"]["Arn"]
     typer.secho(f"IAM role ARN: {iam_arn}", fg="green")
 
-    ds_client_src = AWSServer.get_boto3_client("datasync", src_region)
+    ds_client_src = aws_auth.get_boto3_client("datasync", src_region)
     src_response = ds_client_src.create_location_s3(
         S3BucketArn=f"arn:aws:s3:::{src_bucket}",
         Subdirectory=path,
         S3Config={"BucketAccessRoleArn": iam_arn},
     )
     src_s3_arn = src_response["LocationArn"]
-    ds_client_dst = AWSServer.get_boto3_client("datasync", dst_region)
+    ds_client_dst = aws_auth.get_boto3_client("datasync", dst_region)
     dst_response = ds_client_dst.create_location_s3(
         S3BucketArn=f"arn:aws:s3:::{dst_bucket}",
         Subdirectory=path,
