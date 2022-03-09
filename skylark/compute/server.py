@@ -224,7 +224,7 @@ class Server:
             assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
         logger.debug(f"{desc_prefix}: Starting gateway container")
         docker_run_flags = (
-            f"-d --rm --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024} {docker_envs}"
+            f"-d --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024} {docker_envs}"
         )
         docker_run_flags += " --mount type=tmpfs,dst=/skylark,tmpfs-size=$(($(free -b  | head -n2 | tail -n1 | awk '{print $2}')/2))"
         docker_run_flags += f" -v /tmp/{config_file.name}:/pkg/data/{config_file.name}"
