@@ -20,17 +20,17 @@ class AWSAuthentication:
                 self.config_mode = "disabled"
                 self.access_key = None
                 self.secret_key = None
-    
+
     def enabled(self):
         return self.config_mode != "disabled"
-    
+
     def infer_credentials(self):
         # todo load temporary credentials from STS
         session = boto3.Session()
         credentials = session.get_credentials()
         credentials = credentials.get_frozen_credentials()
         return credentials.access_key, credentials.secret_key
-    
+
     def get_boto3_session(self, aws_region: str):
         if self.config_mode == "manual":
             return boto3.Session(
@@ -40,7 +40,7 @@ class AWSAuthentication:
             )
         else:
             return boto3.Session(region_name=aws_region)
-    
+
     def get_boto3_resource(self, service_name, aws_region=None):
         return self.get_boto3_session(aws_region).resource(service_name, region_name=aws_region)
 

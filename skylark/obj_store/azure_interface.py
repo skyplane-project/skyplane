@@ -2,9 +2,7 @@ import os
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Iterator, List
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
-from azure.identity import DefaultAzureCredential, ClientSecretCredential
-from azure.storage.blob import BlobServiceClient
-from skylark.config import SkylarkConfig, load_config
+from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.utils import logger
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
@@ -16,21 +14,16 @@ class AzureObject(ObjectStoreObject):
 
 class AzureInterface(ObjectStoreInterface):
     def __init__(self, azure_region, container_name):
-        # TODO: the azure region should get corresponding os.getenv()
         self.azure_region = azure_region
         self.container_name = container_name
         self.bucket_name = self.container_name  # For compatibility
         self.pending_downloads, self.completed_downloads = 0, 0
         self.pending_uploads, self.completed_uploads = 0, 0
-        # Authenticate
-        config = SkylarkConfig.load()
-        assert config.azure_enabled, "Azure is not enabled in the config"
-        self.subscription_id = config.azure_subscription_id
-        raise NotImplementedError("TODO: COPY SESSION ID FROM CLIENT TO GATEWAY")
-        self.credential = None
+
         # Create a blob service client
+        self.auth = AzureAuthentication()
         self.account_url = "https://{}.blob.core.windows.net".format("skylark" + self.azure_region)
-        self.blob_service_client = BlobServiceClient(account_url=self.account_url, credential=self.credential)
+        self.blob_service_client = self.auth.get_storage_client(self.account_url)
 
         self.pool = ThreadPoolExecutor(max_workers=256)  # TODO: This might need some tuning
         self.max_concurrency = 1

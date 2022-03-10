@@ -25,6 +25,7 @@ import skylark.cli.cli_gcp
 import skylark.cli.cli_solver
 import skylark.cli.experiments
 import typer
+from skylark.config import SkylarkConfig
 from skylark.utils import logger
 from skylark import config_path, GB, MB, print_header
 from skylark.cli.cli_helper import (
@@ -46,7 +47,6 @@ from skylark.cli.cli_helper import (
     ls_s3,
     parse_path,
 )
-from skylark.config import SkylarkConfig, load_config
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
 from skylark.obj_store.object_store_interface import ObjectStoreInterface
@@ -270,7 +270,7 @@ def replicate_json(
     )
     stats["success"] = stats["monitor_status"] == "completed"
     out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
-    
+
     # deprovision
     if not reuse_gateways:
         atexit.unregister(rc.deprovision_gateways)
@@ -287,23 +287,26 @@ def deprovision():
 
 
 @app.command()
-def init(reinit_aws: bool = False, reinit_azure: bool = False, reinit_gcp: bool = False):
+def init(reinit_azure: bool = False, reinit_gcp: bool = False):
     print_header()
-    config = SkylarkConfig.load()
+    if config_path.exists():
+        cloud_config = SkylarkConfig.load_config(config_path)
+    else:
+        cloud_config = SkylarkConfig()
 
     # load AWS config
     typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)
-    config = load_aws_config(config, force_init=reinit_aws)
+    cloud_config = load_aws_config(cloud_config)
 
     # load Azure config
     typer.secho("\n(2) Configuring Azure:", fg="yellow", bold=True)
-    config = load_azure_config(config, force_init=reinit_azure)
+    cloud_config = load_azure_config(cloud_config, force_init=reinit_azure)
 
     # load GCP config
     typer.secho("\n(3) Configuring GCP:", fg="yellow", bold=True)
-    config = load_gcp_config(config, force_init=reinit_gcp)
+    cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp)
 
-    config.to_config_file(config_path)
+    cloud_config.to_config_file(config_path)
     typer.secho(f"\nConfig file saved to {config_path}", fg="green")
     return 0
 

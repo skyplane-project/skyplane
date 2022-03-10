@@ -18,8 +18,6 @@ from shutil import copyfile
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
 
-from skylark.config import load_config
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run a replication job")

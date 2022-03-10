@@ -10,7 +10,6 @@ import questionary
 import typer
 from skylark import GB, skylark_root
 from skylark.benchmark.utils import provision, split_list
-from skylark.config import SkylarkConfig
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
@@ -87,9 +86,6 @@ def throughput_grid(
 ):
     def check_stderr(tup):
         assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
-
-    config = SkylarkConfig.load()
-    assert config.aws_enabled and config.azure_enabled and config.gcp_enabled, "All cloud providers must be enabled."
 
     if resume:
         index_key = [

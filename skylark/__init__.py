@@ -42,6 +42,6 @@ GB = 1024 * 1024 * 1024
 
 # cloud config
 if config_path.exists():
-    cloud_config = SkylarkConfig.load_from_config_file(config_path)
+    cloud_config = SkylarkConfig.load_config(config_path)
 else:
-    cloud_config = SkylarkConfig()  # empty config
+    cloud_config = SkylarkConfig.load_infer_cli()

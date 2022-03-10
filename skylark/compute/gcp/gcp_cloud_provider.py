@@ -6,6 +6,7 @@ from typing import List
 
 import googleapiclient
 import paramiko
+from skylark.compute.gcp.gcp_auth import GCPAuthentication
 from skylark.config import SkylarkConfig
 from skylark.utils import logger
 
@@ -20,9 +21,7 @@ from skylark.compute.server import Server
 class GCPCloudProvider(CloudProvider):
     def __init__(self, key_root=key_root / "gcp"):
         super().__init__()
-        config = SkylarkConfig.load()
-        assert config.gcp_enabled, "GCP is not enabled in the config"
-        self.gcp_project = config.gcp_project_id
+        self.auth = GCPAuthentication()
         key_root.mkdir(parents=True, exist_ok=True)
         self.private_key_path = key_root / "gcp-cert.pem"
         self.public_key_path = key_root / "gcp-cert.pub"
@@ -154,11 +153,11 @@ class GCPCloudProvider(CloudProvider):
                 raise ValueError("Unknown src_continent: {}".format(src_continent))
 
     def get_instance_list(self, region) -> List[GCPServer]:
-        gcp_instance_result = GCPServer.gcp_instances(self.gcp_project, region)
+        gcp_instance_result = self.auth.get_gcp_instances(region)
         if "items" in gcp_instance_result:
             instance_list = []
             for i in gcp_instance_result["items"]:
-                instance_list.append(GCPServer(f"gcp:{region}", self.gcp_project, i["name"], ssh_private_key=self.private_key_path))
+                instance_list.append(GCPServer(f"gcp:{region}", i["name"], ssh_private_key=self.private_key_path))
             return instance_list
         else:
             return []
@@ -181,14 +180,14 @@ class GCPCloudProvider(CloudProvider):
                 f.write(f"{key.get_name()} {key.get_base64()}\n")
 
     def configure_default_network(self):
-        compute = GCPServer.get_gcp_client()
+        compute = self.auth.get_gcp_client()
         try:
-            compute.networks().get(project=self.gcp_project, network="default").execute()
+            compute.networks().get(project=self.auth.project_id, network="default").execute()
         except googleapiclient.errors.HttpError as e:
             if e.resp.status == 404:  # create network
                 op = (
                     compute.networks()
-                    .insert(project=self.gcp_project, body={"name": "default", "subnetMode": "auto", "autoCreateSubnetworks": True})
+                    .insert(project=self.auth.project_id, body={"name": "default", "subnetMode": "auto", "autoCreateSubnetworks": True})
                     .execute()
                 )
                 self.wait_for_operation_to_complete("global", op["name"])
@@ -197,18 +196,18 @@ class GCPCloudProvider(CloudProvider):
 
     def configure_default_firewall(self, ip="0.0.0.0/0"):
         """Configure default firewall to allow access from all ports from all IPs (if not exists)."""
-        compute = GCPServer.get_gcp_client()
+        compute = self.auth.get_gcp_client()
 
         @lockutils.synchronized(f"gcp_configure_default_firewall", external=True, lock_path="/tmp/skylark_locks")
         def create_firewall(body, update_firewall=False):
             if update_firewall:
-                op = compute.firewalls().update(project=self.gcp_project, firewall="default", body=fw_body).execute()
+                op = compute.firewalls().update(project=self.auth.project_id, firewall="default", body=fw_body).execute()
             else:
-                op = compute.firewalls().insert(project=self.gcp_project, body=fw_body).execute()
+                op = compute.firewalls().insert(project=self.auth.project_id, body=fw_body).execute()
             self.wait_for_operation_to_complete("global", op["name"])
 
         try:
-            current_firewall = compute.firewalls().get(project=self.gcp_project, firewall="default").execute()
+            current_firewall = compute.firewalls().get(project=self.auth.project_id, firewall="default").execute()
         except googleapiclient.errors.HttpError as e:
             if e.resp.status == 404:
                 current_firewall = None
@@ -231,11 +230,11 @@ class GCPCloudProvider(CloudProvider):
             logger.debug(f"[GCP] Updated firewall")
 
     def get_operation_state(self, zone, operation_name):
-        compute = GCPServer.get_gcp_client()
+        compute = self.auth.get_gcp_client()
         if zone == "global":
-            return compute.globalOperations().get(project=self.gcp_project, operation=operation_name).execute()
+            return compute.globalOperations().get(project=self.auth.project_id, operation=operation_name).execute()
         else:
-            return compute.zoneOperations().get(project=self.gcp_project, zone=zone, operation=operation_name).execute()
+            return compute.zoneOperations().get(project=self.auth.project_id, zone=zone, operation=operation_name).execute()
 
     def wait_for_operation_to_complete(self, zone, operation_name, timeout=120):
         time_intervals = [0.1] * 10 + [0.2] * 10 + [1.0] * int(timeout)  # backoff
@@ -255,7 +254,7 @@ class GCPCloudProvider(CloudProvider):
         assert not region.startswith("gcp:"), "Region should be GCP region"
         if name is None:
             name = f"skylark-gcp-{str(uuid.uuid4()).replace('-', '')}"
-        compute = GCPServer.get_gcp_client("compute", "v1")
+        compute = self.auth.get_gcp_client()
         with open(os.path.expanduser(self.public_key_path)) as f:
             pub_key = f.read()
 
@@ -289,9 +288,9 @@ class GCPCloudProvider(CloudProvider):
                 ]
             },
         }
-        result = compute.instances().insert(project=self.gcp_project, zone=region, body=req_body).execute()
+        result = compute.instances().insert(project=self.auth.project_id, zone=region, body=req_body).execute()
         self.wait_for_operation_to_complete(region, result["name"])
-        server = GCPServer(f"gcp:{region}", self.gcp_project, name)
+        server = GCPServer(f"gcp:{region}", name)
         server.wait_for_ready()
         server.run_command("sudo /sbin/iptables -A INPUT -j ACCEPT")
         return server

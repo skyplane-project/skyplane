@@ -14,9 +14,9 @@ from skylark.utils.utils import retry_backoff
 
 
 class AWSCloudProvider(CloudProvider):
-    def __init__(self, auth: AWSAuthentication):
+    def __init__(self):
         super().__init__()
-        self.auth: AWSAuthentication = auth
+        self.auth = AWSAuthentication()
 
     @property
     def name(self):
@@ -224,8 +224,6 @@ class AWSCloudProvider(CloudProvider):
         if name is None:
             name = f"skylark-aws-{str(uuid.uuid4()).replace('-', '')}"
         ec2 = self.auth.get_boto3_resource("ec2", region)
-        AWSServer.ensure_keyfile_exists(region)
-
         vpc = self.get_vpc(region)
         assert vpc is not None, "No VPC found"
         subnets = list(vpc.subnets.all())

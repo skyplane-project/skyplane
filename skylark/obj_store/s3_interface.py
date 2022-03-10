@@ -8,9 +8,8 @@ from awscrt.auth import AwsCredentialsProvider
 from awscrt.http import HttpHeaders, HttpRequest
 from awscrt.io import ClientBootstrap, DefaultHostResolver, EventLoopGroup
 from awscrt.s3 import S3Client, S3RequestTlsMode, S3RequestType
+from skylark.compute.aws.aws_auth import AWSAuthentication
 
-from skylark.compute.aws.aws_server import AWSServer
-from skylark.config import load_config
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
 
@@ -20,33 +19,21 @@ class S3Object(ObjectStoreObject):
 
 
 class S3Interface(ObjectStoreInterface):
-    def __init__(self, aws_region, bucket_name, use_tls=True, part_size=None, throughput_target_gbps=None):
-
+    def __init__(self, aws_region, bucket_name, use_tls=True, part_size=None, throughput_target_gbps=None, num_threads=4):
+        self.auth = AWSAuthentication()
         self.aws_region = self.infer_s3_region(bucket_name) if aws_region is None or aws_region == "infer" else aws_region
         self.bucket_name = bucket_name
         self.pending_downloads, self.completed_downloads = 0, 0
         self.pending_uploads, self.completed_uploads = 0, 0
         self.s3_part_size = part_size
         self.s3_throughput_target_gbps = throughput_target_gbps
-        # num_threads=os.cpu_count()
-        # num_threads=256
-        num_threads = 4  # 256
         event_loop_group = EventLoopGroup(num_threads=num_threads, cpu_group=None)
         host_resolver = DefaultHostResolver(event_loop_group)
         bootstrap = ClientBootstrap(event_loop_group, host_resolver)
-        # Authenticate
-        config = load_config()
-        aws_access_key_id = config["aws_access_key_id"]
-        aws_secret_access_key = config["aws_secret_access_key"]
-        if aws_access_key_id and aws_secret_access_key:
-            credential_provider = AwsCredentialsProvider.new_static(aws_access_key_id, aws_secret_access_key)
-        else:  # use default
-            credential_provider = AwsCredentialsProvider.new_default_chain(bootstrap)
-
         self._s3_client = S3Client(
             bootstrap=bootstrap,
             region=self.aws_region,
-            credential_provider=credential_provider,
+            credential_provider=AwsCredentialsProvider.new_default_chain(bootstrap),
             throughput_target_gbps=100,
             part_size=None,
             tls_mode=S3RequestTlsMode.ENABLED if use_tls else S3RequestTlsMode.DISABLED,
@@ -60,18 +47,17 @@ class S3Interface(ObjectStoreInterface):
         self.completed_uploads += 1
         self.pending_uploads -= 1
 
-    @staticmethod
-    def infer_s3_region(bucket_name: str):
-        s3_client = AWSServer.get_boto3_client("s3")
+    def infer_s3_region(self, bucket_name: str):
+        s3_client = self.auth.get_boto3_client("s3")
         region = s3_client.get_bucket_location(Bucket=bucket_name).get("LocationConstraint", "us-east-1")
         return region if region is not None else "us-east-1"
 
     def bucket_exists(self):
-        s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
+        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         return self.bucket_name in [b["Name"] for b in s3_client.list_buckets()["Buckets"]]
 
     def create_bucket(self):
-        s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
+        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         if not self.bucket_exists():
             if self.aws_region == "us-east-1":
                 s3_client.create_bucket(Bucket=self.bucket_name)
@@ -81,7 +67,7 @@ class S3Interface(ObjectStoreInterface):
 
     def list_objects(self, prefix="") -> Iterator[S3Object]:
         prefix = prefix if not prefix.startswith("/") else prefix[1:]
-        s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
+        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         paginator = s3_client.get_paginator("list_objects_v2")
         page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix)
         for page in page_iterator:
@@ -89,13 +75,13 @@ class S3Interface(ObjectStoreInterface):
                 yield S3Object("s3", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"])
 
     def delete_objects(self, keys: List[str]):
-        s3_client = AWSServer.get_boto3_client("s3", self.aws_region)
+        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         while keys:
             batch, keys = keys[:1000], keys[1000:]  # take up to 1000 keys at a time
             s3_client.delete_objects(Bucket=self.bucket_name, Delete={"Objects": [{"Key": k} for k in batch]})
 
     def get_obj_metadata(self, obj_name):
-        s3_resource = AWSServer.get_boto3_resource("s3", self.aws_region).Bucket(self.bucket_name)
+        s3_resource = self.auth.get_boto3_resource("s3", self.aws_region).Bucket(self.bucket_name)
         try:
             return s3_resource.Object(str(obj_name).lstrip("/"))
         except botocore.exceptions.ClientError as e:

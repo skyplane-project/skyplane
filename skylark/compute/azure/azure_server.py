@@ -5,7 +5,6 @@ from typing import Optional
 import paramiko
 from skylark import key_root
 from skylark.compute.azure.azure_auth import AzureAuthentication
-from skylark.config import SkylarkConfig, load_config
 from skylark.compute.server import Server, ServerState
 from skylark.utils.cache import ignore_lru_cache
 from skylark.utils.utils import PathLike
@@ -25,9 +24,7 @@ class AzureServer(Server):
         ssh_private_key=None,
         assume_exists=True,
     ):
-        config = SkylarkConfig.load()
-        assert config.azure_enabled, "Azure is not enabled in the config"
-        self.auth = AzureAuthentication(config.azure_subscription_id)
+        self.auth = AzureAuthentication()
         self.name = name
         self.location = None
 

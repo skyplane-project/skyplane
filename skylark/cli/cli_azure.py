@@ -9,6 +9,7 @@ from typing import List
 import typer
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
+from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.config import SkylarkConfig
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.utils.utils import do_parallel
@@ -22,12 +23,10 @@ def get_valid_skus(
     prefix: str = typer.Option("", "--prefix", help="Filter by prefix"),
     top_k: int = typer.Option(-1, "--top-k", help="Print top k entries"),
 ):
-    config = SkylarkConfig.load()
-    credential = DefaultAzureCredential()
+    auth = AzureAuthentication()
+    client = auth.get_compute_client()
 
-    # query azure API for each region to get available SKUs for each resource type
     def get_skus(region):
-        client = ComputeManagementClient(credential, config.azure_subscription_id)
         valid_skus = []
         for sku in client.resource_skus.list(filter="location eq '{}'".format(region)):
             if len(sku.restrictions) == 0 and (not prefix or sku.name.startswith(prefix)):

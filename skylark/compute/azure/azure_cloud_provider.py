@@ -20,9 +20,7 @@ from skylark.utils.utils import do_parallel
 class AzureCloudProvider(CloudProvider):
     def __init__(self, key_root=key_root / "azure"):
         super().__init__()
-        config = SkylarkConfig().load()
-        assert config.azure_enabled, "Azure cloud provider is not enabled in the config file."
-        self.auth = AzureAuthentication(config.subscription_id)
+        self.auth = AzureAuthentication()
 
         key_root.mkdir(parents=True, exist_ok=True)
         self.private_key_path = key_root / "azure_key"
@@ -438,7 +436,7 @@ class AzureCloudProvider(CloudProvider):
         # Assign roles to system MSI, see https://docs.microsoft.com/en-us/samples/azure-samples/compute-python-msi-vm/compute-python-msi-vm/#role-assignment
         # todo only grant storage-blob-data-reader and storage-blob-data-writer for specified buckets
         auth_client = self.auth.get_authorization_client()
-        role_name = 'Contributor'
+        role_name = "Contributor"
         roles = list(auth_client.role_definitions.list(resource_group, filter="roleName eq '{}'".format(role_name)))
         assert len(roles) == 1
 
@@ -446,10 +444,7 @@ class AzureCloudProvider(CloudProvider):
         role_assignment = auth_client.role_assignments.create(
             resource_group,
             uuid.uuid4(),  # Role assignment random name
-            {
-                'role_definition_id': roles[0].id,
-                'principal_id': vm_result.identity.principal_id
-            }
+            {"role_definition_id": roles[0].id, "principal_id": vm_result.identity.principal_id},
         )
 
         return AzureServer(name)

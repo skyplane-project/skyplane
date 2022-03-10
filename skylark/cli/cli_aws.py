@@ -60,8 +60,9 @@ def ssh(region: Optional[str] = None):
 @app.command()
 def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
     aws_auth = AWSAuthentication()
-    src_region = S3Interface.infer_s3_region(src_bucket)
-    dst_region = S3Interface.infer_s3_region(dst_bucket)
+    s3_interface = S3Interface("us-east-1", None)
+    src_region = s3_interface.infer_s3_region(src_bucket)
+    dst_region = s3_interface.infer_s3_region(dst_bucket)
 
     iam_client = aws_auth.get_boto3_client("iam", "us-east-1")
     try:

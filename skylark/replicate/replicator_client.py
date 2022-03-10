@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Tuple
 import uuid
 
 import requests
+from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.config import SkylarkConfig
 from skylark.replicate.profiler import status_df_to_traceevent
 from skylark.utils import logger
@@ -36,7 +37,6 @@ class ReplicatorClient:
         gcp_instance_class: Optional[str] = "n2-standard-16",  # set to None to disable GCP
         gcp_use_premium_network: bool = True,
     ):
-        config = SkylarkConfig.load()
         self.topology = topology
         self.gateway_docker_image = gateway_docker_image
         self.aws_instance_class = aws_instance_class
@@ -45,9 +45,9 @@ class ReplicatorClient:
         self.gcp_use_premium_network = gcp_use_premium_network
 
         # provisioning
-        self.aws = AWSCloudProvider() if aws_instance_class != "None" and config.aws_enabled else None
-        self.azure = AzureCloudProvider() if azure_instance_class != "None" and config.azure_enabled else None
-        self.gcp = GCPCloudProvider() if gcp_instance_class != "None" and config.gcp_enabled else None
+        self.aws = AWSCloudProvider()
+        self.azure = AzureCloudProvider()
+        self.gcp = GCPCloudProvider()
         self.bound_nodes: Dict[ReplicationTopologyGateway, Server] = {}
 
     def provision_gateways(
@@ -58,9 +58,15 @@ class ReplicatorClient:
         azure_regions_to_provision = [r for r in regions_to_provision if r.startswith("azure:")]
         gcp_regions_to_provision = [r for r in regions_to_provision if r.startswith("gcp:")]
 
-        assert len(aws_regions_to_provision) == 0 or self.aws is not None, "AWS not enabled"
-        assert len(azure_regions_to_provision) == 0 or self.azure is not None, "Azure not enabled"
-        assert len(gcp_regions_to_provision) == 0 or self.gcp is not None, "GCP not enabled"
+        assert (
+            len(aws_regions_to_provision) == 0 or self.aws.auth.enabled()
+        ), "AWS credentials not configured but job provisions AWS gateways"
+        assert (
+            len(azure_regions_to_provision) == 0 or self.azure.auth.enabled()
+        ), "Azure credentials not configured but job provisions Azure gateways"
+        assert (
+            len(gcp_regions_to_provision) == 0 or self.gcp.auth.enabled()
+        ), "GCP credentials not configured but job provisions GCP gateways"
 
         # init clouds
         jobs = []
@@ -78,7 +84,7 @@ class ReplicatorClient:
 
         # reuse existing AWS instances
         if reuse_instances:
-            if self.aws is not None:
+            if self.aws.auth.enabled():
                 aws_instance_filter = {
                     "tags": {"skylark": "true"},
                     "instance_type": self.aws_instance_class,
@@ -94,7 +100,7 @@ class ReplicatorClient:
             else:
                 current_aws_instances = {}
 
-            if self.azure is not None:
+            if self.azure.auth.enabled():
                 azure_instance_filter = {
                     "tags": {"skylark": "true"},
                     "instance_type": self.azure_instance_class,
@@ -110,7 +116,7 @@ class ReplicatorClient:
             else:
                 current_azure_instances = {}
 
-            if self.gcp is not None:
+            if self.gcp.auth.enabled():
                 gcp_instance_filter = {
                     "tags": {"skylark": "true"},
                     "instance_type": self.gcp_instance_class,
@@ -131,13 +137,13 @@ class ReplicatorClient:
             def provision_gateway_instance(region: str) -> Server:
                 provider, subregion = region.split(":")
                 if provider == "aws":
-                    assert self.aws is not None
+                    assert self.aws.auth.enabled()
                     server = self.aws.provision_instance(subregion, self.aws_instance_class)
                 elif provider == "azure":
-                    assert self.azure is not None
+                    assert self.azure.auth.enabled()
                     server = self.azure.provision_instance(subregion, self.azure_instance_class)
                 elif provider == "gcp":
-                    assert self.gcp is not None
+                    assert self.gcp.auth.enabled()
                     # todo specify network tier in ReplicationTopology
                     server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
                 else:
