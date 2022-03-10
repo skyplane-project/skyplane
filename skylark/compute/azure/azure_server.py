@@ -117,7 +117,7 @@ class AzureServer(Server):
             return False
 
     def uuid(self):
-        return f"{self.subscription_id}:{self.region_tag}:{self.name}"
+        return f"{self.region_tag}:{self.name}"
 
     def instance_state(self) -> ServerState:
         compute_client = self.auth.get_compute_client()

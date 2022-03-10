@@ -11,10 +11,11 @@ from skylark.utils import logger
 from skylark import key_root
 from skylark.compute.azure.azure_server import AzureServer
 from skylark.compute.cloud_providers import CloudProvider
+from azure.mgmt.authorization.models import RoleAssignmentCreateParameters
 
 from azure.mgmt.compute.models import ResourceIdentityType
 
-from skylark.utils.utils import do_parallel
+from skylark.utils.utils import Timer, do_parallel
 
 
 class AzureCloudProvider(CloudProvider):
@@ -327,124 +328,131 @@ class AzureCloudProvider(CloudProvider):
         # TODO: On future requests to create resources, check if a resource
         # with that name already exists, and fail the operation if so
 
-        # Create a Virtual Network for this instance
-        poller = network_client.virtual_networks.begin_create_or_update(
-            resource_group,
-            AzureServer.vnet_name(name),
-            {"location": location, "tags": {"skylark": "true"}, "address_space": {"address_prefixes": ["10.0.0.0/24"]}},
-        )
-        poller.result()
-
-        # Create a Network Security Group for this instance
-        # NOTE: This is insecure. We should fix this soon.
-        poller = network_client.network_security_groups.begin_create_or_update(
-            resource_group,
-            AzureServer.nsg_name(name),
-            {
-                "location": location,
-                "tags": {"skylark": "true"},
-                "security_rules": [
-                    {
-                        "name": name + "-allow-all",
-                        "protocol": "Tcp",
-                        "source_port_range": "*",
-                        "source_address_prefix": "*",
-                        "destination_port_range": "*",
-                        "destination_address_prefix": "*",
-                        "access": "Allow",
-                        "priority": 300,
-                        "direction": "Inbound",
-                    }
-                    # Azure appears to add default rules for outbound connections
-                ],
-            },
-        )
-        nsg_result = poller.result()
-
-        # Create a subnet for this instance with the above Network Security Group
-        subnet_poller = network_client.subnets.begin_create_or_update(
-            resource_group,
-            AzureServer.vnet_name(name),
-            AzureServer.subnet_name(name),
-            {"address_prefix": "10.0.0.0/26", "network_security_group": {"id": nsg_result.id}},
-        )
-
-        # Create a public IPv4 address for this instance
-        ip_poller = network_client.public_ip_addresses.begin_create_or_update(
-            resource_group,
-            AzureServer.ip_name(name),
-            {
-                "location": location,
-                "tags": {"skylark": "true"},
-                "sku": {"name": "Standard"},
-                "public_ip_allocation_method": "Static",
-                "public_ip_address_version": "IPV4",
-            },
-        )
-
-        subnet_result = subnet_poller.result()
-        public_ip_result = ip_poller.result()
-
-        # Create a NIC for this instance, with accelerated networking enabled
-        poller = network_client.network_interfaces.begin_create_or_update(
-            resource_group,
-            AzureServer.nic_name(name),
-            {
-                "location": location,
-                "tags": {"skylark": "true"},
-                "ip_configurations": [
-                    {"name": name + "-ip", "subnet": {"id": subnet_result.id}, "public_ip_address": {"id": public_ip_result.id}}
-                ],
-                "enable_accelerated_networking": True,
-            },
-        )
-        nic_result = poller.result()
-
-        # Create the VM
-        with self.provisioning_semaphore:
-            poller = compute_client.virtual_machines.begin_create_or_update(
+        with Timer("Creating Azure network"):
+            # Create a Virtual Network for this instance
+            poller = network_client.virtual_networks.begin_create_or_update(
                 resource_group,
-                AzureServer.vm_name(name),
+                AzureServer.vnet_name(name),
+                {"location": location, "tags": {"skylark": "true"}, "address_space": {"address_prefixes": ["10.0.0.0/24"]}},
+            )
+            poller.result()
+
+            # Create a Network Security Group for this instance
+            # NOTE: This is insecure. We should fix this soon.
+            poller = network_client.network_security_groups.begin_create_or_update(
+                resource_group,
+                AzureServer.nsg_name(name),
                 {
                     "location": location,
                     "tags": {"skylark": "true"},
-                    "hardware_profile": {"vm_size": self.lookup_valid_instance(location, vm_size)},
-                    "storage_profile": {
-                        "image_reference": {
-                            "publisher": "canonical",
-                            "offer": "0001-com-ubuntu-server-focal",
-                            "sku": "20_04-lts",
-                            "version": "latest",
-                        },
-                        "os_disk": {"create_option": "FromImage", "delete_option": "Delete"},
-                    },
-                    "os_profile": {
-                        "computer_name": AzureServer.vm_name(name),
-                        "admin_username": uname,
-                        "linux_configuration": {
-                            "disable_password_authentication": True,
-                            "ssh": {"public_keys": [{"path": f"/home/{uname}/.ssh/authorized_keys", "key_data": pub_key}]},
-                        },
-                    },
-                    "network_profile": {"network_interfaces": [{"id": nic_result.id}]},
-                    # give VM managed identity w/ system assigned identity
-                    "identity": {"type": ResourceIdentityType.system_assigned},
+                    "security_rules": [
+                        {
+                            "name": name + "-allow-all",
+                            "protocol": "Tcp",
+                            "source_port_range": "*",
+                            "source_address_prefix": "*",
+                            "destination_port_range": "*",
+                            "destination_address_prefix": "*",
+                            "access": "Allow",
+                            "priority": 300,
+                            "direction": "Inbound",
+                        }
+                        # Azure appears to add default rules for outbound connections
+                    ],
                 },
             )
-            vm_result = poller.result()
+            nsg_result = poller.result()
 
-        # Assign roles to system MSI, see https://docs.microsoft.com/en-us/samples/azure-samples/compute-python-msi-vm/compute-python-msi-vm/#role-assignment
-        # todo only grant storage-blob-data-reader and storage-blob-data-writer for specified buckets
-        auth_client = self.auth.get_authorization_client()
-        role_name = "Contributor"
-        roles = list(auth_client.role_definitions.list(resource_group, filter="roleName eq '{}'".format(role_name)))
-        assert len(roles) == 1
+            # Create a subnet for this instance with the above Network Security Group
+            subnet_poller = network_client.subnets.begin_create_or_update(
+                resource_group,
+                AzureServer.vnet_name(name),
+                AzureServer.subnet_name(name),
+                {"address_prefix": "10.0.0.0/26", "network_security_group": {"id": nsg_result.id}},
+            )
 
-        # Add RG scope to the MSI identities:
-        role_assignment = auth_client.role_assignments.create(
-            resource_group,
-            uuid.uuid4(),  # Role assignment random name
-            {"role_definition_id": roles[0].id, "principal_id": vm_result.identity.principal_id},
-        )
+            # Create a public IPv4 address for this instance
+            ip_poller = network_client.public_ip_addresses.begin_create_or_update(
+                resource_group,
+                AzureServer.ip_name(name),
+                {
+                    "location": location,
+                    "tags": {"skylark": "true"},
+                    "sku": {"name": "Standard"},
+                    "public_ip_allocation_method": "Static",
+                    "public_ip_address_version": "IPV4",
+                },
+            )
+
+            subnet_result = subnet_poller.result()
+            public_ip_result = ip_poller.result()
+
+        with Timer("Creating Azure NIC"):
+            # Create a NIC for this instance, with accelerated networking enabled
+            poller = network_client.network_interfaces.begin_create_or_update(
+                resource_group,
+                AzureServer.nic_name(name),
+                {
+                    "location": location,
+                    "tags": {"skylark": "true"},
+                    "ip_configurations": [
+                        {"name": name + "-ip", "subnet": {"id": subnet_result.id}, "public_ip_address": {"id": public_ip_result.id}}
+                    ],
+                    "enable_accelerated_networking": True,
+                },
+            )
+            nic_result = poller.result()
+
+        # Create the VM
+        with Timer("Creating Azure VM"):
+            with self.provisioning_semaphore:
+                poller = compute_client.virtual_machines.begin_create_or_update(
+                    resource_group,
+                    AzureServer.vm_name(name),
+                    {
+                        "location": location,
+                        "tags": {"skylark": "true"},
+                        "hardware_profile": {"vm_size": self.lookup_valid_instance(location, vm_size)},
+                        "storage_profile": {
+                            "image_reference": {
+                                "publisher": "canonical",
+                                "offer": "0001-com-ubuntu-server-focal",
+                                "sku": "20_04-lts",
+                                "version": "latest",
+                            },
+                            "os_disk": {"create_option": "FromImage", "delete_option": "Delete"},
+                        },
+                        "os_profile": {
+                            "computer_name": AzureServer.vm_name(name),
+                            "admin_username": uname,
+                            "linux_configuration": {
+                                "disable_password_authentication": True,
+                                "ssh": {"public_keys": [{"path": f"/home/{uname}/.ssh/authorized_keys", "key_data": pub_key}]},
+                            },
+                        },
+                        "network_profile": {"network_interfaces": [{"id": nic_result.id}]},
+                        # give VM managed identity w/ system assigned identity
+                        "identity": {"type": ResourceIdentityType.system_assigned},
+                    },
+                )
+                vm_result = poller.result()
+
+        with Timer("Role assignment"):
+            # Assign roles to system MSI, see https://docs.microsoft.com/en-us/samples/azure-samples/compute-python-msi-vm/compute-python-msi-vm/#role-assignment
+            # todo only grant storage-blob-data-reader and storage-blob-data-writer for specified buckets
+            auth_client = self.auth.get_authorization_client()
+            scope = f"/subscriptions/{self.auth.subscription_id}"
+            role_name = "Contributor"
+            roles = list(auth_client.role_definitions.list(scope, filter="roleName eq '{}'".format(role_name)))
+            assert len(roles) == 1
+
+            # Add RG scope to the MSI identities:
+            role_assignment = auth_client.role_assignments.create(
+                scope,
+                uuid.uuid4(),  # Role assignment random name
+                RoleAssignmentCreateParameters(
+                    properties=dict(role_definition_id=roles[0].id, principal_id=vm_result.identity.principal_id)
+                ),
+            )
 
         return AzureServer(name)
