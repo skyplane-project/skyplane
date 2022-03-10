@@ -30,7 +30,7 @@ class AzureAuthentication:
             return os.environ["AZURE_SUBSCRIPTION_ID"]
         else:
             try:
-                return subprocess.check_output(["az", "account", "show", "--query", "id"]).decode("utf-8").strip()
+                return subprocess.check_output(["az", "account", "show", "--query", "id"]).decode("utf-8").replace('"', "").strip()
             except subprocess.CalledProcessError:
                 return None
 

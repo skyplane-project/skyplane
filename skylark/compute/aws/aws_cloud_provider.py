@@ -72,7 +72,7 @@ class AWSCloudProvider(CloudProvider):
             return transfer_df.loc[src, "internet"]["cost"]
 
     def get_instance_list(self, region: str) -> List[AWSServer]:
-        ec2 = self.auth.get_boto3_client("ec2", region)
+        ec2 = self.auth.get_boto3_resource("ec2", region)
         valid_states = ["pending", "running", "stopped", "stopping"]
         instances = ec2.instances.filter(Filters=[{"Name": "instance-state-name", "Values": valid_states}])
         try:

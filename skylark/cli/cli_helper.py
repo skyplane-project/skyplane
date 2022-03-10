@@ -311,6 +311,7 @@ def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> Skylar
         typer.secho("    https://docs.microsoft.com/en-us/azure/developer/python/azure-sdk-authenticate", fg="red")
         typer.secho("    Disabling Azure support", fg="blue")
         return config
+    typer.secho("    Azure credentials found in Azure CLI", fg="blue")
     inferred_subscription_id = AzureAuthentication.infer_subscription_id()
     if typer.confirm("    Azure credentials found, do you want to enable Azure support in Skylark?", default=True):
         config.azure_subscription_id = typer.prompt("    Enter the Azure subscription ID:", default=inferred_subscription_id)
@@ -336,21 +337,22 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
         gcp_enabled = True
     except Exception as e:
         print(e)
-        print(e.message)
         gcp_enabled = False
     if not gcp_enabled:
-        typer.secho("    Default GCP credentials are not set up yet. Run `gcloud auth application-default login` to set them up.", fg="red")
+        typer.secho(
+            "    Default GCP credentials are not set up yet. Run `gcloud auth application-default login` or set GOOGLE_APPLICATION_CREDENTIALS.",
+            fg="red",
+        )
         typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red")
         typer.secho("    Disabling GCP support", fg="blue")
         return config
     else:
         typer.secho("    GCP credentials found in GCP CLI", fg="blue")
         inferred_project_id = GCPAuthentication.infer_project_id()
-        if inferred_project_id:
-            typer.secho(f"    Inferred GCP project ID: {inferred_project_id}", fg="blue")
-            if typer.confirm(f"    Do you want to use the inferred project ID `{inferred_project_id}`?", default=True):
-                config.gcp_project_id = inferred_project_id
-                return config
-    if typer.confirm("    GCP credentials are configured, but no default project ID was set. Do you want to set one now?", default=True):
-        config.gcp_project_id = typer.prompt("    Enter the GCP project ID:")
-    return config
+        if typer.confirm("    GCP credentials found, do you want to enable GCP support in Skylark?", default=True):
+            config.gcp_project_id = typer.prompt("    Enter the GCP project ID:", default=inferred_project_id)
+            return config
+        else:
+            config.gcp_project_id = None
+            typer.secho("    Disabling GCP support", fg="blue")
+            return config
