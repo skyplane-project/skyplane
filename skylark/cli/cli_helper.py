@@ -5,6 +5,7 @@ import resource
 import subprocess
 from pathlib import Path
 from shutil import copyfile
+import sys
 from typing import Dict, List, Optional
 
 import boto3
@@ -298,47 +299,53 @@ def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> Skylar
 
     # check if Azure is enabled
     auth = AzureAuthentication()
-    if not auth.enabled():
-        typer.secho("    Default Azure credentials are not set up yet. Run `az login` to set them up.", fg="red")
+    try:
+        auth.credential.get_token("https://management.azure.com/")
+        azure_enabled = True
+    except Exception as e:
+        print(e)
+        print(e.message)
+        azure_enabled = False
+    if not azure_enabled:
+        typer.secho("    No local Azure credentials! Run `az login` to set them up.", fg="red")
         typer.secho("    https://docs.microsoft.com/en-us/azure/developer/python/azure-sdk-authenticate", fg="red")
         typer.secho("    Disabling Azure support", fg="blue")
         return config
+    inferred_subscription_id = AzureAuthentication.infer_subscription_id()
+    if typer.confirm("    Azure credentials found, do you want to enable Azure support in Skylark?", default=True):
+        config.azure_subscription_id = typer.prompt("    Enter the Azure subscription ID:", default=inferred_subscription_id)
     else:
-        typer.secho("    Azure credentials found in Azure CLI", fg="blue")
-        inferred_subscription_id = auth.infer_subscription_id()
-        if inferred_subscription_id:
-            typer.secho(f"    Inferred Azure subscription ID: {inferred_subscription_id}", fg="blue")
-            if typer.confirm(f"    Do you want to use the inferred subscription ID `{inferred_subscription_id}`?", default=True):
-                config.azure_subscription_id = inferred_subscription_id
-                return config
-    if typer.confirm(
-        "    Azure credentials are configured, but no default subscription ID was set. Do you want to set one now?", default=True
-    ):
-        config.azure_subscription_id = typer.prompt("    Enter the Azure subscription ID:")
+        config.azure_subscription_id = None
+        typer.secho("    Disabling Azure support", fg="blue")
     return config
 
 
 def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkConfig:
     if force_init:
         typer.secho("    GCP credentials will be re-initialized", fg="red")
-        config.gcp_enabled = False
-        config.gcp_application_credentials_file = None
         config.gcp_project_id = None
 
-    if config.gcp_project_id is not None and config.gcp_application_credentials_file is not None:
+    if config.gcp_project_id is not None:
         typer.secho("    GCP already configured! To reconfigure GCP, run `skylark init --reinit-gcp`.", fg="blue")
         return config
 
     # check if GCP is enabled
     auth = GCPAuthentication()
-    if not auth.enabled():
-        typer.secho("    Default GCP credentials are not set up yet. Run `gcloud auth login` to set them up.", fg="red")
+    try:
+        auth.get_gcp_client("cloudbilling", "v1").services().list().execute()
+        gcp_enabled = True
+    except Exception as e:
+        print(e)
+        print(e.message)
+        gcp_enabled = False
+    if not gcp_enabled:
+        typer.secho("    Default GCP credentials are not set up yet. Run `gcloud auth application-default login` to set them up.", fg="red")
         typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red")
         typer.secho("    Disabling GCP support", fg="blue")
         return config
     else:
         typer.secho("    GCP credentials found in GCP CLI", fg="blue")
-        inferred_project_id = auth.infer_project_id()
+        inferred_project_id = GCPAuthentication.infer_project_id()
         if inferred_project_id:
             typer.secho(f"    Inferred GCP project ID: {inferred_project_id}", fg="blue")
             if typer.confirm(f"    Do you want to use the inferred project ID `{inferred_project_id}`?", default=True):

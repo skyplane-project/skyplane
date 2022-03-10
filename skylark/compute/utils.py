@@ -1,4 +1,39 @@
+from functools import lru_cache
+import subprocess
 from skylark.utils import logger
+
+
+@lru_cache
+def query_which_cloud() -> str:
+    if (
+        subprocess.call(
+            'curl -f --noproxy "*" http://169.254.169.254/1.0/meta-data/instance-id'.split(),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        == 0
+    ):
+        return "aws"
+    elif (
+        subprocess.call(
+            'curl -f -H Metadata:true --noproxy "*" "http://169.254.169.254/metadata/instance?api-version=2021-02-01"'.split(),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        == 0
+    ):
+        return "azure"
+    elif (
+        subprocess.call(
+            'curl -f --noproxy "*" http://metadata.google.internal/computeMetadata/v1/instance/hostname'.split(),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        == 0
+    ):
+        return "gcp"
+    else:
+        return "unknown"
 
 
 def make_dozzle_command(port):

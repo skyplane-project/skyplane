@@ -9,12 +9,17 @@ from azure.mgmt.authorization import AuthorizationManagementClient
 from azure.storage.blob import BlobServiceClient
 
 from skylark import cloud_config
+from skylark.compute.utils import query_which_cloud
 
 
 class AzureAuthentication:
     def __init__(self, subscription_id: str = cloud_config.azure_subscription_id):
         self.subscription_id = subscription_id
-        self.credential = DefaultAzureCredential()
+        self.credential = DefaultAzureCredential(
+            exclude_managed_identity_credential=query_which_cloud() != "azure",  # exclude MSI if not Azure
+            exclude_powershell_credential=True,
+            exclude_visual_studio_code_credential=True,
+        )
 
     def enabled(self) -> bool:
         return self.subscription_id is not None

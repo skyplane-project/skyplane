@@ -1,6 +1,7 @@
 import os
 
 from pathlib import Path
+from skylark.compute.utils import query_which_cloud
 
 from skylark.config import SkylarkConfig
 
@@ -38,10 +39,7 @@ def print_header():
 KB = 1024
 MB = 1024 * 1024
 GB = 1024 * 1024 * 1024
-
-
-# cloud config
 if config_path.exists():
     cloud_config = SkylarkConfig.load_config(config_path)
 else:
-    cloud_config = SkylarkConfig.load_infer_cli()
+    cloud_config = SkylarkConfig()
