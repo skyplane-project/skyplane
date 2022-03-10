@@ -2,6 +2,7 @@ from datetime import datetime
 from multiprocessing import Lock, Manager, Queue
 from os import PathLike
 from pathlib import Path
+from queue import Empty
 import subprocess
 from typing import Dict, List, Optional
 
@@ -26,8 +27,6 @@ class ChunkStore:
 
         # state log
         self.chunk_status_queue: Queue[Dict] = Queue()
-        self.chunk_status_log: List[Dict] = []
-        self.chunk_status_log_lock = Lock()
 
     def get_chunk_file_path(self, chunk_id: int) -> Path:
         return self.chunk_dir / f"{chunk_id:05d}.chunk"
@@ -46,17 +45,15 @@ class ChunkStore:
             rec.update(log_metadata)
         self.chunk_status_queue.put(rec)
 
-    def get_chunk_status_log(self) -> List[Dict]:
-        # flush queue to log
-        with self.chunk_status_log_lock:
-            while True:
-                try:
-                    elem = self.chunk_status_queue.get_nowait()
-                    self.chunk_status_log.append(elem)
-                except:
-                    break
-
-        return list(self.chunk_status_log)
+    def drain_chunk_status_queue(self) -> List[Dict]:
+        out_events = []
+        while True:
+            try:
+                elem = self.chunk_status_queue.get_nowait()
+                out_events.append(elem)
+            except Empty:
+                break
+        return out_events
 
     def state_start_download(self, chunk_id: int, receiver_id: Optional[str] = None):
         state = self.get_chunk_state(chunk_id)

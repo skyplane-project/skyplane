@@ -1,5 +1,4 @@
 import os
-import threading
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -16,8 +15,6 @@ from skylark.utils.cache import ignore_lru_cache
 class AWSServer(Server):
     """AWS Server class to support basic SSH operations"""
 
-    ns = threading.local()
-
     def __init__(self, region_tag, instance_id, log_dir=None):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "aws"
@@ -31,11 +28,7 @@ class AWSServer(Server):
 
     @classmethod
     def get_boto3_session(cls, aws_region) -> boto3.Session:
-        # cache in thead-local storage
-        key = f"{aws_region}_boto3_session"
-        if not hasattr(cls.ns, key):
-            setattr(cls.ns, key, boto3.Session(region_name=aws_region))
-        return getattr(cls.ns, key)
+        return boto3.Session(region_name=aws_region)
 
     @classmethod
     def get_boto3_resource(cls, service_name, aws_region=None):
@@ -69,15 +62,18 @@ class AWSServer(Server):
                 if key_name in keys_in_region:
                     logger.warning(f"Deleting key {key_name} in region {aws_region}")
                     ec2_client.delete_key_pair(KeyName=key_name)
-                key_pair = ec2.create_key_pair(KeyName=f"skylark-{aws_region}")
+                key_pair = ec2.create_key_pair(KeyName=f"skylark-{aws_region}", KeyType="rsa")
                 with local_key_file.open("w") as f:
-                    f.write(key_pair.key_material)
+                    key_str = key_pair.key_material
+                    if not key_str.endswith("\n"):
+                        key_str += "\n"
+                    f.write(key_str)
                     f.flush()  # sometimes generates keys with zero bytes, so we flush to ensure it's written
                 os.chmod(local_key_file, 0o600)
+                logger.info(f"Created key file {local_key_file}")
 
         if not local_key_file.exists():
             create_keyfile()
-            logger.info(f"Created key file {local_key_file}")
         return local_key_file
 
     @ignore_lru_cache()
@@ -120,9 +116,12 @@ class AWSServer(Server):
         client.connect(
             self.public_ip(),
             username="ec2-user",
-            key_filename=str(self.local_keyfile),
+            pkey=paramiko.RSAKey.from_private_key_file(self.local_keyfile),
             look_for_keys=False,
             allow_agent=False,
             banner_timeout=200,
         )
         return client
+
+    def get_ssh_cmd(self):
+        return f"ssh -i {self.local_keyfile} ec2-user@{self.public_ip()}"

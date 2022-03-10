@@ -1,3 +1,7 @@
+#!/bin/bash
+
+set -xe
+
 #src="aws:us-east-1"
 #dest="aws:us-west-1"
 
@@ -55,10 +59,10 @@ cp ${filename} data/results/${experiment}
 
 ## run replication (random)
 #skylark replicate-json ${filename} \
-#    --gcp-project skylark-sarah \
-#    --use-random-data \
-#    --size-total-mb 73728 \
-#    --n-chunks 1152  > data/results/${experiment}/random-logs.txt
+#   --gcp-project skylark-sarah \
+#   --use-random-data \
+#   --size-total-mb 73728 \
+#   --n-chunks 1152 &> data/results/${experiment}/random-logs.txt
 #tail -1 data/results/${experiment}/random-logs.txt;
 
 # run replication (obj store)

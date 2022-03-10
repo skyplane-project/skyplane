@@ -57,6 +57,7 @@ class GatewayObjStoreConn:
         self.processes = []
 
     def worker_loop(self, worker_id: int):
+        # todo should this use processes instead of threads?
         setproctitle.setproctitle(f"skylark-gateway-obj-store:{worker_id}")
         self.worker_id = worker_id
 

@@ -3,6 +3,7 @@ from datetime import datetime
 import itertools
 from functools import partial
 import json
+import pickle
 import time
 from typing import Dict, List, Optional, Tuple
 import uuid
@@ -50,21 +51,6 @@ class ReplicatorClient:
         self.gcp = GCPCloudProvider(gcp_project) if gcp_instance_class != "None" and gcp_project is not None else None
         self.bound_nodes: Dict[ReplicationTopologyGateway, Server] = {}
 
-        # init clouds
-        jobs = []
-        if self.aws is not None:
-            for r in self.aws.region_list():
-                jobs.append(partial(self.aws.add_ip_to_security_group, r))
-        if self.azure is not None:
-            jobs.append(self.azure.create_ssh_key)
-            jobs.append(self.azure.set_up_resource_group)
-        if self.gcp is not None:
-            jobs.append(self.gcp.create_ssh_key)
-            jobs.append(self.gcp.configure_default_network)
-            jobs.append(self.gcp.configure_default_firewall)
-        with Timer(f"Cloud SSH key initialization"):
-            do_parallel(lambda fn: fn(), jobs)
-
     def provision_gateways(
         self, reuse_instances=False, log_dir: Optional[PathLike] = None, authorize_ssh_pub_key: Optional[PathLike] = None
     ):
@@ -76,6 +62,20 @@ class ReplicatorClient:
         assert len(aws_regions_to_provision) == 0 or self.aws is not None, "AWS not enabled"
         assert len(azure_regions_to_provision) == 0 or self.azure is not None, "Azure not enabled"
         assert len(gcp_regions_to_provision) == 0 or self.gcp is not None, "GCP not enabled"
+
+        # init clouds
+        jobs = []
+        for r in set(aws_regions_to_provision):
+            jobs.append(partial(self.aws.add_ip_to_security_group, r.split(":")[1]))
+        if azure_regions_to_provision:
+            jobs.append(self.azure.create_ssh_key)
+            jobs.append(self.azure.set_up_resource_group)
+        if gcp_regions_to_provision:
+            jobs.append(self.gcp.create_ssh_key)
+            jobs.append(self.gcp.configure_default_network)
+            jobs.append(self.gcp.configure_default_firewall)
+        with Timer(f"Cloud SSH key initialization"):
+            do_parallel(lambda fn: fn(), jobs)
 
         # reuse existing AWS instances
         if reuse_instances:
@@ -309,7 +309,9 @@ class ReplicatorClient:
         log_interval_s: Optional[float] = None,
         time_limit_seconds: Optional[float] = None,
         cancel_pending: bool = True,
+        save_log: bool = True,
         write_profile: bool = True,
+        copy_gateway_logs: bool = True,
     ) -> Dict:
         assert job.chunk_requests is not None
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in job.chunk_requests])
@@ -318,29 +320,35 @@ class ReplicatorClient:
         sinks = self.topology.sink_instances()
         sink_regions = set(s.region for s in sinks)
 
-        def write_profile_fn():
+        def shutdown_handler():
+            transfer_dir = tmp_log_dir / f"transfer_{datetime.now().isoformat()}"
+            transfer_dir.mkdir(exist_ok=True, parents=True)
+            if save_log:
+                (transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
+            if copy_gateway_logs:
+                for instance in self.bound_nodes.values():
+                    stdout, stderr = instance.run_command("sudo docker logs -t skylark_gateway")
+                    log_out = transfer_dir / f"gateway_{instance.uuid()}.log"
+                    log_out.write_text(stdout + "\n" + stderr)
+                logger.debug(f"Wrote gateway logs to {transfer_dir}")
             if write_profile:
-                traceevent = status_df_to_traceevent(self.get_chunk_status_log_df())
-                tmp_log_dir.mkdir(exist_ok=True)
-                profile_out = tmp_log_dir / f"traceevent_{uuid.uuid4()}.json"
-                with open(profile_out, "w") as f:
-                    json.dump(traceevent, f)
+                chunk_status_df = self.get_chunk_status_log_df()
+                (transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
+                traceevent = status_df_to_traceevent(chunk_status_df)
+                profile_out = transfer_dir / f"traceevent_{uuid.uuid4()}.json"
+                profile_out.parent.mkdir(parents=True, exist_ok=True)
+                profile_out.write_text(json.dumps(traceevent))
                 logger.debug(f"Wrote profile to {profile_out}, visualize using `about://tracing` in Chrome")
 
+            def fn(s: Server):
+                try:
+                    requests.post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
+                except:
+                    return  # ignore connection errors since server may be shutting down
+
+            do_parallel(fn, self.bound_nodes.values(), n=-1)
+
         if cancel_pending:
-            # register atexit handler to cancel pending chunk requests (force shutdown gateways)
-            def shutdown_handler():
-                def fn(s: Server):
-                    logger.warning(f"Cancelling pending chunk requests to {s.public_ip()}")
-                    try:
-                        requests.post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
-                    except requests.exceptions.ConnectionError as e:
-                        return  # ignore connection errors since server may be shutting down
-
-                write_profile_fn()
-                do_parallel(fn, self.bound_nodes.values(), n=-1)
-                logger.warning("Cancelled pending chunk requests")
-
             atexit.register(shutdown_handler)
 
         with Timer() as t:
@@ -374,7 +382,7 @@ class ReplicatorClient:
                     ):
                         if cancel_pending:
                             atexit.unregister(shutdown_handler)
-                        write_profile_fn()
+                        shutdown_handler()
                         return dict(
                             completed_chunk_ids=completed_chunk_ids,
                             total_runtime_s=total_runtime_s,

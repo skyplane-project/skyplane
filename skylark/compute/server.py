@@ -1,18 +1,19 @@
 import json
 import os
 import subprocess
-import threading
 from enum import Enum, auto
 from pathlib import Path
 from typing import Dict
-
 import requests
+from skylark import config_file
 from skylark.utils import logger
 from skylark.compute.utils import make_dozzle_command, make_sysctl_tcp_tuning_command
 from skylark.utils.utils import PathLike, Timer, retry_backoff, wait_for
 
 import configparser
 import os
+
+from skylark import config_file
 
 
 class ServerState(Enum):
@@ -67,8 +68,6 @@ class ServerState(Enum):
 class Server:
     """Abstract server class to support basic SSH operations"""
 
-    ns = threading.local()
-
     def __init__(self, region_tag, log_dir=None):
         self.region_tag = region_tag  # format provider:region
         self.command_log = []
@@ -94,12 +93,15 @@ class Server:
     def get_ssh_client_impl(self):
         raise NotImplementedError()
 
+    def get_ssh_cmd(self) -> str:
+        raise NotImplementedError()
+
     @property
     def ssh_client(self):
-        """Create SSH client and cache (one connection per thread using threadlocal)"""
-        if not hasattr(self, "client"):
-            self.client = self.get_ssh_client_impl()
-        return self.client
+        """Create SSH client and cache."""
+        if not hasattr(self, "_ssh_client"):
+            self._ssh_client = self.get_ssh_client_impl()
+        return self._ssh_client
 
     @property
     def provider(self) -> str:
@@ -151,9 +153,6 @@ class Server:
         wait_for(is_up, timeout=timeout, interval=interval, desc=f"Waiting for {self.uuid()} to be ready")
 
     def close_server(self):
-        if hasattr(self.ns, "client"):
-            self.ns.client.close()
-            del self.ns.client
         self.flush_command_log()
 
     def flush_command_log(self):
@@ -213,25 +212,22 @@ class Server:
 
         # read AWS config file to get credentials
         # TODO: Integrate this with updated skylark config file
-        docker_envs = ""
-        try:
-            config = configparser.RawConfigParser()
-            config.read(os.path.expanduser("~/.aws/credentials"))
-            aws_access_key_id = config.get("default", "aws_access_key_id")
-            aws_secret_access_key = config.get("default", "aws_secret_access_key")
-            docker_envs += f" -e AWS_ACCESS_KEY_ID='{aws_access_key_id}'"
-            docker_envs += f" -e AWS_SECRET_ACCESS_KEY='{aws_secret_access_key}'"
-        except Exception as e:
-            logger.error(f"Failed to read AWS credentials locally {e}")
+        # copy config file
+        config = config_file.read_text()[:-2] + "}"
+        config = json.dumps(config)  # Convert to JSON string and remove trailing comma/new-line
+        self.run_command(f'mkdir -p /tmp; echo "{config}" | sudo tee /tmp/{config_file.name} > /dev/null')
+
+        docker_envs = ""  # If needed, add environment variables to docker command
 
         with Timer(f"{desc_prefix}: Docker pull"):
             docker_out, docker_err = self.run_command(f"sudo docker pull {gateway_docker_image}")
             assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
         logger.debug(f"{desc_prefix}: Starting gateway container")
         docker_run_flags = (
-            f"-d --rm --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024} {docker_envs}"
+            f"-d --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024} {docker_envs}"
         )
         docker_run_flags += " --mount type=tmpfs,dst=/skylark,tmpfs-size=$(($(free -b  | head -n2 | tail -n1 | awk '{print $2}')/2))"
+        docker_run_flags += f" -v /tmp/{config_file.name}:/pkg/data/{config_file.name}"
         gateway_daemon_cmd = f"python -u /pkg/skylark/gateway/gateway_daemon.py --chunk-dir /skylark/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = self.run_command(docker_launch_cmd)
@@ -255,9 +251,12 @@ class Server:
 
         try:
             wait_for(is_ready, timeout=10, interval=0.1, desc=f"Waiting for gateway {self.uuid()} to start", leave_pbar=False)
-        except Exception as e:
+        except TimeoutError as e:
             logger.error(f"Gateway {self.instance_name()} is not ready {e}")
             logger.warning(desc_prefix + " gateway launch command: " + docker_launch_cmd)
             logs, err = self.run_command(f"sudo docker logs skylark_gateway --tail=100")
             logger.error(f"Docker logs: {logs}\nerr: {err}")
+
+            out, err = self.run_command(docker_launch_cmd.replace(" -d ", " "))
+            logger.error(f"Relaunching gateway in foreground\nout: {out}\nerr: {err}")
             raise e

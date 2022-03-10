@@ -22,29 +22,30 @@ class AWSCloudProvider(CloudProvider):
 
     @staticmethod
     def region_list() -> List[str]:
+        # todo query AWS for list of active regions
         all_regions = [
-            # "af-south-1",
+            "af-south-1",
+            "ap-east-1",
             "ap-northeast-1",
             "ap-northeast-2",
             "ap-northeast-3",
-            # "ap-east-1",
             "ap-south-1",
             "ap-southeast-1",
             "ap-southeast-2",
+            "ap-southeast-3",
             "ca-central-1",
             "eu-central-1",
             "eu-north-1",
-            # "eu-south-1",
+            "eu-south-1",
             "eu-west-1",
             "eu-west-2",
             "eu-west-3",
-            # "me-south-1",
+            "me-south-1",
             "sa-east-1",
             "us-east-1",
             "us-east-2",
             "us-west-1",
             "us-west-2",
-            # "ap-southeast-3",  # too new region, not well supported
         ]
         return all_regions
 
@@ -74,7 +75,12 @@ class AWSCloudProvider(CloudProvider):
         ec2 = AWSServer.get_boto3_resource("ec2", region)
         valid_states = ["pending", "running", "stopped", "stopping"]
         instances = ec2.instances.filter(Filters=[{"Name": "instance-state-name", "Values": valid_states}])
-        instance_ids = [i.id for i in instances]
+        try:
+            instance_ids = [i.id for i in instances]
+        except botocore.exceptions.ClientError as e:
+            logger.error(f"error provisioning in {region}: {e}")
+            return []
+
         return [AWSServer(f"aws:{region}", i) for i in instance_ids]
 
     def get_security_group(self, region: str, vpc_name="skylark", sg_name="skylark"):

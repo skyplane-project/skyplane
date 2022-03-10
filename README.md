@@ -20,6 +20,10 @@ This package represents both components as a single binary. Docker builds a sing
 	* (1) Install AWS CLI with `sudo apt install awscli`
 	* (2) Configure AWS by running `aws configure` and input the necessary information. See https://docs.aws.amazon.com/powershell/latest/userguide/pstools-appendix-sign-up.html. 
 	* (3) Ensure that you have a sufficient AWS vCPU limit in any regions you intend to use
+<<<<<<< HEAD
+=======
+    * (4) Install netcat with `sudo apt install nc`
+>>>>>>> main
 
 ### Building and deploying the gateway
 
