@@ -18,7 +18,7 @@ import json
 import os
 from pathlib import Path
 from typing import Optional
-import multiprocessing
+import threading
 
 import skylark.cli.cli_aws
 import skylark.cli.cli_azure
@@ -197,6 +197,10 @@ def query_object_store(conn):
     obj_keys = list([obj.key for obj in objs])
     conn.send(obj_keys)
 
+def get_file_sizes(job, return_list):
+    obj_file_size_bytes = job.src_obj_sizes() if job.source_bucket else None
+    return_list.append(obj_file_size_bytes)
+
 @app.command()
 def replicate_json(
     path: Path = typer.Argument(..., exists=True, file_okay=True, dir_okay=False, help="Path to JSON file describing replication plan"),
@@ -249,12 +253,22 @@ def replicate_json(
         logger.warning(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
         )
-    
+
     if not use_random_data:
-        parent_conn, child_conn = multiprocessing.Pipe()
-        query_process = multiprocessing.Process(target=query_object_store, args=(child_conn,))#Process(target=query_object_store, args=(
-        parent_conn.send([topo, source_bucket, key_prefix])
-        query_process.start()
+        objs = ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(key_prefix)
+        obj_keys = list([obj.key for obj in objs])
+
+        # create replication job
+        job = ReplicationJob(
+            source_region=topo.source_region(),
+            source_bucket=source_bucket,
+            dest_region=topo.sink_region(),
+            dest_bucket=dest_bucket,
+            objs=obj_keys,
+        )
+        return_list = []
+        query_thread = threading.Thread(target=get_file_sizes, args=(job, return_list))
+        query_thread.start()
 
     rc.provision_gateways(reuse_gateways)
     for node, gw in rc.bound_nodes.items():
@@ -278,20 +292,10 @@ def replicate_json(
         job = rc.run_replication_plan(job)
         total_bytes = n_chunks * chunk_size_mb * MB
     else:
+        query_thread.join()
+        obj_file_size_bytes = return_list[0]
 
-        # get object keys with prefix
-        query_process.join()
-        obj_keys = parent_conn.recv()
-
-        # create replication job
-        job = ReplicationJob(
-            source_region=topo.source_region(),
-            source_bucket=source_bucket,
-            dest_region=topo.sink_region(),
-            dest_bucket=dest_bucket,
-            objs=obj_keys,
-        )
-        job = rc.run_replication_plan(job)
+        job = rc.run_replication_plan(job, obj_file_size_bytes=obj_file_size_bytes)
 
         # query chunk sizes
         total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])

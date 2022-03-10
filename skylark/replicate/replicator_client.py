@@ -193,7 +193,7 @@ class ReplicatorClient:
 
         do_parallel(deprovision_gateway_instance, self.bound_nodes.values(), n=-1)
 
-    def run_replication_plan(self, job: ReplicationJob) -> ReplicationJob:
+    def run_replication_plan(self, job: ReplicationJob, obj_file_size_bytes: dict = None) -> ReplicationJob:
         assert job.source_region.split(":")[0] in [
             "aws",
             "azure",
@@ -210,13 +210,16 @@ class ReplicatorClient:
 
         # make list of chunks
         chunks = []
-        obj_file_size_bytes = job.src_obj_sizes() if job.source_bucket else None
+        if obj_file_size_bytes == None:
+            obj_file_size_bytes = job.src_obj_sizes() if job.source_bucket else None
+        
         for idx, obj in enumerate(job.objs):
             if obj_file_size_bytes:
                 file_size_bytes = obj_file_size_bytes[obj]
             else:
                 file_size_bytes = job.random_chunk_size_mb * MB
             chunks.append(Chunk(key=obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes))
+
 
         # partition chunks into roughly equal-sized batches (by bytes)
         src_instances = [self.bound_nodes[n] for n in self.topology.source_instances()]
