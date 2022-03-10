@@ -157,28 +157,24 @@ class AzureServer(Server):
     def network_tier(self):
         return "PREMIUM"
 
-    def terminate_instance_impl(self):
+    def terminate_instance_impl(self, block=True):
         compute_client = self.auth.get_compute_client()
         network_client = self.auth.get_network_client()
-
         vm_poller = compute_client.virtual_machines.begin_delete(AzureServer.resource_group_name, self.vm_name(self.name))
-        _ = vm_poller.result()
-
+        vm_poller.result()
         nic_poller = network_client.network_interfaces.begin_delete(AzureServer.resource_group_name, self.nic_name(self.name))
-        _ = nic_poller.result()
-
         ip_poller = network_client.public_ip_addresses.begin_delete(AzureServer.resource_group_name, self.ip_name(self.name))
         subnet_poller = network_client.subnets.begin_delete(
             AzureServer.resource_group_name, self.vnet_name(self.name), self.subnet_name(self.name)
         )
-        _ = ip_poller.result()
-        _ = subnet_poller.result()
-
         nsg_poller = network_client.network_security_groups.begin_delete(AzureServer.resource_group_name, self.nsg_name(self.name))
-        _ = nsg_poller.result()
-
         vnet_poller = network_client.virtual_networks.begin_delete(AzureServer.resource_group_name, self.vnet_name(self.name))
-        _ = vnet_poller.result()
+        if block:
+            nsg_poller.result()
+            ip_poller.result()
+            subnet_poller.result()
+            nic_poller.result()
+            vnet_poller.result()
 
     def get_ssh_client_impl(self, uname=os.environ.get("USER"), ssh_key_password="skylark"):
         """Return paramiko client that connects to this instance."""

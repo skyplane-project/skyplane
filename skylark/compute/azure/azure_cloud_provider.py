@@ -414,10 +414,16 @@ class AzureCloudProvider(CloudProvider):
                         "tags": {"skylark": "true"},
                         "hardware_profile": {"vm_size": self.lookup_valid_instance(location, vm_size)},
                         "storage_profile": {
+                            # "image_reference": {
+                            #     "publisher": "canonical",
+                            #     "offer": "0001-com-ubuntu-server-focal",
+                            #     "sku": "20_04-lts",
+                            #     "version": "latest",
+                            # },
                             "image_reference": {
-                                "publisher": "canonical",
-                                "offer": "0001-com-ubuntu-server-focal",
-                                "sku": "20_04-lts",
+                                "publisher": "microsoft-aks",
+                                "offer": "aks",
+                                "sku": "aks-engine-ubuntu-1804-202112",
                                 "version": "latest",
                             },
                             "os_disk": {"create_option": "FromImage", "delete_option": "Delete"},

@@ -113,7 +113,7 @@ def replicate_random(
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
     aws_instance_class: str = "m5.8xlarge",
-    azure_instance_class: str = "Standard_D32_v5",
+    azure_instance_class: str = "Standard_D32_v4",
     gcp_instance_class: Optional[str] = "n2-standard-32",
     gcp_use_premium_network: bool = True,
     key_prefix: str = "/test/replicate_random",
@@ -146,7 +146,7 @@ def replicate_random(
     )
 
     if not reuse_gateways:
-        atexit.register(rc.deprovision_gateways)
+        atexit.register(rc.deprovision_gateways, block=False)
     else:
         logger.warning(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
@@ -197,7 +197,7 @@ def replicate_json(
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
     # cloud provider specific options
     aws_instance_class: str = "m5.8xlarge",
-    azure_instance_class: str = "Standard_D32_v5",
+    azure_instance_class: str = "Standard_D32_v4",
     gcp_instance_class: Optional[str] = "n2-standard-32",
     gcp_use_premium_network: bool = True,
     # logging options
@@ -221,7 +221,7 @@ def replicate_json(
     )
 
     if not reuse_gateways:
-        atexit.register(rc.deprovision_gateways)
+        atexit.register(rc.deprovision_gateways, block=False)
     else:
         logger.warning(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."

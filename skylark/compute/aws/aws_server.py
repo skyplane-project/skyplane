@@ -92,7 +92,7 @@ class AWSServer(Server):
     def __repr__(self):
         return f"AWSServer(region_tag={self.region_tag}, instance_id={self.instance_id})"
 
-    def terminate_instance_impl(self):
+    def terminate_instance_impl(self, block=True):
         self.auth.get_boto3_resource("ec2", self.aws_region).instances.filter(InstanceIds=[self.instance_id]).terminate()
 
     def get_ssh_client_impl(self):

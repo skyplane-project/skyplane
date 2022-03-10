@@ -127,10 +127,10 @@ class Server:
     def network_tier(self):
         raise NotImplementedError()
 
-    def terminate_instance_impl(self):
+    def terminate_instance_impl(self, block=True):
         raise NotImplementedError()
 
-    def terminate_instance(self):
+    def terminate_instance(self, block=False):
         """Terminate instance"""
         self.close_server()
         self.terminate_instance_impl()
@@ -204,7 +204,8 @@ class Server:
 
         # increase TCP connections, enable BBR optionally and raise file limits
         check_stderr(self.run_command(make_sysctl_tcp_tuning_command(cc="bbr" if use_bbr else "cubic")))
-        retry_backoff(self.install_docker, exception_class=RuntimeError)
+        with Timer("Install docker"):
+            retry_backoff(self.install_docker, exception_class=RuntimeError)
         self.run_command(make_dozzle_command(log_viewer_port))
 
         # read AWS config file to get credentials
