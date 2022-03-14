@@ -18,6 +18,7 @@ setup(
         "click>=7.1.2",
         "flask",
         "google-api-python-client",
+        "google-auth",
         "google-cloud-compute",
         "google-cloud-storage",
         "grpcio-status>=1.33.2",

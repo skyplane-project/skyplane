@@ -1,26 +1,16 @@
-from functools import lru_cache
-import os
-import subprocess
+from typing import Optional
 import googleapiclient.discovery
+import google.auth
 
 from skylark import cloud_config
 
 
 class GCPAuthentication:
-    def __init__(self, project_id: str = cloud_config.gcp_project_id):
-        self.project_id = project_id
+    def __init__(self, project_id: Optional[str] = cloud_config.gcp_project_id):
+        self.credentials, self.project_id = google.auth.default(quota_project_id=project_id)
 
     def enabled(self):
-        return self.project_id is not None
-
-    @staticmethod
-    def infer_project_id():
-        if "GOOGLE_PROJECT_ID" in os.environ:
-            return os.environ["GOOGLE_PROJECT_ID"]
-        try:
-            return subprocess.check_output(["gcloud", "config", "get-value", "project"]).decode("utf-8").strip()
-        except subprocess.CalledProcessError:
-            return None
+        return self.credentials is not None and self.project_id is not None
 
     def get_gcp_client(self, service_name="compute", version="v1"):
         return googleapiclient.discovery.build(service_name, version)

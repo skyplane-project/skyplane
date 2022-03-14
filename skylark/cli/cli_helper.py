@@ -332,15 +332,9 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
 
     # check if GCP is enabled
     auth = GCPAuthentication()
-    try:
-        auth.get_gcp_client("cloudbilling", "v1").services().list().execute()
-        gcp_enabled = True
-    except Exception as e:
-        print(e)
-        gcp_enabled = False
-    if not gcp_enabled:
+    if not auth.credentials:
         typer.secho(
-            "    Default GCP credentials are not set up yet. Run `gcloud auth application-default login` or set GOOGLE_APPLICATION_CREDENTIALS.",
+            "    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.",
             fg="red",
         )
         typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red")
@@ -348,9 +342,9 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
         return config
     else:
         typer.secho("    GCP credentials found in GCP CLI", fg="blue")
-        inferred_project_id = GCPAuthentication.infer_project_id()
         if typer.confirm("    GCP credentials found, do you want to enable GCP support in Skylark?", default=True):
-            config.gcp_project_id = typer.prompt("    Enter the GCP project ID:", default=inferred_project_id)
+            config.gcp_project_id = typer.prompt("    Enter the GCP project ID:", default=auth.project_id)
+            assert config.gcp_project_id is not None, "GCP project ID must not be None"
             return config
         else:
             config.gcp_project_id = None
