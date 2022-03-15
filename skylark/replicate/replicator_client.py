@@ -327,9 +327,10 @@ class ReplicatorClient:
                 (transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
             if copy_gateway_logs:
                 for instance in self.bound_nodes.values():
-                    stdout, stderr = instance.run_command("sudo docker logs -t skylark_gateway")
+                    logger.info(f"Copying gateway logs from {instance.uuid()}")
+                    instance.run_command("sudo docker logs -t skylark_gateway &> /tmp/gateway.log")
                     log_out = transfer_dir / f"gateway_{instance.uuid()}.log"
-                    log_out.write_text(stdout + "\n" + stderr)
+                    instance.download_file("/tmp/gateway.log", log_out)
                 logger.debug(f"Wrote gateway logs to {transfer_dir}")
             if write_profile:
                 chunk_status_df = self.get_chunk_status_log_df()
