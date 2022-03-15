@@ -50,6 +50,7 @@ cp ${filename} data/results/${experiment}
 skylark replicate-json ${filename} \
     --source-bucket $src_bucket \
     --dest-bucket $dest_bucket \
+    --reuse-gateways \
     --key-prefix ${key_prefix} > data/results/${experiment}/obj-store-logs.txt
 tail -1 data/results/${experiment}/obj-store-logs.txt;
 echo ${experiment}

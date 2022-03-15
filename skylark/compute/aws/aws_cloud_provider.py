@@ -214,7 +214,6 @@ class AWSCloudProvider(CloudProvider):
             if attach_policy_arn:
                 iam.attach_role_policy(RoleName=iam_name, PolicyArn=attach_policy_arn)
 
-
         return fn()
 
     def add_ip_to_security_group(self, aws_region: str):
@@ -254,14 +253,14 @@ class AWSCloudProvider(CloudProvider):
         assert vpc is not None, "No VPC found"
         subnets = list(vpc.subnets.all())
         assert len(subnets) > 0, "No subnets found"
-        
+
         def check_iam_role():
             try:
                 iam.get_role(RoleName=iam_name)
                 return True
             except iam.exceptions.NoSuchEntityException:
                 return False
-        
+
         def check_instance_profile():
             try:
                 iam.get_instance_profile(InstanceProfileName=iam_instance_profile_name)
@@ -270,10 +269,10 @@ class AWSCloudProvider(CloudProvider):
                 return False
 
         # wait for iam_role to be created and create instance profile
-        wait_for(check_iam_role, timeout=60, interval=.5)
+        wait_for(check_iam_role, timeout=60, interval=0.5)
         iam.create_instance_profile(InstanceProfileName=iam_instance_profile_name, Tags=[{"Key": "skylark", "Value": "true"}])
         iam.add_role_to_instance_profile(InstanceProfileName=iam_instance_profile_name, RoleName=iam_name)
-        wait_for(check_instance_profile, timeout=60, interval=.5)
+        wait_for(check_instance_profile, timeout=60, interval=0.5)
 
         def start_instance():
             return ec2.create_instances(
@@ -304,7 +303,7 @@ class AWSCloudProvider(CloudProvider):
                     }
                 ],
                 IamInstanceProfile={"Name": iam_instance_profile_name},
-                InstanceInitiatedShutdownBehavior='terminate',
+                InstanceInitiatedShutdownBehavior="terminate",
             )
 
         instance = retry_backoff(start_instance, initial_backoff=1)

@@ -1,3 +1,4 @@
+import subprocess
 import os
 from pathlib import Path
 from typing import Dict, Optional
@@ -33,19 +34,17 @@ class AWSServer(Server):
         return ec2.Instance(self.instance_id)
 
     def ensure_keyfile_exists(self, aws_region, prefix=key_root / "aws"):
+        ec2 = self.auth.get_boto3_resource("ec2", aws_region)
+        ec2_client = self.auth.get_boto3_client("ec2", aws_region)
         prefix = Path(prefix)
         key_name = f"skylark-{aws_region}"
         local_key_file = prefix / f"{key_name}.pem"
 
         @lockutils.synchronized(f"aws_keyfile_lock_{aws_region}", external=True, lock_path="/tmp/skylark_locks")
         def create_keyfile():
-            if not local_key_file.exists():  # we have to check again since another process may have created it
-                ec2 = self.auth.get_boto3_resource("ec2", aws_region)
-                ec2_client = self.auth.get_boto3_client("ec2", aws_region)
+            if not local_key_file.exists():
                 local_key_file.parent.mkdir(parents=True, exist_ok=True)
-                # delete key pair from ec2 if it exists
-                keys_in_region = set(p["KeyName"] for p in ec2_client.describe_key_pairs()["KeyPairs"])
-                if key_name in keys_in_region:
+                if key_name in set(p["KeyName"] for p in ec2_client.describe_key_pairs()["KeyPairs"]):
                     logger.warning(f"Deleting key {key_name} in region {aws_region}")
                     ec2_client.delete_key_pair(KeyName=key_name)
                 key_pair = ec2.create_key_pair(KeyName=f"skylark-{aws_region}", KeyType="rsa")
@@ -54,7 +53,6 @@ class AWSServer(Server):
                     if not key_str.endswith("\n"):
                         key_str += "\n"
                     f.write(key_str)
-                    f.flush()  # sometimes generates keys with zero bytes, so we flush to ensure it's written
                 os.chmod(local_key_file, 0o600)
                 logger.info(f"Created key file {local_key_file}")
 

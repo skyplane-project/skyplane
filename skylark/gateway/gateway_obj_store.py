@@ -12,6 +12,8 @@ from skylark.obj_store.object_store_interface import ObjectStoreInterface
 
 from dataclasses import dataclass
 
+from skylark.utils.utils import retry_backoff
+
 
 @dataclass
 class ObjStoreRequest:
@@ -84,7 +86,7 @@ class GatewayObjStoreConn:
 
                 def upload(region, bucket, fpath, key, chunk_id):
                     obj_store_interface = self.get_obj_store_interface(region, bucket)
-                    obj_store_interface.upload_object(fpath, key).result()
+                    retry_backoff(lambda: obj_store_interface.upload_object(fpath, key).result(), max_retries=4)
                     chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
 
                     # update chunk state
@@ -109,7 +111,7 @@ class GatewayObjStoreConn:
 
                 def download(region, bucket, fpath, key, chunk_id):
                     obj_store_interface = self.get_obj_store_interface(region, bucket)
-                    obj_store_interface.download_object(key, fpath).result()
+                    retry_backoff(lambda: obj_store_interface.download_object(key, fpath).result(), max_retries=4)
 
                     # update chunk state
                     self.chunk_store.state_finish_download(chunk_id, f"obj_store:{self.worker_id}")
