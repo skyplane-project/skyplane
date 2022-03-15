@@ -28,8 +28,11 @@ class AWSAuthentication:
         # todo load temporary credentials from STS
         session = boto3.Session()
         credentials = session.get_credentials()
-        credentials = credentials.get_frozen_credentials()
-        return credentials.access_key, credentials.secret_key
+        if credentials:
+            credentials = credentials.get_frozen_credentials()
+            return credentials.access_key, credentials.secret_key
+        else:
+            return None, None
 
     def get_boto3_session(self, aws_region: str):
         if self.config_mode == "manual":
