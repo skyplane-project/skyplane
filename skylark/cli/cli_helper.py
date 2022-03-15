@@ -1,4 +1,5 @@
 import concurrent.futures
+from functools import partial
 import os
 import re
 import resource
@@ -254,7 +255,7 @@ def deprovision_skylark_instances():
         logger.debug("AWS authentication enabled, querying for instances")
         aws = AWSCloudProvider()
         for region in aws.region_list():
-            query_jobs.append(lambda: aws.get_matching_instances(region))
+            query_jobs.append(partial(aws.get_matching_instances, region))
     if AzureAuthentication().enabled():
         logger.debug("Azure authentication enabled, querying for instances")
         query_jobs.append(lambda: AzureCloudProvider().get_matching_instances())
@@ -263,7 +264,7 @@ def deprovision_skylark_instances():
         query_jobs.append(lambda: GCPCloudProvider().get_matching_instances())
 
     # query in parallel
-    for _, instance_list in do_parallel(lambda f: f(), query_jobs, progress_bar=True, desc="Query instances", arg_fmt=None):
+    for _, instance_list in do_parallel(lambda f: f(), query_jobs, progress_bar=True, desc="Query instances", hide_args=True):
         instances.extend(instance_list)
 
     if instances:

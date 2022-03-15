@@ -70,6 +70,7 @@ class ReplicatorClient:
 
         # init clouds
         jobs = []
+        jobs.append(partial(self.aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
         for r in set(aws_regions_to_provision):
             jobs.append(partial(self.aws.add_ip_to_security_group, r.split(":")[1]))
         if azure_regions_to_provision:
@@ -315,7 +316,7 @@ class ReplicatorClient:
         show_pbar=False,
         log_interval_s: Optional[float] = None,
         time_limit_seconds: Optional[float] = None,
-        cancel_pending: bool = True,
+        cleanup_gateway: bool = True,
         save_log: bool = True,
         write_profile: bool = True,
         copy_gateway_logs: bool = True,
@@ -335,9 +336,11 @@ class ReplicatorClient:
             if copy_gateway_logs:
                 for instance in self.bound_nodes.values():
                     logger.info(f"Copying gateway logs from {instance.uuid()}")
-                    instance.run_command("sudo docker logs -t skylark_gateway &> /tmp/gateway.log")
-                    log_out = transfer_dir / f"gateway_{instance.uuid()}.log"
-                    instance.download_file("/tmp/gateway.log", log_out)
+                    instance.run_command("sudo docker logs -t skylark_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
+                    log_out = transfer_dir / f"gateway_{instance.uuid()}.stdout"
+                    log_err = transfer_dir / f"gateway_{instance.uuid()}.stderr"
+                    instance.download_file("/tmp/gateway.stdout", log_out)
+                    instance.download_file("/tmp/gateway.stderr", log_err)
                 logger.debug(f"Wrote gateway logs to {transfer_dir}")
             if write_profile:
                 chunk_status_df = self.get_chunk_status_log_df()
@@ -356,7 +359,7 @@ class ReplicatorClient:
 
             do_parallel(fn, self.bound_nodes.values(), n=-1)
 
-        if cancel_pending:
+        if cleanup_gateway:
             logger.debug("Registering shutdown handler")
             atexit.register(shutdown_handler)
 
@@ -389,7 +392,7 @@ class ReplicatorClient:
                         or time_limit_seconds is not None
                         and t.elapsed > time_limit_seconds
                     ):
-                        if cancel_pending:
+                        if cleanup_gateway:
                             atexit.unregister(shutdown_handler)
                         shutdown_handler()
                         return dict(

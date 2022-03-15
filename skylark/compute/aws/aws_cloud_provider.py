@@ -1,3 +1,4 @@
+import json
 import uuid
 from typing import List, Optional
 
@@ -10,7 +11,7 @@ from oslo_concurrency import lockutils
 from skylark import skylark_root
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.cloud_providers import CloudProvider
-from skylark.utils.utils import retry_backoff
+from skylark.utils.utils import retry_backoff, wait_for
 
 
 class AWSCloudProvider(CloudProvider):
@@ -194,6 +195,28 @@ class AWSCloudProvider(CloudProvider):
         # finally, delete the vpc
         ec2client.delete_vpc(VpcId=vpcid)
 
+    def create_iam(self, iam_name: str = "skylark_gateway", attach_policy_arn: Optional[str] = None):
+        """Create IAM role if it doesn't exist and grant managed role if given."""
+
+        @lockutils.synchronized(f"aws_create_iam_{iam_name}", external=True, lock_path="/tmp/skylark_locks")
+        def fn():
+            iam = self.auth.get_boto3_client("iam")
+
+            # create IAM role
+            try:
+                iam.get_role(RoleName=iam_name)
+            except iam.exceptions.NoSuchEntityException:
+                doc = {
+                    "Version": "2012-10-17",
+                    "Statement": [{"Effect": "Allow", "Principal": {"Service": "ec2.amazonaws.com"}, "Action": "sts:AssumeRole"}],
+                }
+                iam.create_role(RoleName=iam_name, AssumeRolePolicyDocument=json.dumps(doc), Tags=[{"Key": "skylark", "Value": "true"}])
+            if attach_policy_arn:
+                iam.attach_role_policy(RoleName=iam_name, PolicyArn=attach_policy_arn)
+
+
+        return fn()
+
     def add_ip_to_security_group(self, aws_region: str):
         """Add IP to security group. If security group ID is None, use group named skylark (create if not exists)."""
 
@@ -219,18 +242,40 @@ class AWSCloudProvider(CloudProvider):
         # ami_id: Optional[str] = None,
         tags={"skylark": "true"},
         ebs_volume_size: int = 128,
+        iam_name: str = "skylark_gateway",
     ) -> AWSServer:
         assert not region.startswith("aws:"), "Region should be AWS region"
         if name is None:
             name = f"skylark-aws-{str(uuid.uuid4()).replace('-', '')}"
+        iam_instance_profile_name = f"{name}_profile"
+        iam = self.auth.get_boto3_client("iam")
         ec2 = self.auth.get_boto3_resource("ec2", region)
         vpc = self.get_vpc(region)
         assert vpc is not None, "No VPC found"
         subnets = list(vpc.subnets.all())
         assert len(subnets) > 0, "No subnets found"
+        
+        def check_iam_role():
+            try:
+                iam.get_role(RoleName=iam_name)
+                return True
+            except iam.exceptions.NoSuchEntityException:
+                return False
+        
+        def check_instance_profile():
+            try:
+                iam.get_instance_profile(InstanceProfileName=iam_instance_profile_name)
+                return True
+            except iam.exceptions.NoSuchEntityException:
+                return False
+
+        # wait for iam_role to be created and create instance profile
+        wait_for(check_iam_role, timeout=60, interval=.5)
+        iam.create_instance_profile(InstanceProfileName=iam_instance_profile_name, Tags=[{"Key": "skylark", "Value": "true"}])
+        iam.add_role_to_instance_profile(InstanceProfileName=iam_instance_profile_name, RoleName=iam_name)
+        wait_for(check_instance_profile, timeout=60, interval=.5)
 
         def start_instance():
-            # todo instance-initiated-shutdown-behavior terminate
             return ec2.create_instances(
                 ImageId="resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id",
                 InstanceType=instance_class,
@@ -258,6 +303,8 @@ class AWSCloudProvider(CloudProvider):
                         "DeleteOnTermination": True,
                     }
                 ],
+                IamInstanceProfile={"Name": iam_instance_profile_name},
+                InstanceInitiatedShutdownBehavior='terminate',
             )
 
         instance = retry_backoff(start_instance, initial_backoff=1)

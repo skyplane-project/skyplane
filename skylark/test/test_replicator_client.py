@@ -147,7 +147,7 @@ def main(args):
     total_bytes = args.n_chunks * args.chunk_size_mb * MB
     job = rc.run_replication_plan(job)
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
-    stats = rc.monitor_transfer(job, show_pbar=True, cancel_pending=False)
+    stats = rc.monitor_transfer(job, show_pbar=True, cleanup_gateway=False)
     logger.info(f"Replication completed in {stats['total_runtime_s']:.2f}s ({stats['throughput_gbits']:.2f}Gbit/s)")
 
 
