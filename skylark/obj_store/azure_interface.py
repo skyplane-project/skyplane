@@ -1,7 +1,7 @@
 import os
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Iterator, List
-from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
+from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError, ServiceRequestError
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.utils import logger
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
@@ -23,6 +23,7 @@ class AzureInterface(ObjectStoreInterface):
         # Create a blob service client
         self.auth = AzureAuthentication()
         self.account_url = "https://{}.blob.core.windows.net".format("skylark" + self.azure_region)
+        print("===> Account URL:", self.account_url)
         self.blob_service_client = self.auth.get_storage_client(self.account_url)
 
         self.pool = ThreadPoolExecutor(max_workers=256)  # TODO: This might need some tuning
@@ -40,7 +41,8 @@ class AzureInterface(ObjectStoreInterface):
         self.completed_uploads += 1
         self.pending_uploads -= 1
 
-    def container_exists(self):  # More like "is container empty?"
+    def container_exists(self):
+        # More like "is container empty?"
         # Get a client to interact with a specific container - though it may not yet exist
         if self.container_client is None:
             self.container_client = self.blob_service_client.get_container_client(self.container_name)
@@ -49,6 +51,10 @@ class AzureInterface(ObjectStoreInterface):
                 return True
         except ResourceNotFoundError:
             return False
+        except ServiceRequestError:
+            logger.error("==> Unable to access storage account for region specified")
+            logger.error("==> Aborting. Please check your Azure credentials and region")
+            exit(-1)
 
     def create_container(self):
         try:
