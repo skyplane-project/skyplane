@@ -175,6 +175,12 @@ class Server:
         self.add_command_log(command=command, stdout=stdout, stderr=stderr, runtime=t.elapsed)
         return stdout, stderr
 
+    def download_file(self, remote_path, local_path):
+        """Download a file from the server"""
+        client = self.ssh_client
+        with client.open_sftp() as sftp:
+            sftp.get(remote_path, local_path)
+
     def copy_public_key(self, pub_key_path: PathLike):
         """Append public key to authorized_keys file on server."""
         pub_key_path = Path(pub_key_path)
