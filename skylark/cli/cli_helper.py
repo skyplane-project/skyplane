@@ -302,9 +302,7 @@ def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> Skylar
     try:
         auth.credential.get_token("https://management.azure.com/")
         azure_enabled = True
-    except Exception as e:
-        print(e)
-        print(e.message)
+    except:
         azure_enabled = False
     if not azure_enabled:
         typer.secho("    No local Azure credentials! Run `az login` to set them up.", fg="red")
