@@ -17,6 +17,7 @@ from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.utils.utils import Timer, do_parallel
+from skylark.utils import logger
 
 app = typer.Typer(name="skylark-aws")
 
@@ -28,7 +29,12 @@ def vcpu_limits(quota_code="L-1216C47A"):
 
     def get_service_quota(region):
         service_quotas = aws_auth.get_boto3_client("service-quotas", region)
-        response = service_quotas.get_service_quota(ServiceCode="ec2", QuotaCode=quota_code)
+        try:
+            response = service_quotas.get_service_quota(ServiceCode="ec2", QuotaCode=quota_code)
+        except Exception as e:
+            logger.exception(e, print_traceback=False)
+            logger.error(f"Failed to get service quota for {quota_code} in {region}")
+            return -1
         return response["Quota"]["Value"]
 
     quotas = do_parallel(get_service_quota, AWSCloudProvider.region_list())

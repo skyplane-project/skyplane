@@ -20,8 +20,9 @@ warning = partial(log, LEVEL="WARN", color="yellow")
 error = partial(log, LEVEL="ERROR", color="red")
 
 
-def exception(msg, *args, **kwargs):
+def exception(msg, print_traceback=True, *args, **kwargs):
     error(f"Exception: {msg}", *args, **kwargs)
-    import traceback
+    if print_traceback:
+        import traceback
 
-    traceback.print_exc()
+        traceback.print_exc()
