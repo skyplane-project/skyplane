@@ -172,6 +172,12 @@ class Server:
         self.add_command_log(command=command, stdout=stdout, stderr=stderr, runtime=t.elapsed)
         return stdout, stderr
 
+    def download_file(self, remote_path, local_path):
+        """Download a file from the server"""
+        client = self.ssh_client
+        with client.open_sftp() as sftp:
+            sftp.get(remote_path, local_path)
+
     def copy_public_key(self, pub_key_path: PathLike):
         """Append public key to authorized_keys file on server."""
         pub_key_path = Path(pub_key_path)
@@ -222,7 +228,7 @@ class Server:
             assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
         logger.debug(f"{desc_prefix}: Starting gateway container")
         docker_run_flags = (
-            f"-d --rm --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024} {docker_envs}"
+            f"-d --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024} {docker_envs}"
         )
         docker_run_flags += " --mount type=tmpfs,dst=/skylark,tmpfs-size=$(($(free -b  | head -n2 | tail -n1 | awk '{print $2}')/2))"
         docker_run_flags += f" -v /tmp/{config_path.name}:/pkg/data/{config_path.name}"
