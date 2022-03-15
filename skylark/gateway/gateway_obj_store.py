@@ -68,10 +68,8 @@ class GatewayObjStoreConn:
                 request = self.worker_queue.get_nowait()
                 chunk_req = request.chunk_req
                 req_type = request.req_type
-
             except queue.Empty:
                 continue
-
             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
             logger.debug(f"[obj_store:{self.worker_id}] Received chunk ID {chunk_req.chunk.chunk_id}")
 
@@ -79,47 +77,34 @@ class GatewayObjStoreConn:
                 assert chunk_req.dst_type == "object_store"
                 region = chunk_req.dst_region
                 bucket = chunk_req.dst_object_store_bucket
-
                 self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
-
                 logger.debug(f"[obj_store:{self.worker_id}] Start upload {chunk_req.chunk.chunk_id} to {bucket}")
 
                 def upload(region, bucket, fpath, key, chunk_id):
                     obj_store_interface = self.get_obj_store_interface(region, bucket)
                     retry_backoff(lambda: obj_store_interface.upload_object(fpath, key).result(), max_retries=4)
                     chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
-
-                    # update chunk state
                     self.chunk_store.state_finish_upload(chunk_id, f"obj_store:{self.worker_id}")
-
-                    # delete chunk
                     chunk_file_path.unlink()
-
                     logger.debug(f"[obj_store:{self.worker_id}] Uploaded {chunk_id} to {bucket}")
 
                 # wait for upload in seperate thread
                 threading.Thread(target=upload, args=(region, bucket, fpath, chunk_req.chunk.key, chunk_req.chunk.chunk_id)).start()
-
             elif req_type == "download":
                 assert chunk_req.src_type == "object_store"
                 region = chunk_req.src_region
                 bucket = chunk_req.src_object_store_bucket
-
                 self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
-
                 logger.debug(f"[obj_store:{self.worker_id}] Starting download {chunk_req.chunk.chunk_id} from {bucket}")
 
                 def download(region, bucket, fpath, key, chunk_id):
                     obj_store_interface = self.get_obj_store_interface(region, bucket)
                     retry_backoff(lambda: obj_store_interface.download_object(key, fpath).result(), max_retries=4)
-
-                    # update chunk state
                     self.chunk_store.state_finish_download(chunk_id, f"obj_store:{self.worker_id}")
                     logger.debug(f"[obj_store:{self.worker_id}] Downloaded {chunk_id} from {bucket}")
 
                 # wait for request to return in sepearte thread, so we can update chunk state
                 threading.Thread(target=download, args=(region, bucket, fpath, chunk_req.chunk.key, chunk_req.chunk.chunk_id)).start()
-
             else:
                 raise ValueError(f"Invalid location for chunk req, {req_type}: {chunk_req.src_type}->{chunk_req.dst_type}")
 
