@@ -10,7 +10,22 @@ class GCPAuthentication:
     __cached_credentials = threading.local()
 
     def __init__(self, project_id: Optional[str] = cloud_config.gcp_project_id):
-        self.credentials, self.project_id = self.make_credential(project_id)
+        # load credentials lazily and then cache across threads
+        self.inferred_project_id = project_id
+        self._credentials = None
+        self._project_id = None
+
+    @property
+    def credentials(self):
+        if self._credentials is None:
+            self._credentials, self._project_id = self.make_credential(self.inferred_project_id)
+        return self._credentials
+    
+    @property
+    def project_id(self):
+        if self._project_id is None:
+            self._credentials, self._project_id = self.make_credential(self.inferred_project_id)
+        return self._project_id
 
     def make_credential(self, project_id):
         cached_credential = getattr(self.__cached_credentials, f"credential_{project_id}", (None, None))

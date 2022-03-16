@@ -56,7 +56,7 @@ class S3Interface(ObjectStoreInterface):
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         return self.bucket_name in [b["Name"] for b in s3_client.list_buckets()["Buckets"]]
 
-    def create_bucket(self):
+    def create_bucket(self, premium_tier=True):
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         if not self.bucket_exists():
             if self.aws_region == "us-east-1":

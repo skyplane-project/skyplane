@@ -47,10 +47,10 @@ class GCSInterface(ObjectStoreInterface):
         except Exception:
             return False
 
-    def create_bucket(self, storage_class: str = "STANDARD"):
+    def create_bucket(self, premium_tier=True):
         if not self.bucket_exists():
             bucket = self._gcs_client.bucket(self.bucket_name)
-            bucket.storage_class = storage_class
+            bucket.storage_class = "STANDARD"
             new_bucket = self._gcs_client.create_bucket(bucket, location=self.gcp_region)
         assert self.bucket_exists()
 

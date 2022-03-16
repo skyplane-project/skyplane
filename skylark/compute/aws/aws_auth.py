@@ -11,33 +11,39 @@ class AWSAuthentication:
         """Loads AWS authentication details. If no access key is provided, it will try to load credentials using boto3"""
         if access_key and secret_key:
             self.config_mode = "manual"
-            self.access_key = access_key
-            self.secret_key = secret_key
+            self._access_key = access_key
+            self._secret_key = secret_key
         else:
-            infer_access_key, infer_secret_key = self.infer_credentials()
-            if infer_access_key and infer_secret_key:
-                self.config_mode = "iam_inferred"
-                self.access_key = infer_access_key
-                self.secret_key = infer_secret_key
-            else:
-                self.config_mode = "disabled"
-                self.access_key = None
-                self.secret_key = None
+            self.config_mode = "iam_inferred"
+            self._access_key = None
+            self._secret_key = None
+
+    @property
+    def access_key(self):
+        if self._access_key is None:
+            self._access_key, self._secret_key = self.infer_credentials()
+        return self._access_key
+    
+    @property
+    def secret_key(self):
+        if self._secret_key is None:
+            self._access_key, self._secret_key = self.infer_credentials()
+        return self._secret_key
 
     def enabled(self):
         return self.config_mode != "disabled"
 
     def infer_credentials(self):
         # todo load temporary credentials from STS
-        cached_credential = getattr(self.__cached_credentials, "boto3_credential", (None, None))
-        if cached_credential == (None, None):
+        cached_credential = getattr(self.__cached_credentials, "boto3_credential", None)
+        if cached_credential == None:
             session = boto3.Session()
             credentials = session.get_credentials()
             if credentials:
                 credentials = credentials.get_frozen_credentials()
                 cached_credential = (credentials.access_key, credentials.secret_key)
-                setattr(self.__cached_credentials, "boto3_credential", cached_credential)
-        return cached_credential
+            setattr(self.__cached_credentials, "boto3_credential", cached_credential)
+        return cached_credential if cached_credential else (None, None)
 
     def get_boto3_session(self, aws_region: str):
         if self.config_mode == "manual":

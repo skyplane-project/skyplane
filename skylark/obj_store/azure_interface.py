@@ -62,8 +62,9 @@ class AzureInterface(ObjectStoreInterface):
         except ResourceExistsError:
             logger.warning("Unable to create container as it already exists")
 
-    def create_bucket(self):
-        return self.create_storage_account() and self.create_container()
+    def create_bucket(self, premium_tier=True):
+        tier = "Premium_LRS" if premium_tier else "Standard_LRS"
+        return self.create_storage_account(tier=tier) and self.create_container()
 
     def delete_container(self):
         try:
