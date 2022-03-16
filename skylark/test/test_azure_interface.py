@@ -8,9 +8,10 @@ from skylark.utils.utils import Timer
 
 
 def test_azure_interface():
-    azure_interface = AzureInterface(f"eastus", f"sky-us-east-1")
+    azure_interface = AzureInterface("eastus", "skyeastus", "sky-us-east-1")
     assert azure_interface.container_name == "sky-us-east-1"
     assert azure_interface.azure_region == "eastus"
+    assert azure_interface.account_name == "skyeastus"
     azure_interface.create_bucket()
 
     # generate file and upload

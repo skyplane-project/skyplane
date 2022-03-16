@@ -158,12 +158,12 @@ def copy_gcs_local(src_bucket: str, src_key: str, dst: Path):
 
 
 def copy_local_azure(src: Path, dst_account_name: str, dst_container_name: str, dst_key: str):
-    azure = AzureInterface(dst_key, dst_account_name, dst_container_name)
+    azure = AzureInterface(None, dst_account_name, dst_container_name)
     return copy_local_objstore(azure, src, dst_key)
 
 
 def copy_azure_local(src_account_name: str, src_container_name: str, src_key: str, dst: Path):
-    azure = AzureInterface(src_key, src_account_name, src_container_name)
+    azure = AzureInterface(None, src_account_name, src_container_name)
     return copy_objstore_local(azure, src_key, dst)
 
 
