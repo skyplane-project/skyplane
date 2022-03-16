@@ -94,7 +94,8 @@ def cp(src: str, dst: str):
         account_name, container_name = bucket_dst
         copy_local_azure(Path(path_src), account_name, container_name, path_dst)
     elif provider_src == "azure" and provider_dst == "local":
-        copy_azure_local(bucket_src, path_src, Path(path_dst))
+        account_name, container_name = bucket_dst
+        copy_azure_local(account_name, container_name, path_src, Path(path_dst))
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
 
