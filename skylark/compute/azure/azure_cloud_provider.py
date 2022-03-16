@@ -203,10 +203,6 @@ class AzureCloudProvider(CloudProvider):
             return instance_name
 
     @staticmethod
-    def get_resource_group_name(name):
-        return name
-
-    @staticmethod
     def get_transfer_cost(src_key, dst_key, premium_tier=True):
         """Assumes <10TB transfer tier."""
         src_provider, src_region = src_key.split(":")

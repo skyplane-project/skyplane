@@ -20,8 +20,6 @@ class AzureInterface(ObjectStoreInterface):
         self.azure_region = azure_region
         self.container_name = container_name
         self.bucket_name = self.container_name  # For compatibility
-        self.pending_downloads, self.completed_downloads = 0, 0
-        self.pending_uploads, self.completed_uploads = 0, 0
         # Authenticate
         config = load_config()
         self.subscription_id = config["azure_subscription_id"]
@@ -40,14 +38,6 @@ class AzureInterface(ObjectStoreInterface):
         if not self.container_exists():
             self.create_container()
             logger.info(f"==> Creating Azure container {self.container_name}")
-
-    def _on_done_download(self, **kwargs):
-        self.completed_downloads += 1
-        self.pending_downloads -= 1
-
-    def _on_done_upload(self, **kwargs):
-        self.completed_uploads += 1
-        self.pending_uploads -= 1
 
     def container_exists(self):  # More like "is container empty?"
         # Get a client to interact with a specific container - though it may not yet exist
