@@ -1,9 +1,12 @@
+import threading
 from typing import Optional
 
 import boto3
 
 
 class AWSAuthentication:
+    __cached_credentials = threading.local()
+
     def __init__(self, access_key: Optional[str] = None, secret_key: Optional[str] = None):
         """Loads AWS authentication details. If no access key is provided, it will try to load credentials using boto3"""
         if access_key and secret_key:
@@ -26,13 +29,15 @@ class AWSAuthentication:
 
     def infer_credentials(self):
         # todo load temporary credentials from STS
-        session = boto3.Session()
-        credentials = session.get_credentials()
-        if credentials:
-            credentials = credentials.get_frozen_credentials()
-            return credentials.access_key, credentials.secret_key
-        else:
-            return None, None
+        cached_credential = getattr(self.__cached_credentials, "boto3_credential", (None, None))
+        if cached_credential is None:
+            session = boto3.Session()
+            credentials = session.get_credentials()
+            if credentials:
+                credentials = credentials.get_frozen_credentials()
+                cached_credential = (credentials.access_key, credentials.secret_key)
+                setattr(self.__cached_credentials, "boto3_credential", cached_credential)
+        return cached_credential
 
     def get_boto3_session(self, aws_region: str):
         if self.config_mode == "manual":

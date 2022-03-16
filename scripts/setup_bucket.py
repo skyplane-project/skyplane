@@ -7,10 +7,6 @@ import argparse
 from multiprocessing import Pool
 from concurrent.futures import wait
 
-import ctypes
-
-libgcc_s = ctypes.CDLL("libgcc_s.so.1")
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Setup replication experiment")
@@ -20,7 +16,6 @@ def parse_args():
     parser.add_argument("--bucket-prefix", default="sarah", help="Prefix for bucket to avoid naming collision")
     parser.add_argument("--key-prefix", default="", help="Prefix keys")
     args = parser.parse_args()
-
     return args
 
 

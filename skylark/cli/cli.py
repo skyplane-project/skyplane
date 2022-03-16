@@ -62,7 +62,6 @@ app.add_typer(skylark.cli.cli_solver.app, name="solver")
 @app.command()
 def ls(directory: str):
     """List objects in the object store."""
-    check_ulimit()
     provider, bucket, key = parse_path(directory)
     if provider == "local":
         for path in ls_local(Path(directory)):
@@ -146,7 +145,7 @@ def replicate_random(
     )
 
     if not reuse_gateways:
-        atexit.register(rc.deprovision_gateways, block=False)
+        atexit.register(rc.deprovision_gateways)
     else:
         logger.warning(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
@@ -221,7 +220,7 @@ def replicate_json(
     )
 
     if not reuse_gateways:
-        atexit.register(rc.deprovision_gateways, block=False)
+        atexit.register(rc.deprovision_gateways)
     else:
         logger.warning(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."

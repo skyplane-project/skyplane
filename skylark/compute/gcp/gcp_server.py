@@ -82,7 +82,7 @@ class GCPServer(Server):
     def __repr__(self):
         return f"GCPServer(region_tag={self.region_tag}, instance_name={self.gcp_instance_name})"
 
-    def terminate_instance_impl(self, block=True):
+    def terminate_instance_impl(self):
         self.auth.get_gcp_client().instances().delete(
             project=self.auth.project_id, zone=self.gcp_region, instance=self.instance_name()
         ).execute()

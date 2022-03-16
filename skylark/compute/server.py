@@ -127,10 +127,10 @@ class Server:
     def network_tier(self):
         raise NotImplementedError()
 
-    def terminate_instance_impl(self, block=True):
+    def terminate_instance_impl(self):
         raise NotImplementedError()
 
-    def terminate_instance(self, block=False):
+    def terminate_instance(self):
         """Terminate instance"""
         self.close_server()
         self.terminate_instance_impl()

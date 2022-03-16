@@ -192,11 +192,11 @@ class ReplicatorClient:
                 args.append((server, {self.bound_nodes[n].public_ip(): v for n, v in self.topology.get_outgoing_paths(node).items()}))
             do_parallel(lambda arg: arg[0].start_gateway(arg[1], gateway_docker_image=self.gateway_docker_image), args, n=-1)
 
-    def deprovision_gateways(self, block=True):
+    def deprovision_gateways(self):
         def deprovision_gateway_instance(server: Server):
             if server.instance_state() == ServerState.RUNNING:
                 logger.warning(f"Deprovisioning {server.uuid()}")
-                server.terminate_instance(block=block)
+                server.terminate_instance()
 
         logger.warning("Deprovisioning instances")
         do_parallel(deprovision_gateway_instance, self.bound_nodes.values(), n=-1)
