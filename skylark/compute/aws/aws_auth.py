@@ -30,7 +30,7 @@ class AWSAuthentication:
     def infer_credentials(self):
         # todo load temporary credentials from STS
         cached_credential = getattr(self.__cached_credentials, "boto3_credential", (None, None))
-        if cached_credential is None:
+        if cached_credential == (None, None):
             session = boto3.Session()
             credentials = session.get_credentials()
             if credentials:

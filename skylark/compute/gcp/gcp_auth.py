@@ -8,10 +8,10 @@ from skylark import cloud_config
 
 class GCPAuthentication:
     __cached_credentials = threading.local()
-    
+
     def __init__(self, project_id: Optional[str] = cloud_config.gcp_project_id):
         self.credentials, self.project_id = self.make_credential(project_id)
-    
+
     def make_credential(self, project_id):
         cached_credential = getattr(self.__cached_credentials, f"credential_{project_id}", (None, None))
         if cached_credential == (None, None):

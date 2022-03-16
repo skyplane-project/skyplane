@@ -12,6 +12,7 @@ setup(
         "azure-mgmt-compute",
         "azure-mgmt-network",
         "azure-mgmt-resource",
+        "azure-mgmt-storage",
         "azure-mgmt-authorization",
         "azure-storage-blob>=12.0.0",
         "boto3",

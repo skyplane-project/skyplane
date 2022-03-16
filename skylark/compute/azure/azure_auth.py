@@ -7,7 +7,8 @@ from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.authorization import AuthorizationManagementClient
-from azure.storage.blob import BlobServiceClient
+from azure.mgmt.storage import StorageManagementClient
+from azure.storage.blob import BlobServiceClient, ContainerClient
 
 from skylark import cloud_config
 from skylark.compute.utils import query_which_cloud
@@ -19,7 +20,7 @@ class AzureAuthentication:
     def __init__(self, subscription_id: str = cloud_config.azure_subscription_id):
         self.subscription_id = subscription_id
         self.credential = self.get_credential(subscription_id)
-    
+
     def get_credential(self, subscription_id: str):
         cached_credential = getattr(self.__cached_credentials, f"credential_{subscription_id}", None)
         if cached_credential is None:
@@ -59,5 +60,11 @@ class AzureAuthentication:
     def get_authorization_client(self):
         return AuthorizationManagementClient(self.credential, self.subscription_id)
 
-    def get_storage_client(self, account_url: str):
+    def get_storage_management_client(self):
+        return StorageManagementClient(self.credential, self.subscription_id)
+
+    def get_container_client(self, account_url: str, container_name: str):
+        return ContainerClient(account_url, container_name, credential=self.credential)
+
+    def get_blob_service_client(self, account_url: str):
         return BlobServiceClient(account_url=account_url, credential=self.credential)

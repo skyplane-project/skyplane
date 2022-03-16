@@ -51,7 +51,7 @@ def parse_path(path: str):
         if match is None:
             raise ValueError(f"Invalid Azure path: {path}")
         account, container, blob_path = match.groups()
-        return "azure", account, container
+        return "azure", (account, container), blob_path
     elif path.startswith("azure://"):
         bucket_name = path[8:]
         region = path[8:].split("-", 2)[-1]
@@ -96,7 +96,7 @@ def copy_local_local(src: Path, dst: Path):
         copyfile(src, dst)
 
 
-def copy_local_objstore(object_interface: ObjectStoreInterface, src: Path, dst_bucket: str, dst_key: str):
+def copy_local_objstore(object_interface: ObjectStoreInterface, src: Path, dst_key: str):
     ops: List[concurrent.futures.Future] = []
     path_mapping: Dict[concurrent.futures.Future, Path] = {}
 
@@ -120,7 +120,7 @@ def copy_local_objstore(object_interface: ObjectStoreInterface, src: Path, dst_b
             pbar.update(path_mapping[op].stat().st_size)
 
 
-def copy_objstore_local(object_interface: ObjectStoreInterface, src_bucket: str, src_key: str, dst: Path):
+def copy_objstore_local(object_interface: ObjectStoreInterface, src_key: str, dst: Path):
     ops: List[concurrent.futures.Future] = []
     obj_mapping: Dict[concurrent.futures.Future, ObjectStoreObject] = {}
 
@@ -148,24 +148,22 @@ def copy_objstore_local(object_interface: ObjectStoreInterface, src_bucket: str,
 
 def copy_local_gcs(src: Path, dst_bucket: str, dst_key: str):
     gcs = GCSInterface(None, dst_bucket)
-    return copy_local_objstore(gcs, src, dst_bucket, dst_key)
+    return copy_local_objstore(gcs, src, dst_key)
 
 
 def copy_gcs_local(src_bucket: str, src_key: str, dst: Path):
     gcs = GCSInterface(None, src_bucket)
-    return copy_objstore_local(gcs, src_bucket, src_key, dst)
+    return copy_objstore_local(gcs, src_key, dst)
 
 
-def copy_local_azure(src: Path, dst_bucket: str, dst_key: str):
-    # Note that dst_key is infact azure region
-    azure = AzureInterface(dst_key, dst_bucket)
-    return copy_local_objstore(azure, src, dst_bucket, dst_key)
+def copy_local_azure(src: Path, dst_account_name: str, dst_container_name: str, dst_key: str):
+    azure = AzureInterface(dst_key, dst_account_name, dst_container_name)
+    return copy_local_objstore(azure, src, dst_key)
 
 
-def copy_azure_local(src_bucket: str, src_key: str, dst: Path):
-    # Note that src_key is infact azure region
-    azure = AzureInterface(src_key, src_bucket)
-    return copy_objstore_local(azure, src_bucket, src_key, dst)
+def copy_azure_local(src_account_name: str, src_container_name: str, src_key: str, dst: Path):
+    azure = AzureInterface(src_key, src_account_name, src_container_name)
+    return copy_objstore_local(azure, src_key, dst)
 
 
 def copy_local_s3(src: Path, dst_bucket: str, dst_key: str, use_tls: bool = True):

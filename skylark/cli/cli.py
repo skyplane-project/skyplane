@@ -91,7 +91,8 @@ def cp(src: str, dst: str):
     elif provider_src == "gs" and provider_dst == "local":
         copy_gcs_local(bucket_src, path_src, Path(path_dst))
     elif provider_src == "local" and provider_dst == "azure":
-        copy_local_azure(Path(path_src), bucket_dst, path_dst)
+        account_name, container_name = bucket_dst
+        copy_local_azure(Path(path_src), account_name, container_name, path_dst)
     elif provider_src == "azure" and provider_dst == "local":
         copy_azure_local(bucket_src, path_src, Path(path_dst))
     else:
