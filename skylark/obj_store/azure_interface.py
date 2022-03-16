@@ -40,8 +40,8 @@ class AzureInterface(ObjectStoreInterface):
 
     def container_exists(self):
         try:
-            for _ in self.container_client.list_blobs():
-                return True
+            self.container_client.get_container_properties()
+            return True
         except ResourceNotFoundError:
             return False
 
@@ -64,7 +64,10 @@ class AzureInterface(ObjectStoreInterface):
 
     def create_bucket(self, premium_tier=True):
         tier = "Premium_LRS" if premium_tier else "Standard_LRS"
-        return self.create_storage_account(tier=tier) and self.create_container()
+        if not self.storage_account_exists():
+            self.create_storage_account(tier=tier)
+        if not self.container_exists():
+            self.create_container()
 
     def delete_container(self):
         try:
