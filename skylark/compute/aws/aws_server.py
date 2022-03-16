@@ -116,7 +116,7 @@ class AWSServer(Server):
         client.connect(
             self.public_ip(),
             username="ec2-user",
-            pkey=paramiko.RSAKey.from_private_key_file(self.local_keyfile),
+            pkey=paramiko.RSAKey.from_private_key_file(str(self.local_keyfile)),
             look_for_keys=False,
             allow_agent=False,
             banner_timeout=200,
