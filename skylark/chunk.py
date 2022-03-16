@@ -73,17 +73,6 @@ class ChunkState(Enum):
     def from_str(s: str):
         return ChunkState[s.lower()]
 
-    def to_short_str(self):
-        return {
-            ChunkState.registered: "REG",
-            ChunkState.download_in_progress: "DL",
-            ChunkState.downloaded: "DL_DONE",
-            ChunkState.upload_queued: "UL_QUE",
-            ChunkState.upload_in_progress: "UL",
-            ChunkState.upload_complete: "UL_DONE",
-            ChunkState.failed: "FAILED",
-        }
-
     def __lt__(self, other):
         return self.value < other.value
 

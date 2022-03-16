@@ -4,6 +4,8 @@ from typing import Iterator, List
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.azure.azure_server import AzureServer
+from azure.identity import ClientSecretCredential
+from azure.storage.blob import BlobServiceClient
 from skylark.utils import logger
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
@@ -19,7 +21,6 @@ class AzureInterface(ObjectStoreInterface):
         self.azure_region = azure_region
         self.account_name = f"skylark{azure_region.replace(' ', '').lower()}"
         self.container_name = container_name
-
         # Create a blob service client
         self.auth = AzureAuthentication()
         self.account_url = f"https://{self.account_name}.blob.core.windows.net"

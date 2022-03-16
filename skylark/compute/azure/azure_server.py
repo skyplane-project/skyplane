@@ -87,17 +87,6 @@ class AzureServer(Server):
     def nic_name(name):
         return AzureServer.vm_name(name) + "-nic"
 
-    def get_resource_group(self):
-        resource_client = self.auth.get_resource_client()
-        rg = resource_client.resource_groups.get(AzureServer.resource_group_name)
-
-        # Sanity checks
-        assert rg.name == AzureServer.resource_group_name
-        assert rg.location == AzureServer.resource_group_location
-        assert rg.tags.get("skylark", None) == "true"
-
-        return rg
-
     def get_virtual_machine(self):
         compute_client = self.auth.get_compute_client()
         vm = compute_client.virtual_machines.get(AzureServer.resource_group_name, AzureServer.vm_name(self.name))

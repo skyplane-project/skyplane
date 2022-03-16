@@ -7,7 +7,6 @@ import requests
 from skylark.utils import logger
 from skylark.compute.utils import make_dozzle_command, make_sysctl_tcp_tuning_command
 from skylark.utils.utils import PathLike, Timer, retry_backoff, wait_for
-
 from skylark import config_path
 
 
