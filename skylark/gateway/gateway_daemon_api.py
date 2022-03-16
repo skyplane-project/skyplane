@@ -12,7 +12,7 @@ from skylark.gateway.gateway_receiver import GatewayReceiver
 from werkzeug.serving import make_server
 
 
-class GatewayDaemonAPI(threading.Thread):
+class GatewayDaemonAPI:
     """
     API documentation:
     * GET /api/v1/status - returns status of API
@@ -48,11 +48,19 @@ class GatewayDaemonAPI(threading.Thread):
         logging.getLogger("werkzeug").setLevel(logging.WARNING)
         self.server = make_server(host, port, self.app, threaded=True)
 
-    def run(self):
-        self.server.serve_forever()
+    def start(self):
+        def server_fn():
+            setproctitle.setproctitle(f"skylark-gateway-api")
+            logging.getLogger("werkzeug").setLevel(logging.WARNING)
+            make_server(self.host, self.port, self.app, threaded=False).serve_forever()
 
-    def shutdown(self):
-        self.server.shutdown()
+        self.server_process = Process(target=server_fn)
+        self.server_process.start()
+
+    def stop(self):
+        """Closes API server, called from GatewayDaemon"""
+        self.server_process.terminate()
+        self.server_process.join()
 
     def register_global_routes(self):
         # index route returns API version
@@ -75,7 +83,7 @@ class GatewayDaemonAPI(threading.Thread):
         def get_status():
             return jsonify({"status": "ok"})
 
-        # shutdown route
+        # shutdown
         @self.app.route("/api/v1/shutdown", methods=["POST"])
         def shutdown():
             self.shutdown()

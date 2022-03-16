@@ -2,14 +2,10 @@ import argparse
 import atexit
 import json
 import os
-import signal
 import sys
-import threading
 from multiprocessing import Event
 from os import PathLike
 from pathlib import Path
-from threading import BoundedSemaphore
-import time
 from typing import Dict
 
 
@@ -31,41 +27,23 @@ class GatewayDaemon:
         self.region = region
         self.max_incoming_ports = max_incoming_ports
         self.chunk_store = ChunkStore(chunk_dir)
+        self.exit_flag = Event()
+        
         self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store, max_pending_chunks=max_incoming_ports, use_tls=use_tls)
         self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, outgoing_ports=outgoing_ports, use_tls=use_tls)
-
         self.obj_store_conn = GatewayObjStoreConn(chunk_store=self.chunk_store, max_conn=8)
+        self.api_server = GatewayDaemonAPI(self.chunk_store, self.gateway_receiver, daemon_exit_fn=self.stop)
 
-        # Download thread pool
-        self.dl_pool_semaphore = BoundedSemaphore(value=128)
-        self.ul_pool_semaphore = BoundedSemaphore(value=128)
-
-        # API server
-        self.api_server = GatewayDaemonAPI(self.chunk_store, self.gateway_receiver)
-        self.api_server.start()
-        atexit.register(self.api_server.shutdown)
-        logger.info(f"[gateway_daemon] API started at {self.api_server.url}")
+    def stop(self):
+        self.exit_flag.set()
 
     def run(self):
-        setproctitle.setproctitle(f"skylark-gateway-daemon")
-        exit_flag = Event()
-
-        def exit_handler(signum, frame):
-            logger.warning("[gateway_daemon] Received signal {}. Exiting...".format(signum))
-            exit_flag.set()
-            self.gateway_receiver.stop_servers()
-            self.gateway_sender.stop_workers()
-            self.obj_store_conn.stop_workers()
-            sys.exit(0)
-
-        logger.info("[gateway_daemon] Starting gateway sender workers")
         self.gateway_sender.start_workers()
         self.obj_store_conn.start_workers()
-        signal.signal(signal.SIGINT, exit_handler)
-        signal.signal(signal.SIGTERM, exit_handler)
-
-        logger.info("[gateway_daemon] Starting daemon loop")
-        while not exit_flag.is_set():
+        self.api_server.start()
+        logger.info(f"[gateway_daemon] API started at {self.api_server.url}")
+        setproctitle.setproctitle(f"skylark-gateway-daemon")
+        while not self.exit_flag.is_set():
             # queue object uploads and relays
             for chunk_req in self.chunk_store.get_chunk_requests(ChunkState.downloaded):
                 if self.region == chunk_req.dst_region and chunk_req.dst_type == "save_local":  # do nothing, save to ChunkStore
@@ -92,20 +70,13 @@ class GatewayDaemon:
                 elif self.region == chunk_req.src_region and chunk_req.src_type == "random":
                     size_mb = chunk_req.src_random_size_mb
                     if self.chunk_store.remaining_bytes() >= size_mb * MB * self.max_incoming_ports:
-
-                        def fn(chunk_req, size_mb):
-                            while self.chunk_store.remaining_bytes() < size_mb * MB * self.max_incoming_ports:
-                                time.sleep(0.1)
-                            self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, "random")
-                            fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
-                            with self.dl_pool_semaphore:
-                                os.system(f"fallocate -l {size_mb * MB} {fpath}")
-                            chunk_req.chunk.chunk_length_bytes = os.path.getsize(fpath)
-                            self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
-                            self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, "random")
-
-                        self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
-                        threading.Thread(target=fn, args=(chunk_req, size_mb)).start()
+                        self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, "random")
+                        fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
+                        with self.dl_pool_semaphore:
+                            os.system(f"fallocate -l {size_mb * MB} {fpath}")
+                        chunk_req.chunk.chunk_length_bytes = os.path.getsize(fpath)
+                        self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
+                        self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, "random")
                 elif self.region == chunk_req.src_region and chunk_req.src_type == "object_store":
                     self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
                     self.obj_store_conn.queue_request(chunk_req, "download")
@@ -114,7 +85,11 @@ class GatewayDaemon:
                 else:
                     self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
                     raise ValueError(f"No download handler for ChunkRequest: {chunk_req}")
-            time.sleep(0.1)  # yield
+        self.gateway_receiver.stop_servers()
+        self.gateway_sender.stop_workers()
+        self.obj_store_conn.stop_workers()
+        self.api_server.stop()
+        sys.exit(0)
 
 
 if __name__ == "__main__":
