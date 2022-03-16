@@ -45,12 +45,12 @@ class AzureInterface(ObjectStoreInterface):
         except ResourceNotFoundError:
             return False
 
-    def create_storage_account(self, tier="Standard_LRS"):
+    def create_storage_account(self, tier="Premium_LRS"):
         try:
             operation = self.storage_management_client.storage_accounts.begin_create(
                 AzureServer.resource_group_name,
                 self.account_name,
-                {"sku": {"name": tier}, "kind": "Storage", "location": self.azure_region},
+                {"sku": {"name": tier}, "kind": "BlockBlobStorage", "location": self.azure_region},
             )
             operation.result()
         except ResourceExistsError:
