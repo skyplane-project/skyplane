@@ -36,7 +36,7 @@ class GCSInterface(ObjectStoreInterface):
         if not self.bucket_exists():
             bucket = self._gcs_client.bucket(self.bucket_name)
             bucket.storage_class = "STANDARD"
-            new_bucket = self._gcs_client.create_bucket(bucket, location=self.gcp_region)
+            self._gcs_client.create_bucket(bucket, location=self.gcp_region)
         assert self.bucket_exists()
 
     def list_objects(self, prefix="") -> Iterator[GCSObject]:

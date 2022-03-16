@@ -5,6 +5,7 @@ from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.azure.azure_server import AzureServer
 from azure.identity import ClientSecretCredential
+from azure.identity import ClientSecretCredential
 from azure.storage.blob import BlobServiceClient
 from skylark.utils import logger
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
