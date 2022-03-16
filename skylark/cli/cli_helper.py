@@ -8,7 +8,7 @@ from pathlib import Path
 from shutil import copyfile
 from typing import Dict, List
 from sys import platform
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import boto3
 import typer

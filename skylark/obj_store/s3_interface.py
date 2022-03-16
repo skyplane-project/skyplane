@@ -116,6 +116,4 @@ class S3Interface(ObjectStoreInterface):
         upload_headers.add("Content-Type", content_type)
         upload_headers.add("Content-Length", str(content_len))
         request = HttpRequest("PUT", dst_object_name, upload_headers)
-        return self._s3_client.make_request(
-            send_filepath=src_file_path, request=request, type=S3RequestType.PUT_OBJECT
-        ).finished_future
+        return self._s3_client.make_request(send_filepath=src_file_path, request=request, type=S3RequestType.PUT_OBJECT).finished_future
