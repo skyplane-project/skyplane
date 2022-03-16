@@ -20,8 +20,8 @@ echo $filename
 # creats buckets + bucket data and sets env variables
 python scripts/setup_bucket.py --key-prefix ${key_prefix} --bucket-prefix ${bucket_prefix} --src-data-path ../${key_prefix}/ --src-region ${src} --dest-region ${dest}
 
-# TODO:artificially increase the number of chunks 
-# TODO: try synthetic data 
+# TODO:artificially increase the number of chunks
+# TODO: try synthetic data
 
 source scripts/pack_docker.sh
 
@@ -31,7 +31,7 @@ throughput=$(($max_instance*3))
 skylark solver solve-throughput ${src} ${dest} ${throughput}  -o ${filename} --max-instances ${max_instance};
 echo ${filename}
 
-# make exp directory 
+# make exp directory
 mkdir -p data/results
 mkdir -p data/results/${experiment}
 
