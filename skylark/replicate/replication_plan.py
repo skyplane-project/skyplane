@@ -153,6 +153,7 @@ class ReplicationJob:
     dest_region: str
     dest_bucket: Optional[str]
     objs: List[str]
+    obj_sizes: Dict
 
     # progress tracking via a list of chunk_requests
     chunk_requests: Optional[List[ChunkRequest]] = None
