@@ -5,6 +5,7 @@ import resource
 import subprocess
 from pathlib import Path
 from shutil import copyfile
+from sys import platform
 from typing import Dict, List, Optional
 
 import typer
@@ -233,7 +234,7 @@ def check_ulimit(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
                 typer.Abort()
             else:
                 typer.secho(f"Successfully increased ulimit to {new_limit}", fg="green")
-    if current_limit_soft < soft_limit:
+    if current_limit_soft < soft_limit and (platform == "linux" or platform == "linux2"):
         increase_soft_limit = ["sudo", "prlimit", "--pid", str(os.getpid()), f"--nofile={soft_limit}:{hard_limit}"]
         logger.warning(
             f"Warning: soft file limit is set to {current_limit_soft}, increasing for process with `{' '.join(increase_soft_limit)}`"
