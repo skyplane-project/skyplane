@@ -20,17 +20,10 @@ class S3Object(ObjectStoreObject):
 
 
 class S3Interface(ObjectStoreInterface):
-    def __init__(self, aws_region, bucket_name, use_tls=True, part_size=None, throughput_target_gbps=None):
-
+    def __init__(self, aws_region, bucket_name, use_tls=True, part_size=None, throughput_target_gbps=100):
         self.aws_region = self.infer_s3_region(bucket_name) if aws_region is None or aws_region == "infer" else aws_region
         self.bucket_name = bucket_name
-        self.pending_downloads, self.completed_downloads = 0, 0
-        self.pending_uploads, self.completed_uploads = 0, 0
-        self.s3_part_size = part_size
-        self.s3_throughput_target_gbps = throughput_target_gbps
-        # num_threads=os.cpu_count()
-        # num_threads=256
-        num_threads = 4  # 256
+        num_threads = 4
         event_loop_group = EventLoopGroup(num_threads=num_threads, cpu_group=None)
         host_resolver = DefaultHostResolver(event_loop_group)
         bootstrap = ClientBootstrap(event_loop_group, host_resolver)
@@ -47,18 +40,10 @@ class S3Interface(ObjectStoreInterface):
             bootstrap=bootstrap,
             region=self.aws_region,
             credential_provider=credential_provider,
-            throughput_target_gbps=100,
-            part_size=None,
+            throughput_target_gbps=throughput_target_gbps,
+            part_size=part_size,
             tls_mode=S3RequestTlsMode.ENABLED if use_tls else S3RequestTlsMode.DISABLED,
         )
-
-    def _on_done_download(self, **kwargs):
-        self.completed_downloads += 1
-        self.pending_downloads -= 1
-
-    def _on_done_upload(self, **kwargs):
-        self.completed_uploads += 1
-        self.pending_uploads -= 1
 
     @staticmethod
     def infer_s3_region(bucket_name: str):
@@ -129,8 +114,6 @@ class S3Interface(ObjectStoreInterface):
             recv_filepath=dst_file_path,
             request=request,
             type=S3RequestType.GET_OBJECT,
-            on_done=self._on_done_download,
-            on_body=_on_body_download,
         ).finished_future
 
     def upload_object(self, src_file_path, dst_object_name, content_type="infer") -> Future:
@@ -145,5 +128,5 @@ class S3Interface(ObjectStoreInterface):
         upload_headers.add("Content-Length", str(content_len))
         request = HttpRequest("PUT", dst_object_name, upload_headers)
         return self._s3_client.make_request(
-            send_filepath=src_file_path, request=request, type=S3RequestType.PUT_OBJECT, on_done=self._on_done_upload
+            send_filepath=src_file_path, request=request, type=S3RequestType.PUT_OBJECT
         ).finished_future
