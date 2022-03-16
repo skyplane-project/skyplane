@@ -2,7 +2,7 @@ import os
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Iterator, List
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
-from azure.identity import DefaultAzureCredential, ClientSecretCredential
+from azure.identity import ClientSecretCredential
 from azure.storage.blob import BlobServiceClient
 from skylark.config import load_config
 from skylark.utils import logger
