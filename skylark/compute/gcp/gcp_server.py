@@ -1,9 +1,9 @@
 from functools import lru_cache
 from pathlib import Path
 
-import googleapiclient.discovery
 import paramiko
 from skylark import key_root
+from skylark.compute.gcp.gcp_auth import GCPAuthentication
 from skylark.compute.server import Server, ServerState
 from skylark.utils.cache import ignore_lru_cache
 from skylark.utils.utils import PathLike
@@ -13,7 +13,6 @@ class GCPServer(Server):
     def __init__(
         self,
         region_tag: str,
-        gcp_project: str,
         instance_name: str,
         key_root: PathLike = key_root / "gcp",
         log_dir=None,
@@ -22,7 +21,7 @@ class GCPServer(Server):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "gcp", f"Region name doesn't match pattern gcp:<region> {self.region_tag}"
         self.gcp_region = self.region_tag.split(":")[1]
-        self.gcp_project = gcp_project
+        self.auth = GCPAuthentication()
         self.gcp_instance_name = instance_name
         key_root = Path(key_root)
         key_root.mkdir(parents=True, exist_ok=True)
@@ -32,20 +31,11 @@ class GCPServer(Server):
             self.ssh_private_key = ssh_private_key
 
     def uuid(self):
-        return f"{self.gcp_project}:{self.region_tag}:{self.gcp_instance_name}"
-
-    @classmethod
-    def get_gcp_client(cls, service_name="compute", version="v1"):
-        return googleapiclient.discovery.build(service_name, version)
-
-    @staticmethod
-    def gcp_instances(gcp_project, gcp_region):
-        compute = GCPServer.get_gcp_client()
-        return compute.instances().list(project=gcp_project, zone=gcp_region).execute()
+        return f"{self.region_tag}:{self.gcp_instance_name}"
 
     @lru_cache
     def get_gcp_instance(self):
-        instances = self.gcp_instances(self.gcp_project, self.gcp_region)
+        instances = self.auth.get_gcp_instances(self.gcp_region)
         if "items" in instances:
             for i in instances["items"]:
                 if i["name"] == self.gcp_instance_name:
@@ -89,11 +79,12 @@ class GCPServer(Server):
         return interface["accessConfigs"][0]["networkTier"]
 
     def __repr__(self):
-        return f"GCPServer(region_tag={self.region_tag}, gcp_project={self.gcp_project}, instance_name={self.gcp_instance_name})"
+        return f"GCPServer(region_tag={self.region_tag}, instance_name={self.gcp_instance_name})"
 
     def terminate_instance_impl(self):
-        compute = self.get_gcp_client()
-        compute.instances().delete(project=self.gcp_project, zone=self.gcp_region, instance=self.instance_name()).execute()
+        self.auth.get_gcp_client().instances().delete(
+            project=self.auth.project_id, zone=self.gcp_region, instance=self.instance_name()
+        ).execute()
 
     def get_ssh_client_impl(self, uname="skylark", ssh_key_password="skylark"):
         """Return paramiko client that connects to this instance."""

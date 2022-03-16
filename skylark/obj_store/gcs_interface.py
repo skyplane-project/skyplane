@@ -10,7 +10,7 @@ from skylark.obj_store.object_store_interface import NoSuchObjectException, Obje
 
 class GCSObject(ObjectStoreObject):
     def full_path(self):
-        raise NotImplementedError()
+        return os.path.join(f"gs://{self.bucket}", self.key)
 
 
 class GCSInterface(ObjectStoreInterface):
@@ -32,10 +32,10 @@ class GCSInterface(ObjectStoreInterface):
         except Exception:
             return False
 
-    def create_bucket(self, storage_class: str = "STANDARD"):
+    def create_bucket(self, premium_tier=True):
         if not self.bucket_exists():
             bucket = self._gcs_client.bucket(self.bucket_name)
-            bucket.storage_class = storage_class
+            bucket.storage_class = "STANDARD"
             self._gcs_client.create_bucket(bucket, location=self.gcp_region)
         assert self.bucket_exists()
 

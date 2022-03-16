@@ -4,6 +4,7 @@ from typing import Dict, Optional
 
 import boto3
 import paramiko
+from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.utils import logger
 
 from oslo_concurrency import lockutils
@@ -18,6 +19,7 @@ class AWSServer(Server):
     def __init__(self, region_tag, instance_id, log_dir=None):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "aws"
+        self.auth = AWSAuthentication()
         self.aws_region = self.region_tag.split(":")[1]
         self.instance_id = instance_id
         self.boto3_session = boto3.Session(region_name=self.aws_region)
@@ -26,40 +28,22 @@ class AWSServer(Server):
     def uuid(self):
         return f"{self.region_tag}:{self.instance_id}"
 
-    @classmethod
-    def get_boto3_session(cls, aws_region) -> boto3.Session:
-        return boto3.Session(region_name=aws_region)
-
-    @classmethod
-    def get_boto3_resource(cls, service_name, aws_region=None):
-        return cls.get_boto3_session(aws_region).resource(service_name, region_name=aws_region)
-
-    @classmethod
-    def get_boto3_client(cls, service_name, aws_region=None):
-        if aws_region is None:
-            return cls.get_boto3_session(aws_region).client(service_name)
-        else:
-            return cls.get_boto3_session(aws_region).client(service_name, region_name=aws_region)
-
     def get_boto3_instance_resource(self):
-        ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
+        ec2 = self.auth.get_boto3_resource("ec2", self.aws_region)
         return ec2.Instance(self.instance_id)
 
-    @staticmethod
-    def ensure_keyfile_exists(aws_region, prefix=key_root / "aws"):
+    def ensure_keyfile_exists(self, aws_region, prefix=key_root / "aws"):
+        ec2 = self.auth.get_boto3_resource("ec2", aws_region)
+        ec2_client = self.auth.get_boto3_client("ec2", aws_region)
         prefix = Path(prefix)
         key_name = f"skylark-{aws_region}"
         local_key_file = prefix / f"{key_name}.pem"
 
         @lockutils.synchronized(f"aws_keyfile_lock_{aws_region}", external=True, lock_path="/tmp/skylark_locks")
         def create_keyfile():
-            if not local_key_file.exists():  # we have to check again since another process may have created it
-                ec2 = AWSServer.get_boto3_resource("ec2", aws_region)
-                ec2_client = AWSServer.get_boto3_client("ec2", aws_region)
+            if not local_key_file.exists():
                 local_key_file.parent.mkdir(parents=True, exist_ok=True)
-                # delete key pair from ec2 if it exists
-                keys_in_region = set(p["KeyName"] for p in ec2_client.describe_key_pairs()["KeyPairs"])
-                if key_name in keys_in_region:
+                if key_name in set(p["KeyName"] for p in ec2_client.describe_key_pairs()["KeyPairs"]):
                     logger.warning(f"Deleting key {key_name} in region {aws_region}")
                     ec2_client.delete_key_pair(KeyName=key_name)
                 key_pair = ec2.create_key_pair(KeyName=f"skylark-{aws_region}", KeyType="rsa")
@@ -68,7 +52,6 @@ class AWSServer(Server):
                     if not key_str.endswith("\n"):
                         key_str += "\n"
                     f.write(key_str)
-                    f.flush()  # sometimes generates keys with zero bytes, so we flush to ensure it's written
                 os.chmod(local_key_file, 0o600)
                 logger.info(f"Created key file {local_key_file}")
 
@@ -107,8 +90,7 @@ class AWSServer(Server):
         return f"AWSServer(region_tag={self.region_tag}, instance_id={self.instance_id})"
 
     def terminate_instance_impl(self):
-        ec2 = AWSServer.get_boto3_resource("ec2", self.aws_region)
-        ec2.instances.filter(InstanceIds=[self.instance_id]).terminate()
+        self.auth.get_boto3_resource("ec2", self.aws_region).instances.filter(InstanceIds=[self.instance_id]).terminate()
 
     def get_ssh_client_impl(self):
         client = paramiko.SSHClient()
@@ -116,6 +98,7 @@ class AWSServer(Server):
         client.connect(
             self.public_ip(),
             username="ec2-user",
+            # todo generate keys with password "skylark"
             pkey=paramiko.RSAKey.from_private_key_file(str(self.local_keyfile)),
             look_for_keys=False,
             allow_agent=False,

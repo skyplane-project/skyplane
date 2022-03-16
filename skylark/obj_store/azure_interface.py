@@ -2,82 +2,96 @@ import os
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Iterator, List
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
-from azure.identity import ClientSecretCredential
-from azure.storage.blob import BlobServiceClient
-from skylark.config import load_config
+from skylark.compute.azure.azure_auth import AzureAuthentication
+from skylark.compute.azure.azure_server import AzureServer
 from skylark.utils import logger
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
 
 class AzureObject(ObjectStoreObject):
     def full_path(self):
-        raise NotImplementedError()
+        account_name, container_name = self.bucket.split("/")
+        return os.path.join(f"https://{account_name}.blob.core.windows.net", container_name, self.key)
 
 
 class AzureInterface(ObjectStoreInterface):
-    def __init__(self, azure_region, container_name):
-        # TODO: the azure region should get corresponding os.getenv()
-        self.azure_region = azure_region
+    def __init__(self, azure_region, account_name, container_name):
+        # TODO (#210): should be configured via argument
+        self.account_name = f"skylark{azure_region.replace(' ', '').lower()}"
         self.container_name = container_name
-        self.bucket_name = self.container_name  # For compatibility
-        # Authenticate
-        config = load_config()
-        self.subscription_id = config["azure_subscription_id"]
-        self.credential = ClientSecretCredential(
-            tenant_id=config["azure_tenant_id"],
-            client_id=config["azure_client_id"],
-            client_secret=config["azure_client_secret"],
-        )
-        # Create a blob service client
-        self.account_url = "https://{}.blob.core.windows.net".format("skylark" + self.azure_region)
-        self.blob_service_client = BlobServiceClient(account_url=self.account_url, credential=self.credential)
 
+        # Create a blob service client
+        self.auth = AzureAuthentication()
+        self.account_url = f"https://{self.account_name}.blob.core.windows.net"
+        self.storage_management_client = self.auth.get_storage_management_client()
+        self.container_client = self.auth.get_container_client(self.account_url, self.container_name)
+        self.blob_service_client = self.auth.get_blob_service_client(self.account_url)
+
+        # infer azure region from storage account
+        if azure_region is None:
+            self.azure_region = self.get_region_from_storage_account(self.account_name)
+        else:
+            self.azure_region = azure_region
+
+        # parallel upload/downloads
         self.pool = ThreadPoolExecutor(max_workers=256)  # TODO: This might need some tuning
         self.max_concurrency = 1
-        self.container_client = None
-        if not self.container_exists():
-            self.create_container()
-            logger.info(f"==> Creating Azure container {self.container_name}")
 
-    def container_exists(self):  # More like "is container empty?"
-        # Get a client to interact with a specific container - though it may not yet exist
-        if self.container_client is None:
-            self.container_client = self.blob_service_client.get_container_client(self.container_name)
+    def get_region_from_storage_account(self, storage_account_name):
+        storage_account = self.storage_management_client.storage_accounts.get_properties(AzureServer.resource_group_name, storage_account_name)
+        return storage_account.location
+
+    def storage_account_exists(self):
         try:
-            for blob in self.container_client.list_blobs():
-                return True
+            self.storage_management_client.storage_accounts.get_properties(AzureServer.resource_group_name, self.account_name)
+            return True
         except ResourceNotFoundError:
             return False
 
+    def container_exists(self):
+        try:
+            self.container_client.get_container_properties()
+            return True
+        except ResourceNotFoundError:
+            return False
+
+    def create_storage_account(self, tier="Premium_LRS"):
+        try:
+            operation = self.storage_management_client.storage_accounts.begin_create(
+                AzureServer.resource_group_name,
+                self.account_name,
+                {"sku": {"name": tier}, "kind": "BlockBlobStorage", "location": self.azure_region},
+            )
+            operation.result()
+        except ResourceExistsError:
+            logger.warning("Unable to create storage account as it already exists")
+
     def create_container(self):
         try:
-            self.container_client = self.blob_service_client.create_container(self.container_name)
-            self.properties = self.container_client.get_container_properties()
+            self.container_client.create_container()
         except ResourceExistsError:
-            logger.warning("==> Container might already exist, in which case blobs are re-written")
-            # logger.warning("==> Alternatively use a diff bucket name with `--bucket-prefix`")
-            return
+            logger.warning("Unable to create container as it already exists")
 
-    def create_bucket(self):
-        return self.create_container()
+    def create_bucket(self, premium_tier=True):
+        tier = "Premium_LRS" if premium_tier else "Standard_LRS"
+        if not self.storage_account_exists():
+            self.create_storage_account(tier=tier)
+        if not self.container_exists():
+            self.create_container()
 
     def delete_container(self):
-        if self.container_client is None:
-            self.container_client = self.blob_service_client.get_container_client(self.container_name)
         try:
             self.container_client.delete_container()
         except ResourceNotFoundError:
-            logger.warning("Container doesn't exists. Unable to delete")
+            logger.warning("Unable to delete container as it doesn't exists")
 
     def delete_bucket(self):
         return self.delete_container()
 
     def list_objects(self, prefix="") -> Iterator[AzureObject]:
-        if self.container_client is None:
-            self.container_client = self.blob_service_client.get_container_client(self.container_name)
         blobs = self.container_client.list_blobs()
         for blob in blobs:
-            yield AzureObject("azure", blob.container, blob.name, blob.size, blob.last_modified)
+            yield AzureObject("azure", f"{self.account_name}/{blob.container}", blob.name, blob.size, blob.last_modified)
 
     def delete_objects(self, keys: List[str]):
         for key in keys:

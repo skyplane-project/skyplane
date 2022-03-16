@@ -29,8 +29,6 @@ class ReplicatorClient:
     def __init__(
         self,
         topology: ReplicationTopology,
-        azure_subscription: Optional[str],
-        gcp_project: Optional[str],
         gateway_docker_image: str = "ghcr.io/parasj/skylark:latest",
         aws_instance_class: Optional[str] = "m5.4xlarge",  # set to None to disable AWS
         azure_instance_class: Optional[str] = "Standard_D2_v5",  # set to None to disable Azure
@@ -41,14 +39,13 @@ class ReplicatorClient:
         self.gateway_docker_image = gateway_docker_image
         self.aws_instance_class = aws_instance_class
         self.azure_instance_class = azure_instance_class
-        self.azure_subscription = azure_subscription
         self.gcp_instance_class = gcp_instance_class
         self.gcp_use_premium_network = gcp_use_premium_network
 
         # provisioning
-        self.aws = AWSCloudProvider() if aws_instance_class != "None" else None
-        self.azure = AzureCloudProvider(azure_subscription) if azure_instance_class != "None" and azure_subscription is not None else None
-        self.gcp = GCPCloudProvider(gcp_project) if gcp_instance_class != "None" and gcp_project is not None else None
+        self.aws = AWSCloudProvider()
+        self.azure = AzureCloudProvider()
+        self.gcp = GCPCloudProvider()
         self.bound_nodes: Dict[ReplicationTopologyGateway, Server] = {}
 
     def provision_gateways(
@@ -59,12 +56,19 @@ class ReplicatorClient:
         azure_regions_to_provision = [r for r in regions_to_provision if r.startswith("azure:")]
         gcp_regions_to_provision = [r for r in regions_to_provision if r.startswith("gcp:")]
 
-        assert len(aws_regions_to_provision) == 0 or self.aws is not None, "AWS not enabled"
-        assert len(azure_regions_to_provision) == 0 or self.azure is not None, "Azure not enabled"
-        assert len(gcp_regions_to_provision) == 0 or self.gcp is not None, "GCP not enabled"
+        assert (
+            len(aws_regions_to_provision) == 0 or self.aws.auth.enabled()
+        ), "AWS credentials not configured but job provisions AWS gateways"
+        assert (
+            len(azure_regions_to_provision) == 0 or self.azure.auth.enabled()
+        ), "Azure credentials not configured but job provisions Azure gateways"
+        assert (
+            len(gcp_regions_to_provision) == 0 or self.gcp.auth.enabled()
+        ), "GCP credentials not configured but job provisions GCP gateways"
 
         # init clouds
         jobs = []
+        jobs.append(partial(self.aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
         for r in set(aws_regions_to_provision):
             jobs.append(partial(self.aws.add_ip_to_security_group, r.split(":")[1]))
         if azure_regions_to_provision:
@@ -79,7 +83,7 @@ class ReplicatorClient:
 
         # reuse existing AWS instances
         if reuse_instances:
-            if self.aws is not None:
+            if self.aws.auth.enabled():
                 aws_instance_filter = {
                     "tags": {"skylark": "true"},
                     "instance_type": self.aws_instance_class,
@@ -95,7 +99,7 @@ class ReplicatorClient:
             else:
                 current_aws_instances = {}
 
-            if self.azure is not None:
+            if self.azure.auth.enabled():
                 azure_instance_filter = {
                     "tags": {"skylark": "true"},
                     "instance_type": self.azure_instance_class,
@@ -111,7 +115,7 @@ class ReplicatorClient:
             else:
                 current_azure_instances = {}
 
-            if self.gcp is not None:
+            if self.gcp.auth.enabled():
                 gcp_instance_filter = {
                     "tags": {"skylark": "true"},
                     "instance_type": self.gcp_instance_class,
@@ -132,13 +136,13 @@ class ReplicatorClient:
             def provision_gateway_instance(region: str) -> Server:
                 provider, subregion = region.split(":")
                 if provider == "aws":
-                    assert self.aws is not None
+                    assert self.aws.auth.enabled()
                     server = self.aws.provision_instance(subregion, self.aws_instance_class)
                 elif provider == "azure":
-                    assert self.azure is not None
+                    assert self.azure.auth.enabled()
                     server = self.azure.provision_instance(subregion, self.azure_instance_class)
                 elif provider == "gcp":
-                    assert self.gcp is not None
+                    assert self.gcp.auth.enabled()
                     # todo specify network tier in ReplicationTopology
                     server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
                 else:
@@ -189,8 +193,10 @@ class ReplicatorClient:
     def deprovision_gateways(self):
         def deprovision_gateway_instance(server: Server):
             if server.instance_state() == ServerState.RUNNING:
+                logger.warning(f"Deprovisioning {server.uuid()}")
                 server.terminate_instance()
 
+        logger.warning("Deprovisioning instances")
         do_parallel(deprovision_gateway_instance, self.bound_nodes.values(), n=-1)
 
     def run_replication_plan(self, job: ReplicationJob) -> ReplicationJob:
@@ -308,7 +314,7 @@ class ReplicatorClient:
         show_pbar=False,
         log_interval_s: Optional[float] = None,
         time_limit_seconds: Optional[float] = None,
-        cancel_pending: bool = True,
+        cleanup_gateway: bool = True,
         save_log: bool = True,
         write_profile: bool = True,
         copy_gateway_logs: bool = True,
@@ -328,9 +334,11 @@ class ReplicatorClient:
             if copy_gateway_logs:
                 for instance in self.bound_nodes.values():
                     logger.info(f"Copying gateway logs from {instance.uuid()}")
-                    instance.run_command("sudo docker logs -t skylark_gateway &> /tmp/gateway.log")
-                    log_out = transfer_dir / f"gateway_{instance.uuid()}.log"
-                    instance.download_file("/tmp/gateway.log", log_out)
+                    instance.run_command("sudo docker logs -t skylark_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
+                    log_out = transfer_dir / f"gateway_{instance.uuid()}.stdout"
+                    log_err = transfer_dir / f"gateway_{instance.uuid()}.stderr"
+                    instance.download_file("/tmp/gateway.stdout", log_out)
+                    instance.download_file("/tmp/gateway.stderr", log_err)
                 logger.debug(f"Wrote gateway logs to {transfer_dir}")
             if write_profile:
                 chunk_status_df = self.get_chunk_status_log_df()
@@ -349,7 +357,8 @@ class ReplicatorClient:
 
             do_parallel(fn, self.bound_nodes.values(), n=-1)
 
-        if cancel_pending:
+        if cleanup_gateway:
+            logger.debug("Registering shutdown handler")
             atexit.register(shutdown_handler)
 
         with Timer() as t:
@@ -381,7 +390,7 @@ class ReplicatorClient:
                         or time_limit_seconds is not None
                         and t.elapsed > time_limit_seconds
                     ):
-                        if cancel_pending:
+                        if cleanup_gateway:
                             atexit.unregister(shutdown_handler)
                         shutdown_handler()
                         return dict(

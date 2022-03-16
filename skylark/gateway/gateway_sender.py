@@ -1,6 +1,6 @@
 import queue
 import socket
-from multiprocessing import Event, Manager, Process, Value
+from multiprocessing import Event, Manager, Process
 from typing import Dict, List, Optional
 
 import requests

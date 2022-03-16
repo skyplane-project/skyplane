@@ -1,20 +1,23 @@
+import json
 import uuid
 from typing import List, Optional
 
 import botocore
 import pandas as pd
+from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.utils import logger
 
 from oslo_concurrency import lockutils
 from skylark import skylark_root
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.cloud_providers import CloudProvider
-from skylark.utils.utils import retry_backoff
+from skylark.utils.utils import retry_backoff, wait_for
 
 
 class AWSCloudProvider(CloudProvider):
     def __init__(self):
         super().__init__()
+        self.auth = AWSAuthentication()
 
     @property
     def name(self):
@@ -66,13 +69,11 @@ class AWSCloudProvider(CloudProvider):
                 src_rows = transfer_df.loc[src]
                 src_rows = src_rows[src_rows.index != "internet"]
                 return src_rows.max()["cost"]
-        elif dst_provider == "gcp" or dst_provider == "azure":
-            return transfer_df.loc[src, "internet"]["cost"]
         else:
-            raise NotImplementedError
+            return transfer_df.loc[src, "internet"]["cost"]
 
     def get_instance_list(self, region: str) -> List[AWSServer]:
-        ec2 = AWSServer.get_boto3_resource("ec2", region)
+        ec2 = self.auth.get_boto3_resource("ec2", region)
         valid_states = ["pending", "running", "stopped", "stopping"]
         instances = ec2.instances.filter(Filters=[{"Name": "instance-state-name", "Values": valid_states}])
         try:
@@ -84,7 +85,7 @@ class AWSCloudProvider(CloudProvider):
         return [AWSServer(f"aws:{region}", i) for i in instance_ids]
 
     def get_security_group(self, region: str, vpc_name="skylark", sg_name="skylark"):
-        ec2 = AWSServer.get_boto3_resource("ec2", region)
+        ec2 = self.auth.get_boto3_resource("ec2", region)
         vpcs = list(ec2.vpcs.filter(Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]).all())
         assert len(vpcs) == 1, f"Found {len(vpcs)} vpcs with name {vpc_name}"
         sgs = [sg for sg in vpcs[0].security_groups.all() if sg.group_name == sg_name]
@@ -92,7 +93,7 @@ class AWSCloudProvider(CloudProvider):
         return sgs[0]
 
     def get_vpc(self, region: str, vpc_name="skylark"):
-        ec2 = AWSServer.get_boto3_resource("ec2", region)
+        ec2 = self.auth.get_boto3_resource("ec2", region)
         vpcs = list(ec2.vpcs.filter(Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]).all())
         if len(vpcs) == 0:
             return None
@@ -100,7 +101,7 @@ class AWSCloudProvider(CloudProvider):
             return vpcs[0]
 
     def make_vpc(self, region: str, vpc_name="skylark"):
-        ec2 = AWSServer.get_boto3_resource("ec2", region)
+        ec2 = self.auth.get_boto3_resource("ec2", region)
         ec2client = ec2.meta.client
         vpcs = list(ec2.vpcs.filter(Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]).all())
 
@@ -154,7 +155,7 @@ class AWSCloudProvider(CloudProvider):
     def delete_vpc(self, region: str, vpcid: str):
         """Delete VPC, from https://gist.github.com/vernhart/c6a0fc94c0aeaebe84e5cd6f3dede4ce"""
         logger.warning(f"[{region}] Deleting VPC {vpcid}")
-        ec2 = AWSServer.get_boto3_resource("ec2", region)
+        ec2 = self.auth.get_boto3_resource("ec2", region)
         ec2client = ec2.meta.client
         vpc = ec2.Vpc(vpcid)
         # detach and delete all gateways associated with the vpc
@@ -194,6 +195,27 @@ class AWSCloudProvider(CloudProvider):
         # finally, delete the vpc
         ec2client.delete_vpc(VpcId=vpcid)
 
+    def create_iam(self, iam_name: str = "skylark_gateway", attach_policy_arn: Optional[str] = None):
+        """Create IAM role if it doesn't exist and grant managed role if given."""
+
+        @lockutils.synchronized(f"aws_create_iam_{iam_name}", external=True, lock_path="/tmp/skylark_locks")
+        def fn():
+            iam = self.auth.get_boto3_client("iam")
+
+            # create IAM role
+            try:
+                iam.get_role(RoleName=iam_name)
+            except iam.exceptions.NoSuchEntityException:
+                doc = {
+                    "Version": "2012-10-17",
+                    "Statement": [{"Effect": "Allow", "Principal": {"Service": "ec2.amazonaws.com"}, "Action": "sts:AssumeRole"}],
+                }
+                iam.create_role(RoleName=iam_name, AssumeRolePolicyDocument=json.dumps(doc), Tags=[{"Key": "skylark", "Value": "true"}])
+            if attach_policy_arn:
+                iam.attach_role_policy(RoleName=iam_name, PolicyArn=attach_policy_arn)
+
+        return fn()
+
     def add_ip_to_security_group(self, aws_region: str):
         """Add IP to security group. If security group ID is None, use group named skylark (create if not exists)."""
 
@@ -219,20 +241,40 @@ class AWSCloudProvider(CloudProvider):
         # ami_id: Optional[str] = None,
         tags={"skylark": "true"},
         ebs_volume_size: int = 128,
+        iam_name: str = "skylark_gateway",
     ) -> AWSServer:
         assert not region.startswith("aws:"), "Region should be AWS region"
         if name is None:
             name = f"skylark-aws-{str(uuid.uuid4()).replace('-', '')}"
-        ec2 = AWSServer.get_boto3_resource("ec2", region)
-        AWSServer.ensure_keyfile_exists(region)
-
+        iam_instance_profile_name = f"{name}_profile"
+        iam = self.auth.get_boto3_client("iam")
+        ec2 = self.auth.get_boto3_resource("ec2", region)
         vpc = self.get_vpc(region)
         assert vpc is not None, "No VPC found"
         subnets = list(vpc.subnets.all())
         assert len(subnets) > 0, "No subnets found"
 
+        def check_iam_role():
+            try:
+                iam.get_role(RoleName=iam_name)
+                return True
+            except iam.exceptions.NoSuchEntityException:
+                return False
+
+        def check_instance_profile():
+            try:
+                iam.get_instance_profile(InstanceProfileName=iam_instance_profile_name)
+                return True
+            except iam.exceptions.NoSuchEntityException:
+                return False
+
+        # wait for iam_role to be created and create instance profile
+        wait_for(check_iam_role, timeout=60, interval=0.5)
+        iam.create_instance_profile(InstanceProfileName=iam_instance_profile_name, Tags=[{"Key": "skylark", "Value": "true"}])
+        iam.add_role_to_instance_profile(InstanceProfileName=iam_instance_profile_name, RoleName=iam_name)
+        wait_for(check_instance_profile, timeout=60, interval=0.5)
+
         def start_instance():
-            # todo instance-initiated-shutdown-behavior terminate
             return ec2.create_instances(
                 ImageId="resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id",
                 InstanceType=instance_class,
@@ -260,6 +302,8 @@ class AWSCloudProvider(CloudProvider):
                         "DeleteOnTermination": True,
                     }
                 ],
+                IamInstanceProfile={"Name": iam_instance_profile_name},
+                InstanceInitiatedShutdownBehavior="terminate",
             )
 
         instance = retry_backoff(start_instance, initial_backoff=1)

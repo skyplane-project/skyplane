@@ -44,13 +44,12 @@ class CloudProvider:
         tags={"skylark": "true"},
     ) -> List[Server]:
         if isinstance(region, str):
-            region = [region]
+            results = [(region, self.get_instance_list(region))]
         elif region is None:
-            region = self.region_list()
+            results = do_parallel(self.get_instance_list, self.region_list(), n=-1)
 
-        results = do_parallel(self.get_instance_list, region, n=-1)
         matching_instances = []
-        for r, instances in results:
+        for _, instances in results:
             for instance in instances:
                 if not (instance_type is None or instance_type == instance.instance_class()):
                     continue

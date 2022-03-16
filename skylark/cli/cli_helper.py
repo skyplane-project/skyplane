@@ -1,14 +1,21 @@
 import concurrent.futures
+from functools import partial
 import os
 import re
 import resource
 import subprocess
 from pathlib import Path
 from shutil import copyfile
+from typing import Dict, List
 from sys import platform
-from typing import Dict, List, Optional
+from typing import Dict, List
 
+import boto3
 import typer
+from skylark.compute.aws.aws_auth import AWSAuthentication
+from skylark.compute.azure.azure_auth import AzureAuthentication
+from skylark.compute.gcp.gcp_auth import GCPAuthentication
+from skylark.config import SkylarkConfig
 from skylark.utils import logger
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
@@ -45,7 +52,7 @@ def parse_path(path: str):
         if match is None:
             raise ValueError(f"Invalid Azure path: {path}")
         account, container, blob_path = match.groups()
-        return "azure", account, container
+        return "azure", (account, container), blob_path
     elif path.startswith("azure://"):
         bucket_name = path[8:]
         region = path[8:].split("-", 2)[-1]
@@ -90,7 +97,7 @@ def copy_local_local(src: Path, dst: Path):
         copyfile(src, dst)
 
 
-def copy_local_objstore(object_interface: ObjectStoreInterface, src: Path, dst_bucket: str, dst_key: str):
+def copy_local_objstore(object_interface: ObjectStoreInterface, src: Path, dst_key: str):
     ops: List[concurrent.futures.Future] = []
     path_mapping: Dict[concurrent.futures.Future, Path] = {}
 
@@ -114,7 +121,7 @@ def copy_local_objstore(object_interface: ObjectStoreInterface, src: Path, dst_b
             pbar.update(path_mapping[op].stat().st_size)
 
 
-def copy_objstore_local(object_interface: ObjectStoreInterface, src_bucket: str, src_key: str, dst: Path):
+def copy_objstore_local(object_interface: ObjectStoreInterface, src_key: str, dst: Path):
     ops: List[concurrent.futures.Future] = []
     obj_mapping: Dict[concurrent.futures.Future, ObjectStoreObject] = {}
 
@@ -142,24 +149,22 @@ def copy_objstore_local(object_interface: ObjectStoreInterface, src_bucket: str,
 
 def copy_local_gcs(src: Path, dst_bucket: str, dst_key: str):
     gcs = GCSInterface(None, dst_bucket)
-    return copy_local_objstore(gcs, src, dst_bucket, dst_key)
+    return copy_local_objstore(gcs, src, dst_key)
 
 
 def copy_gcs_local(src_bucket: str, src_key: str, dst: Path):
     gcs = GCSInterface(None, src_bucket)
-    return copy_objstore_local(gcs, src_bucket, src_key, dst)
+    return copy_objstore_local(gcs, src_key, dst)
 
 
-def copy_local_azure(src: Path, dst_bucket: str, dst_key: str):
-    # Note that dst_key is infact azure region
-    azure = AzureInterface(dst_key, dst_bucket)
-    return copy_local_objstore(azure, src, dst_bucket, dst_key)
+def copy_local_azure(src: Path, dst_account_name: str, dst_container_name: str, dst_key: str):
+    azure = AzureInterface(None, dst_account_name, dst_container_name)
+    return copy_local_objstore(azure, src, dst_key)
 
 
-def copy_azure_local(src_bucket: str, src_key: str, dst: Path):
-    # Note that src_key is infact azure region
-    azure = AzureInterface(src_key, src_bucket)
-    return copy_objstore_local(azure, src_bucket, src_key, dst)
+def copy_azure_local(src_account_name: str, src_container_name: str, src_key: str, dst: Path):
+    azure = AzureInterface(None, src_account_name, src_container_name)
+    return copy_objstore_local(azure, src_key, dst)
 
 
 def copy_local_s3(src: Path, dst_bucket: str, dst_key: str, use_tls: bool = True):
@@ -231,7 +236,7 @@ def check_ulimit(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
                     f"Failed to increase ulimit to {soft_limit}, please set manually with 'ulimit -n {soft_limit}'. Current limit is {new_limit}",
                     fg="red",
                 )
-                typer.Abort()
+                raise typer.Abort()
             else:
                 typer.secho(f"Successfully increased ulimit to {new_limit}", fg="green")
     if current_limit_soft < soft_limit and (platform == "linux" or platform == "linux2"):
@@ -242,31 +247,104 @@ def check_ulimit(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
         subprocess.check_output(increase_soft_limit)
 
 
-def deprovision_skylark_instances(azure_subscription: Optional[str] = None, gcp_project_id: Optional[str] = None):
+def deprovision_skylark_instances():
     instances = []
+    query_jobs = []
+    if AWSAuthentication().enabled():
+        logger.debug("AWS authentication enabled, querying for instances")
+        aws = AWSCloudProvider()
+        for region in aws.region_list():
+            query_jobs.append(partial(aws.get_matching_instances, region))
+    if AzureAuthentication().enabled():
+        logger.debug("Azure authentication enabled, querying for instances")
+        query_jobs.append(lambda: AzureCloudProvider().get_matching_instances())
+    if GCPAuthentication().enabled():
+        logger.debug("GCP authentication enabled, querying for instances")
+        query_jobs.append(lambda: GCPCloudProvider().get_matching_instances())
 
-    aws = AWSCloudProvider()
-    for _, instance_list in do_parallel(
-        aws.get_matching_instances, aws.region_list(), progress_bar=True, leave_pbar=False, desc="Retrieve AWS instances"
-    ):
-        instances += instance_list
-
-    if not azure_subscription:
-        typer.secho(
-            "No Microsoft Azure subscription given, so Azure instances will not be terminated", color=typer.colors.YELLOW, bold=True
-        )
-    else:
-        azure = AzureCloudProvider(azure_subscription=azure_subscription)
-        instances += azure.get_matching_instances()
-
-    if not gcp_project_id:
-        typer.secho("No GCP project ID given, so GCP instances will not be deprovisioned", color=typer.colors.YELLOW, bold=True)
-    else:
-        gcp = GCPCloudProvider(gcp_project=gcp_project_id)
-        instances += gcp.get_matching_instances()
+    # query in parallel
+    for _, instance_list in do_parallel(lambda f: f(), query_jobs, progress_bar=True, desc="Query instances", hide_args=True):
+        instances.extend(instance_list)
 
     if instances:
-        typer.secho(f"Deprovisioning {len(instances)} instances", color=typer.colors.YELLOW, bold=True)
+        typer.secho(f"Deprovisioning {len(instances)} instances", fg="yellow", bold=True)
         do_parallel(lambda instance: instance.terminate_instance(), instances, progress_bar=True, desc="Deprovisioning")
     else:
-        typer.secho("No instances to deprovision, exiting...", color=typer.colors.YELLOW, bold=True)
+        typer.secho("No instances to deprovision, exiting...", fg="yellow", bold=True)
+
+
+def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
+    # get AWS credentials from boto3
+    session = boto3.Session()
+    credentials = session.get_credentials()
+    credentials = credentials.get_frozen_credentials()
+    if credentials.access_key is None or credentials.secret_key is None:
+        typer.secho("    AWS credentials not found in boto3 session, please use the AWS CLI to set them via `aws configure`", fg="red")
+        typer.secho("    https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html", fg="red")
+        typer.secho("    Disabling AWS support", fg="blue")
+        return config
+
+    typer.secho(f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials.access_key[-6:]}]", fg="blue")
+    return config
+
+
+def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkConfig:
+    if force_init:
+        typer.secho("    Azure credentials will be re-initialized", fg="red")
+        config.azure_subscription_id = None
+
+    if config.azure_subscription_id:
+        typer.secho("    Azure credentials already configured! To reconfigure Azure, run `skylark init --reinit-azure`.", fg="blue")
+        return config
+
+    # check if Azure is enabled
+    auth = AzureAuthentication()
+    try:
+        auth.credential.get_token("https://management.azure.com/")
+        azure_enabled = True
+    except:
+        azure_enabled = False
+    if not azure_enabled:
+        typer.secho("    No local Azure credentials! Run `az login` to set them up.", fg="red")
+        typer.secho("    https://docs.microsoft.com/en-us/azure/developer/python/azure-sdk-authenticate", fg="red")
+        typer.secho("    Disabling Azure support", fg="blue")
+        return config
+    typer.secho("    Azure credentials found in Azure CLI", fg="blue")
+    inferred_subscription_id = AzureAuthentication.infer_subscription_id()
+    if typer.confirm("    Azure credentials found, do you want to enable Azure support in Skylark?", default=True):
+        config.azure_subscription_id = typer.prompt("    Enter the Azure subscription ID:", default=inferred_subscription_id)
+    else:
+        config.azure_subscription_id = None
+        typer.secho("    Disabling Azure support", fg="blue")
+    return config
+
+
+def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkConfig:
+    if force_init:
+        typer.secho("    GCP credentials will be re-initialized", fg="red")
+        config.gcp_project_id = None
+
+    if config.gcp_project_id is not None:
+        typer.secho("    GCP already configured! To reconfigure GCP, run `skylark init --reinit-gcp`.", fg="blue")
+        return config
+
+    # check if GCP is enabled
+    auth = GCPAuthentication()
+    if not auth.credentials:
+        typer.secho(
+            "    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.",
+            fg="red",
+        )
+        typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red")
+        typer.secho("    Disabling GCP support", fg="blue")
+        return config
+    else:
+        typer.secho("    GCP credentials found in GCP CLI", fg="blue")
+        if typer.confirm("    GCP credentials found, do you want to enable GCP support in Skylark?", default=True):
+            config.gcp_project_id = typer.prompt("    Enter the GCP project ID:", default=auth.project_id)
+            assert config.gcp_project_id is not None, "GCP project ID must not be None"
+            return config
+        else:
+            config.gcp_project_id = None
+            typer.secho("    Disabling GCP support", fg="blue")
+            return config
