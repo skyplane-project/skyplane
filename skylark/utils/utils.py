@@ -48,7 +48,7 @@ def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, progress_bar=Fal
 
 
 def do_parallel(
-    func: Callable[[T], R], args_list: Iterable[T], n=-1, progress_bar=False, leave_pbar=True, desc=None, arg_fmt=None
+    func: Callable[[T], R], args_list: Iterable[T], n=-1, progress_bar=False, leave_pbar=True, desc=None, arg_fmt=None, hide_args=False
 ) -> List[Tuple[T, R]]:
     """Run list of jobs in parallel with tqdm progress bar"""
     args_list = list(args_list)
@@ -71,15 +71,19 @@ def do_parallel(
             for future in as_completed(future_list):
                 args, result = future.result()
                 results.append((args, result))
-                pbar.set_description(f"{desc} ({str(arg_fmt(args))})" if desc else str(arg_fmt(args)))
+                if not hide_args:
+                    pbar.set_description(f"{desc} ({str(arg_fmt(args))})" if desc else str(arg_fmt(args)))
+                else:
+                    pbar.set_description(desc)
                 pbar.update()
         return results
 
 
 def retry_backoff(
     fn: Callable[[], R],
-    max_retries=4,
+    max_retries=8,
     initial_backoff=0.1,
+    max_backoff=8,
     exception_class=Exception,
 ) -> R:
     """Retry fn until it does not raise an exception.
@@ -97,4 +101,4 @@ def retry_backoff(
             else:
                 logger.warning(f"Retrying {fn.__name__} due to {e} (attempt {i + 1}/{max_retries})")
                 time.sleep(backoff)
-                backoff *= 2
+                backoff = min(backoff * 2, max_backoff)
