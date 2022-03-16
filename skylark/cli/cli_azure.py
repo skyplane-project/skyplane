@@ -7,10 +7,7 @@ from collections import defaultdict
 from typing import List
 
 import typer
-from azure.identity import DefaultAzureCredential
-from azure.mgmt.compute import ComputeManagementClient
 from skylark.compute.azure.azure_auth import AzureAuthentication
-from skylark.config import SkylarkConfig
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.utils.utils import do_parallel
 

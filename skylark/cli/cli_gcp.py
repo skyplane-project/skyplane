@@ -5,7 +5,6 @@ from typing import Optional
 import questionary
 import typer
 
-from skylark.utils import logger
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.gcp.gcp_server import GCPServer
 

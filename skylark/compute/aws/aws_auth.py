@@ -23,7 +23,7 @@ class AWSAuthentication:
         if self._access_key is None:
             self._access_key, self._secret_key = self.infer_credentials()
         return self._access_key
-    
+
     @property
     def secret_key(self):
         if self._secret_key is None:

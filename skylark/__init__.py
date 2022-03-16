@@ -1,7 +1,6 @@
 import os
 
 from pathlib import Path
-from skylark.compute.utils import query_which_cloud
 
 from skylark.config import SkylarkConfig
 

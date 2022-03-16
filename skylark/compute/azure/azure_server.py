@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-from typing import Optional
 
 import paramiko
 from skylark import key_root

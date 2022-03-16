@@ -1,5 +1,5 @@
 from datetime import datetime
-from multiprocessing import Lock, Manager, Queue
+from multiprocessing import Manager, Queue
 from os import PathLike
 from pathlib import Path
 from queue import Empty

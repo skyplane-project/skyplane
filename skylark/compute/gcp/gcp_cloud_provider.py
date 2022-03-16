@@ -7,7 +7,6 @@ from typing import List
 import googleapiclient
 import paramiko
 from skylark.compute.gcp.gcp_auth import GCPAuthentication
-from skylark.config import SkylarkConfig
 from skylark.utils import logger
 
 from oslo_concurrency import lockutils

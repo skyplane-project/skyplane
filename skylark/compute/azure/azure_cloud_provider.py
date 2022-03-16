@@ -6,7 +6,6 @@ from typing import List, Optional
 
 import paramiko
 from skylark.compute.azure.azure_auth import AzureAuthentication
-from skylark.config import SkylarkConfig
 from skylark.utils import logger
 from skylark import key_root
 from skylark.compute.azure.azure_server import AzureServer

@@ -1,7 +1,7 @@
 import os
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Iterator, List
-from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError, ServiceRequestError
+from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.azure.azure_server import AzureServer
 from skylark.utils import logger

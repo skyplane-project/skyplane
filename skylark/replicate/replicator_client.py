@@ -9,8 +9,6 @@ from typing import Dict, List, Optional, Tuple
 import uuid
 
 import requests
-from skylark.compute.aws.aws_auth import AWSAuthentication
-from skylark.config import SkylarkConfig
 from skylark.replicate.profiler import status_df_to_traceevent
 from skylark.utils import logger
 from tqdm import tqdm

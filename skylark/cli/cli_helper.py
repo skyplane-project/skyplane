@@ -6,8 +6,7 @@ import resource
 import subprocess
 from pathlib import Path
 from shutil import copyfile
-import sys
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import boto3
 import typer

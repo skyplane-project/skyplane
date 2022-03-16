@@ -1,5 +1,4 @@
 import json
-import os
 import subprocess
 from enum import Enum, auto
 from pathlib import Path
@@ -10,7 +9,6 @@ from skylark.compute.utils import make_dozzle_command, make_sysctl_tcp_tuning_co
 from skylark.utils.utils import PathLike, Timer, retry_backoff, wait_for
 
 from skylark import config_path
-import os
 
 
 class ServerState(Enum):

@@ -20,7 +20,7 @@ class GCPAuthentication:
         if self._credentials is None:
             self._credentials, self._project_id = self.make_credential(self.inferred_project_id)
         return self._credentials
-    
+
     @property
     def project_id(self):
         if self._project_id is None:
