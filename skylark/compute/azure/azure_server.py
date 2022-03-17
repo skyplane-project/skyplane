@@ -1,19 +1,14 @@
 import os
 from pathlib import Path
-from typing import Optional
 
 import paramiko
 from skylark import key_root
-from skylark.config import load_config
+from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.server import Server, ServerState
 from skylark.utils.cache import ignore_lru_cache
 from skylark.utils.utils import PathLike
 
 import azure.core.exceptions
-from azure.identity import DefaultAzureCredential, ClientSecretCredential
-from azure.mgmt.compute import ComputeManagementClient
-from azure.mgmt.network import NetworkManagementClient
-from azure.mgmt.resource import ResourceManagementClient
 
 
 class AzureServer(Server):
@@ -22,25 +17,13 @@ class AzureServer(Server):
 
     def __init__(
         self,
-        subscription_id: Optional[str],
         name: str,
         key_root: PathLike = key_root / "azure",
         log_dir=None,
         ssh_private_key=None,
-        read_credential=True,
         assume_exists=True,
     ):
-        if read_credential:
-            config = load_config()
-            self.subscription_id = subscription_id if subscription_id is not None else config["azure_subscription_id"]
-            self.credential = ClientSecretCredential(
-                tenant_id=config["azure_tenant_id"],
-                client_id=config["azure_client_id"],
-                client_secret=config["azure_client_secret"],
-            )
-        else:
-            self.credential = DefaultAzureCredential()
-            self.subscription_id = subscription_id
+        self.auth = AzureAuthentication()
         self.name = name
         self.location = None
 
@@ -104,21 +87,8 @@ class AzureServer(Server):
     def nic_name(name):
         return AzureServer.vm_name(name) + "-nic"
 
-    def get_resource_group(self):
-        credential = self.credential
-        resource_client = ResourceManagementClient(credential, self.subscription_id)
-        rg = resource_client.resource_groups.get(AzureServer.resource_group_name)
-
-        # Sanity checks
-        assert rg.name == AzureServer.resource_group_name
-        assert rg.location == AzureServer.resource_group_location
-        assert rg.tags.get("skylark", None) == "true"
-
-        return rg
-
     def get_virtual_machine(self):
-        credential = self.credential
-        compute_client = ComputeManagementClient(credential, self.subscription_id)
+        compute_client = self.auth.get_compute_client()
         vm = compute_client.virtual_machines.get(AzureServer.resource_group_name, AzureServer.vm_name(self.name))
 
         # Sanity checks
@@ -135,11 +105,10 @@ class AzureServer(Server):
             return False
 
     def uuid(self):
-        return f"{self.subscription_id}:{self.region_tag}:{self.name}"
+        return f"{self.region_tag}:{self.name}"
 
     def instance_state(self) -> ServerState:
-        credential = self.credential
-        compute_client = ComputeManagementClient(credential, self.subscription_id)
+        compute_client = self.auth.get_compute_client()
         vm_instance_view = compute_client.virtual_machines.instance_view(AzureServer.resource_group_name, AzureServer.vm_name(self.name))
         statuses = vm_instance_view.statuses
         for status in statuses:
@@ -149,8 +118,7 @@ class AzureServer(Server):
 
     @ignore_lru_cache()
     def public_ip(self):
-        credential = self.credential
-        network_client = NetworkManagementClient(credential, self.subscription_id)
+        network_client = self.auth.get_network_client()
         public_ip = network_client.public_ip_addresses.get(AzureServer.resource_group_name, AzureServer.ip_name(self.name))
 
         # Sanity checks
@@ -178,28 +146,22 @@ class AzureServer(Server):
         return "PREMIUM"
 
     def terminate_instance_impl(self):
-        credential = self.credential
-        compute_client = ComputeManagementClient(credential, self.subscription_id)
-        network_client = NetworkManagementClient(credential, self.subscription_id)
-
+        compute_client = self.auth.get_compute_client()
+        network_client = self.auth.get_network_client()
         vm_poller = compute_client.virtual_machines.begin_delete(AzureServer.resource_group_name, self.vm_name(self.name))
-        _ = vm_poller.result()
-
+        vm_poller.result()
         nic_poller = network_client.network_interfaces.begin_delete(AzureServer.resource_group_name, self.nic_name(self.name))
-        _ = nic_poller.result()
-
         ip_poller = network_client.public_ip_addresses.begin_delete(AzureServer.resource_group_name, self.ip_name(self.name))
         subnet_poller = network_client.subnets.begin_delete(
             AzureServer.resource_group_name, self.vnet_name(self.name), self.subnet_name(self.name)
         )
-        _ = ip_poller.result()
-        _ = subnet_poller.result()
-
         nsg_poller = network_client.network_security_groups.begin_delete(AzureServer.resource_group_name, self.nsg_name(self.name))
-        _ = nsg_poller.result()
-
         vnet_poller = network_client.virtual_networks.begin_delete(AzureServer.resource_group_name, self.vnet_name(self.name))
-        _ = vnet_poller.result()
+        nsg_poller.result()
+        ip_poller.result()
+        subnet_poller.result()
+        nic_poller.result()
+        vnet_poller.result()
 
     def get_ssh_client_impl(self, uname=os.environ.get("USER"), ssh_key_password="skylark"):
         """Return paramiko client that connects to this instance."""

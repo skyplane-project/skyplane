@@ -1,19 +1,13 @@
 import json
-import os
 import subprocess
 from enum import Enum, auto
 from pathlib import Path
 from typing import Dict
 import requests
-from skylark import config_file
 from skylark.utils import logger
 from skylark.compute.utils import make_dozzle_command, make_sysctl_tcp_tuning_command
 from skylark.utils.utils import PathLike, Timer, retry_backoff, wait_for
-
-import configparser
-import os
-
-from skylark import config_file
+from skylark import config_path
 
 
 class ServerState(Enum):
@@ -91,6 +85,9 @@ class Server:
             self.command_log_file = None
 
     def get_ssh_client_impl(self):
+        raise NotImplementedError()
+
+    def get_ssh_cmd(self) -> str:
         raise NotImplementedError()
 
     @property
@@ -172,6 +169,18 @@ class Server:
         self.add_command_log(command=command, stdout=stdout, stderr=stderr, runtime=t.elapsed)
         return stdout, stderr
 
+    def download_file(self, remote_path, local_path):
+        """Download a file from the server"""
+        client = self.ssh_client
+        with client.open_sftp() as sftp:
+            sftp.get(remote_path, local_path)
+
+    def upload_file(self, local_path, remote_path):
+        """Upload a file to the server"""
+        client = self.ssh_client
+        with client.open_sftp() as sftp:
+            sftp.put(local_path, remote_path)
+
     def copy_public_key(self, pub_key_path: PathLike):
         """Append public key to authorized_keys file on server."""
         pub_key_path = Path(pub_key_path)
@@ -195,36 +204,35 @@ class Server:
         log_viewer_port=8888,
         use_bbr=False,
     ):
-        self.wait_for_ready()
-
         def check_stderr(tup):
             assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
 
         desc_prefix = f"Starting gateway {self.uuid()}, host: {self.public_ip()}"
+        self.wait_for_ready()
 
         # increase TCP connections, enable BBR optionally and raise file limits
         check_stderr(self.run_command(make_sysctl_tcp_tuning_command(cc="bbr" if use_bbr else "cubic")))
-        retry_backoff(self.install_docker, exception_class=RuntimeError)
+        with Timer("Install docker"):
+            retry_backoff(self.install_docker, exception_class=RuntimeError)
+
+        # start log viewer
         self.run_command(make_dozzle_command(log_viewer_port))
 
-        # read AWS config file to get credentials
-        # TODO: Integrate this with updated skylark config file
-        # copy config file
-        config = config_file.read_text()[:-2] + "}"
-        config = json.dumps(config)  # Convert to JSON string and remove trailing comma/new-line
-        self.run_command(f'mkdir -p /opt; echo "{config}" | sudo tee /opt/{config_file.name} > /dev/null')
+        # copy cloud configuration
+        docker_envs = {}
+        if config_path.exists():
+            self.upload_file(config_path, f"/tmp/{config_path.name}")
+            docker_envs["SKYLARK_CONFIG"] = f"/pkg/data/{config_path.name}"
 
-        docker_envs = ""  # If needed, add environment variables to docker command
-
+        # pull docker image and start container
         with Timer(f"{desc_prefix}: Docker pull"):
             docker_out, docker_err = self.run_command(f"sudo docker pull {gateway_docker_image}")
             assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
         logger.debug(f"{desc_prefix}: Starting gateway container")
-        docker_run_flags = (
-            f"-d --rm --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024} {docker_envs}"
-        )
+        docker_run_flags = f"-d --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024}"
         docker_run_flags += " --mount type=tmpfs,dst=/skylark,tmpfs-size=$(($(free -b  | head -n2 | tail -n1 | awk '{print $2}')/2))"
-        docker_run_flags += f" -v /opt/{config_file.name}:/pkg/data/{config_file.name}"
+        docker_run_flags += f" -v /tmp/{config_path.name}:/pkg/data/{config_path.name}"
+        docker_run_flags += " " + " ".join(f"--env {k}={v}" for k, v in docker_envs.items())
         gateway_daemon_cmd = f"python -u /pkg/skylark/gateway/gateway_daemon.py --chunk-dir /skylark/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = self.run_command(docker_launch_cmd)

@@ -1,7 +1,7 @@
 import queue
 import socket
 import ssl
-from multiprocessing import Event, Manager, Process, Value
+from multiprocessing import Event, Manager, Process
 from typing import Dict, List, Optional
 
 import requests
@@ -31,7 +31,6 @@ class GatewaySender:
 
         # shared state
         self.manager = Manager()
-        self.next_worker_id = Value("i", 0)
         self.worker_queue: queue.Queue[int] = self.manager.Queue()
         self.exit_flags = [Event() for _ in range(self.n_processes)]
 

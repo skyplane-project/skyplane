@@ -1,13 +1,10 @@
 import logging
 import logging.handlers
-from multiprocessing import Process
 import os
-import signal
 import threading
 from typing import Dict, List
 
 from flask import Flask, jsonify, request
-import setproctitle
 from skylark.utils import logger
 from skylark.chunk import ChunkRequest, ChunkState
 from skylark.gateway.chunk_store import ChunkStore

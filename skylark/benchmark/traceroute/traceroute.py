@@ -46,7 +46,7 @@ def main(args):
     log_dir.mkdir(exist_ok=True, parents=True)
 
     aws = AWSCloudProvider()
-    gcp = GCPCloudProvider(args.gcp_project)
+    gcp = GCPCloudProvider()
     aws_instances, gcp_instances = provision(
         aws=aws,
         gcp=gcp,

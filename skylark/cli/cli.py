@@ -21,11 +21,13 @@ from typing import Optional
 
 import skylark.cli.cli_aws
 import skylark.cli.cli_azure
+import skylark.cli.cli_gcp
 import skylark.cli.cli_solver
 import skylark.cli.experiments
 import typer
+from skylark.config import SkylarkConfig
 from skylark.utils import logger
-from skylark import GB, MB, config_file, print_header
+from skylark import config_path, GB, MB, print_header
 from skylark.cli.cli_helper import (
     check_ulimit,
     copy_azure_local,
@@ -38,11 +40,13 @@ from skylark.cli.cli_helper import (
     copy_gcs_local,
     copy_local_gcs,
     deprovision_skylark_instances,
+    load_aws_config,
+    load_azure_config,
+    load_gcp_config,
     ls_local,
     ls_s3,
     parse_path,
 )
-from skylark.config import load_config
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
 from skylark.obj_store.object_store_interface import ObjectStoreInterface
@@ -51,17 +55,13 @@ app = typer.Typer(name="skylark")
 app.add_typer(skylark.cli.experiments.app, name="experiments")
 app.add_typer(skylark.cli.cli_aws.app, name="aws")
 app.add_typer(skylark.cli.cli_azure.app, name="azure")
+app.add_typer(skylark.cli.cli_gcp.app, name="gcp")
 app.add_typer(skylark.cli.cli_solver.app, name="solver")
 
 
 @app.command()
 def ls(directory: str):
     """List objects in the object store."""
-    config = load_config()
-    gcp_project = config.get("gcp_project_id")
-    azure_subscription = config.get("azure_subscription_id")
-    logger.debug(f"Loaded gcp_project: {gcp_project}, azure_subscription: {azure_subscription}")
-    check_ulimit()
     provider, bucket, key = parse_path(directory)
     if provider == "local":
         for path in ls_local(Path(directory)):
@@ -75,10 +75,6 @@ def ls(directory: str):
 def cp(src: str, dst: str):
     """Copy objects from the object store to the local filesystem."""
     print_header()
-    config = load_config()
-    gcp_project = config.get("gcp_project_id")
-    azure_subscription = config.get("azure_subscription_id")
-    logger.debug(f"Loaded gcp_project: {gcp_project}, azure_subscription: {azure_subscription}")
     check_ulimit()
 
     provider_src, bucket_src, path_src = parse_path(src)
@@ -95,9 +91,11 @@ def cp(src: str, dst: str):
     elif provider_src == "gs" and provider_dst == "local":
         copy_gcs_local(bucket_src, path_src, Path(path_dst))
     elif provider_src == "local" and provider_dst == "azure":
-        copy_local_azure(Path(path_src), bucket_dst, path_dst)
+        account_name, container_name = bucket_dst
+        copy_local_azure(Path(path_src), account_name, container_name, path_dst)
     elif provider_src == "azure" and provider_dst == "local":
-        copy_azure_local(bucket_src, path_src, Path(path_dst))
+        account_name, container_name = bucket_dst
+        copy_azure_local(account_name, container_name, path_src, Path(path_dst))
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
 
@@ -114,11 +112,9 @@ def replicate_random(
     total_transfer_size_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB."),
     chunk_size_mb: int = typer.Option(8, "--chunk-size-mb", help="Chunk size in MB."),
     reuse_gateways: bool = False,
-    azure_subscription: Optional[str] = None,
-    gcp_project: Optional[str] = None,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
     aws_instance_class: str = "m5.8xlarge",
-    azure_instance_class: str = "Standard_D32_v5",
+    azure_instance_class: str = "Standard_D32_v4",
     gcp_instance_class: Optional[str] = "n2-standard-32",
     gcp_use_premium_network: bool = True,
     key_prefix: str = "/test/replicate_random",
@@ -127,10 +123,6 @@ def replicate_random(
 ):
     """Replicate objects from remote object store to another remote object store."""
     print_header()
-    config = load_config()
-    gcp_project = gcp_project or config.get("gcp_project_id")
-    azure_subscription = azure_subscription or config.get("azure_subscription_id")
-    logger.debug(f"Loaded gcp_project: {gcp_project}, azure_subscription: {azure_subscription}")
     check_ulimit()
 
     if inter_region:
@@ -147,8 +139,6 @@ def replicate_random(
 
     rc = ReplicatorClient(
         topo,
-        azure_subscription=azure_subscription,
-        gcp_project=gcp_project,
         gateway_docker_image=gateway_docker_image,
         aws_instance_class=aws_instance_class,
         azure_instance_class=azure_instance_class,
@@ -184,6 +174,11 @@ def replicate_random(
     stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
     stats["success"] = stats["monitor_status"] == "completed"
     out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
+
+    if not reuse_gateways:
+        atexit.unregister(rc.deprovision_gateways)
+        rc.deprovision_gateways()
+
     typer.echo(f"\n{json.dumps(out_json)}")
     return 0 if stats["success"] else 1
 
@@ -202,10 +197,8 @@ def replicate_json(
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
     # cloud provider specific options
-    azure_subscription: Optional[str] = None,
-    gcp_project: Optional[str] = None,
     aws_instance_class: str = "m5.8xlarge",
-    azure_instance_class: str = "Standard_D32_v5",
+    azure_instance_class: str = "Standard_D32_v4",
     gcp_instance_class: Optional[str] = "n2-standard-32",
     gcp_use_premium_network: bool = True,
     # logging options
@@ -214,10 +207,6 @@ def replicate_json(
 ):
     """Replicate objects from remote object store to another remote object store."""
     print_header()
-    config = load_config()
-    gcp_project = gcp_project or config.get("gcp_project_id")
-    azure_subscription = azure_subscription or config.get("azure_subscription_id")
-    logger.debug(f"Loaded gcp_project: {gcp_project}, azure_subscription: {azure_subscription}")
     check_ulimit()
 
     with path.open("r") as f:
@@ -225,8 +214,6 @@ def replicate_json(
 
     rc = ReplicatorClient(
         topo,
-        azure_subscription=azure_subscription,
-        gcp_project=gcp_project,
         gateway_docker_image=gateway_docker_image,
         aws_instance_class=aws_instance_class,
         azure_instance_class=azure_instance_class,
@@ -247,8 +234,6 @@ def replicate_json(
     if size_total_mb % n_chunks != 0:
         logger.warning(f"total_transfer_size_mb ({size_total_mb}) is not a multiple of n_chunks ({n_chunks})")
     chunk_size_mb = size_total_mb // n_chunks
-
-    print("REGION", topo.source_region())
 
     if use_random_data:
         job = ReplicationJob(
@@ -281,102 +266,47 @@ def replicate_json(
         total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
 
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
-    stats = rc.monitor_transfer(
-        job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds, cancel_pending=False
-    )
+    stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
     stats["success"] = stats["monitor_status"] == "completed"
     out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
+
+    # deprovision
+    if not reuse_gateways:
+        atexit.unregister(rc.deprovision_gateways)
+        rc.deprovision_gateways()
+
     typer.echo(f"\n{json.dumps(out_json)}")
     return 0 if stats["success"] else 1
 
 
 @app.command()
-def deprovision(azure_subscription: Optional[str] = None, gcp_project: Optional[str] = None):
+def deprovision():
     """Deprovision gateways."""
-    config = load_config()
-    gcp_project = gcp_project or config.get("gcp_project_id")
-    azure_subscription = azure_subscription or config.get("azure_subscription_id")
-    logger.debug(f"Loaded from config file: gcp_project={gcp_project}, azure_subscription={azure_subscription}")
-    deprovision_skylark_instances(azure_subscription=azure_subscription, gcp_project_id=gcp_project)
+    deprovision_skylark_instances()
 
 
 @app.command()
-def init(
-    azure_tenant_id: str = typer.Option(None, envvar="AZURE_TENANT_ID", prompt="`Azure tenant ID"),
-    azure_client_id: str = typer.Option(None, envvar="AZURE_CLIENT_ID", prompt="Azure client ID"),
-    azure_client_secret: str = typer.Option(None, envvar="AZURE_CLIENT_SECRET", prompt="Azure client secret"),
-    azure_subscription_id: str = typer.Option(None, envvar="AZURE_SUBSCRIPTION_ID", prompt="Azure subscription ID"),
-    gcp_application_credentials_file: Path = typer.Option(
-        None,
-        envvar="GOOGLE_APPLICATION_CREDENTIALS",
-        exists=True,
-        file_okay=True,
-        dir_okay=False,
-        readable=True,
-        help="Path to GCP application credentials file (usually a JSON file)",
-    ),
-    gcp_project: str = typer.Option(None, envvar="GCP_PROJECT_ID", prompt="GCP project ID"),
-):
-    out_config = {}
-    if config_file.exists():
-        typer.confirm("Config file already exists. Overwrite?", abort=True)
+def init(reinit_azure: bool = False, reinit_gcp: bool = False):
+    print_header()
+    if config_path.exists():
+        cloud_config = SkylarkConfig.load_config(config_path)
+    else:
+        cloud_config = SkylarkConfig()
 
-    # AWS config
-    def load_aws_credentials():
-        if "AWS_ACCESS_KEY_ID" in os.environ and "AWS_SECRET_ACCESS_KEY" in os.environ:
-            return os.environ["AWS_ACCESS_KEY_ID"], os.environ["AWS_SECRET_ACCESS_KEY"]
-        if (Path.home() / ".aws" / "credentials").exists():
-            with open(Path.home() / ".aws" / "credentials") as f:
-                access_key, secret_key = None, None
-                lines = f.readlines()
-                for line in lines:
-                    if line.startswith("aws_access_key_id"):
-                        access_key = line.split("=")[1].strip()
-                    if line.startswith("aws_secret_access_key"):
-                        secret_key = line.split("=")[1].strip()
-                if access_key and secret_key:
-                    return access_key, secret_key
-        return None, None
+    # load AWS config
+    typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)
+    cloud_config = load_aws_config(cloud_config)
 
-    aws_access_key, aws_secret_key = load_aws_credentials()
-    if aws_access_key is None:
-        aws_access_key = typer.prompt("AWS access key")
-        assert aws_access_key is not None and aws_access_key != ""
-    if aws_secret_key is None:
-        aws_secret_key = typer.prompt("AWS secret key")
-        assert aws_secret_key is not None and aws_secret_key != ""
-    out_config["aws_access_key_id"] = aws_access_key
-    out_config["aws_secret_access_key"] = aws_secret_key
+    # load Azure config
+    typer.secho("\n(2) Configuring Azure:", fg="yellow", bold=True)
+    cloud_config = load_azure_config(cloud_config, force_init=reinit_azure)
 
-    # Azure config
-    typer.secho("Azure config can be generated using: az ad sp create-for-rbac -n api://skylark --sdk-auth", fg=typer.colors.GREEN)
-    if azure_tenant_id is not None or len(azure_tenant_id) > 0:
-        logger.info(f"Setting Azure tenant ID to {azure_tenant_id}")
-        out_config["azure_tenant_id"] = azure_tenant_id
-    if azure_client_id is not None or len(azure_client_id) > 0:
-        logger.info(f"Setting Azure client ID to {azure_client_id}")
-        out_config["azure_client_id"] = azure_client_id
-    if azure_client_secret is not None or len(azure_client_secret) > 0:
-        logger.info(f"Setting Azure client secret to {azure_client_secret}")
-        out_config["azure_client_secret"] = azure_client_secret
-    if azure_subscription_id is not None or len(azure_subscription_id) > 0:
-        logger.info(f"Setting Azure subscription ID to {azure_subscription_id}")
-        out_config["azure_subscription_id"] = azure_subscription_id
+    # load GCP config
+    typer.secho("\n(3) Configuring GCP:", fg="yellow", bold=True)
+    cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp)
 
-    # GCP config
-    if gcp_application_credentials_file is not None and gcp_application_credentials_file.exists():
-        logger.info(f"Setting GCP application credentials file to {gcp_application_credentials_file}")
-        out_config["gcp_application_credentials_file"] = str(gcp_application_credentials_file)
-    if gcp_project is not None or len(gcp_project) > 0:
-        logger.info(f"Setting GCP project ID to {gcp_project}")
-        out_config["gcp_project_id"] = gcp_project
-
-    # write to config file
-    config_file.parent.mkdir(parents=True, exist_ok=True)
-    with config_file.open("w") as f:
-        json.dump(out_config, f)
-    typer.secho(f"Config: {out_config}", fg=typer.colors.GREEN)
-    typer.secho(f"Wrote config to {config_file}", fg=typer.colors.GREEN)
+    cloud_config.to_config_file(config_path)
+    typer.secho(f"\nConfig file saved to {config_path}", fg="green")
     return 0
 
 

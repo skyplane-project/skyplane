@@ -10,7 +10,6 @@ import questionary
 import typer
 from skylark import GB, skylark_root
 from skylark.benchmark.utils import provision, split_list
-from skylark.config import load_config
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
@@ -81,20 +80,12 @@ def throughput_grid(
     aws_instance_class: str = typer.Option("m5.8xlarge", help="AWS instance class to use"),
     azure_instance_class: str = typer.Option("Standard_D32_v5", help="Azure instance class to use"),
     gcp_instance_class: str = typer.Option("n2-standard-32", help="GCP instance class to use"),
-    # cloud options
-    gcp_project: Optional[str] = None,
-    azure_subscription: Optional[str] = None,
     # iperf3 options
     iperf3_runtime: int = typer.Option(5, help="Runtime for iperf3 in seconds"),
     iperf3_connections: int = typer.Option(64, help="Number of connections to test"),
 ):
     def check_stderr(tup):
         assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
-
-    config = load_config()
-    gcp_project = gcp_project or config.get("gcp_project_id")
-    azure_subscription = azure_subscription or config.get("azure_subscription_id")
-    logger.debug(f"Loaded from config file: gcp_project={gcp_project}, azure_subscription={azure_subscription}")
 
     if resume:
         index_key = [
@@ -118,21 +109,21 @@ def throughput_grid(
     gcp_region_list = gcp_region_list if enable_gcp else []
     if not enable_aws and not enable_azure and not enable_gcp:
         logger.error("At least one of -aws, -azure, -gcp must be enabled.")
-        typer.Abort()
+        raise typer.Abort()
 
     # validate AWS regions
     if not enable_aws:
         aws_region_list = []
     elif not all(r in all_aws_regions for r in aws_region_list):
         logger.error(f"Invalid AWS region list: {aws_region_list}")
-        typer.Abort()
+        raise typer.Abort()
 
     # validate Azure regions
     if not enable_azure:
         azure_region_list = []
     elif not all(r in all_azure_regions for r in azure_region_list):
         logger.error(f"Invalid Azure region list: {azure_region_list}")
-        typer.Abort()
+        raise typer.Abort()
 
     # validate GCP regions
     assert not enable_gcp_standard or enable_gcp, f"GCP is disabled but GCP standard is enabled"
@@ -140,19 +131,19 @@ def throughput_grid(
         gcp_region_list = []
     elif not all(r in all_gcp_regions for r in gcp_region_list):
         logger.error(f"Invalid GCP region list: {gcp_region_list}")
-        typer.Abort()
+        raise typer.Abort()
 
     # validate GCP standard instances
     if not enable_gcp_standard:
         gcp_standard_region_list = []
     if not all(r in all_gcp_regions_standard for r in gcp_standard_region_list):
         logger.error(f"Invalid GCP standard region list: {gcp_standard_region_list}")
-        typer.Abort()
+        raise typer.Abort()
 
     # provision servers
     aws = AWSCloudProvider()
-    azure = AzureCloudProvider(azure_subscription)
-    gcp = GCPCloudProvider(gcp_project)
+    azure = AzureCloudProvider()
+    gcp = GCPCloudProvider()
     aws_instances, azure_instances, gcp_instances = provision(
         aws=aws,
         azure=azure,

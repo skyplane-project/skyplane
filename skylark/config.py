@@ -1,30 +1,55 @@
-import json
+from dataclasses import dataclass
 import os
-from skylark import config_file
+from pathlib import Path
+from typing import Optional
 
 from skylark.utils import logger
+import configparser
 
 
-def load_config():
-    if config_file.exists():
-        try:
-            with config_file.open("r") as f:
-                config = json.load(f)
-            if "aws_access_key_id" in config:
-                os.environ["AWS_ACCESS_KEY_ID"] = config["aws_access_key_id"]
-            if "aws_secret_access_key" in config:
-                os.environ["AWS_SECRET_ACCESS_KEY"] = config["aws_secret_access_key"]
-            if "azure_tenant_id" in config:
-                os.environ["AZURE_TENANT_ID"] = config["azure_tenant_id"]
-            if "azure_client_id" in config:
-                os.environ["AZURE_CLIENT_ID"] = config["azure_client_id"]
-            if "azure_client_secret" in config:
-                os.environ["AZURE_CLIENT_SECRET"] = config["azure_client_secret"]
-            if "gcp_application_credentials_file" in config:
-                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = config["gcp_application_credentials_file"]
+@dataclass
+class SkylarkConfig:
+    azure_subscription_id: Optional[str] = None
+    gcp_project_id: Optional[str] = None
 
-            return config
-        except json.JSONDecodeError as e:
-            logger.error(f"Error decoding config file: {e}")
-            raise e
-    return {}
+    @staticmethod
+    def load_config(path) -> "SkylarkConfig":
+        """Load from a config file."""
+        path = Path(path)
+        config = configparser.ConfigParser()
+        if not path.exists():
+            logger.error(f"Config file not found: {path}")
+            raise FileNotFoundError(f"Config file not found: {path}")
+        config.read(path)
+
+        azure_subscription_id = None
+        if "azure" in config and "subscription_id" in config["azure"]:
+            azure_subscription_id = config.get("azure", "subscription_id")
+
+        gcp_project_id = None
+        if "gcp" in config and "project_id" in config["gcp"]:
+            gcp_project_id = config.get("gcp", "project_id")
+
+        return SkylarkConfig(
+            azure_subscription_id=azure_subscription_id,
+            gcp_project_id=gcp_project_id,
+        )
+
+    def to_config_file(self, path):
+        path = Path(path)
+        config = configparser.ConfigParser()
+        if path.exists():
+            config.read(os.path.expanduser(path))
+
+        if self.azure_subscription_id:
+            if "azure" not in config:
+                config.add_section("azure")
+            config.set("azure", "subscription_id", self.azure_subscription_id)
+
+        if self.gcp_project_id:
+            if "gcp" not in config:
+                config.add_section("gcp")
+            config.set("gcp", "project_id", self.gcp_project_id)
+
+        with path.open("w") as f:
+            config.write(f)
