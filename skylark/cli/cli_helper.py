@@ -297,16 +297,16 @@ def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> Skylar
     if config.azure_subscription_id:
         typer.secho("    Azure credentials already configured! To reconfigure Azure, run `skylark init --reinit-azure`.", fg="blue")
         return config
-    # check if Azure is enabled
 
-    logging.disable(logging.WARNING)
+    # check if Azure is enabled
+    logging.disable(logging.WARNING) # disable Azure logging, we have our own
     auth = AzureAuthentication()
     try:
         auth.credential.get_token("https://management.azure.com/")
         azure_enabled = True
     except:
         azure_enabled = False
-    logging.disable(logging.NOTSET)
+    logging.disable(logging.NOTSET) # reenable logging
     if not azure_enabled:
         typer.secho("    No local Azure credentials! Run `az login` to set them up.", fg="red")
         typer.secho("    https://docs.microsoft.com/en-us/azure/developer/python/azure-sdk-authenticate", fg="red")
