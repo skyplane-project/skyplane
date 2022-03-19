@@ -20,7 +20,7 @@ This package represents both components as a single binary. Docker builds a sing
 	* (1) Install AWS CLI with `sudo apt install awscli`
 	* (2) Configure AWS by running `aws configure` and input the necessary information. See https://docs.aws.amazon.com/powershell/latest/userguide/pstools-appendix-sign-up.html. 
 	* (3) Ensure that you have a sufficient AWS vCPU limit in any regions you intend to use
-    * (4) Install netcat with `sudo apt install netcat`
+	* (4) Install netcat with `sudo apt install netcat`
 
 ### Building and deploying the gateway
 
@@ -32,12 +32,11 @@ $ cd skylark
 
 Then, install and initalize Skylark:
 ```
-$ sudo python3 setup.py install
+$ pip install -e .
 $ skylark init
 ```
 
 To run a sample replication, first build a new version of the GatewayDaemon Docker image and push it to ghcr.io (ensure you are authenticated as above):
-
 ```
 $ pip install -e ".[all]"
 $ source scripts/pack_docker.sh
