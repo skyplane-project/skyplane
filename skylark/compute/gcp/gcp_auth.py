@@ -18,10 +18,7 @@ class GCPAuthentication:
     @property
     def credentials(self):
         if self._credentials is None:
-            try:
-                self._credentials, self._project_id = self.make_credential(self.inferred_project_id)
-            except:
-                pass
+            self._credentials, self._project_id = self.make_credential(self.inferred_project_id)
         return self._credentials
 
     @property
@@ -33,8 +30,11 @@ class GCPAuthentication:
     def make_credential(self, project_id):
         cached_credential = getattr(self.__cached_credentials, f"credential_{project_id}", (None, None))
         if cached_credential == (None, None):
-            cached_credential = google.auth.default(quota_project_id=project_id)
-            setattr(self.__cached_credentials, f"credential_{project_id}", cached_credential)
+            try:
+                cached_credential = google.auth.default(quota_project_id=project_id)
+                setattr(self.__cached_credentials, f"credential_{project_id}", cached_credential)
+            except:
+                pass
         return cached_credential
 
     def enabled(self):
