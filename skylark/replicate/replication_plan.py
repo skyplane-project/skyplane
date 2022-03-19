@@ -153,6 +153,7 @@ class ReplicationJob:
     dest_region: str
     dest_bucket: Optional[str]
     objs: List[str]
+    obj_sizes: Dict[str, int] = None
 
     # progress tracking via a list of chunk_requests
     chunk_requests: Optional[List[ChunkRequest]] = None
@@ -161,6 +162,9 @@ class ReplicationJob:
     random_chunk_size_mb: Optional[int] = None
 
     def src_obj_sizes(self) -> Dict[str, int]:
+        if self.obj_sizes != None:
+            return self.obj_sizes
+
         if self.random_chunk_size_mb is not None:
             return {obj: self.random_chunk_size_mb * MB for obj in self.objs}
         interface = ObjectStoreInterface.create(self.source_region, self.source_bucket)

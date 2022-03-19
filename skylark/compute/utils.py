@@ -7,7 +7,7 @@ from skylark.utils import logger
 def query_which_cloud() -> str:
     if (
         subprocess.call(
-            'curl -f --noproxy "*" http://169.254.169.254/1.0/meta-data/instance-id'.split(),
+            'curl -f --connection-timeout 1 --noproxy "*" http://169.254.169.254/1.0/meta-data/instance-id'.split(),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -16,7 +16,7 @@ def query_which_cloud() -> str:
         return "aws"
     elif (
         subprocess.call(
-            'curl -f -H Metadata:true --noproxy "*" "http://169.254.169.254/metadata/instance?api-version=2021-02-01"'.split(),
+            'curl -f --connection-timeout 1 -H Metadata:true --noproxy "*" "http://169.254.169.254/metadata/instance?api-version=2021-02-01"'.split(),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -25,7 +25,7 @@ def query_which_cloud() -> str:
         return "azure"
     elif (
         subprocess.call(
-            'curl -f --noproxy "*" http://metadata.google.internal/computeMetadata/v1/instance/hostname'.split(),
+            'curl -f --connection-timeout 1 -noproxy "*" http://metadata.google.internal/computeMetadata/v1/instance/hostname'.split(),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )

@@ -250,7 +250,11 @@ def replicate_json(
 
         # get object keys with prefix
         objs = ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(key_prefix)
-        obj_keys = list([obj.key for obj in objs])
+        obj_keys = []
+        obj_sizes = dict()
+        for obj in objs:
+            obj_keys.append(obj.key)
+            obj_sizes[obj.key] = obj.size
 
         # create replication job
         job = ReplicationJob(
@@ -259,6 +263,7 @@ def replicate_json(
             dest_region=topo.sink_region(),
             dest_bucket=dest_bucket,
             objs=obj_keys,
+            obj_sizes=obj_sizes,
         )
         job = rc.run_replication_plan(job)
 
