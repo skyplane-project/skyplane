@@ -3,9 +3,9 @@ import subprocess
 from enum import Enum, auto
 from pathlib import Path
 from typing import Dict
-import requests
 from skylark.utils import logger
 from skylark.compute.utils import make_dozzle_command, make_sysctl_tcp_tuning_command
+from skylark.utils.net import retry_requests
 from skylark.utils.utils import PathLike, Timer, retry_backoff, wait_for
 from skylark import config_path
 
@@ -248,7 +248,7 @@ class Server:
         def is_ready():
             api_url = f"http://{self.public_ip()}:8080/api/v1/status"
             try:
-                status_val = requests.get(api_url)
+                status_val = retry_requests().get(api_url)
                 is_up = status_val.json().get("status") == "ok"
                 return is_up
             except Exception:

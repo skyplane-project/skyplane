@@ -9,6 +9,7 @@ from skylark.utils import logger
 from skylark import MB
 from skylark.chunk import ChunkRequest
 from skylark.gateway.chunk_store import ChunkStore
+from skylark.utils.net import retry_requests
 from skylark.utils.utils import Timer, retry_backoff, wait_for
 
 
@@ -70,7 +71,7 @@ class GatewaySender:
         def wait_for_chunks():
             cr_status = {}
             for ip, ip_chunk_ids in self.sent_chunk_ids.items():
-                response = requests.get(f"http://{ip}:8080/api/v1/incomplete_chunk_requests")
+                response = retry_requests().get(f"http://{ip}:8080/api/v1/incomplete_chunk_requests")
                 assert response.status_code == 200, f"{response.status_code} {response.text}"
                 host_state = response.json()["chunk_requests"]
                 for chunk_id in ip_chunk_ids:
@@ -85,7 +86,7 @@ class GatewaySender:
         # close servers
         logger.info(f"[sender:{worker_id}] exiting, closing servers")
         for dst_host, dst_port in self.destination_ports.items():
-            response = requests.delete(f"http://{dst_host}:8080/api/v1/servers/{dst_port}")
+            response = retry_requests().delete(f"http://{dst_host}:8080/api/v1/servers/{dst_port}")
             assert response.status_code == 200 and response.json() == {"status": "ok"}, response.json()
             logger.info(f"[sender:{worker_id}] closed destination socket {dst_host}:{dst_port}")
 
@@ -97,13 +98,13 @@ class GatewaySender:
         """Send list of chunks to gateway server, pipelining small chunks together into a single socket stream."""
         # notify server of upcoming ChunkRequests
         chunk_reqs = [self.chunk_store.get_chunk_request(chunk_id) for chunk_id in chunk_ids]
-        post_req = lambda: requests.post(f"http://{dst_host}:8080/api/v1/chunk_requests", json=[c.as_dict() for c in chunk_reqs])
+        post_req = lambda: retry_requests().post(f"http://{dst_host}:8080/api/v1/chunk_requests", json=[c.as_dict() for c in chunk_reqs])
         response = retry_backoff(post_req, exception_class=requests.exceptions.ConnectionError)
         assert response.status_code == 200 and response.json()["status"] == "ok"
 
         # contact server to set up socket connection
         if self.destination_ports.get(dst_host) is None:
-            response = requests.post(f"http://{dst_host}:8080/api/v1/servers")
+            response = retry_requests().post(f"http://{dst_host}:8080/api/v1/servers")
             assert response.status_code == 200, f"{response.status_code} {response.text}"
             self.destination_ports[dst_host] = int(response.json()["server_port"])
             self.destination_sockets[dst_host] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

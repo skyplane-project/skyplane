@@ -38,7 +38,9 @@ class AzureInterface(ObjectStoreInterface):
         self.max_concurrency = 1
 
     def get_region_from_storage_account(self, storage_account_name):
-        storage_account = self.storage_management_client.storage_accounts.get_properties(AzureServer.resource_group_name, storage_account_name)
+        storage_account = self.storage_management_client.storage_accounts.get_properties(
+            AzureServer.resource_group_name, storage_account_name
+        )
         return storage_account.location
 
     def storage_account_exists(self):

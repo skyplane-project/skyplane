@@ -22,6 +22,7 @@ from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server, ServerState
 from skylark.chunk import Chunk, ChunkRequest, ChunkState
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology, ReplicationTopologyGateway
+from skylark.utils.net import retry_requests
 from skylark.utils.utils import PathLike, Timer, do_parallel
 
 
@@ -278,7 +279,7 @@ class ReplicatorClient:
                 hop_instance, chunk_requests = args
                 ip = gateway_ips[hop_instance]
                 logger.debug(f"Sending {len(chunk_requests)} chunk requests to {ip}")
-                reply = requests.post(f"http://{ip}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests])
+                reply = retry_requests().post(f"http://{ip}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests])
                 if reply.status_code != 200:
                     raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
 
@@ -291,7 +292,7 @@ class ReplicatorClient:
     def get_chunk_status_log_df(self) -> pd.DataFrame:
         def get_chunk_status(args):
             node, instance = args
-            reply = requests.get(f"http://{instance.public_ip()}:8080/api/v1/chunk_status_log")
+            reply = retry_requests().get(f"http://{instance.public_ip()}:8080/api/v1/chunk_status_log")
             if reply.status_code != 200:
                 raise Exception(f"Failed to get chunk status from gateway instance {instance.instance_name()}: {reply.text}")
             logs = []
@@ -351,7 +352,7 @@ class ReplicatorClient:
 
             def fn(s: Server):
                 try:
-                    requests.post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
+                    retry_requests().post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
                 except:
                     return  # ignore connection errors since server may be shutting down
 
