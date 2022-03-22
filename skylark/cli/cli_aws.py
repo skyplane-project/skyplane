@@ -91,6 +91,10 @@ def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
     iam_arn = response["Role"]["Arn"]
     typer.secho(f"IAM role ARN: {iam_arn}", fg="green")
 
+    # wait for role to be ready
+    typer.secho("Waiting for IAM role to be ready", fg="green")
+    iam_client.get_waiter("role_exists").wait(RoleName="datasync-role")
+
     ds_client_src = aws_auth.get_boto3_client("datasync", src_region)
     src_response = ds_client_src.create_location_s3(
         S3BucketArn=f"arn:aws:s3:::{src_bucket}",
