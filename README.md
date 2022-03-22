@@ -46,7 +46,7 @@ $ source scripts/pack_docker.sh
 <br>
 
 ```
-$ pip install -e .
+$ pip install -e ".[all]"
 $ source scripts/pack_docker.sh
 Building docker image
 [+] Building 0.0s (2/2) FINISHED
