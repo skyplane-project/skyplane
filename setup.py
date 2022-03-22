@@ -26,6 +26,7 @@ setup(
         "numpy",
         "oslo.concurrency",
         "paramiko",
+        "pyopenssl",
         "setproctitle",
         "termcolor",
         "testresources",
