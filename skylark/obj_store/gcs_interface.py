@@ -16,14 +16,20 @@ class GCSObject(ObjectStoreObject):
 class GCSInterface(ObjectStoreInterface):
     def __init__(self, gcp_region, bucket_name):
         # TODO: infer region?
-        self.gcp_region = gcp_region
         self.bucket_name = bucket_name
 
         # TODO - figure out how paralllelism handled
         self._gcs_client = storage.Client()
 
+        self.gcp_region = self.infer_gcp_region(bucket_name) if gcp_region is None or gcp_region == "infer" else gcp_region
+
         # TODO: set number of threads
         self.pool = ThreadPoolExecutor(max_workers=4)
+
+    def infer_gcp_region(self, bucket_name: str):
+        bucket = self._gcs_client.lookup_bucket(bucket_name)
+        assert isinstance(bucket, storage.bucket.Bucket)
+        return bucket.location.lower()
 
     def bucket_exists(self):
         try:
