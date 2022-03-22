@@ -26,13 +26,13 @@ from skylark.gateway.gateway_obj_store import GatewayObjStoreConn
 
 
 class GatewayDaemon:
-    def __init__(self, region: str, outgoing_ports: Dict[str, int], chunk_dir: PathLike, max_incoming_ports=64):
+    def __init__(self, region: str, outgoing_ports: Dict[str, int], chunk_dir: PathLike, max_incoming_ports=64, use_tls=True):
         # todo max_incoming_ports should be configurable rather than static
         self.region = region
         self.max_incoming_ports = max_incoming_ports
         self.chunk_store = ChunkStore(chunk_dir)
-        self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store, max_pending_chunks=max_incoming_ports)
-        self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, outgoing_ports=outgoing_ports)
+        self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store, max_pending_chunks=max_incoming_ports, use_tls=use_tls)
+        self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, outgoing_ports=outgoing_ports, use_tls=use_tls)
 
         self.obj_store_conn = GatewayObjStoreConn(chunk_store=self.chunk_store, max_conn=8)
 
@@ -126,7 +126,10 @@ if __name__ == "__main__":
         "--outgoing-ports", type=str, required=True, help="JSON encoded path mapping destination ip to number of outgoing ports"
     )
     parser.add_argument("--chunk-dir", type=Path, default="/tmp/skylark/chunks", help="Directory to store chunks")
+    parser.add_argument("--disable-tls", action="store_true")
     args = parser.parse_args()
 
-    daemon = GatewayDaemon(region=args.region, outgoing_ports=json.loads(args.outgoing_ports), chunk_dir=args.chunk_dir)
+    daemon = GatewayDaemon(
+        region=args.region, outgoing_ports=json.loads(args.outgoing_ports), chunk_dir=args.chunk_dir, use_tls=not args.disable_tls
+    )
     daemon.run()

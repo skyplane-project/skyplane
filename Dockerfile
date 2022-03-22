@@ -1,16 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM coinor/cylp
-RUN ln -s /usr/bin/python3 /usr/bin/python && ln -s /usr/bin/pip3 /usr/bin/pip
-RUN --mount=type=cache,target=/root/.cache/pip pip3 install cvxpy ray numpy pandas tqdm matplotlib graphviz
-
-# # install CoinOR
-# ARG DEBIAN_FRONTEND="noninteractive"
-# ENV TZ="America/Los_Angeles"
-# RUN --mount=type=cache,target=/var/cache/apt apt update \
-#     && apt-get install --no-install-recommends -y git wget ca-certificates build-essential gcc g++ gfortran pkg-config libblas-dev liblapack-dev coinor-libcbc-dev libz-dev \
-#     && apt-get clean \
-#     && rm -rf /var/lib/apt/lists/*
-# RUN --mount=type=cache,target=/root/.cache/pip pip install numpy && pip install cylp
+FROM python:3.10-slim
 
 # increase number of open files and concurrent TCP connections
 RUN (echo 'net.ipv4.ip_local_port_range = 12000 65535' >> /etc/sysctl.conf) \
@@ -23,7 +12,7 @@ RUN (echo 'net.ipv4.ip_local_port_range = 12000 65535' >> /etc/sysctl.conf) \
 
 # install apt packages
 RUN --mount=type=cache,target=/var/cache/apt apt update \
-    && apt-get install --no-install-recommends -y git wget ca-certificates build-essential rsync graphviz \
+    && apt-get install --no-install-recommends -y git wget ca-certificates build-essential graphviz \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

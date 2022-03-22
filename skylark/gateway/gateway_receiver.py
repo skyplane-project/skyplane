@@ -1,6 +1,7 @@
 import os
 import signal
 import socket
+import ssl
 import time
 from contextlib import closing
 from multiprocessing import Event, Process, Value
@@ -11,17 +12,29 @@ from skylark.utils import logger
 from skylark import GB, MB
 from skylark.chunk import WireProtocolHeader
 from skylark.gateway.chunk_store import ChunkStore
+from skylark.utils.cert import generate_self_signed_certificate
 from skylark.utils.utils import Timer
 
 
 class GatewayReceiver:
-    def __init__(self, chunk_store: ChunkStore, write_back_block_size=4 * MB, max_pending_chunks=1):
+    def __init__(self, chunk_store: ChunkStore, write_back_block_size=4 * MB, max_pending_chunks=1, use_tls: bool = True):
         self.chunk_store = chunk_store
         self.write_back_block_size = write_back_block_size
         self.max_pending_chunks = max_pending_chunks
         self.server_processes = []
         self.server_ports = []
         self.next_gateway_worker_id = 0
+
+        # SSL context
+        if use_tls:
+            generate_self_signed_certificate("temp.cert", "temp.key")
+            self.ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            self.ssl_context.check_hostname = False
+            self.ssl_context.verify_mode = ssl.CERT_NONE
+            self.ssl_context.load_cert_chain("temp.cert", "temp.key")
+            logger.info(f"Using {str(ssl.OPENSSL_VERSION)}")
+        else:
+            self.ssl_context = None
 
         # private state per worker
         self.worker_id = None
@@ -46,16 +59,20 @@ class GatewayReceiver:
                 setproctitle.setproctitle(f"skylark-gateway-receiver:{socket_port}")
 
                 sock.listen()
+                if self.ssl_context is not None:
+                    ssl_sock = self.ssl_context.wrap_socket(sock, server_side=True)
+                else:
+                    ssl_sock = sock
                 started_event.set()
                 logger.info(f"[receiver:{socket_port}] Waiting for connection")
-                conn, addr = sock.accept()
+                ssl_conn, addr = ssl_sock.accept()
                 logger.info(f"[receiver:{socket_port}] Accepted connection from {addr}")
                 while True:
                     if exit_flag.value == 1:
                         logger.warning(f"[receiver:{socket_port}] Exiting on signal")
-                        conn.close()
+                        ssl_conn.close()
                         return
-                    self.recv_chunks(conn, addr)
+                    self.recv_chunks(ssl_conn, addr)
 
         gateway_id = self.next_gateway_worker_id
         self.next_gateway_worker_id += 1

@@ -99,6 +99,6 @@ def retry_backoff(
             if i == max_retries - 1:
                 raise e
             else:
-                logger.warning(f"Retrying {fn.__name__} due to {e} (attempt {i + 1}/{max_retries})")
+                logger.warning(f"Retrying function due to {e} (attempt {i + 1}/{max_retries})")
                 time.sleep(backoff)
                 backoff = min(backoff * 2, max_backoff)

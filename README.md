@@ -9,7 +9,7 @@ Skylark is composed of two components: A ReplicatorClient that runs locally on y
 This package represents both components as a single binary. Docker builds a single container with the GatewayDaemon and pushes it to the Github Container Registry (ghcr.io). After provisioning an instance, a GatewayDaemon is started by launching that container. Therefore, it's simple and fast to launch a new Gateway.
 
 ### Requirements
-* Python 3.8 or greater
+* Python 3.7 or greater
 * Docker
     * **Ensure you have authenticated your Github account with Docker**: https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-to-the-container-registry
     * TLDR:
@@ -46,7 +46,7 @@ $ source scripts/pack_docker.sh
 <br>
 
 ```
-$ pip install -e .
+$ pip install -e ".[all]"
 $ source scripts/pack_docker.sh
 Building docker image
 [+] Building 0.0s (2/2) FINISHED

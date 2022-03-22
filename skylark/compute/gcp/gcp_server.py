@@ -33,7 +33,7 @@ class GCPServer(Server):
     def uuid(self):
         return f"{self.region_tag}:{self.gcp_instance_name}"
 
-    @lru_cache
+    @lru_cache(maxsize=1)
     def get_gcp_instance(self):
         instances = self.auth.get_gcp_instances(self.gcp_region)
         if "items" in instances:

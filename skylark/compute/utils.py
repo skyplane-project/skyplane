@@ -3,7 +3,7 @@ import subprocess
 from skylark.utils import logger
 
 
-@lru_cache
+@lru_cache(maxsize=1)
 def query_which_cloud() -> str:
     if (
         subprocess.call(

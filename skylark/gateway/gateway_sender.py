@@ -1,5 +1,7 @@
+from functools import partial
 import queue
 import socket
+import ssl
 from multiprocessing import Event, Manager, Process
 from typing import Dict, List, Optional
 
@@ -14,11 +16,20 @@ from skylark.utils.utils import Timer, retry_backoff, wait_for
 
 
 class GatewaySender:
-    def __init__(self, chunk_store: ChunkStore, outgoing_ports: Dict[str, int]):
+    def __init__(self, chunk_store: ChunkStore, outgoing_ports: Dict[str, int], use_tls: bool = True):
         self.chunk_store = chunk_store
         self.outgoing_ports = outgoing_ports
         self.n_processes = sum(outgoing_ports.values())
         self.processes = []
+
+        # SSL context
+        if use_tls:
+            self.ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+            self.ssl_context.check_hostname = False
+            self.ssl_context.verify_mode = ssl.CERT_NONE
+            logger.info(f"Using {str(ssl.OPENSSL_VERSION)}")
+        else:
+            self.ssl_context = None
 
         # shared state
         self.manager = Manager()
@@ -93,24 +104,40 @@ class GatewaySender:
     def queue_request(self, chunk_request: ChunkRequest):
         self.worker_queue.put(chunk_request.chunk.chunk_id)
 
+    def make_socket(self, dst_host):
+        response = retry_requests().post(f"http://{dst_host}:8080/api/v1/servers")
+        assert response.status_code == 200, f"{response.status_code} {response.text}"
+        self.destination_ports[dst_host] = int(response.json()["server_port"])
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect((dst_host, self.destination_ports[dst_host]))
+        original_timeout = sock.gettimeout()
+        sock.settimeout(30.0)  # For the TLS handshake
+        logger.info(f"[sender:{self.worker_id}] started new server connection to {dst_host}:{self.destination_ports[dst_host]}")
+        if self.ssl_context is not None:
+            sock = self.ssl_context.wrap_socket(sock)
+            logger.info(f"[sender:{self.worker_id}] finished TLS handshake to {dst_host}:{self.destination_ports[dst_host]}")
+        sock.settimeout(original_timeout)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        return sock
+
     # send chunks to other instances
     def send_chunks(self, chunk_ids: List[int], dst_host: str):
         """Send list of chunks to gateway server, pipelining small chunks together into a single socket stream."""
         # notify server of upcoming ChunkRequests
+        logger.debug(f"[sender:{self.worker_id}]:{chunk_ids} pre-registering chunks")
         chunk_reqs = [self.chunk_store.get_chunk_request(chunk_id) for chunk_id in chunk_ids]
         post_req = lambda: retry_requests().post(f"http://{dst_host}:8080/api/v1/chunk_requests", json=[c.as_dict() for c in chunk_reqs])
         response = retry_backoff(post_req, exception_class=requests.exceptions.ConnectionError)
         assert response.status_code == 200 and response.json()["status"] == "ok"
+        logger.debug(f"[sender:{self.worker_id}]:{chunk_ids} registered chunks")
 
         # contact server to set up socket connection
         if self.destination_ports.get(dst_host) is None:
-            response = retry_requests().post(f"http://{dst_host}:8080/api/v1/servers")
-            assert response.status_code == 200, f"{response.status_code} {response.text}"
-            self.destination_ports[dst_host] = int(response.json()["server_port"])
-            self.destination_sockets[dst_host] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.destination_sockets[dst_host].connect((dst_host, self.destination_ports[dst_host]))
-            self.destination_sockets[dst_host].setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            logger.info(f"[sender:{self.worker_id}] started new server connection to {dst_host}:{self.destination_ports[dst_host]}")
+            logger.debug(f"[sender:{self.worker_id}]:{chunk_ids} creating new socket")
+            self.destination_sockets[dst_host] = retry_backoff(
+                partial(self.make_socket, dst_host), max_retries=3, exception_class=socket.timeout
+            )
+            logger.debug(f"[sender:{self.worker_id}]:{chunk_ids} created new socket")
         sock = self.destination_sockets[dst_host]
 
         for idx, chunk_id in enumerate(chunk_ids):
@@ -119,7 +146,9 @@ class GatewaySender:
 
             # send chunk header
             header = chunk.to_wire_header(n_chunks_left_on_socket=len(chunk_ids) - idx - 1)
+            logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sending chunk header")
             header.to_socket(sock)
+            logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent chunk header")
 
             # send chunk data
             chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
@@ -127,7 +156,9 @@ class GatewaySender:
             with Timer() as t:
                 with open(chunk_file_path, "rb") as fd:
                     chunk_data = fd.read()
+                logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sending chunk data")
                 sock.sendall(chunk_data)
+                logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent chunk data")
             logger.debug(
                 f"[sender:{self.worker_id}] finished sending chunk data {chunk_id} at {chunk.chunk_length_bytes * 8 / t.elapsed / MB:.2f}Mbps"
             )
