@@ -247,7 +247,7 @@ class AWSCloudProvider(CloudProvider):
         if name is None:
             name = f"skylark-aws-{str(uuid.uuid4()).replace('-', '')}"
         iam_instance_profile_name = f"{name}_profile"
-        iam = self.auth.get_boto3_client("iam")
+        iam = self.auth.get_boto3_client("iam", region)
         ec2 = self.auth.get_boto3_resource("ec2", region)
         vpc = self.get_vpc(region)
         assert vpc is not None, "No VPC found"

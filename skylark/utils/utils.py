@@ -99,6 +99,9 @@ def retry_backoff(
             if i == max_retries - 1:
                 raise e
             else:
-                logger.warning(f"Retrying function due to {e} (attempt {i + 1}/{max_retries})")
+                # ignore retries due to IAM instance profile propagation
+                if "Invalid IAM Instance Profile name" not in str(e):
+                    fn_name = fn.__name__ if hasattr(fn, "__name__") else "unknown function"
+                    logger.warning(f"Retrying {fn_name} due to: {e} (attempt {i + 1}/{max_retries})")
                 time.sleep(backoff)
                 backoff = min(backoff * 2, max_backoff)
