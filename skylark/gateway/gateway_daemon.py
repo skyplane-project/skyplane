@@ -94,6 +94,7 @@ class GatewayDaemon:
                     self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, "read_local")
                 elif self.region == chunk_req.src_region and chunk_req.src_type == "random":
                     size_mb = chunk_req.src_random_size_mb
+                    assert chunk_req.src_random_size_mb is not None, "Random chunk size not set"
                     if self.chunk_store.remaining_bytes() >= size_mb * MB * self.max_incoming_ports:
 
                         def fn(chunk_req, size_mb):
@@ -102,7 +103,9 @@ class GatewayDaemon:
                             self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, "random")
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
                             with self.dl_pool_semaphore:
-                                os.system(f"fallocate -l {size_mb * MB} {fpath}")
+                                size_bytes = int(size_mb * MB)
+                                assert size_bytes > 0, f"Invalid size {size_bytes} for fallocate"
+                                os.system(f"fallocate -l {size_bytes} {fpath}")
                             chunk_req.chunk.chunk_length_bytes = os.path.getsize(fpath)
                             self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
                             self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, "random")
@@ -129,6 +132,7 @@ if __name__ == "__main__":
     parser.add_argument("--disable-tls", action="store_true")
     args = parser.parse_args()
 
+    os.makedirs(args.chunk_dir)
     daemon = GatewayDaemon(
         region=args.region, outgoing_ports=json.loads(args.outgoing_ports), chunk_dir=args.chunk_dir, use_tls=not args.disable_tls
     )

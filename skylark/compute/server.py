@@ -235,6 +235,7 @@ class Server:
         docker_run_flags += " " + " ".join(f"--env {k}={v}" for k, v in docker_envs.items())
         gateway_daemon_cmd = f"python -u /pkg/skylark/gateway/gateway_daemon.py --chunk-dir /skylark/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
+        logger.debug(docker_launch_cmd)
         start_out, start_err = self.run_command(docker_launch_cmd)
         logger.debug(desc_prefix + f": Gateway started {start_out.strip()}")
         assert not start_err.strip(), f"Error starting gateway: {start_err.strip()}"

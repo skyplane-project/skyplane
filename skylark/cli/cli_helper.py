@@ -1,5 +1,7 @@
 import concurrent.futures
 from functools import partial
+import atexit
+import json
 import os
 import re
 import logging
@@ -10,9 +12,12 @@ from shutil import copyfile
 from typing import Dict, List
 from sys import platform
 from typing import Dict, List
+from urllib.parse import ParseResultBytes, parse_qs
+
 
 import boto3
 import typer
+from skylark import config_path, GB, MB, print_header
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.gcp.gcp_auth import GCPAuthentication
@@ -25,7 +30,11 @@ from skylark.obj_store.object_store_interface import ObjectStoreInterface, Objec
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.obj_store.gcs_interface import GCSInterface
 from skylark.obj_store.azure_interface import AzureInterface
+from skylark.obj_store.object_store_interface import ObjectStoreInterface
+from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
+from skylark.replicate.replicator_client import ReplicatorClient
 from skylark.utils.utils import do_parallel
+from typing import Optional
 from tqdm import tqdm
 
 
@@ -219,6 +228,101 @@ def copy_s3_local(src_bucket: str, src_key: str, dst: Path):
             op.result()
             pbar.update(obj_mapping[op].size)
 
+def replicate_helper(
+    topo: ReplicationTopology,
+    size_total_mb: Optional[int] = typer.Option(2048),
+    n_chunks: Optional[int] = typer.Option(512),
+    random: bool = False,
+    # bucket options
+    source_bucket: str = typer.Option(None),
+    dest_bucket: str = typer.Option(None),
+    key_prefix: str = "/",
+    # gateway provisioning options
+    reuse_gateways: bool = False,
+    gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
+    # cloud provider specific options
+    aws_instance_class: str = "m5.8xlarge",
+    azure_instance_class: str = "Standard_D32_v4",
+    gcp_instance_class: Optional[str] = "n2-standard-32",
+    gcp_use_premium_network: bool = True,
+    # logging options
+    time_limit_seconds: Optional[int] = None,
+    log_interval_s: float = 1.0,
+):
+    rc = ReplicatorClient(
+        topo,
+        gateway_docker_image=gateway_docker_image,
+        aws_instance_class=aws_instance_class,
+        azure_instance_class=azure_instance_class,
+        gcp_instance_class=gcp_instance_class,
+        gcp_use_premium_network=gcp_use_premium_network,
+    )
+
+    if not reuse_gateways:
+        atexit.register(rc.deprovision_gateways)
+    else:
+        logger.warning(
+            f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
+        )
+    rc.provision_gateways(reuse_gateways)
+    for node, gw in rc.bound_nodes.items():
+        logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
+
+    if size_total_mb % n_chunks != 0:
+        logger.warning(f"total_transfer_size_mb ({size_total_mb}) is not a multiple of number of chunks ({n_chunks})")
+    
+    chunk_size_mb = size_total_mb/n_chunks
+    logger.debug(f"chunk_size_mb = {chunk_size_mb}")
+
+    if random:
+        job = ReplicationJob(
+            source_region=topo.source_region(),
+            source_bucket=None,
+            dest_region=topo.sink_region(),
+            dest_bucket=None,
+            objs=[f"{key_prefix}/{i}" for i in range(n_chunks)],
+            random_chunk_size_mb=chunk_size_mb,
+        )
+
+        job = rc.run_replication_plan(job)
+        total_bytes = n_chunks * chunk_size_mb * MB
+    else:
+        # get object keys with prefix
+        objs = ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(key_prefix)
+        obj_keys = []
+        obj_sizes = dict()
+        for obj in objs:
+            obj_keys.append(obj.key)
+            obj_sizes[obj.key] = obj.size
+
+        # create replication job
+        job = ReplicationJob(
+            source_region=topo.source_region(),
+            source_bucket=source_bucket,
+            dest_region=topo.sink_region(),
+            dest_bucket=dest_bucket,
+            objs=obj_keys,
+            obj_sizes=obj_sizes,
+        )
+        job = rc.run_replication_plan(job)
+
+        # query chunk sizes
+        total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
+
+    logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
+    stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
+    stats["success"] = stats["monitor_status"] == "completed"
+    out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
+
+    # deprovision
+    if not reuse_gateways:
+        atexit.unregister(rc.deprovision_gateways)
+        rc.deprovision_gateways()
+
+    typer.echo(f"\n{json.dumps(out_json)}")
+    return 0 if stats["success"] else 1
+
+
 
 def check_ulimit(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
     current_limit_soft, current_limit_hard = resource.getrlimit(resource.RLIMIT_NOFILE)
@@ -251,6 +355,7 @@ def check_ulimit(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
 def deprovision_skylark_instances():
     instances = []
     query_jobs = []
+
     if AWSAuthentication().enabled():
         logger.debug("AWS authentication enabled, querying for instances")
         aws = AWSCloudProvider()
