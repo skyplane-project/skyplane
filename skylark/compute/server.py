@@ -1,3 +1,4 @@
+from functools import partial
 import json
 import subprocess
 from enum import Enum, auto
@@ -197,6 +198,13 @@ class Server:
         if not docker_version.startswith("Success"):
             raise RuntimeError(f"Failed to install Docker on {self.region_tag}, {self.public_ip()}: OUT {out}\nERR {err}")
 
+    def pull_docker(self, gateway_docker_image):
+        docker_out, docker_err = self.run_command(f"sudo docker pull {gateway_docker_image}")
+        if "Status: Downloaded newer image" not in docker_out and "Status: Image is up to date" not in docker_out:
+            raise RuntimeError(
+                f"Failed to pull docker image {gateway_docker_image} on {self.region_tag}, {self.public_ip()}: OUT {docker_out}\nERR {docker_err}"
+            )
+
     def start_gateway(
         self,
         outgoing_ports: Dict[str, int],  # maps ip to number of connections along route
@@ -226,8 +234,7 @@ class Server:
 
         # pull docker image and start container
         with Timer(f"{desc_prefix}: Docker pull"):
-            docker_out, docker_err = self.run_command(f"sudo docker pull {gateway_docker_image}")
-            assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
+            retry_backoff(partial(self.pull_docker, gateway_docker_image), exception_class=RuntimeError)
         logger.debug(f"{desc_prefix}: Starting gateway container")
         docker_run_flags = f"-d --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024}"
         docker_run_flags += " --mount type=tmpfs,dst=/skylark,tmpfs-size=$(($(free -b  | head -n2 | tail -n1 | awk '{print $2}')/2))"
