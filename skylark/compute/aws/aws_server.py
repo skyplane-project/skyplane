@@ -1,14 +1,12 @@
-import os
-from pathlib import Path
 from typing import Dict, Optional
 
 import boto3
 import paramiko
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.utils import logger
+from skylark import key_root
 
 from oslo_concurrency import lockutils
-from skylark import key_root
 from skylark.compute.server import Server, ServerState
 from skylark.utils.cache import ignore_lru_cache
 
@@ -23,7 +21,7 @@ class AWSServer(Server):
         self.aws_region = self.region_tag.split(":")[1]
         self.instance_id = instance_id
         self.boto3_session = boto3.Session(region_name=self.aws_region)
-        self.local_keyfile = self.ensure_keyfile_exists(self.aws_region)
+        self.local_keyfile = key_root / "aws" / f"skylark-{self.aws_region}.pem" #TODO: don't hardcode this.
 
     def uuid(self):
         return f"{self.region_tag}:{self.instance_id}"
@@ -31,33 +29,6 @@ class AWSServer(Server):
     def get_boto3_instance_resource(self):
         ec2 = self.auth.get_boto3_resource("ec2", self.aws_region)
         return ec2.Instance(self.instance_id)
-
-    def ensure_keyfile_exists(self, aws_region, prefix=key_root / "aws"):
-        ec2 = self.auth.get_boto3_resource("ec2", aws_region)
-        ec2_client = self.auth.get_boto3_client("ec2", aws_region)
-        prefix = Path(prefix)
-        key_name = f"skylark-{aws_region}"
-        local_key_file = prefix / f"{key_name}.pem"
-
-        @lockutils.synchronized(f"aws_keyfile_lock_{aws_region}", external=True, lock_path="/tmp/skylark_locks")
-        def create_keyfile():
-            if not local_key_file.exists():
-                local_key_file.parent.mkdir(parents=True, exist_ok=True)
-                if key_name in set(p["KeyName"] for p in ec2_client.describe_key_pairs()["KeyPairs"]):
-                    logger.warning(f"Deleting key {key_name} in region {aws_region}")
-                    ec2_client.delete_key_pair(KeyName=key_name)
-                key_pair = ec2.create_key_pair(KeyName=f"skylark-{aws_region}", KeyType="rsa")
-                with local_key_file.open("w") as f:
-                    key_str = key_pair.key_material
-                    if not key_str.endswith("\n"):
-                        key_str += "\n"
-                    f.write(key_str)
-                os.chmod(local_key_file, 0o600)
-                logger.info(f"Created key file {local_key_file}")
-
-        if not local_key_file.exists():
-            create_keyfile()
-        return local_key_file
 
     @ignore_lru_cache()
     def public_ip(self) -> str:

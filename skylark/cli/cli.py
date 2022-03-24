@@ -75,10 +75,13 @@ def ls(directory: str):
 def cp(src: str, dst: str):
     """Copy objects from the object store to the local filesystem."""
     print_header()
-    check_ulimit()
 
     provider_src, bucket_src, path_src = parse_path(src)
     provider_dst, bucket_dst, path_dst = parse_path(dst)
+
+    # raise file limits for local transfers
+    if provider_src == "local" or provider_dst == "local":
+        check_ulimit()
 
     if provider_src == "local" and provider_dst == "local":
         copy_local_local(Path(path_src), Path(path_dst))
@@ -123,7 +126,6 @@ def replicate_random(
 ):
     """Replicate objects from remote object store to another remote object store."""
     print_header()
-    check_ulimit()
 
     if inter_region:
         assert inter_region not in [src_region, dst_region] and src_region != dst_region
@@ -207,7 +209,6 @@ def replicate_json(
 ):
     """Replicate objects from remote object store to another remote object store."""
     print_header()
-    check_ulimit()
 
     with path.open("r") as f:
         topo = ReplicationTopology.from_json(f.read())
