@@ -3,12 +3,16 @@ from typing import Optional
 
 import boto3
 
+from skylark.config import SkylarkConfig
+from skylark import config_path
+
 
 class AWSAuthentication:
     __cached_credentials = threading.local()
 
     def __init__(self, access_key: Optional[str] = None, secret_key: Optional[str] = None):
         """Loads AWS authentication details. If no access key is provided, it will try to load credentials using boto3"""
+        self.config = SkylarkConfig.load_config(config_path)
         if access_key and secret_key:
             self.config_mode = "manual"
             self._access_key = access_key
@@ -31,7 +35,7 @@ class AWSAuthentication:
         return self._secret_key
 
     def enabled(self):
-        return self.config_mode != "disabled"
+        return self.config.aws_enabled
 
     def infer_credentials(self):
         # todo load temporary credentials from STS

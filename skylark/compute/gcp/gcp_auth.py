@@ -4,6 +4,8 @@ import googleapiclient.discovery
 import google.auth
 
 from skylark import cloud_config
+from skylark.config import SkylarkConfig
+from skylark import config_path
 
 
 class GCPAuthentication:
@@ -11,6 +13,7 @@ class GCPAuthentication:
 
     def __init__(self, project_id: Optional[str] = cloud_config.gcp_project_id):
         # load credentials lazily and then cache across threads
+        self.config = SkylarkConfig.load_config(config_path)
         self.inferred_project_id = project_id
         self._credentials = None
         self._project_id = None
@@ -38,7 +41,7 @@ class GCPAuthentication:
         return cached_credential
 
     def enabled(self):
-        return self.credentials is not None and self.project_id is not None
+        return self.config.gcp_enabled and self.credentials is not None and self.project_id is not None
 
     def get_gcp_client(self, service_name="compute", version="v1"):
         return googleapiclient.discovery.build(service_name, version)

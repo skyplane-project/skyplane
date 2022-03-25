@@ -296,7 +296,7 @@ def init(reinit_azure: bool = False, reinit_gcp: bool = False):
     if config_path.exists():
         cloud_config = SkylarkConfig.load_config(config_path)
     else:
-        cloud_config = SkylarkConfig()
+        cloud_config = SkylarkConfig.default_config()
 
     # load AWS config
     typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)

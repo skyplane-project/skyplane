@@ -280,12 +280,14 @@ def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
     credentials = session.get_credentials()
     credentials = credentials.get_frozen_credentials()
     if credentials.access_key is None or credentials.secret_key is None:
+        config.aws_enabled = False
         typer.secho("    AWS credentials not found in boto3 session, please use the AWS CLI to set them via `aws configure`", fg="red")
         typer.secho("    https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html", fg="red")
         typer.secho("    Disabling AWS support", fg="blue")
         return config
 
     typer.secho(f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials.access_key[-6:]}]", fg="blue")
+    config.aws_enabled = True
     return config
 
 
@@ -311,14 +313,17 @@ def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> Skylar
         typer.secho("    No local Azure credentials! Run `az login` to set them up.", fg="red")
         typer.secho("    https://docs.microsoft.com/en-us/azure/developer/python/azure-sdk-authenticate", fg="red")
         typer.secho("    Disabling Azure support", fg="blue")
+        config.azure_enabled = False
         return config
     typer.secho("    Azure credentials found in Azure CLI", fg="blue")
     inferred_subscription_id = AzureAuthentication.infer_subscription_id()
     if typer.confirm("    Azure credentials found, do you want to enable Azure support in Skylark?", default=True):
         config.azure_subscription_id = typer.prompt("    Enter the Azure subscription ID:", default=inferred_subscription_id)
+        config.azure_enabled = True
     else:
         config.azure_subscription_id = None
         typer.secho("    Disabling Azure support", fg="blue")
+        config.azure_enabled = False
     return config
 
 
@@ -329,10 +334,11 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
 
     if config.gcp_project_id is not None:
         typer.secho("    GCP already configured! To reconfigure GCP, run `skylark init --reinit-gcp`.", fg="blue")
+        config.gcp_enabled = True
         return config
 
     # check if GCP is enabled
-    auth = GCPAuthentication()
+    auth = GCPAuthentication(config)
     if not auth.credentials:
         typer.secho(
             "    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.",
@@ -340,14 +346,17 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
         )
         typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red")
         typer.secho("    Disabling GCP support", fg="blue")
+        config.gcp_enabled = False
         return config
     else:
         typer.secho("    GCP credentials found in GCP CLI", fg="blue")
         if typer.confirm("    GCP credentials found, do you want to enable GCP support in Skylark?", default=True):
             config.gcp_project_id = typer.prompt("    Enter the GCP project ID:", default=auth.project_id)
             assert config.gcp_project_id is not None, "GCP project ID must not be None"
+            config.gcp_enabled = True
             return config
         else:
             config.gcp_project_id = None
             typer.secho("    Disabling GCP support", fg="blue")
+            config.gcp_enabled = False
             return config
