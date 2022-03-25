@@ -33,11 +33,8 @@ class GCPAuthentication:
     def make_credential(self, project_id):
         cached_credential = getattr(self.__cached_credentials, f"credential_{project_id}", (None, None))
         if cached_credential == (None, None):
-            try:
-                cached_credential = google.auth.default(quota_project_id=project_id)
-                setattr(self.__cached_credentials, f"credential_{project_id}", cached_credential)
-            except:
-                pass
+            cached_credential = google.auth.default(quota_project_id=project_id)
+            setattr(self.__cached_credentials, f"credential_{project_id}", cached_credential)
         return cached_credential
 
     def enabled(self):
