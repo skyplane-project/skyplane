@@ -5,14 +5,19 @@ import boto3
 
 from skylark.config import SkylarkConfig
 from skylark import config_path
+from skylark import aws_config_path 
 
 
 class AWSAuthentication:
     __cached_credentials = threading.local()
 
-    def __init__(self, access_key: Optional[str] = None, secret_key: Optional[str] = None):
+    def __init__(self, config: Optional[SkylarkConfig] = None, access_key: Optional[str] = None, secret_key: Optional[str] = None):
         """Loads AWS authentication details. If no access key is provided, it will try to load credentials using boto3"""
-        self.config = SkylarkConfig.load_config(config_path)
+        if not config == None:
+            self.config = config
+        else:
+            self.config = SkylarkConfig.load_config(config_path)
+        
         if access_key and secret_key:
             self.config_mode = "manual"
             self._access_key = access_key
@@ -21,6 +26,36 @@ class AWSAuthentication:
             self.config_mode = "iam_inferred"
             self._access_key = None
             self._secret_key = None
+    
+    @staticmethod
+    def save_region_config(config):
+        f = open(aws_config_path, "w")
+        if config.aws_enabled == False:
+            f.write("")
+            f.close()
+            return
+
+        region_list = []
+        for region in boto3.client('ec2').describe_regions()['Regions']:
+            if region['OptInStatus'] == 'opt-in-not-required' or region['OptInStatus'] == 'opted-in':
+                region_text = region['Endpoint']
+                region_name = region_text[region_text.find('.') + 1 :region_text.find(".amazon")]
+                region_list.append(region_name)
+
+        config = ""
+        for i in range(len(region_list) - 1):
+            config += region_list[i] + "\n"
+        config += region_list[len(region_list) - 1]
+        f.write(config)
+        f.close()
+
+    @staticmethod
+    def get_region_config():
+        f = open(aws_config_path, "r")
+        region_list = []
+        for region in f.read().split("\n"):
+            region_list.append(region)
+        return region_list
 
     @property
     def access_key(self):

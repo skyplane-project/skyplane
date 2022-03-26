@@ -11,9 +11,12 @@ from skylark import config_path
 class GCPAuthentication:
     __cached_credentials = threading.local()
 
-    def __init__(self, project_id: Optional[str] = cloud_config.gcp_project_id):
+    def __init__(self, config: Optional[SkylarkConfig] = None, project_id: Optional[str] = cloud_config.gcp_project_id):
         # load credentials lazily and then cache across threads
-        self.config = SkylarkConfig.load_config(config_path)
+        if not config == None:
+            self.config = config
+        else:
+            self.config = SkylarkConfig.load_config(config_path)
         self.inferred_project_id = project_id
         self._credentials = None
         self._project_id = None

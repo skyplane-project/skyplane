@@ -290,6 +290,10 @@ def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
     config.aws_enabled = True
     return config
 
+def create_aws_region_config(config):
+    #region_list = Session().get_available_regions("ec2")
+    #print(boto3.client('ec2').describe_regions())
+    AWSAuthentication.save_region_config(config)
 
 def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkConfig:
     if force_init:
@@ -302,7 +306,7 @@ def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> Skylar
 
     # check if Azure is enabled
     logging.disable(logging.WARNING)  # disable Azure logging, we have our own
-    auth = AzureAuthentication()
+    auth = AzureAuthentication(config=config)
     try:
         auth.credential.get_token("https://management.azure.com/")
         azure_enabled = True
@@ -338,7 +342,7 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
         return config
 
     # check if GCP is enabled
-    auth = GCPAuthentication(config)
+    auth = GCPAuthentication(config=config)
     if not auth.credentials:
         typer.secho(
             "    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.",

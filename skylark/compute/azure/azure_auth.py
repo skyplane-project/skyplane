@@ -19,8 +19,11 @@ from skylark import config_path
 class AzureAuthentication:
     __cached_credentials = threading.local()
 
-    def __init__(self, subscription_id: str = cloud_config.azure_subscription_id):
-        self.config = SkylarkConfig.load_config(config_path)
+    def __init__(self, config: Optional[SkylarkConfig] = None, subscription_id: str = cloud_config.azure_subscription_id):
+        if not config == None:
+            self.config = config
+        else:
+            self.config = SkylarkConfig.load_config(config_path)
         self.subscription_id = subscription_id
         self.credential = self.get_credential(subscription_id)
 
