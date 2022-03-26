@@ -89,7 +89,7 @@ class GatewayObjStoreConn:
                     logger.debug(f"[obj_store:{self.worker_id}] Uploaded {chunk_id} to {bucket}")
 
                 # wait for upload in seperate thread
-                threading.Thread(target=upload, args=(region, bucket, fpath, chunk_req.chunk.key, chunk_req.chunk.chunk_id)).start()
+                threading.Thread(target=upload, args=(region, bucket, fpath, chunk_req.chunk.dest_key, chunk_req.chunk.chunk_id)).start()
             elif req_type == "download":
                 assert chunk_req.src_type == "object_store"
                 region = chunk_req.src_region
@@ -104,7 +104,7 @@ class GatewayObjStoreConn:
                     logger.debug(f"[obj_store:{self.worker_id}] Downloaded {chunk_id} from {bucket}")
 
                 # wait for request to return in sepearte thread, so we can update chunk state
-                threading.Thread(target=download, args=(region, bucket, fpath, chunk_req.chunk.key, chunk_req.chunk.chunk_id)).start()
+                threading.Thread(target=download, args=(region, bucket, fpath, chunk_req.chunk.src_key, chunk_req.chunk.chunk_id)).start()
             else:
                 raise ValueError(f"Invalid location for chunk req, {req_type}: {chunk_req.src_type}->{chunk_req.dst_type}")
 

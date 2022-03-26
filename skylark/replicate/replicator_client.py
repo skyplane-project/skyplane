@@ -218,12 +218,12 @@ class ReplicatorClient:
         # make list of chunks
         chunks = []
         obj_file_size_bytes = job.src_obj_sizes()
-        for idx, obj in enumerate(job.objs):
+        for idx, (src_obj, dest_obj) in enumerate(zip(job.src_objs, job.dest_objs)):
             if obj_file_size_bytes:
-                file_size_bytes = obj_file_size_bytes[obj]
+                file_size_bytes = obj_file_size_bytes[src_obj]
             else:
                 file_size_bytes = job.random_chunk_size_mb * MB
-            chunks.append(Chunk(key=obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes))
+            chunks.append(Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes))
 
         # partition chunks into roughly equal-sized batches (by bytes)
         # iteratively adds chunks to the batch with the smallest size

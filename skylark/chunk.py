@@ -9,7 +9,8 @@ from typing import Dict, Optional
 class Chunk:
     """A Chunk is a contiguous piece of a file (a file may be one or more chunks)."""
 
-    key: str  # human readable path where object is stored
+    src_key: str  # human readable path where object is stored
+    dest_key: str  # human readable path where object is stored
     chunk_id: int
     file_offset_bytes: int
     chunk_length_bytes: int
