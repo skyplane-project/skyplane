@@ -249,25 +249,15 @@ def replicate_json(
         job = rc.run_replication_plan(job)
         total_bytes = n_chunks * chunk_size_mb * MB
     else:
-
-        # get object keys with prefix
         objs = ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(key_prefix)
-        obj_keys_src, obj_keys_dest = [], []
-        obj_sizes = dict()
-        for obj in objs:
-            obj_keys_src.append(obj.key)
-            obj_keys_dest.append(obj.key)
-            obj_sizes[obj.key] = obj.size
-
-        # create replication job
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=source_bucket,
             dest_region=topo.sink_region(),
             dest_bucket=dest_bucket,
-            src_objs=obj_keys_src,
-            dest_objs=obj_keys_dest,
-            obj_sizes=obj_sizes,
+            src_objs=[obj.key for obj in objs],
+            dest_objs=[obj.key for obj in objs],
+            obj_sizes={obj.key: obj.size for obj in objs},
         )
         job = rc.run_replication_plan(job)
 
