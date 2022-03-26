@@ -154,6 +154,7 @@ class ReplicationJob:
     dest_bucket: Optional[str]
     src_objs: List[str]
     dest_objs: List[str]
+    # object sizes (computed using source objects)
     obj_sizes: Optional[Dict[str, int]] = None
     # progress tracking via a list of chunk_requests
     chunk_requests: Optional[List[ChunkRequest]] = None
