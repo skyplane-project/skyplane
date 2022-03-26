@@ -3,10 +3,8 @@ from typing import Dict, Optional
 import boto3
 import paramiko
 from skylark.compute.aws.aws_auth import AWSAuthentication
-from skylark.utils import logger
 from skylark import key_root
 
-from oslo_concurrency import lockutils
 from skylark.compute.server import Server, ServerState
 from skylark.utils.cache import ignore_lru_cache
 
@@ -21,7 +19,7 @@ class AWSServer(Server):
         self.aws_region = self.region_tag.split(":")[1]
         self.instance_id = instance_id
         self.boto3_session = boto3.Session(region_name=self.aws_region)
-        self.local_keyfile = key_root / "aws" / f"skylark-{self.aws_region}.pem" #TODO: don't hardcode this.
+        self.local_keyfile = key_root / "aws" / f"skylark-{self.aws_region}.pem"  # TODO: don't hardcode this.
 
     def uuid(self):
         return f"{self.region_tag}:{self.instance_id}"
