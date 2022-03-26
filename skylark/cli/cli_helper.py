@@ -230,8 +230,8 @@ def copy_s3_local(src_bucket: str, src_key: str, dst: Path):
 
 def replicate_helper(
     topo: ReplicationTopology,
-    size_total_mb: Optional[int] = typer.Option(2048),
-    n_chunks: Optional[int] = typer.Option(512),
+    size_total_mb: int = 2048,
+    n_chunks: int = 512,
     random: bool = False,
     # bucket options
     source_bucket: str = typer.Option(None),
