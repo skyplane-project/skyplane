@@ -1,4 +1,3 @@
-import ssl
 from OpenSSL import crypto
 
 # Based on https://stackoverflow.com/questions/27164354/create-a-self-signed-x509-certificate-in-python

@@ -8,7 +8,6 @@ import time
 from typing import Dict, List, Optional, Tuple
 import uuid
 
-import requests
 from skylark.replicate.profiler import status_df_to_traceevent
 from skylark.utils import logger
 from tqdm import tqdm
