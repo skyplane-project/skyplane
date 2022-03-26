@@ -165,8 +165,8 @@ def replicate_random(
         source_bucket=None,
         dest_region=dst_region,
         dest_bucket=None,
-        src_objs=[str(i) for i in range(n_chunks)],
-        dest_objs=[str(i) for i in range(n_chunks)],
+        src_objs=[f"/{i}" for i in range(n_chunks)],
+        dest_objs=[f"/{i}" for i in range(n_chunks)],
         random_chunk_size_mb=chunk_size_mb,
     )
 
@@ -242,8 +242,8 @@ def replicate_json(
             source_bucket=None,
             dest_region=topo.sink_region(),
             dest_bucket=None,
-            src_objs=[str(i) for i in range(n_chunks)],
-            dest_objs=[str(i) for i in range(n_chunks)],
+            src_objs=[f"/{i}" for i in range(n_chunks)],
+            dest_objs=[f"/{i}" for i in range(n_chunks)],
             random_chunk_size_mb=chunk_size_mb,
         )
         job = rc.run_replication_plan(job)
