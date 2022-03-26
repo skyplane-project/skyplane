@@ -1,39 +1,36 @@
-import mimetypes
+import boto3
+import botocore.exceptions
 import os
 from typing import Iterator, List
-
-from concurrent.futures import Future
-import botocore.exceptions
-from awscrt.auth import AwsCredentialsProvider
-from awscrt.http import HttpHeaders, HttpRequest
-from awscrt.io import ClientBootstrap, DefaultHostResolver, EventLoopGroup
-from awscrt.s3 import S3Client, S3RequestTlsMode, S3RequestType
 from skylark.compute.aws.aws_auth import AWSAuthentication
-
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
-
 
 class S3Object(ObjectStoreObject):
     def full_path(self):
         return f"s3://{self.bucket}/{self.key}"
 
-
 class S3Interface(ObjectStoreInterface):
+    """
+    @property
+    def client(self):
+        return self.auth.get_boto3_client("s3", self.aws_region)
+
+    @property
+    def resource(self):
+        return self.auth.get_boto3_resource("s3", self.aws_region)
+
+    @staticmethod
+    def sanitize_targets(object_name, file_path=""):
+        object_name = "/" + object_name if object_name[0] != "/" else object_name
+        return (str(object_name), str(file_path)) if file_path else str(object_name)
+    """
+    #thoughts? could reduce repetition by a little but may be superfluous
+    #I think sanitize_targets would be useful in other places as well, this might not be the best place to define it
+
     def __init__(self, aws_region, bucket_name, use_tls=True, part_size=None, throughput_target_gbps=10, num_threads=4):
         self.auth = AWSAuthentication()
         self.aws_region = self.infer_s3_region(bucket_name) if aws_region is None or aws_region == "infer" else aws_region
         self.bucket_name = bucket_name
-        event_loop_group = EventLoopGroup(num_threads=num_threads, cpu_group=None)
-        host_resolver = DefaultHostResolver(event_loop_group)
-        bootstrap = ClientBootstrap(event_loop_group, host_resolver)
-        self._s3_client = S3Client(
-            bootstrap=bootstrap,
-            region=self.aws_region,
-            credential_provider=AwsCredentialsProvider.new_default_chain(bootstrap),
-            throughput_target_gbps=throughput_target_gbps,
-            part_size=part_size,
-            tls_mode=S3RequestTlsMode.ENABLED if use_tls else S3RequestTlsMode.DISABLED,
-        )
 
     def infer_s3_region(self, bucket_name: str):
         s3_client = self.auth.get_boto3_client("s3")
@@ -85,35 +82,85 @@ class S3Interface(ObjectStoreInterface):
         except NoSuchObjectException:
             return False
 
-    # todo: implement range request for download
-    def download_object(self, src_object_name, dst_file_path) -> Future:
+    def download_part(self, src_object_name, dst_file_path, byte_offset, byte_count) -> String:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = "/" + src_object_name if src_object_name[0] != "/" else src_object_name
-        download_headers = HttpHeaders([("host", self.bucket_name + ".s3." + self.aws_region + ".amazonaws.com")])
-        request = HttpRequest("GET", src_object_name, download_headers)
+        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
+        response = s3_client.get_object(
+            Bucket=self.bucket_name,
+            Key=src_object_name,
+            Range=f"bytes={byte_offset}-{byte_offset + byte_count - 1}"
+        )
+        if not os.path.exists(dst_file_path):
+            open(dst_file_path, "a").close()
+        with open(dst_file_path, "rb+") as f:
+            f.seek(byte_offset)
+            f.write(response["Body"].read())
+        response["Body"].close() 
+        return response["ETag"] #might want to return bytes read instead
 
-        def _on_body_download(offset, chunk, **kwargs):
-            if not os.path.exists(dst_file_path):
-                open(dst_file_path, "a").close()
-            with open(dst_file_path, "rb+") as f:
-                f.seek(offset)
-                f.write(chunk)
+    def download_entire_object(self, src_object_name, dst_file_path, config: boto.s3.transfer.TransferConfig=None) -> String:
+        src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
+        src_object_name = "/" + src_object_name if src_object_name[0] != "/" else src_object_name
+        if not config:
+            config = boto.s3.transfer.TransferConfig(
+                #fine-tune this
+                use_threads = True
+            )
+        s3_resource = self.auth.get_boto3_resource("s3", self.aws_region)
+        response = s3_resource.download_file(dst_file_path, self.bucket_name, src_object_name, config)
+        return response["ETag"] #might want to return bytes read instead
 
-        return self._s3_client.make_request(
-            recv_filepath=dst_file_path,
-            request=request,
-            type=S3RequestType.GET_OBJECT,
-        ).finished_future
-
-    def upload_object(self, src_file_path, dst_object_name, content_type="infer") -> Future:
-        src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
+    def initiate_multipart_upload(self, dst_object_name, content_type) -> String:
+        #cannot infer content type here
         dst_object_name = "/" + dst_object_name if dst_object_name[0] != "/" else dst_object_name
-        content_len = os.path.getsize(src_file_path)
-        if content_type == "infer":
-            content_type = mimetypes.guess_type(src_file_path)[0] or "application/octet-stream"
-        upload_headers = HttpHeaders()
-        upload_headers.add("host", self.bucket_name + ".s3." + self.aws_region + ".amazonaws.com")
-        upload_headers.add("Content-Type", content_type)
-        upload_headers.add("Content-Length", str(content_len))
-        request = HttpRequest("PUT", dst_object_name, upload_headers)
-        return self._s3_client.make_request(send_filepath=src_file_path, request=request, type=S3RequestType.PUT_OBJECT).finished_future
+        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
+        response = s3_client.create_multipart_upload(
+            Bucket=self.bucket_name,
+            Key=dst_object_name,
+            ContentType=content_type
+        )
+        return response["UploadID"]
+
+    def upload_part(self, upload_id, src_file_path, dst_object_name, byte_offset, byte_count, part_number) -> Dictionary:
+        #all parts excluding the final one must be 5MB or larger
+        assert 1 <= part_number <= 10000, f"invalid part_number {part_number}, should be in range [1, 10000]" 
+        dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
+        dst_object_name = "/" + dst_object_name if dst_object_name[0] != "/" else dst_object_name
+        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
+        with open(src_file_path, mode="rb+") as f:
+            f.seek(byte_offset)
+            response = s3_client.upload_part(
+                UploadId=part_upload_id,
+                Bucket=self.bucket_name,
+                Key=dst_object_name,
+                PartNumber=part_number,
+                Body=f,
+                ContentLength=byte_count
+                #checksum support could be added here
+            )
+        return {"ETag": response["ETag"], "PartNumber": part_number} #user should build a list of these
+
+    def finalize_multipart_upload(self, upload_id, dst_object_name, part_list) -> String:
+        dst_object_name = "/" + dst_object_name if dst_object_name[0] != "/" else dst_object_name
+        part_list.sort(key=lambda d: d["PartNumber"]) #list sorting is handled here, not left to user
+        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
+        response = s3_client.complete_multipart_upload(
+                UploadID=upload_id,
+                Bucket=self.bucket_name,
+                Key=dst_object_name,
+                MultipartUpload=part_list
+        )
+        return response["ETag"]
+
+    def upload_entire_object(self, src_file_path, dst_object_name, config: boto.s3.transfer.TransferConfig=None) -> String:
+        dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
+        dst_object_name = "/" + dst_object_name if dst_object_name[0] != "/" else dst_object_name
+        if not config:
+            config = boto.s3.transfer.TransferConfig(
+                #fine-tune this
+                use_threads = True
+            )
+        s3_resource = self.auth.get_boto3_resource("s3", self.aws_region)
+        response = s3_resource.upload_file(src_file_path, self.bucket_name, dst_object_name, config)
+        return response["ETag"]
