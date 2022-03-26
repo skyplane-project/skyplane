@@ -179,6 +179,7 @@ def replicate_random(
         os._exit(1)  # exit now
     if not reuse_gateways:
         rc.deprovision_gateways()
+    stats = stats if stats else {}
     stats["success"] = stats["monitor_status"] == "completed"
     out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
     typer.echo(f"\n{json.dumps(out_json)}")
@@ -270,6 +271,7 @@ def replicate_json(
         os._exit(1)  # exit now
     if not reuse_gateways:
         rc.deprovision_gateways()
+    stats = stats if stats else {}
     stats["success"] = stats["monitor_status"] == "completed"
     out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
     typer.echo(f"\n{json.dumps(out_json)}")
