@@ -1,4 +1,5 @@
 import boto3
+from boto3.s3.transfer import TransferConfig
 import botocore.exceptions
 import os
 from typing import Iterator, List
@@ -82,7 +83,7 @@ class S3Interface(ObjectStoreInterface):
         except NoSuchObjectException:
             return False
 
-    def download_part(self, src_object_name, dst_file_path, byte_offset, byte_count) -> String:
+    def download_part(self, src_object_name, dst_file_path, byte_offset, byte_count) -> str:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = "/" + src_object_name if src_object_name[0] != "/" else src_object_name
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
@@ -99,11 +100,11 @@ class S3Interface(ObjectStoreInterface):
         response["Body"].close() 
         return response["ETag"] #might want to return bytes read instead
 
-    def download_entire_object(self, src_object_name, dst_file_path, config: boto.s3.transfer.TransferConfig=None) -> String:
+    def download_entire_object(self, src_object_name, dst_file_path, config: TransferConfig=None) -> str:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = "/" + src_object_name if src_object_name[0] != "/" else src_object_name
         if not config:
-            config = boto.s3.transfer.TransferConfig(
+            config = TransferConfig(
                 #fine-tune this
                 use_threads = True
             )
@@ -111,7 +112,7 @@ class S3Interface(ObjectStoreInterface):
         response = s3_resource.download_file(dst_file_path, self.bucket_name, src_object_name, config)
         return response["ETag"] #might want to return bytes read instead
 
-    def initiate_multipart_upload(self, dst_object_name, content_type) -> String:
+    def initiate_multipart_upload(self, dst_object_name, content_type) -> str:
         #cannot infer content type here
         dst_object_name = "/" + dst_object_name if dst_object_name[0] != "/" else dst_object_name
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
@@ -122,7 +123,7 @@ class S3Interface(ObjectStoreInterface):
         )
         return response["UploadID"]
 
-    def upload_part(self, upload_id, src_file_path, dst_object_name, byte_offset, byte_count, part_number) -> Dictionary:
+    def upload_part(self, upload_id, src_file_path, dst_object_name, byte_offset, byte_count, part_number) -> dict:
         #all parts excluding the final one must be 5MB or larger
         assert 1 <= part_number <= 10000, f"invalid part_number {part_number}, should be in range [1, 10000]" 
         dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
@@ -141,7 +142,7 @@ class S3Interface(ObjectStoreInterface):
             )
         return {"ETag": response["ETag"], "PartNumber": part_number} #user should build a list of these
 
-    def finalize_multipart_upload(self, upload_id, dst_object_name, part_list) -> String:
+    def finalize_multipart_upload(self, upload_id, dst_object_name, part_list) -> str:
         dst_object_name = "/" + dst_object_name if dst_object_name[0] != "/" else dst_object_name
         part_list.sort(key=lambda d: d["PartNumber"]) #list sorting is handled here, not left to user
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
@@ -153,11 +154,11 @@ class S3Interface(ObjectStoreInterface):
         )
         return response["ETag"]
 
-    def upload_entire_object(self, src_file_path, dst_object_name, config: boto.s3.transfer.TransferConfig=None) -> String:
+    def upload_entire_object(self, src_file_path, dst_object_name, config: TransferConfig=None) -> str:
         dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
         dst_object_name = "/" + dst_object_name if dst_object_name[0] != "/" else dst_object_name
         if not config:
-            config = boto.s3.transfer.TransferConfig(
+            config = TransferConfig(
                 #fine-tune this
                 use_threads = True
             )
