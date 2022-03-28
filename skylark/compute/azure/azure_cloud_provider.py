@@ -302,9 +302,7 @@ class AzureCloudProvider(CloudProvider):
 
     # This code, along with some code in azure_server.py, is based on
     # https://github.com/ucbrise/mage-scripts/blob/main/azure_cloud.py.
-    def provision_instance(
-        self, location: str, vm_size: str, name: Optional[str] = None, uname: str = os.environ.get("USER")
-    ) -> AzureServer:
+    def provision_instance(self, location: str, vm_size: str, name: Optional[str] = None, uname: str = "skylark") -> AzureServer:
         assert ":" not in location, "invalid colon in Azure location"
 
         if name is None:
