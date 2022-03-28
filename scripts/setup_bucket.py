@@ -40,5 +40,6 @@ def main(args):
     upload_fn = lambda x: obj_store_interface_src.upload_object(x[0], x[1])
     do_parallel(upload_fn, fn_args, n=500, progress_bar=True, desc="Uploading", arg_fmt=lambda x: x[1])
 
+
 if __name__ == "__main__":
     main(parse_args())

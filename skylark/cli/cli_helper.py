@@ -172,56 +172,12 @@ def copy_azure_local(src_account_name: str, src_container_name: str, src_key: st
 
 def copy_local_s3(src: Path, dst_bucket: str, dst_key: str, use_tls: bool = True):
     s3 = S3Interface(None, dst_bucket, use_tls=use_tls)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=64) as executor:
-        ops: List[concurrent.futures.Future] = []
-        path_mapping: Dict[concurrent.futures.Future, Path] = {}
-
-        def _copy(path: Path, dst_key: str, total_size=0.0):
-            if path.is_dir():
-                for child in path.iterdir():
-                    total_size += _copy(child, os.path.join(dst_key, child.name))
-                return total_size
-            else:
-                future = executor.submit(s3.upload_object, path, dst_key)
-                ops.append(future)
-                path_mapping[future] = path
-                return path.stat().st_size
-
-        total_bytes = _copy(src, dst_key)
-
-        # wait for all uploads to complete, displaying a progress bar
-        with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Uploading") as pbar:
-            for op in concurrent.futures.as_completed(ops):
-                op.result()
-                pbar.update(path_mapping[op].stat().st_size)
+    return copy_local_objstore(s3, src, dst_key)
 
 
 def copy_s3_local(src_bucket: str, src_key: str, dst: Path):
     s3 = S3Interface(None, src_bucket)
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=64) as executor:
-        ops: List[concurrent.futures.Future] = []
-        obj_mapping: Dict[concurrent.futures.Future, ObjectStoreObject] = {}
-
-        def _copy(src_obj: ObjectStoreObject, dst: Path):
-            dst.parent.mkdir(exist_ok=True, parents=True)
-            future = executor.submit(s3.download_object, src_obj.key, dst)
-            ops.append(future)
-            obj_mapping[future] = src_obj
-            return src_obj.size
-
-        total_bytes = 0.0
-        for obj in s3.list_objects(prefix=src_key):
-            sub_key = obj.key[len(src_key) :]
-            sub_key = sub_key.lstrip("/")
-            dest_path = dst / sub_key
-            total_bytes += _copy(obj, dest_path)
-
-    # wait for all downloads to complete, displaying a progress bar
-    with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Downloading") as pbar:
-        for op in concurrent.futures.as_completed(ops):
-            op.result()
-            pbar.update(obj_mapping[op].size)
+    return copy_objstore_local(s3, src_key, dst)
 
 
 def check_ulimit(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
