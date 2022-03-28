@@ -163,7 +163,7 @@ class AzureServer(Server):
         nic_poller.result()
         vnet_poller.result()
 
-    def get_ssh_client_impl(self, uname=os.environ.get("USER"), ssh_key_password="skylark"):
+    def get_ssh_client_impl(self, uname="skylark", ssh_key_password="skylark"):
         """Return paramiko client that connects to this instance."""
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -176,3 +176,9 @@ class AzureServer(Server):
             banner_timeout=200,
         )
         return ssh_client
+
+    def get_sftp_client(self, uname="skylark", ssh_key_password="skylark"):
+        t = paramiko.Transport((self.public_ip(), 22))
+        pkey = paramiko.RSAKey.from_private_key_file(str(self.ssh_private_key), password=ssh_key_password)
+        t.connect(username=uname, pkey=pkey)
+        return paramiko.SFTPClient.from_transport(t)

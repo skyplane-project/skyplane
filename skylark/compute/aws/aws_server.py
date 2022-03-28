@@ -77,3 +77,8 @@ class AWSServer(Server):
 
     def get_ssh_cmd(self):
         return f"ssh -i {self.local_keyfile} ec2-user@{self.public_ip()}"
+
+    def get_sftp_client(self):
+        t = paramiko.Transport((self.public_ip(), 22))
+        t.connect(username="ec2-user", pkey=paramiko.RSAKey.from_private_key_file(str(self.local_keyfile)))
+        return paramiko.SFTPClient.from_transport(t)
