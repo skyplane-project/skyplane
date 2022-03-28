@@ -1,8 +1,12 @@
 import boto3
 from boto3.s3.transfer import TransferConfig
 import botocore.exceptions
+
 import os
+import mimetypes
 from typing import Iterator, List
+from concurrent.futures import Future, ThreadPoolExecutor
+
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
@@ -11,27 +15,11 @@ class S3Object(ObjectStoreObject):
         return f"s3://{self.bucket}/{self.key}"
 
 class S3Interface(ObjectStoreInterface):
-    """
-    @property
-    def client(self):
-        return self.auth.get_boto3_client("s3", self.aws_region)
-
-    @property
-    def resource(self):
-        return self.auth.get_boto3_resource("s3", self.aws_region)
-
-    @staticmethod
-    def sanitize_targets(object_name, file_path=""):
-        object_name = "/" + object_name if object_name[0] != "/" else object_name
-        return (str(object_name), str(file_path)) if file_path else str(object_name)
-    """
-    #thoughts? could reduce repetition by a little but may be superfluous
-    #I think sanitize_targets would be useful in other places as well, this might not be the best place to define it
-
     def __init__(self, aws_region, bucket_name, use_tls=True, part_size=None, throughput_target_gbps=10, num_threads=4):
         self.auth = AWSAuthentication()
         self.aws_region = self.infer_s3_region(bucket_name) if aws_region is None or aws_region == "infer" else aws_region
         self.bucket_name = bucket_name
+        self.pool = ThreadPoolExecutor(max_workers=256) #TODO: pick a non arbitrary number
 
     def infer_s3_region(self, bucket_name: str):
         s3_client = self.auth.get_boto3_client("s3")
@@ -83,24 +71,31 @@ class S3Interface(ObjectStoreInterface):
         except NoSuchObjectException:
             return False
 
-    def download_part(self, src_object_name, dst_file_path, byte_offset, byte_count) -> str:
+    def download_object(self, src_object_name, dst_file_path, byte_offset=None, byte_count=None) -> Future:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = "/" + src_object_name if src_object_name[0] != "/" else src_object_name
-        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
-        response = s3_client.get_object(
-            Bucket=self.bucket_name,
-            Key=src_object_name,
-            Range=f"bytes={byte_offset}-{byte_offset + byte_count - 1}"
-        )
-        if not os.path.exists(dst_file_path):
-            open(dst_file_path, "a").close()
-        with open(dst_file_path, "rb+") as f:
-            f.seek(byte_offset)
-            f.write(response["Body"].read())
-        response["Body"].close() 
-        return response["ETag"] #might want to return bytes read instead
+        if byte_offset is None or byte_count is None:
+            #unoptimized
+            byte_offset = 0
+            byte_count = os.path.get(size_src_file_path)
+        def _download_object_helper():
+            s3_client = self.auth.get_boto3_client("s3", self.aws_region)
+            response = s3_client.get_object(
+                Bucket=self.bucket_name,
+                Key=src_object_name,
+                Range=f"bytes={byte_offset}-{byte_offset + byte_count - 1}"
+            )
+            if not os.path.exists(dst_file_path):
+                open(dst_file_path, "a").close()
+            with open(dst_file_path, "rb+") as f:
+                f.seek(byte_offset)
+                f.write(response["Body"].read())
+            response["Body"].close() 
+            return response["ETag"] #might want to return bytes read instead
+        return self.pool.submit(_download_part_helper)
 
-    def download_entire_object(self, src_object_name, dst_file_path, config: TransferConfig=None) -> str:
+    """
+    def download_entire_object(self, src_object_name, dst_file_path, config: TransferConfig=None) -> Future:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = "/" + src_object_name if src_object_name[0] != "/" else src_object_name
         if not config:
@@ -111,50 +106,65 @@ class S3Interface(ObjectStoreInterface):
         s3_resource = self.auth.get_boto3_resource("s3", self.aws_region)
         response = s3_resource.download_file(dst_file_path, self.bucket_name, src_object_name, config)
         return response["ETag"] #might want to return bytes read instead
-
-    def initiate_multipart_upload(self, dst_object_name, content_type) -> str:
+    """
+    def initiate_multipart_upload(self, dst_object_name, content_type) -> Future:
         #cannot infer content type here
         dst_object_name = "/" + dst_object_name if dst_object_name[0] != "/" else dst_object_name
-        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
-        response = s3_client.create_multipart_upload(
-            Bucket=self.bucket_name,
-            Key=dst_object_name,
-            ContentType=content_type
-        )
-        return response["UploadID"]
+        def _initiate_multipart_upload_helper():
+            s3_client = self.auth.get_boto3_client("s3", self.aws_region)
+            response = s3_client.create_multipart_upload(
+                Bucket=self.bucket_name,
+                Key=dst_object_name,
+                ContentType=content_type
+            )
+            return response["UploadID"]
+        return self.pool.submit(_initiate_multipart_upload_helper)
 
-    def upload_part(self, upload_id, src_file_path, dst_object_name, byte_offset, byte_count, part_number) -> dict:
-        #all parts excluding the final one must be 5MB or larger
-        assert 1 <= part_number <= 10000, f"invalid part_number {part_number}, should be in range [1, 10000]" 
+    def upload_object(self, src_file_path, dst_object_name, upload_id=None, byte_offset=None, byte_count=None, part_number=None) -> Future:
+        assert part_number is None or 1 <= part_number <= 10000, f"invalid part_number {part_number}, should be in range [1, 10000]" 
         dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
         dst_object_name = "/" + dst_object_name if dst_object_name[0] != "/" else dst_object_name
-        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
-        with open(src_file_path, mode="rb+") as f:
-            f.seek(byte_offset)
-            response = s3_client.upload_part(
-                UploadId=part_upload_id,
-                Bucket=self.bucket_name,
-                Key=dst_object_name,
-                PartNumber=part_number,
-                Body=f,
-                ContentLength=byte_count
-                #checksum support could be added here
-            )
-        return {"ETag": response["ETag"], "PartNumber": part_number} #user should build a list of these
+        def _upload_object_part_helper():
+            s3_client = self.auth.get_boto3_client("s3", self.aws_region)
+            with open(src_file_path, mode="rb+") as f:
+                f.seek(byte_offset)
+                response = s3_client.upload_part(
+                    UploadId=part_upload_id,
+                    Bucket=self.bucket_name,
+                    Key=dst_object_name,
+                    PartNumber=part_number,
+                    Body=f,
+                    ContentLength=byte_count
+                )
+            return {"ETag": response["ETag"], "PartNumber": part_number} #user should build a list of these
+        def _upload_entire_object_helper():
+            #unoptimized
+            print(self.bucket_name)
+            inferred_type = mimetypes.guess_type(src_file_path)[0] or "application/octet-stream"
+            upload_id = self.initiate_multipart_upload(dst_object_name, inferred_type).result()
+            byte_offset = 0
+            byte_count = os.path.getsize(src_file_path)
+            part_number = 1
+            part_list = [_upload_object_part_helper().result]
+            return self.finalize_multipart_upload(dst_object_name, upload_id, part_list).result()
+        is_entire = upload_id is None or byte_offset is None or byte_count is None or part_number is None
+        return self.pool.submit(_upload_object_part_helper if not is_entire else _upload_entire_object_helper)
 
-    def finalize_multipart_upload(self, upload_id, dst_object_name, part_list) -> str:
+    def finalize_multipart_upload(self, dst_object_name, upload_id, part_list) -> Future:
         dst_object_name = "/" + dst_object_name if dst_object_name[0] != "/" else dst_object_name
         part_list.sort(key=lambda d: d["PartNumber"]) #list sorting is handled here, not left to user
-        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
-        response = s3_client.complete_multipart_upload(
-                UploadID=upload_id,
-                Bucket=self.bucket_name,
-                Key=dst_object_name,
-                MultipartUpload=part_list
-        )
-        return response["ETag"]
-
-    def upload_entire_object(self, src_file_path, dst_object_name, config: TransferConfig=None) -> str:
+        def _finalize_multipart_upload_helper():
+            s3_client = self.auth.get_boto3_client("s3", self.aws_region)
+            response = s3_client.complete_multipart_upload(
+                    UploadID=upload_id,
+                    Bucket=self.bucket_name,
+                    Key=dst_object_name,
+                    MultipartUpload=part_list
+            )
+            return response["ETag"]
+        return self.pool.submit(_finalize_multipart_upload_helper)
+    """
+    def upload_entire_object(self, src_file_path, dst_object_name, config: TransferConfig=None) -> Future:
         dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
         dst_object_name = "/" + dst_object_name if dst_object_name[0] != "/" else dst_object_name
         if not config:
@@ -165,3 +175,4 @@ class S3Interface(ObjectStoreInterface):
         s3_resource = self.auth.get_boto3_resource("s3", self.aws_region)
         response = s3_resource.upload_file(src_file_path, self.bucket_name, dst_object_name, config)
         return response["ETag"]
+    """

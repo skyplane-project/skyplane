@@ -11,7 +11,6 @@ def test_s3_interface():
     s3_interface = S3Interface("us-east-1", "sky-us-east-1", True)
     assert s3_interface.bucket_name == "sky-us-east-1"
     assert s3_interface.aws_region == "us-east-1"
-    assert s3_interface._s3_client.use_tls is True
 
     # generate file and upload
     obj_name = "/test.txt"
