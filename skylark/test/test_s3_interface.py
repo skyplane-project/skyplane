@@ -8,10 +8,10 @@ from skylark.utils.utils import Timer
 
 
 def test_s3_interface():
-    s3_interface = S3Interface("us-east-1", "sky-us-east-1", True)
-    assert s3_interface.bucket_name == "sky-us-east-1"
+    s3_interface = S3Interface("us-east-1", "skylark-test-us-east-1", True)
     assert s3_interface.aws_region == "us-east-1"
-    assert s3_interface._s3_client.use_tls is True
+    assert s3_interface.bucket_name == "skylark-test-us-east-1"
+    s3_interface.create_bucket()
 
     # generate file and upload
     obj_name = "/test.txt"
@@ -33,6 +33,7 @@ def test_s3_interface():
             os.remove(fpath)
         with Timer() as t:
             s3_interface.download_object(obj_name, fpath)
+        assert s3_interface.get_obj_size(obj_name) == os.path.getsize(fpath)
 
         # check md5
         dl_file_md5 = hashlib.md5(open(fpath, "rb").read()).hexdigest()
