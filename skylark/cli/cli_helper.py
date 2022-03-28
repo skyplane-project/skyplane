@@ -114,13 +114,13 @@ def copy_local_objstore(object_interface: ObjectStoreInterface, src: Path, dst_k
                 path_mapping[future] = path
                 return path.stat().st_size
 
-    total_bytes = _copy(src, dst_key)
+        total_bytes = _copy(src, dst_key)
 
-    # wait for all uploads to complete, displaying a progress bar
-    with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Uploading") as pbar:
-        for op in concurrent.futures.as_completed(ops):
-            op.result()
-            pbar.update(path_mapping[op].stat().st_size)
+        # wait for all uploads to complete, displaying a progress bar
+        with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Uploading") as pbar:
+            for op in concurrent.futures.as_completed(ops):
+                op.result()
+                pbar.update(path_mapping[op].stat().st_size)
 
 
 def copy_objstore_local(object_interface: ObjectStoreInterface, src_key: str, dst: Path):
@@ -143,11 +143,11 @@ def copy_objstore_local(object_interface: ObjectStoreInterface, src_key: str, ds
             dest_path = dst / sub_key
             total_bytes += _copy(obj, dest_path)
 
-    # wait for all downloads to complete, displaying a progress bar
-    with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Downloading") as pbar:
-        for op in concurrent.futures.as_completed(ops):
-            op.result()
-            pbar.update(obj_mapping[op].size)
+        # wait for all downloads to complete, displaying a progress bar
+        with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Downloading") as pbar:
+            for op in concurrent.futures.as_completed(ops):
+                op.result()
+                pbar.update(obj_mapping[op].size)
 
 
 def copy_local_gcs(src: Path, dst_bucket: str, dst_key: str):
