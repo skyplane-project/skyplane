@@ -8,8 +8,8 @@ from skylark.utils.utils import Timer
 
 
 def test_gcs_interface():
-    gcs_interface = GCSInterface(f"us-east1", f"sky-us-east-1", True)
-    assert gcs_interface.bucket_name == "sky-us-east-1"
+    gcs_interface = GCSInterface(f"us-east1", f"skylark-test-us-east1")
+    assert gcs_interface.bucket_name == "skylark-test-us-east1"
     assert gcs_interface.gcp_region == "us-east1"
     gcs_interface.create_bucket()
 
