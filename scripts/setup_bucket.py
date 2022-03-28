@@ -1,11 +1,8 @@
 from skylark.obj_store.object_store_interface import ObjectStoreInterface
 from skylark.utils.utils import do_parallel
-from skylark.utils.utils import PathLike, Timer, wait_for
 from tqdm import tqdm
 import os
 import argparse
-from multiprocessing import Pool
-from concurrent.futures import wait
 
 
 def parse_args():
@@ -17,15 +14,6 @@ def parse_args():
     parser.add_argument("--key-prefix", default="", help="Prefix keys")
     args = parser.parse_args()
     return args
-
-
-def upload(region, bucket, path, key):
-    obj_store = ObjectStoreInterface.create(region, bucket)
-    # TODO: make sure is actually same file
-    if obj_store.exists(key):
-        return 0
-    obj_store.upload_object(path, key).result()
-    return 1
 
 
 def main(args):
@@ -40,15 +28,17 @@ def main(args):
     obj_store_interface_dst = ObjectStoreInterface.create(args.dest_region, dst_bucket)
     obj_store_interface_dst.create_bucket()
 
-    print("running upload... (note: may need to chunk)")
-    futures = []
+    # query for all keys under key_prefix
+    objs = {obj.key: obj.size for obj in obj_store_interface_src.list_objects(args.key_prefix)}
+    fn_args = []
     for f in tqdm(os.listdir(args.src_data_path)):
-        futures.append(obj_store_interface_src.upload_object(os.path.join(args.src_data_path, f), f"{args.key_prefix}/{f}"))
-        if len(futures) > 500:  # wait, or else awscrt errors
-            print("waiting for completion")
-            wait(futures)
-            futures = []
-
+        path = os.path.join(args.src_data_path, f)
+        key = f"{args.key_prefix}/{f}"
+        if key not in objs.keys() or objs[key] != os.path.getsize(path):
+            fn_args.append((path, key))
+    print(f"Found {len(fn_args)} files to upload")
+    upload_fn = lambda x: obj_store_interface_src.upload_object(x[0], x[1])
+    do_parallel(upload_fn, fn_args, n=500, progress_bar=True, desc="Uploading", arg_fmt=lambda x: x[1])
 
 if __name__ == "__main__":
     main(parse_args())

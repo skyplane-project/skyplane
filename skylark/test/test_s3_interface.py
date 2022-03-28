@@ -23,8 +23,7 @@ def test_s3_interface():
         file_md5 = hashlib.md5(open(fpath, "rb").read()).hexdigest()
 
         with Timer() as t:
-            upload_future = s3_interface.upload_object(fpath, obj_name)
-            upload_future.result()
+            s3_interface.upload_object(fpath, obj_name)
         assert s3_interface.get_obj_size(obj_name) == os.path.getsize(fpath)
 
     # download object
@@ -33,8 +32,7 @@ def test_s3_interface():
         if os.path.exists(fpath):
             os.remove(fpath)
         with Timer() as t:
-            download_future = s3_interface.download_object(obj_name, fpath)
-            download_future.result()
+            s3_interface.download_object(obj_name, fpath)
 
         # check md5
         dl_file_md5 = hashlib.md5(open(fpath, "rb").read()).hexdigest()
