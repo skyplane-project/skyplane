@@ -356,17 +356,28 @@ def deprovision_skylark_instances():
     instances = []
     query_jobs = []
 
+    # TODO remove when skylark init explicitly configures regions
+    def catch_error(fn):
+        def run():
+            try:
+                return fn()
+            except Exception as e:
+                logger.error(f"Error encountered during deprovision: {e}")
+                return []
+
+        return run
+
     if AWSAuthentication().enabled():
         logger.debug("AWS authentication enabled, querying for instances")
         aws = AWSCloudProvider()
         for region in aws.region_list():
-            query_jobs.append(partial(aws.get_matching_instances, region))
+            query_jobs.append(catch_error(partial(aws.get_matching_instances, region)))
     if AzureAuthentication().enabled():
         logger.debug("Azure authentication enabled, querying for instances")
-        query_jobs.append(lambda: AzureCloudProvider().get_matching_instances())
+        query_jobs.append(catch_error(lambda: AzureCloudProvider().get_matching_instances()))
     if GCPAuthentication().enabled():
         logger.debug("GCP authentication enabled, querying for instances")
-        query_jobs.append(lambda: GCPCloudProvider().get_matching_instances())
+        query_jobs.append(catch_error(lambda: GCPCloudProvider().get_matching_instances()))
 
     # query in parallel
     for _, instance_list in do_parallel(lambda f: f(), query_jobs, progress_bar=True, desc="Query instances", hide_args=True):
