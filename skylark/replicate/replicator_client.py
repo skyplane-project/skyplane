@@ -8,7 +8,6 @@ import time
 from typing import Dict, List, Optional, Tuple
 import uuid
 
-import requests
 from skylark.replicate.profiler import status_df_to_traceevent
 from skylark.utils import logger
 from tqdm import tqdm
@@ -22,6 +21,7 @@ from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server, ServerState
 from skylark.chunk import Chunk, ChunkRequest, ChunkState
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology, ReplicationTopologyGateway
+from skylark.utils.net import retry_requests
 from skylark.utils.utils import PathLike, Timer, do_parallel
 
 
@@ -71,6 +71,7 @@ class ReplicatorClient:
         jobs.append(partial(self.aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
         for r in set(aws_regions_to_provision):
             jobs.append(partial(self.aws.add_ip_to_security_group, r.split(":")[1]))
+            jobs.append(partial(self.aws.ensure_keyfile_exists, r.split(":")[1]))
         if azure_regions_to_provision:
             jobs.append(self.azure.create_ssh_key)
             jobs.append(self.azure.set_up_resource_group)
@@ -225,33 +226,22 @@ class ReplicatorClient:
             chunks.append(Chunk(key=obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes))
 
         # partition chunks into roughly equal-sized batches (by bytes)
-        src_instances = [self.bound_nodes[n] for n in self.topology.source_instances()]
-        chunk_lens = [c.chunk_length_bytes for c in chunks]
-        new_chunk_lens = int(len(chunk_lens) / len(src_instances)) * len(src_instances)
-        if len(chunk_lens) != new_chunk_lens:
-            dropped_chunks = len(chunk_lens) - new_chunk_lens
-            logger.warn(f"Dropping {dropped_chunks} chunks to be evenly distributed")
-            chunk_lens = chunk_lens[:new_chunk_lens]
-            chunks = chunks[:new_chunk_lens]
+        # iteratively adds chunks to the batch with the smallest size
+        def partition(items: List[Chunk], n_batches: int) -> List[List[Chunk]]:
+            batches = [[] for _ in range(n_batches)]
+            items.sort(key=lambda c: c.chunk_length_bytes, reverse=True)
+            for item in items:
+                batch_sizes = [sum(b.chunk_length_bytes for b in bs) for bs in batches]
+                batches[batch_sizes.index(min(batch_sizes))].append(item)
+            return batches
 
-        approx_bytes_per_connection = sum(chunk_lens) / len(src_instances)
-        assert sum(chunk_lens) > 0, f"No chunks to replicate, got {chunk_lens}"
-        batch_bytes = 0
-        chunk_batches = []
-        current_batch = []
-        for chunk in chunks:
-            current_batch.append(chunk)
-            batch_bytes += chunk.chunk_length_bytes
-            if batch_bytes >= approx_bytes_per_connection and len(chunk_batches) < len(src_instances):
-                chunk_batches.append(current_batch)
-                batch_bytes = 0
-                current_batch = []
-        if current_batch:  # add remaining chunks to the smallest batch by total bytes
-            smallest_batch = min(chunk_batches, key=lambda b: sum([c.chunk_length_bytes for c in b]))
-            smallest_batch.extend(current_batch)
+        src_instances = [self.bound_nodes[n] for n in self.topology.source_instances()]
+        chunk_batches = partition(chunks, len(src_instances))
         assert (len(chunk_batches) == (len(src_instances) - 1)) or (
             len(chunk_batches) == len(src_instances)
         ), f"{len(chunk_batches)} batches, expected {len(src_instances)}"
+        for batch_idx, batch in enumerate(chunk_batches):
+            logger.info(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")
 
         # make list of ChunkRequests
         chunk_requests_sharded: Dict[int, List[ChunkRequest]] = {}
@@ -278,7 +268,7 @@ class ReplicatorClient:
                 hop_instance, chunk_requests = args
                 ip = gateway_ips[hop_instance]
                 logger.debug(f"Sending {len(chunk_requests)} chunk requests to {ip}")
-                reply = requests.post(f"http://{ip}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests])
+                reply = retry_requests().post(f"http://{ip}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests])
                 if reply.status_code != 200:
                     raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
 
@@ -291,7 +281,7 @@ class ReplicatorClient:
     def get_chunk_status_log_df(self) -> pd.DataFrame:
         def get_chunk_status(args):
             node, instance = args
-            reply = requests.get(f"http://{instance.public_ip()}:8080/api/v1/chunk_status_log")
+            reply = retry_requests().get(f"http://{instance.public_ip()}:8080/api/v1/chunk_status_log")
             if reply.status_code != 200:
                 raise Exception(f"Failed to get chunk status from gateway instance {instance.instance_name()}: {reply.text}")
             logs = []
@@ -332,14 +322,14 @@ class ReplicatorClient:
             if save_log:
                 (transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
             if copy_gateway_logs:
-                for instance in self.bound_nodes.values():
+
+                def copy_log(instance):
                     logger.info(f"Copying gateway logs from {instance.uuid()}")
                     instance.run_command("sudo docker logs -t skylark_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
-                    log_out = transfer_dir / f"gateway_{instance.uuid()}.stdout"
-                    log_err = transfer_dir / f"gateway_{instance.uuid()}.stderr"
-                    instance.download_file("/tmp/gateway.stdout", log_out)
-                    instance.download_file("/tmp/gateway.stderr", log_err)
-                logger.debug(f"Wrote gateway logs to {transfer_dir}")
+                    instance.download_file("/tmp/gateway.stdout", transfer_dir / f"gateway_{instance.uuid()}.stdout")
+                    instance.download_file("/tmp/gateway.stderr", transfer_dir / f"gateway_{instance.uuid()}.stderr")
+
+                do_parallel(copy_log, self.bound_nodes.values(), n=-1)
             if write_profile:
                 chunk_status_df = self.get_chunk_status_log_df()
                 (transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
@@ -351,7 +341,7 @@ class ReplicatorClient:
 
             def fn(s: Server):
                 try:
-                    requests.post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
+                    retry_requests().post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
                 except:
                     return  # ignore connection errors since server may be shutting down
 
