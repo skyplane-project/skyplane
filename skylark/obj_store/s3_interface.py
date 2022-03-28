@@ -103,6 +103,7 @@ class S3Interface(ObjectStoreInterface):
             recv_filepath=dst_file_path,
             request=request,
             type=S3RequestType.GET_OBJECT,
+            on_body=_on_body_download,
         ).finished_future
 
     def upload_object(self, src_file_path, dst_object_name, content_type="infer") -> Future:
