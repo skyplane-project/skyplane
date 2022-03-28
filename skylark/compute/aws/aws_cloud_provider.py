@@ -1,11 +1,14 @@
 import json
 import uuid
+import os
 from typing import List, Optional
+from pathlib import Path
 
 import botocore
 import pandas as pd
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.utils import logger
+from skylark import key_root
 
 from oslo_concurrency import lockutils
 from skylark import skylark_root
@@ -233,6 +236,34 @@ class AWSCloudProvider(CloudProvider):
 
         return fn()
 
+    def ensure_keyfile_exists(self, aws_region, prefix=key_root / "aws"):
+        ec2 = self.auth.get_boto3_resource("ec2", aws_region)
+        ec2_client = self.auth.get_boto3_client("ec2", aws_region)
+        prefix = Path(prefix)
+        key_name = f"skylark-{aws_region}"
+        local_key_file = prefix / f"{key_name}.pem"
+
+        @lockutils.synchronized(f"aws_keyfile_lock_{aws_region}", external=True, lock_path="/tmp/skylark_locks")
+        def create_keyfile():
+            if not local_key_file.exists():
+                local_key_file.parent.mkdir(parents=True, exist_ok=True)
+                if key_name in set(p["KeyName"] for p in ec2_client.describe_key_pairs()["KeyPairs"]):
+                    logger.warning(f"Deleting key {key_name} in region {aws_region}")
+                    ec2_client.delete_key_pair(KeyName=key_name)
+                key_pair = ec2.create_key_pair(KeyName=f"skylark-{aws_region}", KeyType="rsa")
+                with local_key_file.open("w") as f:
+                    key_str = key_pair.key_material
+                    if not key_str.endswith("\n"):
+                        key_str += "\n"
+                    f.write(key_str)
+                os.chmod(local_key_file, 0o600)
+                logger.info(f"Created key file {local_key_file}")
+
+        if not local_key_file.exists():
+            create_keyfile()
+
+        return local_key_file
+
     def provision_instance(
         self,
         region: str,
@@ -247,7 +278,7 @@ class AWSCloudProvider(CloudProvider):
         if name is None:
             name = f"skylark-aws-{str(uuid.uuid4()).replace('-', '')}"
         iam_instance_profile_name = f"{name}_profile"
-        iam = self.auth.get_boto3_client("iam")
+        iam = self.auth.get_boto3_client("iam", region)
         ec2 = self.auth.get_boto3_resource("ec2", region)
         vpc = self.get_vpc(region)
         assert vpc is not None, "No VPC found"

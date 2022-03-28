@@ -1,11 +1,12 @@
+from functools import partial
 import json
 import subprocess
 from enum import Enum, auto
 from pathlib import Path
 from typing import Dict
-import requests
 from skylark.utils import logger
 from skylark.compute.utils import make_dozzle_command, make_sysctl_tcp_tuning_command
+from skylark.utils.net import retry_requests
 from skylark.utils.utils import PathLike, Timer, retry_backoff, wait_for
 from skylark import config_path
 
@@ -83,6 +84,9 @@ class Server:
             self.command_log_file = str(log_dir / f"{self.uuid()}.jsonl")
         else:
             self.command_log_file = None
+
+    def get_sftp_client(self):
+        raise NotImplementedError()
 
     def get_ssh_client_impl(self):
         raise NotImplementedError()
@@ -171,15 +175,15 @@ class Server:
 
     def download_file(self, remote_path, local_path):
         """Download a file from the server"""
-        client = self.ssh_client
-        with client.open_sftp() as sftp:
-            sftp.get(remote_path, local_path)
+        sftp_client = self.get_sftp_client()
+        sftp_client.get(remote_path, local_path)
+        sftp_client.close()
 
     def upload_file(self, local_path, remote_path):
         """Upload a file to the server"""
-        client = self.ssh_client
-        with client.open_sftp() as sftp:
-            sftp.put(local_path, remote_path)
+        sftp_client = self.get_sftp_client()
+        sftp_client.put(local_path, remote_path)
+        sftp_client.close()
 
     def copy_public_key(self, pub_key_path: PathLike):
         """Append public key to authorized_keys file on server."""
@@ -196,6 +200,13 @@ class Server:
         docker_version = out.strip().split("\n")[-1]
         if not docker_version.startswith("Success"):
             raise RuntimeError(f"Failed to install Docker on {self.region_tag}, {self.public_ip()}: OUT {out}\nERR {err}")
+
+    def pull_docker(self, gateway_docker_image):
+        docker_out, docker_err = self.run_command(f"sudo docker pull {gateway_docker_image}")
+        if "Status: Downloaded newer image" not in docker_out and "Status: Image is up to date" not in docker_out:
+            raise RuntimeError(
+                f"Failed to pull docker image {gateway_docker_image} on {self.region_tag}, {self.public_ip()}: OUT {docker_out}\nERR {docker_err}"
+            )
 
     def start_gateway(
         self,
@@ -226,8 +237,7 @@ class Server:
 
         # pull docker image and start container
         with Timer(f"{desc_prefix}: Docker pull"):
-            docker_out, docker_err = self.run_command(f"sudo docker pull {gateway_docker_image}")
-            assert "Status: Downloaded newer image" in docker_out or "Status: Image is up to date" in docker_out, (docker_out, docker_err)
+            retry_backoff(partial(self.pull_docker, gateway_docker_image), exception_class=RuntimeError)
         logger.debug(f"{desc_prefix}: Starting gateway container")
         docker_run_flags = f"-d --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024}"
         docker_run_flags += " --mount type=tmpfs,dst=/skylark,tmpfs-size=$(($(free -b  | head -n2 | tail -n1 | awk '{print $2}')/2))"
@@ -248,7 +258,7 @@ class Server:
         def is_ready():
             api_url = f"http://{self.public_ip()}:8080/api/v1/status"
             try:
-                status_val = requests.get(api_url)
+                status_val = retry_requests().get(api_url)
                 is_up = status_val.json().get("status") == "ok"
                 return is_up
             except Exception:
