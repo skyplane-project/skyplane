@@ -235,43 +235,52 @@ class AWSCloudProvider(CloudProvider):
                 except botocore.exceptions.ClientError as e:
                     if not str(e).endswith("already exists"):
                         raise e
-            else if ip:
+            elif ip:
                 # Add instance IP to security group
                 sg = self.get_security_group(aws_region)
                 try:
                     sg.authorize_ingress(
-                        IpPermissions=[{"IpProtocol": "tcp", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": ip}]}]
+                        IpPermissions=[{"IpProtocol": "tcp", "FromPort": 12000 , "ToPort": 65535, "IpRanges": [{"CidrIp": ip+"/32"}]}]
                     )
                 except botocore.exceptions.ClientError as e:
                     if not str(e).endswith("already exists"):
                         raise e
 
-
         return fn()
 
     def clear_security_group(self, aws_region: str, vpc_name="skylark"):
-        """Clears security group"""
+        """Clears security group, and allows ssh and dozzle if activated"""
 
         @lockutils.synchronized(f"aws_clear_security_group_{aws_region}", external=True, lock_path="/tmp/skylark_locks")
         def fn():
             sg = self.get_security_group(aws_region)
             # Revoke all ingress rules
             if sg.ip_permissions:
-                for perm in sg.ip_permissions:
-                    sg.revoke_ingress(IpPermissions=perm)
-            # Allow ssh access on Port 22
+                # logger.warn(f"Revoking {sg.ip_permissions} rules for {sg.group_name}")
+                sg.revoke_ingress(IpPermissions=sg.ip_permissions)
+            # Allow internal traffic
             try:
                 sg.authorize_ingress(
-                    IpPermissions=[{"IpProtocol": "tcp", "FromPort": -1, "ToPort": 22, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]
+                    IpPermissions=[{"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": "0.0.0.0/32"}]}]
+                )
+            except botocore.exceptions.ClientError as e:
+                if not str(e).endswith("already exists"):
+                    raise e
+            # Allow ssh access on Port 22
+            try:
+                logger.info(f"Adding ssh access to security group {sg.id}")
+                sg.authorize_ingress(
+                    IpPermissions=[{"IpProtocol": "tcp", "FromPort": 22, "ToPort": 22, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]
                 )
             except botocore.exceptions.ClientError as e:
                 if not str(e).endswith("already exists"):
                     raise e
             # Allow Dozzle on log_viewer_port
             if self.logging_enabled:
+                logger.info(f"Adding log viewer port {self.log_viewer_port} to security group {sg.id}")
                 try:
                     sg.authorize_ingress(
-                        IpPermissions=[{"IpProtocol": "tcp", "FromPort": -1, "ToPort": self.log_viewer_port, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]
+                        IpPermissions=[{"IpProtocol": "tcp", "FromPort": self.log_viewer_port, "ToPort": self.log_viewer_port, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]
                     )
                 except botocore.exceptions.ClientError as e:
                     if not str(e).endswith("already exists"):

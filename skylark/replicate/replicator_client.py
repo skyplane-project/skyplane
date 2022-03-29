@@ -186,11 +186,15 @@ class ReplicatorClient:
             self.bound_nodes[node] = instances_by_region[node.region].pop()
 
         # Firewall rules
-        # Pre-fetch instance IPs for all gateways
-        gateway_ips =  self.bound_nodes.values()
-        # For one node in each region, update the firewall rules. 
-        for _ip in gateway_ips:
-            node.add_ip_to_security_group(aws_region = , ip=_ip)
+        # Pre-fetch instance IPs for all gateway
+        public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.nodes]
+        for r in set(aws_regions_to_provision):
+            r = r.split(":")[1]
+            jobs.append(partial(self.aws.clear_security_group, r))
+            for _ip in public_ips:
+                jobs.append(partial(self.aws.add_ip_to_security_group, r, _ip)) 
+        with Timer(f"Adding firewall rules"):
+            do_parallel(lambda fn: fn(), jobs)
 
         with Timer("Install gateway package on instances"):
             args = []
