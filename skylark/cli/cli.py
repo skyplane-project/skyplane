@@ -119,7 +119,6 @@ def replicate_random(
     azure_instance_class: str = "Standard_D32_v4",
     gcp_instance_class: Optional[str] = "n2-standard-32",
     gcp_use_premium_network: bool = True,
-    key_prefix: str = "/test/replicate_random",
     time_limit_seconds: Optional[int] = None,
     log_interval_s: float = 1.0,
 ):
@@ -151,7 +150,8 @@ def replicate_random(
         source_bucket=None,
         dest_region=dst_region,
         dest_bucket=None,
-        objs=[f"{key_prefix}/{i}" for i in range(n_chunks)],
+        src_objs=[f"/{i}" for i in range(n_chunks)],
+        dest_objs=[f"/{i}" for i in range(n_chunks)],
         random_chunk_size_mb=chunk_size_mb,
     )
 
@@ -226,23 +226,20 @@ def replicate_json(
             source_bucket=None,
             dest_region=topo.sink_region(),
             dest_bucket=None,
-            objs=[f"{key_prefix}/{i}" for i in range(n_chunks)],
+            src_objs=[f"/{i}" for i in range(n_chunks)],
+            dest_objs=[f"/{i}" for i in range(n_chunks)],
             random_chunk_size_mb=chunk_size_mb,
         )
     else:
-        objs = ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(key_prefix)
-        obj_keys = []
-        obj_sizes = dict()
-        for obj in objs:
-            obj_keys.append(obj.key)
-            obj_sizes[obj.key] = obj.size
+        objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(key_prefix))
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=source_bucket,
             dest_region=topo.sink_region(),
             dest_bucket=dest_bucket,
-            objs=obj_keys,
-            obj_sizes=obj_sizes,
+            src_objs=[obj.key for obj in objs],
+            dest_objs=[obj.key for obj in objs],
+            obj_sizes={obj.key: obj.size for obj in objs},
         )
 
     rc = ReplicatorClient(
