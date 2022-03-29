@@ -335,7 +335,6 @@ class ReplicatorClient:
                             and row["region"] in [s.region for s in sinks]
                         )
                         sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
-                        logger.debug(f"Columns: {sink_status_df.columns}")
                         completed_status = sink_status_df.groupby("chunk_id").apply(
                             lambda x: set(x["region"].unique()) == set(sink_regions)
                         )
