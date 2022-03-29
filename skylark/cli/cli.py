@@ -186,6 +186,10 @@ def replicate_random(
 ):
     """Replicate objects from remote object store to another remote object store."""
     print_header()
+    if reuse_gateways:
+        logger.warning(
+            f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
+        )
 
     if inter_region:
         assert inter_region not in [src_region, dst_region] and src_region != dst_region

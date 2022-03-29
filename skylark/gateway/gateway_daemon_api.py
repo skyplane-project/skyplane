@@ -26,12 +26,11 @@ class GatewayDaemonAPI(threading.Thread):
     * GET /api/v1/chunk_status_log - returns list of chunk status log entries
     """
 
-    def __init__(self, chunk_store: ChunkStore, gateway_receiver: GatewayReceiver, host="0.0.0.0", port=8080, daemon_cleanup_handler=None):
+    def __init__(self, chunk_store: ChunkStore, gateway_receiver: GatewayReceiver, host="0.0.0.0", port=8080):
         super().__init__()
         self.app = Flask("gateway_metadata_server")
         self.chunk_store = chunk_store
         self.gateway_receiver = gateway_receiver
-        self.daemon_cleanup_handler = daemon_cleanup_handler  # optional handler to run when daemon is shutting down during cleanup
 
         # load routes
         self.register_global_routes()
@@ -79,10 +78,6 @@ class GatewayDaemonAPI(threading.Thread):
         # shutdown route
         @self.app.route("/api/v1/shutdown", methods=["POST"])
         def shutdown():
-            logger.warning("Shutting down gateway daemon")
-            if self.daemon_cleanup_handler is not None:
-                self.daemon_cleanup_handler()
-            logger.warning("Shutting down API")
             self.shutdown()
             logger.error("Shutdown complete. Hard exit.")
             os._exit(1)

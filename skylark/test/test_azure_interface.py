@@ -24,8 +24,7 @@ def test_azure_interface():
         file_md5 = hashlib.md5(open(fpath, "rb").read()).hexdigest()
 
         with Timer() as t:
-            upload_future = azure_interface.upload_object(fpath, obj_name)
-            upload_future.result()
+            azure_interface.upload_object(fpath, obj_name)
         assert azure_interface.get_obj_size(obj_name) == os.path.getsize(fpath)
         assert azure_interface.exists(obj_name)
         assert not azure_interface.exists("random_nonexistent_file")
@@ -36,8 +35,7 @@ def test_azure_interface():
         if os.path.exists(fpath):
             os.remove(fpath)
         with Timer() as t:
-            download_future = azure_interface.download_object(obj_name, fpath)
-            download_future.result()
+            azure_interface.download_object(obj_name, fpath)
 
         # check md5
         dl_file_md5 = hashlib.md5(open(fpath, "rb").read()).hexdigest()
