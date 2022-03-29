@@ -196,7 +196,8 @@ def replicate_helper(
     # bucket options
     source_bucket: str = typer.Option(None),
     dest_bucket: str = typer.Option(None),
-    key_prefix: str = "/",
+    src_key_prefix: str = "/",
+    dest_key_prefix: str="/",
     # gateway provisioning options
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
@@ -218,15 +219,10 @@ def replicate_helper(
         gcp_use_premium_network=gcp_use_premium_network,
     )
 
-    if not reuse_gateways:
-        atexit.register(rc.deprovision_gateways)
-    else:
+    if reuse_gateways:
         logger.warning(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
         )
-    rc.provision_gateways(reuse_gateways)
-    for node, gw in rc.bound_nodes.items():
-        logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
 
     if size_total_mb % n_chunks != 0:
         logger.warning(f"total_transfer_size_mb ({size_total_mb}) is not a multiple of number of chunks ({n_chunks})")
@@ -240,45 +236,60 @@ def replicate_helper(
             source_bucket=None,
             dest_region=topo.sink_region(),
             dest_bucket=None,
-            objs=[f"{key_prefix}/{i}" for i in range(n_chunks)],
+            src_objs=[f"/{i}" for i in range(n_chunks)],
+            dest_objs=[f"/{i}" for i in range(n_chunks)],
             random_chunk_size_mb=chunk_size_mb,
         )
+        try:
+            rc.provision_gateways(reuse_gateways)
+            for node, gw in rc.bound_nodes.items():
+                logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
+            job = rc.run_replication_plan(job)
+            total_bytes = n_chunks * chunk_size_mb * MB
+            logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
+            stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
+        except KeyboardInterrupt:
+            if not reuse_gateways:
+                logger.warning("Deprovisioning gateways then exiting...")
+                rc.deprovision_gateways()
+            os._exit(1)  # exit now
 
-        job = rc.run_replication_plan(job)
+        if not reuse_gateways:
+            rc.deprovision_gateways()
+
         total_bytes = n_chunks * chunk_size_mb * MB
     else:
-        # get object keys with prefix
-        objs = ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(key_prefix)
-        obj_keys = []
-        obj_sizes = dict()
-        for obj in objs:
-            obj_keys.append(obj.key)
-            obj_sizes[obj.key] = obj.size
-
-        # create replication job
+        # make replication job
+        objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=source_bucket,
             dest_region=topo.sink_region(),
             dest_bucket=dest_bucket,
-            objs=obj_keys,
-            obj_sizes=obj_sizes,
+            src_objs=[obj.key for obj in objs],
+            dest_objs=[dest_key_prefix + obj.key for obj in objs],
+            obj_sizes={obj.key: obj.size for obj in objs},
         )
-        job = rc.run_replication_plan(job)
 
-        # query chunk sizes
-        total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
+        try:
+            rc.provision_gateways(reuse_gateways)
+            for node, gw in rc.bound_nodes.items():
+                logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
+            job = rc.run_replication_plan(job)
+            total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
+            stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
+        except KeyboardInterrupt:
+            if not reuse_gateways:
+                logger.warning("Deprovisioning gateways then exiting...")
+                rc.deprovision_gateways()
+            os._exit(1)  # exit now
+        if not reuse_gateways:
+            rc.deprovision_gateways()
 
     logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
-    stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
+    stats = stats if stats else {}
     stats["success"] = stats["monitor_status"] == "completed"
     out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
-
-    # deprovision
-    if not reuse_gateways:
-        atexit.unregister(rc.deprovision_gateways)
-        rc.deprovision_gateways()
-
     typer.echo(f"\n{json.dumps(out_json)}")
     return 0 if stats["success"] else 1
 
