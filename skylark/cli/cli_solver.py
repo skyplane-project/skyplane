@@ -12,6 +12,7 @@ from skylark.utils.utils import Timer
 
 app = typer.Typer(name="skylark-solver")
 
+
 @app.command()
 def solve_throughput(
     src: str = typer.Argument(..., help="Source region, in format of provider:region."),
