@@ -28,13 +28,16 @@ class AzureInterface(ObjectStoreInterface):
         self.blob_service_client = self.auth.get_blob_service_client(self.account_url)
 
         # infer azure region from storage account
-        if azure_region is None:
+        if azure_region is None or azure_region is "infer":
             self.azure_region = self.get_region_from_storage_account(self.account_name)
         else:
             self.azure_region = azure_region
 
         # parallel upload/downloads
         self.max_concurrency = 1
+
+    def region_tag(self):
+        return "azure:" + self.azure_region
 
     def get_region_from_storage_account(self, storage_account_name):
         storage_account = self.storage_management_client.storage_accounts.get_properties(

@@ -12,20 +12,25 @@ Current support:
 * `skylark cp s3://bucket/path /local/path`
 """
 
-
-import json
 import os
 from pathlib import Path
 from typing import Optional
 
+from skylark import skylark_root
 import skylark.cli.cli_aws
 import skylark.cli.cli_azure
 import skylark.cli.cli_gcp
 import skylark.cli.cli_solver
 import skylark.cli.experiments
+from skylark.obj_store.azure_interface import AzureInterface
+from skylark.obj_store.gcs_interface import GCSInterface
+from skylark.obj_store.object_store_interface import ObjectStoreInterface
+from skylark.obj_store.s3_interface import S3Interface
+from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP
 import typer
 from skylark.config import SkylarkConfig
 from skylark.utils import logger
+from skylark.utils.utils import Timer
 from skylark import config_path, GB, MB, print_header
 from skylark.cli.cli_helper import (
     check_ulimit,
@@ -45,10 +50,9 @@ from skylark.cli.cli_helper import (
     ls_local,
     ls_s3,
     parse_path,
+    replicate_helper,
 )
-from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
-from skylark.replicate.replicator_client import ReplicatorClient
-from skylark.obj_store.object_store_interface import ObjectStoreInterface
+from skylark.replicate.replication_plan import ReplicationTopology
 
 app = typer.Typer(name="skylark")
 app.add_typer(skylark.cli.experiments.app, name="experiments")
@@ -71,12 +75,25 @@ def ls(directory: str):
 
 
 @app.command()
-def cp(src: str, dst: str):
+def cp(
+    src: str,
+    dst: str,
+    num_connections: int = typer.Option(64, help="Number of connections to open for replication"),
+    max_instances: int = typer.Option(1, help="Max number of instances per overlay region."),
+    solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
+    solver_required_throughput_gbits: float = typer.Option(2, help="Solver option: Required throughput in gbps."),
+    solver_throughput_grid: Path = typer.Option(
+        skylark_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
+    ),
+    solver_verbose: bool = False,
+):
     """Copy objects from the object store to the local filesystem."""
     print_header()
 
     provider_src, bucket_src, path_src = parse_path(src)
     provider_dst, bucket_dst, path_dst = parse_path(dst)
+
+    clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
 
     # raise file limits for local transfers
     if provider_src == "local" or provider_dst == "local":
@@ -98,6 +115,41 @@ def cp(src: str, dst: str):
     elif provider_src == "azure" and provider_dst == "local":
         account_name, container_name = bucket_dst
         copy_azure_local(account_name, container_name, path_src, Path(path_dst))
+    elif provider_src in clouds and provider_dst in clouds:
+        src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)
+        src_region = src_client.region_tag()
+
+        dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
+        dst_region = dst_client.region_tag()
+
+        # Set up replication topology
+        if solve:
+            objs = list(src_client.list_objects(path_src))
+            total_gbyte_to_transfer = sum([obj.size for obj in objs]) / GB
+
+            # build problem and solve
+            tput = ThroughputSolverILP(solver_throughput_grid)
+            problem = ThroughputProblem(
+                src=src_region,
+                dst=dst_region,
+                required_throughput_gbits=solver_required_throughput_gbits,
+                gbyte_to_transfer=total_gbyte_to_transfer,
+                instance_limit=max_instances,
+            )
+            with Timer("Solve throughput problem"):
+                solution = tput.solve_min_cost(
+                    problem,
+                    solver=ThroughputSolverILP.choose_solver(),
+                    solver_verbose=solver_verbose,
+                    save_lp_path=None,
+                )
+            topo = tput.to_replication_topology(solution)
+        else:
+            topo = ReplicationTopology()
+            for i in range(max_instances):
+                topo.add_edge(src_region, i, dst_region, i, num_connections)
+
+        replicate_helper(topo, source_bucket=bucket_src, dest_bucket=bucket_dst, src_key_prefix=path_src, dest_key_prefix=path_dst)
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
 
@@ -141,48 +193,24 @@ def replicate_random(
         for i in range(num_gateways):
             topo.add_edge(src_region, i, dst_region, i, num_outgoing_connections)
 
-    # make replication job
     if total_transfer_size_mb % chunk_size_mb != 0:
         logger.warning(f"total_transfer_size_mb ({total_transfer_size_mb}) is not a multiple of chunk_size_mb ({chunk_size_mb})")
     n_chunks = int(total_transfer_size_mb / chunk_size_mb)
-    job = ReplicationJob(
-        source_region=src_region,
-        source_bucket=None,
-        dest_region=dst_region,
-        dest_bucket=None,
-        src_objs=[f"/{i}" for i in range(n_chunks)],
-        dest_objs=[f"/{i}" for i in range(n_chunks)],
-        random_chunk_size_mb=chunk_size_mb,
-    )
 
-    rc = ReplicatorClient(
+    return replicate_helper(
         topo,
+        size_total_mb=total_transfer_size_mb,
+        n_chunks=n_chunks,
+        random=True,
+        reuse_gateways=reuse_gateways,
         gateway_docker_image=gateway_docker_image,
         aws_instance_class=aws_instance_class,
-        azure_instance_class=azure_instance_class,
         gcp_instance_class=gcp_instance_class,
+        azure_instance_class=azure_instance_class,
         gcp_use_premium_network=gcp_use_premium_network,
+        time_limit_seconds=time_limit_seconds,
+        log_interval_s=log_interval_s,
     )
-    try:
-        rc.provision_gateways(reuse_gateways)
-        for node, gw in rc.bound_nodes.items():
-            logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
-        job = rc.run_replication_plan(job)
-        total_bytes = n_chunks * chunk_size_mb * MB
-        logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
-        stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
-    except KeyboardInterrupt:
-        if not reuse_gateways:
-            logger.warning("Deprovisioning gateways then exiting...")
-            rc.deprovision_gateways()
-        os._exit(1)  # exit now
-    if not reuse_gateways:
-        rc.deprovision_gateways()
-    stats = stats if stats else {}
-    stats["success"] = stats["monitor_status"] == "completed"
-    out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
-    typer.echo(f"\n{json.dumps(out_json)}")
-    return 0 if stats["success"] else 1
 
 
 @app.command()
@@ -194,7 +222,8 @@ def replicate_json(
     use_random_data: bool = False,
     source_bucket: str = typer.Option(None, "--source-bucket", help="Source bucket url"),
     dest_bucket: str = typer.Option(None, "--dest-bucket", help="Destination bucket url"),
-    key_prefix: str = "/",
+    src_key_prefix: str = "/",
+    dest_key_prefix: str = "/",
     # gateway provisioning options
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
@@ -209,71 +238,28 @@ def replicate_json(
 ):
     """Replicate objects from remote object store to another remote object store."""
     print_header()
-    if reuse_gateways:
-        logger.warning(
-            f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
-        )
 
     with path.open("r") as f:
         topo = ReplicationTopology.from_json(f.read())
 
-    # make replication job
-    if use_random_data:
-        assert size_total_mb % n_chunks == 0, f"size_total_mb ({size_total_mb}) is not a multiple of n_chunks ({n_chunks})"
-        chunk_size_mb = size_total_mb // n_chunks
-        job = ReplicationJob(
-            source_region=topo.source_region(),
-            source_bucket=None,
-            dest_region=topo.sink_region(),
-            dest_bucket=None,
-            src_objs=[f"/{i}" for i in range(n_chunks)],
-            dest_objs=[f"/{i}" for i in range(n_chunks)],
-            random_chunk_size_mb=chunk_size_mb,
-        )
-    else:
-        objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(key_prefix))
-        job = ReplicationJob(
-            source_region=topo.source_region(),
-            source_bucket=source_bucket,
-            dest_region=topo.sink_region(),
-            dest_bucket=dest_bucket,
-            src_objs=[obj.key for obj in objs],
-            dest_objs=[obj.key for obj in objs],
-            obj_sizes={obj.key: obj.size for obj in objs},
-        )
-
-    rc = ReplicatorClient(
+    return replicate_helper(
         topo,
+        size_total_mb=size_total_mb,
+        n_chunks=n_chunks,
+        random=use_random_data,
+        source_bucket=source_bucket,
+        dest_bucket=dest_bucket,
+        src_key_prefix=src_key_prefix,
+        dest_key_prefix=dest_key_prefix,
+        reuse_gateways=reuse_gateways,
         gateway_docker_image=gateway_docker_image,
         aws_instance_class=aws_instance_class,
-        azure_instance_class=azure_instance_class,
         gcp_instance_class=gcp_instance_class,
+        azure_instance_class=azure_instance_class,
         gcp_use_premium_network=gcp_use_premium_network,
+        time_limit_seconds=time_limit_seconds,
+        log_interval_s=log_interval_s,
     )
-    try:
-        rc.provision_gateways(reuse_gateways)
-        for node, gw in rc.bound_nodes.items():
-            logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
-        job = rc.run_replication_plan(job)
-        total_bytes = (
-            n_chunks * chunk_size_mb * MB
-            if use_random_data
-            else sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
-        )
-        logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
-        stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
-    except KeyboardInterrupt:
-        if not reuse_gateways:
-            logger.warning("Deprovisioning gateways then exiting...")
-            rc.deprovision_gateways()
-        os._exit(1)  # exit now
-    if not reuse_gateways:
-        rc.deprovision_gateways()
-    stats = stats if stats else {}
-    stats["success"] = stats["monitor_status"] == "completed"
-    out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
-    typer.echo(f"\n{json.dumps(out_json)}")
-    return 0 if stats["success"] else 1
 
 
 @app.command()
