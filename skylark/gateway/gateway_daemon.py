@@ -102,9 +102,7 @@ class GatewayDaemon:
                             with self.dl_pool_semaphore:
                                 size_bytes = int(size_mb * MB)
                                 assert size_bytes > 0, f"Invalid size {size_bytes} for fallocate"
-                                fallocate_cmd = f"fallocate -l {size_bytes} {fpath}"
-                                logger.info(f"fallocate cmd = {fallocate_cmd}")
-                                os.system(fallocate_cmd)
+                                os.system(f"fallocate -l {size_bytes} {fpath}")
                             chunk_req.chunk.chunk_length_bytes = os.path.getsize(fpath)
                             self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
                             self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, "random")

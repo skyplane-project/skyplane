@@ -140,7 +140,6 @@ class ThroughputSolver:
 
 
 class ThroughputSolverILP(ThroughputSolver):
-    
     @staticmethod
     def choose_solver():
         try:

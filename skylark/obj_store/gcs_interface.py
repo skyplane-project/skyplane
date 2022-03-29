@@ -21,6 +21,9 @@ class GCSInterface(ObjectStoreInterface):
         self._gcs_client = storage.Client()
         self.gcp_region = self.infer_gcp_region(bucket_name) if gcp_region is None or gcp_region == "infer" else gcp_region
 
+    def region_tag(self):
+        return "gcp:" + self.gcp_region
+
     def infer_gcp_region(self, bucket_name: str):
         bucket = self._gcs_client.lookup_bucket(bucket_name)
         assert isinstance(bucket, storage.bucket.Bucket)
