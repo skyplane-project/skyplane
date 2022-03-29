@@ -192,7 +192,7 @@ class ReplicatorClient:
             r = r.split(":")[1]
             jobs.append(partial(self.aws.clear_security_group, r))
             for _ip in public_ips:
-                jobs.append(partial(self.aws.add_ip_to_security_group, r, _ip)) 
+                jobs.append(partial(self.aws.add_ip_to_security_group, r, _ip))
         with Timer(f"Adding firewall rules"):
             do_parallel(lambda fn: fn(), jobs)
 

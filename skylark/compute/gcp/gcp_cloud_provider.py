@@ -229,15 +229,14 @@ class GCPCloudProvider(CloudProvider):
             create_firewall(fw_body, update_firewall=True)
             logger.debug(f"[GCP] Updated firewall")
 
-    
-    def add_ip_to_security_group(self, gcp_region: str, ip:str = "None"):
+    def add_ip_to_security_group(self, gcp_region: str, ip: str = "None"):
         """Add IP to security group. If security group ID is None, use group named skylark (create if not exists)."""
         raise NotImplementedError("GCP does not yet support adding IPs to security groups")
-    
+
     def clear_security_group(self, gcp_region: str, vpc_name="skylark"):
         """Clears security group, and allows ssh and dozzle if activated"""
         raise NotImplementedError("GCP does not yet support clearing security groups")
-    
+
     def get_operation_state(self, zone, operation_name):
         compute = self.auth.get_gcp_client()
         if zone == "global":

@@ -6,7 +6,7 @@ from skylark.utils.utils import do_parallel
 
 class CloudProvider:
 
-    logging_enabled = True # For Dozzle
+    logging_enabled = True  # For Dozzle
     log_viewer_port = 8888
 
     @property

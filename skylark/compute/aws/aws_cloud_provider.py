@@ -219,7 +219,7 @@ class AWSCloudProvider(CloudProvider):
 
         return fn()
 
-    def add_ip_to_security_group(self, aws_region: str, ip:str = "None"):
+    def add_ip_to_security_group(self, aws_region: str, ip: str = "None"):
         """Add IP to security group. If security group ID is None, use group named skylark (create if not exists)."""
 
         @lockutils.synchronized(f"aws_add_ip_to_security_group_{aws_region}", external=True, lock_path="/tmp/skylark_locks")
@@ -240,7 +240,7 @@ class AWSCloudProvider(CloudProvider):
                 sg = self.get_security_group(aws_region)
                 try:
                     sg.authorize_ingress(
-                        IpPermissions=[{"IpProtocol": "tcp", "FromPort": 12000 , "ToPort": 65535, "IpRanges": [{"CidrIp": ip+"/32"}]}]
+                        IpPermissions=[{"IpProtocol": "tcp", "FromPort": 12000, "ToPort": 65535, "IpRanges": [{"CidrIp": ip + "/32"}]}]
                     )
                 except botocore.exceptions.ClientError as e:
                     if not str(e).endswith("already exists"):
@@ -280,14 +280,20 @@ class AWSCloudProvider(CloudProvider):
                 logger.info(f"Adding log viewer port {self.log_viewer_port} to security group {sg.id}")
                 try:
                     sg.authorize_ingress(
-                        IpPermissions=[{"IpProtocol": "tcp", "FromPort": self.log_viewer_port, "ToPort": self.log_viewer_port, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]
+                        IpPermissions=[
+                            {
+                                "IpProtocol": "tcp",
+                                "FromPort": self.log_viewer_port,
+                                "ToPort": self.log_viewer_port,
+                                "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+                            }
+                        ]
                     )
                 except botocore.exceptions.ClientError as e:
                     if not str(e).endswith("already exists"):
                         raise e
-    
-        return fn()
 
+        return fn()
 
     def ensure_keyfile_exists(self, aws_region, prefix=key_root / "aws"):
         ec2 = self.auth.get_boto3_resource("ec2", aws_region)

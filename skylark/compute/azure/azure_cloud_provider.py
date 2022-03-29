@@ -299,16 +299,14 @@ class AzureCloudProvider(CloudProvider):
             AzureServer.resource_group_name, {"location": AzureServer.resource_group_location, "tags": {"skylark": "true"}}
         )
         assert rg_result.name == AzureServer.resource_group_name
-    
 
-    def add_ip_to_security_group(self, azure_region: str, ip:str = "None"):
+    def add_ip_to_security_group(self, azure_region: str, ip: str = "None"):
         """Add IP to security group. If security group ID is None, use group named skylark (create if not exists)."""
         raise NotImplementedError("Azure does not yet support adding IPs to security groups")
-    
+
     def clear_security_group(self, azure_region: str, vpc_name="skylark"):
         """Clears security group, and allows ssh and dozzle if activated"""
         raise NotImplementedError("Azure does not yet support clearing security groups")
-
 
     # This code, along with some code in azure_server.py, is based on
     # https://github.com/ucbrise/mage-scripts/blob/main/azure_cloud.py.
