@@ -231,7 +231,7 @@ def replicate_json(
             random_chunk_size_mb=chunk_size_mb,
         )
     else:
-        objs = ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(key_prefix)
+        objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(key_prefix))
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=source_bucket,

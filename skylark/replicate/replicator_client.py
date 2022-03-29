@@ -324,12 +324,18 @@ class ReplicatorClient:
                     log_fn = tqdm.write if show_pbar else logger.debug
                     while True:
                         log_df = self.get_chunk_status_log_df()
+                        if log_df.empty:
+                            logger.warning("No chunk status log entries yet")
+                            time.sleep(0.5)
+                            continue
+
                         is_complete_rec = (
                             lambda row: row["state"] == ChunkState.upload_complete
                             and row["instance"] in [s.instance for s in sinks]
                             and row["region"] in [s.region for s in sinks]
                         )
                         sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
+                        logger.debug(f"Columns: {sink_status_df.columns}")
                         completed_status = sink_status_df.groupby("chunk_id").apply(
                             lambda x: set(x["region"].unique()) == set(sink_regions)
                         )
