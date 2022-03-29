@@ -146,7 +146,6 @@ def replicate_random(
     if total_transfer_size_mb % chunk_size_mb != 0:
         logger.warning(f"total_transfer_size_mb ({total_transfer_size_mb}) is not a multiple of chunk_size_mb ({chunk_size_mb})")
     n_chunks = int(total_transfer_size_mb / chunk_size_mb)
-    total_bytes = n_chunks * chunk_size_mb * MB
     job = ReplicationJob(
         source_region=src_region,
         source_bucket=None,
@@ -164,12 +163,12 @@ def replicate_random(
         gcp_instance_class=gcp_instance_class,
         gcp_use_premium_network=gcp_use_premium_network,
     )
-
     try:
         rc.provision_gateways(reuse_gateways)
         for node, gw in rc.bound_nodes.items():
             logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
         job = rc.run_replication_plan(job)
+        total_bytes = n_chunks * chunk_size_mb * MB
         logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
         stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
     except KeyboardInterrupt:
@@ -230,7 +229,6 @@ def replicate_json(
             objs=[f"{key_prefix}/{i}" for i in range(n_chunks)],
             random_chunk_size_mb=chunk_size_mb,
         )
-        total_bytes = n_chunks * chunk_size_mb * MB
     else:
         objs = ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(key_prefix)
         obj_keys = []
@@ -246,7 +244,6 @@ def replicate_json(
             objs=obj_keys,
             obj_sizes=obj_sizes,
         )
-        total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
 
     rc = ReplicatorClient(
         topo,
@@ -256,12 +253,16 @@ def replicate_json(
         gcp_instance_class=gcp_instance_class,
         gcp_use_premium_network=gcp_use_premium_network,
     )
-
     try:
         rc.provision_gateways(reuse_gateways)
         for node, gw in rc.bound_nodes.items():
             logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
         job = rc.run_replication_plan(job)
+        total_bytes = (
+            n_chunks * chunk_size_mb * MB
+            if use_random_data
+            else sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
+        )
         logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
         stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
     except KeyboardInterrupt:
