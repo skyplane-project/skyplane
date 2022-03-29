@@ -54,9 +54,16 @@ class ChunkStore:
                 break
         return out_events
 
+    def state_queue_download(self, chunk_id: int):
+        state = self.get_chunk_state(chunk_id)
+        if state in [ChunkState.registered, ChunkState.download_queued]:
+            self.set_chunk_state(chunk_id, ChunkState.download_queued)
+        else:
+            raise ValueError(f"Invalid transition queue_download from {state} (id={chunk_id})")
+
     def state_start_download(self, chunk_id: int, receiver_id: Optional[str] = None):
         state = self.get_chunk_state(chunk_id)
-        if state in [ChunkState.registered, ChunkState.download_in_progress]:
+        if state in [ChunkState.download_queued, ChunkState.download_in_progress]:
             self.set_chunk_state(chunk_id, ChunkState.download_in_progress, {"receiver_id": receiver_id})
         else:
             raise ValueError(f"Invalid transition start_download from {state}")

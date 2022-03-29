@@ -63,6 +63,7 @@ class ChunkRequest:
 @total_ordering
 class ChunkState(Enum):
     registered = auto()
+    download_queued = auto()
     download_in_progress = auto()
     downloaded = auto()
     upload_queued = auto()
