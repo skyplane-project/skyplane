@@ -151,7 +151,7 @@ class AWSCloudProvider(CloudProvider):
             ec2client.create_route(RouteTableId=public_route_table.id, DestinationCidrBlock="0.0.0.0/0", GatewayId=igw.id)
             public_route_table.associate_with_subnet(SubnetId=subnet.id)
 
-            # make security group named "default"
+            # make security group named "skylark"
             sg = ec2.create_security_group(GroupName="skylark", Description="Default security group for Skylark VPC", VpcId=matching_vpc.id)
         return matching_vpc
 
@@ -219,22 +219,66 @@ class AWSCloudProvider(CloudProvider):
 
         return fn()
 
-    def add_ip_to_security_group(self, aws_region: str):
+    def add_ip_to_security_group(self, aws_region: str, ip:str = "None"):
         """Add IP to security group. If security group ID is None, use group named skylark (create if not exists)."""
 
         @lockutils.synchronized(f"aws_add_ip_to_security_group_{aws_region}", external=True, lock_path="/tmp/skylark_locks")
         def fn():
-            self.make_vpc(aws_region)
+            if ip == "None":
+                # The default fallback if we don't have list of ips
+                self.make_vpc(aws_region)
+                sg = self.get_security_group(aws_region)
+                try:
+                    sg.authorize_ingress(
+                        IpPermissions=[{"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]
+                    )
+                except botocore.exceptions.ClientError as e:
+                    if not str(e).endswith("already exists"):
+                        raise e
+            else if ip:
+                # Add instance IP to security group
+                sg = self.get_security_group(aws_region)
+                try:
+                    sg.authorize_ingress(
+                        IpPermissions=[{"IpProtocol": "tcp", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": ip}]}]
+                    )
+                except botocore.exceptions.ClientError as e:
+                    if not str(e).endswith("already exists"):
+                        raise e
+
+
+        return fn()
+
+    def clear_security_group(self, aws_region: str, vpc_name="skylark"):
+        """Clears security group"""
+
+        @lockutils.synchronized(f"aws_clear_security_group_{aws_region}", external=True, lock_path="/tmp/skylark_locks")
+        def fn():
             sg = self.get_security_group(aws_region)
+            # Revoke all ingress rules
+            if sg.ip_permissions:
+                for perm in sg.ip_permissions:
+                    sg.revoke_ingress(IpPermissions=perm)
+            # Allow ssh access on Port 22
             try:
                 sg.authorize_ingress(
-                    IpPermissions=[{"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]
+                    IpPermissions=[{"IpProtocol": "tcp", "FromPort": -1, "ToPort": 22, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]
                 )
             except botocore.exceptions.ClientError as e:
                 if not str(e).endswith("already exists"):
                     raise e
-
+            # Allow Dozzle on log_viewer_port
+            if self.logging_enabled:
+                try:
+                    sg.authorize_ingress(
+                        IpPermissions=[{"IpProtocol": "tcp", "FromPort": -1, "ToPort": self.log_viewer_port, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]
+                    )
+                except botocore.exceptions.ClientError as e:
+                    if not str(e).endswith("already exists"):
+                        raise e
+    
         return fn()
+
 
     def ensure_keyfile_exists(self, aws_region, prefix=key_root / "aws"):
         ec2 = self.auth.get_boto3_resource("ec2", aws_region)

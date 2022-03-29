@@ -5,6 +5,10 @@ from skylark.utils.utils import do_parallel
 
 
 class CloudProvider:
+
+    self.logging_enabled = False # For Dozzle
+    self.log_viewer_port = 8888
+
     @property
     def name(self):
         raise NotImplementedError
