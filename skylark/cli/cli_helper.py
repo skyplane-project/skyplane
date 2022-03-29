@@ -236,7 +236,7 @@ def deprovision_skylark_instances():
         query_jobs.append(catch_error(lambda: GCPCloudProvider().get_matching_instances()))
 
     # query in parallel
-    for _, instance_list in do_parallel(lambda f: f(), query_jobs, progress_bar=True, desc="Query instances", hide_args=True):
+    for _, instance_list in do_parallel(lambda f: f(), query_jobs, progress_bar=True, desc="Query instances", hide_args=True, n=-1):
         instances.extend(instance_list)
 
     if instances:

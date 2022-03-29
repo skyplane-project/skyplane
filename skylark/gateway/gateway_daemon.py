@@ -41,14 +41,10 @@ class GatewayDaemon:
         self.ul_pool_semaphore = BoundedSemaphore(value=128)
 
         # API server
-        atexit.register(self.cleanup)
-        self.api_server = GatewayDaemonAPI(self.chunk_store, self.gateway_receiver, daemon_cleanup_handler=self.cleanup)
+        self.api_server = GatewayDaemonAPI(self.chunk_store, self.gateway_receiver)
         self.api_server.start()
+        atexit.register(self.api_server.shutdown)
         logger.info(f"[gateway_daemon] API started at {self.api_server.url}")
-
-    def cleanup(self):
-        logger.warning("[gateway_daemon] Shutting down gateway daemon")
-        self.api_server.shutdown()
 
     def run(self):
         setproctitle.setproctitle(f"skylark-gateway-daemon")

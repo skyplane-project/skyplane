@@ -1,4 +1,3 @@
-import atexit
 from datetime import datetime
 import itertools
 from functools import partial
@@ -194,11 +193,12 @@ class ReplicatorClient:
     def deprovision_gateways(self):
         def deprovision_gateway_instance(server: Server):
             if server.instance_state() == ServerState.RUNNING:
-                logger.warning(f"Deprovisioning {server.uuid()}")
                 server.terminate_instance()
+                logger.warning(f"Deprovisioned {server.uuid()}")
 
-        logger.warning("Deprovisioning instances")
-        do_parallel(deprovision_gateway_instance, self.bound_nodes.values(), n=-1)
+        instances = self.bound_nodes.values()
+        logger.warning(f"Deprovisioning {len(instances)} instances")
+        do_parallel(deprovision_gateway_instance, instances, n=-1)
 
     def run_replication_plan(self, job: ReplicationJob) -> ReplicationJob:
         assert job.source_region.split(":")[0] in [
@@ -308,7 +308,7 @@ class ReplicatorClient:
         save_log: bool = True,
         write_profile: bool = True,
         copy_gateway_logs: bool = True,
-    ) -> Dict:
+    ) -> Optional[Dict]:
         assert job.chunk_requests is not None
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in job.chunk_requests])
         last_log = None
@@ -316,7 +316,61 @@ class ReplicatorClient:
         sinks = self.topology.sink_instances()
         sink_regions = set(s.region for s in sinks)
 
-        def shutdown_handler():
+        try:
+            with Timer() as t:
+                with tqdm(
+                    total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB, disable=not show_pbar
+                ) as pbar:
+                    log_fn = tqdm.write if show_pbar else logger.debug
+                    while True:
+                        log_df = self.get_chunk_status_log_df()
+                        is_complete_rec = (
+                            lambda row: row["state"] == ChunkState.upload_complete
+                            and row["instance"] in [s.instance for s in sinks]
+                            and row["region"] in [s.region for s in sinks]
+                        )
+                        sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
+                        completed_status = sink_status_df.groupby("chunk_id").apply(
+                            lambda x: set(x["region"].unique()) == set(sink_regions)
+                        )
+                        completed_chunk_ids = completed_status[completed_status].index
+                        completed_bytes = sum(
+                            [cr.chunk.chunk_length_bytes for cr in job.chunk_requests if cr.chunk.chunk_id in completed_chunk_ids]
+                        )
+
+                        # update progress bar
+                        pbar.update(completed_bytes * 8 - pbar.n)
+                        total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
+                        throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
+                        pbar.set_description(f"Replication: average {throughput_gbits:.2f}Gbit/s")
+
+                        if len(completed_chunk_ids) == len(job.chunk_requests):
+                            return dict(
+                                completed_chunk_ids=completed_chunk_ids,
+                                total_runtime_s=total_runtime_s,
+                                throughput_gbits=throughput_gbits,
+                                monitor_status="completed",
+                            )
+                        elif time_limit_seconds is not None and t.elapsed > time_limit_seconds or t.elapsed > 600 and completed_bytes == 0:
+                            logger.error("Transfer timed out! Please retry.")
+                            return dict(
+                                completed_chunk_ids=completed_chunk_ids,
+                                total_runtime_s=total_runtime_s,
+                                throughput_gbits=throughput_gbits,
+                                monitor_status="timed_out",
+                            )
+                        else:
+                            current_time = datetime.now()
+                            if log_interval_s and (not last_log or (current_time - last_log).seconds > float(log_interval_s)):
+                                last_log = current_time
+                                gbits_remaining = (total_bytes - completed_bytes) * 8 / GB
+                                eta = int(gbits_remaining / throughput_gbits) if throughput_gbits > 0 else None
+                                log_fn(
+                                    f"{len(completed_chunk_ids)}/{len(job.chunk_requests)} chunks done ({completed_bytes / GB:.2f} / {total_bytes / GB:.2f}GB, {throughput_gbits:.2f}Gbit/s, ETA={str(eta) + 's' if eta is not None else 'unknown'})"
+                                )
+                            time.sleep(0.01 if show_pbar else 0.25)
+        # always run cleanup, even if there's an exception
+        finally:
             transfer_dir = tmp_log_dir / f"transfer_{datetime.now().isoformat()}"
             transfer_dir.mkdir(exist_ok=True, parents=True)
             if save_log:
@@ -338,74 +392,12 @@ class ReplicatorClient:
                 profile_out.parent.mkdir(parents=True, exist_ok=True)
                 profile_out.write_text(json.dumps(traceevent))
                 logger.debug(f"Wrote profile to {profile_out}, visualize using `about://tracing` in Chrome")
+            if cleanup_gateway:
 
-            def fn(s: Server):
-                try:
-                    retry_requests().post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
-                except:
-                    return  # ignore connection errors since server may be shutting down
+                def fn(s: Server):
+                    try:
+                        retry_requests().post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
+                    except:
+                        return  # ignore connection errors since server may be shutting down
 
-            do_parallel(fn, self.bound_nodes.values(), n=-1)
-
-        if cleanup_gateway:
-            logger.debug("Registering shutdown handler")
-            atexit.register(shutdown_handler)
-
-        with Timer() as t:
-            with tqdm(
-                total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB, disable=not show_pbar
-            ) as pbar:
-                while True:
-                    log_df = self.get_chunk_status_log_df()
-                    is_complete_rec = (
-                        lambda row: row["state"] == ChunkState.upload_complete
-                        and row["instance"] in [s.instance for s in sinks]
-                        and row["region"] in [s.region for s in sinks]
-                    )
-                    sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
-                    completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region"].unique()) == set(sink_regions))
-                    completed_chunk_ids = completed_status[completed_status].index
-                    completed_bytes = sum(
-                        [cr.chunk.chunk_length_bytes for cr in job.chunk_requests if cr.chunk.chunk_id in completed_chunk_ids]
-                    )
-
-                    # update progress bar
-                    pbar.update(completed_bytes * 8 - pbar.n)
-                    total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
-                    throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
-                    pbar.set_description(f"Replication: average {throughput_gbits:.2f}Gbit/s")
-
-                    if (
-                        len(completed_chunk_ids) == len(job.chunk_requests)
-                        or time_limit_seconds is not None
-                        and t.elapsed > time_limit_seconds
-                    ):
-                        if cleanup_gateway:
-                            atexit.unregister(shutdown_handler)
-                        shutdown_handler()
-                        return dict(
-                            completed_chunk_ids=completed_chunk_ids,
-                            total_runtime_s=total_runtime_s,
-                            throughput_gbits=throughput_gbits,
-                            monitor_status="completed" if len(completed_chunk_ids) == len(job.chunk_requests) else "timed_out",
-                        )
-                    else:
-                        current_time = datetime.now()
-                        if log_interval_s and (not last_log or (current_time - last_log).seconds > float(log_interval_s)):
-                            last_log = current_time
-                            gbits_remaining = (total_bytes - completed_bytes) * 8 / GB
-                            eta = int(gbits_remaining / throughput_gbits) if throughput_gbits > 0 else None
-                            log_line = f"{len(completed_chunk_ids)}/{len(job.chunk_requests)} chunks done ({completed_bytes / GB:.2f} / {total_bytes / GB:.2f}GB, {throughput_gbits:.2f}Gbit/s, ETA={str(eta) + 's' if eta is not None else 'unknown'})"
-                            if show_pbar:
-                                tqdm.write(log_line)
-                            else:
-                                logger.debug(log_line)
-                        elif t.elapsed > 600 and completed_bytes == 0:
-                            logger.error(f"No chunks completed after {int(t.elapsed)}s! There is probably a bug, check logs. Exiting...")
-                            return dict(
-                                completed_chunk_ids=completed_chunk_ids,
-                                total_runtime_s=total_runtime_s,
-                                throughput_gbits=throughput_gbits,
-                                monitor_status="timed_out",
-                            )
-                    time.sleep(0.01 if show_pbar else 0.25)
+                do_parallel(fn, self.bound_nodes.values(), n=-1)
