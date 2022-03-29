@@ -216,9 +216,6 @@ def replicate_helper(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
         )
 
-    if size_total_mb % n_chunks != 0:
-        logger.warning(f"total_transfer_size_mb ({size_total_mb}) is not a multiple of number of chunks ({n_chunks})")
-
     if random:
         chunk_size_mb = size_total_mb // n_chunks
         job = ReplicationJob(
