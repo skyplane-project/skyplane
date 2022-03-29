@@ -88,7 +88,7 @@ class GatewaySender:
                 for chunk_id in ip_chunk_ids:
                     if chunk_id in host_state:
                         cr_status[chunk_id] = host_state[chunk_id]["state"]
-            return all(status not in ["registered", "download_in_progress"] for status in cr_status.values())
+            return all(status not in ["registered", "download_queued", "download_in_progress"] for status in cr_status.values())
 
         logger.info(f"[sender:{worker_id}] waiting for chunks to reach state 'downloaded'")
         wait_for(wait_for_chunks)

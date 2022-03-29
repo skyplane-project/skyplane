@@ -90,6 +90,7 @@ class GatewayDaemon:
             # queue object store downloads and relays (if space is available)
             for chunk_req in self.chunk_store.get_chunk_requests(ChunkState.registered):
                 if self.region == chunk_req.src_region and chunk_req.src_type == "read_local":  # do nothing, read from local ChunkStore
+                    self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
                     self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, "read_local")
                     self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, "read_local")
                 elif self.region == chunk_req.src_region and chunk_req.src_type == "random":
@@ -107,8 +108,10 @@ class GatewayDaemon:
                             self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
                             self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, "random")
 
+                        self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
                         threading.Thread(target=fn, args=(chunk_req, size_mb)).start()
                 elif self.region == chunk_req.src_region and chunk_req.src_type == "object_store":
+                    self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
                     self.obj_store_conn.queue_request(chunk_req, "download")
                 elif self.region != chunk_req.src_region:  # do nothing, waiting for chunk to be be ready_to_upload
                     continue
