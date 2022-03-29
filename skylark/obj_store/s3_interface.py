@@ -21,6 +21,9 @@ class S3Interface(ObjectStoreInterface):
         self.bucket_name = bucket_name
         self.pool = ThreadPoolExecutor(max_workers=256) #TODO: pick a non arbitrary number
 
+    def region_tag(self):
+        return "aws:" + self.aws_region
+
     def infer_s3_region(self, bucket_name: str):
         s3_client = self.auth.get_boto3_client("s3")
         region = s3_client.get_bucket_location(Bucket=bucket_name).get("LocationConstraint", "us-east-1")

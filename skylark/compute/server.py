@@ -85,6 +85,9 @@ class Server:
         else:
             self.command_log_file = None
 
+    def get_sftp_client(self):
+        raise NotImplementedError()
+
     def get_ssh_client_impl(self):
         raise NotImplementedError()
 
@@ -172,15 +175,15 @@ class Server:
 
     def download_file(self, remote_path, local_path):
         """Download a file from the server"""
-        client = self.ssh_client
-        with client.open_sftp() as sftp:
-            sftp.get(remote_path, local_path)
+        sftp_client = self.get_sftp_client()
+        sftp_client.get(remote_path, local_path)
+        sftp_client.close()
 
     def upload_file(self, local_path, remote_path):
         """Upload a file to the server"""
-        client = self.ssh_client
-        with client.open_sftp() as sftp:
-            sftp.put(local_path, remote_path)
+        sftp_client = self.get_sftp_client()
+        sftp_client.put(local_path, remote_path)
+        sftp_client.close()
 
     def copy_public_key(self, pub_key_path: PathLike):
         """Append public key to authorized_keys file on server."""

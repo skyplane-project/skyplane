@@ -121,6 +121,7 @@ class GatewayReceiver:
                 time.sleep(0.1)
 
             # get data
+            self.chunk_store.state_queue_download(chunk_header.chunk_id)
             self.chunk_store.state_start_download(chunk_header.chunk_id, f"receiver:{self.worker_id}")
             logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} wire header length {chunk_header.chunk_len}")
             with Timer() as t:
@@ -132,6 +133,9 @@ class GatewayReceiver:
                         f.write(data)
                         chunk_data_size -= len(data)
                         chunk_received_size += len(data)
+            assert (
+                chunk_data_size == 0 and chunk_received_size == chunk_header.chunk_len
+            ), f"Size mismatch: got {chunk_received_size} expected {chunk_header.chunk_len}"
             logger.info(
                 f"[receiver:{server_port}]:{chunk_header.chunk_id} in {t.elapsed:.2f} seconds ({chunk_received_size * 8 / t.elapsed / GB:.2f}Gbps)"
             )
