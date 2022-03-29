@@ -121,6 +121,7 @@ class GatewayReceiver:
                 time.sleep(0.1)
 
             # get data
+            self.chunk_store.state_queue_download(chunk_header.chunk_id)
             self.chunk_store.state_start_download(chunk_header.chunk_id, f"receiver:{self.worker_id}")
             logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} wire header length {chunk_header.chunk_len}")
             with Timer() as t:
