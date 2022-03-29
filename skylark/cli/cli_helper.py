@@ -99,53 +99,55 @@ def copy_local_local(src: Path, dst: Path):
 
 
 def copy_local_objstore(object_interface: ObjectStoreInterface, src: Path, dst_key: str):
-    ops: List[concurrent.futures.Future] = []
-    path_mapping: Dict[concurrent.futures.Future, Path] = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=64) as executor:
+        ops: List[concurrent.futures.Future] = []
+        path_mapping: Dict[concurrent.futures.Future, Path] = {}
 
-    def _copy(path: Path, dst_key: str, total_size=0.0):
-        if path.is_dir():
-            for child in path.iterdir():
-                total_size += _copy(child, os.path.join(dst_key, child.name))
-            return total_size
-        else:
-            future = object_interface.upload_object(path, dst_key)
-            ops.append(future)
-            path_mapping[future] = path
-            return path.stat().st_size
+        def _copy(path: Path, dst_key: str, total_size=0.0):
+            if path.is_dir():
+                for child in path.iterdir():
+                    total_size += _copy(child, os.path.join(dst_key, child.name))
+                return total_size
+            else:
+                future = executor.submit(object_interface.upload_object, path, dst_key)
+                ops.append(future)
+                path_mapping[future] = path
+                return path.stat().st_size
 
-    total_bytes = _copy(src, dst_key)
+        total_bytes = _copy(src, dst_key)
 
-    # wait for all uploads to complete, displaying a progress bar
-    with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Uploading") as pbar:
-        for op in concurrent.futures.as_completed(ops):
-            op.result()
-            pbar.update(path_mapping[op].stat().st_size)
+        # wait for all uploads to complete, displaying a progress bar
+        with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Uploading") as pbar:
+            for op in concurrent.futures.as_completed(ops):
+                op.result()
+                pbar.update(path_mapping[op].stat().st_size)
 
 
 def copy_objstore_local(object_interface: ObjectStoreInterface, src_key: str, dst: Path):
-    ops: List[concurrent.futures.Future] = []
-    obj_mapping: Dict[concurrent.futures.Future, ObjectStoreObject] = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=64) as executor:
+        ops: List[concurrent.futures.Future] = []
+        obj_mapping: Dict[concurrent.futures.Future, ObjectStoreObject] = {}
 
-    # copy single object
-    def _copy(src_obj: ObjectStoreObject, dst: Path):
-        dst.parent.mkdir(exist_ok=True, parents=True)
-        future = object_interface.download_object(src_obj.key, dst)
-        ops.append(future)
-        obj_mapping[future] = src_obj
-        return src_obj.size
+        # copy single object
+        def _copy(src_obj: ObjectStoreObject, dst: Path):
+            dst.parent.mkdir(exist_ok=True, parents=True)
+            future = executor.submit(object_interface.download_object, src_obj.key, dst)
+            ops.append(future)
+            obj_mapping[future] = src_obj
+            return src_obj.size
 
-    total_bytes = 0.0
-    for obj in object_interface.list_objects(prefix=src_key):
-        sub_key = obj.key[len(src_key) :]
-        sub_key = sub_key.lstrip("/")
-        dest_path = dst / sub_key
-        total_bytes += _copy(obj, dest_path)
+        total_bytes = 0.0
+        for obj in object_interface.list_objects(prefix=src_key):
+            sub_key = obj.key[len(src_key) :]
+            sub_key = sub_key.lstrip("/")
+            dest_path = dst / sub_key
+            total_bytes += _copy(obj, dest_path)
 
-    # wait for all downloads to complete, displaying a progress bar
-    with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Downloading") as pbar:
-        for op in concurrent.futures.as_completed(ops):
-            op.result()
-            pbar.update(obj_mapping[op].size)
+        # wait for all downloads to complete, displaying a progress bar
+        with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Downloading") as pbar:
+            for op in concurrent.futures.as_completed(ops):
+                op.result()
+                pbar.update(obj_mapping[op].size)
 
 
 def copy_local_gcs(src: Path, dst_bucket: str, dst_key: str):
@@ -170,54 +172,12 @@ def copy_azure_local(src_account_name: str, src_container_name: str, src_key: st
 
 def copy_local_s3(src: Path, dst_bucket: str, dst_key: str, use_tls: bool = True):
     s3 = S3Interface(None, dst_bucket, use_tls=use_tls)
-    ops: List[concurrent.futures.Future] = []
-    path_mapping: Dict[concurrent.futures.Future, Path] = {}
-
-    def _copy(path: Path, dst_key: str, total_size=0.0):
-        if path.is_dir():
-            for child in path.iterdir():
-                total_size += _copy(child, os.path.join(dst_key, child.name))
-            return total_size
-        else:
-            future = s3.upload_object(path, dst_key)
-            ops.append(future)
-            path_mapping[future] = path
-            return path.stat().st_size
-
-    total_bytes = _copy(src, dst_key)
-
-    # wait for all uploads to complete, displaying a progress bar
-    with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Uploading") as pbar:
-        for op in concurrent.futures.as_completed(ops):
-            op.result()
-            pbar.update(path_mapping[op].stat().st_size)
+    return copy_local_objstore(s3, src, dst_key)
 
 
 def copy_s3_local(src_bucket: str, src_key: str, dst: Path):
     s3 = S3Interface(None, src_bucket)
-    ops: List[concurrent.futures.Future] = []
-    obj_mapping: Dict[concurrent.futures.Future, ObjectStoreObject] = {}
-
-    # copy single object
-    def _copy(src_obj: ObjectStoreObject, dst: Path):
-        dst.parent.mkdir(exist_ok=True, parents=True)
-        future = s3.download_object(src_obj.key, dst)
-        ops.append(future)
-        obj_mapping[future] = src_obj
-        return src_obj.size
-
-    total_bytes = 0.0
-    for obj in s3.list_objects(prefix=src_key):
-        sub_key = obj.key[len(src_key) :]
-        sub_key = sub_key.lstrip("/")
-        dest_path = dst / sub_key
-        total_bytes += _copy(obj, dest_path)
-
-    # wait for all downloads to complete, displaying a progress bar
-    with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Downloading") as pbar:
-        for op in concurrent.futures.as_completed(ops):
-            op.result()
-            pbar.update(obj_mapping[op].size)
+    return copy_objstore_local(s3, src_key, dst)
 
 
 def check_ulimit(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
@@ -251,17 +211,29 @@ def check_ulimit(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
 def deprovision_skylark_instances():
     instances = []
     query_jobs = []
+
+    # TODO remove when skylark init explicitly configures regions
+    def catch_error(fn):
+        def run():
+            try:
+                return fn()
+            except Exception as e:
+                logger.error(f"Error encountered during deprovision: {e}")
+                return []
+
+        return run
+
     if AWSAuthentication().enabled():
         logger.debug("AWS authentication enabled, querying for instances")
         aws = AWSCloudProvider()
         for region in aws.region_list():
-            query_jobs.append(partial(aws.get_matching_instances, region))
+            query_jobs.append(catch_error(partial(aws.get_matching_instances, region)))
     if AzureAuthentication().enabled():
         logger.debug("Azure authentication enabled, querying for instances")
-        query_jobs.append(lambda: AzureCloudProvider().get_matching_instances())
+        query_jobs.append(catch_error(lambda: AzureCloudProvider().get_matching_instances()))
     if GCPAuthentication().enabled():
         logger.debug("GCP authentication enabled, querying for instances")
-        query_jobs.append(lambda: GCPCloudProvider().get_matching_instances())
+        query_jobs.append(catch_error(lambda: GCPCloudProvider().get_matching_instances()))
 
     # query in parallel
     for _, instance_list in do_parallel(lambda f: f(), query_jobs, progress_bar=True, desc="Query instances", hide_args=True, n=-1):
