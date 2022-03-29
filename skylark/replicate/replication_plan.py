@@ -161,12 +161,12 @@ class ReplicationJob:
     # Generates random chunks for testing on the gateways
     random_chunk_size_mb: Optional[int] = None
 
+    # TODO: delete this method and refer to obj_sizes instead
     def src_obj_sizes(self) -> Dict[str, int]:
-        if self.obj_sizes != None:
-            return self.obj_sizes
-
-        if self.random_chunk_size_mb is not None:
-            return {obj: self.random_chunk_size_mb * MB for obj in self.src_objs}
-        interface = ObjectStoreInterface.create(self.source_region, self.source_bucket)
-        get_size = lambda o: interface.get_obj_size(o)
-        return dict(do_parallel(get_size, self.src_objs, n=16, progress_bar=True, desc="Query object sizes"))
+        if self.obj_sizes is None:
+            if self.random_chunk_size_mb is not None:
+                return {obj: self.random_chunk_size_mb * MB for obj in self.src_objs}
+            interface = ObjectStoreInterface.create(self.source_region, self.source_bucket)
+            get_size = lambda o: interface.get_obj_size(o)
+            self.obj_sizes = dict(do_parallel(get_size, self.src_objs, n=16, progress_bar=True, desc="Query object sizes"))
+        return self.obj_sizes
