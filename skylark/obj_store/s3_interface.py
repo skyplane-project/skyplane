@@ -74,17 +74,19 @@ class S3Interface(ObjectStoreInterface):
     def download_object(self, src_object_name, dst_file_path, byte_offset=None, byte_count=None) -> Future:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = "/" + src_object_name if src_object_name[0] != "/" else src_object_name
-        if byte_offset is None or byte_count is None:
-            #unoptimized
-            byte_offset = 0
-            byte_count = os.path.get(size_src_file_path)
         def _download_object_helper():
+            nonlocal byte_offset, byte_count
             s3_client = self.auth.get_boto3_client("s3", self.aws_region)
-            response = s3_client.get_object(
-                Bucket=self.bucket_name,
-                Key=src_object_name,
-                Range=f"bytes={byte_offset}-{byte_offset + byte_count - 1}"
-            )
+            parameters = {
+                    "Bucket": self.bucket_name,
+                    "Key": src_object_name
+            }
+            if byte_offset is None or byte_count is None:
+                #unoptimized
+                byte_offset = 0
+            else:
+                parameters["Range"] = f"bytes={byte_offset}-{byte_offset + byte_count - 1}"
+            response = s3_client.get_object(**parameters)
             if not os.path.exists(dst_file_path):
                 open(dst_file_path, "a").close()
             with open(dst_file_path, "rb+") as f:
@@ -92,7 +94,7 @@ class S3Interface(ObjectStoreInterface):
                 f.write(response["Body"].read())
             response["Body"].close() 
             return response["ETag"] #might want to return bytes read instead
-        return self.pool.submit(_download_part_helper)
+        return self.pool.submit(_download_object_helper)
 
     """
     def download_entire_object(self, src_object_name, dst_file_path, config: TransferConfig=None) -> Future:
@@ -117,7 +119,7 @@ class S3Interface(ObjectStoreInterface):
                 Key=dst_object_name,
                 ContentType=content_type
             )
-            return response["UploadID"]
+            return response["UploadId"]
         return self.pool.submit(_initiate_multipart_upload_helper)
 
     def upload_object(self, src_file_path, dst_object_name, upload_id=None, byte_offset=None, byte_count=None, part_number=None) -> Future:
@@ -129,7 +131,7 @@ class S3Interface(ObjectStoreInterface):
             with open(src_file_path, mode="rb+") as f:
                 f.seek(byte_offset)
                 response = s3_client.upload_part(
-                    UploadId=part_upload_id,
+                    UploadId=upload_id,
                     Bucket=self.bucket_name,
                     Key=dst_object_name,
                     PartNumber=part_number,
@@ -139,13 +141,13 @@ class S3Interface(ObjectStoreInterface):
             return {"ETag": response["ETag"], "PartNumber": part_number} #user should build a list of these
         def _upload_entire_object_helper():
             #unoptimized
-            print(self.bucket_name)
+            nonlocal upload_id, byte_offset, byte_count, part_number
             inferred_type = mimetypes.guess_type(src_file_path)[0] or "application/octet-stream"
             upload_id = self.initiate_multipart_upload(dst_object_name, inferred_type).result()
             byte_offset = 0
             byte_count = os.path.getsize(src_file_path)
             part_number = 1
-            part_list = [_upload_object_part_helper().result]
+            part_list = [_upload_object_part_helper()]
             return self.finalize_multipart_upload(dst_object_name, upload_id, part_list).result()
         is_entire = upload_id is None or byte_offset is None or byte_count is None or part_number is None
         return self.pool.submit(_upload_object_part_helper if not is_entire else _upload_entire_object_helper)
@@ -156,10 +158,10 @@ class S3Interface(ObjectStoreInterface):
         def _finalize_multipart_upload_helper():
             s3_client = self.auth.get_boto3_client("s3", self.aws_region)
             response = s3_client.complete_multipart_upload(
-                    UploadID=upload_id,
+                    UploadId=upload_id,
                     Bucket=self.bucket_name,
                     Key=dst_object_name,
-                    MultipartUpload=part_list
+                    MultipartUpload={"Parts": part_list}
             )
             return response["ETag"]
         return self.pool.submit(_finalize_multipart_upload_helper)
