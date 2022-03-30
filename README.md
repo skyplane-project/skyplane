@@ -38,13 +38,12 @@ Then, configure cloud credentials as needed:
 
 Finally, install and initalize Skylark:
 ```
-$ pip install -e .
+$ pip install -e ".[all]"
 $ skylark init
 ```
 
 To run a sample transfer, first build a new version of the GatewayDaemon Docker image and push it to ghcr.io (ensure you are authenticated as above):
 ```
-$ pip install -e ".[all]"
 $ source scripts/pack_docker.sh
 ```
 <details>
