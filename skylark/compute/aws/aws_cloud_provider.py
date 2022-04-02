@@ -8,6 +8,7 @@ import botocore
 import pandas as pd
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.utils import logger
+import typer
 from skylark import key_root
 
 from oslo_concurrency import lockutils
@@ -29,31 +30,8 @@ class AWSCloudProvider(CloudProvider):
     @staticmethod
     def region_list() -> List[str]:
         # todo query AWS for list of active regions
-        all_regions = [
-            "af-south-1",
-            "ap-east-1",
-            "ap-northeast-1",
-            "ap-northeast-2",
-            "ap-northeast-3",
-            "ap-south-1",
-            "ap-southeast-1",
-            "ap-southeast-2",
-            "ap-southeast-3",
-            "ca-central-1",
-            "eu-central-1",
-            "eu-north-1",
-            "eu-south-1",
-            "eu-west-1",
-            "eu-west-2",
-            "eu-west-3",
-            "me-south-1",
-            "sa-east-1",
-            "us-east-1",
-            "us-east-2",
-            "us-west-1",
-            "us-west-2",
-        ]
-        return all_regions
+        region_list = AWSAuthentication.get_region_config()
+        return region_list
 
     @staticmethod
     def get_transfer_cost(src_key, dst_key, premium_tier=True):

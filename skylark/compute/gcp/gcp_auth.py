@@ -4,13 +4,19 @@ import googleapiclient.discovery
 import google.auth
 
 from skylark import cloud_config
+from skylark.config import SkylarkConfig
+from skylark import config_path
 
 
 class GCPAuthentication:
     __cached_credentials = threading.local()
 
-    def __init__(self, project_id: Optional[str] = cloud_config.gcp_project_id):
+    def __init__(self, config: Optional[SkylarkConfig] = None, project_id: Optional[str] = cloud_config.gcp_project_id):
         # load credentials lazily and then cache across threads
+        if not config == None:
+            self.config = config
+        else:
+            self.config = SkylarkConfig.load_config(config_path)
         self.inferred_project_id = project_id
         self._credentials = None
         self._project_id = None
@@ -30,15 +36,12 @@ class GCPAuthentication:
     def make_credential(self, project_id):
         cached_credential = getattr(self.__cached_credentials, f"credential_{project_id}", (None, None))
         if cached_credential == (None, None):
-            try:
-                cached_credential = google.auth.default(quota_project_id=project_id)
-                setattr(self.__cached_credentials, f"credential_{project_id}", cached_credential)
-            except:
-                pass
+            cached_credential = google.auth.default(quota_project_id=project_id)
+            setattr(self.__cached_credentials, f"credential_{project_id}", cached_credential)
         return cached_credential
 
     def enabled(self):
-        return self.credentials is not None and self.project_id is not None
+        return self.config.gcp_enabled and self.credentials is not None and self.project_id is not None
 
     def get_gcp_client(self, service_name="compute", version="v1"):
         return googleapiclient.discovery.build(service_name, version)

@@ -12,12 +12,18 @@ from azure.storage.blob import BlobServiceClient, ContainerClient
 
 from skylark import cloud_config
 from skylark.compute.utils import query_which_cloud
+from skylark.config import SkylarkConfig
+from skylark import config_path
 
 
 class AzureAuthentication:
     __cached_credentials = threading.local()
 
-    def __init__(self, subscription_id: str = cloud_config.azure_subscription_id):
+    def __init__(self, config: Optional[SkylarkConfig] = None, subscription_id: str = cloud_config.azure_subscription_id):
+        if not config == None:
+            self.config = config
+        else:
+            self.config = SkylarkConfig.load_config(config_path)
         self.subscription_id = subscription_id
         self.credential = self.get_credential(subscription_id)
 
@@ -33,7 +39,7 @@ class AzureAuthentication:
         return cached_credential
 
     def enabled(self) -> bool:
-        return self.subscription_id is not None
+        return self.config.azure_enabled and self.subscription_id is not None
 
     @staticmethod
     def infer_subscription_id() -> Optional[str]:
