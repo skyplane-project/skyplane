@@ -35,6 +35,9 @@ class S3Interface(ObjectStoreInterface):
             tls_mode=S3RequestTlsMode.ENABLED if use_tls else S3RequestTlsMode.DISABLED,
         )
 
+    def region_tag(self):
+        return "aws:" + self.aws_region
+
     def infer_s3_region(self, bucket_name: str):
         s3_client = self.auth.get_boto3_client("s3")
         region = s3_client.get_bucket_location(Bucket=bucket_name).get("LocationConstraint", "us-east-1")
@@ -86,7 +89,7 @@ class S3Interface(ObjectStoreInterface):
             return False
 
     # todo: implement range request for download
-    def download_object(self, src_object_name, dst_file_path) -> Future:
+    def download_object(self, src_object_name, dst_file_path):
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = "/" + src_object_name if src_object_name[0] != "/" else src_object_name
         download_headers = HttpHeaders([("host", self.bucket_name + ".s3." + self.aws_region + ".amazonaws.com")])
@@ -99,13 +102,14 @@ class S3Interface(ObjectStoreInterface):
                 f.seek(offset)
                 f.write(chunk)
 
-        return self._s3_client.make_request(
+        self._s3_client.make_request(
             recv_filepath=dst_file_path,
             request=request,
             type=S3RequestType.GET_OBJECT,
-        ).finished_future
+            on_body=_on_body_download,
+        ).finished_future.result()
 
-    def upload_object(self, src_file_path, dst_object_name, content_type="infer") -> Future:
+    def upload_object(self, src_file_path, dst_object_name, content_type="infer"):
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         dst_object_name = "/" + dst_object_name if dst_object_name[0] != "/" else dst_object_name
         content_len = os.path.getsize(src_file_path)
@@ -116,4 +120,4 @@ class S3Interface(ObjectStoreInterface):
         upload_headers.add("Content-Type", content_type)
         upload_headers.add("Content-Length", str(content_len))
         request = HttpRequest("PUT", dst_object_name, upload_headers)
-        return self._s3_client.make_request(send_filepath=src_file_path, request=request, type=S3RequestType.PUT_OBJECT).finished_future
+        self._s3_client.make_request(send_filepath=src_file_path, request=request, type=S3RequestType.PUT_OBJECT).finished_future.result()

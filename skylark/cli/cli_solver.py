@@ -4,8 +4,6 @@ AWS convenience interface
 
 from pathlib import Path
 
-import cvxpy as cp
-
 import typer
 from skylark.utils import logger
 from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP
@@ -13,22 +11,6 @@ from skylark import skylark_root
 from skylark.utils.utils import Timer
 
 app = typer.Typer(name="skylark-solver")
-
-
-def choose_solver():
-    try:
-        import gurobipy as _grb  # pytype: disable=import-error
-
-        return cp.GUROBI
-    except ImportError:
-        try:
-            import cylp as _cylp  # pytype: disable=import-error
-
-            logger.warning("Gurobi not installed, using CoinOR instead.")
-            return cp.CBC
-        except ImportError:
-            logger.warning("Gurobi and CoinOR not installed, using GLPK instead.")
-            return cp.GLPK
 
 
 @app.command()
@@ -56,7 +38,7 @@ def solve_throughput(
     with Timer("Solve throughput problem"):
         solution = tput.solve_min_cost(
             problem,
-            solver=choose_solver(),
+            solver=ThroughputSolverILP.choose_solver(),
             solver_verbose=solver_verbose,
             save_lp_path=skylark_root / "data" / "throughput_solver.lp",
         )

@@ -2,7 +2,6 @@
 AWS convenience interface
 """
 
-import atexit
 import json
 import subprocess
 import time
@@ -91,6 +90,10 @@ def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
     iam_arn = response["Role"]["Arn"]
     typer.secho(f"IAM role ARN: {iam_arn}", fg="green")
 
+    # wait for role to be ready
+    typer.secho("Waiting for IAM role to be ready", fg="green")
+    iam_client.get_waiter("role_exists").wait(RoleName="datasync-role")
+
     ds_client_src = aws_auth.get_boto3_client("datasync", src_region)
     src_response = ds_client_src.create_location_s3(
         S3BucketArn=f"arn:aws:s3:::{src_bucket}",
@@ -128,29 +131,23 @@ def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
                 ds_client_dst.cancel_task_execution(TaskExecutionArn=task_execution_arn)
                 typer.secho("Cancelling task", fg="red")
 
-        atexit.register(exit)
-
         last_status = None
-        while last_status != "SUCCESS":
-            task_execution_response = ds_client_dst.describe_task_execution(TaskExecutionArn=task_execution_arn)
-            last_status = task_execution_response["Status"]
-            metadata = {
-                k: v
-                for k, v in task_execution_response.items()
-                if k
-                in [
-                    "EstimatedBytesToTransfer",
-                    "BytesWritten",
-                    "Result",
-                ]
-            }
-            typer.secho(f"{int(t.elapsed)}s\tStatus: {last_status}, {metadata}", fg="green")
-            time.sleep(5)
-            if (int(t.elapsed) > 300) and last_status == "LAUNCHING":
-                typer.secho(
-                    "The process might have errored out. One way to solve this is to delete the objects if they exist already, and restart the transfer",
-                    fg="red",
-                )
+        try:
+            while last_status != "SUCCESS":
+                task_execution_response = ds_client_dst.describe_task_execution(TaskExecutionArn=task_execution_arn)
+                last_status = task_execution_response["Status"]
+                metadata_fields = ["EstimatedBytesToTransfer", "BytesWritten", "Result"]
+                metadata = {k: v for k, v in task_execution_response.items() if k in metadata_fields}
+                typer.secho(f"{int(t.elapsed)}s\tStatus: {last_status}, {metadata}", fg="green")
+                time.sleep(5)
+                if (int(t.elapsed) > 300) and last_status == "LAUNCHING":
+                    typer.secho(
+                        "The process might have errored out. Try deleting the objects if they exist already and restart the transfer.",
+                        fg="red",
+                    )
+        except KeyboardInterrupt:
+            if last_status != "SUCCESS":
+                exit()
 
     task_execution_response = ds_client_dst.describe_task_execution(TaskExecutionArn=task_execution_arn)
     transfer_size_gb = task_execution_response["BytesTransferred"] / GB

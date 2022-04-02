@@ -33,7 +33,7 @@ class GCPServer(Server):
     def uuid(self):
         return f"{self.region_tag}:{self.gcp_instance_name}"
 
-    @lru_cache
+    @lru_cache(maxsize=1)
     def get_gcp_instance(self):
         instances = self.auth.get_gcp_instances(self.gcp_region)
         if "items" in instances:
@@ -102,3 +102,9 @@ class GCPServer(Server):
     def get_ssh_cmd(self, uname="skylark", ssh_key_password="skylark"):
         # todo can we include the key password inline?
         return f"ssh -i {self.ssh_private_key} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no {uname}@{self.public_ip()}"
+
+    def get_sftp_client(self, uname="skylark", ssh_key_password="skylark"):
+        t = paramiko.Transport((self.public_ip(), 22))
+        pkey = paramiko.RSAKey.from_private_key_file(str(self.ssh_private_key), password=ssh_key_password)
+        t.connect(username=uname, pkey=pkey)
+        return paramiko.SFTPClient.from_transport(t)

@@ -1,3 +1,4 @@
+from functools import partial
 import queue
 import threading
 from multiprocessing import Event, Manager, Process, Value
@@ -80,31 +81,27 @@ class GatewayObjStoreConn:
                 self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
                 logger.debug(f"[obj_store:{self.worker_id}] Start upload {chunk_req.chunk.chunk_id} to {bucket}")
 
-                def upload(region, bucket, fpath, key, chunk_id):
-                    obj_store_interface = self.get_obj_store_interface(region, bucket)
-                    retry_backoff(lambda: obj_store_interface.upload_object(fpath, key).result(), max_retries=4)
-                    chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
-                    self.chunk_store.state_finish_upload(chunk_id, f"obj_store:{self.worker_id}")
-                    chunk_file_path.unlink()
-                    logger.debug(f"[obj_store:{self.worker_id}] Uploaded {chunk_id} to {bucket}")
-
-                # wait for upload in seperate thread
-                threading.Thread(target=upload, args=(region, bucket, fpath, chunk_req.chunk.key, chunk_req.chunk.chunk_id)).start()
+                obj_store_interface = self.get_obj_store_interface(region, bucket)
+                retry_backoff(partial(obj_store_interface.upload_object, fpath, chunk_req.chunk.dest_key), max_retries=4)
+                chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id)
+                self.chunk_store.state_finish_upload(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
+                chunk_file_path.unlink()
+                logger.debug(f"[obj_store:{self.worker_id}] Uploaded {chunk_req.chunk.dest_key} to {bucket}")
             elif req_type == "download":
                 assert chunk_req.src_type == "object_store"
                 region = chunk_req.src_region
                 bucket = chunk_req.src_object_store_bucket
                 self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
-                logger.debug(f"[obj_store:{self.worker_id}] Starting download {chunk_req.chunk.chunk_id} from {bucket}")
+                logger.debug(f"[obj_store:{self.worker_id}] Start download {chunk_req.chunk.chunk_id} from {bucket}")
 
-                def download(region, bucket, fpath, key, chunk_id):
-                    obj_store_interface = self.get_obj_store_interface(region, bucket)
-                    retry_backoff(lambda: obj_store_interface.download_object(key, fpath).result(), max_retries=4)
-                    self.chunk_store.state_finish_download(chunk_id, f"obj_store:{self.worker_id}")
-                    logger.debug(f"[obj_store:{self.worker_id}] Downloaded {chunk_id} from {bucket}")
-
-                # wait for request to return in sepearte thread, so we can update chunk state
-                threading.Thread(target=download, args=(region, bucket, fpath, chunk_req.chunk.key, chunk_req.chunk.chunk_id)).start()
+                obj_store_interface = self.get_obj_store_interface(region, bucket)
+                retry_backoff(partial(obj_store_interface.download_object, chunk_req.chunk.src_key, fpath), max_retries=4)
+                self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
+                recieved_chunk_size = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).stat().st_size
+                assert (
+                    recieved_chunk_size == chunk_req.chunk.chunk_length_bytes
+                ), f"Downloaded chunk {chunk_req.chunk.chunk_id} has incorrect size (expected {chunk_req.chunk.chunk_length_bytes} but got {recieved_chunk_size})"
+                logger.debug(f"[obj_store:{self.worker_id}] Downloaded {chunk_req.chunk.src_key} from {bucket}")
             else:
                 raise ValueError(f"Invalid location for chunk req, {req_type}: {chunk_req.src_type}->{chunk_req.dst_type}")
 
@@ -114,4 +111,5 @@ class GatewayObjStoreConn:
         # TODO: wait for uploads to finish (check chunk exists)
 
     def queue_request(self, chunk_request: ChunkRequest, request_type: str):
+        logger.debug(f"[gateway_daemon] Queueing chunk request {chunk_request.chunk.chunk_id}")
         self.worker_queue.put(ObjStoreRequest(chunk_request, request_type))

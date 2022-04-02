@@ -140,6 +140,22 @@ class ThroughputSolver:
 
 
 class ThroughputSolverILP(ThroughputSolver):
+    @staticmethod
+    def choose_solver():
+        try:
+            import gurobipy as _grb  # pytype: disable=import-error
+
+            return cp.GUROBI
+        except ImportError:
+            try:
+                import cylp as _cylp  # pytype: disable=import-error
+
+                logger.warning("Gurobi not installed, using CoinOR instead.")
+                return cp.CBC
+            except ImportError:
+                logger.warning("Gurobi and CoinOR not installed, using GLPK instead.")
+                return cp.GLPK
+
     def solve_min_cost(self, p: ThroughputProblem, solver=cp.GLPK, solver_verbose=False, save_lp_path=None):
         regions = self.get_regions()
         sources = [regions.index(p.src)]

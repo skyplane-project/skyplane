@@ -11,6 +11,7 @@ from skylark.utils import logger
 from skylark import MB
 from skylark.chunk import ChunkRequest
 from skylark.gateway.chunk_store import ChunkStore
+from skylark.utils.net import retry_requests
 from skylark.utils.utils import Timer, retry_backoff, wait_for
 
 
@@ -81,13 +82,13 @@ class GatewaySender:
         def wait_for_chunks():
             cr_status = {}
             for ip, ip_chunk_ids in self.sent_chunk_ids.items():
-                response = requests.get(f"http://{ip}:8080/api/v1/incomplete_chunk_requests")
+                response = retry_requests().get(f"http://{ip}:8080/api/v1/incomplete_chunk_requests")
                 assert response.status_code == 200, f"{response.status_code} {response.text}"
                 host_state = response.json()["chunk_requests"]
                 for chunk_id in ip_chunk_ids:
                     if chunk_id in host_state:
                         cr_status[chunk_id] = host_state[chunk_id]["state"]
-            return all(status not in ["registered", "download_in_progress"] for status in cr_status.values())
+            return all(status not in ["registered", "download_queued", "download_in_progress"] for status in cr_status.values())
 
         logger.info(f"[sender:{worker_id}] waiting for chunks to reach state 'downloaded'")
         wait_for(wait_for_chunks)
@@ -96,7 +97,7 @@ class GatewaySender:
         # close servers
         logger.info(f"[sender:{worker_id}] exiting, closing servers")
         for dst_host, dst_port in self.destination_ports.items():
-            response = requests.delete(f"http://{dst_host}:8080/api/v1/servers/{dst_port}")
+            response = retry_requests().delete(f"http://{dst_host}:8080/api/v1/servers/{dst_port}")
             assert response.status_code == 200 and response.json() == {"status": "ok"}, response.json()
             logger.info(f"[sender:{worker_id}] closed destination socket {dst_host}:{dst_port}")
 
@@ -104,7 +105,7 @@ class GatewaySender:
         self.worker_queue.put(chunk_request.chunk.chunk_id)
 
     def make_socket(self, dst_host):
-        response = requests.post(f"http://{dst_host}:8080/api/v1/servers")
+        response = retry_requests().post(f"http://{dst_host}:8080/api/v1/servers")
         assert response.status_code == 200, f"{response.status_code} {response.text}"
         self.destination_ports[dst_host] = int(response.json()["server_port"])
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -125,7 +126,7 @@ class GatewaySender:
         # notify server of upcoming ChunkRequests
         logger.debug(f"[sender:{self.worker_id}]:{chunk_ids} pre-registering chunks")
         chunk_reqs = [self.chunk_store.get_chunk_request(chunk_id) for chunk_id in chunk_ids]
-        post_req = lambda: requests.post(f"http://{dst_host}:8080/api/v1/chunk_requests", json=[c.as_dict() for c in chunk_reqs])
+        post_req = lambda: retry_requests().post(f"http://{dst_host}:8080/api/v1/chunk_requests", json=[c.as_dict() for c in chunk_reqs])
         response = retry_backoff(post_req, exception_class=requests.exceptions.ConnectionError)
         assert response.status_code == 200 and response.json()["status"] == "ok"
         logger.debug(f"[sender:{self.worker_id}]:{chunk_ids} registered chunks")
@@ -158,6 +159,9 @@ class GatewaySender:
                 logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sending chunk data")
                 sock.sendall(chunk_data)
                 logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent chunk data")
+            assert (
+                len(chunk_data) == chunk.chunk_length_bytes
+            ), f"chunk {chunk_id} has size {len(chunk_data)} but should be {chunk.chunk_length_bytes}"
             logger.debug(
                 f"[sender:{self.worker_id}] finished sending chunk data {chunk_id} at {chunk.chunk_length_bytes * 8 / t.elapsed / MB:.2f}Mbps"
             )
