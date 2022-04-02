@@ -6,6 +6,7 @@ import botocore
 import pandas as pd
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.utils import logger
+import typer
 
 from oslo_concurrency import lockutils
 from skylark import skylark_root
@@ -27,10 +28,7 @@ class AWSCloudProvider(CloudProvider):
     def region_list() -> List[str]:
         # todo query AWS for list of active regions
         region_list = AWSAuthentication.get_region_config()
-        if not region_list is None:
-            return region_list
-        else:
-            return []
+        return region_list
 
     @staticmethod
     def get_transfer_cost(src_key, dst_key, premium_tier=True):

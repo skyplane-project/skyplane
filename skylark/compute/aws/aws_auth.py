@@ -1,5 +1,6 @@
 import threading
 from typing import Optional
+import typer
 
 import boto3
 
@@ -47,11 +48,16 @@ class AWSAuthentication:
             config += region_list[i] + "\n"
         config += region_list[len(region_list) - 1]
         f.write(config)
+        typer.secho(f"\nConfig file saved to {aws_config_path}", fg="green")
         f.close()
 
     @staticmethod
     def get_region_config():
-        f = open(aws_config_path, "r")
+        try:
+            f = open(aws_config_path, "r")
+        except FileNotFoundError:
+            typer.echo("No AWS config detected! Consquently, the AWS region list is empty. Run 'skylark init' to remedy this.")
+            return []
         region_list = []
         for region in f.read().split("\n"):
             region_list.append(region)

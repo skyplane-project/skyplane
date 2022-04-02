@@ -291,8 +291,6 @@ def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
     return config
 
 def create_aws_region_config(config):
-    #region_list = Session().get_available_regions("ec2")
-    #print(boto3.client('ec2').describe_regions())
     AWSAuthentication.save_region_config(config)
 
 def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkConfig:
