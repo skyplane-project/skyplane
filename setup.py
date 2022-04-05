@@ -33,7 +33,6 @@ setup(
         "paramiko",
         "termcolor",
         "tqdm",
-
     ],
     extras_require={
         "solver": [
