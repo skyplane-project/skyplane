@@ -355,8 +355,10 @@ def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
     config.aws_enabled = True
     return config
 
+
 def create_aws_region_config(config):
     AWSAuthentication.save_region_config(config)
+
 
 def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkConfig:
     if force_init:

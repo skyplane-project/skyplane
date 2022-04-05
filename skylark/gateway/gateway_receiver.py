@@ -12,7 +12,7 @@ from skylark.utils import logger
 from skylark import GB, MB
 from skylark.chunk import WireProtocolHeader
 from skylark.gateway.chunk_store import ChunkStore
-from skylark.utils.cert import generate_self_signed_certificate
+from skylark.gateway.cert import generate_self_signed_certificate
 from skylark.utils.utils import Timer
 
 

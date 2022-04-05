@@ -22,6 +22,6 @@ RUN --mount=type=cache,target=/root/.cache/pip pip3 install --no-cache-dir --com
 
 WORKDIR /pkg
 COPY . .
-RUN pip3 install -e .
+RUN pip3 install -e ".[gateway]"
 
 CMD ["python3", "skylark/gateway/gateway_daemon.py"]

@@ -1,3 +1,4 @@
+# cloud dependencies
 awscrt
 azure-identity
 azure-mgmt-compute
@@ -7,18 +8,21 @@ azure-mgmt-storage
 azure-mgmt-authorization
 azure-storage-blob>=12.0.0
 boto3
-click>=7.1.2
-flask
 google-api-python-client
 google-auth
 google-cloud-compute
 google-cloud-storage
 grpcio-status>=1.33.2
-numpy
+
+# shared dependencies
+cachetools
 oslo.concurrency
 paramiko
-setproctitle
 termcolor
-testresources
 tqdm
+
+# gateway dependencies
+flask
+pyopenssl
+setproctitle
 werkzeug
