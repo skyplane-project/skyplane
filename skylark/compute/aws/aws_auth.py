@@ -1,3 +1,4 @@
+from pydoc import describe
 import threading
 from typing import Optional
 import typer
@@ -30,33 +31,26 @@ class AWSAuthentication:
     
     @staticmethod
     def save_region_config(config):
-        f = open(aws_config_path, "w")
-        if config.aws_enabled == False:
-            f.write("")
-            f.close()
-            return
-
-        region_list = []
-        for region in boto3.client('ec2').describe_regions()['Regions']:
-            if region['OptInStatus'] == 'opt-in-not-required' or region['OptInStatus'] == 'opted-in':
-                region_text = region['Endpoint']
-                region_name = region_text[region_text.find('.') + 1 :region_text.find(".amazon")]
-                region_list.append(region_name)
-
-        config = ""
-        for i in range(len(region_list) - 1):
-            config += region_list[i] + "\n"
-        config += region_list[len(region_list) - 1]
-        f.write(config)
-        typer.secho(f"\nConfig file saved to {aws_config_path}", fg="green")
-        f.close()
+        with open(aws_config_path, "w") as f:
+            if config.aws_enabled == False:
+                f.write("")
+                return
+            region_list = []
+            describe_regions = boto3.client('ec2', region_name="us-east-1").describe_regions()
+            for region in describe_regions['Regions']:
+                if region['OptInStatus'] == 'opt-in-not-required' or region['OptInStatus'] == 'opted-in':
+                    region_text = region['Endpoint']
+                    region_name = region_text[region_text.find('.') + 1 :region_text.find(".amazon")]
+                    region_list.append(region_name)
+            f.write("\n".join(region_list))
+            typer.secho(f"    AWS region config file saved to {aws_config_path}", fg="green")
 
     @staticmethod
     def get_region_config():
         try:
             f = open(aws_config_path, "r")
         except FileNotFoundError:
-            typer.echo("No AWS config detected! Consquently, the AWS region list is empty. Run 'skylark init' to remedy this.")
+            typer.secho("    No AWS config detected! Consquently, the AWS region list is empty. Run 'skylark init' to remedy this.", fg="red")
             return []
         region_list = []
         for region in f.read().split("\n"):
