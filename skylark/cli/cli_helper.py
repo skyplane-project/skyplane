@@ -230,6 +230,13 @@ def replicate_helper(
     else:
         # make replication job
         objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
+        if not objs:
+            logger.warning(
+                f"Objects do not exist."
+            )
+            raise typer.Abort()
+            return 1
+
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=source_bucket,

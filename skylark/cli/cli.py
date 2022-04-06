@@ -126,6 +126,13 @@ def cp(
         # Set up replication topology
         if solve:
             objs = list(src_client.list_objects(path_src))
+            if not objs:
+                logger.warning(
+                    f"Objects do not exist."
+                )
+                raise typer.Abort()
+                os._exit(1)
+
             total_gbyte_to_transfer = sum([obj.size for obj in objs]) / GB
 
             # build problem and solve
