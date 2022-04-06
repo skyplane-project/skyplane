@@ -1,5 +1,6 @@
 from skylark.obj_store.object_store_interface import ObjectStoreInterface
 from skylark.utils.utils import do_parallel
+from skylark.utils import logger
 from tqdm import tqdm
 import os
 import argparse
@@ -27,6 +28,14 @@ def main(args):
     obj_store_interface_src.create_bucket()
     obj_store_interface_dst = ObjectStoreInterface.create(args.dest_region, dst_bucket)
     obj_store_interface_dst.create_bucket()
+
+    # check for read access
+    try:
+        next(obj_store_interface_src.list_objects(args.key_prefix))
+    except StopIteration:
+        pass
+    except:
+        logger.error("Failed to list objects in source bucket, do you have read access?")
 
     # query for all keys under key_prefix
     objs = {obj.key: obj.size for obj in obj_store_interface_src.list_objects(args.key_prefix)}
