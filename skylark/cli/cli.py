@@ -131,7 +131,6 @@ def cp(
                     f"Objects do not exist."
                 )
                 raise typer.Abort()
-                os._exit(1)
 
             total_gbyte_to_transfer = sum([obj.size for obj in objs]) / GB
 
