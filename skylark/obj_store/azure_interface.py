@@ -28,7 +28,7 @@ class AzureInterface(ObjectStoreInterface):
         self.blob_service_client = self.auth.get_blob_service_client(self.account_url)
 
         # infer azure region from storage account
-        if azure_region is None or azure_region is "infer":
+        if azure_region is None or azure_region == "infer":
             self.azure_region = self.get_region_from_storage_account(self.account_name)
         else:
             self.azure_region = azure_region

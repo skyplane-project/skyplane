@@ -3,9 +3,6 @@ import subprocess
 import threading
 from typing import Optional
 from azure.identity import DefaultAzureCredential
-from azure.mgmt.compute import ComputeManagementClient
-from azure.mgmt.network import NetworkManagementClient
-from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.authorization import AuthorizationManagementClient
 from azure.mgmt.storage import StorageManagementClient
 from azure.storage.blob import BlobServiceClient, ContainerClient
@@ -14,6 +11,23 @@ from skylark import cloud_config
 from skylark.compute.utils import query_which_cloud
 from skylark.config import SkylarkConfig
 from skylark import config_path
+
+# optional imports due to large package size
+try:
+    from azure.mgmt.network import NetworkManagementClient
+except ImportError:
+    NetworkManagementClient = None
+
+try:
+    from azure.mgmt.compute import ComputeManagementClient
+except ImportError:
+    ComputeManagementClient = None
+
+try:
+    from azure.mgmt.resource import ResourceManagementClient
+except ImportError:
+    ResourceManagementClient = None
+
 
 
 class AzureAuthentication:
@@ -55,12 +69,15 @@ class AzureAuthentication:
         return self.credential.get_token(resource)
 
     def get_compute_client(self):
+        assert ComputeManagementClient is not None, "ComputeManagementClient is not installed"
         return ComputeManagementClient(self.credential, self.subscription_id)
 
     def get_resource_client(self):
+        assert ResourceManagementClient is not None, "ResourceManagementClient is not installed"
         return ResourceManagementClient(self.credential, self.subscription_id)
 
     def get_network_client(self):
+        assert NetworkManagementClient is not None, "NetworkManagementClient is not installed"
         return NetworkManagementClient(self.credential, self.subscription_id)
 
     def get_authorization_client(self):
