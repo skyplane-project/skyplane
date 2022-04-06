@@ -1,20 +1,19 @@
-from multiprocessing import BoundedSemaphore
 import os
 import uuid
+from multiprocessing import BoundedSemaphore
 from pathlib import Path
 from typing import List, Optional
 
 import paramiko
-from skylark.compute.azure.azure_auth import AzureAuthentication
-from skylark.utils import logger
 from skylark import key_root
+from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.azure.azure_server import AzureServer
 from skylark.compute.cloud_providers import CloudProvider
-from azure.mgmt.authorization.models import RoleAssignmentCreateParameters
-
-from azure.mgmt.compute.models import ResourceIdentityType
-
+from skylark.utils import logger
 from skylark.utils.utils import Timer, do_parallel
+
+from azure.mgmt.authorization.models import RoleAssignmentCreateParameters
+from azure.mgmt.compute.models import ResourceIdentityType
 
 
 class AzureCloudProvider(CloudProvider):

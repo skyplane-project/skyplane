@@ -1,12 +1,11 @@
 import threading
 from typing import Optional
-import typer
 
 import boto3
 
 from skylark.config import SkylarkConfig
 from skylark import config_path
-from skylark import aws_config_path 
+from skylark import aws_config_path
 
 
 class AWSAuthentication:
@@ -18,7 +17,7 @@ class AWSAuthentication:
             self.config = config
         else:
             self.config = SkylarkConfig.load_config(config_path)
-        
+
         if access_key and secret_key:
             self.config_mode = "manual"
             self._access_key = access_key
@@ -27,36 +26,29 @@ class AWSAuthentication:
             self.config_mode = "iam_inferred"
             self._access_key = None
             self._secret_key = None
-    
+
     @staticmethod
     def save_region_config(config):
-        f = open(aws_config_path, "w")
-        if config.aws_enabled == False:
-            f.write("")
-            f.close()
-            return
-
-        region_list = []
-        for region in boto3.client('ec2').describe_regions()['Regions']:
-            if region['OptInStatus'] == 'opt-in-not-required' or region['OptInStatus'] == 'opted-in':
-                region_text = region['Endpoint']
-                region_name = region_text[region_text.find('.') + 1 :region_text.find(".amazon")]
-                region_list.append(region_name)
-
-        config = ""
-        for i in range(len(region_list) - 1):
-            config += region_list[i] + "\n"
-        config += region_list[len(region_list) - 1]
-        f.write(config)
-        typer.secho(f"\nConfig file saved to {aws_config_path}", fg="green")
-        f.close()
+        with open(aws_config_path, "w") as f:
+            if config.aws_enabled == False:
+                f.write("")
+                return
+            region_list = []
+            describe_regions = boto3.client("ec2", region_name="us-east-1").describe_regions()
+            for region in describe_regions["Regions"]:
+                if region["OptInStatus"] == "opt-in-not-required" or region["OptInStatus"] == "opted-in":
+                    region_text = region["Endpoint"]
+                    region_name = region_text[region_text.find(".") + 1 : region_text.find(".amazon")]
+                    region_list.append(region_name)
+            f.write("\n".join(region_list))
+            print(f"    AWS region config file saved to {aws_config_path}")
 
     @staticmethod
     def get_region_config():
         try:
             f = open(aws_config_path, "r")
         except FileNotFoundError:
-            typer.echo("No AWS config detected! Consquently, the AWS region list is empty. Run 'skylark init' to remedy this.")
+            print("    No AWS config detected! Consquently, the AWS region list is empty. Run 'skylark init' to remedy this.")
             return []
         region_list = []
         for region in f.read().split("\n"):

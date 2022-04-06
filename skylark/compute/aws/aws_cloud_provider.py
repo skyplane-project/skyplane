@@ -5,10 +5,8 @@ from typing import List, Optional
 from pathlib import Path
 
 import botocore
-import pandas as pd
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.utils import logger
-import typer
 from skylark import key_root
 
 from oslo_concurrency import lockutils
@@ -16,6 +14,12 @@ from skylark import skylark_root
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.cloud_providers import CloudProvider
 from skylark.utils.utils import retry_backoff, wait_for
+
+try:
+    import pandas as pd
+except ImportError:
+    pd = None
+    logger.warning("pandas not installed, will not be able to load transfer costs")
 
 
 class AWSCloudProvider(CloudProvider):
