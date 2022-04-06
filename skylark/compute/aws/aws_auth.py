@@ -34,11 +34,11 @@ class AWSAuthentication:
                 f.write("")
                 return
             region_list = []
-            describe_regions = boto3.client('ec2', region_name="us-east-1").describe_regions()
-            for region in describe_regions['Regions']:
-                if region['OptInStatus'] == 'opt-in-not-required' or region['OptInStatus'] == 'opted-in':
-                    region_text = region['Endpoint']
-                    region_name = region_text[region_text.find('.') + 1 :region_text.find(".amazon")]
+            describe_regions = boto3.client("ec2", region_name="us-east-1").describe_regions()
+            for region in describe_regions["Regions"]:
+                if region["OptInStatus"] == "opt-in-not-required" or region["OptInStatus"] == "opted-in":
+                    region_text = region["Endpoint"]
+                    region_name = region_text[region_text.find(".") + 1 : region_text.find(".amazon")]
                     region_list.append(region_name)
             f.write("\n".join(region_list))
             print(f"    AWS region config file saved to {aws_config_path}")

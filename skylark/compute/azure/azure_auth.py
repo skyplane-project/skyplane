@@ -29,7 +29,6 @@ except ImportError:
     ResourceManagementClient = None
 
 
-
 class AzureAuthentication:
     __cached_credentials = threading.local()
 
