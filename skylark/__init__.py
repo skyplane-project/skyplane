@@ -45,4 +45,4 @@ GB = 1024 * 1024 * 1024
 if config_path.exists():
     cloud_config = SkylarkConfig.load_config(config_path)
 else:
-    cloud_config = SkylarkConfig()
+    cloud_config = SkylarkConfig(False, False, False)
