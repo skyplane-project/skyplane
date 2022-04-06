@@ -72,12 +72,11 @@ class AzureInterface(ObjectStoreInterface):
             operation.result()
         except ResourceExistsError:
             logger.warning("Unable to create storage account as it already exists")
-        self.grant_storage_account_access("Storage Blob Data Contributor")
 
     def grant_storage_account_access(self, role_name: str, principal_id: str = None):
         # lookup role
         auth_client = self.auth.get_authorization_client()
-        scope = f"/subscriptions/{self.auth.subscription_id}/resourceGroups/{AzureServer.resource_group_name}/providers/Microsoft.Storage/storageAccounts/{self.account_name}/blobServices/default/containers/{self.container_name}"
+        scope = f"/subscriptions/{self.auth.subscription_id}/resourceGroups/{AzureServer.resource_group_name}/providers/Microsoft.Storage/storageAccounts/{self.account_name}"
         roles = list(auth_client.role_definitions.list(scope, filter="roleName eq '{}'".format(role_name)))
         assert len(roles) == 1
 
@@ -91,26 +90,37 @@ class AzureInterface(ObjectStoreInterface):
                     .strip()
                 )
             else:
-                logger.error(f"Unable to determine principal ID for role assignment for {scope}")
-                raise Exception(f"Unable to determine principal ID for role assignment for {scope}")
-        role_assignment = auth_client.role_assignments.create(
-            scope,
-            uuid.uuid4(),  # Role assignment random name
-            RoleAssignmentCreateParameters(properties=RoleAssignmentProperties(role_definition_id=roles[0].id, principal_id=principal_id)),
+                logger.error(f"Unable to determine principal ID for role assignment for {scope}, cannot automatically grant access")
+                return
+
+        # query for existing role assignment
+        assignments = list(
+            auth_client.role_assignments.list(scope, filter=f"principalId eq '{principal_id}' and roleDefinitionId eq '{roles[0].id}'")
         )
+        if len(assignments) == 0:
+            logger.debug(f"Granting access to {principal_id} for role {role_name} on storage account {self.account_name}")
+            role_assignment = auth_client.role_assignments.create(
+                scope,
+                uuid.uuid4(),  # Role assignment random name
+                RoleAssignmentCreateParameters(
+                    properties=RoleAssignmentProperties(role_definition_id=roles[0].id, principal_id=principal_id)
+                ),
+            )
 
     def create_container(self):
         try:
             self.container_client.create_container()
         except ResourceExistsError:
-            logger.warning("Unable to create container as it already exists")
+            logger.warning(f"Unable to create container {self.container_name} as it already exists")
 
     def create_bucket(self, premium_tier=True):
-        logger.debug(f"Creating bucket {self.container_name} in {self.account_name}")
         tier = "Premium_LRS" if premium_tier else "Standard_LRS"
         if not self.storage_account_exists():
+            logger.debug(f"Creating storage account {self.account_name}")
             self.create_storage_account(tier=tier)
+        self.grant_storage_account_access("Storage Blob Data Contributor")
         if not self.container_exists():
+            logger.debug(f"Creating container {self.container_name}")
             self.create_container()
 
     def delete_container(self):

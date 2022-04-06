@@ -34,8 +34,9 @@ def main(args):
         next(obj_store_interface_src.list_objects(args.key_prefix))
     except StopIteration:
         pass
-    except:
-        logger.error("Failed to list objects in source bucket, do you have read access?")
+    except Exception as e:
+        logger.error(f"Failed to list objects in source bucket {src_bucket}, do you have read access?: {e}")
+        exit(1)
 
     # query for all keys under key_prefix
     objs = {obj.key: obj.size for obj in obj_store_interface_src.list_objects(args.key_prefix)}
