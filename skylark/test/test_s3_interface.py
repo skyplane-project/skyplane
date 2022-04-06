@@ -15,7 +15,7 @@ def test_s3_interface():
 
     # generate file and upload
     obj_name = "/test_small.txt"
-    file_size_mb = 128
+    file_size_mb = 64
     with tempfile.NamedTemporaryFile() as tmp:
         fpath = tmp.name
         with open(fpath, "rb+") as f:
@@ -24,7 +24,7 @@ def test_s3_interface():
             file_md5 = hashlib.md5(f.read()).hexdigest()
 
         with Timer() as t:
-            s3_interface.upload_object(fpath, obj_name).result()
+            s3_interface.upload_object(fpath, obj_name)
 
         assert s3_interface.get_obj_size(obj_name) == os.path.getsize(fpath)
 
@@ -34,7 +34,7 @@ def test_s3_interface():
         if os.path.exists(fpath):
             os.remove(fpath)
         with Timer() as t:
-            s3_interface.download_object(obj_name, fpath).result()
+            s3_interface.download_object(obj_name, fpath)
 
         assert s3_interface.get_obj_size(obj_name) == os.path.getsize(fpath)
 
