@@ -441,7 +441,7 @@ class AzureCloudProvider(CloudProvider):
             # todo only grant storage-blob-data-reader and storage-blob-data-writer for specified buckets
             auth_client = self.auth.get_authorization_client()
             scope = f"/subscriptions/{self.auth.subscription_id}"
-            role_name = "Contributor"
+            role_name = "Storage Blob Data Contributor"
             roles = list(auth_client.role_definitions.list(scope, filter="roleName eq '{}'".format(role_name)))
             assert len(roles) == 1
 
