@@ -45,7 +45,6 @@ setup(
         "gateway": [
             "flask",
             "pyopenssl",
-            "setproctitle",
             "werkzeug",
         ],
         "experiments": [

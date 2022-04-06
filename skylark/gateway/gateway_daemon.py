@@ -13,7 +13,6 @@ import time
 from typing import Dict
 
 
-import setproctitle
 from skylark.utils import logger
 from skylark import MB, print_header
 from skylark.chunk import ChunkState
@@ -47,7 +46,6 @@ class GatewayDaemon:
         logger.info(f"[gateway_daemon] API started at {self.api_server.url}")
 
     def run(self):
-        setproctitle.setproctitle(f"skylark-gateway-daemon")
         exit_flag = Event()
 
         def exit_handler(signum, frame):

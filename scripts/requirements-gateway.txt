@@ -23,5 +23,4 @@ tqdm
 # gateway dependencies
 flask
 pyopenssl
-setproctitle
 werkzeug
