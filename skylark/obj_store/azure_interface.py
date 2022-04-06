@@ -94,10 +94,11 @@ class AzureInterface(ObjectStoreInterface):
                 return
 
         # query for existing role assignment
-        assignments = list(
-            auth_client.role_assignments.list(scope, filter=f"principalId eq '{principal_id}' and roleDefinitionId eq '{roles[0].id}'")
-        )
-        if len(assignments) == 0:
+        matches = []
+        for assignment in auth_client.role_assignments.list_for_scope(scope, filter="principalId eq '{}'".format(principal_id)):
+            if assignment.role_definition_id == roles[0].id:
+                matches.append(assignment)
+        if len(matches) == 0:
             logger.debug(f"Granting access to {principal_id} for role {role_name} on storage account {self.account_name}")
             role_assignment = auth_client.role_assignments.create(
                 scope,
