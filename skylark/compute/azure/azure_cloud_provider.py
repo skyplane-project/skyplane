@@ -10,7 +10,7 @@ from skylark.utils import logger
 from skylark import key_root
 from skylark.compute.azure.azure_server import AzureServer
 from skylark.compute.cloud_providers import CloudProvider
-from azure.mgmt.authorization.models import RoleAssignmentCreateParameters
+from azure.mgmt.authorization.models import RoleAssignmentCreateParameters, RoleAssignmentProperties
 
 from azure.mgmt.compute.models import ResourceIdentityType
 
@@ -450,7 +450,7 @@ class AzureCloudProvider(CloudProvider):
                 scope,
                 uuid.uuid4(),  # Role assignment random name
                 RoleAssignmentCreateParameters(
-                    properties=dict(role_definition_id=roles[0].id, principal_id=vm_result.identity.principal_id)
+                    properties=RoleAssignmentProperties(role_definition_id=roles[0].id, principal_id=vm_result.identity.principal_id)
                 ),
             )
 

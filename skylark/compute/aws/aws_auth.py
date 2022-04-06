@@ -7,7 +7,7 @@ import boto3
 
 from skylark.config import SkylarkConfig
 from skylark import config_path
-from skylark import aws_config_path 
+from skylark import aws_config_path
 
 
 class AWSAuthentication:
@@ -19,7 +19,7 @@ class AWSAuthentication:
             self.config = config
         else:
             self.config = SkylarkConfig.load_config(config_path)
-        
+
         if access_key and secret_key:
             self.config_mode = "manual"
             self._access_key = access_key
@@ -28,7 +28,7 @@ class AWSAuthentication:
             self.config_mode = "iam_inferred"
             self._access_key = None
             self._secret_key = None
-    
+
     @staticmethod
     def save_region_config(config):
         with open(aws_config_path, "w") as f:
@@ -36,11 +36,11 @@ class AWSAuthentication:
                 f.write("")
                 return
             region_list = []
-            describe_regions = boto3.client('ec2', region_name="us-east-1").describe_regions()
-            for region in describe_regions['Regions']:
-                if region['OptInStatus'] == 'opt-in-not-required' or region['OptInStatus'] == 'opted-in':
-                    region_text = region['Endpoint']
-                    region_name = region_text[region_text.find('.') + 1 :region_text.find(".amazon")]
+            describe_regions = boto3.client("ec2", region_name="us-east-1").describe_regions()
+            for region in describe_regions["Regions"]:
+                if region["OptInStatus"] == "opt-in-not-required" or region["OptInStatus"] == "opted-in":
+                    region_text = region["Endpoint"]
+                    region_name = region_text[region_text.find(".") + 1 : region_text.find(".amazon")]
                     region_list.append(region_name)
             f.write("\n".join(region_list))
             typer.secho(f"    AWS region config file saved to {aws_config_path}", fg="green")
@@ -50,7 +50,9 @@ class AWSAuthentication:
         try:
             f = open(aws_config_path, "r")
         except FileNotFoundError:
-            typer.secho("    No AWS config detected! Consquently, the AWS region list is empty. Run 'skylark init' to remedy this.", fg="red")
+            typer.secho(
+                "    No AWS config detected! Consquently, the AWS region list is empty. Run 'skylark init' to remedy this.", fg="red"
+            )
             return []
         region_list = []
         for region in f.read().split("\n"):
