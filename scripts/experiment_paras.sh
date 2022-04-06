@@ -50,7 +50,6 @@ skylark replicate-json ${filename} \
     --source-bucket $src_bucket \
     --dest-bucket $dest_bucket \
     --src-key-prefix ${key_prefix} \
-    --dest-key-prefix ${key_prefix} \
-    |& tee data/results/${experiment}/obj-store-logs.txt
+    --dest-key-prefix ${key_prefix} |& tee data/results/${experiment}/obj-store-logs.txt
 tail -1 data/results/${experiment}/obj-store-logs.txt
 echo ${experiment}

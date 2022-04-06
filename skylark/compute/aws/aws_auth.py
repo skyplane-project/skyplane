@@ -1,7 +1,5 @@
-from pydoc import describe
 import threading
 from typing import Optional
-import typer
 
 import boto3
 
@@ -43,16 +41,14 @@ class AWSAuthentication:
                     region_name = region_text[region_text.find(".") + 1 : region_text.find(".amazon")]
                     region_list.append(region_name)
             f.write("\n".join(region_list))
-            typer.secho(f"    AWS region config file saved to {aws_config_path}", fg="green")
+            print(f"    AWS region config file saved to {aws_config_path}")
 
     @staticmethod
     def get_region_config():
         try:
             f = open(aws_config_path, "r")
         except FileNotFoundError:
-            typer.secho(
-                "    No AWS config detected! Consquently, the AWS region list is empty. Run 'skylark init' to remedy this.", fg="red"
-            )
+            print("    No AWS config detected! Consquently, the AWS region list is empty. Run 'skylark init' to remedy this.")
             return []
         region_list = []
         for region in f.read().split("\n"):
