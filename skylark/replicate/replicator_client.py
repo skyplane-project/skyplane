@@ -211,7 +211,6 @@ class ReplicatorClient:
             "azure",
             "gcp",
         ], f"Only AWS, Azure, and GCP are supported, but got {job.dest_region}"
-        assert len(job.src_objs) > 0, f"Found {len(job.src_objs)} matching objects. Objects do not exist in src bucket or bucket is empty"
 
         # pre-fetch instance IPs for all gateways
         gateway_ips: Dict[Server, str] = {s: s.public_ip() for s in self.bound_nodes.values()}

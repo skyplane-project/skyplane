@@ -3,6 +3,7 @@ import os
 from typing import Iterator, List
 
 from concurrent.futures import Future
+import typer
 import botocore.exceptions
 from awscrt.auth import AwsCredentialsProvider
 from awscrt.http import HttpHeaders, HttpRequest
@@ -40,8 +41,14 @@ class S3Interface(ObjectStoreInterface):
 
     def infer_s3_region(self, bucket_name: str):
         s3_client = self.auth.get_boto3_client("s3")
-        region = s3_client.get_bucket_location(Bucket=bucket_name).get("LocationConstraint", "us-east-1")
-        return region if region is not None else "us-east-1"
+
+        try:
+            region = s3_client.get_bucket_location(Bucket=bucket_name).get("LocationConstraint", "us-east-1")
+            return region if region is not None else "us-east-1"
+        except:
+            typer.echo("Specified bucket does not exist.")
+            raise typer.Abort()
+        
 
     def bucket_exists(self):
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
