@@ -1,6 +1,5 @@
 from functools import partial
 import queue
-import threading
 from multiprocessing import Event, Manager, Process, Value
 from typing import Dict, Optional
 
