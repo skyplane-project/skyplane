@@ -1,6 +1,5 @@
 import mimetypes
 import os
-from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Iterator, List
 
 from google.cloud import storage  # pytype: disable=import-error

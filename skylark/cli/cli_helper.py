@@ -1,6 +1,5 @@
 import concurrent.futures
 from functools import partial
-import atexit
 import json
 import os
 import re
@@ -12,12 +11,11 @@ from shutil import copyfile
 from typing import Dict, List
 from sys import platform
 from typing import Dict, List
-from urllib.parse import ParseResultBytes, parse_qs
 
 
 import boto3
 import typer
-from skylark import config_path, GB, MB, print_header
+from skylark import GB, MB
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.gcp.gcp_auth import GCPAuthentication
