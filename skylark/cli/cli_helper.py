@@ -414,6 +414,7 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
         typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red")
         typer.secho("    Disabling GCP support", fg="blue")
         config.gcp_enabled = False
+        auth.save_region_config()
         return config
     else:
         typer.secho("    GCP credentials found in GCP CLI", fg="blue")
@@ -421,9 +422,11 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
             config.gcp_project_id = typer.prompt("    Enter the GCP project ID:", default=auth.project_id)
             assert config.gcp_project_id is not None, "GCP project ID must not be None"
             config.gcp_enabled = True
+            auth.save_region_config()
             return config
         else:
             config.gcp_project_id = None
             typer.secho("    Disabling GCP support", fg="blue")
             config.gcp_enabled = False
+            auth.save_region_config()
             return config
