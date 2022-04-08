@@ -81,7 +81,6 @@ def ls(directory: str):
         raise NotImplementedError(f"Unrecognized object store provider")
 
 
-
 @app.command()
 def cp(
     src: str,
