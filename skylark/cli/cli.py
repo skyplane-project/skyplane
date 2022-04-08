@@ -46,6 +46,7 @@ from skylark.cli.cli_helper import (
     load_azure_config,
     load_gcp_config,
     ls_local,
+    ls_objstore,
     ls_s3,
     parse_path,
     replicate_helper,
@@ -68,8 +69,17 @@ def ls(directory: str):
         for path in ls_local(Path(directory)):
             typer.echo(path)
     elif provider == "s3":
-        for path in ls_s3(bucket, key):
+        for path in ls_objstore("aws:infer", bucket, key):
             typer.echo(path)
+    elif provider == "gs":
+        for path in ls_objstore("gcp:infer", bucket, key):
+            typer.echo(path)
+    elif provider == "azure":
+        for path in ls_objstore("azure:infer", bucket, key):
+            typer.echo(path)
+    else:
+        raise NotImplementedError(f"Unrecognized object store provider")
+
 
 
 @app.command()

@@ -8,6 +8,7 @@ import resource
 import subprocess
 from pathlib import Path
 from shutil import copyfile
+from types import GetSetDescriptorType
 from typing import Dict, List
 from sys import platform
 from typing import Dict, List
@@ -81,9 +82,9 @@ def ls_local(path: Path):
         yield path.name
 
 
-def ls_s3(bucket_name: str, key_name: str, use_tls: bool = True):
-    s3 = S3Interface(None, bucket_name, use_tls=use_tls)
-    for obj in s3.list_objects(prefix=key_name):
+def ls_objstore(obj_store: str, bucket_name: str, key_name: str, use_tls: bool = True):
+    client = ObjectStoreInterface.create(obj_store, bucket_name, use_tls=use_tls)
+    for obj in client.list_objects(prefix=key_name):
         yield obj.full_path()
 
 
