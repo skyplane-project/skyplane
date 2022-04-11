@@ -9,7 +9,6 @@ from skylark import config_path
 from skylark import gcp_config_path
 
 from googleapiclient import discovery
-#from oauth2client.client import GoogleCredentials
 
 
 class GCPAuthentication:
