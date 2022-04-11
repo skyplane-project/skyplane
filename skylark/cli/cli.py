@@ -282,7 +282,7 @@ def init(reinit_azure: bool = False, reinit_gcp: bool = False):
     typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)
     cloud_config = load_aws_config(cloud_config)
     create_aws_region_config(cloud_config)
-    query_aws_vcpu_limits(cloud_config)
+    # query_aws_vcpu_limits(cloud_config)
 
     # load Azure config
     typer.secho("\n(2) Configuring Azure:", fg="yellow", bold=True)

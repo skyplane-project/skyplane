@@ -8,6 +8,7 @@ import paramiko
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.utils import logger
 from skylark import key_root
+from skylark import exceptions
 from skylark.compute.azure.azure_server import AzureServer
 from skylark.compute.cloud_providers import CloudProvider
 from azure.mgmt.authorization.models import RoleAssignmentCreateParameters
