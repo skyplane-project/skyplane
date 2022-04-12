@@ -22,16 +22,13 @@ import skylark.cli.cli_azure
 import skylark.cli.cli_gcp
 import skylark.cli.cli_solver
 import skylark.cli.experiments
-from skylark.obj_store.azure_interface import AzureInterface
-from skylark.obj_store.gcs_interface import GCSInterface
 from skylark.obj_store.object_store_interface import ObjectStoreInterface
-from skylark.obj_store.s3_interface import S3Interface
 from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP
 import typer
 from skylark.config import SkylarkConfig
 from skylark.utils import logger
 from skylark.utils.utils import Timer
-from skylark import config_path, GB, MB, print_header
+from skylark import GB, config_path, print_header
 from skylark.cli.cli_helper import (
     check_ulimit,
     copy_azure_local,
@@ -274,7 +271,7 @@ def init(reinit_azure: bool = False, reinit_gcp: bool = False):
     if config_path.exists():
         cloud_config = SkylarkConfig.load_config(config_path)
     else:
-        cloud_config = SkylarkConfig()
+        cloud_config = SkylarkConfig.default_config()
 
     # load AWS config
     typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)

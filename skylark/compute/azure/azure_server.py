@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import paramiko
@@ -176,6 +175,9 @@ class AzureServer(Server):
             banner_timeout=200,
         )
         return ssh_client
+
+    def get_ssh_cmd(self, uname="skylark", ssh_key_password="skylark"):
+        return f"ssh -i {self.ssh_private_key} {uname}@{self.public_ip()}"
 
     def get_sftp_client(self, uname="skylark", ssh_key_password="skylark"):
         t = paramiko.Transport((self.public_ip(), 22))
