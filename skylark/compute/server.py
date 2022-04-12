@@ -211,7 +211,7 @@ class Server:
     def start_gateway(
         self,
         outgoing_ports: Dict[str, int],  # maps ip to number of connections along route
-        gateway_docker_image="ghcr.io/parasj/skylark:main",
+        gateway_docker_image: str,
         log_viewer_port=8888,
         use_bbr=False,
     ):
