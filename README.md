@@ -1,10 +1,10 @@
-# Skylark: A Unified Data Layer for the Multi-Cloud
+# Skyplane: A Unified Data Layer for the Multi-Cloud
 
 <img src="https://gist.githubusercontent.com/parasj/d67e6e161ea1329d4509c69bc3325dcb/raw/232009efdeb8620d2acb91aec111dedf98fdae18/skylark.jpg" width="350px">
-Skylark is lifting cloud object stores to the Sky.
+Skyplane is lifting cloud object stores to the Sky.
 
 ## Instructions to build and run demo
-Skylark is composed of two components: A ReplicatorClient that runs locally on your machine that is responsible for provisioning instances and coordinating replication jobs and a GatewayDaemon that runs on each provisioned instance to actually copy data through the overlay.
+Skyplane is composed of two components: A ReplicatorClient that runs locally on your machine that is responsible for provisioning instances and coordinating replication jobs and a GatewayDaemon that runs on each provisioned instance to actually copy data through the overlay.
 
 This package represents both components as a single binary. Docker builds a single container with the GatewayDaemon and pushes it to the Github Container Registry (ghcr.io). After provisioning an instance, a GatewayDaemon is started by launching that container. Therefore, it's simple and fast to launch a new Gateway.
 
@@ -36,7 +36,7 @@ Then, configure cloud credentials as needed:
 * GCS: `gcloud auth application-default login`
 * Azure: `az login`
 
-Finally, install and initalize Skylark:
+Finally, install and initalize Skyplane:
 ```
 $ pip install -e ".[all]"
 $ skylark init
@@ -123,7 +123,7 @@ Replication: average 0.02Gbit/s: 100%|██████████████
 
 </details>
 
-When done, stop all instances started by Skylark by running:
+When done, stop all instances started by Skyplane by running:
 
 ```skyklark deprovision```
 
