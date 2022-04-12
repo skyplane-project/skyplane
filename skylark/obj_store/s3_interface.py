@@ -92,7 +92,6 @@ class S3Interface(ObjectStoreInterface):
             f.seek(byte_offset)
             f.write(response["Body"].read())
         response["Body"].close() 
-        return response["ETag"] #might want to return bytes read instead
 
     def initiate_multipart_upload(self, dst_object_name, content_type):
         #cannot infer content type here
