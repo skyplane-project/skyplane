@@ -454,5 +454,6 @@ class AzureCloudProvider(CloudProvider):
             # todo only grant storage-blob-data-reader and storage-blob-data-writer for specified buckets
             scope = f"/subscriptions/{self.auth.subscription_id}"
             grant_vm_role(scope, "Storage Blob Data Contributor")
+            grant_vm_role(scope, "Contributor")
 
         return AzureServer(name)
