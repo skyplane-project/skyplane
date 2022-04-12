@@ -12,16 +12,16 @@ RUN (echo 'net.ipv4.ip_local_port_range = 12000 65535' >> /etc/sysctl.conf) \
 
 # install apt packages
 RUN --mount=type=cache,target=/var/cache/apt apt update \
-    && apt-get install --no-install-recommends -y git wget ca-certificates build-essential graphviz \
+    && apt-get install --no-install-recommends -y curl ca-certificates build-essential \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # install gateway
 COPY scripts/requirements-gateway.txt /tmp/requirements-gateway.txt
-RUN --mount=type=cache,target=/root/.cache/pip pip3 install --no-cache-dir --compile -r /tmp/requirements-gateway.txt && rm -r /tmp/requirements-gateway.txt
+RUN --mount=type=cache,target=/root/.cache/pip pip3 install --no-cache-dir -r /tmp/requirements-gateway.txt && rm -r /tmp/requirements-gateway.txt
 
 WORKDIR /pkg
 COPY . .
-RUN pip3 install -e .
+RUN pip3 install --no-dependencies -e ".[gateway]"
 
 CMD ["python3", "skylark/gateway/gateway_daemon.py"]

@@ -1,36 +1,20 @@
 from functools import lru_cache
+import shlex
 import subprocess
 from skylark.utils import logger
 
 
 @lru_cache(maxsize=1)
 def query_which_cloud() -> str:
-    if (
-        subprocess.call(
-            'curl -f --connection-timeout 1 --noproxy "*" http://169.254.169.254/1.0/meta-data/instance-id'.split(),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        == 0
-    ):
+    check_exit_code = lambda cmd: subprocess.call(shlex.split(cmd), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    aws_metadata_url = "curl -f --connect-timeout 1 --noproxy * http://169.254.169.254/1.0/meta-data/instance-id"
+    azure_metadata_url = "curl -f --connect-timeout 1 -H Metadata:true --noproxy * http://169.254.169.254/metadata/instance?api-version=2021-02-01"
+    gcp_metadata_url = "curl -f --connect-timeout 1 -noproxy * http://metadata.google.internal/computeMetadata/v1/instance/hostname"
+    if check_exit_code(aws_metadata_url) == 0:
         return "aws"
-    elif (
-        subprocess.call(
-            'curl -f --connection-timeout 1 -H Metadata:true --noproxy "*" "http://169.254.169.254/metadata/instance?api-version=2021-02-01"'.split(),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        == 0
-    ):
+    elif check_exit_code(azure_metadata_url) == 0:
         return "azure"
-    elif (
-        subprocess.call(
-            'curl -f --connection-timeout 1 -noproxy "*" http://metadata.google.internal/computeMetadata/v1/instance/hostname'.split(),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        == 0
-    ):
+    elif check_exit_code(gcp_metadata_url) == 0:
         return "gcp"
     else:
         return "unknown"

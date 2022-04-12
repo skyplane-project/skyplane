@@ -1,11 +1,14 @@
 import os
-from concurrent.futures import Future, ThreadPoolExecutor
+import subprocess
 from typing import Iterator, List
+import uuid
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.azure.azure_server import AzureServer
 from skylark.utils import logger
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
+from azure.mgmt.authorization.models import RoleAssignmentCreateParameters, RoleAssignmentProperties
+from azure.identity import AzureCliCredential
 
 
 class AzureObject(ObjectStoreObject):
@@ -28,7 +31,7 @@ class AzureInterface(ObjectStoreInterface):
         self.blob_service_client = self.auth.get_blob_service_client(self.account_url)
 
         # infer azure region from storage account
-        if azure_region is None or azure_region is "infer":
+        if azure_region is None or azure_region == "infer":
             self.azure_region = self.get_region_from_storage_account(self.account_name)
         else:
             self.azure_region = azure_region
@@ -70,17 +73,55 @@ class AzureInterface(ObjectStoreInterface):
         except ResourceExistsError:
             logger.warning("Unable to create storage account as it already exists")
 
+    def grant_storage_account_access(self, role_name: str, principal_id: str = None):
+        # lookup role
+        auth_client = self.auth.get_authorization_client()
+        scope = f"/subscriptions/{self.auth.subscription_id}/resourceGroups/{AzureServer.resource_group_name}/providers/Microsoft.Storage/storageAccounts/{self.account_name}"
+        roles = list(auth_client.role_definitions.list(scope, filter="roleName eq '{}'".format(role_name)))
+        assert len(roles) == 1
+
+        # lookup principal
+        if principal_id is None:
+            self.auth.credential.get_token("https://graph.windows.net")  # must request token to attempt to load credential
+            if isinstance(self.auth.credential._successful_credential, AzureCliCredential):
+                principal_id = (
+                    subprocess.check_output(["az", "ad", "signed-in-user", "show", "--query", "objectId", "-o", "tsv"])
+                    .decode("utf-8")
+                    .strip()
+                )
+            else:
+                logger.error(f"Unable to determine principal ID for role assignment for {scope}, cannot automatically grant access")
+                return
+
+        # query for existing role assignment
+        matches = []
+        for assignment in auth_client.role_assignments.list_for_scope(scope, filter="principalId eq '{}'".format(principal_id)):
+            if assignment.role_definition_id == roles[0].id:
+                matches.append(assignment)
+        if len(matches) == 0:
+            logger.debug(f"Granting access to {principal_id} for role {role_name} on storage account {self.account_name}")
+            role_assignment = auth_client.role_assignments.create(
+                scope,
+                uuid.uuid4(),  # Role assignment random name
+                RoleAssignmentCreateParameters(
+                    properties=RoleAssignmentProperties(role_definition_id=roles[0].id, principal_id=principal_id)
+                ),
+            )
+
     def create_container(self):
         try:
             self.container_client.create_container()
         except ResourceExistsError:
-            logger.warning("Unable to create container as it already exists")
+            logger.warning(f"Unable to create container {self.container_name} as it already exists")
 
     def create_bucket(self, premium_tier=True):
         tier = "Premium_LRS" if premium_tier else "Standard_LRS"
         if not self.storage_account_exists():
+            logger.debug(f"Creating storage account {self.account_name}")
             self.create_storage_account(tier=tier)
+        self.grant_storage_account_access("Storage Blob Data Contributor")
         if not self.container_exists():
+            logger.debug(f"Creating container {self.container_name}")
             self.create_container()
 
     def delete_container(self):
