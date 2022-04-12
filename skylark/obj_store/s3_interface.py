@@ -58,7 +58,7 @@ class S3Interface(ObjectStoreInterface):
     def get_obj_metadata(self, obj_name):
         s3_resource = self.auth.get_boto3_resource("s3", self.aws_region).Bucket(self.bucket_name)
         try:
-            return s3_resource.Object(str(obj_name).lstrip("/"))
+            return s3_resource.Object(str(obj_name))
         except botocore.exceptions.ClientError as e:
             raise NoSuchObjectException(f"Object {obj_name} does not exist, or you do not have permission to access it") from e
 
