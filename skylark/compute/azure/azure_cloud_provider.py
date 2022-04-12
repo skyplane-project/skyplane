@@ -455,7 +455,7 @@ class AzureCloudProvider(CloudProvider):
 
             # wait for role to propagate
             wait_for(
-                lambda: (len(auth_client.role_assignments.list("principalId eq '{}'".format(vm_result.identity.principal_id))) == 2),
+                lambda: (len(list(auth_client.role_assignments.list(f"principalId eq '{vm_result.identity.principal_id}'"))) == 2),
                 timeout=60,
             )
 
