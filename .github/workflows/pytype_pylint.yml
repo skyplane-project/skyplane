@@ -1,4 +1,4 @@
-name: PyType + PyLint (optional)
+name: lint
 
 on:
   push:
