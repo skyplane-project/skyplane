@@ -6,7 +6,6 @@ from typing import Dict, List, Optional, Set, Tuple
 from skylark.obj_store.object_store_interface import ObjectStoreInterface
 
 from skylark.utils import logger
-import graphviz as gv
 from skylark import MB
 from skylark.chunk import ChunkRequest
 
@@ -108,6 +107,7 @@ class ReplicationTopology:
         return ReplicationTopology(edges)
 
     def to_graphviz(self):
+        import graphviz as gv
         # if dot is not installed
         has_dot = shutil.which("dot") is not None
         if not has_dot:
