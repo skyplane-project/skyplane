@@ -14,7 +14,7 @@ def test_s3_interface():
     s3_interface.create_bucket()
 
     # generate file and upload
-    obj_name = "/test_small.txt"
+    obj_name = "test_small.txt"
     file_size_mb = 64
     with tempfile.NamedTemporaryFile() as tmp:
         fpath = tmp.name

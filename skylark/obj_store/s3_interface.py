@@ -58,7 +58,7 @@ class S3Interface(ObjectStoreInterface):
     def get_obj_metadata(self, obj_name):
         s3_resource = self.auth.get_boto3_resource("s3", self.aws_region).Bucket(self.bucket_name)
         try:
-            return s3_resource.Object(str(obj_name))
+            return s3_resource.Object(str(obj_name).lstrip("/"))
         except botocore.exceptions.ClientError as e:
             raise NoSuchObjectException(f"Object {obj_name} does not exist, or you do not have permission to access it") from e
 
@@ -84,6 +84,7 @@ class S3Interface(ObjectStoreInterface):
             #unoptimized
             byte_offset = 0
         else:
+            raise NotImplementedError("Feature disabled due to lack of testing")
             parameters["Range"] = f"bytes={byte_offset}-{byte_offset + byte_count - 1}"
         response = s3_client.get_object(**parameters)
         if not os.path.exists(dst_file_path):
@@ -92,7 +93,6 @@ class S3Interface(ObjectStoreInterface):
             f.seek(byte_offset)
             f.write(response["Body"].read())
         response["Body"].close() 
-        return response["ETag"] #might want to return bytes read instead
 
     def initiate_multipart_upload(self, dst_object_name, content_type):
         #cannot infer content type here
@@ -133,6 +133,7 @@ class S3Interface(ObjectStoreInterface):
             part_list = [_upload_object_part_helper()]
             return self.finalize_multipart_upload(dst_object_name, upload_id, part_list)
         else:
+            raise NotImplementedError("Feature disabled due to lack of testing")
             return _upload_object_part_helper()
 
     def finalize_multipart_upload(self, dst_object_name, upload_id, part_list):
