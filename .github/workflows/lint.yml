@@ -28,7 +28,7 @@ jobs:
           pip install -e .
           pip install pytype
       - name: Run pytype
-        run: pytype . --config .pytype.cfg
+        run: pytype skylark --config .pytype.cfg
   pylint:
     runs-on: ubuntu-latest
     steps:
