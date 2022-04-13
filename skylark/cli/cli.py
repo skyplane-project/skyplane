@@ -40,7 +40,6 @@ from skylark.cli.cli_helper import (
     copy_s3_local,
     copy_gcs_local,
     copy_local_gcs,
-    create_aws_region_config,
     deprovision_skylark_instances,
     load_aws_config,
     load_azure_config,
@@ -286,7 +285,6 @@ def init(reinit_azure: bool = False, reinit_gcp: bool = False):
     # load AWS config
     typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)
     cloud_config = load_aws_config(cloud_config)
-    create_aws_region_config(cloud_config)
 
     # load Azure config
     typer.secho("\n(2) Configuring Azure:", fg="yellow", bold=True)

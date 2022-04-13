@@ -176,6 +176,9 @@ class AzureServer(Server):
         )
         return ssh_client
 
+    def get_ssh_cmd(self, uname="skylark", ssh_key_password="skylark"):
+        return f"ssh -i {self.ssh_private_key} {uname}@{self.public_ip()}"
+
     def get_sftp_client(self, uname="skylark", ssh_key_password="skylark"):
         t = paramiko.Transport((self.public_ip(), 22))
         pkey = paramiko.RSAKey.from_private_key_file(str(self.ssh_private_key), password=ssh_key_password)
