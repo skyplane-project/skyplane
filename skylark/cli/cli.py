@@ -46,7 +46,6 @@ from skylark.cli.cli_helper import (
     load_gcp_config,
     ls_local,
     ls_objstore,
-    ls_s3,
     parse_path,
     replicate_helper,
 )
