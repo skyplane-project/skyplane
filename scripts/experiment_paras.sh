@@ -49,6 +49,7 @@ cp ${filename} data/results/${experiment}
 skylark replicate-json ${filename} \
     --source-bucket $src_bucket \
     --dest-bucket $dest_bucket \
-    --key-prefix ${key_prefix} > data/results/${experiment}/obj-store-logs.txt
-tail -1 data/results/${experiment}/obj-store-logs.txt;
+    --src-key-prefix ${key_prefix} \
+    --dest-key-prefix ${key_prefix} |& tee data/results/${experiment}/obj-store-logs.txt
+tail -1 data/results/${experiment}/obj-store-logs.txt
 echo ${experiment}

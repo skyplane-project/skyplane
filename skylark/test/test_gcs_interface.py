@@ -8,8 +8,8 @@ from skylark.utils.utils import Timer
 
 
 def test_gcs_interface():
-    gcs_interface = GCSInterface(f"us-east1", f"sky-us-east-1", True)
-    assert gcs_interface.bucket_name == "sky-us-east-1"
+    gcs_interface = GCSInterface(f"us-east1", f"skylark-test-us-east1")
+    assert gcs_interface.bucket_name == "skylark-test-us-east1"
     assert gcs_interface.gcp_region == "us-east1"
     gcs_interface.create_bucket()
 
@@ -23,8 +23,7 @@ def test_gcs_interface():
         file_md5 = hashlib.md5(open(fpath, "rb").read()).hexdigest()
 
         with Timer() as t:
-            upload_future = gcs_interface.upload_object(fpath, obj_name)
-            upload_future.result()
+            gcs_interface.upload_object(fpath, obj_name)
         assert gcs_interface.get_obj_size(obj_name) == os.path.getsize(fpath)
         assert gcs_interface.exists(obj_name)
         assert not gcs_interface.exists("random_nonexistent_file")
@@ -35,8 +34,7 @@ def test_gcs_interface():
         if os.path.exists(fpath):
             os.remove(fpath)
         with Timer() as t:
-            download_future = gcs_interface.download_object(obj_name, fpath)
-            download_future.result()
+            gcs_interface.download_object(obj_name, fpath)
 
         # check md5
         dl_file_md5 = hashlib.md5(open(fpath, "rb").read()).hexdigest()

@@ -3,21 +3,40 @@ import subprocess
 import threading
 from typing import Optional
 from azure.identity import DefaultAzureCredential
-from azure.mgmt.compute import ComputeManagementClient
-from azure.mgmt.network import NetworkManagementClient
-from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.authorization import AuthorizationManagementClient
 from azure.mgmt.storage import StorageManagementClient
 from azure.storage.blob import BlobServiceClient, ContainerClient
 
 from skylark import cloud_config
 from skylark.compute.utils import query_which_cloud
+from skylark.config import SkylarkConfig
+from skylark import config_path
+
+# optional imports due to large package size
+try:
+    from azure.mgmt.network import NetworkManagementClient
+except ImportError:
+    NetworkManagementClient = None
+
+try:
+    from azure.mgmt.compute import ComputeManagementClient
+except ImportError:
+    ComputeManagementClient = None
+
+try:
+    from azure.mgmt.resource import ResourceManagementClient
+except ImportError:
+    ResourceManagementClient = None
 
 
 class AzureAuthentication:
     __cached_credentials = threading.local()
 
-    def __init__(self, subscription_id: str = cloud_config.azure_subscription_id):
+    def __init__(self, config: Optional[SkylarkConfig] = None, subscription_id: str = cloud_config.azure_subscription_id):
+        if not config == None:
+            self.config = config
+        else:
+            self.config = SkylarkConfig.load_config(config_path)
         self.subscription_id = subscription_id
         self.credential = self.get_credential(subscription_id)
 
@@ -33,7 +52,7 @@ class AzureAuthentication:
         return cached_credential
 
     def enabled(self) -> bool:
-        return self.subscription_id is not None
+        return self.config.azure_enabled and self.subscription_id is not None
 
     @staticmethod
     def infer_subscription_id() -> Optional[str]:
@@ -49,16 +68,20 @@ class AzureAuthentication:
         return self.credential.get_token(resource)
 
     def get_compute_client(self):
+        assert ComputeManagementClient is not None, "ComputeManagementClient is not installed"
         return ComputeManagementClient(self.credential, self.subscription_id)
 
     def get_resource_client(self):
+        assert ResourceManagementClient is not None, "ResourceManagementClient is not installed"
         return ResourceManagementClient(self.credential, self.subscription_id)
 
     def get_network_client(self):
+        assert NetworkManagementClient is not None, "NetworkManagementClient is not installed"
         return NetworkManagementClient(self.credential, self.subscription_id)
 
     def get_authorization_client(self):
-        return AuthorizationManagementClient(self.credential, self.subscription_id)
+        # set API version to avoid UnsupportedApiVersionForRoleDefinitionHasDataActions error
+        return AuthorizationManagementClient(self.credential, self.subscription_id, api_version="2018-01-01-preview")
 
     def get_storage_management_client(self):
         return StorageManagementClient(self.credential, self.subscription_id)

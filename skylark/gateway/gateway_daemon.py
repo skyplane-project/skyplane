@@ -13,7 +13,6 @@ import time
 from typing import Dict
 
 
-import setproctitle
 from skylark.utils import logger
 from skylark import MB, print_header
 from skylark.chunk import ChunkState
@@ -41,17 +40,12 @@ class GatewayDaemon:
         self.ul_pool_semaphore = BoundedSemaphore(value=128)
 
         # API server
-        atexit.register(self.cleanup)
-        self.api_server = GatewayDaemonAPI(self.chunk_store, self.gateway_receiver, daemon_cleanup_handler=self.cleanup)
+        self.api_server = GatewayDaemonAPI(self.chunk_store, self.gateway_receiver)
         self.api_server.start()
+        atexit.register(self.api_server.shutdown)
         logger.info(f"[gateway_daemon] API started at {self.api_server.url}")
 
-    def cleanup(self):
-        logger.warning("[gateway_daemon] Shutting down gateway daemon")
-        self.api_server.shutdown()
-
     def run(self):
-        setproctitle.setproctitle(f"skylark-gateway-daemon")
         exit_flag = Event()
 
         def exit_handler(signum, frame):
@@ -90,10 +84,12 @@ class GatewayDaemon:
             # queue object store downloads and relays (if space is available)
             for chunk_req in self.chunk_store.get_chunk_requests(ChunkState.registered):
                 if self.region == chunk_req.src_region and chunk_req.src_type == "read_local":  # do nothing, read from local ChunkStore
+                    self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
                     self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, "read_local")
                     self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, "read_local")
                 elif self.region == chunk_req.src_region and chunk_req.src_type == "random":
                     size_mb = chunk_req.src_random_size_mb
+                    assert chunk_req.src_random_size_mb is not None, "Random chunk size not set"
                     if self.chunk_store.remaining_bytes() >= size_mb * MB * self.max_incoming_ports:
 
                         def fn(chunk_req, size_mb):
@@ -102,13 +98,17 @@ class GatewayDaemon:
                             self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, "random")
                             fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
                             with self.dl_pool_semaphore:
-                                os.system(f"fallocate -l {size_mb * MB} {fpath}")
+                                size_bytes = int(size_mb * MB)
+                                assert size_bytes > 0, f"Invalid size {size_bytes} for fallocate"
+                                os.system(f"fallocate -l {size_bytes} {fpath}")
                             chunk_req.chunk.chunk_length_bytes = os.path.getsize(fpath)
                             self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
                             self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, "random")
 
+                        self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
                         threading.Thread(target=fn, args=(chunk_req, size_mb)).start()
                 elif self.region == chunk_req.src_region and chunk_req.src_type == "object_store":
+                    self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
                     self.obj_store_conn.queue_request(chunk_req, "download")
                 elif self.region != chunk_req.src_region:  # do nothing, waiting for chunk to be be ready_to_upload
                     continue
@@ -129,6 +129,7 @@ if __name__ == "__main__":
     parser.add_argument("--disable-tls", action="store_true")
     args = parser.parse_args()
 
+    os.makedirs(args.chunk_dir)
     daemon = GatewayDaemon(
         region=args.region, outgoing_ports=json.loads(args.outgoing_ports), chunk_dir=args.chunk_dir, use_tls=not args.disable_tls
     )

@@ -6,7 +6,6 @@ from multiprocessing import Event, Manager, Process
 from typing import Dict, List, Optional
 
 import requests
-import setproctitle
 from skylark.utils import logger
 from skylark import MB
 from skylark.chunk import ChunkRequest
@@ -57,7 +56,6 @@ class GatewaySender:
         self.processes = []
 
     def worker_loop(self, worker_id: int, dest_ip: str):
-        setproctitle.setproctitle(f"skylark-gateway-sender:{worker_id}")
         self.worker_id = worker_id
 
         while not self.exit_flags[worker_id].is_set():
@@ -88,7 +86,7 @@ class GatewaySender:
                 for chunk_id in ip_chunk_ids:
                     if chunk_id in host_state:
                         cr_status[chunk_id] = host_state[chunk_id]["state"]
-            return all(status not in ["registered", "download_in_progress"] for status in cr_status.values())
+            return all(status not in ["registered", "download_queued", "download_in_progress"] for status in cr_status.values())
 
         logger.info(f"[sender:{worker_id}] waiting for chunks to reach state 'downloaded'")
         wait_for(wait_for_chunks)
@@ -159,6 +157,9 @@ class GatewaySender:
                 logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sending chunk data")
                 sock.sendall(chunk_data)
                 logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent chunk data")
+            assert (
+                len(chunk_data) == chunk.chunk_length_bytes
+            ), f"chunk {chunk_id} has size {len(chunk_data)} but should be {chunk.chunk_length_bytes}"
             logger.debug(
                 f"[sender:{self.worker_id}] finished sending chunk data {chunk_id} at {chunk.chunk_length_bytes * 8 / t.elapsed / MB:.2f}Mbps"
             )
