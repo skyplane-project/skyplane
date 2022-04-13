@@ -25,10 +25,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          pip install -e ".[gateway,solver]"
           pip install pytype
       - name: Run pytype
-        run: pytype skylark --config .pytype.cfg
+        run: pytype skylark --config .pytype.cfg -j auto
   pylint:
     runs-on: ubuntu-latest
     steps:
