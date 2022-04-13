@@ -1,6 +1,5 @@
 import concurrent.futures
 from functools import partial
-import atexit
 import json
 import os
 import re
@@ -9,15 +8,17 @@ import resource
 import subprocess
 from pathlib import Path
 from shutil import copyfile
+from types import GetSetDescriptorType
 from typing import Dict, List
 from sys import platform
 from typing import Dict, List
 from urllib.parse import ParseResultBytes, parse_qs
 
 
+
 import boto3
 import typer
-from skylark import config_path, GB, MB, print_header
+from skylark import GB, MB
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.gcp.gcp_auth import GCPAuthentication
@@ -83,9 +84,9 @@ def ls_local(path: Path):
         yield path.name
 
 
-def ls_s3(bucket_name: str, key_name: str, use_tls: bool = True):
-    s3 = S3Interface(None, bucket_name, use_tls=use_tls)
-    for obj in s3.list_objects(prefix=key_name):
+def ls_objstore(obj_store: str, bucket_name: str, key_name: str):
+    client = ObjectStoreInterface.create(obj_store, bucket_name)
+    for obj in client.list_objects(prefix=key_name):
         yield obj.full_path()
 
 
@@ -201,7 +202,7 @@ def replicate_helper(
     dest_key_prefix: str = "/",
     # gateway provisioning options
     reuse_gateways: bool = False,
-    gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
+    gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
     # cloud provider specific options
     aws_instance_class: str = "m5.8xlarge",
     azure_instance_class: str = "Standard_D32_v4",
@@ -345,12 +346,16 @@ def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
     credentials = session.get_credentials()
     credentials = credentials.get_frozen_credentials()
     if credentials.access_key is None or credentials.secret_key is None:
+        config.aws_enabled = False
         typer.secho("    AWS credentials not found in boto3 session, please use the AWS CLI to set them via `aws configure`", fg="red")
         typer.secho("    https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html", fg="red")
         typer.secho("    Disabling AWS support", fg="blue")
+        AWSAuthentication.save_region_config(config)
         return config
 
     typer.secho(f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials.access_key[-6:]}]", fg="blue")
+    config.aws_enabled = True
+    AWSAuthentication.save_region_config(config)
     return config
 
 
@@ -365,7 +370,7 @@ def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> Skylar
 
     # check if Azure is enabled
     logging.disable(logging.WARNING)  # disable Azure logging, we have our own
-    auth = AzureAuthentication()
+    auth = AzureAuthentication(config=config)
     try:
         auth.credential.get_token("https://management.azure.com/")
         azure_enabled = True
@@ -376,14 +381,17 @@ def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> Skylar
         typer.secho("    No local Azure credentials! Run `az login` to set them up.", fg="red")
         typer.secho("    https://docs.microsoft.com/en-us/azure/developer/python/azure-sdk-authenticate", fg="red")
         typer.secho("    Disabling Azure support", fg="blue")
+        config.azure_enabled = False
         return config
     typer.secho("    Azure credentials found in Azure CLI", fg="blue")
     inferred_subscription_id = AzureAuthentication.infer_subscription_id()
     if typer.confirm("    Azure credentials found, do you want to enable Azure support in Skylark?", default=True):
         config.azure_subscription_id = typer.prompt("    Enter the Azure subscription ID:", default=inferred_subscription_id)
+        config.azure_enabled = True
     else:
         config.azure_subscription_id = None
         typer.secho("    Disabling Azure support", fg="blue")
+        config.azure_enabled = False
     return config
 
 
@@ -394,10 +402,11 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
 
     if config.gcp_project_id is not None:
         typer.secho("    GCP already configured! To reconfigure GCP, run `skylark init --reinit-gcp`.", fg="blue")
+        config.gcp_enabled = True
         return config
 
     # check if GCP is enabled
-    auth = GCPAuthentication()
+    auth = GCPAuthentication(config=config)
     if not auth.credentials:
         typer.secho(
             "    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.",
@@ -405,14 +414,20 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
         )
         typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red")
         typer.secho("    Disabling GCP support", fg="blue")
+        config.gcp_enabled = False
+        auth.save_region_config()
         return config
     else:
         typer.secho("    GCP credentials found in GCP CLI", fg="blue")
         if typer.confirm("    GCP credentials found, do you want to enable GCP support in Skylark?", default=True):
             config.gcp_project_id = typer.prompt("    Enter the GCP project ID:", default=auth.project_id)
             assert config.gcp_project_id is not None, "GCP project ID must not be None"
+            config.gcp_enabled = True
+            auth.save_region_config()
             return config
         else:
             config.gcp_project_id = None
             typer.secho("    Disabling GCP support", fg="blue")
+            config.gcp_enabled = False
+            auth.save_region_config()
             return config

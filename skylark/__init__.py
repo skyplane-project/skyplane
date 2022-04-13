@@ -14,6 +14,10 @@ if "SKYLARK_CONFIG" in os.environ:
 else:
     config_path = config_root / "config"
 
+aws_config_path = config_root / "aws_config"
+azure_config_path = config_root / "azure_config"
+gcp_config_path = config_root / "gcp_config"
+
 key_root = config_root / "keys"
 tmp_log_dir = Path("/tmp/skylark")
 tmp_log_dir.mkdir(exist_ok=True)
@@ -41,4 +45,4 @@ GB = 1024 * 1024 * 1024
 if config_path.exists():
     cloud_config = SkylarkConfig.load_config(config_path)
 else:
-    cloud_config = SkylarkConfig()
+    cloud_config = SkylarkConfig(False, False, False)

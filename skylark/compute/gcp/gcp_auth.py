@@ -4,16 +4,57 @@ import googleapiclient.discovery
 import google.auth
 
 from skylark import cloud_config
+from skylark.config import SkylarkConfig
+from skylark import config_path
+from skylark import gcp_config_path
+
+from googleapiclient import discovery
 
 
 class GCPAuthentication:
     __cached_credentials = threading.local()
 
-    def __init__(self, project_id: Optional[str] = cloud_config.gcp_project_id):
+    def __init__(self, config: Optional[SkylarkConfig] = None, project_id: Optional[str] = cloud_config.gcp_project_id):
         # load credentials lazily and then cache across threads
+        if not config == None:
+            self.config = config
+        else:
+            self.config = SkylarkConfig.load_config(config_path)
         self.inferred_project_id = project_id
         self._credentials = None
         self._project_id = None
+
+    def save_region_config(self):
+        with open(gcp_config_path, "w") as f:
+            if self.config.gcp_enabled == False:
+                f.write("")
+                return
+            region_list = []
+            credentials = self.credentials
+            service = discovery.build("compute", "beta", credentials=credentials)
+            request = service.zones().list(project=self.inferred_project_id)
+            while request is not None:
+                response = request.execute()
+                # In reality, these are zones. However, we shall call them regions to be self-consistent.
+                for region in response["items"]:
+                    region_list.append(region["description"])
+
+                request = service.regions().list_next(previous_request=request, previous_response=response)
+
+            f.write("\n".join(region_list))
+            print(f"    GCP region config file saved to {gcp_config_path}")
+
+    @staticmethod
+    def get_region_config():
+        try:
+            f = open(gcp_config_path, "r")
+        except FileNotFoundError:
+            print("    No GCP config detected! Consquently, the GCP region list is empty. Run 'skylark init' to remedy this.")
+            return []
+        region_list = []
+        for region in f.read().split("\n"):
+            region_list.append(region)
+        return region_list
 
     @property
     def credentials(self):
@@ -30,15 +71,12 @@ class GCPAuthentication:
     def make_credential(self, project_id):
         cached_credential = getattr(self.__cached_credentials, f"credential_{project_id}", (None, None))
         if cached_credential == (None, None):
-            try:
-                cached_credential = google.auth.default(quota_project_id=project_id)
-                setattr(self.__cached_credentials, f"credential_{project_id}", cached_credential)
-            except:
-                pass
+            cached_credential = google.auth.default(quota_project_id=project_id)
+            setattr(self.__cached_credentials, f"credential_{project_id}", cached_credential)
         return cached_credential
 
     def enabled(self):
-        return self.credentials is not None and self.project_id is not None
+        return self.config.gcp_enabled and self.credentials is not None and self.project_id is not None
 
     def get_gcp_client(self, service_name="compute", version="v1"):
         return googleapiclient.discovery.build(service_name, version)

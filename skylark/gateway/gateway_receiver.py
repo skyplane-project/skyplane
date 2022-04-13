@@ -7,12 +7,11 @@ from contextlib import closing
 from multiprocessing import Event, Process, Value
 from typing import Tuple
 
-import setproctitle
 from skylark.utils import logger
 from skylark import GB, MB
 from skylark.chunk import WireProtocolHeader
 from skylark.gateway.chunk_store import ChunkStore
-from skylark.utils.cert import generate_self_signed_certificate
+from skylark.gateway.cert import generate_self_signed_certificate
 from skylark.utils.utils import Timer
 
 
@@ -56,7 +55,6 @@ class GatewayReceiver:
                     exit_flag.value = 1
 
                 signal.signal(signal.SIGINT, signal_handler)
-                setproctitle.setproctitle(f"skylark-gateway-receiver:{socket_port}")
 
                 sock.listen()
                 if self.ssl_context is not None:
