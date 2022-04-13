@@ -28,7 +28,7 @@ class ReplicatorClient:
     def __init__(
         self,
         topology: ReplicationTopology,
-        gateway_docker_image: str = "ghcr.io/parasj/skylark:latest",
+        gateway_docker_image: str = "ghcr.io/skyplane-project/skyplane:latest",
         aws_instance_class: Optional[str] = "m5.4xlarge",  # set to None to disable AWS
         azure_instance_class: Optional[str] = "Standard_D2_v5",  # set to None to disable Azure
         gcp_instance_class: Optional[str] = "n2-standard-16",  # set to None to disable GCP

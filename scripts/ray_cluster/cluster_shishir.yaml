@@ -15,14 +15,14 @@
  # and opens all the necessary ports to support the Ray cluster.
  # Empty string means disabled.
  docker:
-     image: "ghcr.io/parasj/skylark:local-acecc236e40ed040d94d5463a337fd70" 
+     image: "ghcr.io/skyplane-project/skyplane:local-acecc236e40ed040d94d5463a337fd70" 
      container_name: "skylark_container"
      pull_before_run: True
      run_options:   # Extra options to pass into "docker run"
          - --ulimit nofile=65536:65536
 
 
-     worker_image: "ghcr.io/parasj/skylark:local-acecc236e40ed040d94d5463a337fd70"
+     worker_image: "ghcr.io/skyplane-project/skyplane:local-acecc236e40ed040d94d5463a337fd70"
      # worker_run_options: []
 
  # If a node is idle for this many minutes, it will be removed.
