@@ -107,7 +107,7 @@ class ReplicationTopology:
         return ReplicationTopology(edges)
 
     def to_graphviz(self):
-        import graphviz as gv
+        import graphviz as gv  # pytype: disable=import-error
 
         # if dot is not installed
         has_dot = shutil.which("dot") is not None
