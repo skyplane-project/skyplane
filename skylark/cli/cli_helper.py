@@ -82,8 +82,8 @@ def ls_local(path: Path):
         yield path.name
 
 
-def ls_objstore(obj_store: str, bucket_name: str, key_name: str, use_tls: bool = True):
-    client = ObjectStoreInterface.create(obj_store, bucket_name, use_tls=use_tls)
+def ls_objstore(obj_store: str, bucket_name: str, key_name: str):
+    client = ObjectStoreInterface.create(obj_store, bucket_name)
     for obj in client.list_objects(prefix=key_name):
         yield obj.full_path()
 
