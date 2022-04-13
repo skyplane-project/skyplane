@@ -80,7 +80,8 @@ class AzureAuthentication:
         return NetworkManagementClient(self.credential, self.subscription_id)
 
     def get_authorization_client(self):
-        return AuthorizationManagementClient(self.credential, self.subscription_id)
+        # set API version to avoid UnsupportedApiVersionForRoleDefinitionHasDataActions error
+        return AuthorizationManagementClient(self.credential, self.subscription_id, api_version="2018-01-01-preview")
 
     def get_storage_management_client(self):
         return StorageManagementClient(self.credential, self.subscription_id)

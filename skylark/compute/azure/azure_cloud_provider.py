@@ -9,6 +9,7 @@ from skylark import key_root
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.azure.azure_server import AzureServer
 from skylark.compute.cloud_providers import CloudProvider
+from azure.mgmt.authorization.models import RoleAssignmentCreateParameters, RoleAssignmentProperties
 from skylark.utils import logger
 from skylark.utils.utils import Timer, do_parallel
 
@@ -435,22 +436,24 @@ class AzureCloudProvider(CloudProvider):
                 )
                 vm_result = poller.result()
 
-        with Timer("Role assignment"):
-            # Assign roles to system MSI, see https://docs.microsoft.com/en-us/samples/azure-samples/compute-python-msi-vm/compute-python-msi-vm/#role-assignment
-            # todo only grant storage-blob-data-reader and storage-blob-data-writer for specified buckets
+        def grant_vm_role(scope, role_name):
             auth_client = self.auth.get_authorization_client()
-            scope = f"/subscriptions/{self.auth.subscription_id}"
-            role_name = "Contributor"
             roles = list(auth_client.role_definitions.list(scope, filter="roleName eq '{}'".format(role_name)))
             assert len(roles) == 1
 
-            # Add RG scope to the MSI identities:
-            role_assignment = auth_client.role_assignments.create(
+            auth_client.role_assignments.create(
                 scope,
                 uuid.uuid4(),  # Role assignment random name
                 RoleAssignmentCreateParameters(
-                    properties=dict(role_definition_id=roles[0].id, principal_id=vm_result.identity.principal_id)
+                    properties=RoleAssignmentProperties(role_definition_id=roles[0].id, principal_id=vm_result.identity.principal_id)
                 ),
             )
+
+        with Timer("Role assignment"):
+            # Assign roles to system MSI, see https://docs.microsoft.com/en-us/samples/azure-samples/compute-python-msi-vm/compute-python-msi-vm/#role-assignment
+            # todo only grant storage-blob-data-reader and storage-blob-data-writer for specified buckets
+            scope = f"/subscriptions/{self.auth.subscription_id}"
+            grant_vm_role(scope, "Storage Blob Data Contributor")
+            grant_vm_role(scope, "Contributor")
 
         return AzureServer(name)

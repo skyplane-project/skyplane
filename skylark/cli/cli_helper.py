@@ -1,6 +1,5 @@
 import concurrent.futures
 from functools import partial
-import atexit
 import json
 import os
 import re
@@ -12,12 +11,11 @@ from shutil import copyfile
 from typing import Dict, List
 from sys import platform
 from typing import Dict, List
-from urllib.parse import ParseResultBytes, parse_qs
 
 
 import boto3
 import typer
-from skylark import config_path, GB, MB, print_header
+from skylark import GB, MB
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.gcp.gcp_auth import GCPAuthentication
@@ -349,15 +347,13 @@ def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
         typer.secho("    AWS credentials not found in boto3 session, please use the AWS CLI to set them via `aws configure`", fg="red")
         typer.secho("    https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html", fg="red")
         typer.secho("    Disabling AWS support", fg="blue")
+        AWSAuthentication.save_region_config(config)
         return config
 
     typer.secho(f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials.access_key[-6:]}]", fg="blue")
     config.aws_enabled = True
-    return config
-
-
-def create_aws_region_config(config):
     AWSAuthentication.save_region_config(config)
+    return config
 
 
 def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkConfig:
@@ -416,6 +412,7 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
         typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red")
         typer.secho("    Disabling GCP support", fg="blue")
         config.gcp_enabled = False
+        auth.save_region_config()
         return config
     else:
         typer.secho("    GCP credentials found in GCP CLI", fg="blue")
@@ -423,9 +420,11 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
             config.gcp_project_id = typer.prompt("    Enter the GCP project ID:", default=auth.project_id)
             assert config.gcp_project_id is not None, "GCP project ID must not be None"
             config.gcp_enabled = True
+            auth.save_region_config()
             return config
         else:
             config.gcp_project_id = None
             typer.secho("    Disabling GCP support", fg="blue")
             config.gcp_enabled = False
+            auth.save_region_config()
             return config
