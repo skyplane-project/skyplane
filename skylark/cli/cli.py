@@ -163,7 +163,7 @@ def replicate_random(
     total_transfer_size_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB."),
     chunk_size_mb: int = typer.Option(8, "--chunk-size-mb", help="Chunk size in MB."),
     reuse_gateways: bool = False,
-    gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
+    gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
     aws_instance_class: str = "m5.8xlarge",
     azure_instance_class: str = "Standard_D32_v4",
     gcp_instance_class: Optional[str] = "n2-standard-32",
@@ -223,7 +223,7 @@ def replicate_json(
     dest_key_prefix: str = "/",
     # gateway provisioning options
     reuse_gateways: bool = False,
-    gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
+    gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
     # cloud provider specific options
     aws_instance_class: str = "m5.8xlarge",
     azure_instance_class: str = "Standard_D32_v4",
