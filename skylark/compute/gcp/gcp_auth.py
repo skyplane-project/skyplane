@@ -24,7 +24,6 @@ class GCPAuthentication:
         self._credentials = None
         self._project_id = None
 
-
     def save_region_config(self):
         with open(gcp_config_path, "w") as f:
             if self.config.gcp_enabled == False:
@@ -36,16 +35,14 @@ class GCPAuthentication:
             request = service.zones().list(project=self.inferred_project_id)
             while request is not None:
                 response = request.execute()
-                # In reality, these are zones. However, we shall call them regions to be self-consistent. 
-                for region in response['items']:
-                    region_list.append(region['description'])
+                # In reality, these are zones. However, we shall call them regions to be self-consistent.
+                for region in response["items"]:
+                    region_list.append(region["description"])
 
                 request = service.regions().list_next(previous_request=request, previous_response=response)
 
-
             f.write("\n".join(region_list))
             print(f"    GCP region config file saved to {gcp_config_path}")
-
 
     @staticmethod
     def get_region_config():
@@ -58,7 +55,6 @@ class GCPAuthentication:
         for region in f.read().split("\n"):
             region_list.append(region)
         return region_list
-
 
     @property
     def credentials(self):

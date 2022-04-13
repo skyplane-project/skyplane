@@ -29,10 +29,9 @@ class GCPCloudProvider(CloudProvider):
     def name(self):
         return "gcp"
 
-
     @staticmethod
     def region_list():
-        """See https://cloud.google.com/network-tiers/docs/overview#regions_supporting_standard_tier for a list of regions in the standard tier. """ 
+        """See https://cloud.google.com/network-tiers/docs/overview#regions_supporting_standard_tier for a list of regions in the standard tier."""
         return GCPAuthentication.get_region_config()
 
     @staticmethod

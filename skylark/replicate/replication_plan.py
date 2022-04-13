@@ -108,6 +108,7 @@ class ReplicationTopology:
 
     def to_graphviz(self):
         import graphviz as gv
+
         # if dot is not installed
         has_dot = shutil.which("dot") is not None
         if not has_dot:

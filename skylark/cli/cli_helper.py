@@ -352,7 +352,7 @@ def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
 
     typer.secho(f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials.access_key[-6:]}]", fg="blue")
     config.aws_enabled = True
-    AWSAuthentication.save_region_config(config) 
+    AWSAuthentication.save_region_config(config)
     return config
 
 
