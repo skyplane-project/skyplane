@@ -3,7 +3,6 @@ import subprocess
 from typing import Iterator, List, Optional
 import uuid
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
-from typer import Option
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.azure.azure_server import AzureServer
 from skylark.utils import logger
