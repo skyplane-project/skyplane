@@ -1,6 +1,6 @@
 import os
 import subprocess
-from typing import Iterator, List
+from typing import Iterator, List, Optional
 import uuid
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
 from skylark.compute.azure.azure_auth import AzureAuthentication
@@ -73,7 +73,7 @@ class AzureInterface(ObjectStoreInterface):
         except ResourceExistsError:
             logger.warning("Unable to create storage account as it already exists")
 
-    def grant_storage_account_access(self, role_name: str, principal_id: str = None):
+    def grant_storage_account_access(self, role_name: str, principal_id: Optional[str] = None):
         # lookup role
         auth_client = self.auth.get_authorization_client()
         scope = f"/subscriptions/{self.auth.subscription_id}/resourceGroups/{AzureServer.resource_group_name}/providers/Microsoft.Storage/storageAccounts/{self.account_name}"
