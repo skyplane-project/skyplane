@@ -74,13 +74,11 @@ class S3Interface(ObjectStoreInterface):
 
     def download_object(self, src_object_name, dst_file_path):
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
-        src_object_name = "/" + src_object_name if src_object_name[0] != "/" else src_object_name
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
-        s3_client.download_file(self.bucket_name, src_object_name, dst_file_path)
+        s3_client.download_file(self.bucket_name, src_object_name, dst_file_path, Config=TransferConfig(use_threads=False))
 
     def upload_object(self, src_file_path, dst_object_name):
         dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
-        dst_object_name = "/" + dst_object_name if dst_object_name[0] != "/" else dst_object_name
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
-        s3_client.upload_file(src_file_path, self.bucket_name, dst_object_name)
+        s3_client.upload_file(src_file_path, self.bucket_name, dst_object_name, Config=TransferConfig(use_threads=False))
 
