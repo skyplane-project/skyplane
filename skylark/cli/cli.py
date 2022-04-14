@@ -45,7 +45,7 @@ from skylark.cli.cli_helper import (
     load_azure_config,
     load_gcp_config,
     ls_local,
-    ls_s3,
+    ls_objstore,
     parse_path,
     replicate_helper,
 )
@@ -67,8 +67,16 @@ def ls(directory: str):
         for path in ls_local(Path(directory)):
             typer.echo(path)
     elif provider == "s3":
-        for path in ls_s3(bucket, key):
+        for path in ls_objstore("aws:infer", bucket, key):
             typer.echo(path)
+    elif provider == "gs":
+        for path in ls_objstore("gcp:infer", bucket, key):
+            typer.echo(path)
+    elif provider == "azure":
+        for path in ls_objstore("azure:infer", bucket, key):
+            typer.echo(path)
+    else:
+        raise NotImplementedError(f"Unrecognized object store provider")
 
 
 @app.command()
@@ -77,6 +85,7 @@ def cp(
     dst: str,
     num_connections: int = typer.Option(64, help="Number of connections to open for replication"),
     max_instances: int = typer.Option(1, help="Max number of instances per overlay region."),
+    reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_required_throughput_gbits: float = typer.Option(2, help="Solver option: Required throughput in gbps."),
     solver_throughput_grid: Path = typer.Option(
@@ -146,7 +155,7 @@ def cp(
             for i in range(max_instances):
                 topo.add_edge(src_region, i, dst_region, i, num_connections)
 
-        replicate_helper(topo, source_bucket=bucket_src, dest_bucket=bucket_dst, src_key_prefix=path_src, dest_key_prefix=path_dst)
+        replicate_helper(topo, source_bucket=bucket_src, dest_bucket=bucket_dst, src_key_prefix=path_src, dest_key_prefix=path_dst, reuse_gateways=reuse_gateways)
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
 
