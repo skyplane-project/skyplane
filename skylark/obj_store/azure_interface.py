@@ -18,7 +18,7 @@ class AzureObject(ObjectStoreObject):
 
 
 class AzureInterface(ObjectStoreInterface):
-    def __init__(self, azure_region, account_name, container_name):
+    def __init__(self, azure_region, account_name, container_name, use_tls=True):
         # TODO (#210): should be configured via argument
         self.account_name = f"skylark{azure_region.replace(' ', '').lower()}"
         self.container_name = container_name
