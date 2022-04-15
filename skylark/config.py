@@ -18,12 +18,12 @@ class SkylarkConfig:
     @staticmethod
     def default_config() -> "SkylarkConfig":
         return SkylarkConfig(
-                aws_enabled=False,
-                azure_enabled=False,
-                gcp_enabled=False,
-                azure_subscription_id=None,
-                gcp_project_id=None,
-            )
+            aws_enabled=False,
+            azure_enabled=False,
+            gcp_enabled=False,
+            azure_subscription_id=None,
+            gcp_project_id=None,
+        )
 
     @staticmethod
     def load_config(path) -> "SkylarkConfig":

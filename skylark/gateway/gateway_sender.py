@@ -6,7 +6,6 @@ from multiprocessing import Event, Manager, Process
 from typing import Dict, List, Optional
 
 import requests
-import setproctitle
 from skylark.utils import logger
 from skylark import MB
 from skylark.chunk import ChunkRequest
@@ -57,7 +56,6 @@ class GatewaySender:
         self.processes = []
 
     def worker_loop(self, worker_id: int, dest_ip: str):
-        setproctitle.setproctitle(f"skylark-gateway-sender:{worker_id}")
         self.worker_id = worker_id
 
         while not self.exit_flags[worker_id].is_set():

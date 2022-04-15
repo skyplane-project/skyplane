@@ -2,7 +2,6 @@ import mimetypes
 import os
 from typing import Iterator, List
 
-from concurrent.futures import Future
 import typer
 import botocore.exceptions
 from awscrt.auth import AwsCredentialsProvider
