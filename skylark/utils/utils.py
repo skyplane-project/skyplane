@@ -2,6 +2,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, Iterable, List, Tuple, Union, TypeVar
+from skylark import exceptions
 
 from skylark.utils import logger
 from tqdm import tqdm
@@ -89,6 +90,7 @@ def retry_backoff(
     initial_backoff=0.1,
     max_backoff=8,
     exception_class=Exception,
+    log_errors=True,
 ) -> R:
     """Retry fn until it does not raise an exception.
     If it fails, sleep for a bit and try again.
@@ -104,7 +106,7 @@ def retry_backoff(
                 raise e
             else:
                 # ignore retries due to IAM instance profile propagation
-                if "Invalid IAM Instance Profile name" not in str(e):
+                if log_errors:
                     fn_name = fn.__name__ if hasattr(fn, "__name__") else "unknown function"
                     logger.warning(f"Retrying {fn_name} due to: {e} (attempt {i + 1}/{max_retries})")
                 time.sleep(backoff)
