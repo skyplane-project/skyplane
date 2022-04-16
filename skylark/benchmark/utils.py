@@ -12,10 +12,10 @@ from skylark.compute.server import Server, ServerState
 from skylark.utils.utils import do_parallel
 
 
-def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None) -> Dict[str, List[Server]]:
+def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1) -> Dict[str, List[Server]]:
     if instance_filter is None:
         instance_filter = {"tags": {"skylark": "true"}}
-    results = do_parallel(lambda region: provider.get_matching_instances(region=region, **instance_filter), region_list, progress_bar=False)
+    results = do_parallel(lambda region: provider.get_matching_instances(region=region, **instance_filter), region_list, progress_bar=False, n=n)
     return {r: ilist for r, ilist in results if ilist}
 
 
@@ -28,7 +28,7 @@ def split_list(l):
         for x, y in pairs:
             if x not in elems_in_last_group and y not in elems_in_last_group:
                 group.append((x, y))
-                elems_in_last_group.add(x)
+                elems_in_last_group.add(x)  
                 elems_in_last_group.add(y)
         groups.append(group)
         elems_in_last_group = set()
@@ -112,7 +112,7 @@ def provision(
         gcp.create_ssh_key()
         gcp.configure_default_network()
         gcp.configure_default_firewall()
-        gcp_instances = refresh_instance_list(gcp, gcp_regions_to_provision, gcp_instance_filter)
+        gcp_instances = refresh_instance_list(gcp, gcp_regions_to_provision, gcp_instance_filter, n=4)
         missing_gcp_regions = set(gcp_regions_to_provision) - set(gcp_instances.keys())
 
         # filter duplicate regions from list and select lexicographically smallest region by zone

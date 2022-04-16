@@ -319,6 +319,7 @@ def latency_grid(
         raise typer.Abort()
 
     # validate Azure regions
+    azure_region_list = [r for r in azure_region_list if r != "westus2"]  # due to instance class
     if not enable_azure:
         azure_region_list = []
     elif not all(r in all_azure_regions for r in azure_region_list):
@@ -327,6 +328,7 @@ def latency_grid(
 
     # validate GCP regions
     assert not enable_gcp_standard or enable_gcp, f"GCP is disabled but GCP standard is enabled"
+    gcp_region_list = [r for r in gcp_region_list if r != "us-west2-c"]  # due to instance class
     if not enable_gcp:
         gcp_region_list = []
     elif not all(r in all_gcp_regions for r in gcp_region_list):
