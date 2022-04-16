@@ -48,7 +48,6 @@ from skylark.cli.cli_helper import (
     ls_objstore,
     parse_path,
     replicate_helper,
-    query_aws_vcpu_limits,
 )
 from skylark.replicate.replication_plan import ReplicationTopology
 

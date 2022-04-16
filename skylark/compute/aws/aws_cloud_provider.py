@@ -326,7 +326,7 @@ class AWSCloudProvider(CloudProvider):
         max_backoff = 8
         for i in range(max_retries):
             try:
-                start_instance()
+                instance = start_instance()
                 break
             except botocore.exceptions.ClientError as e:
                 if i == max_retries - 1:
