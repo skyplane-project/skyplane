@@ -11,7 +11,6 @@ from skylark.replicate.profiler import status_df_to_traceevent
 from skylark.utils import logger
 from tqdm import tqdm
 import pandas as pd
-import typer
 from skylark import GB, KB, MB, tmp_log_dir
 
 from skylark.benchmark.utils import refresh_instance_list

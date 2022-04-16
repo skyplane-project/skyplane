@@ -127,9 +127,7 @@ def cp(
         if solve:
             objs = list(src_client.list_objects(path_src))
             if not objs:
-                logger.warning(
-                    f"Objects do not exist."
-                )
+                logger.error("Specified object does not exist.")
                 raise typer.Abort()
 
             total_gbyte_to_transfer = sum([obj.size for obj in objs]) / GB

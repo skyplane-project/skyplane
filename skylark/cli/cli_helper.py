@@ -155,9 +155,7 @@ def copy_objstore_local(object_interface: ObjectStoreInterface, src_key: str, ds
             obj_count += 1
 
         if not obj_count:
-            logger.warning(
-                f"Objects do not exist."
-            )
+            logger.warning("Specified object does not exist.")
             raise typer.Abort()
 
         # wait for all downloads to complete, displaying a progress bar
@@ -239,11 +237,8 @@ def replicate_helper(
         # make replication job
         objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
         if not objs:
-            logger.warning(
-                f"Objects do not exist."
-            )
+            logger.warning("Specified object does not exist.")
             raise typer.Abort()
-            return 1
 
         job = ReplicationJob(
             source_region=topo.source_region(),
