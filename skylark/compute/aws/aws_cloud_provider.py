@@ -315,7 +315,7 @@ class AWSCloudProvider(CloudProvider):
                         "DeleteOnTermination": True,
                     }
                 ],
-                IamInstanceProfile={"Name": iam_instance_profile_name},
+                #IamInstanceProfile={"Name": iam_instance_profile_name},
                 InstanceInitiatedShutdownBehavior="terminate",
             )
 

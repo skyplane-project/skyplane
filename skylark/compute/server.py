@@ -238,7 +238,7 @@ class Server:
         if self.provider == "aws":
             aws_auth = AWSAuthentication()
             docker_envs["AWS_ACCESS_KEY_ID"] = aws_auth.access_key
-            docker_envs["AWS_SECRET_ACCESS_KEY"] = aws_auth.secret_key``
+            docker_envs["AWS_SECRET_ACCESS_KEY"] = aws_auth.secret_key
 
         # pull docker image and start container
         with Timer(f"{desc_prefix}: Docker pull"):

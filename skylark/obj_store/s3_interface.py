@@ -20,6 +20,8 @@ class S3Object(ObjectStoreObject):
 class S3Interface(ObjectStoreInterface):
     def __init__(self, aws_region, bucket_name, use_tls=True, part_size=None, throughput_target_gbps=10, num_threads=4):
         self.auth = AWSAuthentication()
+        print(self.auth.secret_key)
+        print(self.auth.access_key)
         self.aws_region = self.infer_s3_region(bucket_name) if aws_region is None or aws_region == "infer" else aws_region
         self.bucket_name = bucket_name
         event_loop_group = EventLoopGroup(num_threads=num_threads, cpu_group=None)
@@ -28,7 +30,8 @@ class S3Interface(ObjectStoreInterface):
         self._s3_client = S3Client(
             bootstrap=bootstrap,
             region=self.aws_region,
-            credential_provider=AwsCredentialsProvider.new_default_chain(bootstrap),
+            credential_provider=AwsCredentialsProvider.new_static(self.auth.secret_key, self.auth.access_key),
+            #credential_provider=AwsCredentialsProvider.new_default_chain(bootstrap),
             throughput_target_gbps=throughput_target_gbps,
             part_size=part_size,
             tls_mode=S3RequestTlsMode.ENABLED if use_tls else S3RequestTlsMode.DISABLED,
