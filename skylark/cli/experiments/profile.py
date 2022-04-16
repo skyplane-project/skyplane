@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,6 +13,7 @@ from skylark import GB, skylark_root
 from skylark.benchmark.utils import provision, split_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
+from skylark.compute.azure.azure_server import AzureServer
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server
 from skylark.compute.utils import make_sysctl_tcp_tuning_command
@@ -319,7 +321,7 @@ def latency_grid(
         raise typer.Abort()
 
     # validate Azure regions
-    azure_region_list = [r for r in azure_region_list if r != "westus2"]  # due to instance class
+    azure_region_list = [r for r in azure_region_list if r != "westus2" and r != "eastus2"]  # due to instance class
     if not enable_azure:
         azure_region_list = []
     elif not all(r in all_azure_regions for r in azure_region_list):
@@ -387,7 +389,9 @@ def latency_grid(
     instance_pairs_all = [(i1, i2) for i1 in instance_list for i2 in instance_list if i1 != i2]
     instance_pairs = []
     for i1, i2 in instance_pairs_all:
-        instance_pairs.append((i1, i2))
+        if not isinstance(i2, AzureServer) and (i2, i1) not in instance_pairs:
+            instance_pairs.append((i1, i2))
+    random.shuffle(instance_pairs)
 
     # confirm experiment
     experiment_tag_words = os.popen("bash scripts/utils/get_random_word_hash.sh").read().strip()
@@ -402,9 +406,9 @@ def latency_grid(
     logger.debug(f"Log directory: {log_dir}")
     sys.stdout.flush()
     sys.stderr.flush()
-    if not questionary.confirm(f"Launch experiment {experiment_tag}?", default=False).ask():
-        logger.error("Exiting")
-        sys.exit(1)
+    # if not questionary.confirm(f"Launch experiment {experiment_tag}?", default=False).ask():
+    #     logger.error("Exiting")
+    #     sys.exit(1)
 
     # define ping command
     def client_fn(instance_pair):
@@ -433,10 +437,11 @@ def latency_grid(
         result_rec["mdev_rtt"] = mdev_rtt
         pbar.update(1)
         pbar.write(f"{instance_src.region_tag} -> {instance_dst.region_tag}: {avg_rtt} ms")
-        return result_rec, min_rtt, avg_rtt, max_rtt, mdev_rtt
+        return result_rec
 
     # run experiment
     new_througput_results = []
+    log_dir.mkdir(parents=True, exist_ok=True)
     output_file = log_dir / "latency.csv"
     with tqdm(total=len(instance_pairs), desc="Total latency evaluation") as pbar:
         results = do_parallel(client_fn, instance_pairs, progress_bar=False, n=8)
