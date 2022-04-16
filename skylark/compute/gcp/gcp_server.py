@@ -54,7 +54,8 @@ class GCPServer(Server):
         return self.get_instance_property("networkInterfaces")[0]["accessConfigs"][0].get("natIP")
 
     def instance_class(self):
-        return self.get_instance_property("machineType").split("/")[-1]
+        machine_type = self.get_instance_property("machineType")
+        return machine_type.split("/")[-1] if machine_type else None
 
     def region(self):
         return self.gcp_region
