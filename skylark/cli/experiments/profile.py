@@ -434,8 +434,8 @@ def latency_grid(
 
     # run experiment
     new_througput_results = []
-    output_file = log_dir / "throughput.csv"
-    with tqdm(total=len(instance_pairs), desc="Total throughput evaluation") as pbar:
+    output_file = log_dir / "latency.csv"
+    with tqdm(total=len(instance_pairs), desc="Total latency evaluation") as pbar:
         results = do_parallel(client_fn, instance_pairs, progress_bar=False)
         new_througput_results.extend([rec for args, rec in results if rec is not None])
 
