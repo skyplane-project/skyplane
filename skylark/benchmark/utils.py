@@ -1,3 +1,4 @@
+from functools import partial
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from skylark.utils import logger
@@ -9,13 +10,19 @@ from skylark.compute.cloud_providers import CloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.gcp.gcp_server import GCPServer
 from skylark.compute.server import Server, ServerState
-from skylark.utils.utils import do_parallel
+from skylark.utils.utils import Timer, do_parallel
 
 
 def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1) -> Dict[str, List[Server]]:
     if instance_filter is None:
         instance_filter = {"tags": {"skylark": "true"}}
-    results = do_parallel(lambda region: provider.get_matching_instances(region=region, **instance_filter), region_list, progress_bar=False, n=n)
+    results = do_parallel(
+        lambda region: provider.get_matching_instances(region=region, **instance_filter),
+        region_list,
+        progress_bar=True,
+        n=n,
+        desc="Refreshing instance list",
+    )
     return {r: ilist for r, ilist in results if ilist}
 
 
@@ -28,7 +35,7 @@ def split_list(l):
         for x, y in pairs:
             if x not in elems_in_last_group and y not in elems_in_last_group:
                 group.append((x, y))
-                elems_in_last_group.add(x)  
+                elems_in_last_group.add(x)
                 elems_in_last_group.add(y)
         groups.append(group)
         elems_in_last_group = set()
@@ -55,6 +62,22 @@ def provision(
     gcp_instances = {}
 
     # TODO: It might be significantly faster to provision AWS, Azure, and GCP concurrently (e.g., using threads)
+
+    jobs = []
+    jobs.append(partial(aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
+    if aws_regions_to_provision:
+        for r in set(aws_regions_to_provision):
+            jobs.append(partial(aws.add_ip_to_security_group, r))
+            jobs.append(partial(aws.ensure_keyfile_exists, r))
+    if azure_regions_to_provision:
+        jobs.append(azure.create_ssh_key)
+        jobs.append(azure.set_up_resource_group)
+    if gcp_regions_to_provision:
+        jobs.append(gcp.create_ssh_key)
+        jobs.append(gcp.configure_default_network)
+        jobs.append(gcp.configure_default_firewall)
+    with Timer("Cloud SSH key initialization"):
+        do_parallel(lambda fn: fn(), jobs)
 
     if len(aws_regions_to_provision) > 0:
         logger.info(f"Provisioning AWS instances in {aws_regions_to_provision}")
