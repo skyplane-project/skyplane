@@ -15,7 +15,6 @@ from typing import Dict, List
 from urllib.parse import ParseResultBytes, parse_qs
 
 
-
 import boto3
 import typer
 from skylark import GB, MB
@@ -56,7 +55,7 @@ def parse_path(path: str):
         if len(parsed) == 1:
             bucket_name, key_name = parsed[0], "/"
         else:
-            if (parsed[1] == ''):
+            if parsed[1] == "":
                 bucket_name, key_name = parsed[0], "/"
             else:
                 bucket_name, key_name = parsed[0], parsed[1]
@@ -66,7 +65,7 @@ def parse_path(path: str):
         if len(parsed) == 1:
             bucket_name, key_name = parsed[0], "/"
         else:
-            if (parsed[1] == ''):
+            if parsed[1] == "":
                 bucket_name, key_name = parsed[0], "/"
             else:
                 bucket_name, key_name = parsed[0], parsed[1]
@@ -246,9 +245,9 @@ def replicate_helper(
         # make replication job
         src_objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
         dest_is_directory = False
-        if (dest_key_prefix.endswith('/')):
+        if dest_key_prefix.endswith("/"):
             dest_is_directory = True
-        
+
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=source_bucket,
