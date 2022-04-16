@@ -85,11 +85,20 @@ def provision(
         missing_azure_regions = set(azure_regions_to_provision) - set(azure_instances.keys())
         if missing_azure_regions:
             logger.info(f"(Azure) provisioning missing regions: {missing_azure_regions}")
-            azure_provisioner = lambda r: azure.provision_instance(r, azure_instance_class)
+
+            def azure_provisioner(r):
+                try:
+                    return azure.provision_instance(r, azure_instance_class)
+                except Exception as e:
+                    logger.error(f"Failed to provision Azure instance in {r}: {e}")
+                    logger.error(f"Skipping region {r}")
+                    return None
+
             results = do_parallel(azure_provisioner, missing_azure_regions, progress_bar=True, desc="provision Azure")
             for region, result in results:
                 assert region not in azure_instances
-                azure_instances[region] = [result]
+                if result is not None:
+                    azure_instances[region] = [result]
             azure_instances = refresh_instance_list(azure, azure_regions_to_provision, azure_instance_filter)
 
     if len(gcp_regions_to_provision) > 0:
@@ -107,7 +116,15 @@ def provision(
         missing_gcp_regions = set(gcp_regions_to_provision) - set(gcp_instances.keys())
         if missing_gcp_regions:
             logger.info(f"(GCP) provisioning missing regions: {missing_gcp_regions}")
-            gcp_provisioner = lambda r: gcp.provision_instance(r, gcp_instance_class, premium_network=gcp_use_premium_network)
+
+            def gcp_provisioner(r):
+                try:
+                    gcp.provision_instance(r, gcp_instance_class, premium_network=gcp_use_premium_network)
+                except Exception as e:
+                    logger.error(f"Failed to provision GCP instance in {r}: {e}")
+                    logger.error(f"Skipping region {r}")
+                    return None
+
             results = do_parallel(
                 gcp_provisioner, missing_gcp_regions, progress_bar=True, desc=f"provision GCP (premium network = {gcp_use_premium_network})"
             )
