@@ -15,6 +15,7 @@ from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.azure.azure_server import AzureServer
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
+from skylark.compute.gcp.gcp_server import GCPServer
 from skylark.compute.server import Server
 from skylark.compute.utils import make_sysctl_tcp_tuning_command
 from skylark.utils.utils import do_parallel
@@ -389,8 +390,7 @@ def latency_grid(
     instance_pairs_all = [(i1, i2) for i1 in instance_list for i2 in instance_list if i1 != i2]
     instance_pairs = []
     for i1, i2 in instance_pairs_all:
-        if not isinstance(i2, AzureServer) and (i2, i1) not in instance_pairs:
-            instance_pairs.append((i1, i2))
+        instance_pairs.append((i1, i2))
     random.shuffle(instance_pairs)
 
     # confirm experiment
@@ -422,14 +422,21 @@ def latency_grid(
             dst_instance_class=instance_dst.instance_class(),
         )
 
-        # ping from src to dst
         ping_cmd = f"ping -c 10 {instance_dst.public_ip()}"
-        ping_result_stdout, _ = instance_src.run_command(ping_cmd)
+        if isinstance(instance_src, GCPServer):
+            ping_cmd = f"docker run --net=host alpine {ping_cmd}"
+        ping_result_stdout, ping_result_stderr = instance_src.run_command(ping_cmd)
+        values = list(map(float, ping_result_stdout.strip().split("\n")[-1].split(" = ")[-1][:-3].split("/")))
         try:
-            (min_rtt, avg_rtt, max_rtt, mdev_rtt) = map(float, ping_result_stdout.strip().split("\n")[-1].split(" = ")[-1][:-3].split("/"))
+            if len(values) == 4:
+                (min_rtt, avg_rtt, max_rtt, mdev_rtt) = values
+            else:
+                (min_rtt, avg_rtt, max_rtt) = values
+                mdev_rtt = None
         except Exception as e:
             logger.error(f"{instance_src.region_tag} -> {instance_dst.region_tag} ping failed: {e}")
             logger.warning(f"Full ping output: {ping_result_stdout}")
+            logger.warning(f"Full ping error: {ping_result_stderr}")
             (min_rtt, avg_rtt, max_rtt, mdev_rtt) = (None, None, None, None)
         result_rec["min_rtt"] = min_rtt
         result_rec["avg_rtt"] = avg_rtt
@@ -444,7 +451,7 @@ def latency_grid(
     log_dir.mkdir(parents=True, exist_ok=True)
     output_file = log_dir / "latency.csv"
     with tqdm(total=len(instance_pairs), desc="Total latency evaluation") as pbar:
-        results = do_parallel(client_fn, instance_pairs, progress_bar=False, n=8)
+        results = do_parallel(client_fn, instance_pairs, progress_bar=False, n=16)
         new_througput_results.extend([rec for args, rec in results if rec is not None])
 
     # build dataframe from results
