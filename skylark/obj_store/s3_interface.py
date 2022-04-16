@@ -2,12 +2,12 @@ import mimetypes
 import os
 from typing import Iterator, List
 
-import typer
 import botocore.exceptions
 from awscrt.auth import AwsCredentialsProvider
 from awscrt.http import HttpHeaders, HttpRequest
 from awscrt.io import ClientBootstrap, DefaultHostResolver, EventLoopGroup
 from awscrt.s3 import S3Client, S3RequestTlsMode, S3RequestType
+from skylark import exceptions
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.utils import logger
 
@@ -26,7 +26,7 @@ class S3Interface(ObjectStoreInterface):
         self.bucket_name = bucket_name
         if not self.bucket_exists():
             logger.error("Specified bucket does not exist.")
-            raise typer.Abort()
+            raise exceptions.MissingBucketException()
         event_loop_group = EventLoopGroup(num_threads=num_threads, cpu_group=None)
         host_resolver = DefaultHostResolver(event_loop_group)
         bootstrap = ClientBootstrap(event_loop_group, host_resolver)
@@ -47,9 +47,9 @@ class S3Interface(ObjectStoreInterface):
         try:
             region = s3_client.get_bucket_location(Bucket=bucket_name).get("LocationConstraint", "us-east-1")
             return region if region is not None else "us-east-1"
-        except:
+        except Exception as e:
             logger.error("Specified bucket does not exist.")
-            raise typer.Abort()
+            raise exceptions.MissingBucketException() from e
         
 
     def bucket_exists(self):

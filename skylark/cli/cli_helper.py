@@ -17,6 +17,7 @@ from typing import Dict, List
 import boto3
 import typer
 from skylark import GB, MB
+from skylark import exceptions
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.gcp.gcp_auth import GCPAuthentication
@@ -154,8 +155,8 @@ def copy_objstore_local(object_interface: ObjectStoreInterface, src_key: str, ds
             obj_count += 1
 
         if not obj_count:
-            logger.warning("Specified object does not exist.")
-            raise typer.Abort()
+            logger.error("Specified object does not exist.")
+            raise exceptions.MissingObjectException()
 
         # wait for all downloads to complete, displaying a progress bar
         with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Downloading") as pbar:
@@ -236,8 +237,8 @@ def replicate_helper(
         # make replication job
         objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
         if not objs:
-            logger.warning("Specified object does not exist.")
-            raise typer.Abort()
+            logger.error("Specified object does not exist.")
+            raise exceptions.MissingObjectException()
 
         job = ReplicationJob(
             source_region=topo.source_region(),
