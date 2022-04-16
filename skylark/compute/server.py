@@ -4,6 +4,7 @@ import subprocess
 from enum import Enum, auto
 from pathlib import Path
 from typing import Dict
+from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.utils import logger
 from skylark.compute.utils import make_dozzle_command, make_sysctl_tcp_tuning_command
 from skylark.utils.net import retry_requests
@@ -234,6 +235,10 @@ class Server:
         if config_path.exists():
             self.upload_file(config_path, f"/tmp/{config_path.name}")
             docker_envs["SKYLARK_CONFIG"] = f"/pkg/data/{config_path.name}"
+        if self.provider == "aws":
+            aws_auth = AWSAuthentication()
+            docker_envs["AWS_ACCESS_KEY_ID"] = aws_auth.access_key
+            docker_envs["AWS_SECRET_ACCESS_KEY"] = aws_auth.secret_key``
 
         # pull docker image and start container
         with Timer(f"{desc_prefix}: Docker pull"):
