@@ -160,7 +160,14 @@ def cp(
             for i in range(max_instances):
                 topo.add_edge(src_region, i, dst_region, i, num_connections)
 
-        replicate_helper(topo, source_bucket=bucket_src, dest_bucket=bucket_dst, src_key_prefix=path_src, dest_key_prefix=path_dst, reuse_gateways=reuse_gateways)
+        replicate_helper(
+            topo,
+            source_bucket=bucket_src,
+            dest_bucket=bucket_dst,
+            src_key_prefix=path_src,
+            dest_key_prefix=path_dst,
+            reuse_gateways=reuse_gateways,
+        )
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
 
