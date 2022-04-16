@@ -1,3 +1,4 @@
+from functools import partial
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from skylark.utils import logger
@@ -9,13 +10,19 @@ from skylark.compute.cloud_providers import CloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.gcp.gcp_server import GCPServer
 from skylark.compute.server import Server, ServerState
-from skylark.utils.utils import do_parallel
+from skylark.utils.utils import Timer, do_parallel
 
 
-def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None) -> Dict[str, List[Server]]:
+def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1) -> Dict[str, List[Server]]:
     if instance_filter is None:
         instance_filter = {"tags": {"skylark": "true"}}
-    results = do_parallel(lambda region: provider.get_matching_instances(region=region, **instance_filter), region_list, progress_bar=False)
+    results = do_parallel(
+        lambda region: provider.get_matching_instances(region=region, **instance_filter),
+        region_list,
+        progress_bar=True,
+        n=n,
+        desc="Refreshing instance list",
+    )
     return {r: ilist for r, ilist in results if ilist}
 
 
@@ -56,6 +63,22 @@ def provision(
 
     # TODO: It might be significantly faster to provision AWS, Azure, and GCP concurrently (e.g., using threads)
 
+    jobs = []
+    jobs.append(partial(aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
+    if aws_regions_to_provision:
+        for r in set(aws_regions_to_provision):
+            jobs.append(partial(aws.add_ip_to_security_group, r))
+            jobs.append(partial(aws.ensure_keyfile_exists, r))
+    if azure_regions_to_provision:
+        jobs.append(azure.create_ssh_key)
+        jobs.append(azure.set_up_resource_group)
+    if gcp_regions_to_provision:
+        jobs.append(gcp.create_ssh_key)
+        jobs.append(gcp.configure_default_network)
+        jobs.append(gcp.configure_default_firewall)
+    with Timer("Cloud SSH key initialization"):
+        do_parallel(lambda fn: fn(), jobs)
+
     if len(aws_regions_to_provision) > 0:
         logger.info(f"Provisioning AWS instances in {aws_regions_to_provision}")
         aws_instance_filter = {
@@ -85,11 +108,20 @@ def provision(
         missing_azure_regions = set(azure_regions_to_provision) - set(azure_instances.keys())
         if missing_azure_regions:
             logger.info(f"(Azure) provisioning missing regions: {missing_azure_regions}")
-            azure_provisioner = lambda r: azure.provision_instance(r, azure_instance_class)
+
+            def azure_provisioner(r):
+                try:
+                    return azure.provision_instance(r, azure_instance_class)
+                except Exception as e:
+                    logger.error(f"Failed to provision Azure instance in {r}: {e}")
+                    logger.error(f"Skipping region {r}")
+                    return None
+
             results = do_parallel(azure_provisioner, missing_azure_regions, progress_bar=True, desc="provision Azure")
             for region, result in results:
                 assert region not in azure_instances
-                azure_instances[region] = [result]
+                if result is not None:
+                    azure_instances[region] = [result]
             azure_instances = refresh_instance_list(azure, azure_regions_to_provision, azure_instance_filter)
 
     if len(gcp_regions_to_provision) > 0:
@@ -103,11 +135,32 @@ def provision(
         gcp.create_ssh_key()
         gcp.configure_default_network()
         gcp.configure_default_firewall()
-        gcp_instances = refresh_instance_list(gcp, gcp_regions_to_provision, gcp_instance_filter)
+        gcp_instances = refresh_instance_list(gcp, gcp_regions_to_provision, gcp_instance_filter, n=4)
         missing_gcp_regions = set(gcp_regions_to_provision) - set(gcp_instances.keys())
+
+        # filter duplicate regions from list and select lexicographically smallest region by zone
+        zone_map = {}
+        for region in missing_gcp_regions:
+            continent, region_name, zone = region.split("-")
+            region = f"{continent}-{region_name}"
+            if region not in zone_map:
+                zone_map[region] = []
+            zone_map[region].append(zone)
+        missing_gcp_regions = []
+        for region, zones in zone_map.items():
+            missing_gcp_regions.append(f"{region}-{min(zones)}")
+
         if missing_gcp_regions:
             logger.info(f"(GCP) provisioning missing regions: {missing_gcp_regions}")
-            gcp_provisioner = lambda r: gcp.provision_instance(r, gcp_instance_class, premium_network=gcp_use_premium_network)
+
+            def gcp_provisioner(r):
+                try:
+                    gcp.provision_instance(r, gcp_instance_class, premium_network=gcp_use_premium_network)
+                except Exception as e:
+                    logger.error(f"Failed to provision GCP instance in {r}: {e}")
+                    logger.error(f"Skipping region {r}")
+                    return None
+
             results = do_parallel(
                 gcp_provisioner, missing_gcp_regions, progress_bar=True, desc=f"provision GCP (premium network = {gcp_use_premium_network})"
             )

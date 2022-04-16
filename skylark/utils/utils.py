@@ -63,7 +63,11 @@ def do_parallel(
         n = len(args_list)
 
     def wrapped_fn(args):
-        return args, func(args)
+        try:
+            return args, func(args)
+        except Exception as e:
+            logger.error(f"Error running {func.__name__} with args {arg_fmt(args)}: {e}")
+            raise e
 
     results = []
     with tqdm(total=len(args_list), leave=leave_pbar, desc=desc, disable=not progress_bar) as pbar:

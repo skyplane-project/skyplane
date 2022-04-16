@@ -49,14 +49,13 @@ class GCPServer(Server):
         else:
             return None
 
-    @ignore_lru_cache()
     def public_ip(self):
         """Get public IP for instance with GCP client"""
         return self.get_instance_property("networkInterfaces")[0]["accessConfigs"][0].get("natIP")
 
-    @ignore_lru_cache()
     def instance_class(self):
-        return self.get_instance_property("machineType").split("/")[-1]
+        machine_type = self.get_instance_property("machineType")
+        return machine_type.split("/")[-1] if machine_type else None
 
     def region(self):
         return self.gcp_region
@@ -64,16 +63,13 @@ class GCPServer(Server):
     def instance_state(self):
         return ServerState.from_gcp_state(self.get_instance_property("status"))
 
-    @ignore_lru_cache()
     def instance_name(self):
         return self.get_instance_property("name")
 
-    @ignore_lru_cache()
     def tags(self):
         """Get labels for instance."""
         return self.get_instance_property("labels") or {}
 
-    @ignore_lru_cache()
     def network_tier(self):
         interface = self.get_instance_property("networkInterfaces")[0]
         return interface["accessConfigs"][0]["networkTier"]
