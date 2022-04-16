@@ -1,11 +1,14 @@
 import os
-from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Iterator, List
+import subprocess
+from typing import Iterator, List, Optional
+import uuid
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.azure.azure_server import AzureServer
 from skylark.utils import logger
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
+from azure.mgmt.authorization.models import RoleAssignmentCreateParameters, RoleAssignmentProperties
+from azure.identity import AzureCliCredential
 
 
 class AzureObject(ObjectStoreObject):
@@ -15,7 +18,7 @@ class AzureObject(ObjectStoreObject):
 
 
 class AzureInterface(ObjectStoreInterface):
-    def __init__(self, azure_region, account_name, container_name):
+    def __init__(self, azure_region, account_name, container_name, use_tls=True):
         # TODO (#210): should be configured via argument
         self.account_name = f"skylark{azure_region.replace(' ', '').lower()}"
         self.container_name = container_name
@@ -23,18 +26,27 @@ class AzureInterface(ObjectStoreInterface):
         # Create a blob service client
         self.auth = AzureAuthentication()
         self.account_url = f"https://{self.account_name}.blob.core.windows.net"
-        self.storage_management_client = self.auth.get_storage_management_client()
-        self.container_client = self.auth.get_container_client(self.account_url, self.container_name)
-        self.blob_service_client = self.auth.get_blob_service_client(self.account_url)
 
         # infer azure region from storage account
-        if azure_region is None or azure_region is "infer":
+        if azure_region is None or azure_region == "infer":
             self.azure_region = self.get_region_from_storage_account(self.account_name)
         else:
             self.azure_region = azure_region
 
         # parallel upload/downloads
         self.max_concurrency = 1
+
+    @property
+    def blob_service_client(self):
+        return self.auth.get_blob_service_client(self.account_url)
+
+    @property
+    def container_client(self):
+        return self.auth.get_container_client(self.account_url, self.container_name)
+
+    @property
+    def storage_management_client(self):
+        return self.auth.get_storage_management_client()
 
     def region_tag(self):
         return "azure:" + self.azure_region
@@ -67,20 +79,52 @@ class AzureInterface(ObjectStoreInterface):
                 {"sku": {"name": tier}, "kind": "BlockBlobStorage", "location": self.azure_region},
             )
             operation.result()
-        except ResourceExistsError:
-            logger.warning("Unable to create storage account as it already exists")
+        except ResourceExistsError as e:
+            logger.warning(f"Unable to create storage account as it already exists: {e}")
+
+    def infer_cli_principal_id(self):
+        self.auth.credential.get_token("https://graph.windows.net")  # must request token to attempt to load credential
+        if isinstance(self.auth.credential._successful_credential, AzureCliCredential):
+            out = subprocess.check_output(["az", "ad", "signed-in-user", "show", "--query", "objectId", "-o", "tsv"])
+            return out.decode("utf-8").strip()
+        else:
+            return None
+
+    def grant_storage_account_access(self, role_name: str, principal_id: str):
+        # lookup role
+        auth_client = self.auth.get_authorization_client()
+        scope = f"/subscriptions/{self.auth.subscription_id}/resourceGroups/{AzureServer.resource_group_name}/providers/Microsoft.Storage/storageAccounts/{self.account_name}"
+        roles = list(auth_client.role_definitions.list(scope, filter="roleName eq '{}'".format(role_name)))
+        assert len(roles) == 1
+
+        # query for existing role assignment
+        matches = []
+        for assignment in auth_client.role_assignments.list_for_scope(scope, filter="principalId eq '{}'".format(principal_id)):
+            if assignment.role_definition_id == roles[0].id:
+                matches.append(assignment)
+        if len(matches) == 0:
+            logger.debug(f"Granting access to {principal_id} for role {role_name} on storage account {self.account_name}")
+            params = RoleAssignmentCreateParameters(
+                properties=RoleAssignmentProperties(role_definition_id=roles[0].id, principal_id=principal_id)
+            )
+            auth_client.role_assignments.create(scope, uuid.uuid4(), params)
 
     def create_container(self):
         try:
             self.container_client.create_container()
         except ResourceExistsError:
-            logger.warning("Unable to create container as it already exists")
+            logger.warning(f"Unable to create container {self.container_name} as it already exists")
 
     def create_bucket(self, premium_tier=True):
         tier = "Premium_LRS" if premium_tier else "Standard_LRS"
         if not self.storage_account_exists():
+            logger.debug(f"Creating storage account {self.account_name}")
             self.create_storage_account(tier=tier)
+        principal_id = self.infer_cli_principal_id()
+        if principal_id:
+            self.grant_storage_account_access("Storage Blob Data Contributor", principal_id)
         if not self.container_exists():
+            logger.debug(f"Creating container {self.container_name}")
             self.create_container()
 
     def delete_container(self):

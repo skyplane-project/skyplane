@@ -31,35 +31,8 @@ class GCPCloudProvider(CloudProvider):
 
     @staticmethod
     def region_list():
-        return [
-            "asia-east1-a",
-            "asia-east2-a",
-            "asia-northeast1-a",
-            "asia-northeast2-a",
-            "asia-northeast3-a",
-            "asia-south1-a",
-            "asia-south2-a",
-            "asia-southeast1-a",
-            "asia-southeast2-a",
-            "australia-southeast1-a",
-            "australia-southeast2-a",
-            "europe-central2-a",
-            "europe-north1-a",
-            "europe-west1-b",
-            "europe-west2-a",
-            "europe-west3-a",
-            "europe-west4-a",
-            "europe-west6-a",
-            "northamerica-northeast1-a",
-            "northamerica-northeast2-a",
-            "southamerica-east1-a",
-            "southamerica-west1-a",
-            "us-central1-a",
-            "us-east1-b",
-            "us-east4-a",
-            "us-west1-a",
-            "us-west4-a",
-        ]
+        """See https://cloud.google.com/network-tiers/docs/overview#regions_supporting_standard_tier for a list of regions in the standard tier."""
+        return GCPAuthentication.get_region_config()
 
     @staticmethod
     def region_list_standard():

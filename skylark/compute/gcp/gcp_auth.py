@@ -6,6 +6,9 @@ import google.auth
 from skylark import cloud_config
 from skylark.config import SkylarkConfig
 from skylark import config_path
+from skylark import gcp_config_path
+
+from googleapiclient import discovery
 
 
 class GCPAuthentication:
@@ -20,6 +23,38 @@ class GCPAuthentication:
         self.inferred_project_id = project_id
         self._credentials = None
         self._project_id = None
+
+    def save_region_config(self):
+        with open(gcp_config_path, "w") as f:
+            if self.config.gcp_enabled == False:
+                f.write("")
+                return
+            region_list = []
+            credentials = self.credentials
+            service = discovery.build("compute", "beta", credentials=credentials)
+            request = service.zones().list(project=self.inferred_project_id)
+            while request is not None:
+                response = request.execute()
+                # In reality, these are zones. However, we shall call them regions to be self-consistent.
+                for region in response["items"]:
+                    region_list.append(region["description"])
+
+                request = service.regions().list_next(previous_request=request, previous_response=response)
+
+            f.write("\n".join(region_list))
+            print(f"    GCP region config file saved to {gcp_config_path}")
+
+    @staticmethod
+    def get_region_config():
+        try:
+            f = open(gcp_config_path, "r")
+        except FileNotFoundError:
+            print("    No GCP config detected! Consquently, the GCP region list is empty. Run 'skylark init' to remedy this.")
+            return []
+        region_list = []
+        for region in f.read().split("\n"):
+            region_list.append(region)
+        return region_list
 
     @property
     def credentials(self):
