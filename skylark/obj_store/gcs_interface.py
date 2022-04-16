@@ -1,6 +1,5 @@
 import mimetypes
 import os
-from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Iterator, List
 
 from google.cloud import storage  # pytype: disable=import-error
@@ -14,7 +13,7 @@ class GCSObject(ObjectStoreObject):
 
 
 class GCSInterface(ObjectStoreInterface):
-    def __init__(self, gcp_region, bucket_name):
+    def __init__(self, gcp_region, bucket_name, use_tls=True):
         # TODO: infer region?
         # TODO - figure out how paralllelism handled
         self.bucket_name = bucket_name

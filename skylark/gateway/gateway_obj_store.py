@@ -1,10 +1,8 @@
 from functools import partial
 import queue
-import threading
 from multiprocessing import Event, Manager, Process, Value
 from typing import Dict, Optional
 
-import setproctitle
 from skylark.gateway.chunk_store import ChunkStore
 from skylark.utils import logger
 from skylark.chunk import ChunkRequest
@@ -61,7 +59,6 @@ class GatewayObjStoreConn:
 
     def worker_loop(self, worker_id: int):
         # todo should this use processes instead of threads?
-        setproctitle.setproctitle(f"skylark-gateway-obj-store:{worker_id}")
         self.worker_id = worker_id
 
         while not self.exit_flags[worker_id].is_set():
