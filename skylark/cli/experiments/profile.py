@@ -419,7 +419,7 @@ def latency_grid(
         )
 
         # ping from src to dst
-        ping_cmd = f"ping -c 60 -i 1 -W 1 {instance_dst.public_ip()}"
+        ping_cmd = f"ping -c 10 -i 1 -W 1 {instance_dst.public_ip()}"
         ping_result_stdout, _ = instance_src.run_command(ping_cmd)
         try:
             (min_rtt, avg_rtt, max_rtt, mdev_rtt) = map(float, ping_result_stdout.strip().split("\n")[-1].split(" = ")[-1][:-3].split("/"))
@@ -438,7 +438,7 @@ def latency_grid(
     new_througput_results = []
     output_file = log_dir / "latency.csv"
     with tqdm(total=len(instance_pairs), desc="Total latency evaluation") as pbar:
-        results = do_parallel(client_fn, instance_pairs, progress_bar=False)
+        results = do_parallel(client_fn, instance_pairs, progress_bar=False, n=8)
         new_througput_results.extend([rec for args, rec in results if rec is not None])
 
     # build dataframe from results
