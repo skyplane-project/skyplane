@@ -6,6 +6,7 @@ from typing import List, Optional
 
 import paramiko
 from skylark import key_root
+from skylark import exceptions
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.azure.azure_server import AzureServer
 from skylark.compute.cloud_providers import CloudProvider
