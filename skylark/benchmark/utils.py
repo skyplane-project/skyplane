@@ -114,6 +114,19 @@ def provision(
         gcp.configure_default_firewall()
         gcp_instances = refresh_instance_list(gcp, gcp_regions_to_provision, gcp_instance_filter)
         missing_gcp_regions = set(gcp_regions_to_provision) - set(gcp_instances.keys())
+
+        # filter duplicate regions from list and select lexicographically smallest region by zone
+        zone_map = {}
+        for region in missing_gcp_regions:
+            continent, region_name, zone = region.split("-")
+            region = f"{continent}-{region_name}"
+            if region not in zone_map:
+                zone_map[region] = []
+            zone_map[region].append(zone)
+        missing_gcp_regions = []
+        for region, zones in zone_map.items():
+            missing_gcp_regions.append(f"{region}-{min(zones)}")
+
         if missing_gcp_regions:
             logger.info(f"(GCP) provisioning missing regions: {missing_gcp_regions}")
 

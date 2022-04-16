@@ -133,19 +133,6 @@ def throughput_grid(
         logger.error(f"Invalid GCP region list: {gcp_region_list}")
         raise typer.Abort()
 
-    # filter duplicate regions from list and select lexicographically smallest region by zone
-    zone_map = {}
-    for region in gcp_region_list:
-        continent, region_name, zone = region.split("-")
-        region = f"{continent}-{region_name}"
-        if region not in zone_map:
-            zone_map[region] = []
-        zone_map[region].append(zone)
-
-    gcp_region_list = []
-    for region, zones in zone_map.items():
-        gcp_region_list.append(f"{region}-{min(zones)}")
-
     # validate GCP standard instances
     if not enable_gcp_standard:
         gcp_standard_region_list = []
