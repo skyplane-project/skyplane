@@ -419,12 +419,13 @@ def latency_grid(
         )
 
         # ping from src to dst
-        ping_cmd = f"ping -c 10 -i 1 -W 1 {instance_dst.public_ip()}"
+        ping_cmd = f"ping -c 10 {instance_dst.public_ip()}"
         ping_result_stdout, _ = instance_src.run_command(ping_cmd)
         try:
             (min_rtt, avg_rtt, max_rtt, mdev_rtt) = map(float, ping_result_stdout.strip().split("\n")[-1].split(" = ")[-1][:-3].split("/"))
         except Exception as e:
-            logger.error(f"Failed to parse ping result: {e}")
+            logger.error(f"{instance_src.region_tag} -> {instance_dst.region_tag} ping failed: {e}")
+            logger.warning(f"Full ping output: {ping_result_stdout}")
             (min_rtt, avg_rtt, max_rtt, mdev_rtt) = (None, None, None, None)
         result_rec["min_rtt"] = min_rtt
         result_rec["avg_rtt"] = avg_rtt
