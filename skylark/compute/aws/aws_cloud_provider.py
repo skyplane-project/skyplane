@@ -325,12 +325,12 @@ class AWSCloudProvider(CloudProvider):
                 start_instance()
                 break
             except botocore.exceptions.ClientError as e:
-                if "VcpuLimitExceeded" in str(e):
-                    raise exceptions.InsufficientVCPUException() from e
-                if "Invalid IAM Instance Profile name" not in str(e):
-                    logger.warning(str(e))
                 if i == max_retries - 1:
                     raise e
+                elif "VcpuLimitExceeded" in str(e):
+                    raise exceptions.InsufficientVCPUException() from e
+                elif "Invalid IAM Instance Profile name" not in str(e):
+                    logger.warning(str(e))
                 time.sleep(backoff)
                 backoff = min(backoff * 2, max_backoff)
 

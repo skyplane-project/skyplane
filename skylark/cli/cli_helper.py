@@ -358,15 +358,6 @@ def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
 def create_aws_region_config(config):
     AWSAuthentication.save_region_config(config)
 
-def query_aws_vcpu_limits(config):
-    if config.aws_enabled:
-        from skylark.cli.cli_aws import vcpu_limits
-        typer.secho(f"    Queried AWS vCPU limits from the AWS CLI:", fg="green")
-        old = typer.secho
-        typer.secho = lambda x, *args, **kwargs:  old(f"        {x}", *args, **kwargs)
-        vcpu_limits()
-        typer.secho = old
-
 def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkConfig:
     if force_init:
         typer.secho("    Azure credentials will be re-initialized", fg="red")
