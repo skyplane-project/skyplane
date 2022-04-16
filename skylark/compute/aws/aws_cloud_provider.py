@@ -121,9 +121,14 @@ class AWSCloudProvider(CloudProvider):
             matching_vpc.create_tags(Tags=[{"Key": "Name", "Value": vpc_name}])
             matching_vpc.wait_until_available()
 
-            # make subnet
-            subnet = ec2.create_subnet(CidrBlock="10.0.2.0/24", VpcId=matching_vpc.id)
-            subnet.meta.client.modify_subnet_attribute(SubnetId=subnet.id, MapPublicIpOnLaunch={"Value": True})
+            # make subnet for each AZ in region
+            def make_subnet(az):
+                subnet = self.auth.get_boto3_resource("ec2", f"{region}{az}").create_subnet(CidrBlock="10.0.2.0/24", VpcId=matching_vpc.id)
+                subnet.meta.client.modify_subnet_attribute(SubnetId=subnet.id, MapPublicIpOnLaunch={"Value": True})
+
+            azs = ec2client.describe_availability_zones()["AvailabilityZones"]
+            for az in azs:
+                make_subnet(az["ZoneName"])
 
             # make internet gateway
             igw = ec2.create_internet_gateway()
