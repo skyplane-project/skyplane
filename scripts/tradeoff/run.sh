@@ -17,7 +17,7 @@ mkdir -p ${solution_dir}
 
 
 echo -e "${Blue}Range: [${min_range}, ${max_range}]${NC}"
-throughputs=`python -c "import numpy as np; print(' '.join(np.around(np.linspace(${min_range}, ${max_range}, ${n_samples}), decimals=2).astype(str).tolist()[::-1]))"`
+throughputs=`python -c "import numpy as np; print(' '.join(np.around(np.linspace(${min_range}, ${max_range}*.95, ${n_samples}), decimals=2).astype(str).tolist()[::-1]))"`
 for t in ${throughputs}; do
     echo -e "${BGreen}Solving for throughput ${t}...${NC}"
     bash scripts/tradeoff/eval.sh $src $dest $t $n_instances |& tee ${solution_dir}/solve-throughput_${t}.log
