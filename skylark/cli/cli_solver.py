@@ -1,7 +1,8 @@
 """
-AWS convenience interface
+Optimal solver using ILP formulation.
 """
 
+import json
 from pathlib import Path
 
 import typer
@@ -56,7 +57,7 @@ def solve_throughput(
                     g.render(filename="/tmp/throughput_graph.gv", format="png")
                 except FileNotFoundError as e:
                     logger.error(f"Could not render graph: {e}")
-        replication_topo = tput.to_replication_topology(solution)
+        replication_topo, connection_scale_factor = tput.to_replication_topology(solution)
         if out:
             with open(out, "w") as f:
                 f.write(replication_topo.to_json())
@@ -70,3 +71,7 @@ def solve_throughput(
                     g_rt.render(filename="/tmp/replication_topo.gv", format="png")
                 except FileNotFoundError as e:
                     logger.error(f"Could not render graph: {e}")
+
+    # print json summarizing solution
+    print(json.dumps(problem.to_summary_dict()))
+    print(json.dumps(solution.to_summary_dict()))

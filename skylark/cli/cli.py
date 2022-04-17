@@ -149,7 +149,7 @@ def cp(
                     solver_verbose=solver_verbose,
                     save_lp_path=None,
                 )
-            topo = tput.to_replication_topology(solution)
+            topo, _ = tput.to_replication_topology(solution)
         else:
             topo = ReplicationTopology()
             for i in range(max_instances):

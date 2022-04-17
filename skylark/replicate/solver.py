@@ -36,6 +36,23 @@ class ThroughputProblem:
     instance_cost_multiplier = 1.0
     instance_provision_time_s = 0.0
 
+    def to_summary_dict(self):
+        """Simple summary of the problem"""
+        return {
+            "src": self.src,
+            "dst": self.dst,
+            "required_throughput_gbits": self.required_throughput_gbits,
+            "gbyte_to_transfer": self.gbyte_to_transfer,
+            "instance_limit": self.instance_limit,
+            "aws_instance_throughput_limit": self.aws_instance_throughput_limit,
+            "gcp_instance_throughput_limit": self.gcp_instance_throughput_limit,
+            "azure_instance_throughput_limit": self.azure_instance_throughput_limit,
+            "benchmarked_throughput_connections": self.benchmarked_throughput_connections,
+            "cost_per_instance_hr": self.cost_per_instance_hr,
+            "instance_cost_multiplier": self.instance_cost_multiplier,
+            "instance_provision_time_s": self.instance_provision_time_s,
+        }
+
 
 @dataclass
 class ThroughputSolution:
@@ -62,6 +79,28 @@ class ThroughputSolution:
     baseline_cost_instance: Optional[float] = None
     baseline_cost_total: Optional[float] = None
 
+    def to_summary_dict(self):
+        """Print simple summary of solution."""
+        if self.is_feasible:
+            return {
+                "is_feasible": self.is_feasible,
+                "solution": {
+                    "throughput_achieved_gbits": self.throughput_achieved_gbits,
+                    "cost_egress": self.cost_egress,
+                    "cost_instance": self.cost_instance,
+                    "cost_total": self.cost_total,
+                    "transfer_runtime_s": self.transfer_runtime_s,
+                },
+                "baseline": {
+                    "throughput_achieved_gbits": self.baseline_throughput_achieved_gbits,
+                    "cost_egress": self.baseline_cost_egress,
+                    "cost_instance": self.baseline_cost_instance,
+                    "cost_total": self.baseline_cost_total,
+                },
+            }
+        else:
+            return {"is_feasible": self.is_feasible}
+
 
 class ThroughputSolver:
     def __init__(self, df_path, default_throughput=0.0):
@@ -75,7 +114,8 @@ class ThroughputSolver:
             return None
         return self.df.loc[(src, dst, src_tier, dst_tier), "throughput_sent"].values[0]
 
-    def get_path_cost(self, src, dst):
+    def get_path_cost(self, src, dst, src_tier="PREMIUM", dst_tier="PREMIUM"):
+        assert src_tier == "PREMIUM" and dst_tier == "PREMIUM"
         return CloudProvider.get_transfer_cost(src, dst)
 
     def get_regions(self):
@@ -420,4 +460,4 @@ class ThroughputSolverILP(ThroughputSolver):
                     num_connections=e.connections,
                 )
 
-        return replication_topology
+        return replication_topology, scale_factor
