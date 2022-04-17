@@ -342,7 +342,7 @@ class AzureCloudProvider(CloudProvider):
                     "security_rules": [
                         {
                             "name": name + "-allow-all",
-                            "protocol": "Tcp",
+                            "protocol": "*",
                             "source_port_range": "*",
                             "source_address_prefix": "*",
                             "destination_port_range": "*",
