@@ -1,0 +1,22 @@
+    No GCP config detected! Consquently, the GCP region list is empty. Run 'skylark init' to remedy this.
+    No GCP config detected! Consquently, the GCP region list is empty. Run 'skylark init' to remedy this.
+
+=================================================
+  ______  _             _                 _     
+ / _____)| |           | |               | |    
+( (____  | |  _  _   _ | |  _____   ____ | |  _ 
+ \____ \ | |_/ )| | | || | (____ | / ___)| |_/ )
+ _____) )|  _ ( | |_| || | / ___ || |    |  _ ( 
+(______/ |_| \_) \__  | \_)\_____||_|    |_| \_)
+                (____/                          
+=================================================
+
+0/1000 chunks done (0.00 / 7.81GB, 0.00Gbit/s, ETA=unknown)
+6/1000 chunks done (0.05 / 7.81GB, 0.11Gbit/s, ETA=573s)
+119/1000 chunks done (0.93 / 7.81GB, 1.15Gbit/s, ETA=47s)
+394/1000 chunks done (3.08 / 7.81GB, 2.52Gbit/s, ETA=15s)
+515/1000 chunks done (4.02 / 7.81GB, 2.81Gbit/s, ETA=10s)
+744/1000 chunks done (5.81 / 7.81GB, 3.35Gbit/s, ETA=4s)
+996/1000 chunks done (7.78 / 7.81GB, 3.45Gbit/s, ETA=0s)
+
+{"total_runtime_s": 20.414319, "throughput_gbits": 3.061576533608591, "monitor_status": "completed", "success": true}
