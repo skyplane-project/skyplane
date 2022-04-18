@@ -19,8 +19,10 @@ inter_regions = solver.get_regions()
 src_region_select = st.sidebar.selectbox("Source region", src_regions)
 dest_region_input = st.sidebar.selectbox("Destination region", dest_regions)
 
-st.sidebar.write(f"Baseline throughput: {solver.get_path_throughput(src_region_select, dest_region_input) / 2**30:.4f} Gbps")
-st.sidebar.write(f"Baseline cost: ${solver.get_path_cost(src_region_select, dest_region_input):.02f}")
+baseline_cost = solver.get_path_cost(src_region_select, dest_region_input)
+baseline_throughput = solver.get_path_throughput(src_region_select, dest_region_input)
+st.sidebar.write(f"Baseline throughput: {baseline_throughput / 2**30:.2f} Gb/s")
+st.sidebar.write(f"Baseline cost: ${baseline_cost:.2f}")
 
 costs = []
 for inter_region in inter_regions:
@@ -30,13 +32,14 @@ for inter_region in inter_regions:
     throughput = min(
         solver.get_path_throughput(src_region_select, inter_region), solver.get_path_throughput(inter_region, dest_region_input)
     )
+
     costs.append(
         {
             "inter": inter_region,
             "cost": cost,
             "throughput": throughput / 2**30,
-            "cost_overhead": cost / solver.get_path_cost(src_region_select, dest_region_input),
-            "thoughput_speedup": throughput / solver.get_path_throughput(src_region_select, dest_region_input),
+            "cost_overhead": cost / baseline_cost if baseline_cost > 0 else 0,
+            "thoughput_speedup": throughput / baseline_throughput if baseline_throughput > 0 else 0,
         }
     )
 df = pd.DataFrame(costs)
@@ -47,6 +50,10 @@ fig, ax = plt.subplots(figsize=(8, 6))
 ax.scatter(df["throughput"], df["cost"], alpha=0.8)
 ax.set_xlabel("Throughput (GB/s)")
 ax.set_ylabel("Cost (USD)")
+
+ax.axhline(y=solver.get_path_cost(src_region_select, dest_region_input), color="red", linestyle="--")
+ax.axvline(x=solver.get_path_throughput(src_region_select, dest_region_input) / 2**30, color="red", linestyle="--")
+
 fig.set_facecolor("white")
 st.pyplot(fig, bbox_inches="tight")
 
