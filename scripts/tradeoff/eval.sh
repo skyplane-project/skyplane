@@ -4,7 +4,7 @@ src=$1
 dest=$2
 throughput_per_instance=$3
 max_instance=$4
-throughput=`python -c "print(${throughput_per_instance}*${max_instance})"`
+throughput=`python -c "print(${throughput_per_instance} * ${max_instance})"`
 
 # color output
 BGreen='\033[1;32m'

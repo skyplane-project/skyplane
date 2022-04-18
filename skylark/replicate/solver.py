@@ -1,5 +1,6 @@
 from collections import namedtuple
 from dataclasses import dataclass
+import functools
 import shutil
 from typing import Dict, List, Optional, Tuple
 
@@ -107,6 +108,7 @@ class ThroughputSolver:
         self.df = pd.read_csv(df_path).set_index(["src_region", "dst_region", "src_tier", "dst_tier"]).sort_index()
         self.default_throughput = default_throughput
 
+    @functools.lru_cache(maxsize=None)
     def get_path_throughput(self, src, dst, src_tier="PREMIUM", dst_tier="PREMIUM"):
         if src == dst:
             return self.default_throughput
@@ -114,6 +116,7 @@ class ThroughputSolver:
             return None
         return self.df.loc[(src, dst, src_tier, dst_tier), "throughput_sent"].values[0]
 
+    @functools.lru_cache(maxsize=None)
     def get_path_cost(self, src, dst, src_tier="PREMIUM", dst_tier="PREMIUM"):
         assert src_tier == "PREMIUM" and dst_tier == "PREMIUM"
         return CloudProvider.get_transfer_cost(src, dst)
