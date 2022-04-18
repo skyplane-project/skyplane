@@ -335,6 +335,7 @@ class ThroughputSolverILP(ThroughputSolver):
         # average_egress_conns = [64 for i in range(len(regions))]
         # average_ingress_conns = [64 for i in range(len(regions))]
 
+
         # first assign source instances to destination regions
         src_edges: List[Edge] = []
         n_instances = {}
@@ -411,7 +412,7 @@ class ThroughputSolverILP(ThroughputSolver):
         # build ReplicationTopology
         replication_topology = ReplicationTopology()
         for e in dst_edges:
-            if e.connections > 1:
+            if e.connections >= 1:
                 replication_topology.add_edge(
                     src_region=e.src_region,
                     src_instance=e.src_instance_idx,
