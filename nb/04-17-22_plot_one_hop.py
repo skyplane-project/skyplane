@@ -25,8 +25,10 @@ with tqdm(total=len(src_regions) * len(dest_regions)) as pbar:
                 if inter_region == src_region_select or inter_region == dest_region_input:
                     continue
                 cost = solver.get_path_cost(src_region_select, inter_region) + solver.get_path_cost(inter_region, dest_region_input)
-                throughput = min(solver.get_path_throughput(src_region_select, inter_region), solver.get_path_throughput(inter_region, dest_region_input))
-                costs.append({'inter': inter_region, 'cost': cost, 'throughput': throughput / 2**30})
+                throughput = min(
+                    solver.get_path_throughput(src_region_select, inter_region), solver.get_path_throughput(inter_region, dest_region_input)
+                )
+                costs.append({"inter": inter_region, "cost": cost, "throughput": throughput / 2**30})
             df = pd.DataFrame(costs)
 
             # plot scatter plot with labels of cost vs throughput
@@ -35,9 +37,9 @@ with tqdm(total=len(src_regions) * len(dest_regions)) as pbar:
             ax.set_xlabel("Throughput (GB/s)")
             ax.set_ylabel("Cost (USD)")
             fig.set_facecolor("white")
-            
+
             with skylark_root / "data" / "figures" / "one_hop" / f"{src_region_select}_{dest_region_input}.png" as path:
                 fig.savefig(path, bbox_inches="tight")
-            
+
             # close the figure to avoid memory leak
             plt.close(fig)
