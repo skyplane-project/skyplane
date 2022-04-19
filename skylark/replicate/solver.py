@@ -335,7 +335,6 @@ class ThroughputSolverILP(ThroughputSolver):
         # average_egress_conns = [64 for i in range(len(regions))]
         # average_ingress_conns = [64 for i in range(len(regions))]
 
-
         # first assign source instances to destination regions
         src_edges: List[Edge] = []
         n_instances = {}
