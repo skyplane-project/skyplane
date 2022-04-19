@@ -454,7 +454,7 @@ class ThroughputSolverILP(ThroughputSolver):
         # build ReplicationTopology
         replication_topology = ReplicationTopology()
         for e in dst_edges:
-            if e.connections > 1:
+            if e.connections >= 1:
                 replication_topology.add_edge(
                     src_region=e.src_region,
                     src_instance=e.src_instance_idx,
