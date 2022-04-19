@@ -22,16 +22,13 @@ import skylark.cli.cli_azure
 import skylark.cli.cli_gcp
 import skylark.cli.cli_solver
 import skylark.cli.experiments
-from skylark.obj_store.azure_interface import AzureInterface
-from skylark.obj_store.gcs_interface import GCSInterface
 from skylark.obj_store.object_store_interface import ObjectStoreInterface
-from skylark.obj_store.s3_interface import S3Interface
 from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP
 import typer
 from skylark.config import SkylarkConfig
 from skylark.utils import logger
 from skylark.utils.utils import Timer
-from skylark import config_path, GB, MB, print_header
+from skylark import GB, config_path, print_header
 from skylark.cli.cli_helper import (
     check_ulimit,
     copy_azure_local,
@@ -48,7 +45,7 @@ from skylark.cli.cli_helper import (
     load_azure_config,
     load_gcp_config,
     ls_local,
-    ls_s3,
+    ls_objstore,
     parse_path,
     replicate_helper,
 )
@@ -70,8 +67,16 @@ def ls(directory: str):
         for path in ls_local(Path(directory)):
             typer.echo(path)
     elif provider == "s3":
-        for path in ls_s3(bucket, key):
+        for path in ls_objstore("aws:infer", bucket, key):
             typer.echo(path)
+    elif provider == "gs":
+        for path in ls_objstore("gcp:infer", bucket, key):
+            typer.echo(path)
+    elif provider == "azure":
+        for path in ls_objstore("azure:infer", bucket, key):
+            typer.echo(path)
+    else:
+        raise NotImplementedError(f"Unrecognized object store provider")
 
 
 @app.command()
@@ -80,6 +85,7 @@ def cp(
     dst: str,
     num_connections: int = typer.Option(64, help="Number of connections to open for replication"),
     max_instances: int = typer.Option(1, help="Max number of instances per overlay region."),
+    reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_required_throughput_gbits: float = typer.Option(2, help="Solver option: Required throughput in gbps."),
     solver_throughput_grid: Path = typer.Option(
@@ -149,7 +155,7 @@ def cp(
             for i in range(max_instances):
                 topo.add_edge(src_region, i, dst_region, i, num_connections)
 
-        replicate_helper(topo, source_bucket=bucket_src, dest_bucket=bucket_dst, src_key_prefix=path_src, dest_key_prefix=path_dst)
+        replicate_helper(topo, source_bucket=bucket_src, dest_bucket=bucket_dst, src_key_prefix=path_src, dest_key_prefix=path_dst, reuse_gateways=reuse_gateways)
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
 
@@ -166,7 +172,7 @@ def replicate_random(
     total_transfer_size_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB."),
     chunk_size_mb: int = typer.Option(8, "--chunk-size-mb", help="Chunk size in MB."),
     reuse_gateways: bool = False,
-    gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
+    gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
     aws_instance_class: str = "m5.8xlarge",
     azure_instance_class: str = "Standard_D32_v4",
     gcp_instance_class: Optional[str] = "n2-standard-32",
@@ -226,7 +232,7 @@ def replicate_json(
     dest_key_prefix: str = "/",
     # gateway provisioning options
     reuse_gateways: bool = False,
-    gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
+    gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
     # cloud provider specific options
     aws_instance_class: str = "m5.8xlarge",
     azure_instance_class: str = "Standard_D32_v4",
@@ -274,7 +280,7 @@ def init(reinit_azure: bool = False, reinit_gcp: bool = False):
     if config_path.exists():
         cloud_config = SkylarkConfig.load_config(config_path)
     else:
-        cloud_config = SkylarkConfig()
+        cloud_config = SkylarkConfig.default_config()
 
     # load AWS config
     typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)

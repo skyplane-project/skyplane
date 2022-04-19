@@ -1,10 +1,14 @@
-# Skylark: A Unified Data Layer for the Multi-Cloud
+# Skyplane: A Unified Data Layer for the Multi-Cloud
 
-<img src="https://gist.githubusercontent.com/parasj/d67e6e161ea1329d4509c69bc3325dcb/raw/232009efdeb8620d2acb91aec111dedf98fdae18/skylark.jpg" width="350px">
-Skylark is lifting cloud object stores to the Sky.
+
+[![Docker](https://github.com/skyplane-project/skyplane/actions/workflows/docker-publish.yml/badge.svg?branch=main)](https://github.com/skyplane-project/skyplane/actions/workflows/docker-publish.yml)
+
+<img src="https://gist.githubusercontent.com/parasj/d67e6e161ea1329d4509c69bc3325dcb/raw/232009efdeb8620d2acb91aec111dedf98fdae18/skylark.jpg" width="200px">
+
+Skyplane is lifting cloud object stores to the Sky.
 
 ## Instructions to build and run demo
-Skylark is composed of two components: A ReplicatorClient that runs locally on your machine that is responsible for provisioning instances and coordinating replication jobs and a GatewayDaemon that runs on each provisioned instance to actually copy data through the overlay.
+Skyplane is composed of two components: A ReplicatorClient that runs locally on your machine that is responsible for provisioning instances and coordinating replication jobs and a GatewayDaemon that runs on each provisioned instance to actually copy data through the overlay.
 
 This package represents both components as a single binary. Docker builds a single container with the GatewayDaemon and pushes it to the Github Container Registry (ghcr.io). After provisioning an instance, a GatewayDaemon is started by launching that container. Therefore, it's simple and fast to launch a new Gateway.
 
@@ -36,15 +40,14 @@ Then, configure cloud credentials as needed:
 * GCS: `gcloud auth application-default login`
 * Azure: `az login`
 
-Finally, install and initalize Skylark:
+Finally, install and initalize Skyplane:
 ```
-$ pip install -e .
+$ pip install -e ".[all]"
 $ skylark init
 ```
 
 To run a sample transfer, first build a new version of the GatewayDaemon Docker image and push it to ghcr.io (ensure you are authenticated as above):
 ```
-$ pip install -e ".[all]"
 $ source scripts/pack_docker.sh
 ```
 <details>
@@ -61,8 +64,8 @@ Building docker image
  => [internal] load .dockerignore                                                                                                                  0.0s
  => => transferring context: 2B                                                                                                                    0.0s
 failed to solve with frontend dockerfile.v0: failed to read dockerfile: open /var/lib/docker/tmp/buildkit-mount683951637/Dockerfile: no such file or directory
-Uploading docker image to ghcr.io/parasj/skylark:local-PotRzrFT
-The push refers to repository [ghcr.io/parasj/skylark]
+Uploading docker image to ghcr.io/skyplane-project/skyplane:local-PotRzrFT
+The push refers to repository [ghcr.io/skyplane-project/skyplane]
 20d2ed8618ca: Layer already exists
 1c4146875228: Layer already exists
 1f4f7ac2f199: Layer already exists
@@ -74,12 +77,12 @@ tltkismwtov5n8zokghil1py9
 u0e2ymhmv64oriiq66ibepn63
 
 Total reclaimed space: 0B
-SKYLARK_DOCKER_IMAGE=ghcr.io/parasj/skylark:local-PotRzrFT
+SKYLARK_DOCKER_IMAGE=ghcr.io/skyplane-project/skyplane:local-PotRzrFT
 ```
 
 </details>
 
-The script will export the new image (ghcr.io/parasj/skylark:local-PotRzrFT in this example) to an environment variable (`SKYLARK_DOCKER_IMAGE`). Ensure you use `source` so the environment variable is published to your shell.
+The script will export the new image (ghcr.io/skyplane-project/skyplane:local-PotRzrFT in this example) to an environment variable (`SKYLARK_DOCKER_IMAGE`). Ensure you use `source` so the environment variable is published to your shell.
 
 ### Running a basic cloud to cloud transfer job
 We then run the ReplicatorClient with that new Docker image (stored in `$SKYLARK_DOCKER_IMAGE`):
@@ -124,7 +127,7 @@ Replication: average 0.02Gbit/s: 100%|██████████████
 
 </details>
 
-When done, stop all instances started by Skylark by running:
+When done, stop all instances started by Skyplane by running:
 
 ```skyklark deprovision```
 
