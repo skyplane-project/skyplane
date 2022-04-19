@@ -47,10 +47,6 @@ def solve_throughput(
 
     # save results
     tput.print_solution(solution)
-    #print(vars(solution))
-    print(solution.var_edge_flow_gigabits)
-    print(solution.var_conn)
-    print(solution.var_instances_per_region)
     if solution.is_feasible:
         if visualize:
             g = tput.plot_graphviz(solution)
@@ -82,12 +78,21 @@ def solve_single_hop(
     src: str = typer.Argument(..., help="Source region, in format of provider:region."),
     dst: str = typer.Argument(..., help="Destination region, in format of provider:region."),
     throughput_grid: Path = typer.Option(skylark_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"),
+    gbyte_to_transfer: float = typer.Option(1, help="Gigabytes to transfer"),
     out: Path = typer.Option(None, "--out", "-o", help="Output file for path."),
 ):
+
+    GBIT_PER_GBYTE = 8
+
+    def calculate_plan_cost(src, dst, region):
+        per_instance_cost = ThroughputProblem.cost_per_instance_hour / 3600 * (runtime_s + p.instance_provision_time_s)
+
     tput = ThroughputSolverILP(throughput_grid)
+    p = ThroughputProblem(src, dst, 1, gbyte_to_transfer, 1, const_throughput_grid_gbits=tput.get_throughput_grid())
     selected_region = None
     selected_region_num = -1
     throughput = tput.get_path_throughput(src, dst)
+
     for i, region in enumerate(tput.get_regions()):
         if region == src:
             src_region = i
@@ -96,10 +101,11 @@ def solve_single_hop(
         else:
             curr_throughput = min(tput.get_path_throughput(src, region), tput.get_path_throughput(region, dst))
             if curr_throughput > throughput:
-                print(region, curr_throughput)
                 selected_region = region
                 selected_region_num = i
                 throughput = curr_throughput
+                
+
 
     regions = tput.get_regions()
     edge_flow_gigabits = np.zeros((len(regions), len(regions)))
@@ -108,26 +114,51 @@ def solve_single_hop(
 
     # direct transfer is optimal
     if selected_region == None:
+        transfer_size_gbit = p.gbyte_to_transfer * GBIT_PER_GBYTE
+        runtime_s = transfer_size_gbit / p.required_throughput_gbits
+        cost_egress = gbyte_to_transfer * runtime_s * tput.get_path_cost(src, dst)
+                
+        per_instance_cost: float = p.cost_per_instance_hr / 3600 * (runtime_s + p.instance_provision_time_s)
+        instance_cost = 2 * per_instance_cost
+        cost = cost_egress + instance_cost * p.instance_cost_multiplier
+
         edge_flow_gigabits[src_region, dst_region] = 1
         conn[src_region, dst_region] = 1
    
     else:
+        transfer_size_gbit = p.gbyte_to_transfer * GBIT_PER_GBYTE
+        runtime_s = transfer_size_gbit / p.required_throughput_gbits
+        cost_egress = gbyte_to_transfer * runtime_s * tput.get_path_cost(src, selected_region) + gbyte_to_transfer * runtime_s * tput.get_path_cost(selected_region, dst)
+                
+        per_instance_cost: float = p.cost_per_instance_hr / 3600 * (runtime_s + p.instance_provision_time_s)
+        instance_cost = 3 * per_instance_cost
+        cost = cost_egress + instance_cost * p.instance_cost_multiplier
+
         edge_flow_gigabits[src_region, selected_region_num] = 1
         edge_flow_gigabits[selected_region_num, dst_region] = 1
 
         conn[src_region, selected_region_num] = 1
         conn[selected_region_num, dst_region] = 1
 
+        instances_per_region[src_region] = 1
         instances_per_region[selected_region_num] = 1
+        instances_per_region[dst_region] = 1
     
     sol = ThroughputSolution(None, True)
     sol.var_edge_flow_gigabits = edge_flow_gigabits
     sol.var_conn = conn
     sol.var_instances_per_region = instances_per_region
+    sol.throughput_achieved_gbits = [throughput/GB]
+    sol.cost_total = cost
+    sol.cost_egress = cost_egress
+    sol.cost_instance = instance_cost
+    sol.transfer_runtime_s = runtime_s
+    sol.problem = p
 
     replication_topo = tput.to_replication_topology(sol, scale_to_capacity=False)
 
-    #print(top)
+    tput.print_solution(sol)
+
     if out:
         with open(out, "w") as f: 
             f.write(replication_topo.to_json())
