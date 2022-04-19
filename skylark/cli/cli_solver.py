@@ -7,7 +7,7 @@ from pathlib import Path
 import typer
 import numpy as np
 from skylark.utils import logger
-from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP, ThroughputSolution
+from skylark.replicate.solver import GBIT_PER_GBYTE, ThroughputProblem, ThroughputSolverILP, ThroughputSolution
 from skylark import skylark_root
 from skylark.utils.utils import Timer
 from skylark import GB
@@ -82,12 +82,6 @@ def solve_single_hop(
     gbyte_to_transfer: float = typer.Option(1, help="Gigabytes to transfer"),
     out: Path = typer.Option(None, "--out", "-o", help="Output file for path."),
 ):
-
-    GBIT_PER_GBYTE = 8
-
-    def calculate_plan_cost(src, dst, region):
-        per_instance_cost = ThroughputProblem.cost_per_instance_hour / 3600 * (runtime_s + p.instance_provision_time_s)
-
     tput = ThroughputSolverILP(throughput_grid)
     p = ThroughputProblem(src, dst, 1, gbyte_to_transfer, 1, const_throughput_grid_gbits=tput.get_throughput_grid())
     selected_region = None
