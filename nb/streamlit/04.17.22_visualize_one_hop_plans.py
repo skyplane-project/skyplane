@@ -17,6 +17,11 @@ dest_regions = solver.get_regions()
 inter_regions = solver.get_regions()
 
 src_region_select = st.sidebar.selectbox("Source region", src_regions)
+st.sidebar.write("Slowest 10 destinations for source region:")
+direct_speeds = {r: solver.get_path_throughput(src_region_select, r) / 2**30 for r in dest_regions if r != src_region_select}
+for dest_region in sorted(direct_speeds, key=direct_speeds.get)[:10]:
+    st.sidebar.write(f"{dest_region}: {direct_speeds[dest_region]:.2f}")
+
 dest_region_input = st.sidebar.selectbox("Destination region", dest_regions)
 
 baseline_cost = solver.get_path_cost(src_region_select, dest_region_input)

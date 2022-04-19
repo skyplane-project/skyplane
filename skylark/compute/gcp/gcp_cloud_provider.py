@@ -8,7 +8,6 @@ import googleapiclient
 import paramiko
 from skylark.compute.gcp.gcp_auth import GCPAuthentication
 from skylark.utils import logger
-from skylark import exceptions
 from oslo_concurrency import lockutils
 from skylark import key_root
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider

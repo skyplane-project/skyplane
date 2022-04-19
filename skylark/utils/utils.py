@@ -2,7 +2,6 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, Iterable, List, Tuple, Union, TypeVar
-from skylark import exceptions
 
 from skylark.utils import logger
 from tqdm import tqdm

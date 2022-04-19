@@ -1,3 +1,4 @@
+import functools
 import json
 import uuid
 import os
@@ -14,7 +15,7 @@ from oslo_concurrency import lockutils
 from skylark import skylark_root
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.cloud_providers import CloudProvider
-from skylark.utils.utils import retry_backoff, wait_for
+from skylark.utils.utils import wait_for
 
 try:
     import pandas as pd
@@ -39,9 +40,14 @@ class AWSCloudProvider(CloudProvider):
         return region_list
 
     @staticmethod
+    @functools.lru_cache(maxsize=None)
+    def load_transfer_cost_df():
+        return pd.read_csv(skylark_root / "profiles" / "aws_transfer_costs.csv").set_index(["src", "dst"])
+
+    @staticmethod
     def get_transfer_cost(src_key, dst_key, premium_tier=True):
         assert premium_tier, "AWS transfer cost is only available for premium tier"
-        transfer_df = pd.read_csv(skylark_root / "profiles" / "aws_transfer_costs.csv").set_index(["src", "dst"])
+        transfer_df = AWSCloudProvider.load_transfer_cost_df()
 
         src_provider, src = src_key.split(":")
         dst_provider, dst = dst_key.split(":")
