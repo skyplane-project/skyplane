@@ -14,6 +14,7 @@ Current support:
 
 import os
 from pathlib import Path
+import tempfile
 from typing import Optional
 
 from skylark import skylark_root
@@ -260,19 +261,18 @@ def replicate_random_solve(
         )
 
     if solve:
-        path = "scripts/experiments/abalation_experiments/temp_out/temp.json"
-        skylark.cli.cli_solver.solve_throughput(
-            src_region,
-            dst_region,
-            solver_required_throughput_gbits,
-            gbyte_to_transfer=total_transfer_size_mb,
-            max_instances=num_gateways,
-            throughput_grid=solver_throughput_grid,
-            solver_verbose=solver_verbose,
-            out=path,
-        )
-        with Path(path).open("r") as f:
-            topo = ReplicationTopology.from_json(f.read())
+        with tempfile.NamedTemporaryFile(mode="w") as f:
+            skylark.cli.cli_solver.solve_throughput(
+                src_region,
+                dst_region,
+                solver_required_throughput_gbits,
+                gbyte_to_transfer=total_transfer_size_mb / 1024.0,
+                max_instances=num_gateways,
+                throughput_grid=solver_throughput_grid,
+                solver_verbose=solver_verbose,
+                out=f.name,
+            )
+            topo = ReplicationTopology.from_json(Path(f.name).read_text())
     elif inter_region:
         assert inter_region not in [src_region, dst_region] and src_region != dst_region
         topo = ReplicationTopology()

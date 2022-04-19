@@ -71,6 +71,8 @@ def solve_throughput(
                     g_rt.render(filename="/tmp/replication_topo.gv", format="png")
                 except FileNotFoundError as e:
                     logger.error(f"Could not render graph: {e}")
+    else:
+        raise typer.Exit(f"Solution is infeasible.")
 
     # print json summarizing solution
     print(json.dumps(problem.to_summary_dict()))
