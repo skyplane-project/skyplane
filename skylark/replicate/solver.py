@@ -368,7 +368,7 @@ class ThroughputSolverILP(ThroughputSolver):
                     g.edge(src_label, dst_label, label=label)
         return g
 
-    def to_replication_topology(self, solution: ThroughputSolution, scale_to_capacity=True) -> ReplicationTopology:
+    def to_replication_topology(self, solution: ThroughputSolution, scale_to_capacity=True) -> Tuple[ReplicationTopology, float]:
         regions = self.get_regions()
         Edge = namedtuple("Edge", ["src_region", "src_instance_idx", "dst_region", "dst_instance_idx", "connections"])
 
