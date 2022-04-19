@@ -1,0 +1,23 @@
+    No GCP config detected! Consquently, the GCP region list is empty. Run 'skylark init' to remedy this.
+    No GCP config detected! Consquently, the GCP region list is empty. Run 'skylark init' to remedy this.
+
+=================================================
+  ______  _             _                 _     
+ / _____)| |           | |               | |    
+( (____  | |  _  _   _ | |  _____   ____ | |  _ 
+ \____ \ | |_/ )| | | || | (____ | / ___)| |_/ )
+ _____) )|  _ ( | |_| || | / ___ || |    |  _ ( 
+(______/ |_| \_) \__  | \_)\_____||_|    |_| \_)
+                (____/                          
+=================================================
+
+Set parameter Username
+Academic license - for non-commercial use only - expires 2023-03-16
+0/4000 chunks done (0.00 / 31.25GB, 0.00Gbit/s, ETA=unknown)
+317/4000 chunks done (2.48 / 31.25GB, 3.16Gbit/s, ETA=72s)
+855/4000 chunks done (6.68 / 31.25GB, 4.43Gbit/s, ETA=44s)
+1611/4000 chunks done (12.59 / 31.25GB, 6.26Gbit/s, ETA=23s)
+2806/4000 chunks done (21.92 / 31.25GB, 7.83Gbit/s, ETA=9s)
+3993/4000 chunks done (31.20 / 31.25GB, 8.41Gbit/s, ETA=0s)
+
+{"total_runtime_s": 31.275287, "throughput_gbits": 7.993531761994703, "monitor_status": "completed", "success": true}

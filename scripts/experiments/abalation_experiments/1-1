@@ -1,0 +1,41 @@
+    No GCP config detected! Consquently, the GCP region list is empty. Run 'skylark init' to remedy this.
+    No GCP config detected! Consquently, the GCP region list is empty. Run 'skylark init' to remedy this.
+
+=================================================
+  ______  _             _                 _     
+ / _____)| |           | |               | |    
+( (____  | |  _  _   _ | |  _____   ____ | |  _ 
+ \____ \ | |_/ )| | | || | (____ | / ___)| |_/ )
+ _____) )|  _ ( | |_| || | / ___ || |    |  _ ( 
+(______/ |_| \_) \__  | \_)\_____||_|    |_| \_)
+                (____/                          
+=================================================
+
+0/256 chunks done (0.00 / 2.00GB, 0.00Gbit/s, ETA=unknown)
+2/256 chunks done (0.02 / 2.00GB, 0.04Gbit/s, ETA=380s)
+12/256 chunks done (0.09 / 2.00GB, 0.14Gbit/s, ETA=110s)
+23/256 chunks done (0.18 / 2.00GB, 0.18Gbit/s, ETA=80s)
+31/256 chunks done (0.24 / 2.00GB, 0.20Gbit/s, ETA=71s)
+41/256 chunks done (0.32 / 2.00GB, 0.21Gbit/s, ETA=64s)
+51/256 chunks done (0.40 / 2.00GB, 0.21Gbit/s, ETA=60s)
+62/256 chunks done (0.48 / 2.00GB, 0.22Gbit/s, ETA=54s)
+73/256 chunks done (0.57 / 2.00GB, 0.23Gbit/s, ETA=50s)
+83/256 chunks done (0.65 / 2.00GB, 0.23Gbit/s, ETA=47s)
+94/256 chunks done (0.73 / 2.00GB, 0.23Gbit/s, ETA=43s)
+105/256 chunks done (0.82 / 2.00GB, 0.23Gbit/s, ETA=40s)
+117/256 chunks done (0.91 / 2.00GB, 0.24Gbit/s, ETA=36s)
+128/256 chunks done (1.00 / 2.00GB, 0.24Gbit/s, ETA=33s)
+139/256 chunks done (1.09 / 2.00GB, 0.24Gbit/s, ETA=30s)
+150/256 chunks done (1.17 / 2.00GB, 0.24Gbit/s, ETA=27s)
+162/256 chunks done (1.27 / 2.00GB, 0.24Gbit/s, ETA=24s)
+173/256 chunks done (1.35 / 2.00GB, 0.24Gbit/s, ETA=21s)
+182/256 chunks done (1.42 / 2.00GB, 0.24Gbit/s, ETA=19s)
+194/256 chunks done (1.52 / 2.00GB, 0.24Gbit/s, ETA=15s)
+202/256 chunks done (1.58 / 2.00GB, 0.24Gbit/s, ETA=13s)
+212/256 chunks done (1.66 / 2.00GB, 0.24Gbit/s, ETA=11s)
+224/256 chunks done (1.75 / 2.00GB, 0.24Gbit/s, ETA=8s)
+237/256 chunks done (1.85 / 2.00GB, 0.25Gbit/s, ETA=4s)
+245/256 chunks done (1.91 / 2.00GB, 0.25Gbit/s, ETA=2s)
+254/256 chunks done (1.98 / 2.00GB, 0.25Gbit/s, ETA=0s)
+
+{"total_runtime_s": 64.721934, "throughput_gbits": 0.24721140131566524, "monitor_status": "completed", "success": true}
