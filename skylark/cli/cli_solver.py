@@ -145,7 +145,9 @@ def solve_single_hop(
         instances_per_region[selected_region_num] = 1
         instances_per_region[dst_region] = 1
 
-    sol = ThroughputSolution(None, True)
+    prob = ThroughputProblem(src, dst, -1, gbyte_to_transfer, 1)
+
+    sol = ThroughputSolution(prob, True)
     sol.var_edge_flow_gigabits = edge_flow_gigabits
     sol.var_conn = conn
     sol.var_instances_per_region = instances_per_region
