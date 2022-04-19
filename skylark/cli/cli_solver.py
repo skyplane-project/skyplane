@@ -159,7 +159,7 @@ def solve_single_hop(
     sol.transfer_runtime_s = runtime_s
     sol.problem = p
 
-    replication_topo = tput.to_replication_topology(sol, scale_to_capacity=False)
+    replication_topo, _ = tput.to_replication_topology(sol, scale_to_capacity=False)
 
     tput.print_solution(sol)
 
