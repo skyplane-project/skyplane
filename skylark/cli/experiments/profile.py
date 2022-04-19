@@ -13,7 +13,6 @@ from skylark import GB, skylark_root
 from skylark.benchmark.utils import provision, split_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
-from skylark.compute.azure.azure_server import AzureServer
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.gcp.gcp_server import GCPServer
 from skylark.compute.server import Server

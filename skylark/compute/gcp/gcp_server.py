@@ -5,7 +5,6 @@ import paramiko
 from skylark import key_root
 from skylark.compute.gcp.gcp_auth import GCPAuthentication
 from skylark.compute.server import Server, ServerState
-from skylark.utils.cache import ignore_lru_cache
 from skylark.utils.utils import PathLike
 
 
