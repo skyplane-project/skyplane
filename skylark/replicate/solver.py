@@ -450,6 +450,8 @@ class ThroughputSolverILP(ThroughputSolver):
             scale_factor = 64 / bottleneck_capacity
             logger.warning(f"Scaling connections by {scale_factor:.2f}x")
             dst_edges = [e._replace(connections=int(e.connections * scale_factor)) for e in dst_edges]
+        else:
+            scale_factor = 1.0
 
         # build ReplicationTopology
         replication_topology = ReplicationTopology()
