@@ -30,11 +30,11 @@ all_gcp_regions_standard = GCPCloudProvider.region_list_standard()
 
 def start_iperf3_client(arg_pair: Tuple[Server, Server], iperf3_log_dir: Path, iperf3_runtime: int, iperf3_connections: int):
     instance_src, instance_dst = arg_pair
-    tag = f"{instance_src.region_tag}:{instance_src.network_tier()}_{instance_dst.region_tag}:{instance_dst.network_tier()}"
+    tag = f"{instance_src.region_tag}:{None}_{instance_dst.region_tag}:{None}"
 
     # run benchmark
     stdout, stderr = instance_src.run_command(
-        f"iperf3 -J -Z -C cubic -t {iperf3_runtime} -P {iperf3_connections} -c {instance_dst.public_ip()}"
+        f"iperf3 -J -Z -C cubic -t {iperf3_runtime} -P {iperf3_connections} -c {instance_dst.private_ip()}"
     )
 
     # save logs
@@ -71,14 +71,14 @@ def throughput_grid(
     ),
     copy_resume_file: bool = typer.Option(True, help="Copy the resume file to the output CSV. Default is True."),
     # regions
-    aws_region_list: List[str] = typer.Option(all_aws_regions, "-aws"),
-    azure_region_list: List[str] = typer.Option(all_azure_regions, "-azure"),
+    aws_region_list: List[str] = typer.Option([], "-aws"),
+    azure_region_list: List[str] = typer.Option([], "-azure"),
     gcp_region_list: List[str] = typer.Option(all_gcp_regions, "-gcp"),
-    gcp_standard_region_list: List[str] = typer.Option(all_gcp_regions_standard, "-gcp-standard"),
-    enable_aws: bool = typer.Option(True),
-    enable_azure: bool = typer.Option(True),
+    gcp_standard_region_list: List[str] = typer.Option([], "-gcp-standard"),
+    enable_aws: bool = typer.Option(False),
+    enable_azure: bool = typer.Option(False),
     enable_gcp: bool = typer.Option(True),
-    enable_gcp_standard: bool = typer.Option(True),
+    enable_gcp_standard: bool = typer.Option(False),
     # instances to provision
     aws_instance_class: str = typer.Option("m5.8xlarge", help="AWS instance class to use"),
     azure_instance_class: str = typer.Option("Standard_D32_v5", help="Azure instance class to use"),
@@ -189,6 +189,7 @@ def throughput_grid(
         check_stderr(server.run_command(make_sysctl_tcp_tuning_command(cc="cubic")))
 
     do_parallel(setup, instance_list, progress_bar=True, n=-1, desc="Setup")
+    logger.info(f"Setup complete, {len(instance_list)} instances")
 
     # build experiment
     instance_pairs_all = [(i1, i2) for i1 in instance_list for i2 in instance_list if i1 != i2]
@@ -197,10 +198,10 @@ def throughput_grid(
         exp_key = (
             iperf3_connections,
             iperf3_runtime,
-            i1.instance_class(),
-            i2.instance_class(),
-            i1.network_tier(),
-            i2.network_tier(),
+            None,
+            None,
+            None,
+            None,
             i1.region_tag,
             i2.region_tag,
         )
@@ -209,6 +210,7 @@ def throughput_grid(
         else:
             instance_pairs.append((i1, i2))
     groups = split_list(instance_pairs)
+    logger.info(f"{len(groups)} groups")
 
     # confirm experiment
     experiment_tag_words = os.popen("bash scripts/get_random_word_hash.sh").read().strip()
@@ -222,10 +224,6 @@ def throughput_grid(
     typer.secho(f"\nExperiment configuration: (total pairs = {len(instance_pairs)})", fg="red", bold=True)
     for group_idx, group in enumerate(groups):
         typer.secho(f"\tGroup {group_idx}: ({len(group)} items)", fg="green", bold=True)
-        for instance_pair in group:
-            typer.secho(
-                f"\t{instance_pair[0].region_tag}:{instance_pair[0].network_tier()} -> {instance_pair[1].region_tag}:{instance_pair[1].network_tier()}"
-            )
     gbyte_sent = len(instance_pairs) * 5.0 / 8 * iperf3_runtime
     typer.secho(f"\niperf_runtime={iperf3_runtime}, iperf3_connections={iperf3_connections}", fg="blue")
     typer.secho(f"Approximate runtime: {len(groups) * (10 + iperf3_runtime)}s (assuming 10s startup time)", fg="blue")
@@ -235,6 +233,8 @@ def throughput_grid(
     logger.debug(f"Log directory: {log_dir}")
     sys.stdout.flush()
     sys.stderr.flush()
+
+    logger.info("Confirm experiment")
     if not questionary.confirm(f"Launch experiment {experiment_tag}?", default=False).ask():
         logger.error("Exiting")
         sys.exit(1)
@@ -249,11 +249,11 @@ def throughput_grid(
         instance_src, instance_dst = instance_pair
         result_rec = dict(
             src_region=instance_src.region_tag,
-            src_tier=instance_src.network_tier(),
-            src_instance_class=instance_src.instance_class(),
+            src_tier=None,
+            src_instance_class=None,
             dst_region=instance_dst.region_tag,
-            dst_tier=instance_dst.network_tier(),
-            dst_instance_class=instance_dst.instance_class(),
+            dst_tier=None,
+            dst_instance_class=None,
             iperf3_connections=iperf3_connections,
             iperf3_runtime=iperf3_runtime,
         )

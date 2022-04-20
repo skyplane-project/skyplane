@@ -239,7 +239,8 @@ class GCPCloudProvider(CloudProvider):
                     "boot": True,
                     "autoDelete": True,
                     "initializeParams": {
-                        "sourceImage": "projects/cos-cloud/global/images/family/cos-stable",
+                        "sourceImage": "projects/ubuntu-os-cloud/global/images/family/ubuntu-1804-lts",
+                        # "sourceImage": "projects/cos-cloud/global/images/family/cos-stable",
                         "diskType": f"zones/{region}/diskTypes/pd-standard",
                         "diskSizeGb": "100",
                     },

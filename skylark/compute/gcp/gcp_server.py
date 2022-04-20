@@ -52,6 +52,9 @@ class GCPServer(Server):
     def public_ip(self):
         """Get public IP for instance with GCP client"""
         return self.get_instance_property("networkInterfaces")[0]["accessConfigs"][0].get("natIP")
+    
+    def private_ip(self):
+        return self.get_instance_property("networkInterfaces")[0]["networkIP"]
 
     def instance_class(self):
         machine_type = self.get_instance_property("machineType")
