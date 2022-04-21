@@ -164,4 +164,5 @@ class GatewaySender:
                 f"[sender:{self.worker_id}] finished sending chunk data {chunk_id} at {chunk.chunk_length_bytes * 8 / t.elapsed / MB:.2f}Mbps"
             )
             self.chunk_store.state_finish_upload(chunk_id, f"sender:{self.worker_id}")
-            chunk_file_path.unlink()
+            # TODO: sarah - uncomment (was just for gridftp experiment)
+            #chunk_file_path.unlink()
