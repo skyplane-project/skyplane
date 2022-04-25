@@ -3,3 +3,6 @@ class MissingBucketException(Exception):
 
 class MissingObjectException(Exception):
     pass
+
+class InsufficientVCPUException(Exception):
+    pass

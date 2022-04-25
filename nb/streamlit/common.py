@@ -16,16 +16,16 @@ def load_data_impl(source_bucket_path, source_bucket_experiment_tag, out_dir, ou
     if not out_fname.exists():
         st.info("Parsing data, this will take some time...")
         s3_path = os.path.join(source_bucket_path, source_bucket_experiment_tag)
-        st.info(f"aws s3 sync {s3_path} {out_dir}")
-        with st.spinner("Downloading data..."):
+        with st.spinner(f"aws s3 sync {s3_path} {out_dir}"):
             subprocess.run(f"aws s3 sync {s3_path} {out_dir}", shell=True)
 
         dfs = []
-        for file in out_dir.glob("*.pkl"):
+        for file in sorted(out_dir.glob("*.pkl")):
             with st.spinner(f"Parsing {file.name}..."):
                 rows = []
-                with open(file, "rb") as f:
-                    data_pickle = pickle.load(f)
+                with st.spinner(f"Loading pickle: {file.name}..."):
+                    with open(file, "rb") as f:
+                        data_pickle = pickle.load(f)
                 n_rows = len(data_pickle)
                 pbar = st.progress(0)
                 while data_pickle:

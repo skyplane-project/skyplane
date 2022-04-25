@@ -8,11 +8,9 @@ import resource
 import subprocess
 from pathlib import Path
 from shutil import copyfile
-from types import GetSetDescriptorType
 from typing import Dict, List
 from sys import platform
 from typing import Dict, List
-from urllib.parse import ParseResultBytes, parse_qs
 
 
 import boto3
