@@ -62,7 +62,14 @@ app.add_typer(skylark.cli.cli_solver.app, name="solver")
 
 @app.command()
 def ls(directory: str):
-    """List objects in the object store."""
+    """
+    It takes a directory path, parses it, and then calls the appropriate function to list the contents
+    of that directory. If the path is on an object store, it will list the contents of the object store
+    at that prefix.
+    
+    :param directory: str
+    :type directory: str
+    """
     provider, bucket, key = parse_path(directory)
     if provider == "local":
         for path in ls_local(Path(directory)):
@@ -88,13 +95,40 @@ def cp(
     max_instances: int = typer.Option(1, help="Max number of instances per overlay region."),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
-    solver_required_throughput_gbits: float = typer.Option(2, help="Solver option: Required throughput in gbps."),
+    solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
     solver_throughput_grid: Path = typer.Option(
         skylark_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
     ),
     solver_verbose: bool = False,
 ):
-    """Copy objects from the object store to the local filesystem."""
+    """
+    `cp` copies a file or folder from one location to another. If the source is on an object store,
+    it will copy all objects with that prefix. If it is a local path, it will copy the entire file
+    or directory tree.
+
+    By default, it will copy objects using a direct connection between instances. However, if you would
+    like to use the solver, call `--solve`. Note that the solver requires a throughput grid file to be
+    specified. We provide a default one but it may be out-of-date.
+    
+    :param src: Source prefix to copy from
+    :type src: str
+    :param dst: The destination of the transfer
+    :type dst: str
+    :param num_connections: Number of connections to use between each gateway instance pair (default: 64)
+    :type num_connections: int
+    :param max_instances: The maximum number of instances to use per region (default: 1)
+    :type max_instances: int
+    :param reuse_gateways: If true, will leave provisioned instances running to be reused. You must run `skylark deprovision` to clean up.
+    :type reuse_gateways: bool
+    :param solve: If true, will use solver to optimize transfer, else direct path is chosen
+    :type solve: bool
+    :param solver_required_throughput_gbits: The required throughput in Gbps when using the solver (default: 4)
+    :type solver_required_throughput_gbits: float
+    :param solver_throughput_grid: The throughput grid profile to use for the solver, defaults to author-provided profile
+    :type solver_throughput_grid: Path
+    :param solver_verbose: If true, will print out the solver's output, defaults to False
+    :type solver_verbose: bool (optional)
+    """
     print_header()
 
     provider_src, bucket_src, path_src = parse_path(src)
