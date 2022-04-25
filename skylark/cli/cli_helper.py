@@ -50,10 +50,24 @@ def is_plausible_local_path(path: str):
 
 def parse_path(path: str):
     if path.startswith("s3://"):
-        bucket_name, key_name = path[5:].split("/", 1)
+        parsed = path[5:].split("/", 1)
+        if len(parsed) == 1:
+            bucket_name, key_name = parsed[0], "/"
+        else:
+            if parsed[1] == "":
+                bucket_name, key_name = parsed[0], "/"
+            else:
+                bucket_name, key_name = parsed[0], parsed[1]
         return "s3", bucket_name, key_name
     elif path.startswith("gs://"):
-        bucket_name, key_name = path[5:].split("/", 1)
+        parsed = path[5:].split("/", 1)
+        if len(parsed) == 1:
+            bucket_name, key_name = parsed[0], "/"
+        else:
+            if parsed[1] == "":
+                bucket_name, key_name = parsed[0], "/"
+            else:
+                bucket_name, key_name = parsed[0], parsed[1]
         return "gs", bucket_name, key_name
     elif (path.startswith("https://") or path.startswith("http://")) and "blob.core.windows.net" in path:
         regex = re.compile(r"https?://([^/]+).blob.core.windows.net/([^/]+)/(.*)")
@@ -82,9 +96,9 @@ def ls_local(path: Path):
         yield path.name
 
 
-def ls_s3(bucket_name: str, key_name: str, use_tls: bool = True):
-    s3 = S3Interface(None, bucket_name, use_tls=use_tls)
-    for obj in s3.list_objects(prefix=key_name):
+def ls_objstore(obj_store: str, bucket_name: str, key_name: str):
+    client = ObjectStoreInterface.create(obj_store, bucket_name)
+    for obj in client.list_objects(prefix=key_name):
         yield obj.full_path()
 
 
@@ -228,15 +242,19 @@ def replicate_helper(
         )
     else:
         # make replication job
-        objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
+        src_objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
+        dest_is_directory = False
+        if dest_key_prefix.endswith("/"):
+            dest_is_directory = True
+
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=source_bucket,
             dest_region=topo.sink_region(),
             dest_bucket=dest_bucket,
-            src_objs=[obj.key for obj in objs],
-            dest_objs=[dest_key_prefix + obj.key for obj in objs],
-            obj_sizes={obj.key: obj.size for obj in objs},
+            src_objs=[obj.key for obj in src_objs],
+            dest_objs=[dest_key_prefix + obj.key if dest_is_directory else dest_key_prefix for obj in src_objs],
+            obj_sizes={obj.key: obj.size for obj in src_objs},
         )
 
     rc = ReplicatorClient(

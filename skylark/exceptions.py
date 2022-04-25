@@ -1,0 +1,2 @@
+class InsufficientVCPUException(Exception):
+    pass

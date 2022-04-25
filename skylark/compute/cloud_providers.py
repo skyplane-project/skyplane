@@ -1,3 +1,4 @@
+import functools
 from typing import List, Optional, Union
 
 from skylark.compute.server import Server, ServerState
@@ -14,6 +15,7 @@ class CloudProvider:
         raise NotImplementedError
 
     @staticmethod
+    @functools.lru_cache(maxsize=None)
     def get_transfer_cost(src_key, dst_key, premium_tier=True):
         if src_key == dst_key:
             return 0.0
