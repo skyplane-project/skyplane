@@ -197,12 +197,23 @@ def cp(
 
 @app.command()
 def deprovision():
-    """Deprovision gateways."""
+    """
+    It deletes all the instances that were created by any copy commands like `skylark cp`.
+    """
     deprovision_skylark_instances()
 
 
 @app.command()
 def init(reinit_azure: bool = False, reinit_gcp: bool = False):
+    """
+    It loads the configuration file, and if it doesn't exist, it creates a default one. Then it creates
+    AWS, Azure, and GCP region list configurations.
+    
+    :param reinit_azure: If true, will reinitialize the Azure region list and credentials
+    :type reinit_azure: bool
+    :param reinit_gcp: If true, will reinitialize the GCP region list and credentials
+    :type reinit_gcp: bool
+    """
     print_header()
     if config_path.exists():
         cloud_config = SkylarkConfig.load_config(config_path)
