@@ -16,6 +16,7 @@ from typing import Dict, List
 import boto3
 import typer
 from skylark import GB, MB
+from skylark import gcp_config_path
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.gcp.gcp_auth import GCPAuthentication
@@ -413,6 +414,10 @@ def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> Skylar
 def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkConfig:
     if force_init:
         typer.secho("    GCP credentials will be re-initialized", fg="red")
+        config.gcp_project_id = None
+
+    if not Path(gcp_config_path).is_file():
+        typer.secho("    GCP region config missing! GCP will be reconfigured.", fg="red")
         config.gcp_project_id = None
 
     if config.gcp_project_id is not None:
