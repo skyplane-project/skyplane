@@ -16,6 +16,7 @@ from typing import Dict, List
 import boto3
 import typer
 from skylark import GB, MB
+from skylark import exceptions
 from skylark import gcp_config_path
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.compute.azure.azure_auth import AzureAuthentication
@@ -158,12 +159,18 @@ def copy_objstore_local(object_interface: ObjectStoreInterface, src_key: str, ds
             obj_mapping[future] = src_obj
             return src_obj.size
 
+        obj_count = 0
         total_bytes = 0.0
         for obj in object_interface.list_objects(prefix=src_key):
             sub_key = obj.key[len(src_key) :]
             sub_key = sub_key.lstrip("/")
             dest_path = dst / sub_key
             total_bytes += _copy(obj, dest_path)
+            obj_count += 1
+
+        if not obj_count:
+            logger.error("Specified object does not exist.")
+            raise exceptions.MissingObjectException()
 
         # wait for all downloads to complete, displaying a progress bar
         with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Downloading") as pbar:
@@ -243,6 +250,9 @@ def replicate_helper(
     else:
         # make replication job
         src_objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
+        if not src_objs:
+            logger.error("Specified object does not exist.")
+            raise exceptions.MissingObjectException()
         dest_is_directory = False
         if dest_key_prefix.endswith("/"):
             dest_is_directory = True
