@@ -1,6 +1,7 @@
 from typing import Iterator, List
 
 import botocore.exceptions
+from boto3.s3.transfer import TransferConfig
 from skylark import exceptions
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject

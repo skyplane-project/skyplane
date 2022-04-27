@@ -9,7 +9,7 @@ from skylark.utils import logger
 
 def test_s3_interface(region="us-east-1", bucket="sky-us-east-1"):
     logger.debug("creating interfaces...")
-    interface = S3Interface(region, bucket, True)
+    interface = S3Interface(region, bucket)
     assert interface.aws_region == region
     assert interface.bucket_name == bucket
     interface.create_bucket()
