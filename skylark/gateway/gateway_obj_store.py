@@ -99,9 +99,9 @@ class GatewayObjStoreConn:
                 #retry_backoff(partial(obj_store_interface.download_object, chunk_req.chunk.src_key, fpath), max_retries=4)
                 self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
                 recieved_chunk_size = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).stat().st_size
-                #assert (
-                    #recieved_chunk_size == chunk_req.chunk.chunk_length_bytes
-                #), f"Downloaded chunk {chunk_req.chunk.chunk_id} has incorrect size (expected {chunk_req.chunk.chunk_length_bytes} but got {recieved_chunk_size})"
+                assert (
+                    recieved_chunk_size == chunk_req.chunk.chunk_length_bytes
+                ), f"Downloaded chunk {chunk_req.chunk.chunk_id} has incorrect size (expected {chunk_req.chunk.chunk_length_bytes} but got {recieved_chunk_size})"
                 logger.debug(f"[obj_store:{self.worker_id}] Downloaded {chunk_req.chunk.src_key} from {bucket}")
             else:
                 raise ValueError(f"Invalid location for chunk req, {req_type}: {chunk_req.src_type}->{chunk_req.dst_type}")

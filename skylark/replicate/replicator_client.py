@@ -23,6 +23,8 @@ from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopolo
 from skylark.utils.net import retry_requests
 from skylark.utils.utils import PathLike, Timer, do_parallel
 
+from skylark.obj_store.object_store_interface import ObjectStoreInterface
+
 
 class ReplicatorClient:
     def __init__(
@@ -225,15 +227,33 @@ class ReplicatorClient:
                     chunk_size_bytes = int(job.random_chunk_size_mb*1e6)
                     num_chunks = int(obj_file_size_bytes[src_obj]/chunk_size_bytes) + 1
                     print(f"splitting file into {num_chunks} chunks")
+
+                    # TODO: only do if num_chunks > 1
+                    print("initial upload", dest_obj)
+                    obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
+                    upload_id = obj_store_interface.initiate_multipart_upload(dest_obj)
+
                     offset = 0
+                    part_num = 0
                     for chunk in range(num_chunks):
                         # size is min(chunk_size, remaining data)
                         file_size_bytes = min(chunk_size_bytes, obj_file_size_bytes[src_obj] - offset)
                         assert file_size_bytes > 0, f"File size <= 0 {file_size_bytes}"
                         print("chunk", src_obj, "size", obj_file_size_bytes[src_obj], idx, offset, file_size_bytes)
-                        chunks.append(Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=offset, chunk_length_bytes=file_size_bytes))
+                        chunks.append(Chunk(
+                            src_key=src_obj, 
+                            dest_key=dest_obj, 
+                            chunk_id=idx, 
+                            file_offset_bytes=offset, 
+                            chunk_length_bytes=file_size_bytes, 
+                            part_number=part_num,
+                            upload_id=upload_id
+                        ))
+
                         idx += 1
+                        part_num += 1
                         offset += chunk_size_bytes
+
                 else: # transfer entire object
                     file_size_bytes = obj_file_size_bytes[src_obj]
                     chunks.append(Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes))
@@ -243,7 +263,7 @@ class ReplicatorClient:
                 chunks.append(Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes))
                 idx += 1
 
-        # TODO: add assert to make sure each chunk ID is unique
+        #print(f"Created {idx} chunks from {len(job.src_objs)}")
 
         # partition chunks into roughly equal-sized batches (by bytes)
         # iteratively adds chunks to the batch with the smallest size

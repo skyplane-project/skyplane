@@ -267,7 +267,7 @@ def replicate_helper(
                     dest_objs_job.append(dest_key_prefix + src_path_no_prefix)
                 else:
                     dest_objs_job.append(dest_key_prefix + "/" + src_path_no_prefix)
-
+        print(dest_objs_job)
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=source_bucket,

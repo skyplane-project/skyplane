@@ -12,8 +12,11 @@ class Chunk:
     src_key: str  # human readable path where object is stored
     dest_key: str  # human readable path where object is stored
     chunk_id: int
+    # multi-part upload/download info 
     file_offset_bytes: int
     chunk_length_bytes: int
+    part_number: int 
+    upload_id: str
 
     def to_wire_header(self, n_chunks_left_on_socket):
         return WireProtocolHeader(
