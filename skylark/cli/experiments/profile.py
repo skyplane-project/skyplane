@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,6 +14,7 @@ from skylark.benchmark.utils import provision, split_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
+from skylark.compute.gcp.gcp_server import GCPServer
 from skylark.compute.server import Server
 from skylark.compute.utils import make_sysctl_tcp_tuning_command
 from skylark.utils.utils import do_parallel
@@ -282,3 +284,176 @@ def throughput_grid(
 
     logger.info(f"Experiment complete: {experiment_tag}")
     logger.info(f"Results saved to {output_file}")
+
+
+def latency_grid(
+    aws_region_list: List[str] = typer.Option(all_aws_regions, "-aws"),
+    azure_region_list: List[str] = typer.Option(all_azure_regions, "-azure"),
+    gcp_region_list: List[str] = typer.Option(all_gcp_regions, "-gcp"),
+    gcp_standard_region_list: List[str] = typer.Option(all_gcp_regions_standard, "-gcp-standard"),
+    enable_aws: bool = typer.Option(True),
+    enable_azure: bool = typer.Option(True),
+    enable_gcp: bool = typer.Option(True),
+    enable_gcp_standard: bool = typer.Option(True),
+    # instances to provision
+    aws_instance_class: str = typer.Option("m5.large", help="AWS instance class to use"),
+    azure_instance_class: str = typer.Option("Standard_D2_v3", help="Azure instance class to use"),
+    gcp_instance_class: str = typer.Option("n2-standard-4", help="GCP instance class to use"),
+):
+    # similar to throughput_grid but start all instances at once and then ping all pairs of instances concurrently
+
+    def check_stderr(tup):
+        assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
+
+    # validate arguments
+    aws_region_list = aws_region_list if enable_aws else []
+    azure_region_list = azure_region_list if enable_azure else []
+    gcp_region_list = gcp_region_list if enable_gcp else []
+    if not enable_aws and not enable_azure and not enable_gcp:
+        logger.error("At least one of -aws, -azure, -gcp must be enabled.")
+        raise typer.Abort()
+
+    # validate AWS regions
+    if not enable_aws:
+        aws_region_list = []
+    elif not all(r in all_aws_regions for r in aws_region_list):
+        logger.error(f"Invalid AWS region list: {aws_region_list}")
+        raise typer.Abort()
+
+    # validate Azure regions
+    azure_region_list = [r for r in azure_region_list if r != "westus2" and r != "eastus2"]  # due to instance class
+    if not enable_azure:
+        azure_region_list = []
+    elif not all(r in all_azure_regions for r in azure_region_list):
+        logger.error(f"Invalid Azure region list: {azure_region_list}")
+        raise typer.Abort()
+
+    # validate GCP regions
+    assert not enable_gcp_standard or enable_gcp, f"GCP is disabled but GCP standard is enabled"
+    gcp_region_list = [r for r in gcp_region_list if r != "us-west2-c"]  # due to instance class
+    if not enable_gcp:
+        gcp_region_list = []
+    elif not all(r in all_gcp_regions for r in gcp_region_list):
+        logger.error(f"Invalid GCP region list: {gcp_region_list}")
+        raise typer.Abort()
+
+    # validate GCP standard instances
+    if not enable_gcp_standard:
+        gcp_standard_region_list = []
+    if not all(r in all_gcp_regions_standard for r in gcp_standard_region_list):
+        logger.error(f"Invalid GCP standard region list: {gcp_standard_region_list}")
+        raise typer.Abort()
+
+    # provision servers
+    aws = AWSCloudProvider()
+    azure = AzureCloudProvider()
+    gcp = GCPCloudProvider()
+    aws_instances, azure_instances, gcp_instances = provision(
+        aws=aws,
+        azure=azure,
+        gcp=gcp,
+        aws_regions_to_provision=aws_region_list,
+        azure_regions_to_provision=azure_region_list,
+        gcp_regions_to_provision=gcp_region_list,
+        aws_instance_class=aws_instance_class,
+        azure_instance_class=azure_instance_class,
+        gcp_instance_class=gcp_instance_class,
+        gcp_use_premium_network=True,
+    )
+    instance_list: List[Server] = [i for ilist in aws_instances.values() for i in ilist]
+    instance_list.extend([i for ilist in azure_instances.values() for i in ilist])
+    instance_list.extend([i for ilist in gcp_instances.values() for i in ilist])
+
+    # provision standard tier servers
+    _, _, gcp_standard_instances = provision(
+        aws=aws,
+        azure=azure,
+        gcp=gcp,
+        aws_regions_to_provision=[],
+        azure_regions_to_provision=[],
+        gcp_regions_to_provision=gcp_standard_region_list,
+        aws_instance_class=aws_instance_class,
+        azure_instance_class=azure_instance_class,
+        gcp_instance_class=gcp_instance_class,
+        gcp_use_premium_network=False,
+    )
+    instance_list.extend([i for ilist in gcp_standard_instances.values() for i in ilist])
+
+    # setup instances
+    def setup(server: Server):
+        check_stderr(server.run_command(make_sysctl_tcp_tuning_command(cc="cubic")))
+
+    do_parallel(setup, instance_list, progress_bar=True, n=-1, desc="Setup")
+
+    # build experiment
+    instance_pairs_all = [(i1, i2) for i1 in instance_list for i2 in instance_list if i1 != i2]
+    instance_pairs = []
+    for i1, i2 in instance_pairs_all:
+        instance_pairs.append((i1, i2))
+    random.shuffle(instance_pairs)
+
+    # confirm experiment
+    experiment_tag_words = os.popen("bash scripts/utils/get_random_word_hash.sh").read().strip()
+    timestamp = datetime.now(timezone.utc).strftime("%Y.%m.%d_%H.%M")
+    experiment_tag = f"{timestamp}_{experiment_tag_words}"
+    data_dir = skylark_root / "data"
+    log_dir = data_dir / "logs" / "latency_grid" / f"{experiment_tag}"
+
+    # ask for confirmation
+    typer.secho(f"\nExperiment configuration: (total pairs = {len(instance_pairs)})", fg="red", bold=True)
+    logger.debug(f"Experiment tag: {experiment_tag}")
+    logger.debug(f"Log directory: {log_dir}")
+    sys.stdout.flush()
+    sys.stderr.flush()
+    # if not questionary.confirm(f"Launch experiment {experiment_tag}?", default=False).ask():
+    #     logger.error("Exiting")
+    #     sys.exit(1)
+
+    # define ping command
+    def client_fn(instance_pair):
+        instance_src, instance_dst = instance_pair
+        result_rec = dict(
+            src_region=instance_src.region_tag,
+            src_tier=instance_src.network_tier(),
+            src_instance_class=instance_src.instance_class(),
+            dst_region=instance_dst.region_tag,
+            dst_tier=instance_dst.network_tier(),
+            dst_instance_class=instance_dst.instance_class(),
+        )
+
+        ping_cmd = f"ping -c 10 {instance_dst.public_ip()}"
+        if isinstance(instance_src, GCPServer):
+            ping_cmd = f"docker run --net=host alpine {ping_cmd}"
+        ping_result_stdout, ping_result_stderr = instance_src.run_command(ping_cmd)
+        values = list(map(float, ping_result_stdout.strip().split("\n")[-1].split(" = ")[-1][:-3].split("/")))
+        try:
+            if len(values) == 4:
+                (min_rtt, avg_rtt, max_rtt, mdev_rtt) = values
+            else:
+                (min_rtt, avg_rtt, max_rtt) = values
+                mdev_rtt = None
+        except Exception as e:
+            logger.error(f"{instance_src.region_tag} -> {instance_dst.region_tag} ping failed: {e}")
+            logger.warning(f"Full ping output: {ping_result_stdout}")
+            logger.warning(f"Full ping error: {ping_result_stderr}")
+            (min_rtt, avg_rtt, max_rtt, mdev_rtt) = (None, None, None, None)
+        result_rec["min_rtt"] = min_rtt
+        result_rec["avg_rtt"] = avg_rtt
+        result_rec["max_rtt"] = max_rtt
+        result_rec["mdev_rtt"] = mdev_rtt
+        pbar.update(1)
+        pbar.write(f"{instance_src.region_tag} -> {instance_dst.region_tag}: {avg_rtt} ms")
+        return result_rec
+
+    # run experiment
+    new_througput_results = []
+    log_dir.mkdir(parents=True, exist_ok=True)
+    output_file = log_dir / "latency.csv"
+    with tqdm(total=len(instance_pairs), desc="Total latency evaluation") as pbar:
+        results = do_parallel(client_fn, instance_pairs, progress_bar=False, n=16)
+        new_througput_results.extend([rec for args, rec in results if rec is not None])
+
+    # build dataframe from results
+    tqdm.write(f"Saving intermediate results to {output_file}")
+    df = pd.DataFrame(new_througput_results)
+    df.to_csv(output_file, index=False)
