@@ -32,7 +32,7 @@ class GCPAuthentication:
             region_list = []
             credentials = self.credentials
             service = discovery.build("compute", "beta", credentials=credentials)
-            request = service.zones().list(project=self.inferred_project_id)
+            request = service.zones().list(project="skylark-sarah")
             while request is not None:
                 response = request.execute()
                 # In reality, these are zones. However, we shall call them regions to be self-consistent.

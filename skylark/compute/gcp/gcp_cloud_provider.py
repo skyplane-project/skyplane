@@ -62,6 +62,7 @@ class GCPCloudProvider(CloudProvider):
         ]
         availability_zones = []
         for r in GCPCloudProvider.region_list():
+            print("region", r)
             parsed_region, parsed_zone = r.rsplit("-", 1)
             if parsed_region in regions_with_standard:
                 availability_zones.append(r)
