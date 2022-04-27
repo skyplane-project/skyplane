@@ -41,7 +41,6 @@ class S3Interface(ObjectStoreInterface):
         assert self.bucket_exists()
 
     def list_objects(self, prefix="") -> Iterator[S3Object]:
-        prefix = prefix if not prefix.startswith("/") else prefix[1:]
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         paginator = s3_client.get_paginator("list_objects_v2")
         page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix)
