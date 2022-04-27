@@ -18,7 +18,7 @@ class AzureObject(ObjectStoreObject):
 
 
 class AzureInterface(ObjectStoreInterface):
-    def __init__(self, azure_region, account_name, container_name):
+    def __init__(self, azure_region, account_name, container_name, use_tls=True):
         # TODO (#210): should be configured via argument
         self.account_name = f"skylark{azure_region.replace(' ', '').lower()}"
         self.container_name = container_name
@@ -26,9 +26,6 @@ class AzureInterface(ObjectStoreInterface):
         # Create a blob service client
         self.auth = AzureAuthentication()
         self.account_url = f"https://{self.account_name}.blob.core.windows.net"
-        self.storage_management_client = self.auth.get_storage_management_client()
-        self.container_client = self.auth.get_container_client(self.account_url, self.container_name)
-        self.blob_service_client = self.auth.get_blob_service_client(self.account_url)
 
         # infer azure region from storage account
         if azure_region is None or azure_region == "infer":
@@ -38,6 +35,18 @@ class AzureInterface(ObjectStoreInterface):
 
         # parallel upload/downloads
         self.max_concurrency = 1
+
+    @property
+    def blob_service_client(self):
+        return self.auth.get_blob_service_client(self.account_url)
+
+    @property
+    def container_client(self):
+        return self.auth.get_container_client(self.account_url, self.container_name)
+
+    @property
+    def storage_management_client(self):
+        return self.auth.get_storage_management_client()
 
     def region_tag(self):
         return "azure:" + self.azure_region
@@ -70,28 +79,23 @@ class AzureInterface(ObjectStoreInterface):
                 {"sku": {"name": tier}, "kind": "BlockBlobStorage", "location": self.azure_region},
             )
             operation.result()
-        except ResourceExistsError:
-            logger.warning("Unable to create storage account as it already exists")
+        except ResourceExistsError as e:
+            logger.warning(f"Unable to create storage account as it already exists: {e}")
 
-    def grant_storage_account_access(self, role_name: str, principal_id: str = None):
+    def infer_cli_principal_id(self):
+        self.auth.credential.get_token("https://graph.windows.net")  # must request token to attempt to load credential
+        if isinstance(self.auth.credential._successful_credential, AzureCliCredential):
+            out = subprocess.check_output(["az", "ad", "signed-in-user", "show", "--query", "objectId", "-o", "tsv"])
+            return out.decode("utf-8").strip()
+        else:
+            return None
+
+    def grant_storage_account_access(self, role_name: str, principal_id: str):
         # lookup role
         auth_client = self.auth.get_authorization_client()
         scope = f"/subscriptions/{self.auth.subscription_id}/resourceGroups/{AzureServer.resource_group_name}/providers/Microsoft.Storage/storageAccounts/{self.account_name}"
         roles = list(auth_client.role_definitions.list(scope, filter="roleName eq '{}'".format(role_name)))
         assert len(roles) == 1
-
-        # lookup principal
-        if principal_id is None:
-            self.auth.credential.get_token("https://graph.windows.net")  # must request token to attempt to load credential
-            if isinstance(self.auth.credential._successful_credential, AzureCliCredential):
-                principal_id = (
-                    subprocess.check_output(["az", "ad", "signed-in-user", "show", "--query", "objectId", "-o", "tsv"])
-                    .decode("utf-8")
-                    .strip()
-                )
-            else:
-                logger.error(f"Unable to determine principal ID for role assignment for {scope}, cannot automatically grant access")
-                return
 
         # query for existing role assignment
         matches = []
@@ -100,13 +104,10 @@ class AzureInterface(ObjectStoreInterface):
                 matches.append(assignment)
         if len(matches) == 0:
             logger.debug(f"Granting access to {principal_id} for role {role_name} on storage account {self.account_name}")
-            role_assignment = auth_client.role_assignments.create(
-                scope,
-                uuid.uuid4(),  # Role assignment random name
-                RoleAssignmentCreateParameters(
-                    properties=RoleAssignmentProperties(role_definition_id=roles[0].id, principal_id=principal_id)
-                ),
+            params = RoleAssignmentCreateParameters(
+                properties=RoleAssignmentProperties(role_definition_id=roles[0].id, principal_id=principal_id)
             )
+            auth_client.role_assignments.create(scope, uuid.uuid4(), params)
 
     def create_container(self):
         try:
@@ -119,7 +120,9 @@ class AzureInterface(ObjectStoreInterface):
         if not self.storage_account_exists():
             logger.debug(f"Creating storage account {self.account_name}")
             self.create_storage_account(tier=tier)
-        self.grant_storage_account_access("Storage Blob Data Contributor")
+        principal_id = self.infer_cli_principal_id()
+        if principal_id:
+            self.grant_storage_account_access("Storage Blob Data Contributor", principal_id)
         if not self.container_exists():
             logger.debug(f"Creating container {self.container_name}")
             self.create_container()

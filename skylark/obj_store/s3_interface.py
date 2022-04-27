@@ -1,31 +1,33 @@
-import boto3
-from boto3.s3.transfer import TransferConfig
-import botocore.exceptions
-
-import os
-import mimetypes
 from typing import Iterator, List
 
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
+from skylark.utils import logger
 
 class S3Object(ObjectStoreObject):
     def full_path(self):
         return f"s3://{self.bucket}/{self.key}"
 
 class S3Interface(ObjectStoreInterface):
-    def __init__(self, aws_region, bucket_name, use_tls=True, part_size=None, throughput_target_gbps=10, num_threads=4):
+    def __init__(self, aws_region, bucket_name):
         self.auth = AWSAuthentication()
         self.aws_region = self.infer_s3_region(bucket_name) if aws_region is None or aws_region == "infer" else aws_region
         self.bucket_name = bucket_name
+        if not self.bucket_exists():
+            logger.error("Specified bucket does not exist.")
+            raise exceptions.MissingBucketException()
 
     def region_tag(self):
         return "aws:" + self.aws_region
 
     def infer_s3_region(self, bucket_name: str):
         s3_client = self.auth.get_boto3_client("s3")
-        region = s3_client.get_bucket_location(Bucket=bucket_name).get("LocationConstraint", "us-east-1")
-        return region if region is not None else "us-east-1"
+        try:
+            region = s3_client.get_bucket_location(Bucket=bucket_name).get("LocationConstraint", "us-east-1")
+            return region if region is not None else "us-east-1"
+        except Exception as e:
+            logger.error("Specified bucket does not exist.")
+            raise exceptions.MissingBucketException() from e
 
     def bucket_exists(self):
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
@@ -41,7 +43,6 @@ class S3Interface(ObjectStoreInterface):
         assert self.bucket_exists()
 
     def list_objects(self, prefix="") -> Iterator[S3Object]:
-        prefix = prefix if not prefix.startswith("/") else prefix[1:]
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         paginator = s3_client.get_paginator("list_objects_v2")
         page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix)

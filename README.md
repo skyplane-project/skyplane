@@ -64,8 +64,8 @@ Building docker image
  => [internal] load .dockerignore                                                                                                                  0.0s
  => => transferring context: 2B                                                                                                                    0.0s
 failed to solve with frontend dockerfile.v0: failed to read dockerfile: open /var/lib/docker/tmp/buildkit-mount683951637/Dockerfile: no such file or directory
-Uploading docker image to ghcr.io/parasj/skylark:local-PotRzrFT
-The push refers to repository [ghcr.io/parasj/skylark]
+Uploading docker image to ghcr.io/skyplane-project/skyplane:local-PotRzrFT
+The push refers to repository [ghcr.io/skyplane-project/skyplane]
 20d2ed8618ca: Layer already exists
 1c4146875228: Layer already exists
 1f4f7ac2f199: Layer already exists
@@ -77,12 +77,12 @@ tltkismwtov5n8zokghil1py9
 u0e2ymhmv64oriiq66ibepn63
 
 Total reclaimed space: 0B
-SKYLARK_DOCKER_IMAGE=ghcr.io/parasj/skylark:local-PotRzrFT
+SKYLARK_DOCKER_IMAGE=ghcr.io/skyplane-project/skyplane:local-PotRzrFT
 ```
 
 </details>
 
-The script will export the new image (ghcr.io/parasj/skylark:local-PotRzrFT in this example) to an environment variable (`SKYLARK_DOCKER_IMAGE`). Ensure you use `source` so the environment variable is published to your shell.
+The script will export the new image (ghcr.io/skyplane-project/skyplane:local-PotRzrFT in this example) to an environment variable (`SKYLARK_DOCKER_IMAGE`). Ensure you use `source` so the environment variable is published to your shell.
 
 ### Running a basic cloud to cloud transfer job
 We then run the ReplicatorClient with that new Docker image (stored in `$SKYLARK_DOCKER_IMAGE`):

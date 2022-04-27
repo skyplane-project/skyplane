@@ -8,7 +8,9 @@ from skylark.utils import logger
 def query_which_cloud() -> str:
     check_exit_code = lambda cmd: subprocess.call(shlex.split(cmd), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     aws_metadata_url = "curl -f --connect-timeout 1 --noproxy * http://169.254.169.254/1.0/meta-data/instance-id"
-    azure_metadata_url = "curl -f --connect-timeout 1 -H Metadata:true --noproxy * http://169.254.169.254/metadata/instance?api-version=2021-02-01"
+    azure_metadata_url = (
+        "curl -f --connect-timeout 1 -H Metadata:true --noproxy * http://169.254.169.254/metadata/instance?api-version=2021-02-01"
+    )
     gcp_metadata_url = "curl -f --connect-timeout 1 -noproxy * http://metadata.google.internal/computeMetadata/v1/instance/hostname"
     if check_exit_code(aws_metadata_url) == 0:
         return "aws"

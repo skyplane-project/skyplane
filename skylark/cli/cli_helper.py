@@ -16,6 +16,8 @@ from typing import Dict, List
 import boto3
 import typer
 from skylark import GB, MB
+from skylark import exceptions
+from skylark import gcp_config_path
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.gcp.gcp_auth import GCPAuthentication
@@ -48,12 +50,14 @@ def is_plausible_local_path(path: str):
 
 
 def parse_path(path: str):
-    if path.startswith("s3://"):
-        bucket_name, key_name = path[5:].split("/", 1)
-        return "s3", bucket_name, key_name
-    elif path.startswith("gs://"):
-        bucket_name, key_name = path[5:].split("/", 1)
-        return "gs", bucket_name, key_name
+    if path.startswith("s3://") or path.startswith("gs://"):
+        provider, parsed = path[:2], path[5:]
+        if len(parsed) == 0:
+            typer.secho(f"Invalid path: '{path}'", fg="red")
+            raise typer.Exit(code=1)
+        bucket, *keys = parsed.split("/", 1)
+        key = keys[0] if len(keys) > 0 else ""
+        return provider, bucket, key
     elif (path.startswith("https://") or path.startswith("http://")) and "blob.core.windows.net" in path:
         regex = re.compile(r"https?://([^/]+).blob.core.windows.net/([^/]+)/(.*)")
         match = regex.match(path)
@@ -81,9 +85,9 @@ def ls_local(path: Path):
         yield path.name
 
 
-def ls_s3(bucket_name: str, key_name: str, use_tls: bool = True):
-    s3 = S3Interface(None, bucket_name, use_tls=use_tls)
-    for obj in s3.list_objects(prefix=key_name):
+def ls_objstore(obj_store: str, bucket_name: str, key_name: str):
+    client = ObjectStoreInterface.create(obj_store, bucket_name)
+    for obj in client.list_objects(prefix=key_name):
         yield obj.full_path()
 
 
@@ -143,12 +147,18 @@ def copy_objstore_local(object_interface: ObjectStoreInterface, src_key: str, ds
             obj_mapping[future] = src_obj
             return src_obj.size
 
+        obj_count = 0
         total_bytes = 0.0
         for obj in object_interface.list_objects(prefix=src_key):
             sub_key = obj.key[len(src_key) :]
             sub_key = sub_key.lstrip("/")
             dest_path = dst / sub_key
             total_bytes += _copy(obj, dest_path)
+            obj_count += 1
+
+        if not obj_count:
+            logger.error("Specified object does not exist.")
+            raise exceptions.MissingObjectException()
 
         # wait for all downloads to complete, displaying a progress bar
         with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Downloading") as pbar:
@@ -177,8 +187,8 @@ def copy_azure_local(src_account_name: str, src_container_name: str, src_key: st
     return copy_objstore_local(azure, src_key, dst)
 
 
-def copy_local_s3(src: Path, dst_bucket: str, dst_key: str, use_tls: bool = True):
-    s3 = S3Interface(None, dst_bucket, use_tls=use_tls)
+def copy_local_s3(src: Path, dst_bucket: str, dst_key: str):
+    s3 = S3Interface(None, dst_bucket)
     return copy_local_objstore(s3, src, dst_key)
 
 
@@ -199,7 +209,7 @@ def replicate_helper(
     dest_key_prefix: str = "/",
     # gateway provisioning options
     reuse_gateways: bool = False,
-    gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/parasj/skylark:main"),
+    gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
     # cloud provider specific options
     aws_instance_class: str = "m5.8xlarge",
     azure_instance_class: str = "Standard_D32_v4",
@@ -227,15 +237,22 @@ def replicate_helper(
         )
     else:
         # make replication job
-        objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
+        src_objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
+        if not src_objs:
+            logger.error("Specified object does not exist.")
+            raise exceptions.MissingObjectException()
+        dest_is_directory = False
+        if dest_key_prefix.endswith("/"):
+            dest_is_directory = True
+
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=source_bucket,
             dest_region=topo.sink_region(),
             dest_bucket=dest_bucket,
-            src_objs=[obj.key for obj in objs],
-            dest_objs=[dest_key_prefix + obj.key for obj in objs],
-            obj_sizes={obj.key: obj.size for obj in objs},
+            src_objs=[obj.key for obj in src_objs],
+            dest_objs=[dest_key_prefix + obj.key if dest_is_directory else dest_key_prefix for obj in src_objs],
+            obj_sizes={obj.key: obj.size for obj in src_objs},
         )
 
     rc = ReplicatorClient(
@@ -352,7 +369,7 @@ def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
 
     typer.secho(f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials.access_key[-6:]}]", fg="blue")
     config.aws_enabled = True
-    AWSAuthentication.save_region_config(config) 
+    AWSAuthentication.save_region_config(config)
     return config
 
 
@@ -395,6 +412,10 @@ def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> Skylar
 def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkConfig:
     if force_init:
         typer.secho("    GCP credentials will be re-initialized", fg="red")
+        config.gcp_project_id = None
+
+    if not Path(gcp_config_path).is_file():
+        typer.secho("    GCP region config missing! GCP will be reconfigured.", fg="red")
         config.gcp_project_id = None
 
     if config.gcp_project_id is not None:

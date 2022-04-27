@@ -42,7 +42,7 @@ class ObjectStoreInterface:
         if region_tag.startswith("aws"):
             from skylark.obj_store.s3_interface import S3Interface
 
-            return S3Interface(region_tag.split(":")[1], bucket, use_tls=False)
+            return S3Interface(region_tag.split(":")[1], bucket)
         elif region_tag.startswith("gcp"):
             from skylark.obj_store.gcs_interface import GCSInterface
 

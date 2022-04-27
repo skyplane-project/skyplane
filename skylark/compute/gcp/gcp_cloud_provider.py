@@ -8,7 +8,6 @@ import googleapiclient
 import paramiko
 from skylark.compute.gcp.gcp_auth import GCPAuthentication
 from skylark.utils import logger
-
 from oslo_concurrency import lockutils
 from skylark import key_root
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
@@ -29,10 +28,9 @@ class GCPCloudProvider(CloudProvider):
     def name(self):
         return "gcp"
 
-
     @staticmethod
     def region_list():
-        """See https://cloud.google.com/network-tiers/docs/overview#regions_supporting_standard_tier for a list of regions in the standard tier. """ 
+        """See https://cloud.google.com/network-tiers/docs/overview#regions_supporting_standard_tier for a list of regions in the standard tier."""
         return GCPAuthentication.get_region_config()
 
     @staticmethod

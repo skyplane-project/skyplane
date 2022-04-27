@@ -11,7 +11,7 @@ from skylark.compute.azure.azure_server import AzureServer
 from skylark.compute.cloud_providers import CloudProvider
 from azure.mgmt.authorization.models import RoleAssignmentCreateParameters, RoleAssignmentProperties
 from skylark.utils import logger
-from skylark.utils.utils import Timer, do_parallel
+from skylark.utils.utils import Timer, do_parallel, wait_for
 
 from azure.mgmt.authorization.models import RoleAssignmentCreateParameters
 from azure.mgmt.compute.models import ResourceIdentityType
@@ -341,7 +341,7 @@ class AzureCloudProvider(CloudProvider):
                     "security_rules": [
                         {
                             "name": name + "-allow-all",
-                            "protocol": "Tcp",
+                            "protocol": "*",
                             "source_port_range": "*",
                             "source_address_prefix": "*",
                             "destination_port_range": "*",
@@ -436,18 +436,15 @@ class AzureCloudProvider(CloudProvider):
                 )
                 vm_result = poller.result()
 
+        auth_client = self.auth.get_authorization_client()
+
         def grant_vm_role(scope, role_name):
-            auth_client = self.auth.get_authorization_client()
             roles = list(auth_client.role_definitions.list(scope, filter="roleName eq '{}'".format(role_name)))
             assert len(roles) == 1
-
-            auth_client.role_assignments.create(
-                scope,
-                uuid.uuid4(),  # Role assignment random name
-                RoleAssignmentCreateParameters(
-                    properties=RoleAssignmentProperties(role_definition_id=roles[0].id, principal_id=vm_result.identity.principal_id)
-                ),
+            params = RoleAssignmentCreateParameters(
+                properties=RoleAssignmentProperties(role_definition_id=roles[0].id, principal_id=vm_result.identity.principal_id)
             )
+            auth_client.role_assignments.create(scope, uuid.uuid4(), params)
 
         with Timer("Role assignment"):
             # Assign roles to system MSI, see https://docs.microsoft.com/en-us/samples/azure-samples/compute-python-msi-vm/compute-python-msi-vm/#role-assignment
@@ -455,5 +452,11 @@ class AzureCloudProvider(CloudProvider):
             scope = f"/subscriptions/{self.auth.subscription_id}"
             grant_vm_role(scope, "Storage Blob Data Contributor")
             grant_vm_role(scope, "Contributor")
+
+            # wait for role to propagate
+            wait_for(
+                lambda: (len(list(auth_client.role_assignments.list(f"principalId eq '{vm_result.identity.principal_id}'"))) == 2),
+                timeout=60,
+            )
 
         return AzureServer(name)
