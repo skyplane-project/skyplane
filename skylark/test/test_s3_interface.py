@@ -7,6 +7,7 @@ from skylark.obj_store.s3_interface import S3Interface
 from skylark.utils.utils import Timer
 from skylark.utils import logger
 
+
 def test_s3_interface(region="us-east-1", bucket="sky-us-east-1"):
     logger.debug("creating interfaces...")
     interface = S3Interface(region, bucket)
@@ -31,7 +32,7 @@ def test_s3_interface(region="us-east-1", bucket="sky-us-east-1"):
         logger.debug("uploading...")
         with Timer() as t:
             interface.upload_object(fpath, obj_name)
-            debug_time("uploaded", file_size_mb, t.elapsed) 
+            debug_time("uploaded", file_size_mb, t.elapsed)
 
         assert interface.get_obj_size(obj_name) == os.path.getsize(fpath)
 
@@ -44,7 +45,7 @@ def test_s3_interface(region="us-east-1", bucket="sky-us-east-1"):
         logger.debug("downloading...")
         with Timer() as t:
             interface.download_object(obj_name, fpath)
-            debug_time("downloaded", file_size_mb, t.elapsed) 
+            debug_time("downloaded", file_size_mb, t.elapsed)
 
         assert interface.get_obj_size(obj_name) == os.path.getsize(fpath)
 
