@@ -16,6 +16,7 @@ from typing import Dict, List
 import boto3
 import typer
 from skylark import GB, MB
+from skylark import exceptions
 from skylark import gcp_config_path
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.compute.azure.azure_auth import AzureAuthentication
@@ -49,26 +50,14 @@ def is_plausible_local_path(path: str):
 
 
 def parse_path(path: str):
-    if path.startswith("s3://"):
-        parsed = path[5:].split("/", 1)
-        if len(parsed) == 1:
-            bucket_name, key_name = parsed[0], "/"
-        else:
-            if parsed[1] == "":
-                bucket_name, key_name = parsed[0], "/"
-            else:
-                bucket_name, key_name = parsed[0], parsed[1]
-        return "s3", bucket_name, key_name
-    elif path.startswith("gs://"):
-        parsed = path[5:].split("/", 1)
-        if len(parsed) == 1:
-            bucket_name, key_name = parsed[0], "/"
-        else:
-            if parsed[1] == "":
-                bucket_name, key_name = parsed[0], "/"
-            else:
-                bucket_name, key_name = parsed[0], parsed[1]
-        return "gs", bucket_name, key_name
+    if path.startswith("s3://") or path.startswith("gs://"):
+        provider, parsed = path[:2], path[5:]
+        if len(parsed) == 0:
+            typer.secho(f"Invalid path: '{path}'", fg="red")
+            raise typer.Exit(code=1)
+        bucket, *keys = parsed.split("/", 1)
+        key = keys[0] if len(keys) > 0 else ""
+        return provider, bucket, key
     elif (path.startswith("https://") or path.startswith("http://")) and "blob.core.windows.net" in path:
         regex = re.compile(r"https?://([^/]+).blob.core.windows.net/([^/]+)/(.*)")
         match = regex.match(path)
@@ -158,12 +147,18 @@ def copy_objstore_local(object_interface: ObjectStoreInterface, src_key: str, ds
             obj_mapping[future] = src_obj
             return src_obj.size
 
+        obj_count = 0
         total_bytes = 0.0
         for obj in object_interface.list_objects(prefix=src_key):
             sub_key = obj.key[len(src_key) :]
             sub_key = sub_key.lstrip("/")
             dest_path = dst / sub_key
             total_bytes += _copy(obj, dest_path)
+            obj_count += 1
+
+        if not obj_count:
+            logger.error("Specified object does not exist.")
+            raise exceptions.MissingObjectException()
 
         # wait for all downloads to complete, displaying a progress bar
         with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Downloading") as pbar:
@@ -192,8 +187,8 @@ def copy_azure_local(src_account_name: str, src_container_name: str, src_key: st
     return copy_objstore_local(azure, src_key, dst)
 
 
-def copy_local_s3(src: Path, dst_bucket: str, dst_key: str, use_tls: bool = True):
-    s3 = S3Interface(None, dst_bucket, use_tls=use_tls)
+def copy_local_s3(src: Path, dst_bucket: str, dst_key: str):
+    s3 = S3Interface(None, dst_bucket)
     return copy_local_objstore(s3, src, dst_key)
 
 
@@ -243,6 +238,9 @@ def replicate_helper(
     else:
         # make replication job
         src_objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
+        if not src_objs:
+            logger.error("Specified object does not exist.")
+            raise exceptions.MissingObjectException()
         dest_is_directory = False
 
         # TODO: Don't hardcode

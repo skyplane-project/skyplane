@@ -18,6 +18,7 @@ import tempfile
 from typing import Optional
 
 from skylark import skylark_root
+from skylark import exceptions
 import skylark.cli.cli_aws
 import skylark.cli.cli_azure
 import skylark.cli.cli_gcp
@@ -132,6 +133,10 @@ def cp(
         # Set up replication topology
         if solve:
             objs = list(src_client.list_objects(path_src))
+            if not objs:
+                logger.error("Specified object does not exist.")
+                raise exceptions.MissingObjectException()
+
             total_gbyte_to_transfer = sum([obj.size for obj in objs]) / GB
 
             # build problem and solve
