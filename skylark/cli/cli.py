@@ -20,29 +20,20 @@ import skylark.cli.cli_gcp
 import skylark.cli.cli_solver
 import skylark.cli.experiments
 import typer
-from skylark import GB, config_path, print_header, skylark_root
-from skylark.cli.cli_helper import (
-    check_ulimit,
-    copy_azure_local,
-    copy_gcs_local,
-    copy_local_azure,
-    copy_local_gcs,
-    copy_local_local,
-    copy_local_s3,
-    copy_s3_local,
-    deprovision_skylark_instances,
-    load_aws_config,
-    load_azure_config,
-    load_gcp_config,
-    ls_local,
-    ls_objstore,
-    parse_path,
-    replicate_helper,
-)
+from skylark import GB, config_path, exceptions, print_header, skylark_root
+from skylark.cli.cli_helper import (check_ulimit, copy_azure_local,
+                                    copy_gcs_local, copy_local_azure,
+                                    copy_local_gcs, copy_local_local,
+                                    copy_local_s3, copy_s3_local,
+                                    deprovision_skylark_instances,
+                                    load_aws_config, load_azure_config,
+                                    load_gcp_config, ls_local, ls_objstore,
+                                    parse_path, replicate_helper)
 from skylark.config import SkylarkConfig
 from skylark.obj_store.object_store_interface import ObjectStoreInterface
 from skylark.replicate.replication_plan import ReplicationTopology
 from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP
+from skylark.utils import logger
 from skylark.utils.utils import Timer
 
 app = typer.Typer(name="skylark")
@@ -159,6 +150,10 @@ def cp(
         # Set up replication topology
         if solve:
             objs = list(src_client.list_objects(path_src))
+            if not objs:
+                logger.error("Specified object does not exist.")
+                raise exceptions.MissingObjectException()
+
             total_gbyte_to_transfer = sum([obj.size for obj in objs]) / GB
 
             # build problem and solve
