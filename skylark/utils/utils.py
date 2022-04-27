@@ -48,8 +48,16 @@ def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, progress_bar=Fal
 
 
 def do_parallel(
-    func: Callable[[T], R], args_list: Iterable[T], n=-1, progress_bar=False, leave_pbar=True, desc=None, arg_fmt=None, hide_args=False
-) -> List[Tuple[T, R]]:
+    func: Callable[[T], R],
+    args_list: Iterable[T],
+    n=-1,
+    progress_bar=False,
+    leave_pbar=True,
+    desc=None,
+    arg_fmt=None,
+    hide_args=False,
+    return_args=True,
+) -> Union[List[Tuple[T, R]], List[R]]:
     """Run list of jobs in parallel with tqdm progress bar"""
     args_list = list(args_list)
     if len(args_list) == 0:
@@ -80,7 +88,10 @@ def do_parallel(
                 else:
                     pbar.set_description(desc)
                 pbar.update()
-        return results
+        if return_args:
+            return results
+        else:
+            return [result for _, result in results]
 
 
 def retry_backoff(

@@ -82,7 +82,7 @@ class AWSAuthentication:
             setattr(self.__cached_credentials, "boto3_credential", cached_credential)
         return cached_credential if cached_credential else (None, None)
 
-    def get_boto3_session(self, aws_region: str):
+    def get_boto3_session(self, aws_region: Optional[str] = None):
         if self.config_mode == "manual":
             return boto3.Session(
                 aws_access_key_id=self.access_key,
@@ -93,10 +93,17 @@ class AWSAuthentication:
             return boto3.Session(region_name=aws_region)
 
     def get_boto3_resource(self, service_name, aws_region=None):
-        return self.get_boto3_session(aws_region).resource(service_name, region_name=aws_region)
+        return self.get_boto3_session().resource(service_name, region_name=aws_region)
 
     def get_boto3_client(self, service_name, aws_region=None):
         if aws_region is None:
-            return self.get_boto3_session(aws_region).client(service_name)
+            return self.get_boto3_session().client(service_name)
         else:
-            return self.get_boto3_session(aws_region).client(service_name, region_name=aws_region)
+            return self.get_boto3_session().client(service_name, region_name=aws_region)
+
+    def get_azs_in_region(self, region):
+        ec2 = self.get_boto3_client("ec2", region)
+        azs = []
+        for az in ec2.describe_availability_zones()["AvailabilityZones"]:
+            azs.append(az["ZoneName"])
+        return azs

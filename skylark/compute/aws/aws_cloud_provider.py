@@ -15,7 +15,7 @@ from oslo_concurrency import lockutils
 from skylark import skylark_root
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.cloud_providers import CloudProvider
-from skylark.utils.utils import wait_for
+from skylark.utils.utils import do_parallel, wait_for
 
 try:
     import pandas as pd
@@ -100,10 +100,12 @@ class AWSCloudProvider(CloudProvider):
         # find matching valid VPC
         matching_vpc = None
         for vpc in vpcs:
+            subsets_azs = [subnet.availability_zone for subnet in vpc.subnets.all()]
             if (
                 vpc.cidr_block == "10.0.0.0/16"
                 and vpc.describe_attribute(Attribute="enableDnsSupport")["EnableDnsSupport"]
                 and vpc.describe_attribute(Attribute="enableDnsHostnames")["EnableDnsHostnames"]
+                and all(az in subsets_azs for az in self.auth.get_azs_in_region(region))
             ):
                 matching_vpc = vpc
                 # delete all other vpcs
@@ -130,14 +132,14 @@ class AWSCloudProvider(CloudProvider):
 
             # make subnet for each AZ in region
             def make_subnet(az):
-                subnet = self.auth.get_boto3_resource("ec2", f"{region}{az}").create_subnet(CidrBlock="10.0.2.0/24", VpcId=matching_vpc.id)
+                subnet_cidr_id = ord(az[-1]) - ord("a")
+                subnet = self.auth.get_boto3_resource("ec2", region).create_subnet(
+                    CidrBlock=f"10.0.{subnet_cidr_id}.0/24", VpcId=matching_vpc.id, AvailabilityZone=az
+                )
                 subnet.meta.client.modify_subnet_attribute(SubnetId=subnet.id, MapPublicIpOnLaunch={"Value": True})
                 return subnet
 
-            azs = ec2client.describe_availability_zones()["AvailabilityZones"]
-            subnets = []
-            for az in azs:
-                subnets.append(make_subnet(az["ZoneName"]))
+            subnets = do_parallel(make_subnet, self.auth.get_azs_in_region(region), return_args=False)
 
             # make internet gateway
             igw = ec2.create_internet_gateway()
@@ -158,10 +160,6 @@ class AWSCloudProvider(CloudProvider):
         ec2 = self.auth.get_boto3_resource("ec2", region)
         ec2client = ec2.meta.client
         vpc = ec2.Vpc(vpcid)
-        # detach and delete all gateways associated with the vpc
-        for gw in vpc.internet_gateways.all():
-            vpc.detach_internet_gateway(InternetGatewayId=gw.id)
-            gw.delete()
         # delete all route table associations
         for rt in vpc.route_tables.all():
             for rta in rt.associations:
@@ -192,6 +190,10 @@ class AWSCloudProvider(CloudProvider):
             for interface in subnet.network_interfaces.all():
                 interface.delete()
             subnet.delete()
+        # detach and delete all gateways associated with the vpc
+        for gw in vpc.internet_gateways.all():
+            vpc.detach_internet_gateway(InternetGatewayId=gw.id)
+            gw.delete()
         # finally, delete the vpc
         ec2client.delete_vpc(VpcId=vpcid)
 
@@ -280,8 +282,6 @@ class AWSCloudProvider(CloudProvider):
         ec2 = self.auth.get_boto3_resource("ec2", region)
         vpc = self.get_vpc(region)
         assert vpc is not None, "No VPC found"
-        subnets = list(vpc.subnets.all())
-        assert len(subnets) > 0, "No subnets found"
 
         def check_iam_role():
             try:
@@ -326,7 +326,6 @@ class AWSCloudProvider(CloudProvider):
                     {
                         "DeviceIndex": 0,
                         "Groups": [self.get_security_group(region).group_id],
-                        "SubnetId": subnets[0].id,
                         "AssociatePublicIpAddress": True,
                         "DeleteOnTermination": True,
                     }
