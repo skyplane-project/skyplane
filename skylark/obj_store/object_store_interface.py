@@ -31,7 +31,7 @@ class ObjectStoreInterface:
     def get_obj_size(self, obj_name):
         raise NotImplementedError()
 
-    def download_object(self, src_object_name, dst_file_path):
+    def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
         raise NotImplementedError()
 
     def upload_object(self, src_file_path, dst_object_name, content_type="infer"):

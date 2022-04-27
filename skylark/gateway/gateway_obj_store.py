@@ -92,7 +92,8 @@ class GatewayObjStoreConn:
                 logger.debug(f"[obj_store:{self.worker_id}] Start download {chunk_req.chunk.chunk_id} from {bucket}")
 
                 obj_store_interface = self.get_obj_store_interface(region, bucket)
-                retry_backoff(partial(obj_store_interface.download_object, chunk_req.chunk.src_key, fpath), max_retries=4)
+                retry_backoff(partial(obj_store_interface.download_object, chunk_req.chunk.src_key, fpath, chunk_req.chunk.file_offset_bytes, chunk_req.chunk.chunk_length_bytes), max_retries=4)
+                #retry_backoff(partial(obj_store_interface.download_object, chunk_req.chunk.src_key, fpath), max_retries=4)
                 self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
                 recieved_chunk_size = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).stat().st_size
                 assert (

@@ -72,7 +72,7 @@ class GCSInterface(ObjectStoreInterface):
             return False
 
     # todo: implement range request for download
-    def download_object(self, src_object_name, dst_file_path):
+    def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = src_object_name if src_object_name[0] != "/" else src_object_name
 

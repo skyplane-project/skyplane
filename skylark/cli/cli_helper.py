@@ -246,7 +246,7 @@ def replicate_helper(
         dest_is_directory = False
 
         # TODO: Don't hardcode
-        chunk_size_mb = 5
+        chunk_size_mb = None #5
         if dest_key_prefix.endswith("/"):
             dest_is_directory = True
 
