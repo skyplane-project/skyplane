@@ -41,7 +41,10 @@ class GatewayObjStoreConn:
         key = f"{region}:{bucket}"
         if key not in self.obj_store_interfaces:
             logger.warning(f"[gateway_daemon] ObjectStoreInferface not cached for {key}")
-            self.obj_store_interfaces[key] = ObjectStoreInterface.create(region, bucket)
+            try:
+                self.obj_store_interfaces[key] = ObjectStoreInterface.create(region, bucket)
+            except Exception as e:
+                raise ValueError(f"Failed to create obj store interface {str(e)}")
         return self.obj_store_interfaces[key]
 
     def start_workers(self):
@@ -76,7 +79,7 @@ class GatewayObjStoreConn:
                 region = chunk_req.dst_region
                 bucket = chunk_req.dst_object_store_bucket
                 self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
-                logger.debug(f"[obj_store:{self.worker_id}] Start upload {chunk_req.chunk.chunk_id} to {bucket}")
+                logger.debug(f"[obj_store:{self.worker_id}] Start upload {chunk_req.chunk.chunk_id} to {bucket}, key {chunk_req.chunk.dest_key}")
 
                 obj_store_interface = self.get_obj_store_interface(region, bucket)
                 retry_backoff(partial(obj_store_interface.upload_object, fpath, chunk_req.chunk.dest_key), max_retries=4)

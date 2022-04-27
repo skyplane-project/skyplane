@@ -238,6 +238,7 @@ def replicate_helper(
     else:
         # make replication job
         src_objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
+        print("list", src_objs)
         if not src_objs:
             logger.error("Specified object does not exist.")
             raise exceptions.MissingObjectException()
@@ -248,7 +249,11 @@ def replicate_helper(
         if dest_key_prefix.endswith("/"):
             dest_is_directory = True
 
-        print("Create replication job", chunk_size_mb)
+        dest_is_directory = True
+
+        print("Create replication job", chunk_size_mb, dest_is_directory)
+        print([obj.key for obj in src_objs])
+        print([dest_key_prefix + obj.key if dest_is_directory else dest_key_prefix for obj in src_objs])
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=source_bucket,
