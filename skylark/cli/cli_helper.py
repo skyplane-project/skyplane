@@ -431,8 +431,7 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
     if force_init:
         typer.secho("    GCP credentials will be re-initialized", fg="red")
         config.gcp_project_id = None
-
-    if not Path(gcp_config_path).is_file():
+    elif not Path(gcp_config_path).is_file():
         typer.secho("    GCP region config missing! GCP will be reconfigured.", fg="red")
         config.gcp_project_id = None
 
