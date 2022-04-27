@@ -207,6 +207,7 @@ def replicate_helper(
     dest_bucket: Optional[str] = None,
     src_key_prefix: str = "",
     dest_key_prefix: str = "",
+    obj_store_chunk_size_mb: int = 20,
     # gateway provisioning options
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
@@ -237,19 +238,14 @@ def replicate_helper(
         )
     else:
         # make replication job
+        chunk_size_mb = obj_store_chunk_size_mb
         src_objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
-        print("list", src_objs)
         if not src_objs:
             logger.error("Specified object does not exist.")
             raise exceptions.MissingObjectException()
-<<<<<<< HEAD
-        dest_is_directory = False
 
-        # TODO: Don't hardcode
-        chunk_size_mb = None #5
         if dest_key_prefix.endswith("/"):
             dest_is_directory = True
-=======
 
         # map objects to destination object paths
         # todo isolate this logic and test independently
@@ -271,13 +267,7 @@ def replicate_helper(
                     dest_objs_job.append(dest_key_prefix + src_path_no_prefix)
                 else:
                     dest_objs_job.append(dest_key_prefix + "/" + src_path_no_prefix)
->>>>>>> f59ecb2de463406e3da921064b56a123801b199b
 
-        dest_is_directory = True
-
-        print("Create replication job", chunk_size_mb, dest_is_directory)
-        print([obj.key for obj in src_objs])
-        print([dest_key_prefix + obj.key if dest_is_directory else dest_key_prefix for obj in src_objs])
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=source_bucket,

@@ -1,4 +1,5 @@
 from typing import Iterator, List
+import os
 
 import botocore.exceptions
 from boto3.s3.transfer import TransferConfig
@@ -79,11 +80,35 @@ class S3Interface(ObjectStoreInterface):
             return False
 
     def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
-        logger.info(f"Download {src_object_name}, {dst_file_path}")
+        logger.info(f"Download {src_object_name}, {dst_file_path}, {offset_bytes}")
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         assert len(src_object_name) > 0, f"Source object name must be non-empty: '{src_object_name}'"
-        s3_client.download_file(self.bucket_name, src_object_name, dst_file_path, Config=TransferConfig(use_threads=False))
+
+        if offset_bytes:
+            byte_range = f"bytes={offset_bytes}-{offset_bytes + size_bytes}" 
+            response = s3_client.get_object(
+                Bucket=self.bucket_name,
+                Key=src_object_name,
+                Range=byte_range
+            )
+        else:
+            response = s3_client.get_object(
+                Bucket=self.bucket_name,
+                Key=src_object_name,
+            )
+
+
+        # write response data 
+        if not os.path.exists(dst_file_path):
+            open(dst_file_path, "a").close()
+        with open(dst_file_path, "rb+") as f:
+            f.seek(0)
+            f.write(response["Body"].read())
+        response["Body"].close() 
+
+        #s3_client.download_file(self.bucket_name, src_object_name, dst_file_path, Config=TransferConfig(use_threads=False))
+
 
     def upload_object(self, src_file_path, dst_object_name):
         logger.info(f"Upload {src_file_path}, {dst_object_name}")
