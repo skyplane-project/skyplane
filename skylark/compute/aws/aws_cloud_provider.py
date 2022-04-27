@@ -1,6 +1,8 @@
+import functools
 import json
 import uuid
 import os
+import time
 from typing import List, Optional
 from pathlib import Path
 
@@ -8,12 +10,12 @@ import botocore
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.utils import logger
 from skylark import key_root
-
+from skylark import exceptions
 from oslo_concurrency import lockutils
 from skylark import skylark_root
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.cloud_providers import CloudProvider
-from skylark.utils.utils import retry_backoff, wait_for
+from skylark.utils.utils import wait_for
 
 try:
     import pandas as pd
@@ -38,9 +40,14 @@ class AWSCloudProvider(CloudProvider):
         return region_list
 
     @staticmethod
+    @functools.lru_cache(maxsize=None)
+    def load_transfer_cost_df():
+        return pd.read_csv(skylark_root / "profiles" / "aws_transfer_costs.csv").set_index(["src", "dst"])
+
+    @staticmethod
     def get_transfer_cost(src_key, dst_key, premium_tier=True):
         assert premium_tier, "AWS transfer cost is only available for premium tier"
-        transfer_df = pd.read_csv(skylark_root / "profiles" / "aws_transfer_costs.csv").set_index(["src", "dst"])
+        transfer_df = AWSCloudProvider.load_transfer_cost_df()
 
         src_provider, src = src_key.split(":")
         dst_provider, dst = dst_key.split(":")
@@ -315,6 +322,7 @@ class AWSCloudProvider(CloudProvider):
         ebs_volume_size: int = 128,
         iam_name: str = "skylark_gateway",
     ) -> AWSServer:
+
         assert not region.startswith("aws:"), "Region should be AWS region"
         if name is None:
             name = f"skylark-aws-{str(uuid.uuid4()).replace('-', '')}"
@@ -378,7 +386,23 @@ class AWSCloudProvider(CloudProvider):
                 InstanceInitiatedShutdownBehavior="terminate",
             )
 
-        instance = retry_backoff(start_instance, initial_backoff=1)
+        backoff = 1
+        max_retries = 8
+        max_backoff = 8
+        for i in range(max_retries):
+            try:
+                instance = start_instance()
+                break
+            except botocore.exceptions.ClientError as e:
+                if i == max_retries - 1:
+                    raise e
+                elif "VcpuLimitExceeded" in str(e):
+                    raise exceptions.InsufficientVCPUException() from e
+                elif "Invalid IAM Instance Profile name" not in str(e):
+                    logger.warning(str(e))
+                time.sleep(backoff)
+                backoff = min(backoff * 2, max_backoff)
+
         assert len(instance) == 1, f"Expected 1 instance, got {len(instance)}"
         instance[0].wait_until_running()
         server = AWSServer(f"aws:{region}", instance[0].id)

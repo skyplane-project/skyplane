@@ -48,7 +48,11 @@ def main(args):
             fn_args.append((path, key))
     print(f"Found {len(fn_args)} files to upload")
     upload_fn = lambda x: obj_store_interface_src.upload_object(x[0], x[1])
-    do_parallel(upload_fn, fn_args, n=500, progress_bar=True, desc="Uploading", arg_fmt=lambda x: x[1])
+    do_parallel(upload_fn, fn_args, n=256, progress_bar=True, desc="Uploading", arg_fmt=lambda x: x[1])
+
+    # check all objects uploaded
+    objs = {obj.key: obj.size for obj in obj_store_interface_src.list_objects(args.key_prefix)}
+    assert all(x[1] in objs for x in fn_args)
 
 
 if __name__ == "__main__":
