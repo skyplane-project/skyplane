@@ -3,15 +3,14 @@ from typing import Iterator, List
 import botocore.exceptions
 from skylark import exceptions
 from skylark.compute.aws.aws_auth import AWSAuthentication
-from skylark.obj_store.object_store_interface import (NoSuchObjectException,
-                                                      ObjectStoreInterface,
-                                                      ObjectStoreObject)
+from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 from skylark.utils import logger
 
 
 class S3Object(ObjectStoreObject):
     def full_path(self):
         return f"s3://{self.bucket}/{self.key}"
+
 
 class S3Interface(ObjectStoreInterface):
     def __init__(self, aws_region, bucket_name):
