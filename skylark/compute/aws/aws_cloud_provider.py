@@ -280,8 +280,24 @@ class AWSCloudProvider(CloudProvider):
         iam_instance_profile_name = f"{name}_profile"
         iam = self.auth.get_boto3_client("iam", region)
         ec2 = self.auth.get_boto3_resource("ec2", region)
+        ec2_client = self.auth.get_boto3_client("ec2", region)
         vpc = self.get_vpc(region)
         assert vpc is not None, "No VPC found"
+
+        # get subnet list
+        def instance_class_supported(az):
+            # describe_instance_type_offerings
+            offerings_list = ec2_client.describe_instance_type_offerings(
+                LocationType="availability-zone",
+                Filters=[
+                    {"Name": "location", "Values": [az]},
+                ],
+            )
+            offerings = [o for o in offerings_list["InstanceTypeOfferings"] if o["InstanceType"] == instance_class]
+            return len(offerings) > 0
+
+        subnets = [subnet for subnet in vpc.subnets.all() if instance_class_supported(subnet.availability_zone)]
+        assert len(subnets) > 0, "No subnets found that support specified instance class"
 
         def check_iam_role():
             try:
@@ -303,7 +319,7 @@ class AWSCloudProvider(CloudProvider):
         iam.add_role_to_instance_profile(InstanceProfileName=iam_instance_profile_name, RoleName=iam_name)
         wait_for(check_instance_profile, timeout=60, interval=0.5)
 
-        def start_instance():
+        def start_instance(subnet_id: str):
             return ec2.create_instances(
                 ImageId="resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id",
                 InstanceType=instance_class,
@@ -326,6 +342,7 @@ class AWSCloudProvider(CloudProvider):
                     {
                         "DeviceIndex": 0,
                         "Groups": [self.get_security_group(region).group_id],
+                        "SubnetId": subnet_id,
                         "AssociatePublicIpAddress": True,
                         "DeleteOnTermination": True,
                     }
@@ -337,9 +354,10 @@ class AWSCloudProvider(CloudProvider):
         backoff = 1
         max_retries = 8
         max_backoff = 8
+        current_subnet_id = 0
         for i in range(max_retries):
             try:
-                instance = start_instance()
+                instance = start_instance(subnets[current_subnet_id].id)
                 break
             except botocore.exceptions.ClientError as e:
                 if i == max_retries - 1:
@@ -348,6 +366,9 @@ class AWSCloudProvider(CloudProvider):
                     raise exceptions.InsufficientVCPUException() from e
                 elif "Invalid IAM Instance Profile name" not in str(e):
                     logger.warning(str(e))
+                elif "InsufficientInstanceCapacity" in str(e):
+                    # try another subnet
+                    current_subnet_id = (current_subnet_id + 1) % len(subnets)
                 time.sleep(backoff)
                 backoff = min(backoff * 2, max_backoff)
 
