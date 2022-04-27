@@ -187,8 +187,8 @@ def copy_azure_local(src_account_name: str, src_container_name: str, src_key: st
     return copy_objstore_local(azure, src_key, dst)
 
 
-def copy_local_s3(src: Path, dst_bucket: str, dst_key: str, use_tls: bool = True):
-    s3 = S3Interface(None, dst_bucket, use_tls=use_tls)
+def copy_local_s3(src: Path, dst_bucket: str, dst_key: str):
+    s3 = S3Interface(None, dst_bucket)
     return copy_local_objstore(s3, src, dst_key)
 
 
@@ -203,10 +203,10 @@ def replicate_helper(
     n_chunks: int = 512,
     random: bool = False,
     # bucket options
-    source_bucket: str = typer.Option(None),
-    dest_bucket: str = typer.Option(None),
-    src_key_prefix: str = "/",
-    dest_key_prefix: str = "/",
+    source_bucket: Optional[str] = None,
+    dest_bucket: Optional[str] = None,
+    src_key_prefix: str = "",
+    dest_key_prefix: str = "",
     # gateway provisioning options
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
@@ -231,8 +231,8 @@ def replicate_helper(
             source_bucket=None,
             dest_region=topo.sink_region(),
             dest_bucket=None,
-            src_objs=[f"/{i}" for i in range(n_chunks)],
-            dest_objs=[f"/{i}" for i in range(n_chunks)],
+            src_objs=[str(i) for i in range(n_chunks)],
+            dest_objs=[str(i) for i in range(n_chunks)],
             random_chunk_size_mb=chunk_size_mb,
         )
     else:
@@ -241,17 +241,35 @@ def replicate_helper(
         if not src_objs:
             logger.error("Specified object does not exist.")
             raise exceptions.MissingObjectException()
-        dest_is_directory = False
-        if dest_key_prefix.endswith("/"):
-            dest_is_directory = True
+
+        # map objects to destination object paths
+        # todo isolate this logic and test independently
+        src_objs_job = []
+        dest_objs_job = []
+        # if only one object exists, replicate it
+        if len(src_objs) == 1 and src_objs[0].key == src_key_prefix:
+            src_objs_job.append(src_objs[0].key)
+            if dest_key_prefix.endswith("/"):
+                dest_objs_job.append(dest_key_prefix + src_objs[0].key.split("/")[-1])
+            else:
+                dest_objs_job.append(dest_key_prefix)
+        # multiple objects to replicate
+        else:
+            for src_obj in src_objs:
+                src_objs_job.append(src_obj.key)
+                src_path_no_prefix = src_obj.key.lstrip(src_key_prefix if src_key_prefix.endswith("/") else src_key_prefix + "/")
+                if dest_key_prefix.endswith("/") or len(dest_key_prefix) == 0:
+                    dest_objs_job.append(dest_key_prefix + src_path_no_prefix)
+                else:
+                    dest_objs_job.append(dest_key_prefix + "/" + src_path_no_prefix)
 
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=source_bucket,
             dest_region=topo.sink_region(),
             dest_bucket=dest_bucket,
-            src_objs=[obj.key for obj in src_objs],
-            dest_objs=[dest_key_prefix + obj.key if dest_is_directory else dest_key_prefix for obj in src_objs],
+            src_objs=src_objs_job,
+            dest_objs=dest_objs_job,
             obj_sizes={obj.key: obj.size for obj in src_objs},
         )
 
@@ -415,8 +433,7 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
     if force_init:
         typer.secho("    GCP credentials will be re-initialized", fg="red")
         config.gcp_project_id = None
-
-    if not Path(gcp_config_path).is_file():
+    elif not Path(gcp_config_path).is_file():
         typer.secho("    GCP region config missing! GCP will be reconfigured.", fg="red")
         config.gcp_project_id = None
 
