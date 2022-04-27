@@ -244,9 +244,13 @@ def replicate_helper(
         # make replication job
         src_objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
         dest_is_directory = False
+
+        # TODO: Don't hardcode
+        chunk_size_mb = 5
         if dest_key_prefix.endswith("/"):
             dest_is_directory = True
 
+        print("Create replication job", chunk_size_mb)
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=source_bucket,
@@ -255,6 +259,7 @@ def replicate_helper(
             src_objs=[obj.key for obj in src_objs],
             dest_objs=[dest_key_prefix + obj.key if dest_is_directory else dest_key_prefix for obj in src_objs],
             obj_sizes={obj.key: obj.size for obj in src_objs},
+            random_chunk_size_mb=chunk_size_mb,
         )
 
     rc = ReplicatorClient(

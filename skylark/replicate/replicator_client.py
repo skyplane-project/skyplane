@@ -218,12 +218,30 @@ class ReplicatorClient:
         # make list of chunks
         chunks = []
         obj_file_size_bytes = job.src_obj_sizes()
-        for idx, (src_obj, dest_obj) in enumerate(zip(job.src_objs, job.dest_objs)):
+        idx = 0
+        for (src_obj, dest_obj) in zip(job.src_objs, job.dest_objs):
             if obj_file_size_bytes:
-                file_size_bytes = obj_file_size_bytes[src_obj]
+                if job.random_chunk_size_mb: # split objects into sub-chunks
+                    chunk_size_bytes = int(job.random_chunk_size_mb*1e6)
+                    num_chunks = int(obj_file_size_bytes[src_obj]/chunk_size_bytes) + 1
+                    print(f"splitting file into {num_chunks} chunks")
+                    offset = 0
+                    for chunk in range(num_chunks):
+                        # size is min(chunk_size, remaining data)
+                        file_size_bytes = min(chunk_size_bytes, obj_file_size_bytes[src_obj] - offset)
+                        assert file_size_bytes > 0, f"File size <= 0 {file_size_bytes}"
+                        print("chunk", src_obj, "size", obj_file_size_bytes[src_obj], idx, offset, file_size_bytes)
+                        chunks.append(Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=offset, chunk_length_bytes=file_size_bytes))
+                        idx += 1
+                        offset += chunk_size_bytes
+                else: # transfer entire object
+                    print("using default object size")
+                    file_size_bytes = obj_file_size_bytes[src_obj]
+                    chunks.append(Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes))
             else:
                 file_size_bytes = job.random_chunk_size_mb * MB
-            chunks.append(Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes))
+                chunks.append(Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes))
+                idx += 1
 
         # partition chunks into roughly equal-sized batches (by bytes)
         # iteratively adds chunks to the batch with the smallest size
