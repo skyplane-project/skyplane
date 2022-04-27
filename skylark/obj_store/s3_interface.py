@@ -7,7 +7,9 @@ from awscrt.auth import AwsCredentialsProvider
 from awscrt.http import HttpHeaders, HttpRequest
 from awscrt.io import ClientBootstrap, DefaultHostResolver, EventLoopGroup
 from awscrt.s3 import S3Client, S3RequestTlsMode, S3RequestType
+from skylark import exceptions
 from skylark.compute.aws.aws_auth import AWSAuthentication
+from skylark.utils import logger
 
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
@@ -22,6 +24,9 @@ class S3Interface(ObjectStoreInterface):
         self.auth = AWSAuthentication()
         self.aws_region = self.infer_s3_region(bucket_name) if aws_region is None or aws_region == "infer" else aws_region
         self.bucket_name = bucket_name
+        if not self.bucket_exists():
+            logger.error("Specified bucket does not exist.")
+            raise exceptions.MissingBucketException()
         event_loop_group = EventLoopGroup(num_threads=num_threads, cpu_group=None)
         host_resolver = DefaultHostResolver(event_loop_group)
         bootstrap = ClientBootstrap(event_loop_group, host_resolver)
@@ -39,8 +44,12 @@ class S3Interface(ObjectStoreInterface):
 
     def infer_s3_region(self, bucket_name: str):
         s3_client = self.auth.get_boto3_client("s3")
-        region = s3_client.get_bucket_location(Bucket=bucket_name).get("LocationConstraint", "us-east-1")
-        return region if region is not None else "us-east-1"
+        try:
+            region = s3_client.get_bucket_location(Bucket=bucket_name).get("LocationConstraint", "us-east-1")
+            return region if region is not None else "us-east-1"
+        except Exception as e:
+            logger.error("Specified bucket does not exist.")
+            raise exceptions.MissingBucketException() from e
 
     def bucket_exists(self):
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
