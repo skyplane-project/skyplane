@@ -197,9 +197,7 @@ def cp(
 
 @app.command()
 def deprovision():
-    """
-    It deletes all the instances that were created by any copy commands like `skylark cp`.
-    """
+    """Deprovision all resources created by skylark."""
     deprovision_skylark_instances()
 
 
