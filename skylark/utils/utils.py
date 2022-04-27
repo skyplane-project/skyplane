@@ -57,7 +57,7 @@ def do_parallel(
     arg_fmt=None,
     hide_args=False,
     return_args=True,
-) -> Union[List[Tuple[T, R]], List[R]]:
+) -> List[Union[Tuple[T, R], R]]:
     """Run list of jobs in parallel with tqdm progress bar"""
     args_list = list(args_list)
     if len(args_list) == 0:

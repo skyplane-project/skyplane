@@ -137,9 +137,9 @@ class AWSCloudProvider(CloudProvider):
                     CidrBlock=f"10.0.{subnet_cidr_id}.0/24", VpcId=matching_vpc.id, AvailabilityZone=az
                 )
                 subnet.meta.client.modify_subnet_attribute(SubnetId=subnet.id, MapPublicIpOnLaunch={"Value": True})
-                return subnet
+                return subnet.id
 
-            subnets = do_parallel(make_subnet, self.auth.get_azs_in_region(region), return_args=False)
+            subnet_ids = do_parallel(make_subnet, self.auth.get_azs_in_region(region), return_args=False)
 
             # make internet gateway
             igw = ec2.create_internet_gateway()
@@ -147,8 +147,8 @@ class AWSCloudProvider(CloudProvider):
             public_route_table = list(matching_vpc.route_tables.all())[0]
             # add a default route, for Public Subnet, pointing to Internet Gateway
             ec2client.create_route(RouteTableId=public_route_table.id, DestinationCidrBlock="0.0.0.0/0", GatewayId=igw.id)
-            for subnet in subnets:
-                public_route_table.associate_with_subnet(SubnetId=subnet.id)
+            for subnet_id in subnet_ids:
+                public_route_table.associate_with_subnet(SubnetId=subnet_id)
 
             # make security group named "default"
             sg = ec2.create_security_group(GroupName="skylark", Description="Default security group for Skylark VPC", VpcId=matching_vpc.id)
