@@ -199,8 +199,8 @@ def copy_azure_local(src_account_name: str, src_container_name: str, src_key: st
     return copy_objstore_local(azure, src_key, dst)
 
 
-def copy_local_s3(src: Path, dst_bucket: str, dst_key: str, use_tls: bool = True):
-    s3 = S3Interface(None, dst_bucket, use_tls=use_tls)
+def copy_local_s3(src: Path, dst_bucket: str, dst_key: str):
+    s3 = S3Interface(None, dst_bucket)
     return copy_local_objstore(s3, src, dst_key)
 
 
