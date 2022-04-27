@@ -50,7 +50,6 @@ class S3Interface(ObjectStoreInterface):
         except Exception as e:
             logger.error("Specified bucket does not exist.")
             raise exceptions.MissingBucketException() from e
-        
 
     def bucket_exists(self):
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)

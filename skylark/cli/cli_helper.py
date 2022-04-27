@@ -50,26 +50,14 @@ def is_plausible_local_path(path: str):
 
 
 def parse_path(path: str):
-    if path.startswith("s3://"):
-        parsed = path[5:].split("/", 1)
-        if len(parsed) == 1:
-            bucket_name, key_name = parsed[0], "/"
-        else:
-            if parsed[1] == "":
-                bucket_name, key_name = parsed[0], "/"
-            else:
-                bucket_name, key_name = parsed[0], parsed[1]
-        return "s3", bucket_name, key_name
-    elif path.startswith("gs://"):
-        parsed = path[5:].split("/", 1)
-        if len(parsed) == 1:
-            bucket_name, key_name = parsed[0], "/"
-        else:
-            if parsed[1] == "":
-                bucket_name, key_name = parsed[0], "/"
-            else:
-                bucket_name, key_name = parsed[0], parsed[1]
-        return "gs", bucket_name, key_name
+    if path.startswith("s3://") or path.startswith("gs://"):
+        provider, parsed = path[:2], path[5:]
+        if len(parsed) == 0:
+            typer.secho(f"Invalid path: '{path}'", fg="red")
+            raise typer.Exit(code=1)
+        bucket, *keys = parsed.split("/", 1)
+        key = keys[0] if len(keys) > 0 else ""
+        return provider, bucket, key
     elif (path.startswith("https://") or path.startswith("http://")) and "blob.core.windows.net" in path:
         regex = re.compile(r"https?://([^/]+).blob.core.windows.net/([^/]+)/(.*)")
         match = regex.match(path)
