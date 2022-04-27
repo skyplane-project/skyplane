@@ -8,7 +8,6 @@ import resource
 import subprocess
 from pathlib import Path
 from shutil import copyfile
-from types import GetSetDescriptorType
 from typing import Dict, List
 from sys import platform
 from typing import Dict, List
@@ -17,6 +16,8 @@ from typing import Dict, List
 import boto3
 import typer
 from skylark import GB, MB
+from skylark import exceptions
+from skylark import gcp_config_path
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.gcp.gcp_auth import GCPAuthentication
@@ -50,10 +51,24 @@ def is_plausible_local_path(path: str):
 
 def parse_path(path: str):
     if path.startswith("s3://"):
-        bucket_name, key_name = path[5:].split("/", 1)
+        parsed = path[5:].split("/", 1)
+        if len(parsed) == 1:
+            bucket_name, key_name = parsed[0], "/"
+        else:
+            if parsed[1] == "":
+                bucket_name, key_name = parsed[0], "/"
+            else:
+                bucket_name, key_name = parsed[0], parsed[1]
         return "s3", bucket_name, key_name
     elif path.startswith("gs://"):
-        bucket_name, key_name = path[5:].split("/", 1)
+        parsed = path[5:].split("/", 1)
+        if len(parsed) == 1:
+            bucket_name, key_name = parsed[0], "/"
+        else:
+            if parsed[1] == "":
+                bucket_name, key_name = parsed[0], "/"
+            else:
+                bucket_name, key_name = parsed[0], parsed[1]
         return "gs", bucket_name, key_name
     elif (path.startswith("https://") or path.startswith("http://")) and "blob.core.windows.net" in path:
         regex = re.compile(r"https?://([^/]+).blob.core.windows.net/([^/]+)/(.*)")
@@ -144,12 +159,18 @@ def copy_objstore_local(object_interface: ObjectStoreInterface, src_key: str, ds
             obj_mapping[future] = src_obj
             return src_obj.size
 
+        obj_count = 0
         total_bytes = 0.0
         for obj in object_interface.list_objects(prefix=src_key):
             sub_key = obj.key[len(src_key) :]
             sub_key = sub_key.lstrip("/")
             dest_path = dst / sub_key
             total_bytes += _copy(obj, dest_path)
+            obj_count += 1
+
+        if not obj_count:
+            logger.error("Specified object does not exist.")
+            raise exceptions.MissingObjectException()
 
         # wait for all downloads to complete, displaying a progress bar
         with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Downloading") as pbar:
@@ -228,15 +249,22 @@ def replicate_helper(
         )
     else:
         # make replication job
-        objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
+        src_objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
+        if not src_objs:
+            logger.error("Specified object does not exist.")
+            raise exceptions.MissingObjectException()
+        dest_is_directory = False
+        if dest_key_prefix.endswith("/"):
+            dest_is_directory = True
+
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=source_bucket,
             dest_region=topo.sink_region(),
             dest_bucket=dest_bucket,
-            src_objs=[obj.key for obj in objs],
-            dest_objs=[dest_key_prefix + obj.key for obj in objs],
-            obj_sizes={obj.key: obj.size for obj in objs},
+            src_objs=[obj.key for obj in src_objs],
+            dest_objs=[dest_key_prefix + obj.key if dest_is_directory else dest_key_prefix for obj in src_objs],
+            obj_sizes={obj.key: obj.size for obj in src_objs},
         )
 
     rc = ReplicatorClient(
@@ -396,6 +424,10 @@ def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> Skylar
 def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkConfig:
     if force_init:
         typer.secho("    GCP credentials will be re-initialized", fg="red")
+        config.gcp_project_id = None
+
+    if not Path(gcp_config_path).is_file():
+        typer.secho("    GCP region config missing! GCP will be reconfigured.", fg="red")
         config.gcp_project_id = None
 
     if config.gcp_project_id is not None:
