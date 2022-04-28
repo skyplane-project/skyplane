@@ -281,20 +281,21 @@ def replicate_helper(
         gcp_instance_class=gcp_instance_class,
         gcp_use_premium_network=gcp_use_premium_network,
     )
+    typer.secho(f"Storing debug information for transfer in {rc.transfer_dir}", fg="yellow")
     try:
         rc.provision_gateways(reuse_gateways)
         for node, gw in rc.bound_nodes.items():
-            logger.info(f"Provisioned {node}: {gw.gateway_log_viewer_url}")
+            typer.secho(f"\tRealtime logs for {node.region}:{node.instance} at {gw.gateway_log_viewer_url}")
         job = rc.run_replication_plan(job)
         if random:
             total_bytes = n_chunks * chunk_size_mb * MB
         else:
             total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
-        logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
+        typer.secho(f"{total_bytes / GB:.2f}GByte replication job launched", fg="green")
         stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
     except KeyboardInterrupt:
         if not reuse_gateways:
-            logger.warning("Deprovisioning gateways then exiting...")
+            logger.fs.warning("Deprovisioning gateways then exiting...")
             rc.deprovision_gateways()
         os._exit(1)  # exit now
     if not reuse_gateways:
@@ -350,26 +351,23 @@ def deprovision_skylark_instances():
         return run
 
     if AWSAuthentication().enabled():
-        logger.debug("AWS authentication enabled, querying for instances")
         aws = AWSCloudProvider()
         for region in aws.region_list():
             query_jobs.append(catch_error(partial(aws.get_matching_instances, region)))
     if AzureAuthentication().enabled():
-        logger.debug("Azure authentication enabled, querying for instances")
         query_jobs.append(catch_error(lambda: AzureCloudProvider().get_matching_instances()))
     if GCPAuthentication().enabled():
-        logger.debug("GCP authentication enabled, querying for instances")
         query_jobs.append(catch_error(lambda: GCPCloudProvider().get_matching_instances()))
 
     # query in parallel
     for instance_list in do_parallel(
-        lambda f: f(), query_jobs, progress_bar=True, desc="Query instances", hide_args=True, n=-1, return_args=False
+        lambda f: f(), query_jobs, n=-1, return_args=False, spinner=True, desc="Querying clouds for instances"
     ):
         instances.extend(instance_list)
 
     if instances:
         typer.secho(f"Deprovisioning {len(instances)} instances", fg="yellow", bold=True)
-        do_parallel(lambda instance: instance.terminate_instance(), instances, progress_bar=True, desc="Deprovisioning")
+        do_parallel(lambda instance: instance.terminate_instance(), instances, desc="Deprovisioning", spinner=True, spinner_persist=True)
     else:
         typer.secho("No instances to deprovision, exiting...", fg="yellow", bold=True)
 

@@ -24,6 +24,7 @@ setup(
         "grpcio-status>=1.33.2",
         # client dependencies
         "click",
+        "halo",
         "pandas",
         "questionary",
         "typer",

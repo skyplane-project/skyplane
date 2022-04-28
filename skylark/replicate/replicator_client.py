@@ -9,6 +9,7 @@ import uuid
 
 from skylark.replicate.profiler import status_df_to_traceevent
 from skylark.utils import logger
+from halo import Halo
 from tqdm import tqdm
 import pandas as pd
 from skylark import GB, KB, MB, tmp_log_dir
@@ -47,6 +48,11 @@ class ReplicatorClient:
         self.gcp = GCPCloudProvider()
         self.bound_nodes: Dict[ReplicationTopologyGateway, Server] = {}
 
+        # logging
+        self.transfer_dir = tmp_log_dir / f"transfer_{datetime.now().isoformat()}"
+        self.transfer_dir.mkdir(exist_ok=True, parents=True)
+        logger.open_log_file(self.transfer_dir / "client.log")
+
     def provision_gateways(
         self, reuse_instances=False, log_dir: Optional[PathLike] = None, authorize_ssh_pub_key: Optional[PathLike] = None
     ):
@@ -78,8 +84,7 @@ class ReplicatorClient:
             jobs.append(self.gcp.create_ssh_key)
             jobs.append(self.gcp.configure_default_network)
             jobs.append(self.gcp.configure_default_firewall)
-        with Timer(f"Cloud SSH key initialization"):
-            do_parallel(lambda fn: fn(), jobs)
+        do_parallel(lambda fn: fn(), jobs, spinner=True, spinner_persist=True, desc="Initializing cloud keys")
 
         # reuse existing AWS instances
         if reuse_instances:
@@ -131,30 +136,33 @@ class ReplicatorClient:
             else:
                 current_gcp_instances = {}
 
-        with Timer("Provisioning instances and waiting to boot"):
-            # provision instances
-            def provision_gateway_instance(region: str) -> Server:
-                provider, subregion = region.split(":")
-                if provider == "aws":
-                    assert self.aws.auth.enabled()
-                    server = self.aws.provision_instance(subregion, self.aws_instance_class)
-                elif provider == "azure":
-                    assert self.azure.auth.enabled()
-                    server = self.azure.provision_instance(subregion, self.azure_instance_class)
-                elif provider == "gcp":
-                    assert self.gcp.auth.enabled()
-                    # todo specify network tier in ReplicationTopology
-                    server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
-                else:
-                    raise NotImplementedError(f"Unknown provider {provider}")
-                return server
+        # provision instances
+        def provision_gateway_instance(region: str) -> Server:
+            provider, subregion = region.split(":")
+            if provider == "aws":
+                assert self.aws.auth.enabled()
+                server = self.aws.provision_instance(subregion, self.aws_instance_class)
+            elif provider == "azure":
+                assert self.azure.auth.enabled()
+                server = self.azure.provision_instance(subregion, self.azure_instance_class)
+            elif provider == "gcp":
+                assert self.gcp.auth.enabled()
+                # todo specify network tier in ReplicationTopology
+                server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
+            else:
+                raise NotImplementedError(f"Unknown provider {provider}")
+            return server
 
-            results = do_parallel(
-                provision_gateway_instance, list(aws_regions_to_provision + azure_regions_to_provision + gcp_regions_to_provision)
-            )
-            instances_by_region = {
-                r: [instance for instance_region, instance in results if instance_region == r] for r in set(regions_to_provision)
-            }
+        results = do_parallel(
+            provision_gateway_instance,
+            list(aws_regions_to_provision + azure_regions_to_provision + gcp_regions_to_provision),
+            spinner=True,
+            spinner_persist=True,
+            desc="Provisioning gateway instances",
+        )
+        instances_by_region = {
+            r: [instance for instance_region, instance in results if instance_region == r] for r in set(regions_to_provision)
+        }
 
         # add existing instances
         if reuse_instances:
@@ -171,34 +179,34 @@ class ReplicatorClient:
                     instances_by_region[f"gcp:{r}"] = []
                 instances_by_region[f"gcp:{r}"].extend(ilist)
 
-        # setup instances
-        def setup(server: Server):
-            if log_dir:
-                server.init_log_files(log_dir)
-            if authorize_ssh_pub_key:
-                server.copy_public_key(authorize_ssh_pub_key)
-
-        do_parallel(setup, set(itertools.chain(*instances_by_region.values())), n=-1)
-
         # bind instances to nodes
         for node in self.topology.nodes:
             self.bound_nodes[node] = instances_by_region[node.region].pop()
 
-        with Timer("Install gateway package on instances"):
-            args = []
-            for node, server in self.bound_nodes.items():
-                args.append((server, {self.bound_nodes[n].public_ip(): v for n, v in self.topology.get_outgoing_paths(node).items()}))
-            do_parallel(lambda arg: arg[0].start_gateway(arg[1], gateway_docker_image=self.gateway_docker_image), args, n=-1)
+        # setup instances
+        def setup(args: Tuple[Server, Dict[str, int]]):
+            server, outgoing_ports = args
+            if log_dir:
+                server.init_log_files(log_dir)
+            if authorize_ssh_pub_key:
+                server.copy_public_key(authorize_ssh_pub_key)
+            server.start_gateway(outgoing_ports, gateway_docker_image=self.gateway_docker_image)
+
+        args = []
+        for node, server in self.bound_nodes.items():
+            args.append((server, {self.bound_nodes[n].public_ip(): v for n, v in self.topology.get_outgoing_paths(node).items()}))
+        do_parallel(setup, args, n=-1, spinner=True, spinner_persist=True, desc="Install gateway package on instances")
 
     def deprovision_gateways(self):
         def deprovision_gateway_instance(server: Server):
             if server.instance_state() == ServerState.RUNNING:
                 server.terminate_instance()
-                logger.warning(f"Deprovisioned {server.uuid()}")
+                logger.fs.warning(f"Deprovisioned {server.uuid()}")
 
         instances = self.bound_nodes.values()
-        logger.warning(f"Deprovisioning {len(instances)} instances")
-        do_parallel(deprovision_gateway_instance, instances, n=-1)
+        logger.fs.warning(f"Deprovisioning {len(instances)} instances")
+        do_parallel(deprovision_gateway_instance, instances, n=-1, spinner=True, spinner_persist=True, desc="Deprovisioning instances")
+        logger.fs.info("Deprovisioned instances")
 
     def run_replication_plan(self, job: ReplicationJob) -> ReplicationJob:
         assert job.source_region.split(":")[0] in [
@@ -212,40 +220,47 @@ class ReplicatorClient:
             "gcp",
         ], f"Only AWS, Azure, and GCP are supported, but got {job.dest_region}"
 
-        # pre-fetch instance IPs for all gateways
-        gateway_ips: Dict[Server, str] = {s: s.public_ip() for s in self.bound_nodes.values()}
+        with Halo(text="Preparing replication plan", spinner="dots") as spinner:
+            # pre-fetch instance IPs for all gateways
+            spinner.text = "Preparing replication plan, fetching instance IPs"
+            gateway_ips: Dict[Server, str] = {s: s.public_ip() for s in self.bound_nodes.values()}
 
-        # make list of chunks
-        chunks = []
-        obj_file_size_bytes = job.src_obj_sizes()
-        for idx, (src_obj, dest_obj) in enumerate(zip(job.src_objs, job.dest_objs)):
-            if obj_file_size_bytes:
-                file_size_bytes = obj_file_size_bytes[src_obj]
-            else:
-                file_size_bytes = job.random_chunk_size_mb * MB
-            chunks.append(Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes))
+            # make list of chunks
+            spinner.text = "Preparing replication plan, querying source object store for matching keys"
+            chunks = []
+            obj_file_size_bytes = job.src_obj_sizes()
+            for idx, (src_obj, dest_obj) in enumerate(zip(job.src_objs, job.dest_objs)):
+                if obj_file_size_bytes:
+                    file_size_bytes = obj_file_size_bytes[src_obj]
+                else:
+                    file_size_bytes = job.random_chunk_size_mb * MB
+                chunks.append(
+                    Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
+                )
 
-        # partition chunks into roughly equal-sized batches (by bytes)
-        # iteratively adds chunks to the batch with the smallest size
-        def partition(items: List[Chunk], n_batches: int) -> List[List[Chunk]]:
-            batches = [[] for _ in range(n_batches)]
-            items.sort(key=lambda c: c.chunk_length_bytes, reverse=True)
-            for item in items:
-                batch_sizes = [sum(b.chunk_length_bytes for b in bs) for bs in batches]
-                batches[batch_sizes.index(min(batch_sizes))].append(item)
-            return batches
+            # partition chunks into roughly equal-sized batches (by bytes)
+            # iteratively adds chunks to the batch with the smallest size
+            spinner.text = "Preparing replication plan, partitioning chunks into batches"
 
-        src_instances = [self.bound_nodes[n] for n in self.topology.source_instances()]
-        chunk_batches = partition(chunks, len(src_instances))
-        assert (len(chunk_batches) == (len(src_instances) - 1)) or (
-            len(chunk_batches) == len(src_instances)
-        ), f"{len(chunk_batches)} batches, expected {len(src_instances)}"
-        for batch_idx, batch in enumerate(chunk_batches):
-            logger.info(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")
+            def partition(items: List[Chunk], n_batches: int) -> List[List[Chunk]]:
+                batches = [[] for _ in range(n_batches)]
+                items.sort(key=lambda c: c.chunk_length_bytes, reverse=True)
+                for item in items:
+                    batch_sizes = [sum(b.chunk_length_bytes for b in bs) for bs in batches]
+                    batches[batch_sizes.index(min(batch_sizes))].append(item)
+                return batches
 
-        # make list of ChunkRequests
-        chunk_requests_sharded: Dict[int, List[ChunkRequest]] = {}
-        with Timer("Building chunk requests"):
+            src_instances = [self.bound_nodes[n] for n in self.topology.source_instances()]
+            chunk_batches = partition(chunks, len(src_instances))
+            assert (len(chunk_batches) == (len(src_instances) - 1)) or (
+                len(chunk_batches) == len(src_instances)
+            ), f"{len(chunk_batches)} batches, expected {len(src_instances)}"
+            for batch_idx, batch in enumerate(chunk_batches):
+                logger.fs.info(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")
+
+            # make list of ChunkRequests
+            spinner.text = "Preparing replication plan, building list of chunk requests"
+            chunk_requests_sharded: Dict[int, List[ChunkRequest]] = {}
             for batch_idx, batch in enumerate(chunk_batches):
                 chunk_requests_sharded[batch_idx] = []
                 for chunk in batch:
@@ -262,12 +277,13 @@ class ReplicatorClient:
                         )
                     )
 
-        with Timer("Dispatch chunk requests"):
             # send chunk requests to start gateways in parallel
+            spinner.text = "Preparing replication plan, dispatching chunk requests to source gateways"
+
             def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
                 hop_instance, chunk_requests = args
                 ip = gateway_ips[hop_instance]
-                logger.debug(f"Sending {len(chunk_requests)} chunk requests to {ip}")
+                logger.fs.debug(f"Sending {len(chunk_requests)} chunk requests to {ip}")
                 reply = retry_requests().post(f"http://{ip}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests])
                 if reply.status_code != 200:
                     raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
@@ -376,33 +392,34 @@ class ReplicatorClient:
                             time.sleep(0.01 if show_pbar else 0.25)
         # always run cleanup, even if there's an exception
         finally:
-            transfer_dir = tmp_log_dir / f"transfer_{datetime.now().isoformat()}"
-            transfer_dir.mkdir(exist_ok=True, parents=True)
-            if save_log:
-                (transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
-            if copy_gateway_logs:
+            with Halo(text="Cleaning up after transfer", spinner="dots") as spinner:
+                if save_log:
+                    spinner.text = "Cleaning up after transfer, saving job log"
+                    (self.transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
+                if copy_gateway_logs:
 
-                def copy_log(instance):
-                    logger.info(f"Copying gateway logs from {instance.uuid()}")
-                    instance.run_command("sudo docker logs -t skylark_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
-                    instance.download_file("/tmp/gateway.stdout", transfer_dir / f"gateway_{instance.uuid()}.stdout")
-                    instance.download_file("/tmp/gateway.stderr", transfer_dir / f"gateway_{instance.uuid()}.stderr")
+                    def copy_log(instance):
+                        instance.run_command("sudo docker logs -t skylark_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
+                        instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
+                        instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 
-                do_parallel(copy_log, self.bound_nodes.values(), n=-1)
-            if write_profile:
-                chunk_status_df = self.get_chunk_status_log_df()
-                (transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
-                traceevent = status_df_to_traceevent(chunk_status_df)
-                profile_out = transfer_dir / f"traceevent_{uuid.uuid4()}.json"
-                profile_out.parent.mkdir(parents=True, exist_ok=True)
-                profile_out.write_text(json.dumps(traceevent))
-                logger.debug(f"Wrote profile to {profile_out}, visualize using `about://tracing` in Chrome")
-            if cleanup_gateway:
+                    spinner.text = "Cleaning up after transfer, copying gateway logs from all nodes"
+                    do_parallel(copy_log, self.bound_nodes.values(), n=-1)
+                if write_profile:
+                    chunk_status_df = self.get_chunk_status_log_df()
+                    (self.transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
+                    traceevent = status_df_to_traceevent(chunk_status_df)
+                    profile_out = self.transfer_dir / f"traceevent_{uuid.uuid4()}.json"
+                    profile_out.parent.mkdir(parents=True, exist_ok=True)
+                    profile_out.write_text(json.dumps(traceevent))
+                    spinner.text = "Cleaning up after transfer, writing profile of transfer"
+                if cleanup_gateway:
 
-                def fn(s: Server):
-                    try:
-                        retry_requests().post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
-                    except:
-                        return  # ignore connection errors since server may be shutting down
+                    def fn(s: Server):
+                        try:
+                            retry_requests().post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
+                        except:
+                            return  # ignore connection errors since server may be shutting down
 
-                do_parallel(fn, self.bound_nodes.values(), n=-1)
+                    do_parallel(fn, self.bound_nodes.values(), n=-1)
+                    spinner.text = "Cleaning up after transfer, shutting down gateway servers"
