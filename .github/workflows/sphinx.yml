@@ -1,7 +1,11 @@
 name: Sphinx
-on: pull_request
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 jobs:
-  check:
+  build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -15,3 +19,10 @@ jobs:
     #   with:
     #     name: html-docs
     #     path: docs/build/html/
+    - name: Deploy
+      uses: peaceiris/actions-gh-pages@v3
+      if: github.ref == 'refs/heads/main'
+      with:
+        deploy_key: ${{ secrets.ACTIONS_DEPLOY_KEY }}
+        external_repository: skyplane-project/docs
+        publish_dir: docs/build/html

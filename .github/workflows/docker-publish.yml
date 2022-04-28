@@ -18,7 +18,7 @@ env:
 
 
 jobs:
-  dockerbuild:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
