@@ -5,7 +5,7 @@ on:
   pull_request:
     branches: [ main ]
 jobs:
-  sphinxbuild:
+  sphinxdeploy:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -19,14 +19,14 @@ jobs:
       with:
         docs-folder: "docs/"
         build-command: "sphinx-build -b html -d build/doctrees . build/html"
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v1
-      with:
-        name: html-docs
-        path: docs/build/html/
+    # - name: Upload artifacts
+    #   uses: actions/upload-artifact@v1
+    #   with:
+    #     name: html-docs
+    #     path: docs/build/html/
     - name: Deploy
       uses: peaceiris/actions-gh-pages@v3
-      if: github.ref == 'refs/heads/main'
+      # if: github.ref == 'refs/heads/main'
       with:
         deploy_key: ${{ secrets.ACTIONS_DEPLOY_KEY }}
         external_repository: skyplane-project/docs
