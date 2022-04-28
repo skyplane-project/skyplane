@@ -25,4 +25,4 @@ jobs:
       with:
         deploy_key: ${{ secrets.ACTIONS_DEPLOY_KEY }}
         external_repository: skyplane-project/docs
-        publish_dir: docs/build/html
+        # publish_dir: docs/build/html
