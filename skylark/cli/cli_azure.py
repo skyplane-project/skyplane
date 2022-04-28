@@ -71,7 +71,3 @@ def ssh(region: Optional[str] = None):
         proc.wait()
     else:
         typer.secho(f"No instance selected", fg="red")
-
-
-if __name__ == "__main__":
-    app()
