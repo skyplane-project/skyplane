@@ -21,14 +21,24 @@ import skylark.cli.cli_solver
 import skylark.cli.experiments
 import typer
 from skylark import GB, config_path, exceptions, print_header, skylark_root
-from skylark.cli.cli_helper import (check_ulimit, copy_azure_local,
-                                    copy_gcs_local, copy_local_azure,
-                                    copy_local_gcs, copy_local_local,
-                                    copy_local_s3, copy_s3_local,
-                                    deprovision_skylark_instances,
-                                    load_aws_config, load_azure_config,
-                                    load_gcp_config, ls_local, ls_objstore,
-                                    parse_path, replicate_helper)
+from skylark.cli.cli_helper import (
+    check_ulimit,
+    copy_azure_local,
+    copy_gcs_local,
+    copy_local_azure,
+    copy_local_gcs,
+    copy_local_local,
+    copy_local_s3,
+    copy_s3_local,
+    deprovision_skylark_instances,
+    load_aws_config,
+    load_azure_config,
+    load_gcp_config,
+    ls_local,
+    ls_objstore,
+    parse_path,
+    replicate_helper,
+)
 from skylark.config import SkylarkConfig
 from skylark.obj_store.object_store_interface import ObjectStoreInterface
 from skylark.replicate.replication_plan import ReplicationTopology
@@ -201,7 +211,7 @@ def init(reinit_azure: bool = False, reinit_gcp: bool = False):
     """
     It loads the configuration file, and if it doesn't exist, it creates a default one. Then it creates
     AWS, Azure, and GCP region list configurations.
-    
+
     :param reinit_azure: If true, will reinitialize the Azure region list and credentials
     :type reinit_azure: bool
     :param reinit_gcp: If true, will reinitialize the GCP region list and credentials

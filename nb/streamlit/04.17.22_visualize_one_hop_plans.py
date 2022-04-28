@@ -27,7 +27,7 @@ dest_region_input = st.sidebar.selectbox("Destination region", dest_regions)
 baseline_cost = solver.get_path_cost(src_region_select, dest_region_input)
 baseline_throughput = solver.get_path_throughput(src_region_select, dest_region_input)
 st.sidebar.write(f"Baseline throughput: {baseline_throughput / 2**30:.2f} Gb/s")
-st.sidebar.write(f"Baseline cost: ${baseline_cost:.2f}")
+st.sidebar.write(f"Baseline cost: ${baseline_cost:.4f}")
 
 costs = []
 for inter_region in inter_regions:
@@ -69,14 +69,21 @@ col1, col2, col3 = st.columns(3)
 col1.subheader("Direct")
 col1.write(f"{src_region_select} -> {dest_region_input}")
 col1.write(f"Throughput: {solver.get_path_throughput(src_region_select, dest_region_input) / 2**30:.4f} Gbps")
-col1.write(f"Cost: ${solver.get_path_cost(src_region_select, dest_region_input):.02f}")
+col1.write(f"Cost: ${solver.get_path_cost(src_region_select, dest_region_input):.04f}")
 
 col2.subheader("Hop 1")
 col2.write(f"{src_region_select} -> {inter_region_single}")
 col2.write(f"Throughput: {solver.get_path_throughput(src_region_select, inter_region_single) / 2**30:.4f} Gbps")
-col2.write(f"Cost: ${solver.get_path_cost(src_region_select, inter_region_single):.02f}")
+col2.write(f"Cost: ${solver.get_path_cost(src_region_select, inter_region_single):.04f}")
 
 col3.subheader("Hop 2")
 col3.write(f"{inter_region_single} -> {dest_region_input}")
 col3.write(f"Throughput: {solver.get_path_throughput(inter_region_single, dest_region_input) / 2**30:.4f} Gbps")
-col3.write(f"Cost: ${solver.get_path_cost(inter_region_single, dest_region_input):.02f}")
+col3.write(f"Cost: ${solver.get_path_cost(inter_region_single, dest_region_input):.04f}")
+
+col1.write(
+    f"One-hop throughput: {min(solver.get_path_throughput(src_region_select, inter_region_single), solver.get_path_throughput(inter_region_single, dest_region_input)) / 2**30:.4f} Gbps"
+)
+col1.write(
+    f"One-hop cost: ${solver.get_path_cost(src_region_select, inter_region_single) + solver.get_path_cost(inter_region_single, dest_region_input):.04f}"
+)
