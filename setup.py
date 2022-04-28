@@ -29,7 +29,7 @@ setup(
         "typer",
         # shared dependencies
         "cachetools",
-        "oslo.concurrency",
+        "ilock",
         "paramiko",
         "termcolor",
         "tqdm",
