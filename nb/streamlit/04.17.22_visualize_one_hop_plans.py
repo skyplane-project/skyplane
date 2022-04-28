@@ -81,5 +81,9 @@ col3.write(f"{inter_region_single} -> {dest_region_input}")
 col3.write(f"Throughput: {solver.get_path_throughput(inter_region_single, dest_region_input) / 2**30:.4f} Gbps")
 col3.write(f"Cost: ${solver.get_path_cost(inter_region_single, dest_region_input):.04f}")
 
-col1.write(f"One-hop throughput: {min(solver.get_path_throughput(src_region_select, inter_region_single), solver.get_path_throughput(inter_region_single, dest_region_input)) / 2**30:.4f} Gbps")
-col1.write(f"One-hop cost: ${solver.get_path_cost(src_region_select, inter_region_single) + solver.get_path_cost(inter_region_single, dest_region_input):.04f}")
+col1.write(
+    f"One-hop throughput: {min(solver.get_path_throughput(src_region_select, inter_region_single), solver.get_path_throughput(inter_region_single, dest_region_input)) / 2**30:.4f} Gbps"
+)
+col1.write(
+    f"One-hop cost: ${solver.get_path_cost(src_region_select, inter_region_single) + solver.get_path_cost(inter_region_single, dest_region_input):.04f}"
+)

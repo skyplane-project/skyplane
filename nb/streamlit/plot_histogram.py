@@ -62,8 +62,8 @@ col1, col2 = st.sidebar.columns(2)
 xmax = col1.slider("X-axis max", 1.0, 10.0, 5.0, 0.5)
 bins = col2.slider("Histogram Bins", 10, 100, 15, 5)
 col1, col2 = st.sidebar.columns(2)
-plot_width = col1.slider("Plot width", 1.0, 20.0, 8., 0.25)
-plot_height = col2.slider("Plot height", 1.0, 20.0, 3., 0.25)
+plot_width = col1.slider("Plot width", 1.0, 20.0, 8.0, 0.25)
+plot_height = col2.slider("Plot height", 1.0, 20.0, 3.0, 0.25)
 
 src_regions_choices = sorted(df["problem_src"].unique())
 dst_regions_choices = sorted(df["problem_dst"].unique())
@@ -86,8 +86,11 @@ label_map = {
     "gcp": "GCP",
 }
 
+
 def geomean(x):
     return np.exp(np.mean(np.log(x)))
+
+
 # plot rugplot w/ throughput speedup
 with plt.style.context(style):
     fig, axs = plt.subplots(3, 3, figsize=(12, 6))
@@ -107,7 +110,9 @@ with plt.style.context(style):
             # df_sub = pd.DataFrame(rows)
 
             # plot baseline data w/ legend label "Overcloud, no Overlay"
-            sns.distplot(df_sub["baseline_throughput_achieved_gbits"] / instance_limit, ax=ax, color= "#21272a", label="Overcloud without overlay")
+            sns.distplot(
+                df_sub["baseline_throughput_achieved_gbits"] / instance_limit, ax=ax, color="#21272a", label="Overcloud without overlay"
+            )
             sns.distplot(df_sub["throughput_achieved_gbits"] / instance_limit, ax=ax, color="#0f62fe", label="Overcloud")
             ax.set_xlabel("Throughput per VM (Gbps)")
 
@@ -117,7 +122,7 @@ with plt.style.context(style):
             elif src == "gcp":
                 # draw vertical line at 7 Gbps
                 ax.axvline(7, color="black", linestyle="--", linewidth=2)
-            
+
             # set x-axis min to 0
             ax.set_xlim(0, max(df_sub["throughput_achieved_gbits"] / instance_limit) * 1.05)
 
@@ -129,7 +134,6 @@ fig.subplots_adjust(wspace=0.2)
 st.pyplot(fig)
 fig.savefig(skylark_root / "data" / "figures" / "overlay_ablation.png", dpi=300, bbox_inches="tight")
 fig.savefig(skylark_root / "data" / "figures" / "overlay_ablation.pdf", dpi=300, bbox_inches="tight")
-
 
 
 # # plot 2D jointplot
@@ -261,7 +265,10 @@ if False:
                     if outliers is False:
                         df_group = df_group[df_group["throughput_speedup"] <= df_group.throughput_speedup.quantile(float(max_flier))]
                     max_speedup = (
-                        df_group.groupby(["problem_src", "problem_dst"])["throughput_speedup"].max().sort_values(ascending=False).clip(lower=1)
+                        df_group.groupby(["problem_src", "problem_dst"])["throughput_speedup"]
+                        .max()
+                        .sort_values(ascending=False)
+                        .clip(lower=1)
                     )
                     label = f"{thresh:.2f}x"
                     ax.boxplot(
