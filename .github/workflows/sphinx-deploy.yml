@@ -9,11 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - name: Cache pip dependencies
-      uses: actions/cache@v2
-      with:
-        path: ~/.cache/pip
-        key: ${{ hashFiles('setup.py') }}-pytype
     - name: Build HTML
       uses: ammaraskar/sphinx-action@0.4
       with:
@@ -30,4 +25,4 @@ jobs:
       with:
         deploy_key: ${{ secrets.ACTIONS_DEPLOY_KEY }}
         external_repository: skyplane-project/docs
-        # publish_dir: docs/build/html
+        publish_dir: docs/build/html
