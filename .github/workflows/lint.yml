@@ -37,7 +37,12 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ~/.cache/pip
-          key: ${{ hashFiles('setup.py') }}-pylint
+          key: ${{ hashFiles('setup.py') }}-pylint-pip
+      - name: Cache pip dependencies
+        uses: actions/cache@v2
+        with:
+          path: .pytype
+          key: ${{ hashFiles('setup.py') }}-pylint-build
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip

@@ -1,4 +1,4 @@
-name: Sphinx
+name: docs
 on:
   push:
     branches: [ main ]
