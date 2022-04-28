@@ -1,14 +1,16 @@
-from functools import partial
 import json
-import subprocess
+import socket
+from contextlib import closing
 from enum import Enum, auto
+from functools import partial
 from pathlib import Path
 from typing import Dict
-from skylark.utils import logger
+
+from skylark import config_path
 from skylark.compute.utils import make_dozzle_command, make_sysctl_tcp_tuning_command
+from skylark.utils import logger
 from skylark.utils.net import retry_requests
 from skylark.utils.utils import PathLike, Timer, retry_backoff, wait_for
-from skylark import config_path
 
 
 class ServerState(Enum):
@@ -143,9 +145,8 @@ class Server:
             except Exception:
                 return False
             if ip is not None:
-                cmd = ["nc", "-zvw1", str(ip), "22"]
-                ping_return = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                return ping_return.returncode == 0
+                with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+                    return sock.connect_ex((ip, 22)) == 0
             return False
 
         wait_for(is_up, timeout=timeout, interval=interval, desc=f"Waiting for {self.uuid()} to be ready")
