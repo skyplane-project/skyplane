@@ -8,7 +8,7 @@ import googleapiclient
 import paramiko
 from skylark.compute.gcp.gcp_auth import GCPAuthentication
 from skylark.utils import logger
-from oslo_concurrency import lockutils
+from ilock import ILock
 from skylark import key_root
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.cloud_providers import CloudProvider
@@ -170,13 +170,13 @@ class GCPCloudProvider(CloudProvider):
         """Configure default firewall to allow access from all ports from all IPs (if not exists)."""
         compute = self.auth.get_gcp_client()
 
-        @lockutils.synchronized(f"gcp_configure_default_firewall", external=True, lock_path="/tmp/skylark_locks")
         def create_firewall(body, update_firewall=False):
-            if update_firewall:
-                op = compute.firewalls().update(project=self.auth.project_id, firewall="default", body=fw_body).execute()
-            else:
-                op = compute.firewalls().insert(project=self.auth.project_id, body=fw_body).execute()
-            self.wait_for_operation_to_complete("global", op["name"])
+            with ILock(f"gcp_configure_default_firewall"):
+                if update_firewall:
+                    op = compute.firewalls().update(project=self.auth.project_id, firewall="default", body=fw_body).execute()
+                else:
+                    op = compute.firewalls().insert(project=self.auth.project_id, body=fw_body).execute()
+                self.wait_for_operation_to_complete("global", op["name"])
 
         try:
             current_firewall = compute.firewalls().get(project=self.auth.project_id, firewall="default").execute()
@@ -254,11 +254,7 @@ class GCPCloudProvider(CloudProvider):
                 }
             ],
             "serviceAccounts": [{"email": "default", "scopes": ["https://www.googleapis.com/auth/cloud-platform"]}],
-            "metadata": {
-                "items": [
-                    {"key": "ssh-keys", "value": f"{uname}:{pub_key}\n"},
-                ]
-            },
+            "metadata": {"items": [{"key": "ssh-keys", "value": f"{uname}:{pub_key}\n"}]},
         }
         result = compute.instances().insert(project=self.auth.project_id, zone=region, body=req_body).execute()
         self.wait_for_operation_to_complete(region, result["name"])

@@ -158,7 +158,3 @@ def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
         json.dumps(dict(transfer_size_gb=transfer_size_gb, transfer_duration_s=transfer_duration_s, gbps=gbps, total_runtime_s=t.elapsed)),
         fg="white",
     )
-
-
-if __name__ == "__main__":
-    app()
