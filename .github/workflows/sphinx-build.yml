@@ -5,15 +5,20 @@ on:
   pull_request:
     branches: [ main ]
 jobs:
-  build:
+  sphinxbuild:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
+    - name: Cache pip dependencies
+      uses: actions/cache@v2
+      with:
+        path: ~/.cache/pip
+        key: ${{ hashFiles('setup.py') }}-pytype
     - name: Build HTML
       uses: ammaraskar/sphinx-action@0.4
       with:
         docs-folder: "docs/"
-        build-command: "sphinx-build -b html -d docs/build/doctrees docs docs/build/html"
+        build-command: "sphinx-build -b html -d build/doctrees . build/html"
     - name: Upload artifacts
       uses: actions/upload-artifact@v1
       with:
