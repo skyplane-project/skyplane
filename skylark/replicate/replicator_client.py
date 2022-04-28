@@ -236,7 +236,6 @@ class ReplicatorClient:
                     # TODO: only do if num_chunks > 1
                     obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
                     upload_id = obj_store_interface.initiate_multipart_upload(dest_obj)
-                    print("initial upload", dest_obj, upload_id, job.dest_region, job.dest_bucket)
 
                     # add multipart upload request
                     self.multipart_upload_requests.append((job.dest_region, job.dest_bucket, upload_id, dest_obj))
@@ -247,7 +246,6 @@ class ReplicatorClient:
                         # size is min(chunk_size, remaining data)
                         file_size_bytes = min(chunk_size_bytes, obj_file_size_bytes[src_obj] - offset)
                         assert file_size_bytes > 0, f"File size <= 0 {file_size_bytes}"
-                        print("chunk", src_obj, "size", obj_file_size_bytes[src_obj], idx, offset, file_size_bytes)
                         chunks.append(Chunk(
                             src_key=src_obj, 
                             dest_key=dest_obj, 
@@ -457,9 +455,7 @@ class ReplicatorClient:
                 do_parallel(fn, self.bound_nodes.values(), n=-1)
 
             if multipart: 
-
-                print("Canceling uploads")
+                # Complete multi-part uploads
                 for region, bucket, upload_id, key in self.multipart_upload_requests:
                     obj_store_interface = ObjectStoreInterface.create(region, bucket)
                     obj_store_interface.complete_multipart_upload(key, upload_id)
-                    print(upload_id)
