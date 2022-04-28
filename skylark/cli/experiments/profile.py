@@ -210,7 +210,7 @@ def throughput_grid(
     groups = split_list(instance_pairs)
 
     # confirm experiment
-    experiment_tag_words = os.popen("bash scripts/utils/get_random_word_hash.sh").read().strip()
+    experiment_tag_words = os.popen("bash scripts/get_random_word_hash.sh").read().strip()
     timestamp = datetime.now(timezone.utc).strftime("%Y.%m.%d_%H.%M")
     experiment_tag = f"{timestamp}_{experiment_tag_words}_{iperf3_runtime}s_{iperf3_connections}c"
     data_dir = skylark_root / "data"
@@ -395,7 +395,7 @@ def latency_grid(
     random.shuffle(instance_pairs)
 
     # confirm experiment
-    experiment_tag_words = os.popen("bash scripts/utils/get_random_word_hash.sh").read().strip()
+    experiment_tag_words = os.popen("bash scripts/get_random_word_hash.sh").read().strip()
     timestamp = datetime.now(timezone.utc).strftime("%Y.%m.%d_%H.%M")
     experiment_tag = f"{timestamp}_{experiment_tag_words}"
     data_dir = skylark_root / "data"
