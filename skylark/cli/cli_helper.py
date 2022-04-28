@@ -292,7 +292,7 @@ def replicate_helper(
         else:
             total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
         typer.secho(f"{total_bytes / GB:.2f}GByte replication job launched", fg="green")
-        stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
+        stats = rc.monitor_transfer(job, show_spinner=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
     except KeyboardInterrupt:
         if not reuse_gateways:
             logger.fs.warning("Deprovisioning gateways then exiting...")

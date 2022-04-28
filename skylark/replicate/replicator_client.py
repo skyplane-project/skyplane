@@ -1,5 +1,4 @@
 from datetime import datetime
-import itertools
 from functools import partial
 import json
 import pickle
@@ -10,9 +9,8 @@ import uuid
 from skylark.replicate.profiler import status_df_to_traceevent
 from skylark.utils import logger
 from halo import Halo
-from tqdm import tqdm
 import pandas as pd
-from skylark import GB, KB, MB, tmp_log_dir
+from skylark import GB, MB, tmp_log_dir
 
 from skylark.benchmark.utils import refresh_instance_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
@@ -49,7 +47,7 @@ class ReplicatorClient:
         self.bound_nodes: Dict[ReplicationTopologyGateway, Server] = {}
 
         # logging
-        self.transfer_dir = tmp_log_dir / f"transfer_{datetime.now().isoformat()}"
+        self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
         self.transfer_dir.mkdir(exist_ok=True, parents=True)
         logger.open_log_file(self.transfer_dir / "client.log")
 
@@ -317,7 +315,7 @@ class ReplicatorClient:
     def monitor_transfer(
         self,
         job: ReplicationJob,
-        show_pbar=False,
+        show_spinner=False,
         log_interval_s: Optional[float] = None,
         time_limit_seconds: Optional[float] = None,
         cleanup_gateway: bool = True,
@@ -332,64 +330,71 @@ class ReplicatorClient:
         sinks = self.topology.sink_instances()
         sink_regions = set(s.region for s in sinks)
 
+        completed_chunk_ids = []
         try:
+            if show_spinner:
+                spinner = Halo(text="Transfer", spinner="dots")
+                spinner.start()
             with Timer() as t:
-                with tqdm(
-                    total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB, disable=not show_pbar
-                ) as pbar:
-                    log_fn = tqdm.write if show_pbar else logger.debug
-                    while True:
-                        log_df = self.get_chunk_status_log_df()
-                        if log_df.empty:
-                            logger.warning("No chunk status log entries yet")
-                            time.sleep(0.5)
-                            continue
+                while True:
+                    log_df = self.get_chunk_status_log_df()
+                    if log_df.empty:
+                        logger.warning("No chunk status log entries yet")
+                        time.sleep(0.5)
+                        continue
 
-                        is_complete_rec = (
-                            lambda row: row["state"] == ChunkState.upload_complete
-                            and row["instance"] in [s.instance for s in sinks]
-                            and row["region"] in [s.region for s in sinks]
-                        )
-                        sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
-                        completed_status = sink_status_df.groupby("chunk_id").apply(
-                            lambda x: set(x["region"].unique()) == set(sink_regions)
-                        )
-                        completed_chunk_ids = completed_status[completed_status].index
-                        completed_bytes = sum(
-                            [cr.chunk.chunk_length_bytes for cr in job.chunk_requests if cr.chunk.chunk_id in completed_chunk_ids]
-                        )
+                    is_complete_rec = (
+                        lambda row: row["state"] == ChunkState.upload_complete
+                        and row["instance"] in [s.instance for s in sinks]
+                        and row["region"] in [s.region for s in sinks]
+                    )
+                    sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
+                    completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region"].unique()) == set(sink_regions))
+                    completed_chunk_ids = completed_status[completed_status].index
+                    completed_bytes = sum(
+                        [cr.chunk.chunk_length_bytes for cr in job.chunk_requests if cr.chunk.chunk_id in completed_chunk_ids]
+                    )
 
-                        # update progress bar
-                        pbar.update(completed_bytes * 8 - pbar.n)
-                        total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
-                        throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
-                        pbar.set_description(f"Replication: average {throughput_gbits:.2f}Gbit/s")
+                    # update progress bar
+                    total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
+                    throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
 
-                        if len(completed_chunk_ids) == len(job.chunk_requests):
-                            return dict(
-                                completed_chunk_ids=completed_chunk_ids,
-                                total_runtime_s=total_runtime_s,
-                                throughput_gbits=throughput_gbits,
-                                monitor_status="completed",
-                            )
-                        elif time_limit_seconds is not None and t.elapsed > time_limit_seconds or t.elapsed > 600 and completed_bytes == 0:
-                            logger.error("Transfer timed out! Please retry.")
-                            return dict(
-                                completed_chunk_ids=completed_chunk_ids,
-                                total_runtime_s=total_runtime_s,
-                                throughput_gbits=throughput_gbits,
-                                monitor_status="timed_out",
-                            )
-                        else:
-                            current_time = datetime.now()
-                            if log_interval_s and (not last_log or (current_time - last_log).seconds > float(log_interval_s)):
-                                last_log = current_time
-                                gbits_remaining = (total_bytes - completed_bytes) * 8 / GB
-                                eta = int(gbits_remaining / throughput_gbits) if throughput_gbits > 0 else None
-                                log_fn(
-                                    f"{len(completed_chunk_ids)}/{len(job.chunk_requests)} chunks done ({completed_bytes / GB:.2f} / {total_bytes / GB:.2f}GB, {throughput_gbits:.2f}Gbit/s, ETA={str(eta) + 's' if eta is not None else 'unknown'})"
-                                )
-                            time.sleep(0.01 if show_pbar else 0.25)
+                    # make log line
+                    gbits_remaining = (total_bytes - completed_bytes) * 8 / GB
+                    eta = int(gbits_remaining / throughput_gbits) if throughput_gbits > 0 else None
+                    log_line = f"{len(completed_chunk_ids)}/{len(job.chunk_requests)} chunks done ({completed_bytes / GB:.2f} / {total_bytes / GB:.2f}GB, {throughput_gbits:.2f}Gbit/s, ETA={str(eta) + 's' if eta is not None else 'unknown'})"
+                    if show_spinner:
+                        spinner.text = f"Transferring {log_line}"
+
+                    if len(completed_chunk_ids) == len(job.chunk_requests):
+                        if show_spinner:
+                            spinner.success(f"Transfer complete ({log_line})")
+                        return dict(
+                            completed_chunk_ids=completed_chunk_ids,
+                            total_runtime_s=total_runtime_s,
+                            throughput_gbits=throughput_gbits,
+                            monitor_status="completed",
+                        )
+                    elif time_limit_seconds is not None and t.elapsed > time_limit_seconds or t.elapsed > 600 and completed_bytes == 0:
+                        if show_spinner:
+                            spinner.fail(f"Transfer timed out with no progress ({log_line})")
+                            logger.error(f"Please share debug logs from: {self.transfer_dir}")
+                        logger.fs.error("Transfer timed out! Please retry.")
+                        return dict(
+                            completed_chunk_ids=completed_chunk_ids,
+                            total_runtime_s=total_runtime_s,
+                            throughput_gbits=throughput_gbits,
+                            monitor_status="timed_out",
+                        )
+                    else:
+                        current_time = datetime.now()
+                        if log_interval_s and (not last_log or (current_time - last_log).seconds > float(log_interval_s)):
+                            last_log = current_time
+                            if show_spinner:  # log only to file
+                                logger.fs.info(log_line)
+                            else:
+                                logger.info(log_line)
+                        time.sleep(0.01 if show_spinner else 0.25)
         # always run cleanup, even if there's an exception
         finally:
             with Halo(text="Cleaning up after transfer", spinner="dots") as spinner:
