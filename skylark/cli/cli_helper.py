@@ -308,7 +308,9 @@ def replicate_helper(
         typer.echo(f"\n{json.dumps(out_json)}")
         os._exit(1)  # exit now
     if not reuse_gateways:
+        s = signal.signal(signal.SIGINT, signal.SIG_IGN)
         rc.deprovision_gateways()
+        signal.signal(signal.SIGINT, s)
     stats = stats if stats else {}
     stats["success"] = stats["monitor_status"] == "completed"
     out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
