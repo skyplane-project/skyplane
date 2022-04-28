@@ -32,7 +32,7 @@ class GatewayDaemon:
         self.chunk_store = ChunkStore(chunk_dir)
         self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store, max_pending_chunks=max_incoming_ports, use_tls=use_tls)
         self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, outgoing_ports=outgoing_ports, use_tls=use_tls)
-        self.obj_store_conn = GatewayObjStoreConn(chunk_store=self.chunk_store, max_conn=int(sum(outgoing_ports.values())))
+        self.obj_store_conn = GatewayObjStoreConn(chunk_store=self.chunk_store, max_conn=32)
 
         # Download thread pool
         self.dl_pool_semaphore = BoundedSemaphore(value=128)
