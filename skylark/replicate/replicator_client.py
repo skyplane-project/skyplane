@@ -237,11 +237,9 @@ class ReplicatorClient:
                     obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
                     upload_id = obj_store_interface.initiate_multipart_upload(dest_obj)
 
-                    # add multipart upload request
-                    self.multipart_upload_requests.append((job.dest_region, job.dest_bucket, upload_id, dest_obj))
-
                     offset = 0
                     part_num = 1
+                    parts = []
                     for chunk in range(num_chunks):
                         # size is min(chunk_size, remaining data)
                         file_size_bytes = min(chunk_size_bytes, obj_file_size_bytes[src_obj] - offset)
@@ -255,10 +253,22 @@ class ReplicatorClient:
                             part_number=part_num,
                             upload_id=upload_id
                         ))
+                        parts.append(part_num)
 
                         idx += 1
                         part_num += 1
                         offset += chunk_size_bytes
+
+                    # add multipart upload request
+                    self.multipart_upload_requests.append({
+                        "region": job.dest_region, 
+                        "bucket": job.dest_bucket, 
+                        "upload_id": upload_id, 
+                        "key": dest_obj,
+                        "parts": parts
+                    })
+
+
 
                 else: # transfer entire object
                     file_size_bytes = obj_file_size_bytes[src_obj]
@@ -456,6 +466,8 @@ class ReplicatorClient:
 
             if multipart: 
                 # Complete multi-part uploads
-                for region, bucket, upload_id, key in self.multipart_upload_requests:
-                    obj_store_interface = ObjectStoreInterface.create(region, bucket)
-                    obj_store_interface.complete_multipart_upload(key, upload_id)
+                for req in self.multipart_upload_requests:
+                    obj_store_interface = ObjectStoreInterface.create(req["region"], req["bucket"])
+                    succ = obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"], req["parts"])
+                    if not succ: 
+                        raise ValueError(f"Failed to complete upload {req['upload_id']}")

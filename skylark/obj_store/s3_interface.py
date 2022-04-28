@@ -143,7 +143,7 @@ class S3Interface(ObjectStoreInterface):
         )
         return response["UploadId"]
 
-    def complete_multipart_upload(self, dst_object_name, upload_id):
+    def complete_multipart_upload(self, dst_object_name, upload_id, parts):
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
 
         all_parts = []
@@ -155,33 +155,26 @@ class S3Interface(ObjectStoreInterface):
                 UploadId=upload_id, 
                 PartNumberMarker=len(all_parts)
             )
-            print(response)
             try:
-                parts = response["Parts"]
+                if len(response["Parts"]) == 0: 
+                    break
+                all_parts += response["Parts"]
             except Exception as e:
                 print(e)
                 break
-            if len(parts) == 0: 
-                break
-            all_parts += parts
-            print(dst_object_name, len(all_parts), all_parts[-1])
 
-        # TODO: Abort if number of parts doesn't match expected
-        if len(all_parts) == 0: 
-            print("Aborting")
+        if len(all_parts) != len(parts): 
+            # abort if number of parts doesn't match expected
+            logger.error(f"Parts length mismatch for {upload_id}: expected {len(parts)}, got {len(all_parts)}")
             response = s3_client.abort_multipart_upload(Bucket=self.bucket_name, Key=dst_object_name, UploadId=upload_id)
-            print(response)
-            return
-
-        logger.info(f"Parts {len(all_parts)}")
-        print({"Parts": [{"PartNumber": p["PartNumber"]} for p in all_parts]})
+            return False
 
         # sort by part-number 
         all_parts = sorted(all_parts, key=lambda d: d['PartNumber']) 
-        print(all_parts)
         response = s3_client.complete_multipart_upload(
                 UploadId=upload_id,
                 Bucket=self.bucket_name,
                 Key=dst_object_name,
                 MultipartUpload={"Parts": [{"PartNumber": p["PartNumber"], "ETag": p["ETag"]} for p in all_parts]}
         )
+        return True

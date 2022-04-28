@@ -207,7 +207,7 @@ def replicate_helper(
     dest_bucket: Optional[str] = None,
     src_key_prefix: str = "",
     dest_key_prefix: str = "",
-    max_chunk_size_mb: int = None,
+    max_chunk_size_mb: Optional[int] = None,
     # gateway provisioning options
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
@@ -297,7 +297,7 @@ def replicate_helper(
         else:
             total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
         logger.info(f"{total_bytes / GB:.2f}GByte replication job launched")
-        stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
+        stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds, multipart=max_chunk_size_mb is not None)
     except KeyboardInterrupt:
         if not reuse_gateways:
             logger.warning("Deprovisioning gateways then exiting...")
