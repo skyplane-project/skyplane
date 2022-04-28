@@ -207,7 +207,7 @@ def replicate_helper(
     dest_bucket: Optional[str] = None,
     src_key_prefix: str = "",
     dest_key_prefix: str = "",
-    obj_store_chunk_size_mb: int = 20,
+    max_chunk_size_mb: int = None,
     # gateway provisioning options
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
@@ -238,7 +238,7 @@ def replicate_helper(
         )
     else:
         # make replication job
-        chunk_size_mb = obj_store_chunk_size_mb
+        chunk_size_mb = max_chunk_size_mb 
         src_objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
         if not src_objs:
             logger.error("Specified object does not exist.")

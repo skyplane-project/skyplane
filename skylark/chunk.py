@@ -15,8 +15,8 @@ class Chunk:
     # multi-part upload/download info 
     file_offset_bytes: int
     chunk_length_bytes: int
-    part_number: int 
-    upload_id: str
+    part_number: int  = None
+    upload_id: str = None 
 
     def to_wire_header(self, n_chunks_left_on_socket):
         return WireProtocolHeader(
