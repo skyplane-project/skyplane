@@ -333,7 +333,7 @@ class ReplicatorClient:
         completed_chunk_ids = []
         try:
             if show_spinner:
-                spinner = Halo(text="Transfer", spinner="dots")
+                spinner = Halo(text="Transfer starting", spinner="dots")
                 spinner.start()
             with Timer() as t:
                 while True:
@@ -362,13 +362,13 @@ class ReplicatorClient:
                     # make log line
                     gbits_remaining = (total_bytes - completed_bytes) * 8 / GB
                     eta = int(gbits_remaining / throughput_gbits) if throughput_gbits > 0 else None
-                    log_line = f"{len(completed_chunk_ids)}/{len(job.chunk_requests)} chunks done ({completed_bytes / GB:.2f} / {total_bytes / GB:.2f}GB, {throughput_gbits:.2f}Gbit/s, ETA={str(eta) + 's' if eta is not None else 'unknown'})"
+                    log_line_detail = f"{len(completed_chunk_ids)}/{len(job.chunk_requests)} chunks done, {completed_bytes / GB:.2f}/{total_bytes / GB:.2f}GB, ETA={str(eta) + 's' if eta is not None else 'unknown'}"
+                    log_line = f"{completed_bytes / total_bytes * 100.:.1f}% at {throughput_gbits:.2f}Gbit/s ({log_line_detail})"
                     if show_spinner:
-                        spinner.text = f"Transferring {log_line}"
-
+                        spinner.text = f"Transfered {log_line}"
                     if len(completed_chunk_ids) == len(job.chunk_requests):
                         if show_spinner:
-                            spinner.success(f"Transfer complete ({log_line})")
+                            spinner.succeed(f"Transfer complete ({log_line})")
                         return dict(
                             completed_chunk_ids=completed_chunk_ids,
                             total_runtime_s=total_runtime_s,
@@ -378,8 +378,8 @@ class ReplicatorClient:
                     elif time_limit_seconds is not None and t.elapsed > time_limit_seconds or t.elapsed > 600 and completed_bytes == 0:
                         if show_spinner:
                             spinner.fail(f"Transfer timed out with no progress ({log_line})")
-                            logger.error(f"Please share debug logs from: {self.transfer_dir}")
                         logger.fs.error("Transfer timed out! Please retry.")
+                        logger.error(f"Please share debug logs from: {self.transfer_dir}")
                         return dict(
                             completed_chunk_ids=completed_chunk_ids,
                             total_runtime_s=total_runtime_s,
@@ -397,6 +397,8 @@ class ReplicatorClient:
                         time.sleep(0.01 if show_spinner else 0.25)
         # always run cleanup, even if there's an exception
         finally:
+            if show_spinner:
+                spinner.stop()
             with Halo(text="Cleaning up after transfer", spinner="dots") as spinner:
                 if save_log:
                     spinner.text = "Cleaning up after transfer, saving job log"
