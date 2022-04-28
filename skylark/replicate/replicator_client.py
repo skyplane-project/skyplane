@@ -331,10 +331,10 @@ class ReplicatorClient:
         sink_regions = set(s.region for s in sinks)
 
         completed_chunk_ids = []
+        if show_spinner:
+            spinner = Halo(text="Transfer starting", spinner="dots")
+            spinner.start()
         try:
-            if show_spinner:
-                spinner = Halo(text="Transfer starting", spinner="dots")
-                spinner.start()
             with Timer() as t:
                 while True:
                     log_df = self.get_chunk_status_log_df()
