@@ -1,4 +1,4 @@
-name: Sphinx build
+name: Sphinx
 on:
   push:
     branches: [ main ]
@@ -13,6 +13,7 @@ jobs:
       uses: ammaraskar/sphinx-action@0.4
       with:
         docs-folder: "docs/"
+        build-command: "sphinx-build -b html -d docs/build/doctrees docs docs/build/html"
     - name: Upload artifacts
       uses: actions/upload-artifact@v1
       with:
