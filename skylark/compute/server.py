@@ -236,6 +236,11 @@ class Server:
             self.upload_file(config_path, f"/tmp/{config_path.name}")
             docker_envs["SKYLARK_CONFIG"] = f"/pkg/data/{config_path.name}"
 
+        # fix issue 312, retry boto3 credential calls to instance metadata service
+        if self.provider == "aws":
+            docker_envs["AWS_METADATA_SERVICE_NUM_ATTEMPTS"] = "4"
+            docker_envs["AWS_METADATA_SERVICE_TIMEOUT"] = "10"
+
         # pull docker image and start container
         with Timer(f"{desc_prefix}: Docker pull"):
             retry_backoff(partial(self.pull_docker, gateway_docker_image), exception_class=RuntimeError)
