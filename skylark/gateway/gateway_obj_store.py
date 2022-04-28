@@ -82,7 +82,7 @@ class GatewayObjStoreConn:
                 logger.debug(f"[obj_store:{self.worker_id}] Start upload {chunk_req.chunk.chunk_id} to {bucket}, key {chunk_req.chunk.dest_key}")
 
                 obj_store_interface = self.get_obj_store_interface(region, bucket)
-                retry_backoff(partial(obj_store_interface.upload_object, fpath, chunk_req.chunk.dest_key), max_retries=4)
+                retry_backoff(partial(obj_store_interface.upload_object, fpath, chunk_req.chunk.dest_key, chunk_req.chunk.part_number, chunk_req.chunk.upload_id), max_retries=4)
                 chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id)
                 self.chunk_store.state_finish_upload(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
                 chunk_file_path.unlink()

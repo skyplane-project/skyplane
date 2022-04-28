@@ -49,6 +49,9 @@ class ReplicatorClient:
         self.gcp = GCPCloudProvider()
         self.bound_nodes: Dict[ReplicationTopologyGateway, Server] = {}
 
+        # upload requests 
+        self.multipart_upload_requests = []
+
     def provision_gateways(
         self, reuse_instances=False, log_dir: Optional[PathLike] = None, authorize_ssh_pub_key: Optional[PathLike] = None
     ):
@@ -228,13 +231,18 @@ class ReplicatorClient:
                     num_chunks = int(obj_file_size_bytes[src_obj]/chunk_size_bytes) + 1
                     print(f"splitting file into {num_chunks} chunks")
 
+                    # TODO: figure out what to do with size limits
+
                     # TODO: only do if num_chunks > 1
-                    print("initial upload", dest_obj)
                     obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
                     upload_id = obj_store_interface.initiate_multipart_upload(dest_obj)
+                    print("initial upload", dest_obj, upload_id, job.dest_region, job.dest_bucket)
+
+                    # add multipart upload request
+                    self.multipart_upload_requests.append((job.dest_region, job.dest_bucket, upload_id, dest_obj))
 
                     offset = 0
-                    part_num = 0
+                    part_num = 1
                     for chunk in range(num_chunks):
                         # size is min(chunk_size, remaining data)
                         file_size_bytes = min(chunk_size_bytes, obj_file_size_bytes[src_obj] - offset)
@@ -348,6 +356,7 @@ class ReplicatorClient:
         save_log: bool = True,
         write_profile: bool = True,
         copy_gateway_logs: bool = True,
+        multipart: bool = True, # multipart object uploads/downloads
     ) -> Optional[Dict]:
         assert job.chunk_requests is not None
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in job.chunk_requests])
@@ -446,3 +455,11 @@ class ReplicatorClient:
                         return  # ignore connection errors since server may be shutting down
 
                 do_parallel(fn, self.bound_nodes.values(), n=-1)
+
+            if multipart: 
+
+                print("Canceling uploads")
+                for region, bucket, upload_id, key in self.multipart_upload_requests:
+                    obj_store_interface = ObjectStoreInterface.create(region, bucket)
+                    obj_store_interface.complete_multipart_upload(key, upload_id)
+                    print(upload_id)
