@@ -12,7 +12,7 @@ RUN (echo 'net.ipv4.ip_local_port_range = 12000 65535' >> /etc/sysctl.conf) \
 
 # install apt packages
 RUN --mount=type=cache,target=/var/cache/apt apt update \
-    && apt-get install --no-install-recommends -y curl ca-certificates build-essential \
+    && apt-get install --no-install-recommends -y curl ca-certificates \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

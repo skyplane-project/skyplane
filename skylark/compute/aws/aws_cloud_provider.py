@@ -11,11 +11,11 @@ from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.utils import logger
 from skylark import key_root
 from skylark import exceptions
-from oslo_concurrency import lockutils
+from ilock import ILock
 from skylark import skylark_root
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.cloud_providers import CloudProvider
-from skylark.utils.utils import wait_for
+from skylark.utils.utils import do_parallel, wait_for
 
 try:
     import pandas as pd
@@ -100,10 +100,12 @@ class AWSCloudProvider(CloudProvider):
         # find matching valid VPC
         matching_vpc = None
         for vpc in vpcs:
+            subsets_azs = [subnet.availability_zone for subnet in vpc.subnets.all()]
             if (
                 vpc.cidr_block == "10.0.0.0/16"
                 and vpc.describe_attribute(Attribute="enableDnsSupport")["EnableDnsSupport"]
                 and vpc.describe_attribute(Attribute="enableDnsHostnames")["EnableDnsHostnames"]
+                and all(az in subsets_azs for az in self.auth.get_azs_in_region(region))
             ):
                 matching_vpc = vpc
                 # delete all other vpcs
@@ -128,9 +130,16 @@ class AWSCloudProvider(CloudProvider):
             matching_vpc.create_tags(Tags=[{"Key": "Name", "Value": vpc_name}])
             matching_vpc.wait_until_available()
 
-            # make subnet
-            subnet = ec2.create_subnet(CidrBlock="10.0.2.0/24", VpcId=matching_vpc.id)
-            subnet.meta.client.modify_subnet_attribute(SubnetId=subnet.id, MapPublicIpOnLaunch={"Value": True})
+            # make subnet for each AZ in region
+            def make_subnet(az):
+                subnet_cidr_id = ord(az[-1]) - ord("a")
+                subnet = self.auth.get_boto3_resource("ec2", region).create_subnet(
+                    CidrBlock=f"10.0.{subnet_cidr_id}.0/24", VpcId=matching_vpc.id, AvailabilityZone=az
+                )
+                subnet.meta.client.modify_subnet_attribute(SubnetId=subnet.id, MapPublicIpOnLaunch={"Value": True})
+                return subnet.id
+
+            subnet_ids = do_parallel(make_subnet, self.auth.get_azs_in_region(region), return_args=False)
 
             # make internet gateway
             igw = ec2.create_internet_gateway()
@@ -138,7 +147,8 @@ class AWSCloudProvider(CloudProvider):
             public_route_table = list(matching_vpc.route_tables.all())[0]
             # add a default route, for Public Subnet, pointing to Internet Gateway
             ec2client.create_route(RouteTableId=public_route_table.id, DestinationCidrBlock="0.0.0.0/0", GatewayId=igw.id)
-            public_route_table.associate_with_subnet(SubnetId=subnet.id)
+            for subnet_id in subnet_ids:
+                public_route_table.associate_with_subnet(SubnetId=subnet_id)
 
             # make security group named "default"
             sg = ec2.create_security_group(GroupName="skylark", Description="Default security group for Skylark VPC", VpcId=matching_vpc.id)
@@ -150,10 +160,6 @@ class AWSCloudProvider(CloudProvider):
         ec2 = self.auth.get_boto3_resource("ec2", region)
         ec2client = ec2.meta.client
         vpc = ec2.Vpc(vpcid)
-        # detach and delete all gateways associated with the vpc
-        for gw in vpc.internet_gateways.all():
-            vpc.detach_internet_gateway(InternetGatewayId=gw.id)
-            gw.delete()
         # delete all route table associations
         for rt in vpc.route_tables.all():
             for rta in rt.associations:
@@ -184,17 +190,17 @@ class AWSCloudProvider(CloudProvider):
             for interface in subnet.network_interfaces.all():
                 interface.delete()
             subnet.delete()
+        # detach and delete all gateways associated with the vpc
+        for gw in vpc.internet_gateways.all():
+            vpc.detach_internet_gateway(InternetGatewayId=gw.id)
+            gw.delete()
         # finally, delete the vpc
         ec2client.delete_vpc(VpcId=vpcid)
 
     def create_iam(self, iam_name: str = "skylark_gateway", attach_policy_arn: Optional[str] = None):
         """Create IAM role if it doesn't exist and grant managed role if given."""
-
-        @lockutils.synchronized(f"aws_create_iam_{iam_name}", external=True, lock_path="/tmp/skylark_locks")
-        def fn():
-            iam = self.auth.get_boto3_client("iam")
-
-            # create IAM role
+        iam = self.auth.get_boto3_client("iam")
+        with ILock(f"aws_create_iam_{iam_name}"):
             try:
                 iam.get_role(RoleName=iam_name)
             except iam.exceptions.NoSuchEntityException:
@@ -206,13 +212,9 @@ class AWSCloudProvider(CloudProvider):
             if attach_policy_arn:
                 iam.attach_role_policy(RoleName=iam_name, PolicyArn=attach_policy_arn)
 
-        return fn()
-
     def add_ip_to_security_group(self, aws_region: str):
         """Add IP to security group. If security group ID is None, use group named skylark (create if not exists)."""
-
-        @lockutils.synchronized(f"aws_add_ip_to_security_group_{aws_region}", external=True, lock_path="/tmp/skylark_locks")
-        def fn():
+        with ILock(f"aws_add_ip_to_security_group_{aws_region}"):
             self.make_vpc(aws_region)
             sg = self.get_security_group(aws_region)
             try:
@@ -223,8 +225,6 @@ class AWSCloudProvider(CloudProvider):
                 if not str(e).endswith("already exists"):
                     raise e
 
-        return fn()
-
     def ensure_keyfile_exists(self, aws_region, prefix=key_root / "aws"):
         ec2 = self.auth.get_boto3_resource("ec2", aws_region)
         ec2_client = self.auth.get_boto3_client("ec2", aws_region)
@@ -232,24 +232,21 @@ class AWSCloudProvider(CloudProvider):
         key_name = f"skylark-{aws_region}"
         local_key_file = prefix / f"{key_name}.pem"
 
-        @lockutils.synchronized(f"aws_keyfile_lock_{aws_region}", external=True, lock_path="/tmp/skylark_locks")
-        def create_keyfile():
-            if not local_key_file.exists():
-                local_key_file.parent.mkdir(parents=True, exist_ok=True)
-                if key_name in set(p["KeyName"] for p in ec2_client.describe_key_pairs()["KeyPairs"]):
-                    logger.warning(f"Deleting key {key_name} in region {aws_region}")
-                    ec2_client.delete_key_pair(KeyName=key_name)
-                key_pair = ec2.create_key_pair(KeyName=f"skylark-{aws_region}", KeyType="rsa")
-                with local_key_file.open("w") as f:
-                    key_str = key_pair.key_material
-                    if not key_str.endswith("\n"):
-                        key_str += "\n"
-                    f.write(key_str)
-                os.chmod(local_key_file, 0o600)
-                logger.info(f"Created key file {local_key_file}")
-
         if not local_key_file.exists():
-            create_keyfile()
+            with ILock(f"aws_keyfile_lock_{aws_region}"):
+                if not local_key_file.exists():  # double check due to lock
+                    local_key_file.parent.mkdir(parents=True, exist_ok=True)
+                    if key_name in set(p["KeyName"] for p in ec2_client.describe_key_pairs()["KeyPairs"]):
+                        logger.warning(f"Deleting key {key_name} in region {aws_region}")
+                        ec2_client.delete_key_pair(KeyName=key_name)
+                    key_pair = ec2.create_key_pair(KeyName=f"skylark-{aws_region}", KeyType="rsa")
+                    with local_key_file.open("w") as f:
+                        key_str = key_pair.key_material
+                        if not key_str.endswith("\n"):
+                            key_str += "\n"
+                        f.write(key_str)
+                    os.chmod(local_key_file, 0o600)
+                    logger.info(f"Created key file {local_key_file}")
 
         return local_key_file
 
@@ -270,10 +267,24 @@ class AWSCloudProvider(CloudProvider):
         iam_instance_profile_name = f"{name}_profile"
         iam = self.auth.get_boto3_client("iam", region)
         ec2 = self.auth.get_boto3_resource("ec2", region)
+        ec2_client = self.auth.get_boto3_client("ec2", region)
         vpc = self.get_vpc(region)
         assert vpc is not None, "No VPC found"
-        subnets = list(vpc.subnets.all())
-        assert len(subnets) > 0, "No subnets found"
+
+        # get subnet list
+        def instance_class_supported(az):
+            # describe_instance_type_offerings
+            offerings_list = ec2_client.describe_instance_type_offerings(
+                LocationType="availability-zone",
+                Filters=[
+                    {"Name": "location", "Values": [az]},
+                ],
+            )
+            offerings = [o for o in offerings_list["InstanceTypeOfferings"] if o["InstanceType"] == instance_class]
+            return len(offerings) > 0
+
+        subnets = [subnet for subnet in vpc.subnets.all() if instance_class_supported(subnet.availability_zone)]
+        assert len(subnets) > 0, "No subnets found that support specified instance class"
 
         def check_iam_role():
             try:
@@ -295,7 +306,7 @@ class AWSCloudProvider(CloudProvider):
         iam.add_role_to_instance_profile(InstanceProfileName=iam_instance_profile_name, RoleName=iam_name)
         wait_for(check_instance_profile, timeout=60, interval=0.5)
 
-        def start_instance():
+        def start_instance(subnet_id: str):
             return ec2.create_instances(
                 ImageId="resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id",
                 InstanceType=instance_class,
@@ -318,7 +329,7 @@ class AWSCloudProvider(CloudProvider):
                     {
                         "DeviceIndex": 0,
                         "Groups": [self.get_security_group(region).group_id],
-                        "SubnetId": subnets[0].id,
+                        "SubnetId": subnet_id,
                         "AssociatePublicIpAddress": True,
                         "DeleteOnTermination": True,
                     }
@@ -330,9 +341,10 @@ class AWSCloudProvider(CloudProvider):
         backoff = 1
         max_retries = 8
         max_backoff = 8
+        current_subnet_id = 0
         for i in range(max_retries):
             try:
-                instance = start_instance()
+                instance = start_instance(subnets[current_subnet_id].id)
                 break
             except botocore.exceptions.ClientError as e:
                 if i == max_retries - 1:
@@ -341,6 +353,9 @@ class AWSCloudProvider(CloudProvider):
                     raise exceptions.InsufficientVCPUException() from e
                 elif "Invalid IAM Instance Profile name" not in str(e):
                     logger.warning(str(e))
+                elif "InsufficientInstanceCapacity" in str(e):
+                    # try another subnet
+                    current_subnet_id = (current_subnet_id + 1) % len(subnets)
                 time.sleep(backoff)
                 backoff = min(backoff * 2, max_backoff)
 

@@ -21,7 +21,7 @@ class ObjStoreRequest:
 
 
 class GatewayObjStoreConn:
-    def __init__(self, chunk_store: ChunkStore, max_conn=32):
+    def __init__(self, chunk_store: ChunkStore, max_conn=1):
         self.chunk_store = chunk_store
         self.n_processes = max_conn
         self.processes = []
