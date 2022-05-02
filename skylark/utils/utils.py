@@ -57,8 +57,13 @@ def do_parallel(
     arg_fmt=None,
     hide_args=False,
     return_args=True,
+    spinner=False,
+    spinner_persist=False,
 ) -> List[Union[Tuple[T, R], R]]:
     """Run list of jobs in parallel with tqdm progress bar"""
+    if spinner:  # check to avoid importing on gateway
+        from halo import Halo
+
     args_list = list(args_list)
     if len(args_list) == 0:
         return []
@@ -76,22 +81,34 @@ def do_parallel(
             logger.error(f"Error running {func.__name__} with args {arg_fmt(args)}: {e}")
             raise e
 
+    output = None
     results = []
-    with tqdm(total=len(args_list), leave=leave_pbar, desc=desc, disable=not progress_bar) as pbar:
-        with ThreadPoolExecutor(max_workers=n) as executor:
-            future_list = [executor.submit(wrapped_fn, args) for args in args_list]
-            for future in as_completed(future_list):
-                args, result = future.result()
-                results.append((args, result))
-                if not hide_args:
-                    pbar.set_description(f"{desc} ({str(arg_fmt(args))})" if desc else str(arg_fmt(args)))
-                else:
-                    pbar.set_description(desc)
-                pbar.update()
-        if return_args:
-            return results
-        else:
-            return [result for _, result in results]
+    if spinner:
+        spinner_obj = Halo(f"{desc} ({len(results)}/{len(args_list)})", spinner="dots")
+        spinner_obj.start()
+    with Timer() as t:
+        with tqdm(total=len(args_list), leave=leave_pbar, desc=desc, disable=not progress_bar) as pbar:
+            with ThreadPoolExecutor(max_workers=n) as executor:
+                future_list = [executor.submit(wrapped_fn, args) for args in args_list]
+                for future in as_completed(future_list):
+                    args, result = future.result()
+                    results.append((args, result))
+                    if not hide_args:
+                        pbar.set_description(f"{desc} ({str(arg_fmt(args))})" if desc else str(arg_fmt(args)))
+                    else:
+                        pbar.set_description(desc)
+                    if spinner:
+                        spinner_obj.text = f"{desc} ({len(results)}/{len(args_list)})"
+                    pbar.update()
+            if return_args:
+                output = results
+            else:
+                output = [result for _, result in results]
+    if spinner and spinner_persist:
+        spinner_obj.succeed(f"{desc} ({len(output)}/{len(args_list)}) in {t.elapsed:.2f}s")
+    elif spinner:
+        spinner_obj.stop()
+    return output
 
 
 def retry_backoff(

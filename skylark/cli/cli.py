@@ -147,11 +147,11 @@ def cp(
 
         # Set up replication topology
         if solve:
+            # todo cache this for the later replicate_helper call
             objs = list(src_client.list_objects(path_src))
             if not objs:
                 logger.error("Specified object does not exist.")
                 raise exceptions.MissingObjectException()
-
             total_gbyte_to_transfer = sum([obj.size for obj in objs]) / GB
 
             # build problem and solve
