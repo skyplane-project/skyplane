@@ -1,16 +1,4 @@
-"""
-CLI for the Skylark object store.
-
-Usage mostly matches the aws-cli command line tool:
-`skylark [command] [subcommand] [flags] [args]`
-
-Current support:
-* `skylark ls /local/path`
-* `skylark ls s3://bucket/path`
-* `skylark cp /local/path /local/path`
-* `skylark cp /local/path s3://bucket/path`
-* `skylark cp s3://bucket/path /local/path`
-"""
+"""CLI for the Skylark object store"""
 
 from pathlib import Path
 
@@ -164,11 +152,11 @@ def cp(
 
         # Set up replication topology
         if solve:
+            # todo cache this for the later replicate_helper call
             objs = list(src_client.list_objects(path_src))
             if not objs:
                 logger.error("Specified object does not exist.")
                 raise exceptions.MissingObjectException()
-
             total_gbyte_to_transfer = sum([obj.size for obj in objs]) / GB
 
             # build problem and solve

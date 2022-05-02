@@ -24,17 +24,19 @@ version = "0.1.0"
 # -- General configuration
 
 extensions = [
-    "myst_nb",
-    "sphinx_autodoc_typehints",
+    # "myst_nb",
     "sphinx_copybutton",
     "sphinx.ext.autodoc",
+    "sphinx.ext.coverage",
     "sphinx.ext.autosummary",
     "sphinx.ext.doctest",
     "sphinx.ext.duration",
     "sphinx.ext.intersphinx",
     "sphinx.ext.mathjax",
-    "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
+    "sphinx.ext.napoleon",
+    "sphinx_autodoc_typehints",
+    "myst_parser",
     # 'matplotlib.sphinxext.plot_directive',
 ]
 
@@ -46,9 +48,18 @@ intersphinx_disabled_domains = ["std"]
 
 templates_path = ["_templates"]
 
-# md support
-extensions = ["myst_parser"]
-source_suffix = [".rst", ".md"]
+# autodoc
+autoclass_content = "both"  # include both class docstring and __init__
+autodoc_default_options = {
+    # Make sure that any autodoc declarations show the right members
+    "members": True,
+    "inherited-members": True,
+    "private-members": True,
+    "show-inheritance": True,
+}
+autosummary_generate = True  # Make _autosummary files and include them
+napoleon_numpy_docstring = False  # Force consistency, leave only Google
+napoleon_use_rtype = False  # More legible
 
 # -- Options for HTML output
 
