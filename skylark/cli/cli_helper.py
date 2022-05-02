@@ -74,7 +74,7 @@ def parse_path(path: str):
     elif is_plausible_local_path(path):
         return "local", None, path
 
-    return ValueError(f"Parse error {path}")
+    raise ValueError(f"Parse error {path}")
 
 
 # skylark ls implementation
