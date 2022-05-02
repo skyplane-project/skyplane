@@ -8,6 +8,7 @@ import skylark.cli.cli_gcp
 import skylark.cli.cli_solver
 import skylark.cli.experiments
 import typer
+from halo import Halo
 from skylark import GB, config_path, exceptions, print_header, skylark_root
 from skylark.cli.cli_helper import (
     check_ulimit,
@@ -32,7 +33,6 @@ from skylark.obj_store.object_store_interface import ObjectStoreInterface
 from skylark.replicate.replication_plan import ReplicationTopology
 from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP
 from skylark.utils import logger
-from skylark.utils.utils import Timer
 
 app = typer.Typer(name="skylark")
 app.add_typer(skylark.cli.experiments.app, name="experiments")
@@ -163,7 +163,7 @@ def cp(
                 gbyte_to_transfer=total_gbyte_to_transfer,
                 instance_limit=max_instances,
             )
-            with Timer("Solve throughput problem"):
+            with Halo(text="Solving...", spinner="dots"):
                 solution = tput.solve_min_cost(
                     problem,
                     solver=ThroughputSolverILP.choose_solver(),
