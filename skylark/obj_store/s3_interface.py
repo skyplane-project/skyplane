@@ -115,19 +115,16 @@ class S3Interface(ObjectStoreInterface):
         logger.info(f"Upload {src_file_path}, {dst_object_name}, {part_number}, {upload_id}, {self.bucket_name}")
         logger.info(f"id {upload_id}")
         dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
-        #dst_object_name = "/" + dst_object_name if dst_object_name[0] != "/" else dst_object_name
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
 
-        upload_id = upload_id.strip()
-
         if upload_id:
             s3_client.upload_part(
-                Body=open(src_file_path, "rb"),#src_file_path, 
+                Body=open(src_file_path, "rb"),
                 Key=dst_object_name,
                 Bucket=self.bucket_name, 
                 PartNumber=part_number,
-                UploadId=upload_id
+                UploadId=upload_id.strip() # TODO: figure out why whitespace gets added
             )
         else:
             s3_client.upload_file(src_file_path, self.bucket_name, dst_object_name, Config=TransferConfig(use_threads=False))
@@ -155,13 +152,17 @@ class S3Interface(ObjectStoreInterface):
                 UploadId=upload_id, 
                 PartNumberMarker=len(all_parts)
             )
-            try:
+            if "Parts" not in response: 
+                #logger.error(f"Invalid response {response}")
+                #return False
+                break
+            else:
                 if len(response["Parts"]) == 0: 
                     break
                 all_parts += response["Parts"]
-            except Exception as e:
-                print(e)
-                break
+            #except Exception as e:
+            #    logger.error(f"Error retrieving parts {str(e)}")
+            #    return False
 
         if len(all_parts) != len(parts): 
             # abort if number of parts doesn't match expected

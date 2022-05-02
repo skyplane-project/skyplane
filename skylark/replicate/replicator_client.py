@@ -221,6 +221,7 @@ class ReplicatorClient:
         gateway_ips: Dict[Server, str] = {s: s.public_ip() for s in self.bound_nodes.values()}
 
         # make list of chunks
+        # TODO: parallelize for large numbers of objects
         chunks = []
         obj_file_size_bytes = job.src_obj_sizes()
         idx = 0
@@ -229,13 +230,13 @@ class ReplicatorClient:
                 if job.random_chunk_size_mb: # split objects into sub-chunks
                     chunk_size_bytes = int(job.random_chunk_size_mb*1e6)
                     num_chunks = int(obj_file_size_bytes[src_obj]/chunk_size_bytes) + 1
-                    print(f"splitting file into {num_chunks} chunks")
 
-                    # TODO: figure out what to do with size limits
-
+                    # TODO: figure out what to do on # part limits per object 
                     # TODO: only do if num_chunks > 1
+                    # TODO: potentially do this in a seperate thread, and/or after chunks sent 
                     obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
                     upload_id = obj_store_interface.initiate_multipart_upload(dest_obj)
+                    logger.info(f"Initiated multipart upload for {dest_obj} with {num_chunks} parts.")
 
                     offset = 0
                     part_num = 1
@@ -364,7 +365,7 @@ class ReplicatorClient:
         save_log: bool = True,
         write_profile: bool = True,
         copy_gateway_logs: bool = True,
-        multipart: bool = True, # multipart object uploads/downloads
+        multipart: bool = False, # multipart object uploads/downloads
     ) -> Optional[Dict]:
         assert job.chunk_requests is not None
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in job.chunk_requests])
@@ -466,8 +467,12 @@ class ReplicatorClient:
 
             if multipart: 
                 # Complete multi-part uploads
-                for req in self.multipart_upload_requests:
+                #for req in tqdm(self.multipart_upload_requests):
+
+                def complete_upload(req):
                     obj_store_interface = ObjectStoreInterface.create(req["region"], req["bucket"])
                     succ = obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"], req["parts"])
                     if not succ: 
                         raise ValueError(f"Failed to complete upload {req['upload_id']}")
+
+                do_parallel(complete_upload, self.multipart_upload_requests)
