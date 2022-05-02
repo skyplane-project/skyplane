@@ -151,7 +151,15 @@ class AWSCloudProvider(CloudProvider):
                 public_route_table.associate_with_subnet(SubnetId=subnet_id)
 
             # make security group named "skylark"
-            sg = ec2.create_security_group(GroupName="skylark", Description="Default security group for Skylark VPC", VpcId=matching_vpc.id)
+            tagSpecifications=[
+                {
+                    'Tags': [
+                        {
+                            'skyplane': 'true',}
+                    ]
+                },
+            ]
+            sg = ec2.create_security_group(GroupName="skylark", Description="Default security group for Skylark VPC", VpcId=matching_vpc.id, TagSpecifications=tagSpecifications)
         return matching_vpc
 
     def delete_vpc(self, region: str, vpcid: str):
