@@ -3,7 +3,7 @@ import os
 import time
 import uuid
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import googleapiclient
 import paramiko
@@ -200,19 +200,6 @@ class GCPCloudProvider(CloudProvider):
             logger.warning(f"[GCP] Updating firewall, current rules do not match")
             create_firewall(fw_body, update_firewall=True)
             logger.debug(f"[GCP] Updated firewall")
-
-    def add_ip_to_security_group(self, gcp_region: str, ip: str = "None"):
-        """Add IP to security group. If security group ID is None, use group named skylark (create if not exists)."""
-        raise NotImplementedError("GCP does not yet support adding IPs to security groups")
-
-    def remove_ip_from_security_group(self, gcp_region: str, ip: str = "None"):
-        """Remove IP from security group. If security group ID is None, return."""
-        raise NotImplementedError("GCP does not yet support removing IPs from security groups")
-
-    def clear_security_group(self, gcp_region: str, vpc_name="skylark"):
-        """Clears security group, and allows ssh and dozzle if activated"""
-        logger.warn(f"Clearing the Security Group will interefere with the VPC affecting cuncurrent transfers.")
-        raise NotImplementedError("GCP does not yet support clearing security groups")
 
     def get_operation_state(self, zone, operation_name):
         compute = self.auth.get_gcp_client()

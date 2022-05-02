@@ -67,7 +67,7 @@ def provision(
     jobs.append(partial(aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
     if aws_regions_to_provision:
         for r in set(aws_regions_to_provision):
-            jobs.append(partial(aws.add_ip_to_security_group, r))
+            jobs.append(partial(aws.make_vpc, r))
             jobs.append(partial(aws.ensure_keyfile_exists, r))
     if azure_regions_to_provision:
         jobs.append(azure.create_ssh_key)

@@ -14,7 +14,7 @@ def util_grid_throughput(
     throughput_grid: Path = typer.Option(skylark_root / "profiles" / "throughput.csv", help="Throughput grid file"),
 ):
     solver = ThroughputSolver(throughput_grid)
-    print(solver.get_path_throughput(src, dest, src_tier, dest_tier) / 2 ** 30)
+    print(solver.get_path_throughput(src, dest, src_tier, dest_tier) / 2**30)
 
 
 def util_grid_cost(

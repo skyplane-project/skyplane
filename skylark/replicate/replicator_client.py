@@ -74,7 +74,7 @@ class ReplicatorClient:
         jobs = []
         jobs.append(partial(self.aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
         for r in set(aws_regions_to_provision):
-            jobs.append(partial(self.aws.add_ip_to_security_group, r.split(":")[1]))
+            jobs.append(partial(self.aws.make_vpc, r.split(":")[1]))
             jobs.append(partial(self.aws.ensure_keyfile_exists, r.split(":")[1]))
         if azure_regions_to_provision:
             jobs.append(self.azure.create_ssh_key)
@@ -189,12 +189,14 @@ class ReplicatorClient:
             self.temp_nodes.remove(instance)
 
         # Firewall rules
-        with Halo(text='Applying firewall rules', spinner='dots'):
+        with Halo(text="Applying firewall rules", spinner="dots"):
+            jobs = []
             public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.nodes]
             for r in set(aws_regions_to_provision):
                 r = r.split(":")[1]
                 for _ip in public_ips:
                     jobs.append(partial(self.aws.add_ip_to_security_group, r, _ip))
+            # todo add firewall rules for Azure and GCP
             do_parallel(lambda fn: fn(), jobs)
 
         # setup instances
@@ -219,13 +221,15 @@ class ReplicatorClient:
                 logger.fs.warning(f"Deprovisioned {server.uuid()}")
 
         # Clear IPs from security groups
+        jobs = []
         public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.nodes]
         for r in set(aws_regions_to_provision):
             r = r.split(":")[1]
             for _ip in public_ips:
                 jobs.append(partial(self.aws.remove_ip_from_security_group, r, _ip))
-        with Timer(f"Deleting firewall rules"):
-            do_parallel(lambda fn: fn(), jobs)
+        # todo remove firewall rules for Azure and GCP
+        do_parallel(lambda fn: fn(), jobs)
+        
         # Terminate instances
         instances = self.bound_nodes.values()
         logger.fs.warning(f"Deprovisioning {len(instances)} instances")
