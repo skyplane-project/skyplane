@@ -272,8 +272,7 @@ class AWSCloudProvider(CloudProvider):
 
     def clear_security_group(self, aws_region: str, vpc_name="skylark"):
         """Clears security group, and allows ssh and dozzle if activated"""
-        logger.warn(f"Clearing the Security Group will interefere with the VPC
-                affecting cuncurrent transfers.")
+        logger.warn(f"Clearing the Security Group will interefere with the VPC affecting cuncurrent transfers.")
 
         @lockutils.synchronized(f"aws_clear_security_group_{aws_region}", external=True, lock_path="/tmp/skylark_locks")
         def fn():

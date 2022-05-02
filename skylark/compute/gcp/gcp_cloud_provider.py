@@ -211,8 +211,7 @@ class GCPCloudProvider(CloudProvider):
 
     def clear_security_group(self, gcp_region: str, vpc_name="skylark"):
         """Clears security group, and allows ssh and dozzle if activated"""
-        logger.warn(f"Clearing the Security Group will interefere with the VPC
-                affecting cuncurrent transfers.")
+        logger.warn(f"Clearing the Security Group will interefere with the VPC affecting cuncurrent transfers.")
         raise NotImplementedError("GCP does not yet support clearing security groups")
 
     def get_operation_state(self, zone, operation_name):

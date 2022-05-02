@@ -310,8 +310,7 @@ class AzureCloudProvider(CloudProvider):
 
     def clear_security_group(self, azure_region: str, vpc_name="skylark"):
         """Clears security group, and allows ssh and dozzle if activated"""
-        logger.warn(f"Clearing the Security Group will interefere with the VPC
-                affecting cuncurrent transfers.")
+        logger.warn(f"Clearing the Security Group will interefere with the VPC affecting cuncurrent transfers.")
         raise NotImplementedError("Azure does not yet support clearing security groups")
 
     # This code, along with some code in azure_server.py, is based on
