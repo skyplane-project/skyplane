@@ -237,8 +237,30 @@ class AWSCloudProvider(CloudProvider):
 
         return fn()
 
+    def remove_ip_from_security_group(self, aws_region: str, ip: str = "None"):
+        """Remove IP from security group. If security group ID is None, return."""
+
+        @lockutils.synchronized(f"remove_ip_from_security_group{aws_region}", external=True, lock_path="/tmp/skylark_locks")
+        def fn():
+            if ip == "None":
+                # The default fallback if we don't have list of ips. We do nothing then.
+                return 
+            elif ip:
+                # Remove instance IP from security group
+                sg = self.get_security_group(aws_region)
+                try:
+                    sg.revoke_ingress(
+                        IpPermissions= [{"IpProtocol": "tcp", "FromPort": 12000, "ToPort": 65535, "IpRanges": [{"CidrIp": ip + "/32"}]}]
+                    )
+                except botocore.exceptions.ClientError as e:
+                    raise e
+
+        return fn()
+
     def clear_security_group(self, aws_region: str, vpc_name="skylark"):
         """Clears security group, and allows ssh and dozzle if activated"""
+        logger.warn(f"Clearing the Security Group will interefere with the VPC
+                affecting cuncurrent transfers.")
 
         @lockutils.synchronized(f"aws_clear_security_group_{aws_region}", external=True, lock_path="/tmp/skylark_locks")
         def fn():

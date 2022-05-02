@@ -189,7 +189,6 @@ class ReplicatorClient:
         public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.nodes]
         for r in set(aws_regions_to_provision):
             r = r.split(":")[1]
-            jobs.append(partial(self.aws.clear_security_group, r))
             for _ip in public_ips:
                 jobs.append(partial(self.aws.add_ip_to_security_group, r, _ip))
         with Timer(f"Adding firewall rules"):
@@ -202,11 +201,20 @@ class ReplicatorClient:
             do_parallel(lambda arg: arg[0].start_gateway(arg[1], gateway_docker_image=self.gateway_docker_image), args, n=-1)
 
     def deprovision_gateways(self):
+        # This is a good place to tear down Security Groups and the instance since this is invoked by CLI too.
         def deprovision_gateway_instance(server: Server):
             if server.instance_state() == ServerState.RUNNING:
                 server.terminate_instance()
                 logger.warning(f"Deprovisioned {server.uuid()}")
-
+        # Clear IPs from security groups
+        public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.nodes]
+        for r in set(aws_regions_to_provision):
+            r = r.split(":")[1]
+            for _ip in public_ips:
+                jobs.append(partial(self.aws.remove_ip_from_security_group, r, _ip))
+        with Timer(f"Deleting firewall rules"):
+            do_parallel(lambda fn: fn(), jobs)
+        # Terminate instances
         instances = self.bound_nodes.values()
         logger.warning(f"Deprovisioning {len(instances)} instances")
         do_parallel(deprovision_gateway_instance, instances, n=-1)
