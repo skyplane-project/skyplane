@@ -72,13 +72,6 @@ For cloud-to-cloud transfers, once ``skylark`` provisions all gateway VMs, trans
 
 .. todo add gif of transfer bar here
 
-What is Skyplane doing under the hood?
---------------------------------------
-.. todo add architecture page
-
-Check out the :doc:`usage` section for further information, including
-how to :ref:`installation` the project.
-
 
 Contents
 --------
@@ -91,7 +84,7 @@ Contents
    build_guide
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 2
    :caption: API documentation
 
-   skylark
+   skylark_cli

@@ -1,16 +1,4 @@
-"""
-CLI for the Skylark object store.
-
-Usage mostly matches the aws-cli command line tool:
-`skylark [command] [subcommand] [flags] [args]`
-
-Current support:
-* `skylark ls /local/path`
-* `skylark ls s3://bucket/path`
-* `skylark cp /local/path /local/path`
-* `skylark cp /local/path s3://bucket/path`
-* `skylark cp s3://bucket/path /local/path`
-"""
+"""CLI for the Skylark object store"""
 
 from pathlib import Path
 
