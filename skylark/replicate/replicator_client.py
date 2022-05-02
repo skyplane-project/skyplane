@@ -46,6 +46,7 @@ class ReplicatorClient:
         self.azure = AzureCloudProvider()
         self.gcp = GCPCloudProvider()
         self.bound_nodes: Dict[ReplicationTopologyGateway, Server] = {}
+        self.temp_nodes: List[Server] = []  # saving nodes that are not yet bound so they can be deprovisioned later
 
     def provision_gateways(
         self, reuse_instances=False, log_dir: Optional[PathLike] = None, authorize_ssh_pub_key: Optional[PathLike] = None
@@ -147,6 +148,7 @@ class ReplicatorClient:
                     server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
                 else:
                     raise NotImplementedError(f"Unknown provider {provider}")
+                self.temp_nodes.append(server)
                 return server
 
             results = do_parallel(
@@ -162,14 +164,17 @@ class ReplicatorClient:
                 if f"aws:{r}" not in instances_by_region:
                     instances_by_region[f"aws:{r}"] = []
                 instances_by_region[f"aws:{r}"].extend(ilist)
+                self.temp_nodes.extend(ilist)
             for r, ilist in current_azure_instances.items():
                 if f"azure:{r}" not in instances_by_region:
                     instances_by_region[f"azure:{r}"] = []
                 instances_by_region[f"azure:{r}"].extend(ilist)
+                self.temp_nodes.extend(ilist)
             for r, ilist in current_gcp_instances.items():
                 if f"gcp:{r}" not in instances_by_region:
                     instances_by_region[f"gcp:{r}"] = []
                 instances_by_region[f"gcp:{r}"].extend(ilist)
+                self.temp_nodes.extend(ilist)
 
         # setup instances
         def setup(server: Server):
@@ -182,7 +187,9 @@ class ReplicatorClient:
 
         # bind instances to nodes
         for node in self.topology.nodes:
-            self.bound_nodes[node] = instances_by_region[node.region].pop()
+            instance = instances_by_region[node.region].pop()
+            self.bound_nodes[node] = instance
+            self.temp_nodes.remove(instance)
 
         with Timer("Install gateway package on instances"):
             args = []
@@ -199,6 +206,10 @@ class ReplicatorClient:
         instances = self.bound_nodes.values()
         logger.warning(f"Deprovisioning {len(instances)} instances")
         do_parallel(deprovision_gateway_instance, instances, n=-1)
+        if self.temp_nodes:
+            logger.warning(f"Deprovisioning {len(self.temp_nodes)} temporary instances")
+            do_parallel(deprovision_gateway_instance, self.temp_nodes, n=-1)
+            self.temp_nodes = []
 
     def run_replication_plan(self, job: ReplicationJob) -> ReplicationJob:
         assert job.source_region.split(":")[0] in [
