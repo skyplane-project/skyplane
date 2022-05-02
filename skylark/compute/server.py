@@ -224,8 +224,7 @@ class Server:
 
         # increase TCP connections, enable BBR optionally and raise file limits
         check_stderr(self.run_command(make_sysctl_tcp_tuning_command(cc="bbr" if use_bbr else "cubic")))
-        with Timer("Install docker"):
-            retry_backoff(self.install_docker, exception_class=RuntimeError)
+        retry_backoff(self.install_docker, exception_class=RuntimeError)
 
         # start log viewer
         self.run_command(make_dozzle_command(log_viewer_port))
@@ -242,9 +241,10 @@ class Server:
             docker_envs["AWS_METADATA_SERVICE_TIMEOUT"] = "10"
 
         # pull docker image and start container
-        with Timer(f"{desc_prefix}: Docker pull"):
+        with Timer() as t:
             retry_backoff(partial(self.pull_docker, gateway_docker_image), exception_class=RuntimeError)
-        logger.debug(f"{desc_prefix}: Starting gateway container")
+        logger.fs.debug(f"{desc_prefix} docker pull in {t.elapsed}")
+        logger.fs.debug(f"{desc_prefix}: Starting gateway container")
         docker_run_flags = f"-d --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024}"
         docker_run_flags += " --mount type=tmpfs,dst=/skylark,tmpfs-size=$(($(free -b  | head -n2 | tail -n1 | awk '{print $2}')/2))"
         docker_run_flags += f" -v /tmp/{config_path.name}:/pkg/data/{config_path.name}"
@@ -252,7 +252,7 @@ class Server:
         gateway_daemon_cmd = f"python -u /pkg/skylark/gateway/gateway_daemon.py --chunk-dir /skylark/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skylark_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = self.run_command(docker_launch_cmd)
-        logger.debug(desc_prefix + f": Gateway started {start_out.strip()}")
+        logger.fs.debug(desc_prefix + f": Gateway started {start_out.strip()}")
         assert not start_err.strip(), f"Error starting gateway: {start_err.strip()}"
 
         # load URLs
