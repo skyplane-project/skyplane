@@ -154,8 +154,7 @@ class AWSCloudProvider(CloudProvider):
             tagSpecifications=[
                 {
                     'Tags': [
-                        {
-                            'skyplane': 'true',}
+                        {"Key": "skylark", "Value": "true"}
                     ]
                 },
             ]

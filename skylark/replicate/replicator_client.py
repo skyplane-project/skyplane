@@ -206,6 +206,7 @@ class ReplicatorClient:
             if server.instance_state() == ServerState.RUNNING:
                 server.terminate_instance()
                 logger.warning(f"Deprovisioned {server.uuid()}")
+
         # Clear IPs from security groups
         public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.nodes]
         for r in set(aws_regions_to_provision):
