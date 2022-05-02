@@ -294,7 +294,7 @@ def replicate_helper(
     try:
         rc.provision_gateways(reuse_gateways)
         for node, gw in rc.bound_nodes.items():
-            typer.secho(f"\tRealtime logs for {node.region}:{node.instance} at {gw.gateway_log_viewer_url}")
+            typer.secho(f"    Realtime logs for {node.region}:{node.instance} at {gw.gateway_log_viewer_url}")
         job = rc.run_replication_plan(job)
         if random:
             total_bytes = n_chunks * chunk_size_mb * MB
