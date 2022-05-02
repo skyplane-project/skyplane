@@ -213,7 +213,14 @@ class ReplicatorClient:
         do_parallel(deprovision_gateway_instance, instances, n=-1, spinner=True, spinner_persist=True, desc="Deprovisioning instances")
         if self.temp_nodes:
             logger.fs.warning(f"Deprovisioning {len(self.temp_nodes)} temporary instances")
-            do_parallel(deprovision_gateway_instance, self.temp_nodes, n=-1, spinner=True, spinner_persist=False, desc="Deprovisioning partially allocated instances")
+            do_parallel(
+                deprovision_gateway_instance,
+                self.temp_nodes,
+                n=-1,
+                spinner=True,
+                spinner_persist=False,
+                desc="Deprovisioning partially allocated instances",
+            )
             self.temp_nodes = []
         logger.fs.info("Deprovisioned instances")
 
