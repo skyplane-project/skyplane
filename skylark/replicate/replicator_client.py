@@ -502,50 +502,6 @@ class ReplicatorClient:
                         time.sleep(0.01 if show_spinner else 0.25)
         # always run cleanup, even if there's an exception
         finally:
-<<<<<<< HEAD
-            transfer_dir = tmp_log_dir / f"transfer_{datetime.now().isoformat()}"
-            transfer_dir.mkdir(exist_ok=True, parents=True)
-            if save_log:
-                (transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
-            if copy_gateway_logs:
-
-                def copy_log(instance):
-                    logger.info(f"Copying gateway logs from {instance.uuid()}")
-                    instance.run_command("sudo docker logs -t skylark_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
-                    instance.download_file("/tmp/gateway.stdout", transfer_dir / f"gateway_{instance.uuid()}.stdout")
-                    instance.download_file("/tmp/gateway.stderr", transfer_dir / f"gateway_{instance.uuid()}.stderr")
-
-                do_parallel(copy_log, self.bound_nodes.values(), n=-1)
-            if write_profile:
-                chunk_status_df = self.get_chunk_status_log_df()
-                (transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
-                traceevent = status_df_to_traceevent(chunk_status_df)
-                profile_out = transfer_dir / f"traceevent_{uuid.uuid4()}.json"
-                profile_out.parent.mkdir(parents=True, exist_ok=True)
-                profile_out.write_text(json.dumps(traceevent))
-                logger.debug(f"Wrote profile to {profile_out}, visualize using `about://tracing` in Chrome")
-            if cleanup_gateway:
-
-                def fn(s: Server):
-                    try:
-                        retry_requests().post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
-                    except:
-                        return  # ignore connection errors since server may be shutting down
-
-                do_parallel(fn, self.bound_nodes.values(), n=-1)
-
-            if multipart: 
-                # Complete multi-part uploads
-                #for req in tqdm(self.multipart_upload_requests):
-
-                def complete_upload(req):
-                    obj_store_interface = ObjectStoreInterface.create(req["region"], req["bucket"])
-                    succ = obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"], req["parts"])
-                    if not succ: 
-                        raise ValueError(f"Failed to complete upload {req['upload_id']}")
-
-                do_parallel(complete_upload, self.multipart_upload_requests)
-=======
             if show_spinner:
                 spinner.stop()
             with Halo(text="Cleaning up after transfer", spinner="dots") as spinner:
@@ -579,4 +535,14 @@ class ReplicatorClient:
 
                     do_parallel(fn, self.bound_nodes.values(), n=-1)
                     spinner.text = "Cleaning up after transfer, shutting down gateway servers"
->>>>>>> 50a21f19af40252caa48d7fc02306366a24ed9cf
+
+                if multipart: 
+                    # Complete multi-part uploads
+                    def complete_upload(req):
+                        obj_store_interface = ObjectStoreInterface.create(req["region"], req["bucket"])
+                        succ = obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"], req["parts"])
+                        if not succ: 
+                            raise ValueError(f"Failed to complete upload {req['upload_id']}")
+
+                    do_parallel(complete_upload, self.multipart_upload_requests)
+                    spinner.text = "Finalizing multipart object uploads"

@@ -73,7 +73,8 @@ def parse_path(path: str):
         return "azure", bucket_name, region
     elif is_plausible_local_path(path):
         return "local", None, path
-    return path
+
+    return ValueError(f"Parse error {path}")
 
 
 # skylark ls implementation
@@ -269,7 +270,6 @@ def replicate_helper(
                     dest_objs_job.append(dest_key_prefix + src_path_no_prefix)
                 else:
                     dest_objs_job.append(dest_key_prefix + "/" + src_path_no_prefix)
-        print(dest_objs_job)
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=source_bucket,
@@ -301,7 +301,7 @@ def replicate_helper(
         else:
             total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
         typer.secho(f"{total_bytes / GB:.2f}GByte replication job launched", fg="green")
-        stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds, multipart=max_chunk_size_mb is not None)
+        stats = rc.monitor_transfer(job, show_spinner=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds, multipart=max_chunk_size_mb is not None)
     except KeyboardInterrupt:
         if not reuse_gateways:
             logger.fs.warning("Deprovisioning gateways then exiting...")
