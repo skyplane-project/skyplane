@@ -5,9 +5,11 @@ import os
 import re
 import logging
 import resource
+import signal
 import subprocess
 from pathlib import Path
 from shutil import copyfile
+from threading import Thread
 from typing import Dict, List
 from sys import platform
 from typing import Dict, List
@@ -281,6 +283,7 @@ def replicate_helper(
         gcp_instance_class=gcp_instance_class,
         gcp_use_premium_network=gcp_use_premium_network,
     )
+    stats = {}
     try:
         rc.provision_gateways(reuse_gateways)
         for node, gw in rc.bound_nodes.items():
@@ -294,11 +297,20 @@ def replicate_helper(
         stats = rc.monitor_transfer(job, show_pbar=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
     except KeyboardInterrupt:
         if not reuse_gateways:
+            # disable sigint to prevent repeated KeyboardInterrupts
             logger.warning("Deprovisioning gateways then exiting...")
+            s = signal.signal(signal.SIGINT, signal.SIG_IGN)
             rc.deprovision_gateways()
+            signal.signal(signal.SIGINT, s)
+
+        stats["success"] = False
+        out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
+        typer.echo(f"\n{json.dumps(out_json)}")
         os._exit(1)  # exit now
     if not reuse_gateways:
+        s = signal.signal(signal.SIGINT, signal.SIG_IGN)
         rc.deprovision_gateways()
+        signal.signal(signal.SIGINT, s)
     stats = stats if stats else {}
     stats["success"] = stats["monitor_status"] == "completed"
     out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
