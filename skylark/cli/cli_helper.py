@@ -362,7 +362,9 @@ def deprovision_skylark_instances():
         query_jobs.append(catch_error(lambda: GCPCloudProvider().get_matching_instances()))
 
     # query in parallel
-    for _, instance_list in do_parallel(lambda f: f(), query_jobs, progress_bar=True, desc="Query instances", hide_args=True, n=-1):
+    for instance_list in do_parallel(
+        lambda f: f(), query_jobs, progress_bar=True, desc="Query instances", hide_args=True, n=-1, return_args=False
+    ):
         instances.extend(instance_list)
 
     if instances:
@@ -431,8 +433,7 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
     if force_init:
         typer.secho("    GCP credentials will be re-initialized", fg="red")
         config.gcp_project_id = None
-
-    if not Path(gcp_config_path).is_file():
+    elif not Path(gcp_config_path).is_file():
         typer.secho("    GCP region config missing! GCP will be reconfigured.", fg="red")
         config.gcp_project_id = None
 

@@ -313,7 +313,7 @@ class ReplicatorClient:
             return logs
 
         rows = []
-        for _, result in do_parallel(get_chunk_status, self.bound_nodes.items(), n=-1):
+        for result in do_parallel(get_chunk_status, self.bound_nodes.items(), n=-1, return_args=False):
             rows.extend(result)
         return pd.DataFrame(rows)
 

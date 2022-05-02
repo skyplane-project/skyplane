@@ -16,7 +16,7 @@ google-cloud-storage
 grpcio-status>=1.33.2
 # shared dependencies
 cachetools
-oslo.concurrency
+ilock
 paramiko
 termcolor
 tqdm

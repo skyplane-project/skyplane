@@ -12,25 +12,15 @@ Current support:
 * `skylark cp s3://bucket/path /local/path`
 """
 
-import os
 from pathlib import Path
-import tempfile
-from typing import Optional
 
-from skylark import skylark_root
-from skylark import exceptions
 import skylark.cli.cli_aws
 import skylark.cli.cli_azure
 import skylark.cli.cli_gcp
 import skylark.cli.cli_solver
 import skylark.cli.experiments
-from skylark.obj_store.object_store_interface import ObjectStoreInterface
-from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP
 import typer
-from skylark.config import SkylarkConfig
-from skylark.utils import logger
-from skylark.utils.utils import Timer
-from skylark import GB, config_path, print_header
+from skylark import GB, config_path, exceptions, print_header, skylark_root
 from skylark.cli.cli_helper import (
     check_ulimit,
     copy_azure_local,
@@ -40,8 +30,6 @@ from skylark.cli.cli_helper import (
     copy_local_local,
     copy_local_s3,
     copy_s3_local,
-    copy_gcs_local,
-    copy_local_gcs,
     deprovision_skylark_instances,
     load_aws_config,
     load_azure_config,
@@ -51,7 +39,12 @@ from skylark.cli.cli_helper import (
     parse_path,
     replicate_helper,
 )
+from skylark.config import SkylarkConfig
+from skylark.obj_store.object_store_interface import ObjectStoreInterface
 from skylark.replicate.replication_plan import ReplicationTopology
+from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP
+from skylark.utils import logger
+from skylark.utils.utils import Timer
 
 app = typer.Typer(name="skylark")
 app.add_typer(skylark.cli.experiments.app, name="experiments")
@@ -63,7 +56,14 @@ app.add_typer(skylark.cli.cli_solver.app, name="solver")
 
 @app.command()
 def ls(directory: str):
-    """List objects in the object store."""
+    """
+    It takes a directory path, parses it, and then calls the appropriate function to list the contents
+    of that directory. If the path is on an object store, it will list the contents of the object store
+    at that prefix.
+
+    :param directory: str
+    :type directory: str
+    """
     provider, bucket, key = parse_path(directory)
     if provider == "local":
         for path in ls_local(Path(directory)):
@@ -89,13 +89,40 @@ def cp(
     max_instances: int = typer.Option(1, help="Max number of instances per overlay region."),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
-    solver_required_throughput_gbits: float = typer.Option(2, help="Solver option: Required throughput in gbps."),
+    solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
     solver_throughput_grid: Path = typer.Option(
         skylark_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
     ),
     solver_verbose: bool = False,
 ):
-    """Copy objects from the object store to the local filesystem."""
+    """
+    `cp` copies a file or folder from one location to another. If the source is on an object store,
+    it will copy all objects with that prefix. If it is a local path, it will copy the entire file
+    or directory tree.
+
+    By default, it will copy objects using a direct connection between instances. However, if you would
+    like to use the solver, call `--solve`. Note that the solver requires a throughput grid file to be
+    specified. We provide a default one but it may be out-of-date.
+
+    :param src: Source prefix to copy from
+    :type src: str
+    :param dst: The destination of the transfer
+    :type dst: str
+    :param num_connections: Number of connections to use between each gateway instance pair (default: 64)
+    :type num_connections: int
+    :param max_instances: The maximum number of instances to use per region (default: 1)
+    :type max_instances: int
+    :param reuse_gateways: If true, will leave provisioned instances running to be reused. You must run `skylark deprovision` to clean up.
+    :type reuse_gateways: bool
+    :param solve: If true, will use solver to optimize transfer, else direct path is chosen
+    :type solve: bool
+    :param solver_required_throughput_gbits: The required throughput in Gbps when using the solver (default: 4)
+    :type solver_required_throughput_gbits: float
+    :param solver_throughput_grid: The throughput grid profile to use for the solver, defaults to author-provided profile
+    :type solver_throughput_grid: Path
+    :param solver_verbose: If true, will print out the solver's output, defaults to False
+    :type solver_verbose: bool (optional)
+    """
     print_header()
 
     provider_src, bucket_src, path_src = parse_path(src)
@@ -174,199 +201,22 @@ def cp(
 
 
 @app.command()
-def replicate_random(
-    src_region: str,
-    dst_region: str,
-    inter_region: Optional[str] = typer.Argument(None),
-    num_gateways: int = typer.Option(1, "--num-gateways", "-n", help="Number of gateways"),
-    num_outgoing_connections: int = typer.Option(
-        64, "--num-outgoing-connections", "-c", help="Number of outgoing connections between each gateway"
-    ),
-    total_transfer_size_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB."),
-    chunk_size_mb: int = typer.Option(8, "--chunk-size-mb", help="Chunk size in MB."),
-    reuse_gateways: bool = False,
-    gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
-    aws_instance_class: str = "m5.8xlarge",
-    azure_instance_class: str = "Standard_D32_v4",
-    gcp_instance_class: Optional[str] = "n2-standard-32",
-    gcp_use_premium_network: bool = True,
-    time_limit_seconds: Optional[int] = None,
-    log_interval_s: float = 1.0,
-):
-    """Replicate objects from remote object store to another remote object store."""
-    print_header()
-    if reuse_gateways:
-        logger.warning(
-            f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
-        )
-
-    if inter_region:
-        assert inter_region not in [src_region, dst_region] and src_region != dst_region
-        topo = ReplicationTopology()
-        for i in range(num_gateways):
-            topo.add_edge(src_region, i, inter_region, i, num_outgoing_connections)
-            topo.add_edge(inter_region, i, dst_region, i, num_outgoing_connections)
-    else:
-        assert src_region != dst_region
-        topo = ReplicationTopology()
-        for i in range(num_gateways):
-            topo.add_edge(src_region, i, dst_region, i, num_outgoing_connections)
-
-    if total_transfer_size_mb % chunk_size_mb != 0:
-        logger.warning(f"total_transfer_size_mb ({total_transfer_size_mb}) is not a multiple of chunk_size_mb ({chunk_size_mb})")
-    n_chunks = int(total_transfer_size_mb / chunk_size_mb)
-
-    return replicate_helper(
-        topo,
-        size_total_mb=total_transfer_size_mb,
-        n_chunks=n_chunks,
-        random=True,
-        reuse_gateways=reuse_gateways,
-        gateway_docker_image=gateway_docker_image,
-        aws_instance_class=aws_instance_class,
-        gcp_instance_class=gcp_instance_class,
-        azure_instance_class=azure_instance_class,
-        gcp_use_premium_network=gcp_use_premium_network,
-        time_limit_seconds=time_limit_seconds,
-        log_interval_s=log_interval_s,
-    )
-
-
-@app.command()
-def replicate_random_solve(
-    src_region: str,
-    dst_region: str,
-    inter_region: Optional[str] = typer.Argument(None),
-    num_gateways: int = typer.Option(1, "--num-gateways", "-n", help="Number of gateways"),
-    num_outgoing_connections: int = typer.Option(
-        64, "--num-outgoing-connections", "-c", help="Number of outgoing connections between each gateway"
-    ),
-    total_transfer_size_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB."),
-    chunk_size_mb: int = typer.Option(8, "--chunk-size-mb", help="Chunk size in MB."),
-    reuse_gateways: bool = False,
-    gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
-    aws_instance_class: str = "m5.8xlarge",
-    azure_instance_class: str = "Standard_D32_v4",
-    gcp_instance_class: Optional[str] = "n2-standard-32",
-    gcp_use_premium_network: bool = True,
-    time_limit_seconds: Optional[int] = None,
-    log_interval_s: float = 1.0,
-    solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
-    solver_required_throughput_gbits: float = typer.Option(2, help="Solver option: Required throughput in gbps."),
-    solver_throughput_grid: Path = typer.Option(
-        skylark_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
-    ),
-    solver_verbose: bool = False,
-):
-    """Replicate objects from remote object store to another remote object store."""
-    print_header()
-    if reuse_gateways:
-        logger.warning(
-            f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
-        )
-
-    if solve:
-        with tempfile.NamedTemporaryFile(mode="w") as f:
-            skylark.cli.cli_solver.solve_throughput(
-                src_region,
-                dst_region,
-                solver_required_throughput_gbits,
-                gbyte_to_transfer=total_transfer_size_mb / 1024.0,
-                max_instances=num_gateways,
-                throughput_grid=solver_throughput_grid,
-                solver_verbose=solver_verbose,
-                out=f.name,
-            )
-            topo = ReplicationTopology.from_json(Path(f.name).read_text())
-    elif inter_region:
-        assert inter_region not in [src_region, dst_region] and src_region != dst_region
-        topo = ReplicationTopology()
-        for i in range(num_gateways):
-            topo.add_edge(src_region, i, inter_region, i, num_outgoing_connections)
-            topo.add_edge(inter_region, i, dst_region, i, num_outgoing_connections)
-    else:
-        assert src_region != dst_region
-        topo = ReplicationTopology()
-        for i in range(num_gateways):
-            topo.add_edge(src_region, i, dst_region, i, num_outgoing_connections)
-
-    if total_transfer_size_mb % chunk_size_mb != 0:
-        logger.warning(f"total_transfer_size_mb ({total_transfer_size_mb}) is not a multiple of chunk_size_mb ({chunk_size_mb})")
-    n_chunks = int(total_transfer_size_mb / chunk_size_mb)
-
-    return replicate_helper(
-        topo,
-        size_total_mb=total_transfer_size_mb,
-        n_chunks=n_chunks,
-        random=True,
-        reuse_gateways=reuse_gateways,
-        gateway_docker_image=gateway_docker_image,
-        aws_instance_class=aws_instance_class,
-        gcp_instance_class=gcp_instance_class,
-        azure_instance_class=azure_instance_class,
-        gcp_use_premium_network=gcp_use_premium_network,
-        time_limit_seconds=time_limit_seconds,
-        log_interval_s=log_interval_s,
-    )
-
-
-@app.command()
-def replicate_json(
-    path: Path = typer.Argument(..., exists=True, file_okay=True, dir_okay=False, help="Path to JSON file describing replication plan"),
-    size_total_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB (across n_chunks chunks)"),
-    n_chunks: int = typer.Option(512, "--n-chunks", "-n", help="Number of chunks"),
-    # bucket options
-    use_random_data: bool = False,
-    source_bucket: str = typer.Option(None, "--source-bucket", help="Source bucket url"),
-    dest_bucket: str = typer.Option(None, "--dest-bucket", help="Destination bucket url"),
-    src_key_prefix: str = "/",
-    dest_key_prefix: str = "/",
-    # gateway provisioning options
-    reuse_gateways: bool = False,
-    gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
-    # cloud provider specific options
-    aws_instance_class: str = "m5.8xlarge",
-    azure_instance_class: str = "Standard_D32_v4",
-    gcp_instance_class: Optional[str] = "n2-standard-32",
-    gcp_use_premium_network: bool = True,
-    # logging options
-    time_limit_seconds: Optional[int] = None,
-    log_interval_s: float = 1.0,
-):
-    """Replicate objects from remote object store to another remote object store."""
-    print_header()
-
-    with path.open("r") as f:
-        topo = ReplicationTopology.from_json(f.read())
-
-    return replicate_helper(
-        topo,
-        size_total_mb=size_total_mb,
-        n_chunks=n_chunks,
-        random=use_random_data,
-        source_bucket=source_bucket,
-        dest_bucket=dest_bucket,
-        src_key_prefix=src_key_prefix,
-        dest_key_prefix=dest_key_prefix,
-        reuse_gateways=reuse_gateways,
-        gateway_docker_image=gateway_docker_image,
-        aws_instance_class=aws_instance_class,
-        gcp_instance_class=gcp_instance_class,
-        azure_instance_class=azure_instance_class,
-        gcp_use_premium_network=gcp_use_premium_network,
-        time_limit_seconds=time_limit_seconds,
-        log_interval_s=log_interval_s,
-    )
-
-
-@app.command()
 def deprovision():
-    """Deprovision gateways."""
+    """Deprovision all resources created by skylark."""
     deprovision_skylark_instances()
 
 
 @app.command()
 def init(reinit_azure: bool = False, reinit_gcp: bool = False):
+    """
+    It loads the configuration file, and if it doesn't exist, it creates a default one. Then it creates
+    AWS, Azure, and GCP region list configurations.
+
+    :param reinit_azure: If true, will reinitialize the Azure region list and credentials
+    :type reinit_azure: bool
+    :param reinit_gcp: If true, will reinitialize the GCP region list and credentials
+    :type reinit_gcp: bool
+    """
     print_header()
     if config_path.exists():
         cloud_config = SkylarkConfig.load_config(config_path)
