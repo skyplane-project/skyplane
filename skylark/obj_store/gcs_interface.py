@@ -36,7 +36,7 @@ class GCSInterface(ObjectStoreInterface):
             for zone in zones["items"]:
                 if zone["name"].startswith(region):
                     return zone["name"]
-            raise ValueError(f"No GCP zone found for region {region}")
+        raise ValueError(f"No GCP zone found for region {region}")
 
     def infer_gcp_region(self, bucket_name: str):
         bucket = self._gcs_client.lookup_bucket(bucket_name)
