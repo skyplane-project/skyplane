@@ -76,6 +76,7 @@ def cp(
     num_connections: int = typer.Option(64, help="Number of connections to open for replication"),
     max_instances: int = typer.Option(1, help="Max number of instances per overlay region."),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
+    max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
     solver_throughput_grid: Path = typer.Option(
@@ -117,6 +118,9 @@ def cp(
     provider_dst, bucket_dst, path_dst = parse_path(dst)
 
     clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
+
+    if (provider_src != "s3" or provider_dst != "s3") and max_chunk_size_mb:
+        raise ValueError(f"Multipart uploads not supported outside of S3")
 
     # raise file limits for local transfers
     if provider_src == "local" or provider_dst == "local":
@@ -183,6 +187,7 @@ def cp(
             src_key_prefix=path_src,
             dest_key_prefix=path_dst,
             reuse_gateways=reuse_gateways,
+            max_chunk_size_mb=max_chunk_size_mb,
         )
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")

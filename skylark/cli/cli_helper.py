@@ -73,7 +73,8 @@ def parse_path(path: str):
         return "azure", bucket_name, region
     elif is_plausible_local_path(path):
         return "local", None, path
-    return path
+
+    raise ValueError(f"Parse error {path}")
 
 
 # skylark ls implementation
@@ -209,6 +210,8 @@ def replicate_helper(
     dest_bucket: Optional[str] = None,
     src_key_prefix: str = "",
     dest_key_prefix: str = "",
+    # maximum chunk size to breakup objects into
+    max_chunk_size_mb: Optional[int] = None,
     # gateway provisioning options
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
@@ -227,7 +230,10 @@ def replicate_helper(
         )
 
     if random:
-        chunk_size_mb = size_total_mb // n_chunks
+        random_chunk_size_mb = size_total_mb // n_chunks
+        if max_chunk_size_mb: 
+            logger.error("Cannot set chunk size for random data replication - set `random_chunk_size_mb` instead")
+            raise ValueError("Cannot set max chunk size")
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=None,
@@ -235,7 +241,7 @@ def replicate_helper(
             dest_bucket=None,
             src_objs=[str(i) for i in range(n_chunks)],
             dest_objs=[str(i) for i in range(n_chunks)],
-            random_chunk_size_mb=chunk_size_mb,
+            random_chunk_size_mb=random_chunk_size_mb,
         )
     else:
         # make replication job
@@ -243,6 +249,9 @@ def replicate_helper(
         if not src_objs:
             logger.error("Specified object does not exist.")
             raise exceptions.MissingObjectException()
+
+        if dest_key_prefix.endswith("/"):
+            dest_is_directory = True
 
         # map objects to destination object paths
         # todo isolate this logic and test independently
@@ -264,7 +273,6 @@ def replicate_helper(
                     dest_objs_job.append(dest_key_prefix + src_path_no_prefix)
                 else:
                     dest_objs_job.append(dest_key_prefix + "/" + src_path_no_prefix)
-
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=source_bucket,
@@ -273,6 +281,7 @@ def replicate_helper(
             src_objs=src_objs_job,
             dest_objs=dest_objs_job,
             obj_sizes={obj.key: obj.size for obj in src_objs},
+            max_chunk_size_mb=max_chunk_size_mb
         )
 
     rc = ReplicatorClient(
@@ -288,14 +297,20 @@ def replicate_helper(
     try:
         rc.provision_gateways(reuse_gateways)
         for node, gw in rc.bound_nodes.items():
-            typer.secho(f"\tRealtime logs for {node.region}:{node.instance} at {gw.gateway_log_viewer_url}")
+            typer.secho(f"    Realtime logs for {node.region}:{node.instance} at {gw.gateway_log_viewer_url}")
         job = rc.run_replication_plan(job)
         if random:
-            total_bytes = n_chunks * chunk_size_mb * MB
+            total_bytes = n_chunks * random_chunk_size_mb * MB
         else:
             total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
         typer.secho(f"{total_bytes / GB:.2f}GByte replication job launched", fg="green")
-        stats = rc.monitor_transfer(job, show_spinner=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds)
+        stats = rc.monitor_transfer(
+            job,
+            show_spinner=True,
+            log_interval_s=log_interval_s,
+            time_limit_seconds=time_limit_seconds,
+            multipart=max_chunk_size_mb is not None,
+        )
     except KeyboardInterrupt:
         if not reuse_gateways:
             logger.fs.warning("Deprovisioning gateways then exiting...")

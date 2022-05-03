@@ -161,6 +161,9 @@ class ReplicationJob:
     chunk_requests: Optional[List[ChunkRequest]] = None
     # Generates random chunks for testing on the gateways
     random_chunk_size_mb: Optional[int] = None
+    # Maximum chunk size used to break-up larger objects
+    # TODO: eventually set default value to prevent OOM on gateways
+    max_chunk_size_mb: Optional[int] = None
 
     # TODO: delete this method and refer to obj_sizes instead
     def src_obj_sizes(self) -> Dict[str, int]:
