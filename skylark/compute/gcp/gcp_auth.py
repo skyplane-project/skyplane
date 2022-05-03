@@ -27,12 +27,12 @@ class GCPAuthentication:
     def save_region_config(self, project_id=None):
         project_id = project_id if project_id is not None else self.project_id
         if project_id is None:
-            print("    No GCP project ID specified, skipping saving region config")
+            self.clear_region_config()
+            print(
+                f"    No project ID detected when trying to save GCP region list! Consquently, the GCP region list is empty. Run 'skylark init --reinit-gcp' or file an issue to remedy this."
+            )
             return
-        with open(gcp_config_path, "w") as f:
-            if self.config.gcp_enabled == False:
-                f.write("")
-                return
+        with gcp_config_path.open("w") as f:
             region_list = []
             credentials = self.credentials
             service = discovery.build("compute", "beta", credentials=credentials)
@@ -47,6 +47,10 @@ class GCPAuthentication:
 
             f.write("\n".join(region_list))
             print(f"    GCP region config file saved to {gcp_config_path}")
+
+    def clear_region_config(self):
+        with gcp_config_path.open("w") as f:
+            f.write("")
 
     @staticmethod
     def get_region_config():

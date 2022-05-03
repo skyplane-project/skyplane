@@ -404,17 +404,18 @@ def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
     session = boto3.Session()
     credentials = session.get_credentials()
     credentials = credentials.get_frozen_credentials()
+    auth = AWSAuthentication(config=config)
     if credentials.access_key is None or credentials.secret_key is None:
         config.aws_enabled = False
         typer.secho("    AWS credentials not found in boto3 session, please use the AWS CLI to set them via `aws configure`", fg="red")
         typer.secho("    https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html", fg="red")
         typer.secho("    Disabling AWS support", fg="blue")
-        AWSAuthentication.save_region_config(config)
+        auth.clear_region_config()
         return config
 
     typer.secho(f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials.access_key[-6:]}]", fg="blue")
     config.aws_enabled = True
-    AWSAuthentication.save_region_config(config)
+    auth.save_region_config(config)
     return config
 
 
@@ -477,12 +478,12 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
         typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red")
         typer.secho("    Disabling GCP support", fg="blue")
         config.gcp_enabled = False
-        auth.save_region_config()
+        auth.clear_region_config()
         return config
     else:
         typer.secho("    GCP credentials found in GCP CLI", fg="blue")
         if typer.confirm("    GCP credentials found, do you want to enable GCP support in Skylark?", default=True):
-            config.gcp_project_id = typer.prompt("    Enter the GCP project ID:", default=auth.project_id)
+            config.gcp_project_id = typer.prompt("    Enter the GCP project ID", default=auth.project_id)
             assert config.gcp_project_id is not None, "GCP project ID must not be None"
             config.gcp_enabled = True
             auth.save_region_config(project_id=config.gcp_project_id)
@@ -491,5 +492,5 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
             config.gcp_project_id = None
             typer.secho("    Disabling GCP support", fg="blue")
             config.gcp_enabled = False
-            auth.save_region_config()
+            auth.clear_region_config()
             return config
