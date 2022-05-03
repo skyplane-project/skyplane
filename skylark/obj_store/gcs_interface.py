@@ -2,7 +2,8 @@ import mimetypes
 import os
 from typing import Iterator, List
 
-from google.cloud import storage  # pytype: disable=import-error
+from google.cloud import storage
+from skylark.compute.gcp.gcp_auth import GCPAuthentication
 
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
@@ -14,19 +15,33 @@ class GCSObject(ObjectStoreObject):
 
 class GCSInterface(ObjectStoreInterface):
     def __init__(self, gcp_region, bucket_name, use_tls=True):
-        # TODO: infer region?
         # TODO - figure out how paralllelism handled
         self.bucket_name = bucket_name
+        self.auth = GCPAuthentication()
         self._gcs_client = storage.Client()
         self.gcp_region = self.infer_gcp_region(bucket_name) if gcp_region is None or gcp_region == "infer" else gcp_region
 
     def region_tag(self):
         return "gcp:" + self.gcp_region
 
+    def map_region_to_zone(self, region) -> str:
+        """Resolves bucket locations to a valid zone."""
+        parsed_region = region.lower().split("-")
+        if len(parsed_region) == 3:
+            return region
+        elif len(parsed_region) == 2 or len(parsed_region) == 1:
+            # query the API to get the list of zones in the region and return the first one
+            compute = self.auth.get_gcp_client()
+            zones = compute.zones().list(project=self.auth.project_id).execute()
+            for zone in zones["items"]:
+                if zone["name"].startswith(region):
+                    return zone["name"]
+            raise ValueError(f"No GCP zone found for region {region}")
+
     def infer_gcp_region(self, bucket_name: str):
         bucket = self._gcs_client.lookup_bucket(bucket_name)
         assert isinstance(bucket, storage.bucket.Bucket)
-        return bucket.location.lower()
+        return self.map_region_to_zone(bucket.location.lower())
 
     def bucket_exists(self):
         try:

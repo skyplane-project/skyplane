@@ -6,9 +6,11 @@ from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 from skylark.utils import logger
 
+
 class S3Object(ObjectStoreObject):
     def full_path(self):
         return f"s3://{self.bucket}/{self.key}"
+
 
 class S3Interface(ObjectStoreInterface):
     def __init__(self, aws_region, bucket_name):
@@ -74,7 +76,7 @@ class S3Interface(ObjectStoreInterface):
             return True
         except NoSuchObjectException:
             return False
-          
+
     def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
         logger.info(f"Download {src_object_name}, {dst_file_path}, {offset_bytes}")
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
@@ -99,7 +101,6 @@ class S3Interface(ObjectStoreInterface):
             f.seek(0)
             f.write(response["Body"].read())
         response["Body"].close()
-
 
     def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
         logger.info(f"Upload {src_file_path}, {dst_object_name}, {part_number}, {upload_id}, {self.bucket_name}")
