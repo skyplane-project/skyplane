@@ -286,8 +286,8 @@ class ReplicatorClient:
         idx = 0
         for (src_obj, dest_obj) in zip(job.src_objs, job.dest_objs):
             if obj_file_size_bytes:
-                if job.random_chunk_size_mb:  # split objects into sub-chunks
-                    chunk_size_bytes = int(job.random_chunk_size_mb * 1e6)
+                if job.max_chunk_size_mb:  # split objects into sub-chunks
+                    chunk_size_bytes = int(job.max_chunk_size_mb * 1e6)
                     num_chunks = int(obj_file_size_bytes[src_obj] / chunk_size_bytes) + 1
 
                     # TODO: figure out what to do on # part limits per object
@@ -295,7 +295,6 @@ class ReplicatorClient:
                     # TODO: potentially do this in a seperate thread, and/or after chunks sent
                     obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
                     upload_id = obj_store_interface.initiate_multipart_upload(dest_obj)
-                    logger.info(f"Initiated multipart upload for {dest_obj} with {num_chunks} parts.")
 
                     offset = 0
                     part_num = 1
@@ -332,7 +331,7 @@ class ReplicatorClient:
                         Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
                     )
                     idx += 1
-            else:
+            else: # random data replication
                 file_size_bytes = job.random_chunk_size_mb * MB
                 chunks.append(
                     Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)

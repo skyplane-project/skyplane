@@ -104,6 +104,10 @@ class S3Interface(ObjectStoreInterface):
     def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
         logger.info(f"Upload {src_file_path}, {dst_object_name}, {part_number}, {upload_id}, {self.bucket_name}")
         logger.info(f"id {upload_id}")
+        dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
+
+        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
+        assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
 
         if upload_id:
             s3_client.upload_part(
@@ -114,7 +118,7 @@ class S3Interface(ObjectStoreInterface):
                 UploadId=upload_id.strip(),  # TODO: figure out why whitespace gets added
             )
         else:
-            s3_client.upload_file(src_file_path, self.bucket_name, dst_object_name, Config=TransferConfig(use_threads=False))
+            s3_client.upload_file(src_file_path, self.bucket_name, dst_object_name)
 
     def initiate_multipart_upload(self, dst_object_name):
         # cannot infer content type here

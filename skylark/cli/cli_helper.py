@@ -210,6 +210,7 @@ def replicate_helper(
     dest_bucket: Optional[str] = None,
     src_key_prefix: str = "",
     dest_key_prefix: str = "",
+    # maximum chunk size to breakup objects into
     max_chunk_size_mb: Optional[int] = None,
     # gateway provisioning options
     reuse_gateways: bool = False,
@@ -229,7 +230,10 @@ def replicate_helper(
         )
 
     if random:
-        chunk_size_mb = size_total_mb // n_chunks
+        random_chunk_size_mb = size_total_mb // n_chunks
+        if max_chunk_size_mb: 
+            logger.error("Cannot set chunk size for random data replication - set `random_chunk_size_mb` instead")
+            raise ValueError("Cannot set max chunk size")
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=None,
@@ -237,11 +241,10 @@ def replicate_helper(
             dest_bucket=None,
             src_objs=[str(i) for i in range(n_chunks)],
             dest_objs=[str(i) for i in range(n_chunks)],
-            random_chunk_size_mb=chunk_size_mb,
+            random_chunk_size_mb=random_chunk_size_mb,
         )
     else:
         # make replication job
-        chunk_size_mb = max_chunk_size_mb
         src_objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
         if not src_objs:
             logger.error("Specified object does not exist.")
@@ -278,7 +281,7 @@ def replicate_helper(
             src_objs=src_objs_job,
             dest_objs=dest_objs_job,
             obj_sizes={obj.key: obj.size for obj in src_objs},
-            random_chunk_size_mb=chunk_size_mb,
+            max_chunk_size_mb=max_chunk_size_mb
         )
 
     rc = ReplicatorClient(
@@ -297,7 +300,7 @@ def replicate_helper(
             typer.secho(f"    Realtime logs for {node.region}:{node.instance} at {gw.gateway_log_viewer_url}")
         job = rc.run_replication_plan(job)
         if random:
-            total_bytes = n_chunks * chunk_size_mb * MB
+            total_bytes = n_chunks * random_chunk_size_mb * MB
         else:
             total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
         typer.secho(f"{total_bytes / GB:.2f}GByte replication job launched", fg="green")
