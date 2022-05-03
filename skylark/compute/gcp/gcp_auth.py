@@ -1,14 +1,11 @@
 import threading
 from typing import Optional
-import googleapiclient.discovery
+
 import google.auth
-
-from skylark import cloud_config
-from skylark.config import SkylarkConfig
-from skylark import config_path
-from skylark import gcp_config_path
-
+from google.cloud import storage  # type: ignore
 from googleapiclient import discovery
+from skylark import cloud_config, config_path, gcp_config_path
+from skylark.config import SkylarkConfig
 
 
 class GCPAuthentication:
@@ -76,15 +73,18 @@ class GCPAuthentication:
     def make_credential(self, project_id):
         cached_credential = getattr(self.__cached_credentials, f"credential_{project_id}", (None, None))
         if cached_credential == (None, None):
-            cached_credential = google.auth.default(quota_project_id=project_id)
-            setattr(self.__cached_credentials, f"credential_{project_id}", cached_credential)
+            inferred_cred, inferred_project = google.auth.default(quota_project_id=project_id)
+            setattr(self.__cached_credentials, f"credential_{project_id}", (inferred_cred, project_id or inferred_project))
         return cached_credential
 
     def enabled(self):
         return self.config.gcp_enabled and self.credentials is not None and self.project_id is not None
 
     def get_gcp_client(self, service_name="compute", version="v1"):
-        return googleapiclient.discovery.build(service_name, version)
+        return discovery.build(service_name, version, credentials=self.credentials, client_options={"quota_project_id": self.project_id})
+
+    def get_storage_client(self):
+        return storage.Client(project=self.project_id, credentials=self.credentials)
 
     def get_gcp_instances(self, gcp_region: str):
         return self.get_gcp_client().instances().list(project=self.project_id, zone=gcp_region).execute()
