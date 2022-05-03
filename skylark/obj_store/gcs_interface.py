@@ -2,7 +2,7 @@ import mimetypes
 import os
 from typing import Iterator, List
 
-from google.cloud import storage
+from google.cloud import storage  # type: ignore
 from skylark.compute.gcp.gcp_auth import GCPAuthentication
 
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
