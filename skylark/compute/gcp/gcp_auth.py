@@ -24,7 +24,7 @@ class GCPAuthentication:
         self._credentials = None
         self._project_id = None
 
-    def save_region_config(self):
+    def save_region_config(self, project_id=None):
         with open(gcp_config_path, "w") as f:
             if self.config.gcp_enabled == False:
                 f.write("")
@@ -32,8 +32,7 @@ class GCPAuthentication:
             region_list = []
             credentials = self.credentials
             service = discovery.build("compute", "beta", credentials=credentials)
-            print(self.project_id)
-            request = service.zones().list(project=self.project_id)
+            request = service.zones().list(project=project_id if project_id else self.project_id)
             while request is not None:
                 response = request.execute()
                 # In reality, these are zones. However, we shall call them regions to be self-consistent.
@@ -50,12 +49,9 @@ class GCPAuthentication:
         try:
             f = open(gcp_config_path, "r")
         except FileNotFoundError:
-            print("    No GCP config detected! Consquently, the GCP region list is empty. Run 'skylark init' to remedy this.")
+            print("    No GCP config detected! Consquently, the GCP region list is empty. Run 'skylark init --reinit-gcp' to remedy this.")
             return []
-        region_list = []
-        for region in f.read().split("\n"):
-            region_list.append(region)
-        return region_list
+        return [r for r in map(str.strip, f.readlines()) if r]
 
     @property
     def credentials(self):
