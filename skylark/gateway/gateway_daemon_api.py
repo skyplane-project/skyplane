@@ -1,6 +1,6 @@
 import logging
 import logging.handlers
-from multiprocessing import Event, Queue
+from multiprocessing import Queue
 import os
 from queue import Empty
 import threading
@@ -30,7 +30,7 @@ class GatewayDaemonAPI(threading.Thread):
     """
 
     def __init__(
-        self, chunk_store: ChunkStore, gateway_receiver: GatewayReceiver, error_event: Event, error_queue: Queue, host="0.0.0.0", port=8080
+        self, chunk_store: ChunkStore, gateway_receiver: GatewayReceiver, error_event, error_queue: Queue, host="0.0.0.0", port=8080
     ):
         super().__init__()
         self.app = Flask("gateway_metadata_server")

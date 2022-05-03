@@ -23,7 +23,7 @@ class ObjStoreRequest:
 
 
 class GatewayObjStoreConn:
-    def __init__(self, chunk_store: ChunkStore, error_event: Event, error_queue: Queue, max_conn=1):
+    def __init__(self, chunk_store: ChunkStore, error_event, error_queue: Queue, max_conn=1):
         self.chunk_store = chunk_store
         self.error_event = error_event
         self.error_queue = error_queue

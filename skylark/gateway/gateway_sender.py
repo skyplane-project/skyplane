@@ -16,9 +16,7 @@ from skylark.utils.utils import Timer, retry_backoff, wait_for
 
 
 class GatewaySender:
-    def __init__(
-        self, chunk_store: ChunkStore, error_event: Event, error_queue: Queue, outgoing_ports: Dict[str, int], use_tls: bool = True
-    ):
+    def __init__(self, chunk_store: ChunkStore, error_event, error_queue: Queue, outgoing_ports: Dict[str, int], use_tls: bool = True):
         self.chunk_store = chunk_store
         self.error_event = error_event
         self.error_queue = error_queue

@@ -20,7 +20,7 @@ class GatewayReceiver:
     def __init__(
         self,
         chunk_store: ChunkStore,
-        error_event: Event,
+        error_event,
         error_queue: Queue,
         write_back_block_size=4 * MB,
         max_pending_chunks=1,
@@ -82,7 +82,7 @@ class GatewayReceiver:
                     except Exception as e:
                         logger.warning(f"[receiver:{socket_port}] Error: {str(e)}")
                         self.error_queue.put(traceback.format_exc())
-                        self.exit_flag.set()
+                        exit_flag.set()
                         self.error_event.set()
                 logger.warning(f"[receiver:{socket_port}] Exiting on signal")
                 ssl_conn.close()
