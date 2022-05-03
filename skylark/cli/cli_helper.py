@@ -241,7 +241,7 @@ def replicate_helper(
         )
     else:
         # make replication job
-        chunk_size_mb = max_chunk_size_mb 
+        chunk_size_mb = max_chunk_size_mb
         src_objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
         if not src_objs:
             logger.error("Specified object does not exist.")
@@ -301,7 +301,13 @@ def replicate_helper(
         else:
             total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
         typer.secho(f"{total_bytes / GB:.2f}GByte replication job launched", fg="green")
-        stats = rc.monitor_transfer(job, show_spinner=True, log_interval_s=log_interval_s, time_limit_seconds=time_limit_seconds, multipart=max_chunk_size_mb is not None)
+        stats = rc.monitor_transfer(
+            job,
+            show_spinner=True,
+            log_interval_s=log_interval_s,
+            time_limit_seconds=time_limit_seconds,
+            multipart=max_chunk_size_mb is not None,
+        )
     except KeyboardInterrupt:
         if not reuse_gateways:
             logger.fs.warning("Deprovisioning gateways then exiting...")

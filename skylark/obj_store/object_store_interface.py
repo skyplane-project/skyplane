@@ -37,7 +37,7 @@ class ObjectStoreInterface:
     def upload_object(self, src_file_path, dst_object_name, content_type="infer", part_number=None, upload_id=None):
         raise NotImplementedError()
 
-    def initiate_multipart_upload(self, dst_object_name): 
+    def initiate_multipart_upload(self, dst_object_name):
         return ValueError("Multipart uploads not supported")
 
     def complete_multipart_upload(self, dst_object_name, upload_id, parts):

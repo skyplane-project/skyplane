@@ -1,6 +1,7 @@
 from functools import partial
 import queue
 from multiprocessing import Event, Manager, Process, Value
+import time
 from typing import Dict, Optional
 
 from skylark.gateway.chunk_store import ChunkStore
@@ -63,7 +64,6 @@ class GatewayObjStoreConn:
     def worker_loop(self, worker_id: int):
         # todo should this use processes instead of threads?
         self.worker_id = worker_id
-
         while not self.exit_flags[worker_id].is_set():
             try:
                 request = self.worker_queue.get_nowait()
@@ -76,27 +76,49 @@ class GatewayObjStoreConn:
 
             if req_type == "upload":
                 assert chunk_req.dst_type == "object_store"
-                region = chunk_req.dst_region
                 bucket = chunk_req.dst_object_store_bucket
                 self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
-                logger.debug(f"[obj_store:{self.worker_id}] Start upload {chunk_req.chunk.chunk_id} to {bucket}, key {chunk_req.chunk.dest_key}")
+                logger.debug(
+                    f"[obj_store:{self.worker_id}] Start upload {chunk_req.chunk.chunk_id} to {bucket}, key {chunk_req.chunk.dest_key}"
+                )
 
-                obj_store_interface = self.get_obj_store_interface(region, bucket)
-                retry_backoff(partial(obj_store_interface.upload_object, fpath, chunk_req.chunk.dest_key, chunk_req.chunk.part_number, chunk_req.chunk.upload_id), max_retries=4)
+                obj_store_interface = self.get_obj_store_interface(chunk_req.dst_region, bucket)
+                retry_backoff(
+                    partial(
+                        obj_store_interface.upload_object,
+                        fpath,
+                        chunk_req.chunk.dest_key,
+                        chunk_req.chunk.part_number,
+                        chunk_req.chunk.upload_id,
+                    ),
+                    max_retries=4,
+                )
                 chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id)
                 self.chunk_store.state_finish_upload(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
                 chunk_file_path.unlink()
                 logger.debug(f"[obj_store:{self.worker_id}] Uploaded {chunk_req.chunk.dest_key} to {bucket}")
             elif req_type == "download":
                 assert chunk_req.src_type == "object_store"
-                region = chunk_req.src_region
+
+                # wait for free space
+                while self.chunk_store.remaining_bytes() < chunk_req.chunk.chunk_length_bytes * self.n_processes:
+                    time.sleep(0.1)
+
                 bucket = chunk_req.src_object_store_bucket
                 self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
                 logger.debug(f"[obj_store:{self.worker_id}] Start download {chunk_req.chunk.chunk_id} from {bucket}")
 
-                obj_store_interface = self.get_obj_store_interface(region, bucket)
-                retry_backoff(partial(obj_store_interface.download_object, chunk_req.chunk.src_key, fpath, chunk_req.chunk.file_offset_bytes, chunk_req.chunk.chunk_length_bytes), max_retries=4)
-                #retry_backoff(partial(obj_store_interface.download_object, chunk_req.chunk.src_key, fpath), max_retries=4)
+                obj_store_interface = self.get_obj_store_interface(chunk_req.src_region, bucket)
+                retry_backoff(
+                    partial(
+                        obj_store_interface.download_object,
+                        chunk_req.chunk.src_key,
+                        fpath,
+                        chunk_req.chunk.file_offset_bytes,
+                        chunk_req.chunk.chunk_length_bytes,
+                    ),
+                    max_retries=4,
+                )
                 self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
                 recieved_chunk_size = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).stat().st_size
                 assert (

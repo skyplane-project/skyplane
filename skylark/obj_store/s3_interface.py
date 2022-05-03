@@ -86,13 +86,9 @@ class S3Interface(ObjectStoreInterface):
         assert len(src_object_name) > 0, f"Source object name must be non-empty: '{src_object_name}'"
 
         if size_bytes:
-            byte_range = f"bytes={offset_bytes}-{offset_bytes + size_bytes - 1}" 
+            byte_range = f"bytes={offset_bytes}-{offset_bytes + size_bytes - 1}"
             logger.info(f"Download {byte_range}")
-            response = s3_client.get_object(
-                Bucket=self.bucket_name,
-                Key=src_object_name,
-                Range=byte_range
-            )
+            response = s3_client.get_object(Bucket=self.bucket_name, Key=src_object_name, Range=byte_range)
         else:
             logger.info(f"Download all {offset_bytes}, {size_bytes}")
             response = s3_client.get_object(
@@ -100,16 +96,15 @@ class S3Interface(ObjectStoreInterface):
                 Key=src_object_name,
             )
 
-        # write response data 
+        # write response data
         if not os.path.exists(dst_file_path):
             open(dst_file_path, "a").close()
         with open(dst_file_path, "rb+") as f:
             f.seek(0)
             f.write(response["Body"].read())
-        response["Body"].close() 
+        response["Body"].close()
 
-        #s3_client.download_file(self.bucket_name, src_object_name, dst_file_path, Config=TransferConfig(use_threads=False))
-
+        # s3_client.download_file(self.bucket_name, src_object_name, dst_file_path, Config=TransferConfig(use_threads=False))
 
     def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
         logger.info(f"Upload {src_file_path}, {dst_object_name}, {part_number}, {upload_id}, {self.bucket_name}")
@@ -122,21 +117,21 @@ class S3Interface(ObjectStoreInterface):
             s3_client.upload_part(
                 Body=open(src_file_path, "rb"),
                 Key=dst_object_name,
-                Bucket=self.bucket_name, 
+                Bucket=self.bucket_name,
                 PartNumber=part_number,
-                UploadId=upload_id.strip() # TODO: figure out why whitespace gets added
+                UploadId=upload_id.strip(),  # TODO: figure out why whitespace gets added
             )
         else:
             s3_client.upload_file(src_file_path, self.bucket_name, dst_object_name, Config=TransferConfig(use_threads=False))
 
     def initiate_multipart_upload(self, dst_object_name):
-        #cannot infer content type here
+        # cannot infer content type here
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         response = s3_client.create_multipart_upload(
             Bucket=self.bucket_name,
             Key=dst_object_name,
-            #ContentType=content_type
+            # ContentType=content_type
         )
         return response["UploadId"]
 
@@ -144,38 +139,34 @@ class S3Interface(ObjectStoreInterface):
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
 
         all_parts = []
-        while True: 
+        while True:
             response = s3_client.list_parts(
-                Bucket=self.bucket_name, 
-                Key=dst_object_name, 
-                MaxParts=100, 
-                UploadId=upload_id, 
-                PartNumberMarker=len(all_parts)
+                Bucket=self.bucket_name, Key=dst_object_name, MaxParts=100, UploadId=upload_id, PartNumberMarker=len(all_parts)
             )
-            if "Parts" not in response: 
-                #logger.error(f"Invalid response {response}")
-                #return False
+            if "Parts" not in response:
+                # logger.error(f"Invalid response {response}")
+                # return False
                 break
             else:
-                if len(response["Parts"]) == 0: 
+                if len(response["Parts"]) == 0:
                     break
                 all_parts += response["Parts"]
-            #except Exception as e:
+            # except Exception as e:
             #    logger.error(f"Error retrieving parts {str(e)}")
             #    return False
 
-        if len(all_parts) != len(parts): 
+        if len(all_parts) != len(parts):
             # abort if number of parts doesn't match expected
             logger.error(f"Parts length mismatch for {upload_id}: expected {len(parts)}, got {len(all_parts)}")
             response = s3_client.abort_multipart_upload(Bucket=self.bucket_name, Key=dst_object_name, UploadId=upload_id)
             return False
 
-        # sort by part-number 
-        all_parts = sorted(all_parts, key=lambda d: d['PartNumber']) 
+        # sort by part-number
+        all_parts = sorted(all_parts, key=lambda d: d["PartNumber"])
         response = s3_client.complete_multipart_upload(
-                UploadId=upload_id,
-                Bucket=self.bucket_name,
-                Key=dst_object_name,
-                MultipartUpload={"Parts": [{"PartNumber": p["PartNumber"], "ETag": p["ETag"]} for p in all_parts]}
+            UploadId=upload_id,
+            Bucket=self.bucket_name,
+            Key=dst_object_name,
+            MultipartUpload={"Parts": [{"PartNumber": p["PartNumber"], "ETag": p["ETag"]} for p in all_parts]},
         )
         return True

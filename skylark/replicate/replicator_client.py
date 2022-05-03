@@ -54,7 +54,7 @@ class ReplicatorClient:
         self.transfer_dir.mkdir(exist_ok=True, parents=True)
         logger.open_log_file(self.transfer_dir / "client.log")
 
-        # upload requests 
+        # upload requests
         self.multipart_upload_requests = []
 
     def provision_gateways(
@@ -286,13 +286,13 @@ class ReplicatorClient:
         idx = 0
         for (src_obj, dest_obj) in zip(job.src_objs, job.dest_objs):
             if obj_file_size_bytes:
-                if job.random_chunk_size_mb: # split objects into sub-chunks
-                    chunk_size_bytes = int(job.random_chunk_size_mb*1e6)
-                    num_chunks = int(obj_file_size_bytes[src_obj]/chunk_size_bytes) + 1
+                if job.random_chunk_size_mb:  # split objects into sub-chunks
+                    chunk_size_bytes = int(job.random_chunk_size_mb * 1e6)
+                    num_chunks = int(obj_file_size_bytes[src_obj] / chunk_size_bytes) + 1
 
-                    # TODO: figure out what to do on # part limits per object 
+                    # TODO: figure out what to do on # part limits per object
                     # TODO: only do if num_chunks > 1
-                    # TODO: potentially do this in a seperate thread, and/or after chunks sent 
+                    # TODO: potentially do this in a seperate thread, and/or after chunks sent
                     obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
                     upload_id = obj_store_interface.initiate_multipart_upload(dest_obj)
                     logger.info(f"Initiated multipart upload for {dest_obj} with {num_chunks} parts.")
@@ -304,15 +304,17 @@ class ReplicatorClient:
                         # size is min(chunk_size, remaining data)
                         file_size_bytes = min(chunk_size_bytes, obj_file_size_bytes[src_obj] - offset)
                         assert file_size_bytes > 0, f"File size <= 0 {file_size_bytes}"
-                        chunks.append(Chunk(
-                            src_key=src_obj, 
-                            dest_key=dest_obj, 
-                            chunk_id=idx, 
-                            file_offset_bytes=offset, 
-                            chunk_length_bytes=file_size_bytes, 
-                            part_number=part_num,
-                            upload_id=upload_id
-                        ))
+                        chunks.append(
+                            Chunk(
+                                src_key=src_obj,
+                                dest_key=dest_obj,
+                                chunk_id=idx,
+                                file_offset_bytes=offset,
+                                chunk_length_bytes=file_size_bytes,
+                                part_number=part_num,
+                                upload_id=upload_id,
+                            )
+                        )
                         parts.append(part_num)
 
                         idx += 1
@@ -320,23 +322,21 @@ class ReplicatorClient:
                         offset += chunk_size_bytes
 
                     # add multipart upload request
-                    self.multipart_upload_requests.append({
-                        "region": job.dest_region, 
-                        "bucket": job.dest_bucket, 
-                        "upload_id": upload_id, 
-                        "key": dest_obj,
-                        "parts": parts
-                    })
+                    self.multipart_upload_requests.append(
+                        {"region": job.dest_region, "bucket": job.dest_bucket, "upload_id": upload_id, "key": dest_obj, "parts": parts}
+                    )
 
-
-
-                else: # transfer entire object
+                else:  # transfer entire object
                     file_size_bytes = obj_file_size_bytes[src_obj]
-                    chunks.append(Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes))
+                    chunks.append(
+                        Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
+                    )
                     idx += 1
             else:
                 file_size_bytes = job.random_chunk_size_mb * MB
-                chunks.append(Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes))
+                chunks.append(
+                    Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
+                )
                 idx += 1
 
         # partition chunks into roughly equal-sized batches (by bytes)
@@ -426,7 +426,7 @@ class ReplicatorClient:
         save_log: bool = True,
         write_profile: bool = True,
         copy_gateway_logs: bool = True,
-        multipart: bool = False, # multipart object uploads/downloads
+        multipart: bool = False,  # multipart object uploads/downloads
     ) -> Optional[Dict]:
         assert job.chunk_requests is not None
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in job.chunk_requests])
@@ -474,6 +474,18 @@ class ReplicatorClient:
                     if len(completed_chunk_ids) == len(job.chunk_requests):
                         if show_spinner:
                             spinner.succeed(f"Transfer complete ({log_line})")
+
+                        if multipart:
+                            # Complete multi-part uploads
+                            def complete_upload(req):
+                                obj_store_interface = ObjectStoreInterface.create(req["region"], req["bucket"])
+                                succ = obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"], req["parts"])
+                                if not succ:
+                                    raise ValueError(f"Failed to complete upload {req['upload_id']}")
+
+                            do_parallel(
+                                complete_upload, self.multipart_upload_requests, n=-1, desc="Completing multipart uploads", spinner=True
+                            )
                         return dict(
                             completed_chunk_ids=completed_chunk_ids,
                             total_runtime_s=total_runtime_s,
@@ -535,14 +547,3 @@ class ReplicatorClient:
 
                     do_parallel(fn, self.bound_nodes.values(), n=-1)
                     spinner.text = "Cleaning up after transfer, shutting down gateway servers"
-
-                if multipart: 
-                    # Complete multi-part uploads
-                    def complete_upload(req):
-                        obj_store_interface = ObjectStoreInterface.create(req["region"], req["bucket"])
-                        succ = obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"], req["parts"])
-                        if not succ: 
-                            raise ValueError(f"Failed to complete upload {req['upload_id']}")
-
-                    do_parallel(complete_upload, self.multipart_upload_requests)
-                    spinner.text = "Finalizing multipart object uploads"
