@@ -1,18 +1,14 @@
 from typing import Iterator, List
 import os
-
 import botocore.exceptions
-from boto3.s3.transfer import TransferConfig
 from skylark import exceptions
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 from skylark.utils import logger
 
-
 class S3Object(ObjectStoreObject):
     def full_path(self):
         return f"s3://{self.bucket}/{self.key}"
-
 
 class S3Interface(ObjectStoreInterface):
     def __init__(self, aws_region, bucket_name):
@@ -78,7 +74,7 @@ class S3Interface(ObjectStoreInterface):
             return True
         except NoSuchObjectException:
             return False
-
+          
     def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
         logger.info(f"Download {src_object_name}, {dst_file_path}, {offset_bytes}")
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
@@ -104,14 +100,10 @@ class S3Interface(ObjectStoreInterface):
             f.write(response["Body"].read())
         response["Body"].close()
 
-        # s3_client.download_file(self.bucket_name, src_object_name, dst_file_path, Config=TransferConfig(use_threads=False))
 
     def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
         logger.info(f"Upload {src_file_path}, {dst_object_name}, {part_number}, {upload_id}, {self.bucket_name}")
         logger.info(f"id {upload_id}")
-        dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
-        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
-        assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
 
         if upload_id:
             s3_client.upload_part(
@@ -144,16 +136,11 @@ class S3Interface(ObjectStoreInterface):
                 Bucket=self.bucket_name, Key=dst_object_name, MaxParts=100, UploadId=upload_id, PartNumberMarker=len(all_parts)
             )
             if "Parts" not in response:
-                # logger.error(f"Invalid response {response}")
-                # return False
                 break
             else:
                 if len(response["Parts"]) == 0:
                     break
                 all_parts += response["Parts"]
-            # except Exception as e:
-            #    logger.error(f"Error retrieving parts {str(e)}")
-            #    return False
 
         if len(all_parts) != len(parts):
             # abort if number of parts doesn't match expected
