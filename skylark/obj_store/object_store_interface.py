@@ -48,16 +48,29 @@ class ObjectStoreInterface:
         if region_tag.startswith("aws"):
             from skylark.obj_store.s3_interface import S3Interface
 
-            return S3Interface(region_tag.split(":")[1], bucket)
+            _, region = region_tag.split(":", 1)
+            if region == "infer":
+                return S3Interface("infer", bucket)
+            else:
+                return S3Interface(region, bucket)
         elif region_tag.startswith("gcp"):
             from skylark.obj_store.gcs_interface import GCSInterface
 
-            return GCSInterface(region_tag.split(":")[1][:-2], bucket)
+            _, region = region_tag.split(":", 1)
+            if region == "infer":
+                return GCSInterface("infer", bucket)
+            else:
+                continent, subregion, *_ = region.split("-")  # remove zone
+                return GCSInterface(f"{continent}-{subregion}", bucket)
         elif region_tag.startswith("azure"):
             from skylark.obj_store.azure_interface import AzureInterface
 
-            # TODO (#210): should be configured via argument
-            return AzureInterface(region_tag.split(":")[1], None, bucket)
+            # TODO (#210): storage account should be configured via argument
+            _, region = region_tag.split(":", 1)
+            if region == "infer":
+                return AzureInterface("infer", None, bucket)
+            else:
+                return AzureInterface(region, None, bucket)
         else:
             raise ValueError(f"Invalid region_tag {region_tag} - could not create interface")
 
