@@ -32,6 +32,7 @@ class GCPAuthentication:
             region_list = []
             credentials = self.credentials
             service = discovery.build("compute", "beta", credentials=credentials)
+            print(self.project_id)
             request = service.zones().list(project=self.project_id)
             while request is not None:
                 response = request.execute()
