@@ -131,7 +131,6 @@ class GatewaySender:
     # send chunks to other instances
     def send_chunks(self, chunk_ids: List[int], dst_host: str):
         """Send list of chunks to gateway server, pipelining small chunks together into a single socket stream."""
-        raise ValueError("send_chunks is not implemented")
         # notify server of upcoming ChunkRequests
         logger.debug(f"[sender:{self.worker_id}]:{chunk_ids} pre-registering chunks")
         chunk_reqs = [self.chunk_store.get_chunk_request(chunk_id) for chunk_id in chunk_ids]
