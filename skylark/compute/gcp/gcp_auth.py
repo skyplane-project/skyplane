@@ -25,6 +25,10 @@ class GCPAuthentication:
         self._project_id = None
 
     def save_region_config(self, project_id=None):
+        project_id = project_id if project_id is not None else self.project_id
+        if project_id is None:
+            print("    No GCP project ID specified, skipping saving region config")
+            return
         with open(gcp_config_path, "w") as f:
             if self.config.gcp_enabled == False:
                 f.write("")
@@ -32,7 +36,7 @@ class GCPAuthentication:
             region_list = []
             credentials = self.credentials
             service = discovery.build("compute", "beta", credentials=credentials)
-            request = service.zones().list(project=project_id if project_id else self.project_id)
+            request = service.zones().list(project=project_id)
             while request is not None:
                 response = request.execute()
                 # In reality, these are zones. However, we shall call them regions to be self-consistent.
