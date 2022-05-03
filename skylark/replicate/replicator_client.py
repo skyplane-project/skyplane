@@ -223,13 +223,14 @@ class ReplicatorClient:
         # Clear IPs from security groups
         jobs = []
         public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.nodes]
-        for r in set(aws_regions_to_provision):
-            r = r.split(":")[1]
-            for _ip in public_ips:
-                jobs.append(partial(self.aws.remove_ip_from_security_group, r, _ip))
+        regions = [node.region for node in self.topology.nodes]
+        for r in set(regions):
+            if r.startswith("aws:"):
+                for _ip in public_ips:
+                    jobs.append(partial(self.aws.remove_ip_from_security_group, r.split(":"), _ip))
         # todo remove firewall rules for Azure and GCP
         do_parallel(lambda fn: fn(), jobs)
-        
+
         # Terminate instances
         instances = self.bound_nodes.values()
         logger.fs.warning(f"Deprovisioning {len(instances)} instances")
