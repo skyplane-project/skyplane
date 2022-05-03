@@ -331,7 +331,7 @@ class ReplicatorClient:
                         Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
                     )
                     idx += 1
-            else: # random data replication
+            else:  # random data replication
                 file_size_bytes = job.random_chunk_size_mb * MB
                 chunks.append(
                     Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
@@ -415,6 +415,19 @@ class ReplicatorClient:
             rows.extend(result)
         return pd.DataFrame(rows)
 
+    def check_error_logs(self) -> Dict[str, List[str]]:
+        def get_error_logs(args):
+            _, instance = args
+            reply = retry_requests().get(f"http://{instance.public_ip()}:8080/api/v1/errors")
+            if reply.status_code != 200:
+                raise Exception(f"Failed to get error logs from gateway instance {instance.instance_name()}: {reply.text}")
+            return reply.json()["errors"]
+
+        errors: Dict[str, List[str]] = {}
+        for (_, instance), result in do_parallel(get_error_logs, self.bound_nodes.items(), n=-1):
+            errors[instance] = result
+        return errors
+
     def monitor_transfer(
         self,
         job: ReplicationJob,
@@ -441,6 +454,14 @@ class ReplicatorClient:
         try:
             with Timer() as t:
                 while True:
+                    # check for errors and exit if there are any
+                    errors = self.check_error_logs()
+                    if any(errors.values()):
+                        return {
+                            "errors": errors,
+                            "monitor_status": "error",
+                        }
+
                     log_df = self.get_chunk_status_log_df()
                     if log_df.empty:
                         logger.warning("No chunk status log entries yet")

@@ -4,7 +4,8 @@ import socket
 import ssl
 import time
 from contextlib import closing
-from multiprocessing import Event, Process, Value
+from multiprocessing import Event, Process, Value, Queue
+import traceback
 from typing import Tuple
 
 from skylark.utils import logger
@@ -16,8 +17,18 @@ from skylark.utils.utils import Timer
 
 
 class GatewayReceiver:
-    def __init__(self, chunk_store: ChunkStore, write_back_block_size=4 * MB, max_pending_chunks=1, use_tls: bool = True):
+    def __init__(
+        self,
+        chunk_store: ChunkStore,
+        error_event: Event,
+        error_queue: Queue,
+        write_back_block_size=4 * MB,
+        max_pending_chunks=1,
+        use_tls: bool = True,
+    ):
         self.chunk_store = chunk_store
+        self.error_event = error_event
+        self.error_queue = error_queue
         self.write_back_block_size = write_back_block_size
         self.max_pending_chunks = max_pending_chunks
         self.server_processes = []
@@ -49,10 +60,10 @@ class GatewayReceiver:
                 sock.bind(("0.0.0.0", 0))
                 socket_port = sock.getsockname()[1]
                 port.value = socket_port
-                exit_flag = Value("i", 0)
+                exit_flag = Event()
 
                 def signal_handler(signal, frame):
-                    exit_flag.value = 1
+                    exit_flag.set()
 
                 signal.signal(signal.SIGINT, signal_handler)
 
@@ -65,12 +76,16 @@ class GatewayReceiver:
                 logger.info(f"[receiver:{socket_port}] Waiting for connection")
                 ssl_conn, addr = ssl_sock.accept()
                 logger.info(f"[receiver:{socket_port}] Accepted connection from {addr}")
-                while True:
-                    if exit_flag.value == 1:
-                        logger.warning(f"[receiver:{socket_port}] Exiting on signal")
-                        ssl_conn.close()
-                        return
-                    self.recv_chunks(ssl_conn, addr)
+                while not exit_flag.is_set() and not self.error_event.is_set():
+                    try:
+                        self.recv_chunks(ssl_conn, addr)
+                    except Exception as e:
+                        logger.warning(f"[receiver:{socket_port}] Error: {str(e)}")
+                        self.error_queue.put(traceback.format_exc())
+                        self.exit_flag.set()
+                        self.error_event.set()
+                logger.warning(f"[receiver:{socket_port}] Exiting on signal")
+                ssl_conn.close()
 
         gateway_id = self.next_gateway_worker_id
         self.next_gateway_worker_id += 1
