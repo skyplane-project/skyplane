@@ -329,6 +329,14 @@ def replicate_helper(
         signal.signal(signal.SIGINT, s)
     stats = stats if stats else {}
     stats["success"] = stats["monitor_status"] == "completed"
+
+    if stats["monitor_status"] == "error":
+        for instance, errors in stats["errors"].items():
+            for error in errors:
+                typer.secho(f"\n❌ {instance} encountered error:", fg="red", bold=True)
+                typer.secho(error, fg="red")
+        raise typer.Exit(1)
+
     out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
     typer.echo(f"\n{json.dumps(out_json)}")
     return 0 if stats["success"] else 1

@@ -156,7 +156,7 @@ class AWSCloudProvider(CloudProvider):
 
     def delete_vpc(self, region: str, vpcid: str):
         """Delete VPC, from https://gist.github.com/vernhart/c6a0fc94c0aeaebe84e5cd6f3dede4ce"""
-        logger.warning(f"[{region}] Deleting VPC {vpcid}")
+        logger.fs.warning(f"[{region}] Deleting VPC {vpcid}")
         ec2 = self.auth.get_boto3_resource("ec2", region)
         ec2client = ec2.meta.client
         vpc = ec2.Vpc(vpcid)
@@ -237,7 +237,7 @@ class AWSCloudProvider(CloudProvider):
                 if not local_key_file.exists():  # double check due to lock
                     local_key_file.parent.mkdir(parents=True, exist_ok=True)
                     if key_name in set(p["KeyName"] for p in ec2_client.describe_key_pairs()["KeyPairs"]):
-                        logger.warning(f"Deleting key {key_name} in region {aws_region}")
+                        logger.fs.warning(f"Deleting key {key_name} in region {aws_region}")
                         ec2_client.delete_key_pair(KeyName=key_name)
                     key_pair = ec2.create_key_pair(KeyName=f"skylark-{aws_region}", KeyType="rsa")
                     with local_key_file.open("w") as f:
@@ -246,7 +246,7 @@ class AWSCloudProvider(CloudProvider):
                             key_str += "\n"
                         f.write(key_str)
                     os.chmod(local_key_file, 0o600)
-                    logger.info(f"Created key file {local_key_file}")
+                    logger.fs.info(f"Created key file {local_key_file}")
 
         return local_key_file
 
