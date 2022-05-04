@@ -1,6 +1,10 @@
-name: test
+name: unittest
 
-on: push
+on:
+  push:
+    branches: [ main ]
+  pull_request: 
+    branches: [ main ]
 
 jobs:
   pytest:
@@ -26,9 +30,10 @@ jobs:
           
       - name: Run unit tests
         run: pytest skylark/test/unit_nocloud
-      - name: Run cloud tests
-        if: ${{ github.base_ref == github.event.repository.default_branch }}
-        run: |
-          pytest skylark/test/unit_aws
-          pytest skylark/test/unit_azure
-          pytest skylark/test/unit_gcp
+     #- name: Run cloud tests
+        ###consider only running cloud tests for PRs to main once we go open source
+        ###if: ${{ github.event_name == 'pull_request' && github.base_ref == github.event.repository.default_branch }}
+        #run: |
+          #pytest skylark/test/unit_aws
+          #pytest skylark/test/unit_azure
+          #pytest skylark/test/unit_gcp
