@@ -254,7 +254,7 @@ class AWSCloudProvider(CloudProvider):
             except botocore.exceptions.ClientError as e:
                 logger.fs.error(f"[AWS] Error adding IP {ip} to security group {sg.group_name}: {e}")
                 if not str(e).endswith("already exists"):
-                    raise e
+                    logger.warn("[AWS] Error adding IP to security group, since it already exits")
 
     def remove_ip_from_security_group(self, aws_region: str, ip: str):
         """Remove IP from security group. If security group ID is None, return."""
@@ -268,8 +268,8 @@ class AWSCloudProvider(CloudProvider):
                 )
             except botocore.exceptions.ClientError as e:
                 logger.fs.error(f"[AWS] Error removing IP {ip} from security group {sg.group_name}: {e}")
-                if not str(e).endswith("does not exist"):
-                    raise e
+                if not str(e).endswith("NotFound"):
+                    logger.warn("[AWS] Error removing IP from security group")
 
     def ensure_keyfile_exists(self, aws_region, prefix=key_root / "aws"):
         ec2 = self.auth.get_boto3_resource("ec2", aws_region)
