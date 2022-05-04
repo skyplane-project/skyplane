@@ -1,4 +1,4 @@
-name: unittest
+name: unittests
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  pytest:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
