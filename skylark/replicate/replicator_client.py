@@ -79,7 +79,12 @@ class ReplicatorClient:
         jobs = []
         jobs.append(partial(self.aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
         for r in set(aws_regions_to_provision):
-            jobs.append(partial(self.aws.make_vpc, r.split(":")[1]))
+
+            def init_aws_vpc(r):
+                self.aws.make_vpc(r)
+                self.aws.authorize_client(r, "0.0.0.0/0")
+
+            jobs.append(partial(init_aws_vpc, r.split(":")[1]))
             jobs.append(partial(self.aws.ensure_keyfile_exists, r.split(":")[1]))
         if azure_regions_to_provision:
             jobs.append(self.azure.create_ssh_key)
@@ -194,15 +199,12 @@ class ReplicatorClient:
             self.temp_nodes.remove(instance)
 
         # Firewall rules
-        with Halo(text="Applying firewall rules", spinner="dots"):
-            jobs = []
-            public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.nodes]
-            for r in set(aws_regions_to_provision):
-                r = r.split(":")[1]
-                for _ip in public_ips:
-                    jobs.append(partial(self.aws.add_ip_to_security_group, r, _ip))
-            # todo add firewall rules for Azure and GCP
-            do_parallel(lambda fn: fn(), jobs)
+        # todo add firewall rules for Azure and GCP
+        public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.nodes]
+        aws_jobs = [
+            partial(self.aws.add_ip_to_security_group, r.split(":")[1], ip) for r in set(aws_regions_to_provision) for ip in public_ips
+        ]
+        do_parallel(lambda fn: fn(), aws_jobs, spinner=True, desc="Applying firewall rules")
 
         # setup instances
         def setup(args: Tuple[Server, Dict[str, int]]):
@@ -226,15 +228,11 @@ class ReplicatorClient:
                 logger.fs.warning(f"Deprovisioned {server.uuid()}")
 
         # Clear IPs from security groups
-        jobs = []
-        public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.nodes]
-        regions = [node.region for node in self.topology.nodes]
-        for r in set(regions):
-            if r.startswith("aws:"):
-                for _ip in public_ips:
-                    jobs.append(partial(self.aws.remove_ip_from_security_group, r.split(":"), _ip))
         # todo remove firewall rules for Azure and GCP
-        do_parallel(lambda fn: fn(), jobs)
+        public_ips = [i.public_ip() for i in self.bound_nodes.values()] + [i.public_ip() for i in self.temp_nodes]
+        aws_regions = [node.region for node in self.topology.nodes if node.region.startswith("aws:")]
+        aws_jobs = [partial(self.aws.remove_ip_from_security_group, r.split(":")[1], ip) for r in set(aws_regions) for ip in public_ips]
+        do_parallel(lambda fn: fn(), aws_jobs)
 
         # Terminate instances
         instances = self.bound_nodes.values()
@@ -355,7 +353,7 @@ class ReplicatorClient:
                         Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
                     )
                     idx += 1
-            else: # random data replication
+            else:  # random data replication
                 file_size_bytes = job.random_chunk_size_mb * MB
                 chunks.append(
                     Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
@@ -408,8 +406,11 @@ class ReplicatorClient:
             def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
                 hop_instance, chunk_requests = args
                 ip = gateway_ips[hop_instance]
-                logger.fs.debug(f"Sending {len(chunk_requests)} chunk requests to {ip}")
-                reply = retry_requests().post(f"http://{ip}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests])
+                tunnel_port = hop_instance.tunnel_port(8080)
+                logger.fs.debug(f"Sending {len(chunk_requests)} chunk requests to {ip} (via 127.0.0.1:{tunnel_port})")
+                reply = retry_requests().post(
+                    f"http://127.0.0.1:{tunnel_port}/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests]
+                )
                 if reply.status_code != 200:
                     raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
 
@@ -422,7 +423,7 @@ class ReplicatorClient:
     def get_chunk_status_log_df(self) -> pd.DataFrame:
         def get_chunk_status(args):
             node, instance = args
-            reply = retry_requests().get(f"http://{instance.public_ip()}:8080/api/v1/chunk_status_log")
+            reply = retry_requests().get(f"http://127.0.0.1:{instance.tunnel_port(8080)}/api/v1/chunk_status_log")
             if reply.status_code != 200:
                 raise Exception(f"Failed to get chunk status from gateway instance {instance.instance_name()}: {reply.text}")
             logs = []
@@ -564,7 +565,7 @@ class ReplicatorClient:
 
                     def fn(s: Server):
                         try:
-                            retry_requests().post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
+                            retry_requests().post(f"http://127.0.0.1:{s.tunnel_port(8080)}/api/v1/shutdown")
                         except:
                             return  # ignore connection errors since server may be shutting down
 

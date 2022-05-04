@@ -2,11 +2,12 @@ from typing import Dict, Optional
 
 import boto3
 import paramiko
-from skylark.compute.aws.aws_auth import AWSAuthentication
+import sshtunnel
 from skylark import key_root
-
+from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.compute.server import Server, ServerState
 from skylark.utils.cache import ignore_lru_cache
+from skylark.utils import logger
 
 
 class AWSServer(Server):
@@ -75,10 +76,19 @@ class AWSServer(Server):
         )
         return client
 
-    def get_ssh_cmd(self):
-        return f"ssh -i {self.local_keyfile} ec2-user@{self.public_ip()}"
-
     def get_sftp_client(self):
         t = paramiko.Transport((self.public_ip(), 22))
         t.connect(username="ec2-user", pkey=paramiko.RSAKey.from_private_key_file(str(self.local_keyfile)))
         return paramiko.SFTPClient.from_transport(t)
+
+    def open_ssh_tunnel_impl(self, remote_port) -> sshtunnel.SSHTunnelForwarder:
+        return sshtunnel.SSHTunnelForwarder(
+            (self.public_ip(), 22),
+            ssh_username="ec2-user",
+            ssh_pkey=str(self.local_keyfile),
+            local_bind_address=("127.0.0.1", 0),
+            remote_bind_address=("127.0.0.1", remote_port),
+        )
+
+    def get_ssh_cmd(self):
+        return f"ssh -i {self.local_keyfile} ec2-user@{self.public_ip()}"

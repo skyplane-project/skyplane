@@ -1,42 +1,36 @@
 import concurrent.futures
-from functools import partial
 import json
+import logging
 import os
 import re
-import logging
 import resource
 import signal
 import subprocess
+from functools import partial
 from pathlib import Path
 from shutil import copyfile
-from threading import Thread
-from typing import Dict, List
 from sys import platform
-from typing import Dict, List
-
+from threading import Thread
+from typing import Dict, List, Optional
 
 import boto3
 import typer
-from skylark import GB, MB
-from skylark import exceptions
-from skylark import gcp_config_path
+from skylark import GB, MB, exceptions, gcp_config_path
 from skylark.compute.aws.aws_auth import AWSAuthentication
-from skylark.compute.azure.azure_auth import AzureAuthentication
-from skylark.compute.gcp.gcp_auth import GCPAuthentication
-from skylark.config import SkylarkConfig
-from skylark.utils import logger
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
+from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
+from skylark.compute.gcp.gcp_auth import GCPAuthentication
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
+from skylark.config import SkylarkConfig
+from skylark.obj_store.azure_interface import AzureInterface
+from skylark.obj_store.gcs_interface import GCSInterface
 from skylark.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skylark.obj_store.s3_interface import S3Interface
-from skylark.obj_store.gcs_interface import GCSInterface
-from skylark.obj_store.azure_interface import AzureInterface
-from skylark.obj_store.object_store_interface import ObjectStoreInterface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
+from skylark.utils import logger
 from skylark.utils.utils import do_parallel
-from typing import Optional
 from tqdm import tqdm
 
 
@@ -231,7 +225,7 @@ def replicate_helper(
 
     if random:
         random_chunk_size_mb = size_total_mb // n_chunks
-        if max_chunk_size_mb: 
+        if max_chunk_size_mb:
             logger.error("Cannot set chunk size for random data replication - set `random_chunk_size_mb` instead")
             raise ValueError("Cannot set max chunk size")
         job = ReplicationJob(
@@ -281,7 +275,7 @@ def replicate_helper(
             src_objs=src_objs_job,
             dest_objs=dest_objs_job,
             obj_sizes={obj.key: obj.size for obj in src_objs},
-            max_chunk_size_mb=max_chunk_size_mb
+            max_chunk_size_mb=max_chunk_size_mb,
         )
 
     rc = ReplicatorClient(
@@ -297,7 +291,7 @@ def replicate_helper(
     try:
         rc.provision_gateways(reuse_gateways)
         for node, gw in rc.bound_nodes.items():
-            typer.secho(f"    Realtime logs for {node.region}:{node.instance} at {gw.gateway_log_viewer_url}")
+            logger.fs.info(f"Realtime logs for {node.region}:{node.instance} at {gw.gateway_log_viewer_url}")
         job = rc.run_replication_plan(job)
         if random:
             total_bytes = n_chunks * random_chunk_size_mb * MB
