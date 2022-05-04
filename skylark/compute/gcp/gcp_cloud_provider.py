@@ -1,8 +1,9 @@
+from operator import not_
 import os
 import time
 import uuid
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import googleapiclient
 import paramiko
