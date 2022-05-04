@@ -84,13 +84,13 @@ class AWSCloudProvider(CloudProvider):
         assert len(sgs) == 1
         return sgs[0]
 
-    def get_vpc(self, region: str, vpc_name="skylark"):
+    def get_vpcs(self, region: str, vpc_name="skylark"):
         ec2 = self.auth.get_boto3_resource("ec2", region)
         vpcs = list(ec2.vpcs.filter(Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]).all())
         if len(vpcs) == 0:
-            return None
+            return []
         else:
-            return vpcs[0]
+            return vpcs
 
     def make_vpc(self, region: str, vpc_name="skylark"):
         ec2 = self.auth.get_boto3_resource("ec2", region)
@@ -166,7 +166,7 @@ class AWSCloudProvider(CloudProvider):
 
     def delete_vpc(self, region: str, vpcid: str):
         """Delete VPC, from https://gist.github.com/vernhart/c6a0fc94c0aeaebe84e5cd6f3dede4ce"""
-        logger.warning(f"[{region}] Deleting VPC {vpcid}")
+        logger.fs.warning(f"[{region}] Deleting VPC {vpcid}")
         ec2 = self.auth.get_boto3_resource("ec2", region)
         ec2client = ec2.meta.client
         vpc = ec2.Vpc(vpcid)
@@ -223,8 +223,9 @@ class AWSCloudProvider(CloudProvider):
                 iam.attach_role_policy(RoleName=iam_name, PolicyArn=attach_policy_arn)
 
     def authorize_client(self, aws_region: str, client_ip: str, port=22):
-        vpc = self.get_vpc(aws_region)
-        assert vpc, f"No VPC found in {aws_region}"
+        vpcs = self.get_vpcs(aws_region)
+        assert vpcs, f"No VPC found in {aws_region}"
+        vpc = vpcs[0]
         sgs = [sg for sg in vpc.security_groups.all() if sg.group_name == "skylark"]
         assert len(sgs) == 1, f"Found {len(sgs)} sgs named skylark, expected 1"
         sg = sgs[0]
@@ -313,8 +314,9 @@ class AWSCloudProvider(CloudProvider):
         iam = self.auth.get_boto3_client("iam", region)
         ec2 = self.auth.get_boto3_resource("ec2", region)
         ec2_client = self.auth.get_boto3_client("ec2", region)
-        vpc = self.get_vpc(region)
-        assert vpc is not None, "No VPC found"
+        vpcs = self.get_vpcs(region)
+        assert vpcs, "No VPC found"
+        vpc = vpcs[0]
 
         # get subnet list
         def instance_class_supported(az):
