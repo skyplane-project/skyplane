@@ -331,7 +331,7 @@ class ReplicatorClient:
                         Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
                     )
                     idx += 1
-            else: # random data replication
+            else:  # random data replication
                 file_size_bytes = job.random_chunk_size_mb * MB
                 chunks.append(
                     Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)

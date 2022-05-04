@@ -164,7 +164,7 @@ class AzureInterface(ObjectStoreInterface):
         except ResourceNotFoundError:
             return False
 
-    def download_object(self, src_object_name, dst_file_path):
+    def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = src_object_name if src_object_name[0] != "/" else src_object_name
         blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=src_object_name)
@@ -173,7 +173,7 @@ class AzureInterface(ObjectStoreInterface):
         with open(dst_file_path, "rb+") as download_file:
             download_file.write(blob_client.download_blob(max_concurrency=self.max_concurrency).readall())
 
-    def upload_object(self, src_file_path, dst_object_name, content_type="infer"):
+    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
         os.path.getsize(src_file_path)

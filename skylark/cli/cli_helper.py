@@ -231,7 +231,7 @@ def replicate_helper(
 
     if random:
         random_chunk_size_mb = size_total_mb // n_chunks
-        if max_chunk_size_mb: 
+        if max_chunk_size_mb:
             logger.error("Cannot set chunk size for random data replication - set `random_chunk_size_mb` instead")
             raise ValueError("Cannot set max chunk size")
         job = ReplicationJob(
@@ -281,7 +281,7 @@ def replicate_helper(
             src_objs=src_objs_job,
             dest_objs=dest_objs_job,
             obj_sizes={obj.key: obj.size for obj in src_objs},
-            max_chunk_size_mb=max_chunk_size_mb
+            max_chunk_size_mb=max_chunk_size_mb,
         )
 
     rc = ReplicatorClient(
