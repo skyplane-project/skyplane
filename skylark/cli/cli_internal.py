@@ -2,21 +2,15 @@ import os
 import tempfile
 from pathlib import Path
 from typing import Optional
+from skylark.cli.cli_solver import solve_throughput
 
-import skylark.cli.cli_aws
-import skylark.cli.cli_azure
-import skylark.cli.cli_gcp
-import skylark.cli.cli_solver
-import skylark.cli.experiments
 import typer
 from skylark import print_header, skylark_root
 from skylark.cli.cli_helper import replicate_helper
 from skylark.replicate.replication_plan import ReplicationTopology
 from skylark.utils import logger
-from skylark.cli.cli import app
 
 
-@app.command()
 def replicate_random(
     src_region: str,
     dst_region: str,
@@ -75,7 +69,6 @@ def replicate_random(
     )
 
 
-@app.command()
 def replicate_random_solve(
     src_region: str,
     dst_region: str,
@@ -110,7 +103,7 @@ def replicate_random_solve(
 
     if solve:
         with tempfile.NamedTemporaryFile(mode="w") as f:
-            skylark.cli.cli_solver.solve_throughput(
+            solve_throughput(
                 src_region,
                 dst_region,
                 solver_required_throughput_gbits,
@@ -153,7 +146,6 @@ def replicate_random_solve(
     )
 
 
-@app.command()
 def replicate_json(
     path: Path = typer.Argument(..., exists=True, file_okay=True, dir_okay=False, help="Path to JSON file describing replication plan"),
     size_total_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB (across n_chunks chunks)"),

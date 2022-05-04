@@ -7,6 +7,7 @@ import skylark.cli.cli_azure
 import skylark.cli.cli_gcp
 import skylark.cli.cli_solver
 import skylark.cli.experiments
+import skylark.cli.cli_internal as cli_internal
 import typer
 from halo import Halo
 from skylark import GB, config_path, exceptions, print_header, skylark_root
@@ -35,6 +36,9 @@ from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP
 from skylark.utils import logger
 
 app = typer.Typer(name="skylark")
+app.command()(cli_internal.replicate_random)
+app.command()(cli_internal.replicate_random_solve)
+app.command()(cli_internal.replicate_json)
 app.add_typer(skylark.cli.experiments.app, name="experiments")
 app.add_typer(skylark.cli.cli_aws.app, name="aws")
 app.add_typer(skylark.cli.cli_azure.app, name="azure")
