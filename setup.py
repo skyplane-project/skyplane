@@ -27,6 +27,7 @@ setup(
         "halo",
         "pandas",
         "questionary",
+        "sshtunnel",
         "typer",
         # shared dependencies
         "cachetools",
