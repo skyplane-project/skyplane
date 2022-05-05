@@ -58,7 +58,7 @@ class ReplicatorClient:
         self.multipart_upload_requests = []
 
     def provision_gateways(
-        self, reuse_instances=False, log_dir: Optional[PathLike] = None, authorize_ssh_pub_key: Optional[PathLike] = None
+        self, reuse_instances=False, log_dir: Optional[PathLike] = None, authorize_ssh_pub_key: Optional[PathLike] = None, use_bbr=False
     ):
         regions_to_provision = [node.region for node in self.topology.nodes]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
@@ -200,7 +200,7 @@ class ReplicatorClient:
                 server.init_log_files(log_dir)
             if authorize_ssh_pub_key:
                 server.copy_public_key(authorize_ssh_pub_key)
-            server.start_gateway(outgoing_ports, gateway_docker_image=self.gateway_docker_image)
+            server.start_gateway(outgoing_ports, gateway_docker_image=self.gateway_docker_image, use_bbr=use_bbr)
 
         args = []
         for node, server in self.bound_nodes.items():

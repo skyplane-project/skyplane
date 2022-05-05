@@ -81,6 +81,7 @@ def cp(
     max_instances: int = typer.Option(1, help="Max number of instances per overlay region."),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
+    use_bbr: bool = typer.Option(False, help="If true, will use BBR congestion control"),
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
     solver_throughput_grid: Path = typer.Option(
@@ -192,6 +193,7 @@ def cp(
             dest_key_prefix=path_dst,
             reuse_gateways=reuse_gateways,
             max_chunk_size_mb=max_chunk_size_mb,
+            use_bbr=use_bbr
         )
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")

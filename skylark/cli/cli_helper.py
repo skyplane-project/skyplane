@@ -215,6 +215,7 @@ def replicate_helper(
     # gateway provisioning options
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
+    use_bbr: bool = False,
     # cloud provider specific options
     aws_instance_class: str = "m5.8xlarge",
     azure_instance_class: str = "Standard_D32_v4",
@@ -295,7 +296,7 @@ def replicate_helper(
     typer.secho(f"Storing debug information for transfer in {rc.transfer_dir}", fg="yellow")
     stats = {}
     try:
-        rc.provision_gateways(reuse_gateways)
+        rc.provision_gateways(reuse_gateways, use_bbr=use_bbr)
         for node, gw in rc.bound_nodes.items():
             typer.secho(f"    Realtime logs for {node.region}:{node.instance} at {gw.gateway_log_viewer_url}")
         job = rc.run_replication_plan(job)
