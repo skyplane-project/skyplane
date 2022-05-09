@@ -207,6 +207,24 @@ class AWSCloudProvider(CloudProvider):
         # finally, delete the vpc
         ec2client.delete_vpc(VpcId=vpcid)
 
+    def list_instance_profiles(self, prefix: str = None):
+        """List instance profile names in a region"""
+        paginator = self.auth.get_boto3_client("iam").get_paginator("list_instance_profiles")
+        matched_names = []
+        for page in paginator.paginate():
+            for profile in page["InstanceProfiles"]:
+                if prefix is None or profile["InstanceProfileName"].startswith(prefix):
+                    matched_names.append(profile["InstanceProfileName"])
+        return matched_names
+
+    def delete_instance_profile(self, profile_name: str):
+        # remove all roles from the instance profile
+        profile = self.auth.get_boto3_resource("iam").InstanceProfile(profile_name)
+        for role in profile.roles:
+            profile.remove_role(RoleName=role.name)
+        # delete the instance profile
+        profile.delete()
+
     def create_iam(self, iam_name: str = "skylark_gateway", attach_policy_arn: Optional[str] = None):
         """Create IAM role if it doesn't exist and grant managed role if given."""
         iam = self.auth.get_boto3_client("iam")

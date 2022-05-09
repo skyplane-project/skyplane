@@ -398,14 +398,18 @@ def deprovision_skylark_instances():
         typer.secho(f"Deprovisioning {len(instances)} instances", fg="yellow", bold=True)
         do_parallel(lambda instance: instance.terminate_instance(), instances, desc="Deprovisioning", spinner=True, spinner_persist=True)
     else:
-        typer.secho("No instances to deprovision, exiting...", fg="yellow", bold=True)
+        typer.secho("No instances to deprovision", fg="yellow", bold=True)
 
-    # remove skylark vpc
     if AWSAuthentication().enabled():
+        # remove skylark vpc
         aws = AWSCloudProvider()
         vpcs = do_parallel(partial(aws.get_vpcs), aws.region_list(), desc="Querying VPCs", spinner=True)
         args = [(x[0], vpc.id) for x in vpcs for vpc in x[1]]
         do_parallel(lambda args: aws.delete_vpc(*args), args, desc="Deleting VPCs", spinner=True, spinner_persist=True)
+        # remove all instance profiles
+        profiles = aws.list_instance_profiles(prefix="skylark-aws")
+        if profiles:
+            do_parallel(aws.delete_instance_profile, profiles, desc="Deleting instance profiles", spinner=True, spinner_persist=True, n=4)
 
 
 def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
