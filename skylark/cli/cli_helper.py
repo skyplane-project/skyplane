@@ -227,7 +227,7 @@ def replicate_helper(
     if random:
         random_chunk_size_mb = size_total_mb // n_chunks
         if max_chunk_size_mb:
-            logger.error("Cannot set chunk size for random data replication - set `random_chunk_size_mb` instead")
+            logger.error("Cannot set chunk size for random data replication, set `random_chunk_size_mb` instead")
             raise ValueError("Cannot set max chunk size")
         job = ReplicationJob(
             source_region=topo.source_region(),
