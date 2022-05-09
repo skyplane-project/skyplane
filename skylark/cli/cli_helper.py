@@ -1,42 +1,36 @@
 import concurrent.futures
-from functools import partial
 import json
+import logging
 import os
 import re
-import logging
 import resource
 import signal
 import subprocess
+from functools import partial
 from pathlib import Path
 from shutil import copyfile
-from threading import Thread
-from typing import Dict, List
 from sys import platform
-from typing import Dict, List
-
+from threading import Thread
+from typing import Dict, List, Optional
 
 import boto3
 import typer
-from skylark import GB, MB
-from skylark import exceptions
-from skylark import gcp_config_path
+from skylark import GB, MB, exceptions, gcp_config_path
 from skylark.compute.aws.aws_auth import AWSAuthentication
-from skylark.compute.azure.azure_auth import AzureAuthentication
-from skylark.compute.gcp.gcp_auth import GCPAuthentication
-from skylark.config import SkylarkConfig
-from skylark.utils import logger
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
+from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
+from skylark.compute.gcp.gcp_auth import GCPAuthentication
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
+from skylark.config import SkylarkConfig
+from skylark.obj_store.azure_interface import AzureInterface
+from skylark.obj_store.gcs_interface import GCSInterface
 from skylark.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skylark.obj_store.s3_interface import S3Interface
-from skylark.obj_store.gcs_interface import GCSInterface
-from skylark.obj_store.azure_interface import AzureInterface
-from skylark.obj_store.object_store_interface import ObjectStoreInterface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
+from skylark.utils import logger
 from skylark.utils.utils import do_parallel
-from typing import Optional
 from tqdm import tqdm
 
 
@@ -298,7 +292,7 @@ def replicate_helper(
     try:
         rc.provision_gateways(reuse_gateways, use_bbr=use_bbr)
         for node, gw in rc.bound_nodes.items():
-            typer.secho(f"    Realtime logs for {node.region}:{node.instance} at {gw.gateway_log_viewer_url}")
+            logger.fs.info(f"Realtime logs for {node.region}:{node.instance} at {gw.gateway_log_viewer_url}")
         job = rc.run_replication_plan(job)
         if random:
             total_bytes = n_chunks * random_chunk_size_mb * MB
@@ -330,6 +324,14 @@ def replicate_helper(
         signal.signal(signal.SIGINT, s)
     stats = stats if stats else {}
     stats["success"] = stats["monitor_status"] == "completed"
+
+    if stats["monitor_status"] == "error":
+        for instance, errors in stats["errors"].items():
+            for error in errors:
+                typer.secho(f"\n❌ {instance} encountered error:", fg="red", bold=True)
+                typer.secho(error, fg="red")
+        raise typer.Exit(1)
+
     out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
     typer.echo(f"\n{json.dumps(out_json)}")
     return 0 if stats["success"] else 1
@@ -398,6 +400,13 @@ def deprovision_skylark_instances():
         do_parallel(lambda instance: instance.terminate_instance(), instances, desc="Deprovisioning", spinner=True, spinner_persist=True)
     else:
         typer.secho("No instances to deprovision, exiting...", fg="yellow", bold=True)
+
+    # remove skylark vpc
+    if AWSAuthentication().enabled():
+        aws = AWSCloudProvider()
+        vpcs = do_parallel(partial(aws.get_vpcs), aws.region_list(), desc="Querying VPCs", spinner=True)
+        args = [(x[0], vpc.id) for x in vpcs for vpc in x[1]]
+        do_parallel(lambda args: aws.delete_vpc(*args), args, desc="Deleting VPCs", spinner=True, spinner_persist=True)
 
 
 def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
