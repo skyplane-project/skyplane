@@ -443,7 +443,7 @@ class ReplicatorClient:
     def check_error_logs(self) -> Dict[str, List[str]]:
         def get_error_logs(args):
             _, instance = args
-            reply = retry_requests().get(f"http://{instance.public_ip()}:8080/api/v1/errors")
+            reply = retry_requests().get(f"http://127.0.0.1:{instance.tunnel_port(8080)}/api/v1/errors")
             if reply.status_code != 200:
                 raise Exception(f"Failed to get error logs from gateway instance {instance.instance_name()}: {reply.text}")
             return reply.json()["errors"]
@@ -473,6 +473,9 @@ class ReplicatorClient:
         sink_regions = set(s.region for s in sinks)
 
         completed_chunk_ids = []
+
+        # wait for VMs to start
+
         if show_spinner:
             spinner = Halo(text="Transfer starting", spinner="dots")
             spinner.start()
