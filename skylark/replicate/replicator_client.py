@@ -235,22 +235,14 @@ class ReplicatorClient:
         do_parallel(lambda fn: fn(), aws_jobs)
 
         # Terminate instances
-        instances = self.bound_nodes.values()
+        instances = list(self.bound_nodes.values()) + self.temp_nodes
         logger.fs.warning(f"Deprovisioning {len(instances)} instances")
-        if any(i.provider == "azure" for i in instances + self.temp_nodes):
-            logger.warning(f"NOTE: Azure is very slow to terminate instances. Consider using --reuse-instances and then deprovisioning the instances manually with `skylark deprovision`.")
-        do_parallel(deprovision_gateway_instance, instances, n=-1, spinner=True, spinner_persist=True, desc="Deprovisioning instances")
-        if self.temp_nodes:
-            logger.fs.warning(f"Deprovisioning {len(self.temp_nodes)} temporary instances")
-            do_parallel(
-                deprovision_gateway_instance,
-                self.temp_nodes,
-                n=-1,
-                spinner=True,
-                spinner_persist=False,
-                desc="Deprovisioning partially allocated instances",
+        if any(i.provider == "azure" for i in instances):
+            logger.warning(
+                f"NOTE: Azure is very slow to terminate instances. Consider using --reuse-instances and then deprovisioning the instances manually with `skylark deprovision`."
             )
-            self.temp_nodes = []
+        do_parallel(deprovision_gateway_instance, instances, n=-1, spinner=True, spinner_persist=True, desc="Deprovisioning instances")
+        self.temp_nodes = []
         logger.fs.info("Deprovisioned instances")
 
     def run_replication_plan(self, job: ReplicationJob) -> ReplicationJob:
