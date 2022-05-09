@@ -437,7 +437,10 @@ class ReplicatorClient:
     def check_error_logs(self) -> Dict[str, List[str]]:
         def get_error_logs(args):
             _, instance = args
-            reply = retry_requests().get(f"http://{instance.public_ip()}:8080/api/v1/errors")
+            url = f"http://{instance.public_ip()}:8080/api/v1/errors"
+            logger.fs.debug(f"Getting error logs from {instance.uuid()} from {url}")
+            reply = retry_requests(connect=1).get(url)
+            logger.fs.debug(f"Got error logs from {instance.uuid()}: {reply.text}, status code: {reply.status_code}")
             if reply.status_code != 200:
                 raise Exception(f"Failed to get error logs from gateway instance {instance.instance_name()}: {reply.text}")
             return reply.json()["errors"]
@@ -473,7 +476,10 @@ class ReplicatorClient:
         try:
             with Timer() as t:
                 while True:
+                    logger.fs.debug(f"Refreshing status, {t.elapsed:.2f}s elapsed")
+
                     # check for errors and exit if there are any
+                    logger.fs.debug("Checking for errors")
                     errors = self.check_error_logs()
                     if any(errors.values()):
                         return {
@@ -481,6 +487,7 @@ class ReplicatorClient:
                             "monitor_status": "error",
                         }
 
+                    logger.fs.debug("Checking for completion")
                     log_df = self.get_chunk_status_log_df()
                     if log_df.empty:
                         logger.warning("No chunk status log entries yet")
@@ -500,6 +507,7 @@ class ReplicatorClient:
                     )
 
                     # update progress bar
+                    logger.fs.debug("Updating progress bar")
                     total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
                     throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
 

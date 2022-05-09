@@ -116,6 +116,7 @@ class Server:
             def open_tunnel():
                 tunnel = self.open_ssh_tunnel_impl(remote_port)
                 tunnel.start()
+                logger.fs.info(f"Opened tunnel to {self.uuid()}:{remote_port} on {tunnel.local_bind_port}")
                 return tunnel
             self.ssh_tunnels[remote_port] = retry_backoff(open_tunnel)
         return self.ssh_tunnels[remote_port].local_bind_port
