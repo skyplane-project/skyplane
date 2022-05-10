@@ -7,7 +7,6 @@ from skylark import key_root
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.compute.server import Server, ServerState
 from skylark.utils.cache import ignore_lru_cache
-from skylark.utils import logger
 
 
 class AWSServer(Server):
@@ -60,7 +59,22 @@ class AWSServer(Server):
         return f"AWSServer(region_tag={self.region_tag}, instance_id={self.instance_id})"
 
     def terminate_instance_impl(self):
-        self.auth.get_boto3_resource("ec2", self.aws_region).instances.filter(InstanceIds=[self.instance_id]).terminate()
+        iam = self.auth.get_boto3_resource("iam")
+
+        # get instance profile name that is associated with this instance
+        profile = self.get_boto3_instance_resource().iam_instance_profile
+        if profile:
+            profile = iam.InstanceProfile(profile["Arn"].split("/")[-1])
+
+            # remove all roles from instance profile
+            for role in profile.roles:
+                profile.remove_role(RoleName=role.name)
+
+            # delete instance profile
+            profile.delete()
+
+        # delete instance
+        self.get_boto3_instance_resource().terminate()
 
     def get_ssh_client_impl(self):
         client = paramiko.SSHClient()
