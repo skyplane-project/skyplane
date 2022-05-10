@@ -207,6 +207,16 @@ class AWSCloudProvider(CloudProvider):
         # finally, delete the vpc
         ec2client.delete_vpc(VpcId=vpcid)
 
+    def remove_sg_ips(self, region: str, vpcid: str):
+        """Remove all IPs from a security group"""
+        ec2 = self.auth.get_boto3_resource("ec2", region)
+        vpc = ec2.Vpc(vpcid)
+        for sg in vpc.security_groups.all():
+            if sg.group_name == "default":
+                continue
+            # revoke all ingress rules except for ssh
+            sg.revoke_ingress(IpPermissions=[r for r in sg.ip_permissions if not (r.get("FromPort") == 22 and r.get("ToPort") == 22)])
+
     def list_instance_profiles(self, prefix: Optional[str] = None):
         """List instance profile names in a region"""
         paginator = self.auth.get_boto3_client("iam").get_paginator("list_instance_profiles")

@@ -59,15 +59,22 @@ class AWSServer(Server):
         return f"AWSServer(region_tag={self.region_tag}, instance_id={self.instance_id})"
 
     def terminate_instance_impl(self):
-        ec2 = self.auth.get_boto3_resource("ec2", self.aws_region)
-        # remove instance profile
-        instance_profile = ec2.Instance(self.instance_id).instance_profile
-        for role in instance_profile.roles:
-            instance_profile.remove_role(RoleName=role["RoleName"])
-        instance_profile.delete()
+        iam = self.auth.get_boto3_resource("iam")
 
-        # terminate instance
-        self.auth.get_boto3_resource("ec2", self.aws_region).instances.filter(InstanceIds=[self.instance_id]).terminate()
+        # get instance profile name that is associated with this instance
+        profile = self.get_boto3_instance_resource().iam_instance_profile
+        if profile:
+            profile = iam.InstanceProfile(profile["Arn"].split("/")[-1])
+
+            # remove all roles from instance profile
+            for role in profile.roles:
+                profile.remove_role(RoleName=role.name)
+
+            # delete instance profile
+            profile.delete()
+
+        # delete instance
+        self.get_boto3_instance_resource().terminate()
 
     def get_ssh_client_impl(self):
         client = paramiko.SSHClient()
