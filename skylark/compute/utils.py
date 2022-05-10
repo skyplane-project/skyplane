@@ -40,7 +40,7 @@ def make_sysctl_tcp_tuning_command(cc="cubic"):
         "fs.file-max": 1024 * 1024 * 1024,
     }
     if cc == "bbr":
-        logger.warning("Using BBR, make sure you indend to!")
+        logger.fs.warning("Using BBR, make sure you indend to!")
         sysctl_updates["net.core.default_qdisc"] = "fq"
         sysctl_updates["net.ipv4.tcp_congestion_control"] = "bbr"
     elif cc == "cubic":
