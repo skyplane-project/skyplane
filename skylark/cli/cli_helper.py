@@ -209,6 +209,7 @@ def replicate_helper(
     # gateway provisioning options
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
+    use_bbr: bool = False,
     # cloud provider specific options
     aws_instance_class: str = "m5.8xlarge",
     azure_instance_class: str = "Standard_D32_v4",
@@ -219,14 +220,15 @@ def replicate_helper(
     log_interval_s: float = 1.0,
 ):
     if reuse_gateways:
-        logger.warning(
-            f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
+        typer.secho(
+            f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways.",
+            fg="red",
+            bold=True,
         )
-
     if random:
         random_chunk_size_mb = size_total_mb // n_chunks
         if max_chunk_size_mb:
-            logger.error("Cannot set chunk size for random data replication - set `random_chunk_size_mb` instead")
+            logger.error("Cannot set chunk size for random data replication, set `random_chunk_size_mb` instead")
             raise ValueError("Cannot set max chunk size")
         job = ReplicationJob(
             source_region=topo.source_region(),
@@ -289,7 +291,7 @@ def replicate_helper(
     typer.secho(f"Storing debug information for transfer in {rc.transfer_dir}", fg="yellow")
     stats = {}
     try:
-        rc.provision_gateways(reuse_gateways)
+        rc.provision_gateways(reuse_gateways, use_bbr=use_bbr)
         for node, gw in rc.bound_nodes.items():
             logger.fs.info(f"Realtime logs for {node.region}:{node.instance} at {gw.gateway_log_viewer_url}")
         job = rc.run_replication_plan(job)

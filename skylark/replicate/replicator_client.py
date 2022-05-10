@@ -58,7 +58,7 @@ class ReplicatorClient:
         self.multipart_upload_requests = []
 
     def provision_gateways(
-        self, reuse_instances=False, log_dir: Optional[PathLike] = None, authorize_ssh_pub_key: Optional[PathLike] = None
+        self, reuse_instances=False, log_dir: Optional[PathLike] = None, authorize_ssh_pub_key: Optional[PathLike] = None, use_bbr=False
     ):
         regions_to_provision = [node.region for node in self.topology.nodes]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
@@ -213,7 +213,7 @@ class ReplicatorClient:
                 server.init_log_files(log_dir)
             if authorize_ssh_pub_key:
                 server.copy_public_key(authorize_ssh_pub_key)
-            server.start_gateway(outgoing_ports, gateway_docker_image=self.gateway_docker_image)
+            server.start_gateway(outgoing_ports, gateway_docker_image=self.gateway_docker_image, use_bbr=use_bbr)
 
         args = []
         for node, server in self.bound_nodes.items():
@@ -235,20 +235,14 @@ class ReplicatorClient:
         do_parallel(lambda fn: fn(), aws_jobs)
 
         # Terminate instances
-        instances = self.bound_nodes.values()
+        instances = list(self.bound_nodes.values()) + self.temp_nodes
         logger.fs.warning(f"Deprovisioning {len(instances)} instances")
-        do_parallel(deprovision_gateway_instance, instances, n=-1, spinner=True, spinner_persist=True, desc="Deprovisioning instances")
-        if self.temp_nodes:
-            logger.fs.warning(f"Deprovisioning {len(self.temp_nodes)} temporary instances")
-            do_parallel(
-                deprovision_gateway_instance,
-                self.temp_nodes,
-                n=-1,
-                spinner=True,
-                spinner_persist=False,
-                desc="Deprovisioning partially allocated instances",
+        if any(i.provider == "azure" for i in instances):
+            logger.warning(
+                f"NOTE: Azure is very slow to terminate instances. Consider using --reuse-instances and then deprovisioning the instances manually with `skylark deprovision`."
             )
-            self.temp_nodes = []
+        do_parallel(deprovision_gateway_instance, instances, n=-1, spinner=True, spinner_persist=True, desc="Deprovisioning instances")
+        self.temp_nodes = []
         logger.fs.info("Deprovisioned instances")
 
     def run_replication_plan(self, job: ReplicationJob) -> ReplicationJob:
@@ -482,7 +476,10 @@ class ReplicatorClient:
         try:
             with Timer() as t:
                 while True:
+                    logger.fs.debug(f"Refreshing status, {t.elapsed:.2f}s elapsed")
+
                     # check for errors and exit if there are any
+                    logger.fs.debug("Checking for errors")
                     errors = self.check_error_logs()
                     if any(errors.values()):
                         return {
@@ -490,6 +487,7 @@ class ReplicatorClient:
                             "monitor_status": "error",
                         }
 
+                    logger.fs.debug("Checking for completion")
                     log_df = self.get_chunk_status_log_df()
                     if log_df.empty:
                         logger.warning("No chunk status log entries yet")
@@ -509,6 +507,7 @@ class ReplicatorClient:
                     )
 
                     # update progress bar
+                    logger.fs.debug("Updating progress bar")
                     total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
                     throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
 
