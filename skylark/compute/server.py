@@ -113,9 +113,14 @@ class Server:
     def tunnel_port(self, remote_port: int) -> int:
         """Returns a local port that tunnels to the remote port."""
         if remote_port not in self.ssh_tunnels:
-            self.ssh_tunnels[remote_port] = self.open_ssh_tunnel_impl(remote_port)
-            self.ssh_tunnels[remote_port].start()
-            logger.fs.info(f"Opened tunnel to {self.uuid()}:{remote_port} on {self.ssh_tunnels[remote_port].local_bind_port}")
+
+            def start():
+                tunnel = self.open_ssh_tunnel_impl(remote_port)
+                tunnel.start()
+                tunnel._check_is_started()
+                return tunnel
+
+            self.ssh_tunnels[remote_port] = retry_backoff(start)
         return self.ssh_tunnels[remote_port].local_bind_port
 
     @property

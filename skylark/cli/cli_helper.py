@@ -220,7 +220,11 @@ def replicate_helper(
     log_interval_s: float = 1.0,
 ):
     if reuse_gateways:
-        typer.secho(f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways.", fg="red", bold=True)
+        typer.secho(
+            f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways.",
+            fg="red",
+            bold=True,
+        )
     if random:
         random_chunk_size_mb = size_total_mb // n_chunks
         if max_chunk_size_mb:

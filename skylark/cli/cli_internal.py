@@ -17,11 +17,11 @@ def replicate_random(
     inter_region: Optional[str] = typer.Argument(None),
     num_gateways: int = typer.Option(1, "--num-gateways", "-n", help="Number of gateways"),
     num_outgoing_connections: int = typer.Option(
-        64, "--num-outgoing-connections", "-c", help="Number of outgoing connections between each gateway"
+        16, "--num-outgoing-connections", "-c", help="Number of outgoing connections between each gateway"
     ),
     total_transfer_size_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB."),
     chunk_size_mb: int = typer.Option(8, "--chunk-size-mb", help="Chunk size in MB."),
-    use_bbr: bool = typer.Option(False, help="If true, will use BBR congestion control"),
+    use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
     aws_instance_class: str = "m5.8xlarge",
@@ -73,11 +73,11 @@ def replicate_random_solve(
     inter_region: Optional[str] = typer.Argument(None),
     num_gateways: int = typer.Option(1, "--num-gateways", "-n", help="Number of gateways"),
     num_outgoing_connections: int = typer.Option(
-        64, "--num-outgoing-connections", "-c", help="Number of outgoing connections between each gateway"
+        16, "--num-outgoing-connections", "-c", help="Number of outgoing connections between each gateway"
     ),
     total_transfer_size_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB."),
     chunk_size_mb: int = typer.Option(8, "--chunk-size-mb", help="Chunk size in MB."),
-    use_bbr: bool = typer.Option(False, help="If true, will use BBR congestion control"),
+    use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
     aws_instance_class: str = "m5.8xlarge",
@@ -153,7 +153,7 @@ def replicate_json(
     src_key_prefix: str = "/",
     dest_key_prefix: str = "/",
     # gateway provisioning options
-    use_bbr: bool = typer.Option(False, help="If true, will use BBR congestion control"),
+    use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
     # cloud provider specific options
