@@ -75,6 +75,7 @@ class GCPAuthentication:
         if cached_credential == (None, None):
             inferred_cred, inferred_project = google.auth.default(quota_project_id=project_id)
             setattr(self.__cached_credentials, f"credential_{project_id}", (inferred_cred, project_id or inferred_project))
+            return inferred_cred, inferred_project
         return cached_credential
 
     def enabled(self):
