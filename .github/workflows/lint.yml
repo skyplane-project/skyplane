@@ -16,7 +16,7 @@ jobs:
       - name: Cache pip dependencies
         uses: actions/cache@v2
         with:
-          path:
+          path: |
             - ~/.cache/pip
             - .pytype  # cache pytype build
           key: ${{ hashFiles('setup.py') }}-pytype
