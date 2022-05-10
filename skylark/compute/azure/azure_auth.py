@@ -11,6 +11,10 @@ from skylark import cloud_config
 from skylark.compute.utils import query_which_cloud
 from skylark.config import SkylarkConfig
 from skylark import config_path
+from skylark import azure_config_path
+
+import subprocess
+import json
 
 # optional imports due to large package size
 try:
@@ -50,6 +54,36 @@ class AzureAuthentication:
             )
             setattr(self.__cached_credentials, f"credential_{subscription_id}", cached_credential)
         return cached_credential
+
+    def save_region_config(self, config: SkylarkConfig):
+        if config.azure_enabled == False:
+            self.clear_region_config()
+            return
+        region_json = json.loads(subprocess.check_output(["az", "account", "list-locations", "-o", "json"]))
+        region_list = []
+        for region in region_json:
+            region_list.append(region["name"])
+
+        with azure_config_path.open("w") as f:
+            f.write("\n".join(region_list))
+        print(f"    Azure region config file saved to {azure_config_path}")
+
+    @staticmethod
+    def get_region_config():
+        try:
+            f = open(azure_config_path, "r")
+        except FileNotFoundError:
+            print("     No Azure config detected! Consquently, the Azure region list is empty. Run skylark init --reinit-azure to remedy this.")
+            return []
+        region_list = []
+        for region in f.read().split("\n"):
+            region_list.append(region)
+        return region_list
+
+
+    def clear_region_config(self):
+        with azure_config_path.open("w") as f:
+            f.write("")
 
     def enabled(self) -> bool:
         return self.config.azure_enabled and self.subscription_id is not None

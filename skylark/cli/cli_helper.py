@@ -397,6 +397,7 @@ def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> Skylar
         typer.secho("    https://docs.microsoft.com/en-us/azure/developer/python/azure-sdk-authenticate", fg="red")
         typer.secho("    Disabling Azure support", fg="blue")
         config.azure_enabled = False
+        auth.save_region_config(config)
         return config
     typer.secho("    Azure credentials found in Azure CLI", fg="blue")
     inferred_subscription_id = AzureAuthentication.infer_subscription_id()
@@ -407,6 +408,7 @@ def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> Skylar
         config.azure_subscription_id = None
         typer.secho("    Disabling Azure support", fg="blue")
         config.azure_enabled = False
+    auth.save_region_config(config)
     return config
 
 

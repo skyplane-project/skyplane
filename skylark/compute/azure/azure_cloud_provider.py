@@ -34,6 +34,8 @@ class AzureCloudProvider(CloudProvider):
 
     @staticmethod
     def region_list():
+        return AzureAuthentication.get_region_config()
+        '''
         return [
             "australiaeast",
             "brazilsouth",
@@ -82,7 +84,7 @@ class AzureCloudProvider(CloudProvider):
             #   "southafricawest",
             #   "switzerlandwest",
             #   "uaecentral",
-        ]
+        ]'''
 
     @staticmethod
     def lookup_continent(region: str) -> str:
