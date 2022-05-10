@@ -27,12 +27,11 @@ class AWSAuthentication:
             self._access_key = None
             self._secret_key = None
 
-    @staticmethod
-    def save_region_config(config):
-        with open(aws_config_path, "w") as f:
-            if config.aws_enabled == False:
-                f.write("")
-                return
+    def save_region_config(self, config: SkylarkConfig):
+        if config.aws_enabled == False:
+            self.clear_region_config()
+            return
+        with aws_config_path.open("w") as f:
             region_list = []
             describe_regions = boto3.client("ec2", region_name="us-east-1").describe_regions()
             for region in describe_regions["Regions"]:
@@ -43,12 +42,16 @@ class AWSAuthentication:
             f.write("\n".join(region_list))
             print(f"    AWS region config file saved to {aws_config_path}")
 
+    def clear_region_config(self):
+        with aws_config_path.open("w") as f:
+            f.write("")
+
     @staticmethod
     def get_region_config():
         try:
             f = open(aws_config_path, "r")
         except FileNotFoundError:
-            print("    No AWS config detected! Consquently, the AWS region list is empty. Run 'skylark init' to remedy this.")
+            print("    No AWS config detected! Consquently, the AWS region list is empty. Run 'skylark init --reinit-aws' to remedy this.")
             return []
         region_list = []
         for region in f.read().split("\n"):

@@ -1,8 +1,6 @@
 import mimetypes
 import os
 from typing import Iterator, List
-
-from google.cloud import storage  # type: ignore
 from skylark.compute.gcp.gcp_auth import GCPAuthentication
 
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
@@ -18,7 +16,7 @@ class GCSInterface(ObjectStoreInterface):
         # TODO - figure out how paralllelism handled
         self.bucket_name = bucket_name
         self.auth = GCPAuthentication()
-        self._gcs_client = storage.Client()
+        self._gcs_client = self.auth.get_storage_client()
         self.gcp_region = self.infer_gcp_region(bucket_name) if gcp_region is None or gcp_region == "infer" else gcp_region
 
     def region_tag(self):
@@ -40,7 +38,6 @@ class GCSInterface(ObjectStoreInterface):
 
     def infer_gcp_region(self, bucket_name: str):
         bucket = self._gcs_client.lookup_bucket(bucket_name)
-        assert isinstance(bucket, storage.bucket.Bucket)
         return self.map_region_to_zone(bucket.location.lower())
 
     def bucket_exists(self):
