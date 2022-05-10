@@ -207,7 +207,7 @@ class AWSCloudProvider(CloudProvider):
         # finally, delete the vpc
         ec2client.delete_vpc(VpcId=vpcid)
 
-    def list_instance_profiles(self, prefix: str = None):
+    def list_instance_profiles(self, prefix: Optional[str] = None):
         """List instance profile names in a region"""
         paginator = self.auth.get_boto3_client("iam").get_paginator("list_instance_profiles")
         matched_names = []
