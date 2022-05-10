@@ -17,7 +17,7 @@ def replicate_random(
     inter_region: Optional[str] = typer.Argument(None),
     num_gateways: int = typer.Option(1, "--num-gateways", "-n", help="Number of gateways"),
     num_outgoing_connections: int = typer.Option(
-        16, "--num-outgoing-connections", "-c", help="Number of outgoing connections between each gateway"
+        32, "--num-outgoing-connections", "-c", help="Number of outgoing connections between each gateway"
     ),
     total_transfer_size_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB."),
     chunk_size_mb: int = typer.Option(8, "--chunk-size-mb", help="Chunk size in MB."),
@@ -73,7 +73,7 @@ def replicate_random_solve(
     inter_region: Optional[str] = typer.Argument(None),
     num_gateways: int = typer.Option(1, "--num-gateways", "-n", help="Number of gateways"),
     num_outgoing_connections: int = typer.Option(
-        16, "--num-outgoing-connections", "-c", help="Number of outgoing connections between each gateway"
+        32, "--num-outgoing-connections", "-c", help="Number of outgoing connections between each gateway"
     ),
     total_transfer_size_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB."),
     chunk_size_mb: int = typer.Option(8, "--chunk-size-mb", help="Chunk size in MB."),
