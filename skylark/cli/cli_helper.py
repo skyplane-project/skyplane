@@ -219,7 +219,8 @@ def replicate_helper(
     time_limit_seconds: Optional[int] = None,
     log_interval_s: float = 1.0,
 ):
-    logger.debug(f"Using docker image: {gateway_docker_image}")
+    if "SKYLARK_DOCKER_IMAGE" in os.environ:
+        logger.debug(f"Using docker image: {gateway_docker_image}")
     if reuse_gateways:
         typer.secho(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways.",
@@ -295,6 +296,8 @@ def replicate_helper(
         gcp_use_premium_network=gcp_use_premium_network,
     )
     typer.secho(f"Storing debug information for transfer in {rc.transfer_dir / 'client.log'}", fg="yellow")
+    (rc.transfer_dir / "topology.json").write_text(topo.to_json())
+
     stats = {}
     try:
         rc.provision_gateways(reuse_gateways, use_bbr=use_bbr)

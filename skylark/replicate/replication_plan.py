@@ -103,17 +103,17 @@ class ReplicationTopology:
         return {src_gateway: num_connections for dest_gateway, src_gateway, num_connections in self.edges if dest_gateway == dest}
 
     def source_instances(self) -> Set[ReplicationTopologyNode]:
-        nodes = set(k[0] for k in self.edges)
+        nodes = set()
         for src, dest, _ in self.edges:
-            if dest in nodes and isinstance(src, ReplicationTopologyGateway):
-                nodes.remove(dest)
+            if isinstance(src, ReplicationTopologyObjectStore):
+                nodes.add(dest)
         return nodes
 
     def sink_instances(self) -> Set[ReplicationTopologyNode]:
-        nodes = set(k[1] for k in self.edges)
+        nodes = set()
         for src, dest, _ in self.edges:
-            if src in nodes and isinstance(dest, ReplicationTopologyGateway):
-                nodes.remove(src)
+            if isinstance(dest, ReplicationTopologyObjectStore):
+                nodes.add(src)
         return nodes
 
     def source_region(self) -> str:
@@ -169,8 +169,14 @@ class ReplicationTopology:
         subgraphs = {}
         for src_gateway, dest_gateway, n_connections in self.edges:
             # group node instances by region
-            src_region, src_instance = src_gateway.region, src_gateway.instance if isinstance(src_gateway, ReplicationTopologyGateway) else "objstore"
-            dest_region, dest_instance = dest_gateway.region, dest_gateway.instance if isinstance(dest_gateway, ReplicationTopologyGateway) else "objstore"
+            src_region, src_instance = (
+                src_gateway.region,
+                src_gateway.instance if isinstance(src_gateway, ReplicationTopologyGateway) else "objstore",
+            )
+            dest_region, dest_instance = (
+                dest_gateway.region,
+                dest_gateway.instance if isinstance(dest_gateway, ReplicationTopologyGateway) else "objstore",
+            )
             src_region, dest_region = src_region.replace(":", "/"), dest_region.replace(":", "/")
             src_node = f"{src_region}, {src_instance}"
             dest_node = f"{dest_region}, {dest_instance}"
@@ -188,7 +194,11 @@ class ReplicationTopology:
             subgraphs[dest_region].node(dest_node, label=str(dest_instance), shape="box")
 
             # add edges
-            g.edge(src_node, dest_node, label=f"{n_connections} connections" if src_instance is not "objstore" and dest_instance is not "objstore" else None)
+            g.edge(
+                src_node,
+                dest_node,
+                label=f"{n_connections} connections" if src_instance is not "objstore" and dest_instance is not "objstore" else None,
+            )
 
         for subgraph in subgraphs.values():
             g.subgraph(subgraph)
