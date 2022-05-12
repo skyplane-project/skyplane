@@ -156,6 +156,9 @@ def cp(
 
         # Set up replication topology
         if solve:
+            if src_region == dst_region:
+                typer.secho("Solver is not supported for intra-region transfers, run without the --solve flag", fg="red")
+                raise typer.Exit(1)
             # todo cache this for the later replicate_helper call
             objs = list(src_client.list_objects(path_src))
             if not objs:
@@ -181,9 +184,17 @@ def cp(
                 )
             topo, _ = tput.to_replication_topology(solution)
         else:
-            topo = ReplicationTopology()
-            for i in range(max_instances):
-                topo.add_edge(src_region, i, dst_region, i, num_connections)
+            if src_region == dst_region:
+                topo = ReplicationTopology()
+                for i in range(max_instances):
+                    topo.add_objstore_instance_edge(src_region, src_region, i)
+                    topo.add_instance_objstore_edge(src_region, i, src_region)
+            else:
+                topo = ReplicationTopology()
+                for i in range(max_instances):
+                    topo.add_objstore_instance_edge(src_region, src_region, i)
+                    topo.add_instance_instance_edge(src_region, i, dst_region, i, num_connections)
+                    topo.add_instance_objstore_edge(dst_region, i, dst_region)
 
         replicate_helper(
             topo,

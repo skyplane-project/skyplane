@@ -80,7 +80,7 @@ class GatewayDaemon:
                     self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).unlink()
                 elif self.region == chunk_req.dst_region and chunk_req.dst_type == "object_store":
                     self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
-                    self.obj_store_conn.queue_request(chunk_req, "upload")
+                    self.obj_store_conn.queue_upload_request(chunk_req)
                 elif self.region != chunk_req.dst_region:
                     self.gateway_sender.queue_request(chunk_req)
                     self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
@@ -117,7 +117,7 @@ class GatewayDaemon:
                         threading.Thread(target=fn, args=(chunk_req, size_mb)).start()
                 elif self.region == chunk_req.src_region and chunk_req.src_type == "object_store":
                     self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
-                    self.obj_store_conn.queue_request(chunk_req, "download")
+                    self.obj_store_conn.queue_download_request(chunk_req)
                 elif self.region != chunk_req.src_region:  # do nothing, waiting for chunk to be be ready_to_upload
                     continue
                 else:

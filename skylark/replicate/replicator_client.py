@@ -60,7 +60,7 @@ class ReplicatorClient:
     def provision_gateways(
         self, reuse_instances=False, log_dir: Optional[PathLike] = None, authorize_ssh_pub_key: Optional[PathLike] = None, use_bbr=False
     ):
-        regions_to_provision = [node.region for node in self.topology.nodes]
+        regions_to_provision = [node.region for node in self.topology.gateway_nodes]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
         azure_regions_to_provision = [r for r in regions_to_provision if r.startswith("azure:")]
         gcp_regions_to_provision = [r for r in regions_to_provision if r.startswith("gcp:")]
@@ -193,14 +193,14 @@ class ReplicatorClient:
                 self.temp_nodes.extend(ilist)
 
         # bind instances to nodes
-        for node in self.topology.nodes:
+        for node in self.topology.gateway_nodes:
             instance = instances_by_region[node.region].pop()
             self.bound_nodes[node] = instance
             self.temp_nodes.remove(instance)
 
         # Firewall rules
         # todo add firewall rules for Azure and GCP
-        public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.nodes]
+        public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.gateway_nodes]
         aws_jobs = [
             partial(self.aws.add_ip_to_security_group, r.split(":")[1], ip) for r in set(aws_regions_to_provision) for ip in public_ips
         ]
@@ -217,7 +217,16 @@ class ReplicatorClient:
 
         args = []
         for node, server in self.bound_nodes.items():
-            args.append((server, {self.bound_nodes[n].public_ip(): v for n, v in self.topology.get_outgoing_paths(node).items()}))
+            args.append(
+                (
+                    server,
+                    {
+                        self.bound_nodes[n].public_ip(): v
+                        for n, v in self.topology.get_outgoing_paths(node).items()
+                        if isinstance(n, ReplicationTopologyGateway)
+                    },
+                )
+            )
         do_parallel(setup, args, n=-1, spinner=True, spinner_persist=True, desc="Install gateway package on instances")
 
     def deprovision_gateways(self):
@@ -230,7 +239,7 @@ class ReplicatorClient:
         # Clear IPs from security groups
         # todo remove firewall rules for Azure and GCP
         public_ips = [i.public_ip() for i in self.bound_nodes.values()] + [i.public_ip() for i in self.temp_nodes]
-        aws_regions = [node.region for node in self.topology.nodes if node.region.startswith("aws:")]
+        aws_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("aws:")]
         aws_jobs = [partial(self.aws.remove_ip_from_security_group, r.split(":")[1], ip) for r in set(aws_regions) for ip in public_ips]
         do_parallel(lambda fn: fn(), aws_jobs)
 
@@ -393,6 +402,9 @@ class ReplicatorClient:
                             dst_object_store_bucket=job.dest_bucket,
                         )
                     )
+                logger.fs.debug(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")
+                for chunk_request in chunk_requests_sharded[batch_idx]:
+                    logger.fs.debug(f"\t{chunk_request}")
 
             # send chunk requests to start gateways in parallel
             spinner.text = "Preparing replication plan, dispatching chunk requests to source gateways"
@@ -400,10 +412,8 @@ class ReplicatorClient:
             def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
                 hop_instance, chunk_requests = args
                 ip = gateway_ips[hop_instance]
-                tunnel_port = hop_instance.tunnel_port(8080)
-                logger.fs.debug(f"Sending {len(chunk_requests)} chunk requests to {ip} (via 127.0.0.1:{tunnel_port})")
                 reply = retry_requests().post(
-                    f"http://127.0.0.1:{tunnel_port}/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests]
+                    f"{hop_instance.gateway_api_url}/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests]
                 )
                 if reply.status_code != 200:
                     raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
@@ -417,7 +427,7 @@ class ReplicatorClient:
     def get_chunk_status_log_df(self) -> pd.DataFrame:
         def get_chunk_status(args):
             node, instance = args
-            reply = retry_requests().get(f"http://127.0.0.1:{instance.tunnel_port(8080)}/api/v1/chunk_status_log")
+            reply = retry_requests().get(f"{instance.gateway_api_url}/api/v1/chunk_status_log")
             if reply.status_code != 200:
                 raise Exception(f"Failed to get chunk status from gateway instance {instance.instance_name()}: {reply.text}")
             logs = []
@@ -437,7 +447,7 @@ class ReplicatorClient:
     def check_error_logs(self) -> Dict[str, List[str]]:
         def get_error_logs(args):
             _, instance = args
-            reply = retry_requests().get(f"http://127.0.0.1:{instance.tunnel_port(8080)}/api/v1/errors")
+            reply = retry_requests().get(f"{instance.gateway_api_url}/api/v1/errors")
             if reply.status_code != 200:
                 raise Exception(f"Failed to get error logs from gateway instance {instance.instance_name()}: {reply.text}")
             return reply.json()["errors"]
@@ -473,6 +483,10 @@ class ReplicatorClient:
         if show_spinner:
             spinner = Halo(text="Transfer starting", spinner="dots")
             spinner.start()
+        if save_log:
+            if show_spinner:
+                spinner.text = "Transfer starting, saving job log"
+            (self.transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
         try:
             with Timer() as t:
                 while True:
@@ -564,9 +578,6 @@ class ReplicatorClient:
             if show_spinner:
                 spinner.stop()
             with Halo(text="Cleaning up after transfer", spinner="dots") as spinner:
-                if save_log:
-                    spinner.text = "Cleaning up after transfer, saving job log"
-                    (self.transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
                 if copy_gateway_logs:
 
                     def copy_log(instance):
@@ -588,7 +599,7 @@ class ReplicatorClient:
 
                     def fn(s: Server):
                         try:
-                            retry_requests().post(f"http://127.0.0.1:{s.tunnel_port(8080)}/api/v1/shutdown")
+                            retry_requests().post(f"{s.gateway_api_url}/api/v1/shutdown")
                         except:
                             return  # ignore connection errors since server may be shutting down
 
