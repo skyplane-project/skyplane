@@ -197,7 +197,7 @@ class ReplicationTopology:
             g.edge(
                 src_node,
                 dest_node,
-                label=f"{n_connections} connections" if src_instance is not "objstore" and dest_instance is not "objstore" else None,
+                label=f"{n_connections} connections" if src_instance != "objstore" and dest_instance != "objstore" else None,
             )
 
         for subgraph in subgraphs.values():
