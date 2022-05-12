@@ -81,7 +81,7 @@ class AWSCloudProvider(CloudProvider):
         vpcs = list(ec2.vpcs.filter(Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]).all())
         assert len(vpcs) == 1, f"Found {len(vpcs)} vpcs with name {vpc_name}"
         sgs = [sg for sg in vpcs[0].security_groups.all() if sg.group_name == sg_name]
-        assert len(sgs) == 1
+        assert len(sgs) == 1, f"Found {len(sgs)} security groups with name {sg_name} in vpc {vpcs[0].id}"
         return sgs[0]
 
     def get_vpcs(self, region: str, vpc_name="skylark"):
@@ -107,6 +107,7 @@ class AWSCloudProvider(CloudProvider):
                     and vpc.describe_attribute(Attribute="enableDnsSupport")["EnableDnsSupport"]
                     and vpc.describe_attribute(Attribute="enableDnsHostnames")["EnableDnsHostnames"]
                     and all(az in subsets_azs for az in self.auth.get_azs_in_region(region))
+                    and any(sg.group_name == "skylark" for sg in vpc.security_groups.all())
                 ):
                     matching_vpc = vpc
                     # delete all other vpcs
@@ -251,12 +252,7 @@ class AWSCloudProvider(CloudProvider):
                 iam.attach_role_policy(RoleName=iam_name, PolicyArn=attach_policy_arn)
 
     def authorize_client(self, aws_region: str, client_ip: str, port=22):
-        vpcs = self.get_vpcs(aws_region)
-        assert vpcs, f"No VPC found in {aws_region}"
-        vpc = vpcs[0]
-        sgs = [sg for sg in vpc.security_groups.all() if sg.group_name == "skylark"]
-        assert len(sgs) == 1, f"Found {len(sgs)} sgs named skylark, expected 1"
-        sg = sgs[0]
+        sg = self.get_security_group(aws_region)
 
         # check if we already have a rule for this security group
         for rule in sg.ip_permissions:

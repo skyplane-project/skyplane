@@ -38,13 +38,15 @@ def replicate_random(
         assert inter_region not in [src_region, dst_region] and src_region != dst_region
         topo = ReplicationTopology()
         for i in range(num_gateways):
-            topo.add_edge(src_region, i, inter_region, i, num_outgoing_connections)
-            topo.add_edge(inter_region, i, dst_region, i, num_outgoing_connections)
+            topo.add_instance_instance_edge(src_region, i, inter_region, i, num_outgoing_connections)
+            topo.add_instance_instance_edge(inter_region, i, dst_region, i, num_outgoing_connections)
+    elif src_region == dst_region:
+        typer.secho("Replicate random doesn't support replicating to the same region as it tests inter-gateway networks.", fg="red")
+        raise typer.Exit(code=1)
     else:
-        assert src_region != dst_region
         topo = ReplicationTopology()
         for i in range(num_gateways):
-            topo.add_edge(src_region, i, dst_region, i, num_outgoing_connections)
+            topo.add_instance_instance_edge(src_region, i, dst_region, i, num_outgoing_connections)
 
     if total_transfer_size_mb % chunk_size_mb != 0:
         logger.warning(f"total_transfer_size_mb ({total_transfer_size_mb}) is not a multiple of chunk_size_mb ({chunk_size_mb})")
@@ -113,13 +115,13 @@ def replicate_random_solve(
         assert inter_region not in [src_region, dst_region] and src_region != dst_region
         topo = ReplicationTopology()
         for i in range(num_gateways):
-            topo.add_edge(src_region, i, inter_region, i, num_outgoing_connections)
-            topo.add_edge(inter_region, i, dst_region, i, num_outgoing_connections)
+            topo.add_instance_instance_edge(src_region, i, inter_region, i, num_outgoing_connections)
+            topo.add_instance_instance_edge(inter_region, i, dst_region, i, num_outgoing_connections)
     else:
         assert src_region != dst_region
         topo = ReplicationTopology()
         for i in range(num_gateways):
-            topo.add_edge(src_region, i, dst_region, i, num_outgoing_connections)
+            topo.add_instance_instance_edge(src_region, i, dst_region, i, num_outgoing_connections)
 
     if total_transfer_size_mb % chunk_size_mb != 0:
         logger.warning(f"total_transfer_size_mb ({total_transfer_size_mb}) is not a multiple of chunk_size_mb ({chunk_size_mb})")

@@ -279,11 +279,12 @@ class Server:
 
         gateway_container_hash = start_out.strip().split("\n")[-1][:12]
         self.gateway_log_viewer_url = f"http://127.0.0.1:{self.tunnel_port(8888)}/container/{gateway_container_hash}"
+        self.gateway_api_url = f"http://127.0.0.1:{self.tunnel_port(8080)}"
 
         # wait for gateways to start (check status API)
         def is_api_ready():
             try:
-                api_url = f"http://127.0.0.1:{self.tunnel_port(8080)}/api/v1/status"
+                api_url = f"{self.gateway_api_url}/api/v1/status"
                 status_val = retry_requests().get(api_url)
                 is_up = status_val.json().get("status") == "ok"
                 return is_up

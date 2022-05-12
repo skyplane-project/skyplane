@@ -373,10 +373,9 @@ class ThroughputSolverILP(ThroughputSolver):
         Edge = namedtuple("Edge", ["src_region", "src_instance_idx", "dst_region", "dst_instance_idx", "connections"])
 
         # compute connections to target per instance
-        average_egress_conns = [np.ceil(solution.var_conn[i, :].sum() / solution.var_instances_per_region[i]) for i in range(len(regions))]
-        average_ingress_conns = [np.ceil(solution.var_conn[:, i].sum() / solution.var_instances_per_region[i]) for i in range(len(regions))]
-        # average_egress_conns = [64 for i in range(len(regions))]
-        # average_ingress_conns = [64 for i in range(len(regions))]
+        ninst = solution.var_instances_per_region
+        average_egress_conns = [0 if ninst[i] == 0 else np.ceil(solution.var_conn[i, :].sum() / ninst[i]) for i in range(len(regions))]
+        average_ingress_conns = [0 if ninst[i] == 0 else np.ceil(solution.var_conn[:, i].sum() / ninst[i]) for i in range(len(regions))]
 
         # first assign source instances to destination regions
         src_edges: List[Edge] = []
@@ -395,7 +394,7 @@ class ThroughputSolverILP(ThroughputSolver):
                             assert partial_conn >= 0, f"partial_conn = {partial_conn}"
                             if partial_conn > 0:
                                 src_edges.append(Edge(src, src_instance_idx, dst, None, partial_conn))
-                                logger.warning(
+                                logger.fs.warning(
                                     f"{src}:{src_instance_idx}:{src_instance_connections}c -> {dst} (partial): {partial_conn}c of {connections_to_allocate}c remaining"
                                 )
                             src_instance_idx += 1
@@ -404,7 +403,7 @@ class ThroughputSolverILP(ThroughputSolver):
                             partial_conn = connections_to_allocate
                             connections_to_allocate = 0
                             src_edges.append(Edge(src, src_instance_idx, dst, None, partial_conn))
-                            logger.warning(
+                            logger.fs.warning(
                                 f"{src}:{src_instance_idx}:{src_instance_connections}c -> {dst}: {partial_conn}c of {connections_to_allocate}c remaining"
                             )
                             src_instance_connections += partial_conn
@@ -424,7 +423,7 @@ class ThroughputSolverILP(ThroughputSolver):
                         dst_edges.append(
                             Edge(e.src_region, e.src_instance_idx, e.dst_region, dsts_instance_idx[e.dst_region], partial_conn)
                         )
-                        logger.warning(
+                        logger.fs.warning(
                             f"{e.src_region}:{e.src_instance_idx}:{dsts_instance_conn[e.dst_region]}c -> {e.dst_region}:{dsts_instance_idx[e.dst_region]}:{dsts_instance_conn[e.dst_region]}c (partial): {partial_conn}c of {connections_to_allocate}c remaining"
                         )
                     dsts_instance_idx[e.dst_region] += 1
@@ -433,7 +432,7 @@ class ThroughputSolverILP(ThroughputSolver):
                     dst_edges.append(
                         Edge(e.src_region, e.src_instance_idx, e.dst_region, dsts_instance_idx[e.dst_region], connections_to_allocate)
                     )
-                    logger.warning(
+                    logger.fs.warning(
                         f"{e.src_region}:{e.src_instance_idx}:{dsts_instance_conn[e.dst_region]}c -> {e.dst_region}:{dsts_instance_idx[e.dst_region]}:{dsts_instance_conn[e.dst_region]}c: {connections_to_allocate}c remaining"
                     )
                     dsts_instance_conn[e.dst_region] += connections_to_allocate
@@ -448,7 +447,7 @@ class ThroughputSolverILP(ThroughputSolver):
                 conns_ingress[(e.dst_region, e.dst_instance_idx)] = e.connections + conns_ingress.get((e.dst_region, e.dst_instance_idx), 0)
             bottleneck_capacity = max(list(conns_egress.values()) + list(conns_ingress.values()))
             scale_factor = 64 / bottleneck_capacity
-            logger.warning(f"Scaling connections by {scale_factor:.2f}x")
+            logger.fs.warning(f"Scaling connections by {scale_factor:.2f}x")
             dst_edges = [e._replace(connections=int(e.connections * scale_factor)) for e in dst_edges]
         else:
             scale_factor = 1.0
@@ -457,12 +456,29 @@ class ThroughputSolverILP(ThroughputSolver):
         replication_topology = ReplicationTopology()
         for e in dst_edges:
             if e.connections >= 1:
-                replication_topology.add_edge(
+                # connect source to destination
+                replication_topology.add_instance_instance_edge(
                     src_region=e.src_region,
                     src_instance=e.src_instance_idx,
                     dest_region=e.dst_region,
                     dest_instance=e.dst_instance_idx,
                     num_connections=e.connections,
                 )
+
+                # connect source instances to source gateway
+                if e.src_region == solution.problem.src:
+                    replication_topology.add_objstore_instance_edge(
+                        src_region=e.src_region,
+                        dest_region=e.src_region,
+                        dest_instance=e.src_instance_idx,
+                    )
+
+                # connect destination instances to destination gateway
+                if e.dst_region == solution.problem.dst:
+                    replication_topology.add_instance_objstore_edge(
+                        src_region=e.dst_region,
+                        src_instance=e.dst_instance_idx,
+                        dest_region=e.dst_region,
+                    )
 
         return replication_topology, scale_factor

@@ -219,6 +219,7 @@ def replicate_helper(
     time_limit_seconds: Optional[int] = None,
     log_interval_s: float = 1.0,
 ):
+    logger.debug(f"Using docker image: {gateway_docker_image}")
     if reuse_gateways:
         typer.secho(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways.",
@@ -264,8 +265,13 @@ def replicate_helper(
         else:
             for src_obj in src_objs:
                 src_objs_job.append(src_obj.key)
-                src_path_no_prefix = src_obj.key.lstrip(src_key_prefix if src_key_prefix.endswith("/") else src_key_prefix + "/")
-                if dest_key_prefix.endswith("/") or len(dest_key_prefix) == 0:
+                # remove prefix from object key
+                src_path_no_prefix = src_obj.key[len(src_key_prefix) :] if src_obj.key.startswith(src_key_prefix) else src_obj.key
+                # remove single leading slash if present
+                src_path_no_prefix = src_path_no_prefix[1:] if src_path_no_prefix.startswith("/") else src_path_no_prefix
+                if len(dest_key_prefix) == 0:
+                    dest_objs_job.append(src_path_no_prefix)
+                elif dest_key_prefix.endswith("/"):
                     dest_objs_job.append(dest_key_prefix + src_path_no_prefix)
                 else:
                     dest_objs_job.append(dest_key_prefix + "/" + src_path_no_prefix)
@@ -288,12 +294,14 @@ def replicate_helper(
         gcp_instance_class=gcp_instance_class,
         gcp_use_premium_network=gcp_use_premium_network,
     )
-    typer.secho(f"Storing debug information for transfer in {rc.transfer_dir}", fg="yellow")
+    typer.secho(f"Storing debug information for transfer in {rc.transfer_dir / 'client.log'}", fg="yellow")
     stats = {}
     try:
         rc.provision_gateways(reuse_gateways, use_bbr=use_bbr)
         for node, gw in rc.bound_nodes.items():
-            logger.fs.info(f"Realtime logs for {node.region}:{node.instance} at {gw.gateway_log_viewer_url}")
+            logger.fs.info(f"Log URLs for {gw.uuid()} ({node.region}:{node.instance})")
+            logger.fs.info(f"\tLog viewer: {gw.gateway_log_viewer_url}")
+            logger.fs.info(f"\tAPI: {gw.gateway_api_url}")
         job = rc.run_replication_plan(job)
         if random:
             total_bytes = n_chunks * random_chunk_size_mb * MB

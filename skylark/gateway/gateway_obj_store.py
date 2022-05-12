@@ -33,7 +33,8 @@ class GatewayObjStoreConn:
         # shared state
         self.manager = Manager()
         self.next_worker_id = Value("i", 0)
-        self.worker_queue: queue.Queue[ObjStoreRequest] = self.manager.Queue()
+        self.worker_download_queue: queue.Queue[ObjStoreRequest] = self.manager.Queue()
+        self.worker_upload_queue: queue.Queue[ObjStoreRequest] = self.manager.Queue()
         self.exit_flags = [Event() for _ in range(self.n_processes)]
 
         # process-local state
@@ -69,14 +70,20 @@ class GatewayObjStoreConn:
         self.worker_id = worker_id
         while not self.exit_flags[worker_id].is_set() and not self.error_event.is_set():
             try:
+                # first try to get an upload request
                 try:
-                    request = self.worker_queue.get_nowait()
+                    request = self.worker_upload_queue.get_nowait()
                     chunk_req = request.chunk_req
                     req_type = request.req_type
                 except queue.Empty:
-                    continue
+                    # try to get a download request
+                    try:
+                        request = self.worker_download_queue.get_nowait()
+                        chunk_req = request.chunk_req
+                        req_type = request.req_type
+                    except queue.Empty:
+                        continue
                 fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
-                logger.debug(f"[obj_store:{self.worker_id}] Received chunk ID {chunk_req.chunk.chunk_id}")
 
                 if req_type == "upload":
                     assert chunk_req.dst_type == "object_store"
@@ -138,9 +145,10 @@ class GatewayObjStoreConn:
                 self.error_event.set()
         # close destination sockets
         logger.info(f"[obj_store:{worker_id}] exiting")
-
         # TODO: wait for uploads to finish (check chunk exists)
 
-    def queue_request(self, chunk_request: ChunkRequest, request_type: str):
-        logger.debug(f"[gateway_daemon] Queueing chunk request {chunk_request.chunk.chunk_id}")
-        self.worker_queue.put(ObjStoreRequest(chunk_request, request_type))
+    def queue_upload_request(self, chunk_request: ChunkRequest):
+        self.worker_upload_queue.put(ObjStoreRequest(chunk_request, "upload"))
+
+    def queue_download_request(self, chunk_request: ChunkRequest):
+        self.worker_download_queue.put(ObjStoreRequest(chunk_request, "download"))
