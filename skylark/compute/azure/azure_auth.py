@@ -12,6 +12,9 @@ from skylark.compute.utils import query_which_cloud
 from skylark.config import SkylarkConfig
 from skylark import config_path
 from skylark import azure_config_path
+from skylark import azure_sku_path
+from skylark.utils.utils import do_parallel
+
 
 import subprocess
 import json
@@ -68,6 +71,30 @@ class AzureAuthentication:
             f.write("\n".join(region_list))
         print(f"    Azure region config file saved to {azure_config_path}")
 
+        client = self.get_compute_client()
+
+        def get_skus(region):
+            valid_skus = []
+            for sku in client.resource_skus.list(filter="location eq '{}'".format(region)):
+                if len(sku.restrictions) == 0 and sku.name.startswith("Standard_D32"):
+                    valid_skus.append(sku.name)
+            return set(valid_skus)
+
+        print("     Querying for SKU availbility in regions.")
+        result = do_parallel(get_skus, region_list, progress_bar=True, leave_pbar=False, desc="Query SKUs")
+
+        region_sku = dict()
+        for region, skus in result:
+            region_sku[region] = list()
+            region_sku[region].extend(skus)
+
+        with azure_sku_path.open("w") as f:
+            json.dump(region_sku, f)
+
+        print(f"    Azure SKU availability cached in {azure_sku_path}.")
+
+
+
     @staticmethod
     def get_region_config():
         try:
@@ -80,6 +107,15 @@ class AzureAuthentication:
             region_list.append(region)
         return region_list
 
+    @staticmethod
+    def get_sku_mapping():
+        try:
+            f = open(azure_sku_path, "r")
+        except FileNotFoundError:
+            print("     Azure SKU data has not been chaced! Run skylark init to remedy this!")
+            return dict()
+        
+        return json.load(f)
 
     def clear_region_config(self):
         with azure_config_path.open("w") as f:

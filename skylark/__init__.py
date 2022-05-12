@@ -16,6 +16,7 @@ else:
 
 aws_config_path = config_root / "aws_config"
 azure_config_path = config_root / "azure_config"
+azure_sku_path = config_root / "azure_sku_mapping"
 gcp_config_path = config_root / "gcp_config"
 
 key_root = config_root / "keys"

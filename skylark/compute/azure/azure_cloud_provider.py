@@ -185,6 +185,7 @@ class AzureCloudProvider(CloudProvider):
                 "westus3",
             ],
         }
+
         if region in available_regions["Standard_D32_v5"] and instance_name == "Standard_D32_v5":
             return "Standard_D32_v5"
         elif region in available_regions["Standard_D32_v4"] and instance_name == "Standard_D32_v5":
