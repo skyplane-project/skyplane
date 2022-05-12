@@ -35,56 +35,6 @@ class AzureCloudProvider(CloudProvider):
     @staticmethod
     def region_list():
         return AzureAuthentication.get_region_config()
-        '''
-        return [
-            "australiaeast",
-            "brazilsouth",
-            "canadacentral",
-            "centralindia",
-            "eastasia",
-            "eastus",
-            "eastus2",
-            "francecentral",
-            "germanywestcentral",
-            "japaneast",
-            "koreacentral",
-            "northcentralus",
-            "northeurope",
-            "norwayeast",
-            "southafricanorth",
-            "swedencentral",
-            "switzerlandnorth",
-            "uaenorth",
-            "uksouth",
-            "westeurope",
-            "westus",
-            "westus2",
-            "westus3",
-            # D32_v4 or D32_v5 not available:
-            #   "australiacentral",
-            #   "australiasoutheast",
-            #   "canadaeast",
-            #   "centralus",
-            #   "japanwest",
-            #   "southcentralus",
-            #   "southeastasia",
-            #   "southindia",
-            #   "ukwest",
-            #   "westcentralus",
-            #   "westindia",
-            # not available due to restrictions:
-            #   "australiacentral2",
-            #   "brazilsoutheast",
-            #   "francesouth",
-            #   "germanynorth",
-            #   "jioindiacentral",
-            #   "jioindiawest",
-            #   "koreasouth",
-            #   "norwaywest",
-            #   "southafricawest",
-            #   "switzerlandwest",
-            #   "uaecentral",
-        ]'''
 
     @staticmethod
     def lookup_continent(region: str) -> str:
@@ -142,53 +92,10 @@ class AzureCloudProvider(CloudProvider):
 
     @staticmethod
     def lookup_valid_instance(region: str, instance_name: str) -> Optional[str]:
-        # todo this should query the Azure API for available SKUs
-        available_regions = {
-            "Standard_D32_v5": [
-                "australiaeast",
-                "canadacentral",
-                "eastus",
-                "eastus2",
-                "francecentral",
-                "germanywestcentral",
-                "japaneast",
-                "koreacentral",
-                "northcentralus",
-                "northeurope",
-                "uksouth",
-                "westeurope",
-                "westus",
-                "westus2",
-                "westus3",
-            ],
-            "Standard_D32_v4": [
-                "australiaeast",
-                "brazilsouth",
-                "canadacentral",
-                "centralindia",
-                "eastasia",
-                "eastus",
-                "francecentral",
-                "germanywestcentral",
-                "japaneast",
-                "koreacentral",
-                "northcentralus",
-                "northeurope",
-                "norwayeast",
-                "southafricanorth",
-                "swedencentral",
-                "switzerlandnorth",
-                "uaenorth",
-                "uksouth",
-                "westeurope",
-                "westus",
-                "westus3",
-            ],
-        }
-
-        if region in available_regions["Standard_D32_v5"] and instance_name == "Standard_D32_v5":
+        sku_mapping = AzureAuthentication.get_sku_mapping()
+        if instance_name == "Standard_D32_v5" and "Standard_D32_v5" in sku_mapping[region]:
             return "Standard_D32_v5"
-        elif region in available_regions["Standard_D32_v4"] and instance_name == "Standard_D32_v5":
+        elif instance_name == "Standard_D32_v4" and "Standard_D32_v4" in sku_mapping[region]:
             return "Standard_D32_v4"
         else:
             logger.error(f"Cannot confirm availability of {instance_name} in {region}")
