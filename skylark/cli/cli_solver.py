@@ -55,8 +55,8 @@ def solve_throughput(
                 try:
                     for f in Path("/tmp/").glob("throughput_graph.gv*"):
                         f.unlink()
-                    g.render(filename="/tmp/throughput_graph.gv", quiet_view=True, format="pdf")
                     g.render(filename="/tmp/throughput_graph.gv", format="png")
+                    g.render(filename="/tmp/throughput_graph.gv", quiet_view=True, format="pdf")
                 except FileNotFoundError as e:
                     logger.error(f"Could not render graph: {e}")
         replication_topo, connection_scale_factor = tput.to_replication_topology(solution)
@@ -69,8 +69,8 @@ def solve_throughput(
                 try:
                     for f in Path("/tmp/").glob("replication_topo.gv*"):
                         f.unlink()
-                    g_rt.render(filename="/tmp/replication_topo.gv", quiet_view=True, format="pdf")
                     g_rt.render(filename="/tmp/replication_topo.gv", format="png")
+                    g_rt.render(filename="/tmp/replication_topo.gv", quiet_view=True, format="pdf")
                 except FileNotFoundError as e:
                     logger.error(f"Could not render graph: {e}")
     else:

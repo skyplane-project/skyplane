@@ -1,14 +1,15 @@
 from dataclasses import dataclass
 import json
+import shutil
 from typing import Dict, List, Optional, Set, Tuple
 
-from attr import asdict
 from skylark.obj_store.object_store_interface import ObjectStoreInterface
 
 from skylark import MB
 from skylark.chunk import ChunkRequest
 
 from skylark.utils.utils import do_parallel
+from skylark.utils import logger
 
 
 @dataclass
@@ -157,45 +158,42 @@ class ReplicationTopology:
     def to_graphviz(self):
         import graphviz as gv  # pytype: disable=import-error
 
-        # todo: implement
-        raise NotImplementedError
+        # if dot is not installed
+        has_dot = shutil.which("dot") is not None
+        if not has_dot:
+            logger.error("Graphviz is not installed. Please install it to plot the solution (sudo apt install graphviz).")
+            return None
 
-        # # if dot is not installed
-        # has_dot = shutil.which("dot") is not None
-        # if not has_dot:
-        #     logger.error("Graphviz is not installed. Please install it to plot the solution (sudo apt install graphviz).")
-        #     return None
+        g = gv.Digraph(name="throughput_graph")
+        g.attr(rankdir="LR")
+        subgraphs = {}
+        for src_gateway, dest_gateway, n_connections in self.edges:
+            # group node instances by region
+            src_region, src_instance = src_gateway.region, src_gateway.instance if isinstance(src_gateway, ReplicationTopologyGateway) else "objstore"
+            dest_region, dest_instance = dest_gateway.region, dest_gateway.instance if isinstance(dest_gateway, ReplicationTopologyGateway) else "objstore"
+            src_region, dest_region = src_region.replace(":", "/"), dest_region.replace(":", "/")
+            src_node = f"{src_region}, {src_instance}"
+            dest_node = f"{dest_region}, {dest_instance}"
 
-        # g = gv.Digraph(name="throughput_graph")
-        # g.attr(rankdir="LR")
-        # subgraphs = {}
-        # for src_gateway, dest_gateway, n_connections in self.edges:
-        #     # group node instances by region
-        #     src_region, src_instance = src_gateway.region, src_gateway.instance
-        #     dest_region, dest_instance = dest_gateway.region, dest_gateway.instance
-        #     src_region, dest_region = src_region.replace(":", "/"), dest_region.replace(":", "/")
-        #     src_node = f"{src_region}, {src_instance}"
-        #     dest_node = f"{dest_region}, {dest_instance}"
+            # make a subgraph for each region
+            if src_region not in subgraphs:
+                subgraphs[src_region] = gv.Digraph(name=f"cluster_{src_region}")
+                subgraphs[src_region].attr(label=src_region)
+            if dest_region not in subgraphs:
+                subgraphs[dest_region] = gv.Digraph(name=f"cluster_{dest_region}")
+                subgraphs[dest_region].attr(label=dest_region)
 
-        #     # make a subgraph for each region
-        #     if src_region not in subgraphs:
-        #         subgraphs[src_region] = gv.Digraph(name=f"cluster_{src_region}")
-        #         subgraphs[src_region].attr(label=src_region)
-        #     if dest_region not in subgraphs:
-        #         subgraphs[dest_region] = gv.Digraph(name=f"cluster_{dest_region}")
-        #         subgraphs[dest_region].attr(label=dest_region)
+            # add nodes
+            subgraphs[src_region].node(src_node, label=str(src_instance), shape="box")
+            subgraphs[dest_region].node(dest_node, label=str(dest_instance), shape="box")
 
-        #     # add nodes
-        #     subgraphs[src_region].node(src_node, label=str(src_instance), shape="box")
-        #     subgraphs[dest_region].node(dest_node, label=str(dest_instance), shape="box")
+            # add edges
+            g.edge(src_node, dest_node, label=f"{n_connections} connections" if src_instance is not "objstore" and dest_instance is not "objstore" else None)
 
-        #     # add edges
-        #     g.edge(src_node, dest_node, label=f"{n_connections} connections")
+        for subgraph in subgraphs.values():
+            g.subgraph(subgraph)
 
-        # for subgraph in subgraphs.values():
-        #     g.subgraph(subgraph)
-
-        # return g
+        return g
 
 
 @dataclass
