@@ -490,10 +490,7 @@ class ReplicatorClient:
         try:
             with Timer() as t:
                 while True:
-                    logger.fs.debug(f"Refreshing status, {t.elapsed:.2f}s elapsed")
-
                     # check for errors and exit if there are any
-                    logger.fs.debug("Checking for errors")
                     errors = self.check_error_logs()
                     if any(errors.values()):
                         return {
@@ -501,7 +498,6 @@ class ReplicatorClient:
                             "monitor_status": "error",
                         }
 
-                    logger.fs.debug("Checking for completion")
                     log_df = self.get_chunk_status_log_df()
                     if log_df.empty:
                         logger.warning("No chunk status log entries yet")
@@ -521,7 +517,6 @@ class ReplicatorClient:
                     )
 
                     # update progress bar
-                    logger.fs.debug("Updating progress bar")
                     total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
                     throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
 
