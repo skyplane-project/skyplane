@@ -23,14 +23,12 @@ class GatewaySender:
         error_queue: Queue,
         outgoing_ports: Dict[str, int],
         use_tls: bool = True,
-        chunk_size: int = 256 * KB,
     ):
         self.chunk_store = chunk_store
         self.error_event = error_event
         self.error_queue = error_queue
         self.outgoing_ports = outgoing_ports
         self.n_processes = sum(outgoing_ports.values())
-        self.chunk_size = chunk_size
         self.processes = []
 
         # SSL context
@@ -45,7 +43,6 @@ class GatewaySender:
         # shared state
         self.worker_queue: queue.Queue[int] = Queue()
         self.exit_flags = [Event() for _ in range(self.n_processes)]
-        self.socket_profiler_event_queue = Queue()
 
         # process-local state
         self.worker_id: Optional[int] = None
@@ -171,17 +168,11 @@ class GatewaySender:
             assert chunk_file_path.exists(), f"chunk file {chunk_file_path} does not exist"
             with Timer() as t:
                 with open(chunk_file_path, "rb") as fd:
-                    bytes_sent = 0
-                    while True:
-                        data = fd.read(self.chunk_size)
-                        if not data:
-                            break
-                        sock.sendall(data)
-                        bytes_sent += len(data)
-                        self.socket_profiler_event_queue.put(
-                            dict(receiver_id=self.worker_id, chunk_id=chunk_id, bytes_sent=bytes_sent, time_ms=t.elapsed * 1000)
-                        )
-            assert bytes_sent == chunk.chunk_length_bytes, f"chunk {chunk_id} has size {bytes_sent} but should be {chunk.chunk_length_bytes}"
+                    data_buf = fd.read()
+                    sock.sendall(data_buf)
+                    assert (
+                        len(data_buf) == chunk.chunk_length_bytes
+                    ), f"chunk {chunk_id} has size {len(data_buf)} but should be {chunk.chunk_length_bytes}"
             logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent at {chunk.chunk_length_bytes * 8 / t.elapsed / MB:.2f}Mbps")
             self.chunk_store.state_finish_upload(chunk_id, f"sender:{self.worker_id}")
             chunk_file_path.unlink()

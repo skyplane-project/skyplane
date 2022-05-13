@@ -71,6 +71,8 @@ class Server:
     def __init__(self, region_tag, log_dir=None):
         self.region_tag = region_tag  # format provider:region
         self.command_log = []
+        self.gateway_log_viewer_url = None
+        self.gateway_api_url = None
         self.init_log_files(log_dir)
         self.ssh_tunnels: Dict[int, sshtunnel.SSHTunnelForwarder] = {}
 

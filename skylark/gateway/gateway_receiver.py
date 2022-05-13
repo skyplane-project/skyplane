@@ -34,7 +34,7 @@ class GatewayReceiver:
         self.server_processes = []
         self.server_ports = []
         self.next_gateway_worker_id = 0
-        self.socket_profiler_queue = Queue()
+        self.socket_profiler_event_queue = Queue()
 
         # SSL context
         if use_tls:
@@ -147,12 +147,12 @@ class GatewayReceiver:
                         f.write(data)
                         chunk_data_size -= len(data)
                         chunk_received_size += len(data)
-                        self.socket_profiler_queue.put(
+                        self.socket_profiler_event_queue.put(
                             dict(
-                                sender_id=self.worker_id,
+                                receiver_id=self.worker_id,
                                 chunk_id=chunk_header.chunk_id,
                                 time_ms=t.elapsed * 1000.0,
-                                bytes_received=chunk_received_size,
+                                bytes=chunk_received_size,
                             )
                         )
             assert (
