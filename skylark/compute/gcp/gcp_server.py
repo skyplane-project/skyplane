@@ -2,10 +2,12 @@ from functools import lru_cache
 from pathlib import Path
 
 import paramiko
+import sshtunnel
 from skylark import key_root
 from skylark.compute.gcp.gcp_auth import GCPAuthentication
 from skylark.compute.server import Server, ServerState
 from skylark.utils.utils import PathLike
+from skylark.utils import logger
 
 
 class GCPServer(Server):
@@ -94,12 +96,22 @@ class GCPServer(Server):
         )
         return ssh_client
 
-    def get_ssh_cmd(self, uname="skylark", ssh_key_password="skylark"):
-        # todo can we include the key password inline?
-        return f"ssh -i {self.ssh_private_key} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no {uname}@{self.public_ip()}"
-
     def get_sftp_client(self, uname="skylark", ssh_key_password="skylark"):
         t = paramiko.Transport((self.public_ip(), 22))
         pkey = paramiko.RSAKey.from_private_key_file(str(self.ssh_private_key), password=ssh_key_password)
         t.connect(username=uname, pkey=pkey)
         return paramiko.SFTPClient.from_transport(t)
+
+    def open_ssh_tunnel_impl(self, remote_port, uname="skylark", ssh_key_password="skylark") -> sshtunnel.SSHTunnelForwarder:
+        return sshtunnel.SSHTunnelForwarder(
+            (self.public_ip(), 22),
+            ssh_username=uname,
+            ssh_pkey=str(self.ssh_private_key),
+            ssh_private_key_password=ssh_key_password,
+            local_bind_address=("127.0.0.1", 0),
+            remote_bind_address=("127.0.0.1", remote_port),
+        )
+
+    def get_ssh_cmd(self, uname="skylark", ssh_key_password="skylark"):
+        # todo can we include the key password inline?
+        return f"ssh -i {self.ssh_private_key} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no {uname}@{self.public_ip()}"

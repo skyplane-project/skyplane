@@ -1,4 +1,5 @@
 import json
+import logging
 import socket
 from contextlib import closing
 from enum import Enum, auto
@@ -11,6 +12,8 @@ from skylark.compute.utils import make_dozzle_command, make_sysctl_tcp_tuning_co
 from skylark.utils import logger
 from skylark.utils.net import retry_requests
 from skylark.utils.utils import PathLike, Timer, retry_backoff, wait_for
+
+import sshtunnel
 
 
 class ServerState(Enum):
@@ -69,6 +72,7 @@ class Server:
         self.region_tag = region_tag  # format provider:region
         self.command_log = []
         self.init_log_files(log_dir)
+        self.ssh_tunnels: Dict[int, sshtunnel.SSHTunnelForwarder] = {}
 
     def __repr__(self):
         return f"Server({self.uuid()})"
@@ -93,6 +97,9 @@ class Server:
     def get_ssh_client_impl(self):
         raise NotImplementedError()
 
+    def open_ssh_tunnel_impl(self, remote_port) -> sshtunnel.SSHTunnelForwarder:
+        raise NotImplementedError()
+
     def get_ssh_cmd(self) -> str:
         raise NotImplementedError()
 
@@ -102,6 +109,19 @@ class Server:
         if not hasattr(self, "_ssh_client"):
             self._ssh_client = self.get_ssh_client_impl()
         return self._ssh_client
+
+    def tunnel_port(self, remote_port: int) -> int:
+        """Returns a local port that tunnels to the remote port."""
+        if remote_port not in self.ssh_tunnels:
+
+            def start():
+                tunnel = self.open_ssh_tunnel_impl(remote_port)
+                tunnel.start()
+                tunnel._check_is_started()
+                return tunnel
+
+            self.ssh_tunnels[remote_port] = retry_backoff(start)
+        return self.ssh_tunnels[remote_port].local_bind_port
 
     @property
     def provider(self) -> str:
@@ -152,6 +172,10 @@ class Server:
         wait_for(is_up, timeout=timeout, interval=interval, desc=f"Waiting for {self.uuid()} to be ready")
 
     def close_server(self):
+        if hasattr(self, "_ssh_client"):
+            self._ssh_client.close()
+        for tunnel in self.ssh_tunnels.values():
+            tunnel.stop()
         self.flush_command_log()
 
     def flush_command_log(self):
@@ -176,15 +200,13 @@ class Server:
 
     def download_file(self, remote_path, local_path):
         """Download a file from the server"""
-        sftp_client = self.get_sftp_client()
-        sftp_client.get(remote_path, local_path)
-        sftp_client.close()
+        self.get_sftp_client().get(remote_path, local_path)
+        self.get_sftp_client().close()
 
     def upload_file(self, local_path, remote_path):
         """Upload a file to the server"""
-        sftp_client = self.get_sftp_client()
-        sftp_client.put(local_path, remote_path)
-        sftp_client.close()
+        self.get_sftp_client().put(local_path, remote_path)
+        self.get_sftp_client().close()
 
     def copy_public_key(self, pub_key_path: PathLike):
         """Append public key to authorized_keys file on server."""
@@ -255,29 +277,33 @@ class Server:
         logger.fs.debug(desc_prefix + f": Gateway started {start_out.strip()}")
         assert not start_err.strip(), f"Error starting gateway: {start_err.strip()}"
 
-        # load URLs
         gateway_container_hash = start_out.strip().split("\n")[-1][:12]
-        self.gateway_api_url = f"http://{self.public_ip()}:8080/api/v1"
-        self.gateway_log_viewer_url = f"http://{self.public_ip()}:8888/container/{gateway_container_hash}"
+        self.gateway_log_viewer_url = f"http://127.0.0.1:{self.tunnel_port(8888)}/container/{gateway_container_hash}"
+        self.gateway_api_url = f"http://127.0.0.1:{self.tunnel_port(8080)}"
 
         # wait for gateways to start (check status API)
-        def is_ready():
-            api_url = f"http://{self.public_ip()}:8080/api/v1/status"
+        def is_api_ready():
             try:
+                api_url = f"{self.gateway_api_url}/api/v1/status"
                 status_val = retry_requests().get(api_url)
                 is_up = status_val.json().get("status") == "ok"
                 return is_up
-            except Exception:
+            except Exception as e:
+                logger.error(f"{desc_prefix}: Failed to check gateway status: {e}")
                 return False
 
         try:
-            wait_for(is_ready, timeout=10, interval=0.1, desc=f"Waiting for gateway {self.uuid()} to start", leave_pbar=False)
+            logging.disable(logging.CRITICAL)
+            wait_for(is_api_ready, timeout=5, interval=0.1, desc=f"Waiting for gateway {self.uuid()} to start", leave_pbar=False)
         except TimeoutError as e:
-            logger.error(f"Gateway {self.instance_name()} is not ready {e}")
-            logger.warning(desc_prefix + " gateway launch command: " + docker_launch_cmd)
+            logger.fs.error(f"Gateway {self.instance_name()} is not ready {e}")
+            logger.fs.warning(desc_prefix + " gateway launch command: " + docker_launch_cmd)
             logs, err = self.run_command(f"sudo docker logs skylark_gateway --tail=100")
-            logger.error(f"Docker logs: {logs}\nerr: {err}")
+            logger.fs.error(f"Docker logs: {logs}\nerr: {err}")
 
             out, err = self.run_command(docker_launch_cmd.replace(" -d ", " "))
-            logger.error(f"Relaunching gateway in foreground\nout: {out}\nerr: {err}")
+            logger.fs.error(f"Relaunching gateway in foreground\nout: {out}\nerr: {err}")
+            logger.fs.exception(e)
             raise e
+        finally:
+            logging.disable(logging.NOTSET)

@@ -1,42 +1,36 @@
 import concurrent.futures
-from functools import partial
 import json
+import logging
 import os
 import re
-import logging
 import resource
 import signal
 import subprocess
+from functools import partial
 from pathlib import Path
 from shutil import copyfile
-from threading import Thread
-from typing import Dict, List
 from sys import platform
-from typing import Dict, List
-
+from threading import Thread
+from typing import Dict, List, Optional
 
 import boto3
 import typer
-from skylark import GB, MB
-from skylark import exceptions
-from skylark import gcp_config_path
+from skylark import GB, MB, exceptions, gcp_config_path
 from skylark.compute.aws.aws_auth import AWSAuthentication
-from skylark.compute.azure.azure_auth import AzureAuthentication
-from skylark.compute.gcp.gcp_auth import GCPAuthentication
-from skylark.config import SkylarkConfig
-from skylark.utils import logger
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
+from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
+from skylark.compute.gcp.gcp_auth import GCPAuthentication
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
+from skylark.config import SkylarkConfig
+from skylark.obj_store.azure_interface import AzureInterface
+from skylark.obj_store.gcs_interface import GCSInterface
 from skylark.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skylark.obj_store.s3_interface import S3Interface
-from skylark.obj_store.gcs_interface import GCSInterface
-from skylark.obj_store.azure_interface import AzureInterface
-from skylark.obj_store.object_store_interface import ObjectStoreInterface
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology
 from skylark.replicate.replicator_client import ReplicatorClient
+from skylark.utils import logger
 from skylark.utils.utils import do_parallel
-from typing import Optional
 from tqdm import tqdm
 
 
@@ -215,6 +209,7 @@ def replicate_helper(
     # gateway provisioning options
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
+    use_bbr: bool = False,
     # cloud provider specific options
     aws_instance_class: str = "m5.8xlarge",
     azure_instance_class: str = "Standard_D32_v4",
@@ -224,15 +219,18 @@ def replicate_helper(
     time_limit_seconds: Optional[int] = None,
     log_interval_s: float = 1.0,
 ):
+    if "SKYLARK_DOCKER_IMAGE" in os.environ:
+        logger.debug(f"Using docker image: {gateway_docker_image}")
     if reuse_gateways:
-        logger.warning(
-            f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
+        typer.secho(
+            f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways.",
+            fg="red",
+            bold=True,
         )
-
     if random:
         random_chunk_size_mb = size_total_mb // n_chunks
         if max_chunk_size_mb:
-            logger.error("Cannot set chunk size for random data replication - set `random_chunk_size_mb` instead")
+            logger.error("Cannot set chunk size for random data replication, set `random_chunk_size_mb` instead")
             raise ValueError("Cannot set max chunk size")
         job = ReplicationJob(
             source_region=topo.source_region(),
@@ -268,8 +266,13 @@ def replicate_helper(
         else:
             for src_obj in src_objs:
                 src_objs_job.append(src_obj.key)
-                src_path_no_prefix = src_obj.key.lstrip(src_key_prefix if src_key_prefix.endswith("/") else src_key_prefix + "/")
-                if dest_key_prefix.endswith("/") or len(dest_key_prefix) == 0:
+                # remove prefix from object key
+                src_path_no_prefix = src_obj.key[len(src_key_prefix) :] if src_obj.key.startswith(src_key_prefix) else src_obj.key
+                # remove single leading slash if present
+                src_path_no_prefix = src_path_no_prefix[1:] if src_path_no_prefix.startswith("/") else src_path_no_prefix
+                if len(dest_key_prefix) == 0:
+                    dest_objs_job.append(src_path_no_prefix)
+                elif dest_key_prefix.endswith("/"):
                     dest_objs_job.append(dest_key_prefix + src_path_no_prefix)
                 else:
                     dest_objs_job.append(dest_key_prefix + "/" + src_path_no_prefix)
@@ -292,12 +295,16 @@ def replicate_helper(
         gcp_instance_class=gcp_instance_class,
         gcp_use_premium_network=gcp_use_premium_network,
     )
-    typer.secho(f"Storing debug information for transfer in {rc.transfer_dir}", fg="yellow")
+    typer.secho(f"Storing debug information for transfer in {rc.transfer_dir / 'client.log'}", fg="yellow")
+    (rc.transfer_dir / "topology.json").write_text(topo.to_json())
+
     stats = {}
     try:
-        rc.provision_gateways(reuse_gateways)
+        rc.provision_gateways(reuse_gateways, use_bbr=use_bbr)
         for node, gw in rc.bound_nodes.items():
-            typer.secho(f"    Realtime logs for {node.region}:{node.instance} at {gw.gateway_log_viewer_url}")
+            logger.fs.info(f"Log URLs for {gw.uuid()} ({node.region}:{node.instance})")
+            logger.fs.info(f"\tLog viewer: {gw.gateway_log_viewer_url}")
+            logger.fs.info(f"\tAPI: {gw.gateway_api_url}")
         job = rc.run_replication_plan(job)
         if random:
             total_bytes = n_chunks * random_chunk_size_mb * MB
@@ -329,6 +336,14 @@ def replicate_helper(
         signal.signal(signal.SIGINT, s)
     stats = stats if stats else {}
     stats["success"] = stats["monitor_status"] == "completed"
+
+    if stats["monitor_status"] == "error":
+        for instance, errors in stats["errors"].items():
+            for error in errors:
+                typer.secho(f"\n❌ {instance} encountered error:", fg="red", bold=True)
+                typer.secho(error, fg="red")
+        raise typer.Exit(1)
+
     out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
     typer.echo(f"\n{json.dumps(out_json)}")
     return 0 if stats["success"] else 1
@@ -396,7 +411,18 @@ def deprovision_skylark_instances():
         typer.secho(f"Deprovisioning {len(instances)} instances", fg="yellow", bold=True)
         do_parallel(lambda instance: instance.terminate_instance(), instances, desc="Deprovisioning", spinner=True, spinner_persist=True)
     else:
-        typer.secho("No instances to deprovision, exiting...", fg="yellow", bold=True)
+        typer.secho("No instances to deprovision", fg="yellow", bold=True)
+
+    if AWSAuthentication().enabled():
+        aws = AWSCloudProvider()
+        # remove skylark vpc
+        vpcs = do_parallel(partial(aws.get_vpcs), aws.region_list(), desc="Querying VPCs", spinner=True)
+        args = [(x[0], vpc.id) for x in vpcs for vpc in x[1]]
+        do_parallel(lambda args: aws.remove_sg_ips(*args), args, desc="Removing IPs from VPCs", spinner=True, spinner_persist=True)
+        # remove all instance profiles
+        profiles = aws.list_instance_profiles(prefix="skylark-aws")
+        if profiles:
+            do_parallel(aws.delete_instance_profile, profiles, desc="Deleting instance profiles", spinner=True, spinner_persist=True, n=4)
 
 
 def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
@@ -404,17 +430,18 @@ def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
     session = boto3.Session()
     credentials = session.get_credentials()
     credentials = credentials.get_frozen_credentials()
+    auth = AWSAuthentication(config=config)
     if credentials.access_key is None or credentials.secret_key is None:
         config.aws_enabled = False
         typer.secho("    AWS credentials not found in boto3 session, please use the AWS CLI to set them via `aws configure`", fg="red")
         typer.secho("    https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html", fg="red")
         typer.secho("    Disabling AWS support", fg="blue")
-        AWSAuthentication.save_region_config(config)
+        auth.clear_region_config()
         return config
 
     typer.secho(f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials.access_key[-6:]}]", fg="blue")
     config.aws_enabled = True
-    AWSAuthentication.save_region_config(config)
+    auth.save_region_config(config)
     return config
 
 
@@ -477,19 +504,19 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
         typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red")
         typer.secho("    Disabling GCP support", fg="blue")
         config.gcp_enabled = False
-        auth.save_region_config()
+        auth.clear_region_config()
         return config
     else:
         typer.secho("    GCP credentials found in GCP CLI", fg="blue")
         if typer.confirm("    GCP credentials found, do you want to enable GCP support in Skylark?", default=True):
-            config.gcp_project_id = typer.prompt("    Enter the GCP project ID:", default=auth.project_id)
+            config.gcp_project_id = typer.prompt("    Enter the GCP project ID", default=auth.project_id)
             assert config.gcp_project_id is not None, "GCP project ID must not be None"
             config.gcp_enabled = True
-            auth.save_region_config()
+            auth.save_region_config(project_id=config.gcp_project_id)
             return config
         else:
             config.gcp_project_id = None
             typer.secho("    Disabling GCP support", fg="blue")
             config.gcp_enabled = False
-            auth.save_region_config()
+            auth.clear_region_config()
             return config

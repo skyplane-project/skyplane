@@ -77,10 +77,11 @@ def ls(directory: str):
 def cp(
     src: str,
     dst: str,
-    num_connections: int = typer.Option(64, help="Number of connections to open for replication"),
+    num_connections: int = typer.Option(32, help="Number of connections to open for replication"),
     max_instances: int = typer.Option(1, help="Max number of instances per overlay region."),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
+    use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
     solver_throughput_grid: Path = typer.Option(
@@ -155,6 +156,9 @@ def cp(
 
         # Set up replication topology
         if solve:
+            if src_region == dst_region:
+                typer.secho("Solver is not supported for intra-region transfers, run without the --solve flag", fg="red")
+                raise typer.Exit(1)
             # todo cache this for the later replicate_helper call
             objs = list(src_client.list_objects(path_src))
             if not objs:
@@ -180,9 +184,17 @@ def cp(
                 )
             topo, _ = tput.to_replication_topology(solution)
         else:
-            topo = ReplicationTopology()
-            for i in range(max_instances):
-                topo.add_edge(src_region, i, dst_region, i, num_connections)
+            if src_region == dst_region:
+                topo = ReplicationTopology()
+                for i in range(max_instances):
+                    topo.add_objstore_instance_edge(src_region, src_region, i)
+                    topo.add_instance_objstore_edge(src_region, i, src_region)
+            else:
+                topo = ReplicationTopology()
+                for i in range(max_instances):
+                    topo.add_objstore_instance_edge(src_region, src_region, i)
+                    topo.add_instance_instance_edge(src_region, i, dst_region, i, num_connections)
+                    topo.add_instance_objstore_edge(dst_region, i, dst_region)
 
         replicate_helper(
             topo,
@@ -192,6 +204,7 @@ def cp(
             dest_key_prefix=path_dst,
             reuse_gateways=reuse_gateways,
             max_chunk_size_mb=max_chunk_size_mb,
+            use_bbr=use_bbr,
         )
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")

@@ -2,9 +2,9 @@ from typing import Dict, Optional
 
 import boto3
 import paramiko
-from skylark.compute.aws.aws_auth import AWSAuthentication
+import sshtunnel
 from skylark import key_root
-
+from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.compute.server import Server, ServerState
 from skylark.utils.cache import ignore_lru_cache
 
@@ -59,7 +59,22 @@ class AWSServer(Server):
         return f"AWSServer(region_tag={self.region_tag}, instance_id={self.instance_id})"
 
     def terminate_instance_impl(self):
-        self.auth.get_boto3_resource("ec2", self.aws_region).instances.filter(InstanceIds=[self.instance_id]).terminate()
+        iam = self.auth.get_boto3_resource("iam")
+
+        # get instance profile name that is associated with this instance
+        profile = self.get_boto3_instance_resource().iam_instance_profile
+        if profile:
+            profile = iam.InstanceProfile(profile["Arn"].split("/")[-1])
+
+            # remove all roles from instance profile
+            for role in profile.roles:
+                profile.remove_role(RoleName=role.name)
+
+            # delete instance profile
+            profile.delete()
+
+        # delete instance
+        self.get_boto3_instance_resource().terminate()
 
     def get_ssh_client_impl(self):
         client = paramiko.SSHClient()
@@ -75,10 +90,19 @@ class AWSServer(Server):
         )
         return client
 
-    def get_ssh_cmd(self):
-        return f"ssh -i {self.local_keyfile} ec2-user@{self.public_ip()}"
-
     def get_sftp_client(self):
         t = paramiko.Transport((self.public_ip(), 22))
         t.connect(username="ec2-user", pkey=paramiko.RSAKey.from_private_key_file(str(self.local_keyfile)))
         return paramiko.SFTPClient.from_transport(t)
+
+    def open_ssh_tunnel_impl(self, remote_port) -> sshtunnel.SSHTunnelForwarder:
+        return sshtunnel.SSHTunnelForwarder(
+            (self.public_ip(), 22),
+            ssh_username="ec2-user",
+            ssh_pkey=str(self.local_keyfile),
+            local_bind_address=("127.0.0.1", 0),
+            remote_bind_address=("127.0.0.1", remote_port),
+        )
+
+    def get_ssh_cmd(self):
+        return f"ssh -i {self.local_keyfile} ec2-user@{self.public_ip()}"

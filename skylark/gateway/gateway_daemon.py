@@ -1,15 +1,17 @@
 import argparse
 import atexit
 import json
+from multiprocessing.sharedctypes import Value
 import os
 import signal
 import sys
 import threading
-from multiprocessing import Event
+from multiprocessing import Event, Queue
 from os import PathLike
 from pathlib import Path
 from threading import BoundedSemaphore
 import time
+import traceback
 from typing import Dict
 
 
@@ -30,16 +32,22 @@ class GatewayDaemon:
         self.region = region
         self.max_incoming_ports = max_incoming_ports
         self.chunk_store = ChunkStore(chunk_dir)
-        self.gateway_receiver = GatewayReceiver(chunk_store=self.chunk_store, max_pending_chunks=max_incoming_ports, use_tls=use_tls)
-        self.gateway_sender = GatewaySender(chunk_store=self.chunk_store, outgoing_ports=outgoing_ports, use_tls=use_tls)
-        self.obj_store_conn = GatewayObjStoreConn(chunk_store=self.chunk_store, max_conn=32)
+        self.error_event = Event()
+        self.error_queue = Queue()
+        self.gateway_receiver = GatewayReceiver(
+            self.chunk_store, self.error_event, self.error_queue, max_pending_chunks=max_incoming_ports, use_tls=use_tls
+        )
+        self.gateway_sender = GatewaySender(
+            self.chunk_store, self.error_event, self.error_queue, outgoing_ports=outgoing_ports, use_tls=use_tls
+        )
+        self.obj_store_conn = GatewayObjStoreConn(self.chunk_store, self.error_event, self.error_queue, max_conn=32)
 
         # Download thread pool
         self.dl_pool_semaphore = BoundedSemaphore(value=128)
         self.ul_pool_semaphore = BoundedSemaphore(value=128)
 
         # API server
-        self.api_server = GatewayDaemonAPI(self.chunk_store, self.gateway_receiver)
+        self.api_server = GatewayDaemonAPI(self.chunk_store, self.gateway_receiver, self.error_event, self.error_queue)
         self.api_server.start()
         atexit.register(self.api_server.shutdown)
         logger.info(f"[gateway_daemon] API started at {self.api_server.url}")
@@ -62,7 +70,7 @@ class GatewayDaemon:
         signal.signal(signal.SIGTERM, exit_handler)
 
         logger.info("[gateway_daemon] Starting daemon loop")
-        while not exit_flag.is_set():
+        while not exit_flag.is_set() and not self.error_event.is_set():
             # queue object uploads and relays
             for chunk_req in self.chunk_store.get_chunk_requests(ChunkState.downloaded):
                 if self.region == chunk_req.dst_region and chunk_req.dst_type == "save_local":  # do nothing, save to ChunkStore
@@ -72,13 +80,14 @@ class GatewayDaemon:
                     self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).unlink()
                 elif self.region == chunk_req.dst_region and chunk_req.dst_type == "object_store":
                     self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
-                    self.obj_store_conn.queue_request(chunk_req, "upload")
+                    self.obj_store_conn.queue_upload_request(chunk_req)
                 elif self.region != chunk_req.dst_region:
                     self.gateway_sender.queue_request(chunk_req)
                     self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
                 else:
                     self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
-                    raise ValueError(f"No upload handler for ChunkRequest: {chunk_req}")
+                    self.error_queue.put(ValueError("[gateway_daemon] Unknown destination type"))
+                    self.error_event.set()
 
             # queue object store downloads and relays (if space is available)
             for chunk_req in self.chunk_store.get_chunk_requests(ChunkState.registered):
@@ -108,13 +117,21 @@ class GatewayDaemon:
                         threading.Thread(target=fn, args=(chunk_req, size_mb)).start()
                 elif self.region == chunk_req.src_region and chunk_req.src_type == "object_store":
                     self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
-                    self.obj_store_conn.queue_request(chunk_req, "download")
+                    self.obj_store_conn.queue_download_request(chunk_req)
                 elif self.region != chunk_req.src_region:  # do nothing, waiting for chunk to be be ready_to_upload
                     continue
                 else:
                     self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
-                    raise ValueError(f"No download handler for ChunkRequest: {chunk_req}")
+                    self.error_queue.put(ValueError("[gateway_daemon] Unknown source type"))
+                    self.error_event.set()
             time.sleep(0.1)  # yield
+
+        # shut down workers except for API to report status
+        logger.info("[gateway_daemon] Exiting all workers except for API")
+        self.gateway_sender.stop_workers()
+        self.gateway_receiver.stop_servers()
+        self.obj_store_conn.stop_workers()
+        logger.info("[gateway_daemon] Done")
 
 
 if __name__ == "__main__":

@@ -37,7 +37,8 @@ def get_max_throughput(region_tag: str):
     elif provider == "azure":
         print(16)
     else:
-        raise typer.Exit(f"Unknown provider: {provider}")
+        typer.secho(f"Unknown provider: {provider}", fg="red")
+        raise typer.Exit(1)
 
 
 def dump_full_util_cost_grid(

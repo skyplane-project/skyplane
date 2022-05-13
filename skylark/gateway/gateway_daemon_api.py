@@ -1,7 +1,10 @@
 import logging
 import logging.handlers
+from multiprocessing import Queue
 import os
+from queue import Empty
 import threading
+from traceback import TracebackException
 from typing import Dict, List
 
 from flask import Flask, jsonify, request
@@ -26,16 +29,23 @@ class GatewayDaemonAPI(threading.Thread):
     * GET /api/v1/chunk_status_log - returns list of chunk status log entries
     """
 
-    def __init__(self, chunk_store: ChunkStore, gateway_receiver: GatewayReceiver, host="0.0.0.0", port=8080):
+    def __init__(
+        self, chunk_store: ChunkStore, gateway_receiver: GatewayReceiver, error_event, error_queue: Queue, host="0.0.0.0", port=8080
+    ):
         super().__init__()
         self.app = Flask("gateway_metadata_server")
         self.chunk_store = chunk_store
         self.gateway_receiver = gateway_receiver
+        self.error_event = error_event
+        self.error_queue = error_queue
+        self.error_list: List[TracebackException] = []
+        self.error_list_lock = threading.Lock()
 
         # load routes
         self.register_global_routes()
         self.register_server_routes()
         self.register_request_routes()
+        self.register_error_routes()
 
         # make server
         self.host = host
@@ -182,3 +192,17 @@ class GatewayDaemonAPI(threading.Thread):
             with self.chunk_status_log_lock:
                 self.chunk_status_log.extend(self.chunk_store.drain_chunk_status_queue())
                 return jsonify({"chunk_status_log": self.chunk_status_log})
+
+    def register_error_routes(self):
+        @self.app.route("/api/v1/errors", methods=["GET"])
+        def get_errors():
+            with self.error_list_lock:
+                while True:
+                    try:
+                        elem = self.error_queue.get_nowait()
+                        self.error_list.append(elem)
+                    except Empty:
+                        break
+                # convert TracebackException to list
+                error_list_str = [str(e) for e in self.error_list]
+                return jsonify({"errors": error_list_str})

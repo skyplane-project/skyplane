@@ -17,10 +17,11 @@ def replicate_random(
     inter_region: Optional[str] = typer.Argument(None),
     num_gateways: int = typer.Option(1, "--num-gateways", "-n", help="Number of gateways"),
     num_outgoing_connections: int = typer.Option(
-        64, "--num-outgoing-connections", "-c", help="Number of outgoing connections between each gateway"
+        32, "--num-outgoing-connections", "-c", help="Number of outgoing connections between each gateway"
     ),
     total_transfer_size_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB."),
     chunk_size_mb: int = typer.Option(8, "--chunk-size-mb", help="Chunk size in MB."),
+    use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
     aws_instance_class: str = "m5.8xlarge",
@@ -32,22 +33,20 @@ def replicate_random(
 ):
     """Replicate objects from remote object store to another remote object store."""
     print_header()
-    if reuse_gateways:
-        logger.warning(
-            f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
-        )
 
     if inter_region:
         assert inter_region not in [src_region, dst_region] and src_region != dst_region
         topo = ReplicationTopology()
         for i in range(num_gateways):
-            topo.add_edge(src_region, i, inter_region, i, num_outgoing_connections)
-            topo.add_edge(inter_region, i, dst_region, i, num_outgoing_connections)
+            topo.add_instance_instance_edge(src_region, i, inter_region, i, num_outgoing_connections)
+            topo.add_instance_instance_edge(inter_region, i, dst_region, i, num_outgoing_connections)
+    elif src_region == dst_region:
+        typer.secho("Replicate random doesn't support replicating to the same region as it tests inter-gateway networks.", fg="red")
+        raise typer.Exit(code=1)
     else:
-        assert src_region != dst_region
         topo = ReplicationTopology()
         for i in range(num_gateways):
-            topo.add_edge(src_region, i, dst_region, i, num_outgoing_connections)
+            topo.add_instance_instance_edge(src_region, i, dst_region, i, num_outgoing_connections)
 
     if total_transfer_size_mb % chunk_size_mb != 0:
         logger.warning(f"total_transfer_size_mb ({total_transfer_size_mb}) is not a multiple of chunk_size_mb ({chunk_size_mb})")
@@ -66,6 +65,7 @@ def replicate_random(
         gcp_use_premium_network=gcp_use_premium_network,
         time_limit_seconds=time_limit_seconds,
         log_interval_s=log_interval_s,
+        use_bbr=use_bbr,
     )
 
 
@@ -75,10 +75,11 @@ def replicate_random_solve(
     inter_region: Optional[str] = typer.Argument(None),
     num_gateways: int = typer.Option(1, "--num-gateways", "-n", help="Number of gateways"),
     num_outgoing_connections: int = typer.Option(
-        64, "--num-outgoing-connections", "-c", help="Number of outgoing connections between each gateway"
+        32, "--num-outgoing-connections", "-c", help="Number of outgoing connections between each gateway"
     ),
     total_transfer_size_mb: int = typer.Option(2048, "--size-total-mb", "-s", help="Total transfer size in MB."),
     chunk_size_mb: int = typer.Option(8, "--chunk-size-mb", help="Chunk size in MB."),
+    use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
     aws_instance_class: str = "m5.8xlarge",
@@ -96,10 +97,6 @@ def replicate_random_solve(
 ):
     """Replicate objects from remote object store to another remote object store."""
     print_header()
-    if reuse_gateways:
-        logger.warning(
-            f"Instances will remain up and may result in continued cloud billing. Remember to call `skylark deprovision` to deprovision gateways."
-        )
 
     if solve:
         with tempfile.NamedTemporaryFile(mode="w") as f:
@@ -118,13 +115,13 @@ def replicate_random_solve(
         assert inter_region not in [src_region, dst_region] and src_region != dst_region
         topo = ReplicationTopology()
         for i in range(num_gateways):
-            topo.add_edge(src_region, i, inter_region, i, num_outgoing_connections)
-            topo.add_edge(inter_region, i, dst_region, i, num_outgoing_connections)
+            topo.add_instance_instance_edge(src_region, i, inter_region, i, num_outgoing_connections)
+            topo.add_instance_instance_edge(inter_region, i, dst_region, i, num_outgoing_connections)
     else:
         assert src_region != dst_region
         topo = ReplicationTopology()
         for i in range(num_gateways):
-            topo.add_edge(src_region, i, dst_region, i, num_outgoing_connections)
+            topo.add_instance_instance_edge(src_region, i, dst_region, i, num_outgoing_connections)
 
     if total_transfer_size_mb % chunk_size_mb != 0:
         logger.warning(f"total_transfer_size_mb ({total_transfer_size_mb}) is not a multiple of chunk_size_mb ({chunk_size_mb})")
@@ -143,6 +140,7 @@ def replicate_random_solve(
         gcp_use_premium_network=gcp_use_premium_network,
         time_limit_seconds=time_limit_seconds,
         log_interval_s=log_interval_s,
+        use_bbr=use_bbr,
     )
 
 
@@ -157,6 +155,7 @@ def replicate_json(
     src_key_prefix: str = "/",
     dest_key_prefix: str = "/",
     # gateway provisioning options
+    use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYLARK_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
     # cloud provider specific options
@@ -191,4 +190,5 @@ def replicate_json(
         gcp_use_premium_network=gcp_use_premium_network,
         time_limit_seconds=time_limit_seconds,
         log_interval_s=log_interval_s,
+        use_bbr=use_bbr,
     )

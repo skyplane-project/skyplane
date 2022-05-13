@@ -1,8 +1,9 @@
+from operator import not_
 import os
 import time
 import uuid
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import googleapiclient
 import paramiko
@@ -62,7 +63,7 @@ class GCPCloudProvider(CloudProvider):
         ]
         availability_zones = []
         for r in GCPCloudProvider.region_list():
-            parsed_region, parsed_zone = r.rsplit("-", 1)
+            parsed_region, _ = r.rsplit("-", 1)
             if parsed_region in regions_with_standard:
                 availability_zones.append(r)
         return availability_zones

@@ -58,9 +58,9 @@ class ReplicatorClient:
         self.multipart_upload_requests = []
 
     def provision_gateways(
-        self, reuse_instances=False, log_dir: Optional[PathLike] = None, authorize_ssh_pub_key: Optional[PathLike] = None
+        self, reuse_instances=False, log_dir: Optional[PathLike] = None, authorize_ssh_pub_key: Optional[PathLike] = None, use_bbr=False
     ):
-        regions_to_provision = [node.region for node in self.topology.nodes]
+        regions_to_provision = [node.region for node in self.topology.gateway_nodes]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
         azure_regions_to_provision = [r for r in regions_to_provision if r.startswith("azure:")]
         gcp_regions_to_provision = [r for r in regions_to_provision if r.startswith("gcp:")]
@@ -79,7 +79,12 @@ class ReplicatorClient:
         jobs = []
         jobs.append(partial(self.aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
         for r in set(aws_regions_to_provision):
-            jobs.append(partial(self.aws.add_ip_to_security_group, r.split(":")[1]))
+
+            def init_aws_vpc(r):
+                self.aws.make_vpc(r)
+                self.aws.authorize_client(r, "0.0.0.0/0")
+
+            jobs.append(partial(init_aws_vpc, r.split(":")[1]))
             jobs.append(partial(self.aws.ensure_keyfile_exists, r.split(":")[1]))
         if azure_regions_to_provision:
             jobs.append(self.azure.create_ssh_key)
@@ -188,10 +193,18 @@ class ReplicatorClient:
                 self.temp_nodes.extend(ilist)
 
         # bind instances to nodes
-        for node in self.topology.nodes:
+        for node in self.topology.gateway_nodes:
             instance = instances_by_region[node.region].pop()
             self.bound_nodes[node] = instance
             self.temp_nodes.remove(instance)
+
+        # Firewall rules
+        # todo add firewall rules for Azure and GCP
+        public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.gateway_nodes]
+        aws_jobs = [
+            partial(self.aws.add_ip_to_security_group, r.split(":")[1], ip) for r in set(aws_regions_to_provision) for ip in public_ips
+        ]
+        do_parallel(lambda fn: fn(), aws_jobs, spinner=True, desc="Applying firewall rules")
 
         # setup instances
         def setup(args: Tuple[Server, Dict[str, int]]):
@@ -200,33 +213,45 @@ class ReplicatorClient:
                 server.init_log_files(log_dir)
             if authorize_ssh_pub_key:
                 server.copy_public_key(authorize_ssh_pub_key)
-            server.start_gateway(outgoing_ports, gateway_docker_image=self.gateway_docker_image)
+            server.start_gateway(outgoing_ports, gateway_docker_image=self.gateway_docker_image, use_bbr=use_bbr)
 
         args = []
         for node, server in self.bound_nodes.items():
-            args.append((server, {self.bound_nodes[n].public_ip(): v for n, v in self.topology.get_outgoing_paths(node).items()}))
+            args.append(
+                (
+                    server,
+                    {
+                        self.bound_nodes[n].public_ip(): v
+                        for n, v in self.topology.get_outgoing_paths(node).items()
+                        if isinstance(n, ReplicationTopologyGateway)
+                    },
+                )
+            )
         do_parallel(setup, args, n=-1, spinner=True, spinner_persist=True, desc="Install gateway package on instances")
 
     def deprovision_gateways(self):
+        # This is a good place to tear down Security Groups and the instance since this is invoked by CLI too.
         def deprovision_gateway_instance(server: Server):
             if server.instance_state() == ServerState.RUNNING:
                 server.terminate_instance()
                 logger.fs.warning(f"Deprovisioned {server.uuid()}")
 
-        instances = self.bound_nodes.values()
+        # Clear IPs from security groups
+        # todo remove firewall rules for Azure and GCP
+        public_ips = [i.public_ip() for i in self.bound_nodes.values()] + [i.public_ip() for i in self.temp_nodes]
+        aws_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("aws:")]
+        aws_jobs = [partial(self.aws.remove_ip_from_security_group, r.split(":")[1], ip) for r in set(aws_regions) for ip in public_ips]
+        do_parallel(lambda fn: fn(), aws_jobs)
+
+        # Terminate instances
+        instances = list(self.bound_nodes.values()) + self.temp_nodes
         logger.fs.warning(f"Deprovisioning {len(instances)} instances")
-        do_parallel(deprovision_gateway_instance, instances, n=-1, spinner=True, spinner_persist=True, desc="Deprovisioning instances")
-        if self.temp_nodes:
-            logger.fs.warning(f"Deprovisioning {len(self.temp_nodes)} temporary instances")
-            do_parallel(
-                deprovision_gateway_instance,
-                self.temp_nodes,
-                n=-1,
-                spinner=True,
-                spinner_persist=False,
-                desc="Deprovisioning partially allocated instances",
+        if any(i.provider == "azure" for i in instances):
+            logger.warning(
+                f"NOTE: Azure is very slow to terminate instances. Consider using --reuse-instances and then deprovisioning the instances manually with `skylark deprovision`."
             )
-            self.temp_nodes = []
+        do_parallel(deprovision_gateway_instance, instances, n=-1, spinner=True, spinner_persist=True, desc="Deprovisioning instances")
+        self.temp_nodes = []
         logger.fs.info("Deprovisioned instances")
 
     def run_replication_plan(self, job: ReplicationJob) -> ReplicationJob:
@@ -377,6 +402,9 @@ class ReplicatorClient:
                             dst_object_store_bucket=job.dest_bucket,
                         )
                     )
+                logger.fs.debug(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")
+                for chunk_request in chunk_requests_sharded[batch_idx]:
+                    logger.fs.debug(f"\t{chunk_request}")
 
             # send chunk requests to start gateways in parallel
             spinner.text = "Preparing replication plan, dispatching chunk requests to source gateways"
@@ -384,8 +412,9 @@ class ReplicatorClient:
             def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
                 hop_instance, chunk_requests = args
                 ip = gateway_ips[hop_instance]
-                logger.fs.debug(f"Sending {len(chunk_requests)} chunk requests to {ip}")
-                reply = retry_requests().post(f"http://{ip}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests])
+                reply = retry_requests().post(
+                    f"{hop_instance.gateway_api_url}/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests]
+                )
                 if reply.status_code != 200:
                     raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
 
@@ -398,7 +427,7 @@ class ReplicatorClient:
     def get_chunk_status_log_df(self) -> pd.DataFrame:
         def get_chunk_status(args):
             node, instance = args
-            reply = retry_requests().get(f"http://{instance.public_ip()}:8080/api/v1/chunk_status_log")
+            reply = retry_requests().get(f"{instance.gateway_api_url}/api/v1/chunk_status_log")
             if reply.status_code != 200:
                 raise Exception(f"Failed to get chunk status from gateway instance {instance.instance_name()}: {reply.text}")
             logs = []
@@ -414,6 +443,19 @@ class ReplicatorClient:
         for result in do_parallel(get_chunk_status, self.bound_nodes.items(), n=-1, return_args=False):
             rows.extend(result)
         return pd.DataFrame(rows)
+
+    def check_error_logs(self) -> Dict[str, List[str]]:
+        def get_error_logs(args):
+            _, instance = args
+            reply = retry_requests().get(f"{instance.gateway_api_url}/api/v1/errors")
+            if reply.status_code != 200:
+                raise Exception(f"Failed to get error logs from gateway instance {instance.instance_name()}: {reply.text}")
+            return reply.json()["errors"]
+
+        errors: Dict[str, List[str]] = {}
+        for (_, instance), result in do_parallel(get_error_logs, self.bound_nodes.items(), n=-1):
+            errors[instance] = result
+        return errors
 
     def monitor_transfer(
         self,
@@ -435,12 +477,31 @@ class ReplicatorClient:
         sink_regions = set(s.region for s in sinks)
 
         completed_chunk_ids = []
+
+        # wait for VMs to start
+
         if show_spinner:
             spinner = Halo(text="Transfer starting", spinner="dots")
             spinner.start()
+        if save_log:
+            if show_spinner:
+                spinner.text = "Transfer starting, saving job log"
+            (self.transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
         try:
             with Timer() as t:
                 while True:
+                    logger.fs.debug(f"Refreshing status, {t.elapsed:.2f}s elapsed")
+
+                    # check for errors and exit if there are any
+                    logger.fs.debug("Checking for errors")
+                    errors = self.check_error_logs()
+                    if any(errors.values()):
+                        return {
+                            "errors": errors,
+                            "monitor_status": "error",
+                        }
+
+                    logger.fs.debug("Checking for completion")
                     log_df = self.get_chunk_status_log_df()
                     if log_df.empty:
                         logger.warning("No chunk status log entries yet")
@@ -460,6 +521,7 @@ class ReplicatorClient:
                     )
 
                     # update progress bar
+                    logger.fs.debug("Updating progress bar")
                     total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
                     throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
 
@@ -516,9 +578,6 @@ class ReplicatorClient:
             if show_spinner:
                 spinner.stop()
             with Halo(text="Cleaning up after transfer", spinner="dots") as spinner:
-                if save_log:
-                    spinner.text = "Cleaning up after transfer, saving job log"
-                    (self.transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
                 if copy_gateway_logs:
 
                     def copy_log(instance):
@@ -540,7 +599,7 @@ class ReplicatorClient:
 
                     def fn(s: Server):
                         try:
-                            retry_requests().post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
+                            retry_requests().post(f"{s.gateway_api_url}/api/v1/shutdown")
                         except:
                             return  # ignore connection errors since server may be shutting down
 
