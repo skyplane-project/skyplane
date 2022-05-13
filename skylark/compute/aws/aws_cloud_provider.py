@@ -292,8 +292,8 @@ class AWSCloudProvider(CloudProvider):
                 )
             except botocore.exceptions.ClientError as e:
                 logger.fs.error(f"[AWS] Error removing IP {ip} from security group {sg.group_name}: {e}")
-                if not str(e).endswith("NotFound"):
-                    logger.warn("[AWS] Error removing IP from security group")
+                if "The specified rule does not exist in this security group." not in str(e):
+                    logger.warn(f"[AWS] Error removing IP from security group: {e}")
 
     def ensure_keyfile_exists(self, aws_region, prefix=key_root / "aws"):
         ec2 = self.auth.get_boto3_resource("ec2", aws_region)
