@@ -31,7 +31,7 @@ class S3Interface(ObjectStoreInterface):
             return region if region is not None else "us-east-1"
         except Exception as e:
             if "An error occurred (AccessDenied) when calling the GetBucketLocation operation" in str(e):
-                logger.error(f"Bucket {bucket_name} is not public. Assuming region is us-east-1.")
+                logger.error(f"Bucket location {bucket_name} is not public. Assuming region is us-east-1.")
                 return "us-east-1"
             logger.error("Specified bucket does not exist.")
             raise exceptions.MissingBucketException() from e

@@ -31,6 +31,15 @@ def make_dozzle_command(port):
 
 
 def make_sysctl_tcp_tuning_command(cc="cubic"):
+    # sam's suggested improvements:
+    # net.core.rmem_max = 2147483647
+    # net.core.wmem_max = 2147483647
+    # net.ipv4.tcp_rmem = 4096 87380 2147483647
+    # net.ipv4.tcp_wmem = 4096 65536 2147483647
+    # net.ipv4.tcp_mem = 8388608 8388608 8388608
+    # net.ipv4.tcp_keepalive_time = 240
+    # net.ipv4.tcp_keepalive_intvl = 65
+    # net.ipv4.tcp_keepalive_probes = 5
     sysctl_updates = {
         "net.core.rmem_max": 134217728,  # from 212992
         "net.core.wmem_max": 134217728,  # from 212992
