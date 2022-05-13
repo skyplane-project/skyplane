@@ -103,23 +103,10 @@ class ReplicationTopology:
         return {src_gateway: num_connections for dest_gateway, src_gateway, num_connections in self.edges if dest_gateway == dest}
 
     def source_instances(self) -> Set[ReplicationTopologyNode]:
-        # try to find a source instance by checking for a source object store, else return {u | u not in {v for u, v in self.edges}}
-        nodes = set()
-        for src, dest, _ in self.edges:
-            if isinstance(src, ReplicationTopologyObjectStore):
-                nodes.add(dest)
-        if len(nodes) == 0:
-            nodes = self.nodes - {v for _, v, _ in self.edges}
-        return nodes
+        return self.nodes - {v for u, v, _ in self.edges if not isinstance(u, ReplicationTopologyObjectStore)}
 
     def sink_instances(self) -> Set[ReplicationTopologyNode]:
-        nodes = set()
-        for src, dest, _ in self.edges:
-            if isinstance(dest, ReplicationTopologyObjectStore):
-                nodes.add(src)
-        if len(nodes) == 0:
-            nodes = self.nodes - {u for u, *_ in self.edges}
-        return nodes
+        return self.nodes - {u for u, v, _ in self.edges if not isinstance(v, ReplicationTopologyObjectStore)}
 
     def source_region(self) -> str:
         instances = list(self.source_instances())
