@@ -103,10 +103,13 @@ class ReplicationTopology:
         return {src_gateway: num_connections for dest_gateway, src_gateway, num_connections in self.edges if dest_gateway == dest}
 
     def source_instances(self) -> Set[ReplicationTopologyNode]:
+        # try to find a source instance by checking for a source object store, else return {u | u not in {v for u, v in self.edges}}
         nodes = set()
         for src, dest, _ in self.edges:
             if isinstance(src, ReplicationTopologyObjectStore):
                 nodes.add(dest)
+        if len(nodes) == 0:
+            nodes = self.nodes - {v for _, v, _ in self.edges}
         return nodes
 
     def sink_instances(self) -> Set[ReplicationTopologyNode]:
@@ -114,6 +117,8 @@ class ReplicationTopology:
         for src, dest, _ in self.edges:
             if isinstance(dest, ReplicationTopologyObjectStore):
                 nodes.add(src)
+        if len(nodes) == 0:
+            nodes = self.nodes - {u for u, *_ in self.edges}
         return nodes
 
     def source_region(self) -> str:
@@ -197,7 +202,7 @@ class ReplicationTopology:
             g.edge(
                 src_node,
                 dest_node,
-                label=f"{n_connections} connections" if src_instance is not "objstore" and dest_instance is not "objstore" else None,
+                label=f"{n_connections} connections" if src_instance != "objstore" and dest_instance != "objstore" else None,
             )
 
         for subgraph in subgraphs.values():
