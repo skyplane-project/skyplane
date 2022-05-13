@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import List
 
 
 @dataclass
@@ -16,6 +17,9 @@ class ObjectStoreObject:
 
 
 class ObjectStoreInterface:
+    def region_tag(self):
+        raise NotImplementedError()
+
     def bucket_exists(self):
         raise NotImplementedError()
 
@@ -28,6 +32,9 @@ class ObjectStoreInterface:
     def list_objects(self, prefix=""):
         raise NotImplementedError()
 
+    def exists(self):
+        raise NotImplementedError()
+
     def get_obj_size(self, obj_name):
         raise NotImplementedError()
 
@@ -36,11 +43,14 @@ class ObjectStoreInterface:
 
     def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
         raise NotImplementedError()
+    
+    def delete_objects(self, keys: List[str]):
+        raise NotImplementedError()
 
     def initiate_multipart_upload(self, dst_object_name):
         return ValueError("Multipart uploads not supported")
 
-    def complete_multipart_upload(self, dst_object_name, upload_id, parts):
+    def complete_multipart_upload(self, dst_object_name, upload_id):
         return ValueError("Multipart uploads not supported")
 
     @staticmethod

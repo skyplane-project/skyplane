@@ -71,6 +71,9 @@ class AzureInterface(ObjectStoreInterface):
         except ResourceNotFoundError:
             return False
 
+    def exists(self):
+        return self.blob_service_client.get_blob_client(container=self.container_name, blob=key).exists()
+
     def create_storage_account(self, tier="Premium_LRS"):
         try:
             operation = self.storage_management_client.storage_accounts.begin_create(

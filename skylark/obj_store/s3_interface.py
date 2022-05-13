@@ -61,14 +61,14 @@ class S3Interface(ObjectStoreInterface):
             s3_client.delete_objects(Bucket=self.bucket_name, Delete={"Objects": [{"Key": k} for k in batch]})
 
     def get_obj_metadata(self, obj_name):
-        s3_resource = self.auth.get_boto3_resource("s3", self.aws_region).Bucket(self.bucket_name)
+        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         try:
-            return s3_resource.Object(str(obj_name))
+            return s3_client.head_object(Bucket=self.bucket_name, Key=str(obj_name))
         except botocore.exceptions.ClientError as e:
             raise NoSuchObjectException(f"Object {obj_name} does not exist, or you do not have permission to access it") from e
 
     def get_obj_size(self, obj_name):
-        return self.get_obj_metadata(obj_name).content_length
+        return self.get_obj_metadata(obj_name)["ContentLength"]
 
     def exists(self, obj_name):
         try:
@@ -78,17 +78,14 @@ class S3Interface(ObjectStoreInterface):
             return False
 
     def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
-        logger.info(f"Download {src_object_name}, {dst_file_path}, {offset_bytes}")
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         assert len(src_object_name) > 0, f"Source object name must be non-empty: '{src_object_name}'"
 
         if size_bytes:
             byte_range = f"bytes={offset_bytes}-{offset_bytes + size_bytes - 1}"
-            logger.info(f"Download {byte_range}")
             response = s3_client.get_object(Bucket=self.bucket_name, Key=src_object_name, Range=byte_range)
         else:
-            logger.info(f"Download all {offset_bytes}, {size_bytes}")
             response = s3_client.get_object(
                 Bucket=self.bucket_name,
                 Key=src_object_name,
@@ -103,8 +100,6 @@ class S3Interface(ObjectStoreInterface):
         response["Body"].close()
 
     def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
-        logger.info(f"Upload {src_file_path}, {dst_object_name}, {part_number}, {upload_id}, {self.bucket_name}")
-        logger.info(f"id {upload_id}")
         dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
 
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
@@ -132,7 +127,7 @@ class S3Interface(ObjectStoreInterface):
         )
         return response["UploadId"]
 
-    def complete_multipart_upload(self, dst_object_name, upload_id, parts):
+    def complete_multipart_upload(self, dst_object_name, upload_id):
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
 
         all_parts = []
@@ -146,12 +141,6 @@ class S3Interface(ObjectStoreInterface):
                 if len(response["Parts"]) == 0:
                     break
                 all_parts += response["Parts"]
-
-        if len(all_parts) != len(parts):
-            # abort if number of parts doesn't match expected
-            logger.error(f"Parts length mismatch for {upload_id}: expected {len(parts)}, got {len(all_parts)}")
-            response = s3_client.abort_multipart_upload(Bucket=self.bucket_name, Key=dst_object_name, UploadId=upload_id)
-            return False
 
         # sort by part-number
         all_parts = sorted(all_parts, key=lambda d: d["PartNumber"])
