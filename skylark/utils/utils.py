@@ -23,7 +23,7 @@ class Timer:
     def __exit__(self, exc_typ, exc_val, exc_tb):
         self.end = time.time()
         if self.print_desc:
-            logger.debug(f"{self.print_desc}: {self.elapsed:.2f}s")
+            logger.fs.debug(f"{self.print_desc}: {self.elapsed:.2f}s")
 
     @property
     def elapsed(self):

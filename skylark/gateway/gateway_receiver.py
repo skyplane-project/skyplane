@@ -6,7 +6,7 @@ import time
 from contextlib import closing
 from multiprocessing import Event, Process, Value, Queue
 import traceback
-from typing import Tuple
+from typing import Optional, Tuple
 
 from skylark.utils import logger
 from skylark import GB, MB
@@ -34,6 +34,7 @@ class GatewayReceiver:
         self.server_processes = []
         self.server_ports = []
         self.next_gateway_worker_id = 0
+        self.socket_profiler_event_queue = Queue()
 
         # SSL context
         if use_tls:
@@ -47,7 +48,7 @@ class GatewayReceiver:
             self.ssl_context = None
 
         # private state per worker
-        self.worker_id = None
+        self.worker_id: Optional[int] = None
 
     def start_server(self):
         # todo a good place to add backpressure?
@@ -146,6 +147,14 @@ class GatewayReceiver:
                         f.write(data)
                         chunk_data_size -= len(data)
                         chunk_received_size += len(data)
+                        self.socket_profiler_event_queue.put(
+                            dict(
+                                receiver_id=self.worker_id,
+                                chunk_id=chunk_header.chunk_id,
+                                time_ms=t.elapsed * 1000.0,
+                                bytes=chunk_received_size,
+                            )
+                        )
             assert (
                 chunk_data_size == 0 and chunk_received_size == chunk_header.chunk_len
             ), f"Size mismatch: got {chunk_received_size} expected {chunk_header.chunk_len}"

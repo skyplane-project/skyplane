@@ -379,7 +379,7 @@ class ReplicatorClient:
             len(chunk_batches) == len(src_instances)
         ), f"{len(chunk_batches)} batches, expected {len(src_instances)}"
         for batch_idx, batch in enumerate(chunk_batches):
-            logger.info(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")
+            logger.fs.info(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")
 
         # make list of ChunkRequests
         chunk_requests_sharded: Dict[int, List[ChunkRequest]] = {}
@@ -466,6 +466,7 @@ class ReplicatorClient:
         cleanup_gateway: bool = True,
         save_log: bool = True,
         write_profile: bool = True,
+        write_socket_profile: bool = False,  # slow but useful for debugging
         copy_gateway_logs: bool = True,
         multipart: bool = False,  # multipart object uploads/downloads
     ) -> Optional[Dict]:
@@ -479,7 +480,6 @@ class ReplicatorClient:
         completed_chunk_ids = []
 
         # wait for VMs to start
-
         if show_spinner:
             spinner = Halo(text="Transfer starting", spinner="dots")
             spinner.start()
@@ -583,13 +583,25 @@ class ReplicatorClient:
                     spinner.text = "Cleaning up after transfer, copying gateway logs from all nodes"
                     do_parallel(copy_log, self.bound_nodes.values(), n=-1)
                 if write_profile:
+                    spinner.text = "Cleaning up after transfer, writing profile of transfer"
                     chunk_status_df = self.get_chunk_status_log_df()
                     (self.transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
                     traceevent = status_df_to_traceevent(chunk_status_df)
                     profile_out = self.transfer_dir / f"traceevent_{uuid.uuid4()}.json"
                     profile_out.parent.mkdir(parents=True, exist_ok=True)
                     profile_out.write_text(json.dumps(traceevent))
-                    spinner.text = "Cleaning up after transfer, writing profile of transfer"
+                if write_socket_profile:
+
+                    def write_socket_profile(instance):
+                        receiver_reply = retry_requests().get(f"{instance.gateway_api_url}/api/v1/socket_profiles/receiver")
+                        if receiver_reply.status_code != 200:
+                            logger.fs.error(
+                                f"Failed to get receiver socket profile from {instance.gateway_api_url}: {receiver_reply.status_code} {receiver_reply.text}"
+                            )
+                        (self.transfer_dir / f"receiver_socket_profile_{instance.uuid()}.json").write_text(receiver_reply.text)
+
+                    spinner.text = "Cleaning up after transfer, writing socket profile of transfer"
+                    do_parallel(write_socket_profile, self.bound_nodes.values(), n=-1)
                 if cleanup_gateway:
 
                     def fn(s: Server):

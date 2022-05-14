@@ -216,7 +216,9 @@ class AWSCloudProvider(CloudProvider):
             if sg.group_name == "default":
                 continue
             # revoke all ingress rules except for ssh
-            sg.revoke_ingress(IpPermissions=[r for r in sg.ip_permissions if not (r.get("FromPort") == 22 and r.get("ToPort") == 22)])
+            for rule in sg.ip_permissions:
+                if not (rule.get("IpProtocol") == "tcp" and rule.get("FromPort") == 22 and rule.get("ToPort") == 22):
+                    sg.revoke_ingress(IpPermissions=rule)
 
     def list_instance_profiles(self, prefix: Optional[str] = None):
         """List instance profile names in a region"""

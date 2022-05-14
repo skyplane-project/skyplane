@@ -1,29 +1,25 @@
 import argparse
 import atexit
 import json
-from multiprocessing.sharedctypes import Value
 import os
 import signal
 import sys
 import threading
+import time
 from multiprocessing import Event, Queue
 from os import PathLike
 from pathlib import Path
 from threading import BoundedSemaphore
-import time
-import traceback
 from typing import Dict
 
-
-from skylark.utils import logger
 from skylark import MB, print_header
 from skylark.chunk import ChunkState
 from skylark.gateway.chunk_store import ChunkStore
 from skylark.gateway.gateway_daemon_api import GatewayDaemonAPI
+from skylark.gateway.gateway_obj_store import GatewayObjStoreConn
 from skylark.gateway.gateway_receiver import GatewayReceiver
 from skylark.gateway.gateway_sender import GatewaySender
-
-from skylark.gateway.gateway_obj_store import GatewayObjStoreConn
+from skylark.utils import logger
 
 
 class GatewayDaemon:

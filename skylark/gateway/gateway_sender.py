@@ -2,13 +2,13 @@ from functools import partial
 import queue
 import socket
 import ssl
-from multiprocessing import Event, Manager, Process, Queue
+from multiprocessing import Event, Process, Queue
 import traceback
 from typing import Dict, List, Optional
 
 import requests
 from skylark.utils import logger
-from skylark import MB
+from skylark import KB, MB
 from skylark.chunk import ChunkRequest
 from skylark.gateway.chunk_store import ChunkStore
 from skylark.utils.net import retry_requests
@@ -16,7 +16,14 @@ from skylark.utils.utils import Timer, retry_backoff, wait_for
 
 
 class GatewaySender:
-    def __init__(self, chunk_store: ChunkStore, error_event, error_queue: Queue, outgoing_ports: Dict[str, int], use_tls: bool = True):
+    def __init__(
+        self,
+        chunk_store: ChunkStore,
+        error_event,
+        error_queue: Queue,
+        outgoing_ports: Dict[str, int],
+        use_tls: bool = True,
+    ):
         self.chunk_store = chunk_store
         self.error_event = error_event
         self.error_queue = error_queue
@@ -34,12 +41,12 @@ class GatewaySender:
             self.ssl_context = None
 
         # shared state
-        self.manager = Manager()
-        self.worker_queue: queue.Queue[int] = self.manager.Queue()
+        self.worker_queue: queue.Queue[int] = Queue()
         self.exit_flags = [Event() for _ in range(self.n_processes)]
 
         # process-local state
         self.worker_id: Optional[int] = None
+        self.sender_port: Optional[int] = None
         self.destination_ports: Dict[str, int] = {}  # ip_address -> int
         self.destination_sockets: Dict[str, socket.socket] = {}  # ip_address -> socket
         self.sent_chunk_ids: Dict[str, List[int]] = {}  # ip_address -> list of chunk_ids
@@ -161,15 +168,11 @@ class GatewaySender:
             assert chunk_file_path.exists(), f"chunk file {chunk_file_path} does not exist"
             with Timer() as t:
                 with open(chunk_file_path, "rb") as fd:
-                    chunk_data = fd.read()
-                logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sending chunk data")
-                sock.sendall(chunk_data)
-                logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent chunk data")
-            assert (
-                len(chunk_data) == chunk.chunk_length_bytes
-            ), f"chunk {chunk_id} has size {len(chunk_data)} but should be {chunk.chunk_length_bytes}"
-            logger.debug(
-                f"[sender:{self.worker_id}] finished sending chunk data {chunk_id} at {chunk.chunk_length_bytes * 8 / t.elapsed / MB:.2f}Mbps"
-            )
+                    data_buf = fd.read()
+                    sock.sendall(data_buf)
+                    assert (
+                        len(data_buf) == chunk.chunk_length_bytes
+                    ), f"chunk {chunk_id} has size {len(data_buf)} but should be {chunk.chunk_length_bytes}"
+            logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent at {chunk.chunk_length_bytes * 8 / t.elapsed / MB:.2f}Mbps")
             self.chunk_store.state_finish_upload(chunk_id, f"sender:{self.worker_id}")
             chunk_file_path.unlink()

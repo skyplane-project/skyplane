@@ -8,6 +8,7 @@ from traceback import TracebackException
 from typing import Dict, List
 
 from flask import Flask, jsonify, request
+from skylark.gateway.gateway_sender import GatewaySender
 from skylark.utils import logger
 from skylark.chunk import ChunkRequest, ChunkState
 from skylark.gateway.chunk_store import ChunkStore
@@ -30,7 +31,13 @@ class GatewayDaemonAPI(threading.Thread):
     """
 
     def __init__(
-        self, chunk_store: ChunkStore, gateway_receiver: GatewayReceiver, error_event, error_queue: Queue, host="0.0.0.0", port=8080
+        self,
+        chunk_store: ChunkStore,
+        gateway_receiver: GatewayReceiver,
+        error_event,
+        error_queue: Queue,
+        host="0.0.0.0",
+        port=8080,
     ):
         super().__init__()
         self.app = Flask("gateway_metadata_server")
@@ -46,6 +53,7 @@ class GatewayDaemonAPI(threading.Thread):
         self.register_server_routes()
         self.register_request_routes()
         self.register_error_routes()
+        self.register_socket_profiling_routes()
 
         # make server
         self.host = host
@@ -55,6 +63,13 @@ class GatewayDaemonAPI(threading.Thread):
         # chunk status log
         self.chunk_status_log: List[Dict] = []
         self.chunk_status_log_lock = threading.Lock()
+
+        # socket profiles
+        self.sender_socket_profiles: List[Dict] = []
+        self.sender_socket_profiles_lock = threading.Lock()
+        self.receiver_socket_profiles: List[Dict] = []
+        self.receiver_socket_profiles_lock = threading.Lock()
+
         logging.getLogger("werkzeug").setLevel(logging.WARNING)
         self.server = make_server(host, port, self.app, threaded=True)
 
@@ -206,3 +221,15 @@ class GatewayDaemonAPI(threading.Thread):
                 # convert TracebackException to list
                 error_list_str = [str(e) for e in self.error_list]
                 return jsonify({"errors": error_list_str})
+
+    def register_socket_profiling_routes(self):
+        @self.app.route("/api/v1/socket_profiles/receiver", methods=["GET"])
+        def get_receiver_socket_profiles():
+            with self.receiver_socket_profiles_lock:
+                while True:
+                    try:
+                        elem = self.gateway_receiver.socket_profiler_event_queue.get_nowait()
+                        self.receiver_socket_profiles.append(elem)
+                    except Empty:
+                        break
+                return jsonify({"socket_profiles": self.receiver_socket_profiles})
