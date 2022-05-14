@@ -13,6 +13,7 @@ def plot(file):
     with open(file, "r") as f:
         data = json.load(f)["socket_profiles"]
     df = pd.DataFrame(data).sort_values("time_ms")
+    print(df.columns)
 
     df_grouped = df.groupby("chunk_id")
     fig, ax = plt.subplots(figsize=(8, 8))
