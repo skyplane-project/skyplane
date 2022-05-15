@@ -300,7 +300,7 @@ def replicate_helper(
 
     stats = {}
     try:
-        rc.provision_gateways(reuse_gateways, use_bbr=use_bbr)
+        rc.provision_gateways(reuse_gateways, use_bbr=use_bbr, log_dir=rc.transfer_dir / "gateway_logs")
         for node, gw in rc.bound_nodes.items():
             logger.fs.info(f"Log URLs for {gw.uuid()} ({node.region}:{node.instance})")
             logger.fs.info(f"\tLog viewer: {gw.gateway_log_viewer_url}")
