@@ -55,7 +55,8 @@ def parse_path(path: str):
         key = keys[0] if len(keys) > 0 else ""
         return provider, bucket, key
     elif (path.startswith("https://") or path.startswith("http://")) and "blob.core.windows.net" in path:
-        regex = re.compile(r"https?://([^/]+).blob.core.windows.net/([^/]+)/(.*)")
+        # Azure blob storage
+        regex = re.compile(r"https?://([^/]+).blob.core.windows.net/([^/]+)/?(.*)")
         match = regex.match(path)
         if match is None:
             raise ValueError(f"Invalid Azure path: {path}")
