@@ -1,40 +1,47 @@
 """CLI for the Skylark object store"""
-
+import subprocess
+from functools import partial
 from pathlib import Path
+from shlex import split
 
+import typer
+from halo import Halo
+
+import questionary
 import typer
 from halo import Halo
 
 import skylark.cli.cli_aws
 import skylark.cli.cli_azure
-import skylark.cli.cli_gcp
 import skylark.cli.cli_internal as cli_internal
 import skylark.cli.cli_solver
 import skylark.cli.experiments
 from skylark import GB, config_path, exceptions, print_header, skylark_root
-from skylark.cli.cli_helper import (
-    check_ulimit,
-    copy_azure_local,
+from skylark.cli.cli_impl.cp_local import (
+    copy_local_local,
+    copy_local_gcs,
     copy_gcs_local,
     copy_local_azure,
-    copy_local_gcs,
-    copy_local_local,
+    copy_azure_local,
     copy_local_s3,
     copy_s3_local,
-    deprovision_skylark_instances,
-    load_aws_config,
-    load_azure_config,
-    load_gcp_config,
-    ls_local,
-    ls_objstore,
-    parse_path,
-    replicate_helper,
 )
+from skylark.cli.cli_impl.cp_replicate import replicate_helper
+from skylark.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
+from skylark.cli.cli_impl.ls import ls_local, ls_objstore
+from skylark.cli.util import (
+    check_ulimit,
+    parse_path,
+    query_instances,
+)
+from skylark.compute.aws.aws_auth import AWSAuthentication
+from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.config import SkylarkConfig
 from skylark.obj_store.object_store_interface import ObjectStoreInterface
 from skylark.replicate.replication_plan import ReplicationTopology
 from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP
 from skylark.utils import logger
+from skylark.utils.utils import do_parallel
 
 app = typer.Typer(name="skylark")
 app.command()(cli_internal.replicate_random)
@@ -43,7 +50,6 @@ app.command()(cli_internal.replicate_json)
 app.add_typer(skylark.cli.experiments.app, name="experiments")
 app.add_typer(skylark.cli.cli_aws.app, name="aws")
 app.add_typer(skylark.cli.cli_azure.app, name="azure")
-app.add_typer(skylark.cli.cli_gcp.app, name="gcp")
 app.add_typer(skylark.cli.cli_solver.app, name="solver")
 
 
@@ -109,6 +115,10 @@ def cp(
     :type max_instances: int
     :param reuse_gateways: If true, will leave provisioned instances running to be reused. You must run `skylark deprovision` to clean up.
     :type reuse_gateways: bool
+    :param max_chunk_size_mb: If set, `cp` will subdivide objects into chunks at most this size.
+    :type max_chunk_size_mb: int
+    :param use_bbr: If set, will use BBR for transfers by default.
+    :type use_bbr: bool
     :param solve: If true, will use solver to optimize transfer, else direct path is chosen
     :type solve: bool
     :param solver_required_throughput_gbits: The required throughput in Gbps when using the solver (default: 4)
@@ -214,7 +224,46 @@ def cp(
 @app.command()
 def deprovision():
     """Deprovision all resources created by skylark."""
-    deprovision_skylark_instances()
+    instances = query_instances()
+
+    if instances:
+        typer.secho(f"Deprovisioning {len(instances)} instances", fg="yellow", bold=True)
+        do_parallel(lambda instance: instance.terminate_instance(), instances, desc="Deprovisioning", spinner=True, spinner_persist=True)
+    else:
+        typer.secho("No instances to deprovision", fg="yellow", bold=True)
+
+    if AWSAuthentication().enabled():
+        aws = AWSCloudProvider()
+        # remove skylark vpc
+        vpcs = do_parallel(partial(aws.get_vpcs), aws.region_list(), desc="Querying VPCs", spinner=True)
+        args = [(x[0], vpc.id) for x in vpcs for vpc in x[1]]
+        do_parallel(lambda args: aws.remove_sg_ips(*args), args, desc="Removing IPs from VPCs", spinner=True, spinner_persist=True)
+        # remove all instance profiles
+        profiles = aws.list_instance_profiles(prefix="skylark-aws")
+        if profiles:
+            do_parallel(aws.delete_instance_profile, profiles, desc="Deleting instance profiles", spinner=True, spinner_persist=True, n=4)
+
+
+@app.command()
+def ssh():
+    """SSH into a running gateway."""
+    instances = query_instances()
+    if len(instances) == 0:
+        typer.secho(f"No instances found", fg="red")
+        raise typer.Abort()
+
+    instance_map = {f"{i.region_tag}, {i.public_ip()} ({i.instance_state()})": i for i in instances}
+    choices = list(sorted(instance_map.keys()))
+    instance_name = questionary.select("Select an instance", choices=choices).ask()
+    if instance_name is not None and instance_name in instance_map:
+        instance = instance_map[instance_name]
+        cmd = instance.get_ssh_cmd()
+        logger.info(f"Running SSH command: {cmd}")
+        logger.info("It may ask for a private key password, try `skylark`.")
+        proc = subprocess.Popen(split(cmd))
+        proc.wait()
+    else:
+        typer.secho(f"No instance selected", fg="red")
 
 
 @app.command()
