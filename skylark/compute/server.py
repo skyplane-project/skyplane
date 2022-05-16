@@ -205,7 +205,7 @@ class Server:
         client = self.ssh_client
         with Timer() as t:
             if self.auto_shutdown_timeout_minutes:
-                command = f"(nohup /tmp/autoshutdown.sh {self.auto_shutdown_timeout_minutes} &> /dev/null < /dev/null) && {command}"
+                command = f"(nohup /tmp/autoshutdown.sh {self.auto_shutdown_timeout_minutes} &> /dev/null < /dev/null); {command}"
             _, stdout, stderr = client.exec_command(command)
             stdout, stderr = (stdout.read().decode("utf-8"), stderr.read().decode("utf-8"))
         self.add_command_log(command=command, stdout=stdout, stderr=stderr, runtime=t.elapsed)
