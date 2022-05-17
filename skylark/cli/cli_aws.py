@@ -3,18 +3,13 @@ AWS convenience interface
 """
 
 import json
-import subprocess
 import time
-from shlex import split
-from typing import Optional
 
-import questionary
 import typer
 
 from skylark import GB
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
-from skylark.compute.aws.aws_server import AWSServer
 from skylark.obj_store.s3_interface import S3Interface
 from skylark.utils import logger
 from skylark.utils.utils import Timer, do_parallel
@@ -40,27 +35,6 @@ def vcpu_limits(quota_code="L-1216C47A"):
     quotas = do_parallel(get_service_quota, AWSCloudProvider.region_list())
     for region, quota in quotas:
         typer.secho(f"{region}: {int(quota)}", fg="green")
-
-
-@app.command()
-def ssh(region: Optional[str] = None):
-    aws = AWSCloudProvider()
-    typer.secho("Querying AWS for instances", fg="green")
-    instances = aws.get_matching_instances(region=region)
-    if len(instances) == 0:
-        typer.secho(f"No instances found", fg="red")
-        raise typer.Abort()
-
-    instance_map = {f"{i.region()}, {i.public_ip()} ({i.instance_state()})": i for i in instances}
-    choices = list(sorted(instance_map.keys()))
-    instance_name: AWSServer = questionary.select("Select an instance", choices=choices).ask()
-    if instance_name is not None and instance_name in instance_map:
-        instance = instance_map[instance_name]
-        cmd = instance.get_ssh_cmd()
-        proc = subprocess.Popen(split(cmd))
-        proc.wait()
-    else:
-        typer.secho(f"No instance selected", fg="red")
 
 
 @app.command()

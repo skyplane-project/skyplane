@@ -3,11 +3,8 @@ import shutil
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Tuple
 
-from skylark import MB
 from skylark.chunk import ChunkRequest
-from skylark.obj_store.object_store_interface import ObjectStoreInterface
 from skylark.utils import logger
-from skylark.utils.utils import do_parallel
 
 
 @dataclass
@@ -215,13 +212,3 @@ class ReplicationJob:
     # Maximum chunk size used to break-up larger objects
     # TODO: eventually set default value to prevent OOM on gateways
     max_chunk_size_mb: Optional[int] = None
-
-    # TODO: delete this method and refer to obj_sizes instead
-    def src_obj_sizes(self) -> Dict[str, int]:
-        if self.obj_sizes is None:
-            if self.random_chunk_size_mb is not None:
-                return {obj: self.random_chunk_size_mb * MB for obj in self.src_objs}
-            interface = ObjectStoreInterface.create(self.source_region, self.source_bucket)
-            get_size = lambda o: interface.get_obj_size(o)
-            self.obj_sizes = dict(do_parallel(get_size, self.src_objs, n=16, progress_bar=True, desc="Query object sizes"))
-        return self.obj_sizes

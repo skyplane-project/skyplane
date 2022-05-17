@@ -20,7 +20,7 @@ class AWSServer(Server):
         self.aws_region = self.region_tag.split(":")[1]
         self.instance_id = instance_id
         self.boto3_session = boto3.Session(region_name=self.aws_region)
-        self.local_keyfile = key_root / "aws" / f"skylark-{self.aws_region}.pem"  # TODO: don't hardcode this.
+        self.local_keyfile = key_root / "aws" / f"skylark-{self.aws_region}.pem"
 
     def uuid(self):
         return f"{self.region_tag}:{self.instance_id}"

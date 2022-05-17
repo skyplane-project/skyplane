@@ -51,7 +51,6 @@ class GatewayReceiver:
         self.worker_id: Optional[int] = None
 
     def start_server(self):
-        # todo a good place to add backpressure?
         started_event = Event()
         port = Value("i", 0)
 

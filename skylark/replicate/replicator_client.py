@@ -269,7 +269,15 @@ class ReplicatorClient:
             # make list of chunks
             spinner.text = "Preparing replication plan, querying source object store for matching keys"
             chunks = []
-            obj_file_size_bytes = job.src_obj_sizes()
+
+            # calculate object sizes
+            if job.obj_sizes:
+                obj_file_size_bytes = job.obj_sizes
+            elif job.obj_sizes is None and job.random_chunk_size_mb:
+                obj_file_size_bytes = {obj: job.random_chunk_size_mb * MB for obj in job.src_objs}
+            else:
+                raise ValueError("Either obj_sizes or random_chunk_size_mb must be specified")
+
             idx = 0
             for (src_obj, dest_obj) in zip(job.src_objs, job.dest_objs):
                 if obj_file_size_bytes:
