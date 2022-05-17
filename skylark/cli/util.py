@@ -78,7 +78,6 @@ def query_instances():
     instances = []
     query_jobs = []
 
-    # TODO remove when skylark init explicitly configures regions
     def catch_error(fn):
         def run():
             try:

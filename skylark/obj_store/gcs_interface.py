@@ -12,7 +12,6 @@ class GCSObject(ObjectStoreObject):
 
 class GCSInterface(ObjectStoreInterface):
     def __init__(self, gcp_region, bucket_name, use_tls=True):
-        # TODO - figure out how paralllelism handled
         self.bucket_name = bucket_name
         self.auth = GCPAuthentication()
         self._gcs_client = self.auth.get_storage_client()

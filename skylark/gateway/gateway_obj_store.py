@@ -63,7 +63,6 @@ class GatewayObjStoreConn:
         self.processes = []
 
     def worker_loop(self, worker_id: int):
-        # todo should this use processes instead of threads?
         self.worker_id = worker_id
         while not self.exit_flags[worker_id].is_set() and not self.error_event.is_set():
             try:
@@ -142,7 +141,6 @@ class GatewayObjStoreConn:
                 self.error_event.set()
         # close destination sockets
         logger.info(f"[obj_store:{worker_id}] exiting")
-        # TODO: wait for uploads to finish (check chunk exists)
 
     def queue_upload_request(self, chunk_request: ChunkRequest):
         self.worker_upload_queue.put(ObjStoreRequest(chunk_request, "upload"))

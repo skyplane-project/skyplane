@@ -36,9 +36,7 @@ class AWSCloudProvider(CloudProvider):
 
     @staticmethod
     def region_list() -> List[str]:
-        # todo query AWS for list of active regions
-        region_list = AWSAuthentication.get_region_config()
-        return region_list
+        return AWSAuthentication.get_region_config()
 
     @staticmethod
     @functools.lru_cache(maxsize=None)
