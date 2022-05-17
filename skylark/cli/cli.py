@@ -2,14 +2,15 @@
 
 from pathlib import Path
 
+import typer
+from halo import Halo
+
 import skylark.cli.cli_aws
 import skylark.cli.cli_azure
 import skylark.cli.cli_gcp
+import skylark.cli.cli_internal as cli_internal
 import skylark.cli.cli_solver
 import skylark.cli.experiments
-import skylark.cli.cli_internal as cli_internal
-import typer
-from halo import Halo
 from skylark import GB, config_path, exceptions, print_header, skylark_root
 from skylark.cli.cli_helper import (
     check_ulimit,

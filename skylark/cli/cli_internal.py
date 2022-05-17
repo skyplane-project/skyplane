@@ -2,11 +2,12 @@ import os
 import tempfile
 from pathlib import Path
 from typing import Optional
-from skylark.cli.cli_solver import solve_throughput
 
 import typer
+
 from skylark import print_header, skylark_root
 from skylark.cli.cli_helper import replicate_helper
+from skylark.cli.cli_solver import solve_throughput
 from skylark.replicate.replication_plan import ReplicationTopology
 from skylark.utils import logger
 

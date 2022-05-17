@@ -1,15 +1,13 @@
-from dataclasses import dataclass
 import json
 import shutil
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Tuple
-
-from skylark.obj_store.object_store_interface import ObjectStoreInterface
 
 from skylark import MB
 from skylark.chunk import ChunkRequest
-
-from skylark.utils.utils import do_parallel
+from skylark.obj_store.object_store_interface import ObjectStoreInterface
 from skylark.utils import logger
+from skylark.utils.utils import do_parallel
 
 
 @dataclass

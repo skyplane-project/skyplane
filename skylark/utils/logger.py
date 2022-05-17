@@ -1,10 +1,9 @@
-from datetime import datetime
 import sys
-from types import SimpleNamespace
+from datetime import datetime
 from functools import partial
+from types import SimpleNamespace
 
 import termcolor
-
 
 log_file = None
 

@@ -1,8 +1,8 @@
 import hashlib
 import os
 import tempfile
-from skylark import MB
 
+from skylark import MB
 from skylark.obj_store.azure_interface import AzureInterface
 from skylark.utils.utils import Timer
 

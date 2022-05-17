@@ -10,13 +10,14 @@ from typing import Optional
 
 import questionary
 import typer
+
 from skylark import GB
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.obj_store.s3_interface import S3Interface
-from skylark.utils.utils import Timer, do_parallel
 from skylark.utils import logger
+from skylark.utils.utils import Timer, do_parallel
 
 app = typer.Typer(name="skylark-aws")
 
