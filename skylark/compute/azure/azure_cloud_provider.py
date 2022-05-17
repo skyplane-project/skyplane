@@ -93,6 +93,21 @@ class AzureCloudProvider(CloudProvider):
     @staticmethod
     def lookup_valid_instance(region: str, instance_name: str) -> Optional[str]:
         sku_mapping = AzureAuthentication.get_sku_mapping()
+        sku_mapping = AzureAuthentication.get_sku_mapping()
+        if instance_name in sku_mapping[region]:
+            return instance_name
+        match = re.match(r"^(?P<base_name>.*)_v(?P<version>\d+)$", instance_name)
+        if match:
+            base_name = match.group("base_name")
+            for version in range(int(match.group("version")), 0, -1):
+                test_instance_name = f"{base_name}_v{version}" if version > 1 else base_name
+                if test_instance_name in sku_mapping[region]:
+                    logger.fs.warning(f"[azure] Instance {instance_name} not found in region {region} but was able to find a similar instance {test_instance_name}")
+                    return test_instance_name
+        logger.fs.error(f"[azure] Instance {instance_name} not found in region {region} and could not infer a similar instance name.")
+        return None 
+
+        '''
         if instance_name == "Standard_D32_v5" and "Standard_D32_v5" in sku_mapping[region]:
             return "Standard_D32_v5"
         elif instance_name == "Standard_D32_v4" and "Standard_D32_v4" in sku_mapping[region]:
@@ -100,6 +115,8 @@ class AzureCloudProvider(CloudProvider):
         else:
             logger.error(f"Cannot confirm availability of {instance_name} in {region}")
             return instance_name
+        '''
+
 
     @staticmethod
     def get_transfer_cost(src_key, dst_key, premium_tier=True):

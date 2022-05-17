@@ -96,7 +96,7 @@ class AzureAuthentication:
 
 
     @staticmethod
-    def get_region_config():
+    def get_region_config() -> list[str]:
         try:
             f = open(azure_config_path, "r")
         except FileNotFoundError:
@@ -108,7 +108,7 @@ class AzureAuthentication:
         return region_list
 
     @staticmethod
-    def get_sku_mapping():
+    def get_sku_mapping() -> dict[str, list[str]]:
         try:
             f = open(azure_sku_path, "r")
         except FileNotFoundError:
