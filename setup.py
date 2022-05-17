@@ -24,12 +24,14 @@ setup(
         "grpcio-status>=1.33.2",
         # client dependencies
         "click",
+        "halo",
         "pandas",
         "questionary",
+        "sshtunnel",
         "typer",
         # shared dependencies
         "cachetools",
-        "oslo.concurrency",
+        "ilock",
         "paramiko",
         "termcolor",
         "tqdm",

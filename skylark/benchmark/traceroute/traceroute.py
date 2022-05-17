@@ -1,9 +1,10 @@
 import argparse
-from datetime import datetime
 import json
+from datetime import datetime
 from typing import List, Tuple
 
-from skylark.utils import logger
+# traceroute parser from https://github.com/ckreibich/tracerouteparser.py
+from skylark.benchmark.network.tracerouteparser import TracerouteParser
 from tqdm import tqdm
 
 from skylark import skylark_root
@@ -11,10 +12,8 @@ from skylark.benchmark.utils import provision, split_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server
+from skylark.utils import logger
 from skylark.utils.utils import do_parallel
-
-# traceroute parser from https://github.com/ckreibich/tracerouteparser.py
-from skylark.benchmark.network.tracerouteparser import TracerouteParser
 
 
 def parse_args():

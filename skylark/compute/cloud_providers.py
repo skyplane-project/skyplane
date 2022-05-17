@@ -6,6 +6,10 @@ from skylark.utils.utils import do_parallel
 
 
 class CloudProvider:
+
+    logging_enabled = True  # For Dozzle
+    log_viewer_port = 8888
+
     @property
     def name(self):
         raise NotImplementedError
@@ -46,12 +50,12 @@ class CloudProvider:
         tags={"skylark": "true"},
     ) -> List[Server]:
         if isinstance(region, str):
-            results = [(region, self.get_instance_list(region))]
+            results = [self.get_instance_list(region)]
         elif region is None:
-            results = do_parallel(self.get_instance_list, self.region_list(), n=-1)
+            results = do_parallel(self.get_instance_list, self.region_list(), n=-1, return_args=False)
 
         matching_instances = []
-        for _, instances in results:
+        for instances in results:
             for instance in instances:
                 if not (instance_type is None or instance_type == instance.instance_class()):
                     continue

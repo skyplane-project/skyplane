@@ -2,20 +2,20 @@ import os
 import subprocess
 import threading
 from typing import Optional
+
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.authorization import AuthorizationManagementClient
 from azure.mgmt.storage import StorageManagementClient
 from azure.storage.blob import BlobServiceClient, ContainerClient
 
 from skylark import cloud_config
+from skylark import config_path
 from skylark.compute.utils import query_which_cloud
 from skylark.config import SkylarkConfig
 from skylark import config_path
 from skylark import azure_config_path
 from skylark import azure_sku_path
 from skylark.utils.utils import do_parallel
-
-
 import subprocess
 import json
 

@@ -1,4 +1,4 @@
-name: Docker
+name: docker
 
 on:
   schedule:
@@ -19,7 +19,6 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
     permissions:
       contents: read

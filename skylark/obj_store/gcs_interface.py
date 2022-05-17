@@ -1,9 +1,7 @@
-import mimetypes
 import os
 from typing import Iterator, List
 
-from google.cloud import storage  # pytype: disable=import-error
-
+from skylark.compute.gcp.gcp_auth import GCPAuthentication
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
 
@@ -14,19 +12,31 @@ class GCSObject(ObjectStoreObject):
 
 class GCSInterface(ObjectStoreInterface):
     def __init__(self, gcp_region, bucket_name, use_tls=True):
-        # TODO: infer region?
-        # TODO - figure out how paralllelism handled
         self.bucket_name = bucket_name
-        self._gcs_client = storage.Client()
+        self.auth = GCPAuthentication()
+        self._gcs_client = self.auth.get_storage_client()
         self.gcp_region = self.infer_gcp_region(bucket_name) if gcp_region is None or gcp_region == "infer" else gcp_region
 
     def region_tag(self):
         return "gcp:" + self.gcp_region
 
+    def map_region_to_zone(self, region) -> str:
+        """Resolves bucket locations to a valid zone."""
+        parsed_region = region.lower().split("-")
+        if len(parsed_region) == 3:
+            return region
+        elif len(parsed_region) == 2 or len(parsed_region) == 1:
+            # query the API to get the list of zones in the region and return the first one
+            compute = self.auth.get_gcp_client()
+            zones = compute.zones().list(project=self.auth.project_id).execute()
+            for zone in zones["items"]:
+                if zone["name"].startswith(region):
+                    return zone["name"]
+        raise ValueError(f"No GCP zone found for region {region}")
+
     def infer_gcp_region(self, bucket_name: str):
         bucket = self._gcs_client.lookup_bucket(bucket_name)
-        assert isinstance(bucket, storage.bucket.Bucket)
-        return bucket.location.lower()
+        return self.map_region_to_zone(bucket.location.lower())
 
     def bucket_exists(self):
         try:
@@ -72,7 +82,7 @@ class GCSInterface(ObjectStoreInterface):
             return False
 
     # todo: implement range request for download
-    def download_object(self, src_object_name, dst_file_path):
+    def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = src_object_name if src_object_name[0] != "/" else src_object_name
 
@@ -86,12 +96,10 @@ class GCSInterface(ObjectStoreInterface):
             f.seek(offset)
             f.write(chunk)
 
-    def upload_object(self, src_file_path, dst_object_name, content_type="infer"):
+    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
         os.path.getsize(src_file_path)
-        if content_type == "infer":
-            content_type = mimetypes.guess_type(src_file_path)[0] or "application/octet-stream"
         bucket = self._gcs_client.bucket(self.bucket_name)
         blob = bucket.blob(dst_object_name)
         blob.upload_from_filename(src_file_path)

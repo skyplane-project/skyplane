@@ -1,9 +1,9 @@
 from pathlib import Path
 
+import typer
+
 from skylark import skylark_root
 from skylark.replicate.solver import ThroughputSolver
-
-import typer
 
 
 def util_grid_throughput(
@@ -37,4 +37,22 @@ def get_max_throughput(region_tag: str):
     elif provider == "azure":
         print(16)
     else:
-        raise typer.Exit(f"Unknown provider: {provider}")
+        typer.secho(f"Unknown provider: {provider}", fg="red")
+        raise typer.Exit(1)
+
+
+def dump_full_util_cost_grid(
+    throughput_grid: Path = typer.Option(skylark_root / "profiles" / "throughput.csv", help="Throughput grid file"),
+):
+    solver = ThroughputSolver(throughput_grid)
+    regions = solver.get_regions()
+
+    print("src,dest,src_tier,dest_tier,cost")
+    for src in regions:
+        for dest in regions:
+            for src_tier in ["PREMIUM", "STANDARD"]:
+                for dest_tier in ["PREMIUM", "STANDARD"]:
+                    try:
+                        print(f"{src},{dest},{src_tier},{dest_tier},{solver.get_path_cost(src, dest, src_tier, dest_tier)}")
+                    except AssertionError:
+                        pass

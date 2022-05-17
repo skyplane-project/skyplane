@@ -9,6 +9,8 @@ from typing import List, Optional, Tuple
 import pandas as pd
 import questionary
 import typer
+from tqdm import tqdm
+
 from skylark import GB, skylark_root
 from skylark.benchmark.utils import provision, split_list
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
@@ -17,9 +19,8 @@ from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.gcp.gcp_server import GCPServer
 from skylark.compute.server import Server
 from skylark.compute.utils import make_sysctl_tcp_tuning_command
-from skylark.utils.utils import do_parallel
 from skylark.utils import logger
-from tqdm import tqdm
+from skylark.utils.utils import do_parallel
 
 all_aws_regions = AWSCloudProvider.region_list()
 all_azure_regions = AzureCloudProvider.region_list()
@@ -210,7 +211,7 @@ def throughput_grid(
     groups = split_list(instance_pairs)
 
     # confirm experiment
-    experiment_tag_words = os.popen("bash scripts/utils/get_random_word_hash.sh").read().strip()
+    experiment_tag_words = os.popen("bash scripts/get_random_word_hash.sh").read().strip()
     timestamp = datetime.now(timezone.utc).strftime("%Y.%m.%d_%H.%M")
     experiment_tag = f"{timestamp}_{experiment_tag_words}_{iperf3_runtime}s_{iperf3_connections}c"
     data_dir = skylark_root / "data"
@@ -271,8 +272,10 @@ def throughput_grid(
     with tqdm(total=len(instance_pairs), desc="Total throughput evaluation") as pbar:
         for group_idx, group in enumerate(groups):
             tag_fmt = lambda x: f"{x[0].region_tag}:{x[0].network_tier()} to {x[1].region_tag}:{x[1].network_tier()}"
-            results = do_parallel(client_fn, group, progress_bar=True, desc=f"Parallel eval group {group_idx}", n=-1, arg_fmt=tag_fmt)
-            new_througput_results.extend([rec for args, rec in results if rec is not None])
+            results = do_parallel(
+                client_fn, group, progress_bar=True, desc=f"Parallel eval group {group_idx}", n=-1, arg_fmt=tag_fmt, return_args=False
+            )
+            new_througput_results.extend([rec for rec in results if rec is not None])
 
             # build dataframe from results
             tqdm.write(f"Saving intermediate results to {output_file}")
@@ -393,7 +396,7 @@ def latency_grid(
     random.shuffle(instance_pairs)
 
     # confirm experiment
-    experiment_tag_words = os.popen("bash scripts/utils/get_random_word_hash.sh").read().strip()
+    experiment_tag_words = os.popen("bash scripts/get_random_word_hash.sh").read().strip()
     timestamp = datetime.now(timezone.utc).strftime("%Y.%m.%d_%H.%M")
     experiment_tag = f"{timestamp}_{experiment_tag_words}"
     data_dir = skylark_root / "data"
@@ -450,8 +453,8 @@ def latency_grid(
     log_dir.mkdir(parents=True, exist_ok=True)
     output_file = log_dir / "latency.csv"
     with tqdm(total=len(instance_pairs), desc="Total latency evaluation") as pbar:
-        results = do_parallel(client_fn, instance_pairs, progress_bar=False, n=16)
-        new_througput_results.extend([rec for args, rec in results if rec is not None])
+        results = do_parallel(client_fn, instance_pairs, progress_bar=False, n=16, return_args=False)
+        new_througput_results.extend([rec for rec in results if rec is not None])
 
     # build dataframe from results
     tqdm.write(f"Saving intermediate results to {output_file}")

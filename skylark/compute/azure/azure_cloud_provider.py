@@ -5,16 +5,16 @@ from pathlib import Path
 from typing import List, Optional
 
 import paramiko
+from azure.mgmt.authorization.models import RoleAssignmentCreateParameters
+from azure.mgmt.authorization.models import RoleAssignmentProperties
+from azure.mgmt.compute.models import ResourceIdentityType
+
 from skylark import key_root
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.azure.azure_server import AzureServer
 from skylark.compute.cloud_providers import CloudProvider
-from azure.mgmt.authorization.models import RoleAssignmentCreateParameters, RoleAssignmentProperties
 from skylark.utils import logger
 from skylark.utils.utils import Timer, do_parallel, wait_for
-
-from azure.mgmt.authorization.models import RoleAssignmentCreateParameters
-from azure.mgmt.compute.models import ResourceIdentityType
 
 
 class AzureCloudProvider(CloudProvider):

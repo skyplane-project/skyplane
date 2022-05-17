@@ -1,13 +1,14 @@
 from pathlib import Path
 
+import azure.core.exceptions
 import paramiko
+import sshtunnel
+
 from skylark import key_root
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.server import Server, ServerState
 from skylark.utils.cache import ignore_lru_cache
 from skylark.utils.utils import PathLike
-
-import azure.core.exceptions
 
 
 class AzureServer(Server):
@@ -147,20 +148,21 @@ class AzureServer(Server):
     def terminate_instance_impl(self):
         compute_client = self.auth.get_compute_client()
         network_client = self.auth.get_network_client()
+
         vm_poller = compute_client.virtual_machines.begin_delete(AzureServer.resource_group_name, self.vm_name(self.name))
-        vm_poller.result()
+        _ = vm_poller.result()
         nic_poller = network_client.network_interfaces.begin_delete(AzureServer.resource_group_name, self.nic_name(self.name))
+        _ = nic_poller.result()
         ip_poller = network_client.public_ip_addresses.begin_delete(AzureServer.resource_group_name, self.ip_name(self.name))
         subnet_poller = network_client.subnets.begin_delete(
             AzureServer.resource_group_name, self.vnet_name(self.name), self.subnet_name(self.name)
         )
+        _ = ip_poller.result()
+        _ = subnet_poller.result()
         nsg_poller = network_client.network_security_groups.begin_delete(AzureServer.resource_group_name, self.nsg_name(self.name))
+        _ = nsg_poller.result()
         vnet_poller = network_client.virtual_networks.begin_delete(AzureServer.resource_group_name, self.vnet_name(self.name))
-        nsg_poller.result()
-        ip_poller.result()
-        subnet_poller.result()
-        nic_poller.result()
-        vnet_poller.result()
+        _ = vnet_poller.result()
 
     def get_ssh_client_impl(self, uname="skylark", ssh_key_password="skylark"):
         """Return paramiko client that connects to this instance."""
@@ -176,11 +178,21 @@ class AzureServer(Server):
         )
         return ssh_client
 
-    def get_ssh_cmd(self, uname="skylark", ssh_key_password="skylark"):
-        return f"ssh -i {self.ssh_private_key} {uname}@{self.public_ip()}"
-
     def get_sftp_client(self, uname="skylark", ssh_key_password="skylark"):
         t = paramiko.Transport((self.public_ip(), 22))
         pkey = paramiko.RSAKey.from_private_key_file(str(self.ssh_private_key), password=ssh_key_password)
         t.connect(username=uname, pkey=pkey)
         return paramiko.SFTPClient.from_transport(t)
+
+    def open_ssh_tunnel_impl(self, remote_port, uname="skylark", ssh_key_password="skylark") -> sshtunnel.SSHTunnelForwarder:
+        return sshtunnel.SSHTunnelForwarder(
+            (self.public_ip(), 22),
+            ssh_username=uname,
+            ssh_pkey=str(self.ssh_private_key),
+            ssh_private_key_password=ssh_key_password,
+            local_bind_address=("127.0.0.1", 0),
+            remote_bind_address=("127.0.0.1", remote_port),
+        )
+
+    def get_ssh_cmd(self, uname="skylark", ssh_key_password="skylark"):
+        return f"ssh -i {self.ssh_private_key} {uname}@{self.public_ip()}"

@@ -3,26 +3,38 @@ import signal
 import socket
 import ssl
 import time
+import traceback
 from contextlib import closing
-from multiprocessing import Event, Process, Value
-from typing import Tuple
+from multiprocessing import Event, Process, Value, Queue
+from typing import Optional, Tuple
 
-from skylark.utils import logger
 from skylark import GB, MB
 from skylark.chunk import WireProtocolHeader
-from skylark.gateway.chunk_store import ChunkStore
 from skylark.gateway.cert import generate_self_signed_certificate
+from skylark.gateway.chunk_store import ChunkStore
+from skylark.utils import logger
 from skylark.utils.utils import Timer
 
 
 class GatewayReceiver:
-    def __init__(self, chunk_store: ChunkStore, write_back_block_size=4 * MB, max_pending_chunks=1, use_tls: bool = True):
+    def __init__(
+        self,
+        chunk_store: ChunkStore,
+        error_event,
+        error_queue: Queue,
+        write_back_block_size=4 * MB,
+        max_pending_chunks=1,
+        use_tls: bool = True,
+    ):
         self.chunk_store = chunk_store
+        self.error_event = error_event
+        self.error_queue = error_queue
         self.write_back_block_size = write_back_block_size
         self.max_pending_chunks = max_pending_chunks
         self.server_processes = []
         self.server_ports = []
         self.next_gateway_worker_id = 0
+        self.socket_profiler_event_queue = Queue()
 
         # SSL context
         if use_tls:
@@ -36,10 +48,9 @@ class GatewayReceiver:
             self.ssl_context = None
 
         # private state per worker
-        self.worker_id = None
+        self.worker_id: Optional[int] = None
 
     def start_server(self):
-        # todo a good place to add backpressure?
         started_event = Event()
         port = Value("i", 0)
 
@@ -49,10 +60,10 @@ class GatewayReceiver:
                 sock.bind(("0.0.0.0", 0))
                 socket_port = sock.getsockname()[1]
                 port.value = socket_port
-                exit_flag = Value("i", 0)
+                exit_flag = Event()
 
                 def signal_handler(signal, frame):
-                    exit_flag.value = 1
+                    exit_flag.set()
 
                 signal.signal(signal.SIGINT, signal_handler)
 
@@ -65,12 +76,16 @@ class GatewayReceiver:
                 logger.info(f"[receiver:{socket_port}] Waiting for connection")
                 ssl_conn, addr = ssl_sock.accept()
                 logger.info(f"[receiver:{socket_port}] Accepted connection from {addr}")
-                while True:
-                    if exit_flag.value == 1:
-                        logger.warning(f"[receiver:{socket_port}] Exiting on signal")
-                        ssl_conn.close()
-                        return
-                    self.recv_chunks(ssl_conn, addr)
+                while not exit_flag.is_set() and not self.error_event.is_set():
+                    try:
+                        self.recv_chunks(ssl_conn, addr)
+                    except Exception as e:
+                        logger.warning(f"[receiver:{socket_port}] Error: {str(e)}")
+                        self.error_queue.put(traceback.format_exc())
+                        exit_flag.set()
+                        self.error_event.set()
+                logger.warning(f"[receiver:{socket_port}] Exiting on signal")
+                ssl_conn.close()
 
         gateway_id = self.next_gateway_worker_id
         self.next_gateway_worker_id += 1
@@ -131,6 +146,14 @@ class GatewayReceiver:
                         f.write(data)
                         chunk_data_size -= len(data)
                         chunk_received_size += len(data)
+                        self.socket_profiler_event_queue.put(
+                            dict(
+                                receiver_id=self.worker_id,
+                                chunk_id=chunk_header.chunk_id,
+                                time_ms=t.elapsed * 1000.0,
+                                bytes=chunk_received_size,
+                            )
+                        )
             assert (
                 chunk_data_size == 0 and chunk_received_size == chunk_header.chunk_len
             ), f"Size mismatch: got {chunk_received_size} expected {chunk_header.chunk_len}"

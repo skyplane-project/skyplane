@@ -1,13 +1,13 @@
+import subprocess
 from datetime import datetime
 from multiprocessing import Manager, Queue
 from os import PathLike
 from pathlib import Path
 from queue import Empty
-import subprocess
 from typing import Dict, List, Optional
 
-from skylark.utils import logger
 from skylark.chunk import ChunkRequest, ChunkState
+from skylark.utils import logger
 
 
 class ChunkStore:

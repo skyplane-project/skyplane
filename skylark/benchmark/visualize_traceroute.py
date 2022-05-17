@@ -1,7 +1,8 @@
-import graphviz
 import argparse
 import json
 from pprint import pprint
+
+import graphviz
 
 
 def main(args):

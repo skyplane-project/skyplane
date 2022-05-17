@@ -1,15 +1,12 @@
-import mimetypes
 import os
 from typing import Iterator, List
 
 import botocore.exceptions
-from awscrt.auth import AwsCredentialsProvider
-from awscrt.http import HttpHeaders, HttpRequest
-from awscrt.io import ClientBootstrap, DefaultHostResolver, EventLoopGroup
-from awscrt.s3 import S3Client, S3RequestTlsMode, S3RequestType
-from skylark.compute.aws.aws_auth import AWSAuthentication
 
+from skylark import exceptions
+from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
+from skylark.utils import logger
 
 
 class S3Object(ObjectStoreObject):
@@ -18,29 +15,28 @@ class S3Object(ObjectStoreObject):
 
 
 class S3Interface(ObjectStoreInterface):
-    def __init__(self, aws_region, bucket_name, use_tls=True, part_size=None, throughput_target_gbps=10, num_threads=4):
+    def __init__(self, aws_region, bucket_name):
         self.auth = AWSAuthentication()
         self.aws_region = self.infer_s3_region(bucket_name) if aws_region is None or aws_region == "infer" else aws_region
         self.bucket_name = bucket_name
-        event_loop_group = EventLoopGroup(num_threads=num_threads, cpu_group=None)
-        host_resolver = DefaultHostResolver(event_loop_group)
-        bootstrap = ClientBootstrap(event_loop_group, host_resolver)
-        self._s3_client = S3Client(
-            bootstrap=bootstrap,
-            region=self.aws_region,
-            credential_provider=AwsCredentialsProvider.new_default_chain(bootstrap),
-            throughput_target_gbps=throughput_target_gbps,
-            part_size=part_size,
-            tls_mode=S3RequestTlsMode.ENABLED if use_tls else S3RequestTlsMode.DISABLED,
-        )
+        if not self.bucket_exists():
+            logger.error("Specified bucket does not exist.")
+            raise exceptions.MissingBucketException()
 
     def region_tag(self):
         return "aws:" + self.aws_region
 
     def infer_s3_region(self, bucket_name: str):
         s3_client = self.auth.get_boto3_client("s3")
-        region = s3_client.get_bucket_location(Bucket=bucket_name).get("LocationConstraint", "us-east-1")
-        return region if region is not None else "us-east-1"
+        try:
+            region = s3_client.get_bucket_location(Bucket=bucket_name).get("LocationConstraint", "us-east-1")
+            return region if region is not None else "us-east-1"
+        except Exception as e:
+            if "An error occurred (AccessDenied) when calling the GetBucketLocation operation" in str(e):
+                logger.error(f"Bucket location {bucket_name} is not public. Assuming region is us-east-1.")
+                return "us-east-1"
+            logger.error("Specified bucket does not exist.")
+            raise exceptions.MissingBucketException() from e
 
     def bucket_exists(self):
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
@@ -56,7 +52,6 @@ class S3Interface(ObjectStoreInterface):
         assert self.bucket_exists()
 
     def list_objects(self, prefix="") -> Iterator[S3Object]:
-        prefix = prefix if not prefix.startswith("/") else prefix[1:]
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         paginator = s3_client.get_paginator("list_objects_v2")
         page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix)
@@ -73,7 +68,7 @@ class S3Interface(ObjectStoreInterface):
     def get_obj_metadata(self, obj_name):
         s3_resource = self.auth.get_boto3_resource("s3", self.aws_region).Bucket(self.bucket_name)
         try:
-            return s3_resource.Object(str(obj_name).lstrip("/"))
+            return s3_resource.Object(str(obj_name))
         except botocore.exceptions.ClientError as e:
             raise NoSuchObjectException(f"Object {obj_name} does not exist, or you do not have permission to access it") from e
 
@@ -87,36 +82,88 @@ class S3Interface(ObjectStoreInterface):
         except NoSuchObjectException:
             return False
 
-    # todo: implement range request for download
-    def download_object(self, src_object_name, dst_file_path):
+    def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
+        logger.info(f"Download {src_object_name}, {dst_file_path}, {offset_bytes}")
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
-        src_object_name = "/" + src_object_name if src_object_name[0] != "/" else src_object_name
-        download_headers = HttpHeaders([("host", self.bucket_name + ".s3." + self.aws_region + ".amazonaws.com")])
-        request = HttpRequest("GET", src_object_name, download_headers)
+        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
+        assert len(src_object_name) > 0, f"Source object name must be non-empty: '{src_object_name}'"
 
-        def _on_body_download(offset, chunk, **kwargs):
-            if not os.path.exists(dst_file_path):
-                open(dst_file_path, "a").close()
-            with open(dst_file_path, "rb+") as f:
-                f.seek(offset)
-                f.write(chunk)
+        if size_bytes:
+            byte_range = f"bytes={offset_bytes}-{offset_bytes + size_bytes - 1}"
+            logger.info(f"Download {byte_range}")
+            response = s3_client.get_object(Bucket=self.bucket_name, Key=src_object_name, Range=byte_range)
+        else:
+            logger.info(f"Download all {offset_bytes}, {size_bytes}")
+            response = s3_client.get_object(
+                Bucket=self.bucket_name,
+                Key=src_object_name,
+            )
 
-        self._s3_client.make_request(
-            recv_filepath=dst_file_path,
-            request=request,
-            type=S3RequestType.GET_OBJECT,
-            on_body=_on_body_download,
-        ).finished_future.result()
+        # write response data
+        if not os.path.exists(dst_file_path):
+            open(dst_file_path, "a").close()
+        with open(dst_file_path, "rb+") as f:
+            f.seek(0)
+            f.write(response["Body"].read())
+        response["Body"].close()
 
-    def upload_object(self, src_file_path, dst_object_name, content_type="infer"):
-        src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
-        dst_object_name = "/" + dst_object_name if dst_object_name[0] != "/" else dst_object_name
-        content_len = os.path.getsize(src_file_path)
-        if content_type == "infer":
-            content_type = mimetypes.guess_type(src_file_path)[0] or "application/octet-stream"
-        upload_headers = HttpHeaders()
-        upload_headers.add("host", self.bucket_name + ".s3." + self.aws_region + ".amazonaws.com")
-        upload_headers.add("Content-Type", content_type)
-        upload_headers.add("Content-Length", str(content_len))
-        request = HttpRequest("PUT", dst_object_name, upload_headers)
-        self._s3_client.make_request(send_filepath=src_file_path, request=request, type=S3RequestType.PUT_OBJECT).finished_future.result()
+    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
+        logger.info(f"Upload {src_file_path}, {dst_object_name}, {part_number}, {upload_id}, {self.bucket_name}")
+        logger.info(f"id {upload_id}")
+        dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
+
+        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
+        assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
+
+        if upload_id:
+            s3_client.upload_part(
+                Body=open(src_file_path, "rb"),
+                Key=dst_object_name,
+                Bucket=self.bucket_name,
+                PartNumber=part_number,
+                UploadId=upload_id.strip(),  # TODO: figure out why whitespace gets added
+            )
+        else:
+            s3_client.upload_file(src_file_path, self.bucket_name, dst_object_name)
+
+    def initiate_multipart_upload(self, dst_object_name):
+        # cannot infer content type here
+        assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
+        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
+        response = s3_client.create_multipart_upload(
+            Bucket=self.bucket_name,
+            Key=dst_object_name,
+            # ContentType=content_type
+        )
+        return response["UploadId"]
+
+    def complete_multipart_upload(self, dst_object_name, upload_id, parts):
+        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
+
+        all_parts = []
+        while True:
+            response = s3_client.list_parts(
+                Bucket=self.bucket_name, Key=dst_object_name, MaxParts=100, UploadId=upload_id, PartNumberMarker=len(all_parts)
+            )
+            if "Parts" not in response:
+                break
+            else:
+                if len(response["Parts"]) == 0:
+                    break
+                all_parts += response["Parts"]
+
+        if len(all_parts) != len(parts):
+            # abort if number of parts doesn't match expected
+            logger.error(f"Parts length mismatch for {upload_id}: expected {len(parts)}, got {len(all_parts)}")
+            response = s3_client.abort_multipart_upload(Bucket=self.bucket_name, Key=dst_object_name, UploadId=upload_id)
+            return False
+
+        # sort by part-number
+        all_parts = sorted(all_parts, key=lambda d: d["PartNumber"])
+        response = s3_client.complete_multipart_upload(
+            UploadId=upload_id,
+            Bucket=self.bucket_name,
+            Key=dst_object_name,
+            MultipartUpload={"Parts": [{"PartNumber": p["PartNumber"], "ETag": p["ETag"]} for p in all_parts]},
+        )
+        return True

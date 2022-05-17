@@ -1,25 +1,25 @@
-from datetime import datetime
-import itertools
-from functools import partial
 import json
 import pickle
 import time
-from typing import Dict, List, Optional, Tuple
 import uuid
+from datetime import datetime
+from functools import partial
+from typing import Dict, List, Optional, Tuple
 
-from skylark.replicate.profiler import status_df_to_traceevent
-from skylark.utils import logger
-from tqdm import tqdm
 import pandas as pd
-from skylark import GB, KB, MB, tmp_log_dir
+from halo import Halo
 
+from skylark import GB, MB, tmp_log_dir
 from skylark.benchmark.utils import refresh_instance_list
+from skylark.chunk import Chunk, ChunkRequest, ChunkState
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server, ServerState
-from skylark.chunk import Chunk, ChunkRequest, ChunkState
+from skylark.obj_store.object_store_interface import ObjectStoreInterface
+from skylark.replicate.profiler import status_df_to_traceevent
 from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopology, ReplicationTopologyGateway
+from skylark.utils import logger
 from skylark.utils.net import retry_requests
 from skylark.utils.utils import PathLike, Timer, do_parallel
 
@@ -46,11 +46,20 @@ class ReplicatorClient:
         self.azure = AzureCloudProvider()
         self.gcp = GCPCloudProvider()
         self.bound_nodes: Dict[ReplicationTopologyGateway, Server] = {}
+        self.temp_nodes: List[Server] = []  # saving nodes that are not yet bound so they can be deprovisioned later
+
+        # logging
+        self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.transfer_dir.mkdir(exist_ok=True, parents=True)
+        logger.open_log_file(self.transfer_dir / "client.log")
+
+        # upload requests
+        self.multipart_upload_requests = []
 
     def provision_gateways(
-        self, reuse_instances=False, log_dir: Optional[PathLike] = None, authorize_ssh_pub_key: Optional[PathLike] = None
+        self, reuse_instances=False, log_dir: Optional[PathLike] = None, authorize_ssh_pub_key: Optional[PathLike] = None, use_bbr=False
     ):
-        regions_to_provision = [node.region for node in self.topology.nodes]
+        regions_to_provision = [node.region for node in self.topology.gateway_nodes]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
         azure_regions_to_provision = [r for r in regions_to_provision if r.startswith("azure:")]
         gcp_regions_to_provision = [r for r in regions_to_provision if r.startswith("gcp:")]
@@ -69,7 +78,12 @@ class ReplicatorClient:
         jobs = []
         jobs.append(partial(self.aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
         for r in set(aws_regions_to_provision):
-            jobs.append(partial(self.aws.add_ip_to_security_group, r.split(":")[1]))
+
+            def init_aws_vpc(r):
+                self.aws.make_vpc(r)
+                self.aws.authorize_client(r, "0.0.0.0/0")
+
+            jobs.append(partial(init_aws_vpc, r.split(":")[1]))
             jobs.append(partial(self.aws.ensure_keyfile_exists, r.split(":")[1]))
         if azure_regions_to_provision:
             jobs.append(self.azure.create_ssh_key)
@@ -78,8 +92,7 @@ class ReplicatorClient:
             jobs.append(self.gcp.create_ssh_key)
             jobs.append(self.gcp.configure_default_network)
             jobs.append(self.gcp.configure_default_firewall)
-        with Timer(f"Cloud SSH key initialization"):
-            do_parallel(lambda fn: fn(), jobs)
+        do_parallel(lambda fn: fn(), jobs, spinner=True, spinner_persist=True, desc="Initializing cloud keys")
 
         # reuse existing AWS instances
         if reuse_instances:
@@ -131,30 +144,34 @@ class ReplicatorClient:
             else:
                 current_gcp_instances = {}
 
-        with Timer("Provisioning instances and waiting to boot"):
-            # provision instances
-            def provision_gateway_instance(region: str) -> Server:
-                provider, subregion = region.split(":")
-                if provider == "aws":
-                    assert self.aws.auth.enabled()
-                    server = self.aws.provision_instance(subregion, self.aws_instance_class)
-                elif provider == "azure":
-                    assert self.azure.auth.enabled()
-                    server = self.azure.provision_instance(subregion, self.azure_instance_class)
-                elif provider == "gcp":
-                    assert self.gcp.auth.enabled()
-                    # todo specify network tier in ReplicationTopology
-                    server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
-                else:
-                    raise NotImplementedError(f"Unknown provider {provider}")
-                return server
+        # provision instances
+        def provision_gateway_instance(region: str) -> Server:
+            provider, subregion = region.split(":")
+            if provider == "aws":
+                assert self.aws.auth.enabled()
+                server = self.aws.provision_instance(subregion, self.aws_instance_class)
+            elif provider == "azure":
+                assert self.azure.auth.enabled()
+                server = self.azure.provision_instance(subregion, self.azure_instance_class)
+            elif provider == "gcp":
+                assert self.gcp.auth.enabled()
+                # todo specify network tier in ReplicationTopology
+                server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
+            else:
+                raise NotImplementedError(f"Unknown provider {provider}")
+            self.temp_nodes.append(server)
+            return server
 
-            results = do_parallel(
-                provision_gateway_instance, list(aws_regions_to_provision + azure_regions_to_provision + gcp_regions_to_provision)
-            )
-            instances_by_region = {
-                r: [instance for instance_region, instance in results if instance_region == r] for r in set(regions_to_provision)
-            }
+        results = do_parallel(
+            provision_gateway_instance,
+            list(aws_regions_to_provision + azure_regions_to_provision + gcp_regions_to_provision),
+            spinner=True,
+            spinner_persist=True,
+            desc="Provisioning gateway instances",
+        )
+        instances_by_region = {
+            r: [instance for instance_region, instance in results if instance_region == r] for r in set(regions_to_provision)
+        }
 
         # add existing instances
         if reuse_instances:
@@ -162,43 +179,75 @@ class ReplicatorClient:
                 if f"aws:{r}" not in instances_by_region:
                     instances_by_region[f"aws:{r}"] = []
                 instances_by_region[f"aws:{r}"].extend(ilist)
+                self.temp_nodes.extend(ilist)
             for r, ilist in current_azure_instances.items():
                 if f"azure:{r}" not in instances_by_region:
                     instances_by_region[f"azure:{r}"] = []
                 instances_by_region[f"azure:{r}"].extend(ilist)
+                self.temp_nodes.extend(ilist)
             for r, ilist in current_gcp_instances.items():
                 if f"gcp:{r}" not in instances_by_region:
                     instances_by_region[f"gcp:{r}"] = []
                 instances_by_region[f"gcp:{r}"].extend(ilist)
+                self.temp_nodes.extend(ilist)
+
+        # bind instances to nodes
+        for node in self.topology.gateway_nodes:
+            instance = instances_by_region[node.region].pop()
+            self.bound_nodes[node] = instance
+            self.temp_nodes.remove(instance)
+
+        # Firewall rules
+        # todo add firewall rules for Azure and GCP
+        public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.gateway_nodes]
+        aws_jobs = [
+            partial(self.aws.add_ip_to_security_group, r.split(":")[1], ip) for r in set(aws_regions_to_provision) for ip in public_ips
+        ]
+        do_parallel(lambda fn: fn(), aws_jobs, spinner=True, desc="Applying firewall rules")
 
         # setup instances
-        def setup(server: Server):
+        def setup(args: Tuple[Server, Dict[str, int]]):
+            server, outgoing_ports = args
             if log_dir:
                 server.init_log_files(log_dir)
             if authorize_ssh_pub_key:
                 server.copy_public_key(authorize_ssh_pub_key)
+            server.start_gateway(outgoing_ports, gateway_docker_image=self.gateway_docker_image, use_bbr=use_bbr)
 
-        do_parallel(setup, set(itertools.chain(*instances_by_region.values())), n=-1)
-
-        # bind instances to nodes
-        for node in self.topology.nodes:
-            self.bound_nodes[node] = instances_by_region[node.region].pop()
-
-        with Timer("Install gateway package on instances"):
-            args = []
-            for node, server in self.bound_nodes.items():
-                args.append((server, {self.bound_nodes[n].public_ip(): v for n, v in self.topology.get_outgoing_paths(node).items()}))
-            do_parallel(lambda arg: arg[0].start_gateway(arg[1], gateway_docker_image=self.gateway_docker_image), args, n=-1)
+        args = []
+        for node, server in self.bound_nodes.items():
+            setup_args = {
+                self.bound_nodes[n].public_ip(): v
+                for n, v in self.topology.get_outgoing_paths(node).items()
+                if isinstance(n, ReplicationTopologyGateway)
+            }
+            args.append((server, setup_args))
+        do_parallel(setup, args, n=-1, spinner=True, spinner_persist=True, desc="Install gateway package on instances")
 
     def deprovision_gateways(self):
+        # This is a good place to tear down Security Groups and the instance since this is invoked by CLI too.
         def deprovision_gateway_instance(server: Server):
             if server.instance_state() == ServerState.RUNNING:
                 server.terminate_instance()
-                logger.warning(f"Deprovisioned {server.uuid()}")
+                logger.fs.warning(f"Deprovisioned {server.uuid()}")
 
-        instances = self.bound_nodes.values()
-        logger.warning(f"Deprovisioning {len(instances)} instances")
-        do_parallel(deprovision_gateway_instance, instances, n=-1)
+        # Clear IPs from security groups
+        # todo remove firewall rules for Azure and GCP
+        public_ips = [i.public_ip() for i in self.bound_nodes.values()] + [i.public_ip() for i in self.temp_nodes]
+        aws_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("aws:")]
+        aws_jobs = [partial(self.aws.remove_ip_from_security_group, r.split(":")[1], ip) for r in set(aws_regions) for ip in public_ips]
+        do_parallel(lambda fn: fn(), aws_jobs)
+
+        # Terminate instances
+        instances = list(self.bound_nodes.values()) + self.temp_nodes
+        logger.fs.warning(f"Deprovisioning {len(instances)} instances")
+        if any(i.provider == "azure" for i in instances):
+            logger.warning(
+                f"NOTE: Azure is very slow to terminate instances. Consider using --reuse-instances and then deprovisioning the instances manually with `skylark deprovision`."
+            )
+        do_parallel(deprovision_gateway_instance, instances, n=-1, spinner=True, spinner_persist=True, desc="Deprovisioning instances")
+        self.temp_nodes = []
+        logger.fs.info("Deprovisioned instances")
 
     def run_replication_plan(self, job: ReplicationJob) -> ReplicationJob:
         assert job.source_region.split(":")[0] in [
@@ -212,68 +261,134 @@ class ReplicatorClient:
             "gcp",
         ], f"Only AWS, Azure, and GCP are supported, but got {job.dest_region}"
 
-        # pre-fetch instance IPs for all gateways
-        gateway_ips: Dict[Server, str] = {s: s.public_ip() for s in self.bound_nodes.values()}
+        with Halo(text="Preparing replication plan", spinner="dots") as spinner:
+            # pre-fetch instance IPs for all gateways
+            spinner.text = "Preparing replication plan, fetching instance IPs"
+            gateway_ips: Dict[Server, str] = {s: s.public_ip() for s in self.bound_nodes.values()}
 
-        # make list of chunks
-        chunks = []
-        obj_file_size_bytes = job.src_obj_sizes()
-        for idx, (src_obj, dest_obj) in enumerate(zip(job.src_objs, job.dest_objs)):
-            if obj_file_size_bytes:
-                file_size_bytes = obj_file_size_bytes[src_obj]
+            # make list of chunks
+            spinner.text = "Preparing replication plan, querying source object store for matching keys"
+            chunks = []
+
+            # calculate object sizes
+            if job.obj_sizes:
+                obj_file_size_bytes = job.obj_sizes
+            elif job.obj_sizes is None and job.random_chunk_size_mb:
+                obj_file_size_bytes = {obj: job.random_chunk_size_mb * MB for obj in job.src_objs}
             else:
-                file_size_bytes = job.random_chunk_size_mb * MB
-            chunks.append(Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes))
+                raise ValueError("Either obj_sizes or random_chunk_size_mb must be specified")
 
-        # partition chunks into roughly equal-sized batches (by bytes)
-        # iteratively adds chunks to the batch with the smallest size
-        def partition(items: List[Chunk], n_batches: int) -> List[List[Chunk]]:
-            batches = [[] for _ in range(n_batches)]
-            items.sort(key=lambda c: c.chunk_length_bytes, reverse=True)
-            for item in items:
-                batch_sizes = [sum(b.chunk_length_bytes for b in bs) for bs in batches]
-                batches[batch_sizes.index(min(batch_sizes))].append(item)
-            return batches
+            idx = 0
+            for (src_obj, dest_obj) in zip(job.src_objs, job.dest_objs):
+                if obj_file_size_bytes:
+                    if job.max_chunk_size_mb:  # split objects into sub-chunks
+                        chunk_size_bytes = int(job.max_chunk_size_mb * 1e6)
+                        num_chunks = int(obj_file_size_bytes[src_obj] / chunk_size_bytes) + 1
 
-        src_instances = [self.bound_nodes[n] for n in self.topology.source_instances()]
-        chunk_batches = partition(chunks, len(src_instances))
-        assert (len(chunk_batches) == (len(src_instances) - 1)) or (
-            len(chunk_batches) == len(src_instances)
-        ), f"{len(chunk_batches)} batches, expected {len(src_instances)}"
-        for batch_idx, batch in enumerate(chunk_batches):
-            logger.info(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")
+                        # TODO: figure out what to do on # part limits per object
+                        # TODO: only do if num_chunks > 1
+                        # TODO: potentially do this in a seperate thread, and/or after chunks sent
+                        obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
+                        upload_id = obj_store_interface.initiate_multipart_upload(dest_obj)
 
-        # make list of ChunkRequests
-        chunk_requests_sharded: Dict[int, List[ChunkRequest]] = {}
-        with Timer("Building chunk requests"):
-            for batch_idx, batch in enumerate(chunk_batches):
-                chunk_requests_sharded[batch_idx] = []
-                for chunk in batch:
-                    chunk_requests_sharded[batch_idx].append(
-                        ChunkRequest(
-                            chunk=chunk,
-                            src_region=job.source_region,
-                            dst_region=job.dest_region,
-                            src_type="object_store" if job.dest_bucket else "random",
-                            dst_type="object_store" if job.dest_bucket else "save_local",
-                            src_random_size_mb=job.random_chunk_size_mb,
-                            src_object_store_bucket=job.source_bucket,
-                            dst_object_store_bucket=job.dest_bucket,
+                        offset = 0
+                        part_num = 1
+                        parts = []
+                        for chunk in range(num_chunks):
+                            # size is min(chunk_size, remaining data)
+                            file_size_bytes = min(chunk_size_bytes, obj_file_size_bytes[src_obj] - offset)
+                            assert file_size_bytes > 0, f"File size <= 0 {file_size_bytes}"
+                            chunks.append(
+                                Chunk(
+                                    src_key=src_obj,
+                                    dest_key=dest_obj,
+                                    chunk_id=idx,
+                                    file_offset_bytes=offset,
+                                    chunk_length_bytes=file_size_bytes,
+                                    part_number=part_num,
+                                    upload_id=upload_id,
+                                )
+                            )
+                            parts.append(part_num)
+
+                            idx += 1
+                            part_num += 1
+                            offset += chunk_size_bytes
+
+                        # add multipart upload request
+                        self.multipart_upload_requests.append(
+                            {"region": job.dest_region, "bucket": job.dest_bucket, "upload_id": upload_id, "key": dest_obj, "parts": parts}
                         )
+
+                    else:  # transfer entire object
+                        file_size_bytes = obj_file_size_bytes[src_obj]
+                        chunks.append(
+                            Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
+                        )
+                        idx += 1
+                else:  # random data replication
+                    file_size_bytes = job.random_chunk_size_mb * MB
+                    chunks.append(
+                        Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
                     )
+                    idx += 1
 
-        with Timer("Dispatch chunk requests"):
-            # send chunk requests to start gateways in parallel
-            def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
-                hop_instance, chunk_requests = args
-                ip = gateway_ips[hop_instance]
-                logger.debug(f"Sending {len(chunk_requests)} chunk requests to {ip}")
-                reply = retry_requests().post(f"http://{ip}:8080/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests])
-                if reply.status_code != 200:
-                    raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
+            # partition chunks into roughly equal-sized batches (by bytes)
+            def partition(items: List[Chunk], n_batches: int) -> List[List[Chunk]]:
+                batches = [[] for _ in range(n_batches)]
+                items.sort(key=lambda c: c.chunk_length_bytes, reverse=True)
+                for item in items:
+                    batch_sizes = [sum(b.chunk_length_bytes for b in bs) for bs in batches]
+                    batches[batch_sizes.index(min(batch_sizes))].append(item)
+                return batches
 
-            start_instances = list(zip(src_instances, chunk_requests_sharded.values()))
-            do_parallel(send_chunk_requests, start_instances, n=-1)
+            spinner.text = "Preparing replication plan, partitioning chunks into batches"
+            src_instances = [self.bound_nodes[n] for n in self.topology.source_instances()]
+            chunk_batches = partition(chunks, len(src_instances))
+            assert (len(chunk_batches) == (len(src_instances) - 1)) or (
+                len(chunk_batches) == len(src_instances)
+            ), f"{len(chunk_batches)} batches, expected {len(src_instances)}"
+            for batch_idx, batch in enumerate(chunk_batches):
+                logger.fs.info(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")
+
+            # make list of ChunkRequests
+            with Timer("Building chunk requests"):
+                # make list of ChunkRequests
+                spinner.text = "Preparing replication plan, building list of chunk requests"
+                chunk_requests_sharded: Dict[int, List[ChunkRequest]] = {}
+                for batch_idx, batch in enumerate(chunk_batches):
+                    chunk_requests_sharded[batch_idx] = []
+                    for chunk in batch:
+                        chunk_requests_sharded[batch_idx].append(
+                            ChunkRequest(
+                                chunk=chunk,
+                                src_region=job.source_region,
+                                dst_region=job.dest_region,
+                                src_type="object_store" if job.dest_bucket else "random",
+                                dst_type="object_store" if job.dest_bucket else "save_local",
+                                src_random_size_mb=job.random_chunk_size_mb,
+                                src_object_store_bucket=job.source_bucket,
+                                dst_object_store_bucket=job.dest_bucket,
+                            )
+                        )
+                    logger.fs.debug(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")
+                    for chunk_request in chunk_requests_sharded[batch_idx]:
+                        logger.fs.debug(f"\t{chunk_request}")
+
+                # send chunk requests to start gateways in parallel
+                spinner.text = "Preparing replication plan, dispatching chunk requests to source gateways"
+
+                def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
+                    hop_instance, chunk_requests = args
+                    ip = gateway_ips[hop_instance]
+                    reply = retry_requests().post(
+                        f"{hop_instance.gateway_api_url}/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests]
+                    )
+                    if reply.status_code != 200:
+                        raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
+
+                start_instances = list(zip(src_instances, chunk_requests_sharded.values()))
+                do_parallel(send_chunk_requests, start_instances, n=-1)
 
         job.chunk_requests = [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
         return job
@@ -281,7 +396,7 @@ class ReplicatorClient:
     def get_chunk_status_log_df(self) -> pd.DataFrame:
         def get_chunk_status(args):
             node, instance = args
-            reply = retry_requests().get(f"http://{instance.public_ip()}:8080/api/v1/chunk_status_log")
+            reply = retry_requests().get(f"{instance.gateway_api_url}/api/v1/chunk_status_log")
             if reply.status_code != 200:
                 raise Exception(f"Failed to get chunk status from gateway instance {instance.instance_name()}: {reply.text}")
             logs = []
@@ -294,20 +409,35 @@ class ReplicatorClient:
             return logs
 
         rows = []
-        for _, result in do_parallel(get_chunk_status, self.bound_nodes.items(), n=-1):
+        for result in do_parallel(get_chunk_status, self.bound_nodes.items(), n=-1, return_args=False):
             rows.extend(result)
         return pd.DataFrame(rows)
+
+    def check_error_logs(self) -> Dict[str, List[str]]:
+        def get_error_logs(args):
+            _, instance = args
+            reply = retry_requests().get(f"{instance.gateway_api_url}/api/v1/errors")
+            if reply.status_code != 200:
+                raise Exception(f"Failed to get error logs from gateway instance {instance.instance_name()}: {reply.text}")
+            return reply.json()["errors"]
+
+        errors: Dict[str, List[str]] = {}
+        for (_, instance), result in do_parallel(get_error_logs, self.bound_nodes.items(), n=-1):
+            errors[instance] = result
+        return errors
 
     def monitor_transfer(
         self,
         job: ReplicationJob,
-        show_pbar=False,
+        show_spinner=False,
         log_interval_s: Optional[float] = None,
         time_limit_seconds: Optional[float] = None,
         cleanup_gateway: bool = True,
         save_log: bool = True,
         write_profile: bool = True,
+        write_socket_profile: bool = False,  # slow but useful for debugging
         copy_gateway_logs: bool = True,
+        multipart: bool = False,  # multipart object uploads/downloads
     ) -> Optional[Dict]:
         assert job.chunk_requests is not None
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in job.chunk_requests])
@@ -316,93 +446,138 @@ class ReplicatorClient:
         sinks = self.topology.sink_instances()
         sink_regions = set(s.region for s in sinks)
 
+        completed_chunk_ids = []
+
+        # wait for VMs to start
+        if show_spinner:
+            spinner = Halo(text="Transfer starting", spinner="dots")
+            spinner.start()
+        if save_log:
+            if show_spinner:
+                spinner.text = "Transfer starting, saving job log"
+            (self.transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
         try:
             with Timer() as t:
-                with tqdm(
-                    total=total_bytes * 8, desc="Replication", unit="bit", unit_scale=True, unit_divisor=KB, disable=not show_pbar
-                ) as pbar:
-                    log_fn = tqdm.write if show_pbar else logger.debug
-                    while True:
-                        log_df = self.get_chunk_status_log_df()
-                        if log_df.empty:
-                            logger.warning("No chunk status log entries yet")
-                            time.sleep(0.5)
-                            continue
+                while True:
+                    # check for errors and exit if there are any
+                    errors = self.check_error_logs()
+                    if any(errors.values()):
+                        return {
+                            "errors": errors,
+                            "monitor_status": "error",
+                        }
 
-                        is_complete_rec = (
-                            lambda row: row["state"] == ChunkState.upload_complete
-                            and row["instance"] in [s.instance for s in sinks]
-                            and row["region"] in [s.region for s in sinks]
-                        )
-                        sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
-                        completed_status = sink_status_df.groupby("chunk_id").apply(
-                            lambda x: set(x["region"].unique()) == set(sink_regions)
-                        )
-                        completed_chunk_ids = completed_status[completed_status].index
-                        completed_bytes = sum(
-                            [cr.chunk.chunk_length_bytes for cr in job.chunk_requests if cr.chunk.chunk_id in completed_chunk_ids]
-                        )
+                    log_df = self.get_chunk_status_log_df()
+                    if log_df.empty:
+                        logger.warning("No chunk status log entries yet")
+                        time.sleep(0.5)
+                        continue
 
-                        # update progress bar
-                        pbar.update(completed_bytes * 8 - pbar.n)
-                        total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
-                        throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
-                        pbar.set_description(f"Replication: average {throughput_gbits:.2f}Gbit/s")
+                    is_complete_rec = (
+                        lambda row: row["state"] == ChunkState.upload_complete
+                        and row["instance"] in [s.instance for s in sinks]
+                        and row["region"] in [s.region for s in sinks]
+                    )
+                    sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
+                    completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region"].unique()) == set(sink_regions))
+                    completed_chunk_ids = completed_status[completed_status].index
+                    completed_bytes = sum(
+                        [cr.chunk.chunk_length_bytes for cr in job.chunk_requests if cr.chunk.chunk_id in completed_chunk_ids]
+                    )
 
-                        if len(completed_chunk_ids) == len(job.chunk_requests):
-                            return dict(
-                                completed_chunk_ids=completed_chunk_ids,
-                                total_runtime_s=total_runtime_s,
-                                throughput_gbits=throughput_gbits,
-                                monitor_status="completed",
+                    # update progress bar
+                    total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
+                    throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
+
+                    # make log line
+                    gbits_remaining = (total_bytes - completed_bytes) * 8 / GB
+                    eta = int(gbits_remaining / throughput_gbits) if throughput_gbits > 0 else None
+                    log_line_detail = f"{len(completed_chunk_ids)}/{len(job.chunk_requests)} chunks done, {completed_bytes / GB:.2f}/{total_bytes / GB:.2f}GB, ETA={str(eta) + 's' if eta is not None else 'unknown'}"
+                    log_line = f"{completed_bytes / total_bytes * 100.:.1f}% at {throughput_gbits:.2f}Gbit/s ({log_line_detail})"
+                    if show_spinner:
+                        spinner.text = f"Transfered {log_line}"
+                    if len(completed_chunk_ids) == len(job.chunk_requests):
+                        if show_spinner:
+                            spinner.succeed(f"Transfer complete ({log_line})")
+
+                        if multipart:
+                            # Complete multi-part uploads
+                            def complete_upload(req):
+                                obj_store_interface = ObjectStoreInterface.create(req["region"], req["bucket"])
+                                succ = obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"], req["parts"])
+                                if not succ:
+                                    raise ValueError(f"Failed to complete upload {req['upload_id']}")
+
+                            do_parallel(
+                                complete_upload, self.multipart_upload_requests, n=-1, desc="Completing multipart uploads", spinner=True
                             )
-                        elif time_limit_seconds is not None and t.elapsed > time_limit_seconds or t.elapsed > 600 and completed_bytes == 0:
-                            logger.error("Transfer timed out! Please retry.")
-                            return dict(
-                                completed_chunk_ids=completed_chunk_ids,
-                                total_runtime_s=total_runtime_s,
-                                throughput_gbits=throughput_gbits,
-                                monitor_status="timed_out",
-                            )
-                        else:
-                            current_time = datetime.now()
-                            if log_interval_s and (not last_log or (current_time - last_log).seconds > float(log_interval_s)):
-                                last_log = current_time
-                                gbits_remaining = (total_bytes - completed_bytes) * 8 / GB
-                                eta = int(gbits_remaining / throughput_gbits) if throughput_gbits > 0 else None
-                                log_fn(
-                                    f"{len(completed_chunk_ids)}/{len(job.chunk_requests)} chunks done ({completed_bytes / GB:.2f} / {total_bytes / GB:.2f}GB, {throughput_gbits:.2f}Gbit/s, ETA={str(eta) + 's' if eta is not None else 'unknown'})"
-                                )
-                            time.sleep(0.01 if show_pbar else 0.25)
+                        return dict(
+                            completed_chunk_ids=completed_chunk_ids,
+                            total_runtime_s=total_runtime_s,
+                            throughput_gbits=throughput_gbits,
+                            monitor_status="completed",
+                        )
+                    elif time_limit_seconds is not None and t.elapsed > time_limit_seconds or t.elapsed > 600 and completed_bytes == 0:
+                        if show_spinner:
+                            spinner.fail(f"Transfer timed out with no progress ({log_line})")
+                        logger.fs.error("Transfer timed out! Please retry.")
+                        logger.error(f"Please share debug logs from: {self.transfer_dir}")
+                        return dict(
+                            completed_chunk_ids=completed_chunk_ids,
+                            total_runtime_s=total_runtime_s,
+                            throughput_gbits=throughput_gbits,
+                            monitor_status="timed_out",
+                        )
+                    else:
+                        current_time = datetime.now()
+                        if log_interval_s and (not last_log or (current_time - last_log).seconds > float(log_interval_s)):
+                            last_log = current_time
+                            if show_spinner:  # log only to file
+                                logger.fs.info(log_line)
+                            else:
+                                logger.info(log_line)
+                        time.sleep(0.01 if show_spinner else 0.25)
         # always run cleanup, even if there's an exception
         finally:
-            transfer_dir = tmp_log_dir / f"transfer_{datetime.now().isoformat()}"
-            transfer_dir.mkdir(exist_ok=True, parents=True)
-            if save_log:
-                (transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
-            if copy_gateway_logs:
+            if show_spinner:
+                spinner.stop()
+            with Halo(text="Cleaning up after transfer", spinner="dots") as spinner:
+                if copy_gateway_logs:
 
-                def copy_log(instance):
-                    logger.info(f"Copying gateway logs from {instance.uuid()}")
-                    instance.run_command("sudo docker logs -t skylark_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
-                    instance.download_file("/tmp/gateway.stdout", transfer_dir / f"gateway_{instance.uuid()}.stdout")
-                    instance.download_file("/tmp/gateway.stderr", transfer_dir / f"gateway_{instance.uuid()}.stderr")
+                    def copy_log(instance):
+                        instance.run_command("sudo docker logs -t skylark_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
+                        instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
+                        instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 
-                do_parallel(copy_log, self.bound_nodes.values(), n=-1)
-            if write_profile:
-                chunk_status_df = self.get_chunk_status_log_df()
-                (transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
-                traceevent = status_df_to_traceevent(chunk_status_df)
-                profile_out = transfer_dir / f"traceevent_{uuid.uuid4()}.json"
-                profile_out.parent.mkdir(parents=True, exist_ok=True)
-                profile_out.write_text(json.dumps(traceevent))
-                logger.debug(f"Wrote profile to {profile_out}, visualize using `about://tracing` in Chrome")
-            if cleanup_gateway:
+                    spinner.text = "Cleaning up after transfer, copying gateway logs from all nodes"
+                    do_parallel(copy_log, self.bound_nodes.values(), n=-1)
+                if write_profile:
+                    spinner.text = "Cleaning up after transfer, writing profile of transfer"
+                    chunk_status_df = self.get_chunk_status_log_df()
+                    (self.transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
+                    traceevent = status_df_to_traceevent(chunk_status_df)
+                    profile_out = self.transfer_dir / f"traceevent_{uuid.uuid4()}.json"
+                    profile_out.parent.mkdir(parents=True, exist_ok=True)
+                    profile_out.write_text(json.dumps(traceevent))
+                if write_socket_profile:
 
-                def fn(s: Server):
-                    try:
-                        retry_requests().post(f"http://{s.public_ip()}:8080/api/v1/shutdown")
-                    except:
-                        return  # ignore connection errors since server may be shutting down
+                    def write_socket_profile(instance):
+                        receiver_reply = retry_requests().get(f"{instance.gateway_api_url}/api/v1/socket_profiles/receiver")
+                        if receiver_reply.status_code != 200:
+                            logger.fs.error(
+                                f"Failed to get receiver socket profile from {instance.gateway_api_url}: {receiver_reply.status_code} {receiver_reply.text}"
+                            )
+                        (self.transfer_dir / f"receiver_socket_profile_{instance.uuid()}.json").write_text(receiver_reply.text)
 
-                do_parallel(fn, self.bound_nodes.values(), n=-1)
+                    spinner.text = "Cleaning up after transfer, writing socket profile of transfer"
+                    do_parallel(write_socket_profile, self.bound_nodes.values(), n=-1)
+                if cleanup_gateway:
+
+                    def fn(s: Server):
+                        try:
+                            retry_requests().post(f"{s.gateway_api_url}/api/v1/shutdown")
+                        except:
+                            return  # ignore connection errors since server may be shutting down
+
+                    do_parallel(fn, self.bound_nodes.values(), n=-1)
+                    spinner.text = "Cleaning up after transfer, shutting down gateway servers"

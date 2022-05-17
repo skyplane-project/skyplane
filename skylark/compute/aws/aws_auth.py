@@ -3,9 +3,9 @@ from typing import Optional
 
 import boto3
 
-from skylark.config import SkylarkConfig
-from skylark import config_path
 from skylark import aws_config_path
+from skylark import config_path
+from skylark.config import SkylarkConfig
 
 
 class AWSAuthentication:
@@ -27,12 +27,11 @@ class AWSAuthentication:
             self._access_key = None
             self._secret_key = None
 
-    @staticmethod
-    def save_region_config(config):
-        with open(aws_config_path, "w") as f:
-            if config.aws_enabled == False:
-                f.write("")
-                return
+    def save_region_config(self, config: SkylarkConfig):
+        if config.aws_enabled == False:
+            self.clear_region_config()
+            return
+        with aws_config_path.open("w") as f:
             region_list = []
             describe_regions = boto3.client("ec2", region_name="us-east-1").describe_regions()
             for region in describe_regions["Regions"]:
@@ -43,12 +42,16 @@ class AWSAuthentication:
             f.write("\n".join(region_list))
             print(f"    AWS region config file saved to {aws_config_path}")
 
+    def clear_region_config(self):
+        with aws_config_path.open("w") as f:
+            f.write("")
+
     @staticmethod
     def get_region_config():
         try:
             f = open(aws_config_path, "r")
         except FileNotFoundError:
-            print("    No AWS config detected! Consquently, the AWS region list is empty. Run 'skylark init' to remedy this.")
+            print("    No AWS config detected! Consquently, the AWS region list is empty. Run 'skylark init --reinit-aws' to remedy this.")
             return []
         region_list = []
         for region in f.read().split("\n"):
@@ -82,7 +85,7 @@ class AWSAuthentication:
             setattr(self.__cached_credentials, "boto3_credential", cached_credential)
         return cached_credential if cached_credential else (None, None)
 
-    def get_boto3_session(self, aws_region: str):
+    def get_boto3_session(self, aws_region: Optional[str] = None):
         if self.config_mode == "manual":
             return boto3.Session(
                 aws_access_key_id=self.access_key,
@@ -93,10 +96,17 @@ class AWSAuthentication:
             return boto3.Session(region_name=aws_region)
 
     def get_boto3_resource(self, service_name, aws_region=None):
-        return self.get_boto3_session(aws_region).resource(service_name, region_name=aws_region)
+        return self.get_boto3_session().resource(service_name, region_name=aws_region)
 
     def get_boto3_client(self, service_name, aws_region=None):
         if aws_region is None:
-            return self.get_boto3_session(aws_region).client(service_name)
+            return self.get_boto3_session().client(service_name)
         else:
-            return self.get_boto3_session(aws_region).client(service_name, region_name=aws_region)
+            return self.get_boto3_session().client(service_name, region_name=aws_region)
+
+    def get_azs_in_region(self, region):
+        ec2 = self.get_boto3_client("ec2", region)
+        azs = []
+        for az in ec2.describe_availability_zones()["AvailabilityZones"]:
+            azs.append(az["ZoneName"])
+        return azs

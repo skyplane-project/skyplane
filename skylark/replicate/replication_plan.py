@@ -1,31 +1,48 @@
-from dataclasses import dataclass
-import dataclasses
 import json
 import shutil
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Tuple
-from skylark.obj_store.object_store_interface import ObjectStoreInterface
 
-from skylark.utils import logger
-from skylark import MB
 from skylark.chunk import ChunkRequest
-
-from skylark.utils.utils import do_parallel
+from skylark.utils import logger
 
 
 @dataclass
-class ReplicationTopologyGateway:
+class ReplicationTopologyNode:
     region: str
+
+    def to_dict(self) -> Dict:
+        """Serialize to dict with type information."""
+        return {"type": self.__class__.__name__, "fields": self.__dict__}
+
+    @classmethod
+    def from_dict(cls, topology_dict: Dict) -> "ReplicationTopologyNode":
+        """Deserialize from dict with type information."""
+        if topology_dict["type"] == "ReplicationTopologyGateway":
+            return ReplicationTopologyGateway.from_dict_fields(topology_dict["fields"])
+        elif topology_dict["type"] == "ReplicationTopologyObjectStore":
+            return ReplicationTopologyObjectStore.from_dict_fields(topology_dict["fields"])
+        else:
+            raise ValueError("Unknown topology node type: {}".format(topology_dict["type"]))
+
+    @classmethod
+    def from_dict_fields(cls, fields: Dict):
+        """Deserialize from dict with type information."""
+        return cls(**fields)
+
+
+@dataclass
+class ReplicationTopologyGateway(ReplicationTopologyNode):
     instance: int
 
-    def to_dict(self):
-        return dataclasses.asdict(self)
-
-    @staticmethod
-    def from_dict(topology_dict: Dict):
-        return ReplicationTopologyGateway(**topology_dict)
-
     def __hash__(self) -> int:
-        return hash(self.region) + hash(self.instance)
+        return hash((self.region, self.instance))
+
+
+@dataclass
+class ReplicationTopologyObjectStore(ReplicationTopologyNode):
+    def __hash__(self) -> int:
+        return hash(self.region)
 
 
 class ReplicationTopology:
@@ -36,36 +53,57 @@ class ReplicationTopology:
     associated number of connections (e.g. 64).
     """
 
-    def __init__(self, edges: Optional[List[Tuple[ReplicationTopologyGateway, ReplicationTopologyGateway, int]]] = None):
-        self.edges: List[Tuple[ReplicationTopologyGateway, ReplicationTopologyGateway, int]] = edges or []
-        self.nodes: Set[ReplicationTopologyGateway] = set(k[0] for k in self.edges) | set(k[1] for k in self.edges)
+    def __init__(self, edges: Optional[List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int]]] = None):
+        self.edges: List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int]] = edges or []
+        self.nodes: Set[ReplicationTopologyNode] = set(k[0] for k in self.edges) | set(k[1] for k in self.edges)
 
-    def add_edge(self, src_region: str, src_instance: int, dest_region: str, dest_instance: int, num_connections: int):
-        """
-        Adds an edge to the topology.
-        """
+    @property
+    def gateway_nodes(self) -> Set[ReplicationTopologyGateway]:
+        return {n for n in self.nodes if isinstance(n, ReplicationTopologyGateway)}
+
+    @property
+    def obj_store_nodes(self) -> Set[ReplicationTopologyObjectStore]:
+        return {n for n in self.nodes if isinstance(n, ReplicationTopologyObjectStore)}
+
+    def add_instance_instance_edge(self, src_region: str, src_instance: int, dest_region: str, dest_instance: int, num_connections: int):
+        """Add relay edge between two instances."""
         src_gateway = ReplicationTopologyGateway(src_region, src_instance)
         dest_gateway = ReplicationTopologyGateway(dest_region, dest_instance)
         self.edges.append((src_gateway, dest_gateway, int(num_connections)))
         self.nodes.add(src_gateway)
         self.nodes.add(dest_gateway)
 
-    def get_outgoing_paths(self, src: ReplicationTopologyGateway):
+    def add_objstore_instance_edge(self, src_region: str, dest_region: str, dest_instance: int):
+        """Add object store to instance node (i.e. source bucket to source gateway)."""
+        src_objstore = ReplicationTopologyObjectStore(src_region)
+        dest_gateway = ReplicationTopologyGateway(dest_region, dest_instance)
+        self.edges.append((src_objstore, dest_gateway, 0))
+        self.nodes.add(src_objstore)
+        self.nodes.add(dest_gateway)
+
+    def add_instance_objstore_edge(self, src_region: str, src_instance: int, dest_region: str):
+        """Add instance to object store edge (i.e. destination gateway to destination bucket)."""
+        src_gateway = ReplicationTopologyGateway(src_region, src_instance)
+        dest_objstore = ReplicationTopologyObjectStore(dest_region)
+        self.edges.append((src_gateway, dest_objstore, 0))
+        self.nodes.add(src_gateway)
+        self.nodes.add(dest_objstore)
+
+    def get_outgoing_paths(self, src: ReplicationTopologyNode):
+        """Return nodes that follow src in the topology."""
         return {dest_gateway: num_connections for src_gateway, dest_gateway, num_connections in self.edges if src_gateway == src}
 
+    def get_incoming_paths(self, dest: ReplicationTopologyNode):
+        """Return nodes that precede dest in the topology."""
+        return {src_gateway: num_connections for dest_gateway, src_gateway, num_connections in self.edges if dest_gateway == dest}
+
     def source_instances(self) -> Set[ReplicationTopologyGateway]:
-        nodes = set(k[0] for k in self.edges)
-        for _, dest, _ in self.edges:
-            if dest in nodes:
-                nodes.remove(dest)
-        return nodes
+        nodes = self.nodes - {v for u, v, _ in self.edges if not isinstance(u, ReplicationTopologyObjectStore)}
+        return {n for n in nodes if isinstance(n, ReplicationTopologyGateway)}
 
     def sink_instances(self) -> Set[ReplicationTopologyGateway]:
-        nodes = set(k[1] for k in self.edges)
-        for src, _, _ in self.edges:
-            if src in nodes:
-                nodes.remove(src)
-        return nodes
+        nodes = self.nodes - {u for u, v, _ in self.edges if not isinstance(v, ReplicationTopologyObjectStore)}
+        return {n for n in nodes if isinstance(n, ReplicationTopologyGateway)}
 
     def source_region(self) -> str:
         instances = list(self.source_instances())
@@ -99,8 +137,8 @@ class ReplicationTopology:
         for edge in in_dict["replication_topology_edges"]:
             edges.append(
                 (
-                    ReplicationTopologyGateway.from_dict(edge["src"]),
-                    ReplicationTopologyGateway.from_dict(edge["dest"]),
+                    ReplicationTopologyNode.from_dict(edge["src"]),
+                    ReplicationTopologyNode.from_dict(edge["dest"]),
                     edge["num_connections"],
                 )
             )
@@ -120,8 +158,14 @@ class ReplicationTopology:
         subgraphs = {}
         for src_gateway, dest_gateway, n_connections in self.edges:
             # group node instances by region
-            src_region, src_instance = src_gateway.region, src_gateway.instance
-            dest_region, dest_instance = dest_gateway.region, dest_gateway.instance
+            src_region, src_instance = (
+                src_gateway.region,
+                src_gateway.instance if isinstance(src_gateway, ReplicationTopologyGateway) else "objstore",
+            )
+            dest_region, dest_instance = (
+                dest_gateway.region,
+                dest_gateway.instance if isinstance(dest_gateway, ReplicationTopologyGateway) else "objstore",
+            )
             src_region, dest_region = src_region.replace(":", "/"), dest_region.replace(":", "/")
             src_node = f"{src_region}, {src_instance}"
             dest_node = f"{dest_region}, {dest_instance}"
@@ -139,7 +183,11 @@ class ReplicationTopology:
             subgraphs[dest_region].node(dest_node, label=str(dest_instance), shape="box")
 
             # add edges
-            g.edge(src_node, dest_node, label=f"{n_connections} connections")
+            g.edge(
+                src_node,
+                dest_node,
+                label=f"{n_connections} connections" if src_instance != "objstore" and dest_instance != "objstore" else None,
+            )
 
         for subgraph in subgraphs.values():
             g.subgraph(subgraph)
@@ -161,13 +209,6 @@ class ReplicationJob:
     chunk_requests: Optional[List[ChunkRequest]] = None
     # Generates random chunks for testing on the gateways
     random_chunk_size_mb: Optional[int] = None
-
-    # TODO: delete this method and refer to obj_sizes instead
-    def src_obj_sizes(self) -> Dict[str, int]:
-        if self.obj_sizes is None:
-            if self.random_chunk_size_mb is not None:
-                return {obj: self.random_chunk_size_mb * MB for obj in self.src_objs}
-            interface = ObjectStoreInterface.create(self.source_region, self.source_bucket)
-            get_size = lambda o: interface.get_obj_size(o)
-            self.obj_sizes = dict(do_parallel(get_size, self.src_objs, n=16, progress_bar=True, desc="Query object sizes"))
-        return self.obj_sizes
+    # Maximum chunk size used to break-up larger objects
+    # TODO: eventually set default value to prevent OOM on gateways
+    max_chunk_size_mb: Optional[int] = None
