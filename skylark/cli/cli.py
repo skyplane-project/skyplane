@@ -158,7 +158,6 @@ def cp(
     elif provider_src in clouds and provider_dst in clouds:
         src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)
         src_region = src_client.region_tag()
-
         dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
         dst_region = dst_client.region_tag()
 

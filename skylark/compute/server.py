@@ -7,7 +7,6 @@ from functools import partial
 from pathlib import Path
 from typing import Dict
 
-import sshtunnel
 
 from skylark import config_path
 from skylark.compute.utils import make_dozzle_command, make_sysctl_tcp_tuning_command
@@ -74,7 +73,7 @@ class Server:
         self.gateway_log_viewer_url = None
         self.gateway_api_url = None
         self.init_log_files(log_dir)
-        self.ssh_tunnels: Dict[int, sshtunnel.SSHTunnelForwarder] = {}
+        self.ssh_tunnels: Dict = {}
 
     def __repr__(self):
         return f"Server({self.uuid()})"
@@ -99,7 +98,7 @@ class Server:
     def get_ssh_client_impl(self):
         raise NotImplementedError()
 
-    def open_ssh_tunnel_impl(self, remote_port) -> sshtunnel.SSHTunnelForwarder:
+    def open_ssh_tunnel_impl(self, remote_port):
         raise NotImplementedError()
 
     def get_ssh_cmd(self) -> str:

@@ -2,7 +2,6 @@ from typing import Dict, Optional
 
 import boto3
 import paramiko
-import sshtunnel
 
 from skylark import key_root
 from skylark.compute.aws.aws_auth import AWSAuthentication
@@ -96,7 +95,9 @@ class AWSServer(Server):
         t.connect(username="ec2-user", pkey=paramiko.RSAKey.from_private_key_file(str(self.local_keyfile)))
         return paramiko.SFTPClient.from_transport(t)
 
-    def open_ssh_tunnel_impl(self, remote_port) -> sshtunnel.SSHTunnelForwarder:
+    def open_ssh_tunnel_impl(self, remote_port):
+        import sshtunnel
+
         return sshtunnel.SSHTunnelForwarder(
             (self.public_ip(), 22),
             ssh_username="ec2-user",
