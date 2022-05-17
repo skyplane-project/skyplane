@@ -7,6 +7,7 @@ from googleapiclient import discovery
 
 from skylark import cloud_config, config_path, gcp_config_path
 from skylark.config import SkylarkConfig
+from skylark.utils import logger
 
 
 class GCPAuthentication:
@@ -74,7 +75,11 @@ class GCPAuthentication:
     def make_credential(self, project_id):
         cached_credential = getattr(self.__cached_credentials, f"credential_{project_id}", (None, None))
         if cached_credential == (None, None):
-            inferred_cred, inferred_project = google.auth.default(quota_project_id=project_id)
+            try:
+                inferred_cred, inferred_project = google.auth.default(quota_project_id=project_id)
+            except google.auth.exceptions.DefaultCredentialsError as e:
+                logger.error(f"Failed to load GCP credentials for project {project_id}: {e}")
+                inferred_cred, inferred_project = (None, None)
             setattr(self.__cached_credentials, f"credential_{project_id}", (inferred_cred, project_id or inferred_project))
             return inferred_cred, inferred_project
         return cached_credential
