@@ -14,20 +14,27 @@ def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
     # get AWS credentials from boto3
     session = boto3.Session()
     credentials_session = session.get_credentials()
-    credentials_frozen = credentials_session.get_frozen_credentials() if credentials_session else None
-    auth = AWSAuthentication(config=config)
-    if credentials_session is None or credentials_frozen.access_key is None or credentials_frozen.secret_key is None:
+    if credentials_session is None:
         config.aws_enabled = False
+    else:
+        credentials_frozen = credentials_session.get_frozen_credentials()
+        if credentials_frozen.access_key is None or credentials_frozen.secret_key is None:
+            config.aws_enabled = False
+        else:
+            config.aws_enabled = True
+
+    auth = AWSAuthentication(config=config)
+    if config.aws_enabled:
+        typer.secho(f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials_frozen.access_key[-6:]}]", fg="blue")
+        config.aws_enabled = True
+        auth.save_region_config(config)
+        return config
+    else:
         typer.secho("    AWS credentials not found in boto3 session, please use the AWS CLI to set them via `aws configure`", fg="red")
         typer.secho("    https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html", fg="red")
         typer.secho("    Disabling AWS support", fg="blue")
         auth.clear_region_config()
         return config
-
-    typer.secho(f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials_frozen.access_key[-6:]}]", fg="blue")
-    config.aws_enabled = True
-    auth.save_region_config(config)
-    return config
 
 
 def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkConfig:
