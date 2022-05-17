@@ -4,6 +4,7 @@ from typing import Optional
 import google.auth
 from google.cloud import storage  # type: ignore
 from googleapiclient import discovery
+
 from skylark import cloud_config, config_path, gcp_config_path
 from skylark.config import SkylarkConfig
 

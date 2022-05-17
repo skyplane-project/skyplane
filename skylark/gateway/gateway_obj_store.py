@@ -1,18 +1,15 @@
-from functools import partial
 import queue
-from multiprocessing import Event, Manager, Process, Value, Queue
 import time
 import traceback
+from dataclasses import dataclass
+from functools import partial
+from multiprocessing import Event, Manager, Process, Value, Queue
 from typing import Dict, Optional
 
-from skylark.gateway.chunk_store import ChunkStore
-from skylark.utils import logger
 from skylark.chunk import ChunkRequest
-
+from skylark.gateway.chunk_store import ChunkStore
 from skylark.obj_store.object_store_interface import ObjectStoreInterface
-
-from dataclasses import dataclass
-
+from skylark.utils import logger
 from skylark.utils.utils import retry_backoff
 
 

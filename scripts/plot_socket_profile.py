@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt  # type: ignore
 from tqdm import tqdm
 
 from skylark import skylark_root

@@ -10,11 +10,12 @@ from functools import partial
 from pathlib import Path
 from shutil import copyfile
 from sys import platform
-from threading import Thread
 from typing import Dict, List, Optional
 
 import boto3
 import typer
+from tqdm import tqdm
+
 from skylark import GB, MB, exceptions, gcp_config_path
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
@@ -31,7 +32,6 @@ from skylark.replicate.replication_plan import ReplicationJob, ReplicationTopolo
 from skylark.replicate.replicator_client import ReplicatorClient
 from skylark.utils import logger
 from skylark.utils.utils import do_parallel
-from tqdm import tqdm
 
 
 def is_plausible_local_path(path: str):

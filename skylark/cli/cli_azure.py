@@ -3,18 +3,19 @@ AWS convenience interface
 """
 
 
+import subprocess
 from collections import defaultdict
 from shlex import split
-import subprocess
 from typing import List, Optional
-import questionary
 
+import questionary
 import typer
+
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.azure.azure_server import AzureServer
-from skylark.utils.utils import do_parallel
 from skylark.utils import logger
+from skylark.utils.utils import do_parallel
 
 app = typer.Typer(name="skylark-azure")
 

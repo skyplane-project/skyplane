@@ -3,11 +3,11 @@ from pathlib import Path
 
 import paramiko
 import sshtunnel
+
 from skylark import key_root
 from skylark.compute.gcp.gcp_auth import GCPAuthentication
 from skylark.compute.server import Server, ServerState
 from skylark.utils.utils import PathLike
-from skylark.utils import logger
 
 
 class GCPServer(Server):

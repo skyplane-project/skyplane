@@ -1,7 +1,7 @@
-from collections import namedtuple
-from dataclasses import dataclass
 import functools
 import shutil
+from collections import namedtuple
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 import cvxpy as cp
@@ -9,11 +9,11 @@ import graphviz as gv
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from skylark.utils import logger
 
 from skylark import GB
 from skylark.compute.cloud_providers import CloudProvider
 from skylark.replicate.replication_plan import ReplicationTopology
+from skylark.utils import logger
 
 GBIT_PER_GBYTE = 8
 

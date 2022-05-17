@@ -7,13 +7,13 @@ from functools import partial
 from pathlib import Path
 from typing import Dict
 
+import sshtunnel
+
 from skylark import config_path
 from skylark.compute.utils import make_dozzle_command, make_sysctl_tcp_tuning_command
 from skylark.utils import logger
 from skylark.utils.net import retry_requests
 from skylark.utils.utils import PathLike, Timer, retry_backoff, wait_for
-
-import sshtunnel
 
 
 class ServerState(Enum):
