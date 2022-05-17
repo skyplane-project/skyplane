@@ -40,7 +40,7 @@ class GatewayDaemonAPI(threading.Thread):
         port=8080,
     ):
         super().__init__()
-        self.app = Flask("gateway_metadata_server")
+        self.app = Flask("gateway_metadata_server", ssl_context = gateway_receiver.ssl_context)
         self.chunk_store = chunk_store
         self.gateway_receiver = gateway_receiver
         self.error_event = error_event
@@ -58,7 +58,7 @@ class GatewayDaemonAPI(threading.Thread):
         # make server
         self.host = host
         self.port = port
-        self.url = "http://{}:{}".format(host, port)
+        self.url = "https://{}:{}".format(host, port)
 
         # chunk status log
         self.chunk_status_log: List[Dict] = []
