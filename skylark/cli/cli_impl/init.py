@@ -14,14 +14,18 @@ def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
     # get AWS credentials from boto3
     session = boto3.Session()
     credentials = session.get_credentials()
-    credentials = credentials.get_frozen_credentials()
-    auth = AWSAuthentication(config=config)
-    if credentials.access_key is None or credentials.secret_key is None:
+    if credentials is not None:
+        credentials = credentials.get_frozen_credentials()
+        auth = AWSAuthentication(config=config)
+    else:
+        auth = None
+    if credentials is None or credentials.access_key is None or credentials.secret_key is None:
         config.aws_enabled = False
         typer.secho("    AWS credentials not found in boto3 session, please use the AWS CLI to set them via `aws configure`", fg="red")
         typer.secho("    https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html", fg="red")
         typer.secho("    Disabling AWS support", fg="blue")
-        auth.clear_region_config()
+        if auth is not None:
+            auth.clear_region_config()
         return config
 
     typer.secho(f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials.access_key[-6:]}]", fg="blue")
