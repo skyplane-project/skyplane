@@ -13,10 +13,10 @@ from skylark.compute.gcp.gcp_auth import GCPAuthentication
 def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
     # get AWS credentials from boto3
     session = boto3.Session()
-    credentials = session.get_credentials()
-    credentials = credentials.get_frozen_credentials()
+    credentials_session = session.get_credentials()
+    credentials_frozen = credentials_session.get_frozen_credentials() if credentials_session else None
     auth = AWSAuthentication(config=config)
-    if credentials.access_key is None or credentials.secret_key is None:
+    if credentials_session is None or credentials_frozen.access_key is None or credentials_frozen.secret_key is None:
         config.aws_enabled = False
         typer.secho("    AWS credentials not found in boto3 session, please use the AWS CLI to set them via `aws configure`", fg="red")
         typer.secho("    https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html", fg="red")
@@ -24,7 +24,7 @@ def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
         auth.clear_region_config()
         return config
 
-    typer.secho(f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials.access_key[-6:]}]", fg="blue")
+    typer.secho(f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials_frozen.access_key[-6:]}]", fg="blue")
     config.aws_enabled = True
     auth.save_region_config(config)
     return config

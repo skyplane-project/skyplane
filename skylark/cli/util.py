@@ -1,3 +1,4 @@
+from functools import partial
 import os
 import re
 import resource
@@ -8,6 +9,13 @@ from sys import platform
 import typer
 
 from skylark.utils import logger
+from skylark.compute.aws.aws_auth import AWSAuthentication
+from skylark.compute.azure.azure_auth import AzureAuthentication
+from skylark.compute.gcp.gcp_auth import GCPAuthentication
+from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
+from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
+from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
+from skylark.utils.utils import do_parallel
 
 
 def parse_path(path: str):
