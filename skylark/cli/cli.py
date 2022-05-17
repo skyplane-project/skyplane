@@ -4,9 +4,6 @@ from functools import partial
 from pathlib import Path
 from shlex import split
 
-import typer
-from halo import Halo
-
 import questionary
 import typer
 from halo import Halo
