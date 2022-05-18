@@ -103,21 +103,12 @@ class AzureCloudProvider(CloudProvider):
             for version in range(int(match.group("version")), 0, -1):
                 test_instance_name = f"{base_name}_v{version}" if version > 1 else base_name
                 if test_instance_name in sku_mapping[region]:
-                    logger.fs.warning(f"[azure] Instance {instance_name} not found in region {region} but was able to find a similar instance {test_instance_name}")
+                    logger.fs.warning(
+                        f"[azure] Instance {instance_name} not found in region {region} but was able to find a similar instance {test_instance_name}"
+                    )
                     return test_instance_name
         logger.fs.error(f"[azure] Instance {instance_name} not found in region {region} and could not infer a similar instance name.")
-        return None 
-
-        '''
-        if instance_name == "Standard_D32_v5" and "Standard_D32_v5" in sku_mapping[region]:
-            return "Standard_D32_v5"
-        elif instance_name == "Standard_D32_v4" and "Standard_D32_v4" in sku_mapping[region]:
-            return "Standard_D32_v4"
-        else:
-            logger.error(f"Cannot confirm availability of {instance_name} in {region}")
-            return instance_name
-        '''
-
+        return None
 
     @staticmethod
     def get_transfer_cost(src_key, dst_key, premium_tier=True):
