@@ -1,6 +1,5 @@
 import os
 import subprocess
-import threading
 from typing import Dict, List, Optional
 
 from azure.identity import DefaultAzureCredential
@@ -42,28 +41,29 @@ except ImportError:
 
 
 class AzureAuthentication:
-    __cached_credentials = threading.local()
-
     def __init__(self, config: Optional[SkylarkConfig] = None):
         self.config = config if config is not None else SkylarkConfig.load_config(config_path)
-        self.credential = self.get_credential(self.subscription_id)
+        self._credential = None
+
+    @property
+    def credential(self) -> DefaultAzureCredential:
+        if self._credential is None:
+            self._credential = self.get_credential()
+        return self._credential
 
     @property
     def subscription_id(self) -> Optional[str]:
         return self.config.azure_subscription_id
 
-    def get_credential(self, subscription_id: str):
-        cached_credential = getattr(self.__cached_credentials, f"credential_{subscription_id}", None)
-        if cached_credential is None:
-            exclude_msi = (query_which_cloud() != "azure",)  # exclude MSI if not Azure
-            logger.warning(f"Getting Azure credential for subscription {subscription_id}, exclude_msi={exclude_msi}")
-            cached_credential = DefaultAzureCredential(
-                exclude_managed_identity_credential=exclude_msi,
-                exclude_powershell_credential=True,
-                exclude_visual_studio_code_credential=True,
-            )
-            setattr(self.__cached_credentials, f"credential_{subscription_id}", cached_credential)
-        return cached_credential
+    @staticmethod
+    def get_azure_credential() -> DefaultAzureCredential:
+        exclude_msi = query_which_cloud() != "azure"  # exclude MSI if not Azure
+        logger.fs.warning(f"Getting Azure credential, exclude_msi={exclude_msi}")
+        return DefaultAzureCredential(
+            exclude_managed_identity_credential=exclude_msi,
+            exclude_powershell_credential=True,
+            exclude_visual_studio_code_credential=True,
+        )
 
     def save_region_config(self, config: SkylarkConfig):
         if config.azure_enabled == False:
@@ -127,7 +127,7 @@ class AzureAuthentication:
             f.write("")
 
     def enabled(self) -> bool:
-        return self.config.azure_enabled and self.subscription_id is not None
+        return self.config.azure_enabled and self.credential is not None
 
     @staticmethod
     def infer_subscription_id() -> Optional[str]:

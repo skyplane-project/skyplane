@@ -25,7 +25,7 @@ class AzureInterface(ObjectStoreInterface):
         self.account_name = account_name
         self.container_name = container_name
         self.account_url = f"https://{self.account_name}.blob.core.windows.net"
-        self.max_concurrency = max_concurrency  # parallel upload/downloads
+        self.max_concurrency = max_concurrency  # parallel upload/downloads, seems to cause issues if too high
         if region == "infer":
             self.storage_account = self.query_storage_account(self.account_name)
             self.azure_region = self.storage_account.location
