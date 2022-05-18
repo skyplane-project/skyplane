@@ -18,7 +18,7 @@ class GCPAuthentication:
         self._credentials = None
 
     def save_region_config(self):
-        if self.config.gcp_project_id is None:
+        if self.project_id is None:
             print(
                 f"    No project ID detected when trying to save GCP region list! Consquently, the GCP region list is empty. Run 'skylark init --reinit-gcp' or file an issue to remedy this."
             )
@@ -28,7 +28,7 @@ class GCPAuthentication:
             region_list = []
             credentials = self.credentials
             service = discovery.build("compute", "beta", credentials=credentials)
-            request = service.zones().list(project=self.config.gcp_project_id)
+            request = service.zones().list(project=self.project_id)
             while request is not None:
                 response = request.execute()
                 # In reality, these are zones. However, we shall call them regions to be self-consistent.
@@ -57,7 +57,7 @@ class GCPAuthentication:
     @property
     def credentials(self):
         if self._credentials is None:
-            self._credentials, _ = self.get_adc_credential(self.config.gcp_project_id)
+            self._credentials, _ = self.get_adc_credential(self.project_id)
         return self._credentials
 
     @property
@@ -71,9 +71,11 @@ class GCPAuthentication:
         except google.auth.exceptions.DefaultCredentialsError as e:
             logger.error(f"Failed to load GCP credentials for project {project_id}: {e}")
             inferred_cred, inferred_project = (None, None)
-        logger.debug(f"For project {project_id}, got ADC project {inferred_project}")
         if project_id is not None and project_id != inferred_project:
-            raise ValueError(f"Project ID {project_id} does not match inferred project {inferred_project}")
+            logger.warning(
+                f"Google project ID error: Project ID from config {project_id} does not match inferred project from google.auth ADC {inferred_project}. Defaulting to config project."
+            )
+            inferred_project = project_id
         return inferred_cred, inferred_project
 
     def enabled(self):
