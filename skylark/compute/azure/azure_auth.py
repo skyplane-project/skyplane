@@ -48,7 +48,7 @@ class AzureAuthentication:
     @property
     def credential(self) -> DefaultAzureCredential:
         if self._credential is None:
-            self._credential = self.get_credential()
+            self._credential = self.get_azure_credential()
         return self._credential
 
     @property
