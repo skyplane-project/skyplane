@@ -96,7 +96,7 @@ class AzureAuthentication:
 
 
     @staticmethod
-    def get_region_config() -> list[str]:
+    def get_region_config() -> List[str]:
         try:
             f = open(azure_config_path, "r")
         except FileNotFoundError:
