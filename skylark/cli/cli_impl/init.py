@@ -13,25 +13,29 @@ from skylark.compute.gcp.gcp_auth import GCPAuthentication
 def load_aws_config(config: SkylarkConfig) -> SkylarkConfig:
     # get AWS credentials from boto3
     session = boto3.Session()
-    credentials = session.get_credentials()
-    if credentials is not None:
-        credentials = credentials.get_frozen_credentials()
-        auth = AWSAuthentication(config=config)
-    else:
-        auth = None
-    if credentials is None or credentials.access_key is None or credentials.secret_key is None:
+    credentials_session = session.get_credentials()
+    if credentials_session is None:
         config.aws_enabled = False
+    else:
+        credentials_frozen = credentials_session.get_frozen_credentials()
+        if credentials_frozen.access_key is None or credentials_frozen.secret_key is None:
+            config.aws_enabled = False
+        else:
+            config.aws_enabled = True
+
+    auth = AWSAuthentication(config=config)
+    if config.aws_enabled:
+        typer.secho(f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials_frozen.access_key[-6:]}]", fg="blue")
+        config.aws_enabled = True
+        auth.save_region_config(config)
+        return config
+    else:
         typer.secho("    AWS credentials not found in boto3 session, please use the AWS CLI to set them via `aws configure`", fg="red")
         typer.secho("    https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html", fg="red")
         typer.secho("    Disabling AWS support", fg="blue")
         if auth is not None:
             auth.clear_region_config()
         return config
-
-    typer.secho(f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials.access_key[-6:]}]", fg="blue")
-    config.aws_enabled = True
-    auth.save_region_config(config)
-    return config
 
 
 def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkConfig:
@@ -57,6 +61,7 @@ def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> Skylar
         typer.secho("    https://docs.microsoft.com/en-us/azure/developer/python/azure-sdk-authenticate", fg="red")
         typer.secho("    Disabling Azure support", fg="blue")
         config.azure_enabled = False
+        auth.save_region_config(config)
         return config
     typer.secho("    Azure credentials found in Azure CLI", fg="blue")
     inferred_subscription_id = AzureAuthentication.infer_subscription_id()
@@ -67,6 +72,7 @@ def load_azure_config(config: SkylarkConfig, force_init: bool = False) -> Skylar
         config.azure_subscription_id = None
         typer.secho("    Disabling Azure support", fg="blue")
         config.azure_enabled = False
+    auth.save_region_config(config)
     return config
 
 
