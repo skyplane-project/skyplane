@@ -1,7 +1,7 @@
 import os
 import subprocess
 import threading
-from typing import Optional
+from typing import Dict, List, Optional
 
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.authorization import AuthorizationManagementClient
@@ -93,14 +93,14 @@ class AzureAuthentication:
 
         print(f"    Azure SKU availability cached in {azure_sku_path}.")
 
-
-
     @staticmethod
     def get_region_config() -> List[str]:
         try:
             f = open(azure_config_path, "r")
         except FileNotFoundError:
-            print("     No Azure config detected! Consquently, the Azure region list is empty. Run skylark init --reinit-azure to remedy this.")
+            print(
+                "     No Azure config detected! Consquently, the Azure region list is empty. Run skylark init --reinit-azure to remedy this."
+            )
             return []
         region_list = []
         for region in f.read().split("\n"):
@@ -108,13 +108,13 @@ class AzureAuthentication:
         return region_list
 
     @staticmethod
-    def get_sku_mapping() -> dict[str, list[str]]:
+    def get_sku_mapping() -> Dict[str, List[str]]:
         try:
             f = open(azure_sku_path, "r")
         except FileNotFoundError:
             print("     Azure SKU data has not been chaced! Run skylark init to remedy this!")
             return dict()
-        
+
         return json.load(f)
 
     def clear_region_config(self):

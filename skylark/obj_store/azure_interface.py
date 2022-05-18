@@ -20,7 +20,7 @@ class AzureObject(ObjectStoreObject):
 
 
 class AzureInterface(ObjectStoreInterface):
-    def __init__(self, account_name, container_name, region="infer", use_tls=True, max_concurrency=1):
+    def __init__(self, account_name, container_name, region="infer", use_tls=True, max_concurrency=4):
         self.auth = AzureAuthentication()
         self.account_name = account_name
         self.container_name = container_name
@@ -164,16 +164,18 @@ class AzureInterface(ObjectStoreInterface):
     def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = src_object_name if src_object_name[0] != "/" else src_object_name
-        blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=src_object_name)
+        downloader = self.container_client.download_blob(
+            src_object_name, offset=offset_bytes, length=size_bytes, max_concurrency=self.max_concurrency
+        )
         if not os.path.exists(dst_file_path):
             open(dst_file_path, "a").close()
-        with open(dst_file_path, "rb+") as download_file:
-            download_file.write(blob_client.download_blob(max_concurrency=self.max_concurrency).readall())
+        with open(dst_file_path, "rb+") as f:
+            f.seek(offset_bytes)
+            f.write(downloader.readall())
 
     def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
         os.path.getsize(src_file_path)
-        blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=dst_object_name)
         with open(src_file_path, "rb") as data:
-            blob_client.upload_blob(data=data, overwrite=True, max_concurrency=self.max_concurrency)
+            self.container_client.upload_blob(data=data, blob_name=dst_object_name, max_concurrency=self.max_concurrency)
