@@ -15,6 +15,7 @@ from skylark import config_path
 from skylark import azure_config_path
 from skylark import azure_sku_path
 from skylark.utils.utils import do_parallel
+from skylark.utils import logger
 import subprocess
 import json
 
@@ -54,8 +55,10 @@ class AzureAuthentication:
     def get_credential(self, subscription_id: str):
         cached_credential = getattr(self.__cached_credentials, f"credential_{subscription_id}", None)
         if cached_credential is None:
+            exclude_msi = (query_which_cloud() != "azure",)  # exclude MSI if not Azure
+            logger.warning(f"Getting Azure credential for subscription {subscription_id}, exclude_msi={exclude_msi}")
             cached_credential = DefaultAzureCredential(
-                exclude_managed_identity_credential=query_which_cloud() != "azure",  # exclude MSI if not Azure
+                exclude_managed_identity_credential=exclude_msi,
                 exclude_powershell_credential=True,
                 exclude_visual_studio_code_credential=True,
             )

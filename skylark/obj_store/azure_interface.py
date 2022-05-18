@@ -174,8 +174,16 @@ class AzureInterface(ObjectStoreInterface):
             f.write(downloader.readall())
 
     def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
+        if part_number is not None or upload_id is not None:
+            # todo implement multipart upload
+            raise NotImplementedError("Multipart upload is not implemented for Azure")
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
-        os.path.getsize(src_file_path)
         with open(src_file_path, "rb") as data:
-            self.container_client.upload_blob(data=data, blob_name=dst_object_name, max_concurrency=self.max_concurrency)
+            self.container_client.upload_blob(
+                name=dst_object_name,
+                data=data,
+                length=os.path.getsize(src_file_path),
+                max_concurrency=self.max_concurrency,
+                overwrite=True,
+            )
