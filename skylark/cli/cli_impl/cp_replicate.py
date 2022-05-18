@@ -1,13 +1,13 @@
 import json
 import os
 import signal
-from typing import Optional
+from typing import List, Optional
 
 from halo import Halo
 import typer
 
 from skylark import exceptions, MB, GB
-from skylark.obj_store.object_store_interface import ObjectStoreInterface
+from skylark.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skylark.replicate.replication_plan import ReplicationTopology, ReplicationJob
 from skylark.replicate.replicator_client import ReplicatorClient
 from skylark.utils import logger
@@ -24,6 +24,7 @@ def replicate_helper(
     dest_bucket: Optional[str] = None,
     src_key_prefix: str = "",
     dest_key_prefix: str = "",
+    cached_src_objs: Optional[List[ObjectStoreObject]] = None,
     # maximum chunk size to breakup objects into
     max_chunk_size_mb: Optional[int] = None,
     # gateway provisioning options
@@ -77,14 +78,18 @@ def replicate_helper(
     else:
         # make replication job
         logger.fs.debug(f"Creating replication job from {source_bucket} to {dest_bucket}")
-        source_iface = ObjectStoreInterface.create(topo.source_region(), source_bucket)
-        logger.fs.debug(f"Querying objects in {source_bucket}")
-        with Timer(f"Query {source_bucket} prefix {src_key_prefix}"):
-            with Halo(text=f"Querying objects in {source_bucket}", spinner="dots") as spinner:
-                src_objs = []
-                for obj in source_iface.list_objects(src_key_prefix):
-                    src_objs.append(obj)
-                    spinner.text = f"Querying objects in {source_bucket} ({len(src_objs)} objects)"
+        if cached_src_objs:
+            src_objs = cached_src_objs
+        else:
+            source_iface = ObjectStoreInterface.create(topo.source_region(), source_bucket)
+            logger.fs.debug(f"Querying objects in {source_bucket}")
+            with Timer(f"Query {source_bucket} prefix {src_key_prefix}"):
+                with Halo(text=f"Querying objects in {source_bucket}", spinner="dots") as spinner:
+                    src_objs = []
+                    for obj in source_iface.list_objects(src_key_prefix):
+                        src_objs.append(obj)
+                        spinner.text = f"Querying objects in {source_bucket} ({len(src_objs)} objects)"
+
         if not src_objs:
             logger.error("Specified object does not exist.")
             raise exceptions.MissingObjectException()
