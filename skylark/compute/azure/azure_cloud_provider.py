@@ -110,16 +110,6 @@ class AzureCloudProvider(CloudProvider):
         logger.fs.error(f"[azure] Instance {instance_name} not found in region {region} and could not infer a similar instance name.")
         return None
 
-        """
-        if instance_name == "Standard_D32_v5" and "Standard_D32_v5" in sku_mapping[region]:
-            return "Standard_D32_v5"
-        elif instance_name == "Standard_D32_v4" and "Standard_D32_v4" in sku_mapping[region]:
-            return "Standard_D32_v4"
-        else:
-            logger.error(f"Cannot confirm availability of {instance_name} in {region}")
-            return instance_name
-        """
-
     @staticmethod
     def get_transfer_cost(src_key, dst_key, premium_tier=True):
         """Assumes <10TB transfer tier."""
