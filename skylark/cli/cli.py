@@ -38,7 +38,7 @@ from skylark.obj_store.object_store_interface import ObjectStoreInterface
 from skylark.replicate.replication_plan import ReplicationTopology
 from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP
 from skylark.utils import logger
-from skylark.utils.utils import do_parallel
+from skylark.utils.utils import Timer, do_parallel
 
 app = typer.Typer(name="skylark")
 app.command()(cli_internal.replicate_random)
@@ -163,16 +163,22 @@ def cp(
         dst_region = dst_client.region_tag()
 
         # Set up replication topology
+        cached_src_objs = None  # cache queried src_objs for solver
         if solve:
             if src_region == dst_region:
                 typer.secho("Solver is not supported for intra-region transfers, run without the --solve flag", fg="red")
                 raise typer.Exit(1)
-            # todo cache this for the later replicate_helper call
-            objs = list(src_client.list_objects(path_src))
+            with Timer(f"Query {bucket_src} prefix {path_src}"):
+                with Halo(text=f"Querying objects in {bucket_src}", spinner="dots") as spinner:
+                    objs = []
+                    for obj in src_client.list_objects(path_src):
+                        objs.append(obj)
+                        spinner.text = f"Querying objects in {bucket_src} ({len(objs)} objects)"
             if not objs:
                 logger.error("Specified object does not exist.")
                 raise exceptions.MissingObjectException()
             total_gbyte_to_transfer = sum([obj.size for obj in objs]) / GB
+            cached_src_objs = objs
 
             # build problem and solve
             tput = ThroughputSolverILP(solver_throughput_grid)
@@ -210,6 +216,7 @@ def cp(
             dest_bucket=bucket_dst,
             src_key_prefix=path_src,
             dest_key_prefix=path_dst,
+            cached_src_objs=cached_src_objs,
             reuse_gateways=reuse_gateways,
             max_chunk_size_mb=max_chunk_size_mb,
             use_bbr=use_bbr,
