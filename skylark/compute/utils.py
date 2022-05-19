@@ -58,3 +58,12 @@ def make_sysctl_tcp_tuning_command(cc="cubic"):
     else:
         raise ValueError("Unknown congestion control algorithm: {}".format(cc))
     return "sudo sysctl -w {}".format(" ".join(f'"{k}={v}"' for k, v in sysctl_updates.items())).strip()
+
+
+def make_autoshutdown_script():
+    return """#!/bin/bash
+TIMEOUTMINUTES=${1:-35}
+if [ -f /tmp/autoshutdown.pid ]; then
+    (kill -9 $(cat /tmp/autoshutdown.pid) && rm -f /tmp/autoshutdown.pid) || true
+fi
+(sleep $(($TIMEOUTMINUTES*60)) && sudo poweroff |& tee /tmp/autoshutdown.out) > /dev/null 2>&1 < /dev/null & echo $! > /tmp/autoshutdown.pid"""

@@ -5,12 +5,12 @@ from contextlib import closing
 from enum import Enum, auto
 from functools import partial
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 import sshtunnel
 
 from skylark import config_path
-from skylark.compute.utils import make_dozzle_command, make_sysctl_tcp_tuning_command
+from skylark.compute.utils import make_dozzle_command, make_sysctl_tcp_tuning_command, make_autoshutdown_script
 from skylark.utils import logger
 from skylark.utils.net import retry_requests
 from skylark.utils.utils import PathLike, Timer, retry_backoff, wait_for
@@ -68,8 +68,9 @@ class ServerState(Enum):
 class Server:
     """Abstract server class to support basic SSH operations"""
 
-    def __init__(self, region_tag, log_dir=None):
+    def __init__(self, region_tag, log_dir=None, auto_shutdown_timeout_minutes: Optional[int] = None):
         self.region_tag = region_tag  # format provider:region
+        self.auto_shutdown_timeout_minutes = auto_shutdown_timeout_minutes
         self.command_log = []
         self.gateway_log_viewer_url = None
         self.gateway_api_url = None
@@ -160,6 +161,15 @@ class Server:
         self.close_server()
         self.terminate_instance_impl()
 
+    def enable_auto_shutdown(self, timeout_minutes=35):  # default to 35 minutes since SSH login is disabled for the last 5 minutes
+        self.auto_shutdown_timeout_minutes = timeout_minutes
+        self.run_command(f"(echo '{make_autoshutdown_script()}' > /tmp/autoshutdown.sh) && chmod +x /tmp/autoshutdown.sh")
+        self.run_command("echo 1")  # run noop to update auto_shutdown
+
+    def disable_auto_shutdown(self):
+        self.auto_shutdown_timeout_minutes = None
+        self.run_command("(kill -9 $(cat /tmp/autoshutdown.pid) && rm -f /tmp/autoshutdown.pid) || true")
+
     def wait_for_ready(self, timeout=120, interval=0.25) -> bool:
         def is_up():
             try:
@@ -192,9 +202,10 @@ class Server:
         self.flush_command_log()
 
     def run_command(self, command):
-        """time command and run it"""
         client = self.ssh_client
         with Timer() as t:
+            if self.auto_shutdown_timeout_minutes:
+                command = f"(nohup /tmp/autoshutdown.sh {self.auto_shutdown_timeout_minutes} &> /dev/null < /dev/null); {command}"
             _, stdout, stderr = client.exec_command(command)
             stdout, stderr = (stdout.read().decode("utf-8"), stderr.read().decode("utf-8"))
         self.add_command_log(command=command, stdout=stdout, stderr=stderr, runtime=t.elapsed)
