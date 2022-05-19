@@ -108,7 +108,8 @@ class AzureAuthentication:
             return []
         region_list = []
         for region in f.read().split("\n"):
-            region_list.append(region)
+            if not region.endswith("stage") and not region.endswith("euap"):
+                region_list.append(region)
         return region_list
 
     @staticmethod

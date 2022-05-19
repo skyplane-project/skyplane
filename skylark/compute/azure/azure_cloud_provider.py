@@ -1,4 +1,5 @@
 import os
+import time
 import uuid
 import re
 from multiprocessing import BoundedSemaphore
@@ -93,7 +94,6 @@ class AzureCloudProvider(CloudProvider):
 
     @staticmethod
     def lookup_valid_instance(region: str, instance_name: str) -> Optional[str]:
-        sku_mapping = AzureAuthentication.get_sku_mapping()
         sku_mapping = AzureAuthentication.get_sku_mapping()
         if instance_name in sku_mapping[region]:
             return instance_name
@@ -387,5 +387,7 @@ class AzureCloudProvider(CloudProvider):
                 lambda: (len(list(auth_client.role_assignments.list(f"principalId eq '{vm_result.identity.principal_id}'"))) == 2),
                 timeout=60,
             )
+            # wait extra 10s for role to propagate
+            time.sleep(10)
 
         return AzureServer(name)

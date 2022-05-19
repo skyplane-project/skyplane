@@ -20,7 +20,7 @@ class AzureObject(ObjectStoreObject):
 
 
 class AzureInterface(ObjectStoreInterface):
-    def __init__(self, account_name, container_name, region="infer", use_tls=True, max_concurrency=4):
+    def __init__(self, account_name, container_name, region="infer", use_tls=True, max_concurrency=1):
         self.auth = AzureAuthentication()
         self.account_name = account_name
         self.container_name = container_name
