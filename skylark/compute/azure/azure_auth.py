@@ -2,19 +2,18 @@ import os
 import subprocess
 from typing import Dict, List, Optional
 
-from azure.identity import DefaultAzureCredential
+from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
 from azure.mgmt.authorization import AuthorizationManagementClient
 from azure.mgmt.storage import StorageManagementClient
 from azure.storage.blob import BlobServiceClient, ContainerClient
 
-from skylark import config_path
+from skylark import config_path, is_gateway_env
 from skylark.compute.utils import query_which_cloud
 from skylark.config import SkylarkConfig
 from skylark import config_path
 from skylark import azure_config_path
 from skylark import azure_sku_path
 from skylark.utils.utils import do_parallel
-from skylark.utils import logger
 import subprocess
 import json
 
@@ -57,10 +56,10 @@ class AzureAuthentication:
 
     @staticmethod
     def get_azure_credential() -> DefaultAzureCredential:
-        exclude_msi = query_which_cloud() != "azure"  # exclude MSI if not Azure
-        logger.fs.warning(f"Getting Azure credential, exclude_msi={exclude_msi}")
+        if is_gateway_env:
+            return ManagedIdentityCredential()
         return DefaultAzureCredential(
-            exclude_managed_identity_credential=exclude_msi,
+            exclude_managed_identity_credential=(query_which_cloud() != "azure"),
             exclude_powershell_credential=True,
             exclude_visual_studio_code_credential=True,
         )

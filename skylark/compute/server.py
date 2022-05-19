@@ -253,7 +253,7 @@ class Server:
         self.run_command(make_dozzle_command(log_viewer_port))
 
         # copy cloud configuration
-        docker_envs = {}
+        docker_envs = {"SKYLARK_IS_GATEWAY": "1"}
         if config_path.exists():
             self.upload_file(config_path, f"/tmp/{config_path.name}")
             docker_envs["SKYLARK_CONFIG"] = f"/pkg/data/{config_path.name}"
