@@ -89,8 +89,8 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
         return config
 
     # check if GCP is enabled
-    auth = GCPAuthentication(config=config)
-    if not auth.credentials:
+    inferred_cred, inferred_project = GCPAuthentication.get_adc_credential()
+    if inferred_cred is None or inferred_project is None:
         typer.secho(
             "    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.",
             fg="red",
@@ -98,19 +98,20 @@ def load_gcp_config(config: SkylarkConfig, force_init: bool = False) -> SkylarkC
         typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red")
         typer.secho("    Disabling GCP support", fg="blue")
         config.gcp_enabled = False
-        auth.clear_region_config()
+        GCPAuthentication.clear_region_config()
         return config
     else:
         typer.secho("    GCP credentials found in GCP CLI", fg="blue")
         if typer.confirm("    GCP credentials found, do you want to enable GCP support in Skylark?", default=True):
-            config.gcp_project_id = typer.prompt("    Enter the GCP project ID", default=auth.project_id)
+            config.gcp_project_id = typer.prompt("    Enter the GCP project ID", default=inferred_project)
             assert config.gcp_project_id is not None, "GCP project ID must not be None"
             config.gcp_enabled = True
-            auth.save_region_config(project_id=config.gcp_project_id)
+            auth = GCPAuthentication(config=config)
+            auth.save_region_config()
             return config
         else:
             config.gcp_project_id = None
             typer.secho("    Disabling GCP support", fg="blue")
             config.gcp_enabled = False
-            auth.clear_region_config()
+            GCPAuthentication.clear_region_config()
             return config

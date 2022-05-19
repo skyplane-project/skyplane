@@ -1,15 +1,17 @@
 import json
 import os
 import signal
-from typing import Optional
+from typing import List, Optional
 
+from halo import Halo
 import typer
 
 from skylark import exceptions, MB, GB
-from skylark.obj_store.object_store_interface import ObjectStoreInterface
+from skylark.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skylark.replicate.replication_plan import ReplicationTopology, ReplicationJob
 from skylark.replicate.replicator_client import ReplicatorClient
 from skylark.utils import logger
+from skylark.utils.utils import Timer
 
 
 def replicate_helper(
@@ -22,6 +24,7 @@ def replicate_helper(
     dest_bucket: Optional[str] = None,
     src_key_prefix: str = "",
     dest_key_prefix: str = "",
+    cached_src_objs: Optional[List[ObjectStoreObject]] = None,
     # maximum chunk size to breakup objects into
     max_chunk_size_mb: Optional[int] = None,
     # gateway provisioning options
@@ -45,6 +48,19 @@ def replicate_helper(
             fg="red",
             bold=True,
         )
+
+    # make replicator client
+    rc = ReplicatorClient(
+        topo,
+        gateway_docker_image=gateway_docker_image,
+        aws_instance_class=aws_instance_class,
+        azure_instance_class=azure_instance_class,
+        gcp_instance_class=gcp_instance_class,
+        gcp_use_premium_network=gcp_use_premium_network,
+    )
+    typer.secho(f"Storing debug information for transfer in {rc.transfer_dir / 'client.log'}", fg="yellow")
+    (rc.transfer_dir / "topology.json").write_text(topo.to_json())
+
     if random:
         random_chunk_size_mb = size_total_mb // n_chunks
         if max_chunk_size_mb:
@@ -61,16 +77,26 @@ def replicate_helper(
         )
     else:
         # make replication job
-        src_objs = list(ObjectStoreInterface.create(topo.source_region(), source_bucket).list_objects(src_key_prefix))
+        logger.fs.debug(f"Creating replication job from {source_bucket} to {dest_bucket}")
+        if cached_src_objs:
+            src_objs = cached_src_objs
+        else:
+            source_iface = ObjectStoreInterface.create(topo.source_region(), source_bucket)
+            logger.fs.debug(f"Querying objects in {source_bucket}")
+            with Timer(f"Query {source_bucket} prefix {src_key_prefix}"):
+                with Halo(text=f"Querying objects in {source_bucket}", spinner="dots") as spinner:
+                    src_objs = []
+                    for obj in source_iface.list_objects(src_key_prefix):
+                        src_objs.append(obj)
+                        spinner.text = f"Querying objects in {source_bucket} ({len(src_objs)} objects)"
+
         if not src_objs:
             logger.error("Specified object does not exist.")
             raise exceptions.MissingObjectException()
 
-        if dest_key_prefix.endswith("/"):
-            dest_is_directory = True
-
         # map objects to destination object paths
         # todo isolate this logic and test independently
+        logger.fs.debug(f"Mapping objects to destination paths")
         src_objs_job = []
         dest_objs_job = []
         # if only one object exists, replicate it
@@ -104,17 +130,6 @@ def replicate_helper(
             obj_sizes={obj.key: obj.size for obj in src_objs},
             max_chunk_size_mb=max_chunk_size_mb,
         )
-
-    rc = ReplicatorClient(
-        topo,
-        gateway_docker_image=gateway_docker_image,
-        aws_instance_class=aws_instance_class,
-        azure_instance_class=azure_instance_class,
-        gcp_instance_class=gcp_instance_class,
-        gcp_use_premium_network=gcp_use_premium_network,
-    )
-    typer.secho(f"Storing debug information for transfer in {rc.transfer_dir / 'client.log'}", fg="yellow")
-    (rc.transfer_dir / "topology.json").write_text(topo.to_json())
 
     stats = {}
     try:
