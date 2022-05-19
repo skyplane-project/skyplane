@@ -159,6 +159,7 @@ class ReplicatorClient:
                 server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
             else:
                 raise NotImplementedError(f"Unknown provider {provider}")
+            server.enable_auto_shutdown()
             self.temp_nodes.append(server)
             return server
 
@@ -459,6 +460,9 @@ class ReplicatorClient:
         try:
             with Timer() as t:
                 while True:
+                    # refresh shutdown status by running noop
+                    do_parallel(lambda i: i.run_command("echo 1"), self.bound_nodes.values(), n=-1)
+
                     # check for errors and exit if there are any
                     errors = self.check_error_logs()
                     if any(errors.values()):

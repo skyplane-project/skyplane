@@ -255,6 +255,8 @@ class GCPCloudProvider(CloudProvider):
             ],
             "serviceAccounts": [{"email": "default", "scopes": ["https://www.googleapis.com/auth/cloud-platform"]}],
             "metadata": {"items": [{"key": "ssh-keys", "value": f"{uname}:{pub_key}\n"}]},
+            "scheduling": {"onHostMaintenance": "TERMINATE", "automaticRestart": False},
+            "deletionProtection": False,
         }
         result = compute.instances().insert(project=self.auth.project_id, zone=region, body=req_body).execute()
         self.wait_for_operation_to_complete(region, result["name"])
