@@ -1,9 +1,9 @@
 from pathlib import Path
 
+import typer
+
 from skylark import skylark_root
 from skylark.replicate.solver import ThroughputSolver
-
-import typer
 
 
 def util_grid_throughput(

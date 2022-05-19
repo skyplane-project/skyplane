@@ -3,9 +3,9 @@ from typing import Optional
 
 import boto3
 
-from skylark.config import SkylarkConfig
-from skylark import config_path
 from skylark import aws_config_path
+from skylark import config_path
+from skylark.config import SkylarkConfig
 
 
 class AWSAuthentication:

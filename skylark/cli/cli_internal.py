@@ -2,11 +2,11 @@ import os
 import tempfile
 from pathlib import Path
 from typing import Optional
-from skylark.cli.cli_solver import solve_throughput
 
 import typer
+
 from skylark import print_header, skylark_root
-from skylark.cli.cli_helper import replicate_helper
+from skylark.cli.cli_impl.cp_replicate import replicate_helper
 from skylark.replicate.replication_plan import ReplicationTopology
 from skylark.utils import logger
 
@@ -99,6 +99,8 @@ def replicate_random_solve(
     print_header()
 
     if solve:
+        from skylark.cli.cli_solver import solve_throughput  # lazy import due to pip dependencies
+
         with tempfile.NamedTemporaryFile(mode="w") as f:
             solve_throughput(
                 src_region,

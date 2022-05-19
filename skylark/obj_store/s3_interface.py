@@ -1,6 +1,8 @@
-from typing import Iterator, List
 import os
+from typing import Iterator, List
+
 import botocore.exceptions
+
 from skylark import exceptions
 from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject

@@ -1,7 +1,6 @@
 from functools import partial
 from typing import Dict, Iterable, List, Optional, Tuple
 
-from skylark.utils import logger
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
@@ -10,6 +9,7 @@ from skylark.compute.cloud_providers import CloudProvider
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.gcp.gcp_server import GCPServer
 from skylark.compute.server import Server, ServerState
+from skylark.utils import logger
 from skylark.utils.utils import Timer, do_parallel
 
 

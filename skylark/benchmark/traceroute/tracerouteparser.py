@@ -36,8 +36,8 @@ Courtesy of the Netalyzr project: http://netalyzr.icsi.berkeley.edu
 # IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from io import StringIO
 import re
+from io import StringIO
 
 
 class Probe(object):

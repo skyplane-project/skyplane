@@ -1,19 +1,20 @@
 import argparse
 import pickle
 import tempfile
-import uuid
 import time
+import uuid
 from datetime import datetime
 
 import boto3
 import cvxpy as cp
 import numpy as np
 import ray
+from tqdm import tqdm
+
 from skylark import GB, skylark_root
 from skylark.replicate.solver import ThroughputProblem, ThroughputSolution, ThroughputSolverILP
 from skylark.utils import logger
 from skylark.utils.utils import Timer
-from tqdm import tqdm
 
 
 def get_futures(futures, desc="Jobs", batch_size=64, timeout_s=None):

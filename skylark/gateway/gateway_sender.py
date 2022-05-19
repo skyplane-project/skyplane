@@ -1,16 +1,17 @@
-from functools import partial
 import queue
 import socket
 import ssl
-from multiprocessing import Event, Process, Queue
 import traceback
+from functools import partial
+from multiprocessing import Event, Process, Queue
 from typing import Dict, List, Optional
 
 import requests
-from skylark.utils import logger
-from skylark import KB, MB
+
+from skylark import MB
 from skylark.chunk import ChunkRequest
 from skylark.gateway.chunk_store import ChunkStore
+from skylark.utils import logger
 from skylark.utils.net import retry_requests
 from skylark.utils.utils import Timer, retry_backoff, wait_for
 

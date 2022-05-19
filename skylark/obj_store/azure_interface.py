@@ -1,14 +1,16 @@
 import os
 import subprocess
-from typing import Iterator, List
 import uuid
+from typing import Iterator, List
+
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
+from azure.identity import AzureCliCredential
+from azure.mgmt.authorization.models import RoleAssignmentCreateParameters, RoleAssignmentProperties
+
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.azure.azure_server import AzureServer
-from skylark.utils import logger
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
-from azure.mgmt.authorization.models import RoleAssignmentCreateParameters, RoleAssignmentProperties
-from azure.identity import AzureCliCredential
+from skylark.utils import logger
 
 
 class AzureObject(ObjectStoreObject):

@@ -1,20 +1,21 @@
 import os
 import uuid
+import re
 from multiprocessing import BoundedSemaphore
 from pathlib import Path
 from typing import List, Optional
 
 import paramiko
+from azure.mgmt.authorization.models import RoleAssignmentCreateParameters
+from azure.mgmt.authorization.models import RoleAssignmentProperties
+from azure.mgmt.compute.models import ResourceIdentityType
+
 from skylark import key_root
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.azure.azure_server import AzureServer
 from skylark.compute.cloud_providers import CloudProvider
-from azure.mgmt.authorization.models import RoleAssignmentCreateParameters, RoleAssignmentProperties
 from skylark.utils import logger
 from skylark.utils.utils import Timer, do_parallel, wait_for
-
-from azure.mgmt.authorization.models import RoleAssignmentCreateParameters
-from azure.mgmt.compute.models import ResourceIdentityType
 
 
 class AzureCloudProvider(CloudProvider):
@@ -34,55 +35,7 @@ class AzureCloudProvider(CloudProvider):
 
     @staticmethod
     def region_list():
-        return [
-            "australiaeast",
-            "brazilsouth",
-            "canadacentral",
-            "centralindia",
-            "eastasia",
-            "eastus",
-            "eastus2",
-            "francecentral",
-            "germanywestcentral",
-            "japaneast",
-            "koreacentral",
-            "northcentralus",
-            "northeurope",
-            "norwayeast",
-            "southafricanorth",
-            "swedencentral",
-            "switzerlandnorth",
-            "uaenorth",
-            "uksouth",
-            "westeurope",
-            "westus",
-            "westus2",
-            "westus3",
-            # D32_v4 or D32_v5 not available:
-            #   "australiacentral",
-            #   "australiasoutheast",
-            #   "canadaeast",
-            #   "centralus",
-            #   "japanwest",
-            #   "southcentralus",
-            #   "southeastasia",
-            #   "southindia",
-            #   "ukwest",
-            #   "westcentralus",
-            #   "westindia",
-            # not available due to restrictions:
-            #   "australiacentral2",
-            #   "brazilsoutheast",
-            #   "francesouth",
-            #   "germanynorth",
-            #   "jioindiacentral",
-            #   "jioindiawest",
-            #   "koreasouth",
-            #   "norwaywest",
-            #   "southafricawest",
-            #   "switzerlandwest",
-            #   "uaecentral",
-        ]
+        return AzureAuthentication.get_region_config()
 
     @staticmethod
     def lookup_continent(region: str) -> str:
@@ -140,56 +93,22 @@ class AzureCloudProvider(CloudProvider):
 
     @staticmethod
     def lookup_valid_instance(region: str, instance_name: str) -> Optional[str]:
-        # todo this should query the Azure API for available SKUs
-        available_regions = {
-            "Standard_D32_v5": [
-                "australiaeast",
-                "canadacentral",
-                "eastus",
-                "eastus2",
-                "francecentral",
-                "germanywestcentral",
-                "japaneast",
-                "koreacentral",
-                "northcentralus",
-                "northeurope",
-                "uksouth",
-                "westeurope",
-                "westus",
-                "westus2",
-                "westus3",
-            ],
-            "Standard_D32_v4": [
-                "australiaeast",
-                "brazilsouth",
-                "canadacentral",
-                "centralindia",
-                "eastasia",
-                "eastus",
-                "francecentral",
-                "germanywestcentral",
-                "japaneast",
-                "koreacentral",
-                "northcentralus",
-                "northeurope",
-                "norwayeast",
-                "southafricanorth",
-                "swedencentral",
-                "switzerlandnorth",
-                "uaenorth",
-                "uksouth",
-                "westeurope",
-                "westus",
-                "westus3",
-            ],
-        }
-        if region in available_regions["Standard_D32_v5"] and instance_name == "Standard_D32_v5":
-            return "Standard_D32_v5"
-        elif region in available_regions["Standard_D32_v4"] and instance_name == "Standard_D32_v5":
-            return "Standard_D32_v4"
-        else:
-            logger.error(f"Cannot confirm availability of {instance_name} in {region}")
+        sku_mapping = AzureAuthentication.get_sku_mapping()
+        sku_mapping = AzureAuthentication.get_sku_mapping()
+        if instance_name in sku_mapping[region]:
             return instance_name
+        match = re.match(r"^(?P<base_name>.*)_v(?P<version>\d+)$", instance_name)
+        if match:
+            base_name = match.group("base_name")
+            for version in range(int(match.group("version")), 0, -1):
+                test_instance_name = f"{base_name}_v{version}" if version > 1 else base_name
+                if test_instance_name in sku_mapping[region]:
+                    logger.fs.warning(
+                        f"[azure] Instance {instance_name} not found in region {region} but was able to find a similar instance {test_instance_name}"
+                    )
+                    return test_instance_name
+        logger.fs.error(f"[azure] Instance {instance_name} not found in region {region} and could not infer a similar instance name.")
+        return None
 
     @staticmethod
     def get_transfer_cost(src_key, dst_key, premium_tier=True):

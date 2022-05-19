@@ -1,20 +1,20 @@
-from operator import not_
 import os
 import time
 import uuid
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import googleapiclient
 import paramiko
-from skylark.compute.gcp.gcp_auth import GCPAuthentication
-from skylark.utils import logger
 from ilock import ILock
+
 from skylark import key_root
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skylark.compute.cloud_providers import CloudProvider
+from skylark.compute.gcp.gcp_auth import GCPAuthentication
 from skylark.compute.gcp.gcp_server import GCPServer
 from skylark.compute.server import Server
+from skylark.utils import logger
 
 
 class GCPCloudProvider(CloudProvider):

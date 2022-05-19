@@ -1,11 +1,11 @@
 import hashlib
 import os
 import tempfile
-from skylark import MB
 
+from skylark import MB
 from skylark.obj_store.s3_interface import S3Interface
-from skylark.utils.utils import Timer
 from skylark.utils import logger
+from skylark.utils.utils import Timer
 
 
 def test_s3_interface(region="us-east-1", bucket="sky-us-east-1"):

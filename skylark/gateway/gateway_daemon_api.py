@@ -1,19 +1,19 @@
 import logging
 import logging.handlers
-from multiprocessing import Queue
 import os
-from queue import Empty
 import threading
+from multiprocessing import Queue
+from queue import Empty
 from traceback import TracebackException
 from typing import Dict, List
 
 from flask import Flask, jsonify, request
-from skylark.gateway.gateway_sender import GatewaySender
-from skylark.utils import logger
+from werkzeug.serving import make_server
+
 from skylark.chunk import ChunkRequest, ChunkState
 from skylark.gateway.chunk_store import ChunkStore
 from skylark.gateway.gateway_receiver import GatewayReceiver
-from werkzeug.serving import make_server
+from skylark.utils import logger
 
 
 class GatewayDaemonAPI(threading.Thread):

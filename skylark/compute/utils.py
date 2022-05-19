@@ -1,6 +1,7 @@
-from functools import lru_cache
 import shlex
 import subprocess
+from functools import lru_cache
+
 from skylark.utils import logger
 
 

@@ -3,8 +3,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, Iterable, List, Tuple, Union, TypeVar
 
-from skylark.utils import logger
 from tqdm import tqdm
+
+from skylark.utils import logger
 
 PathLike = Union[str, Path]
 T = TypeVar("T")

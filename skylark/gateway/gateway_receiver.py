@@ -3,16 +3,16 @@ import signal
 import socket
 import ssl
 import time
+import traceback
 from contextlib import closing
 from multiprocessing import Event, Process, Value, Queue
-import traceback
 from typing import Optional, Tuple
 
-from skylark.utils import logger
 from skylark import GB, MB
 from skylark.chunk import WireProtocolHeader
-from skylark.gateway.chunk_store import ChunkStore
 from skylark.gateway.cert import generate_self_signed_certificate
+from skylark.gateway.chunk_store import ChunkStore
+from skylark.utils import logger
 from skylark.utils.utils import Timer
 
 
@@ -51,7 +51,6 @@ class GatewayReceiver:
         self.worker_id: Optional[int] = None
 
     def start_server(self):
-        # todo a good place to add backpressure?
         started_event = Event()
         port = Value("i", 0)
 

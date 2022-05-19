@@ -1,8 +1,7 @@
-import mimetypes
 import os
 from typing import Iterator, List
-from skylark.compute.gcp.gcp_auth import GCPAuthentication
 
+from skylark.compute.gcp.gcp_auth import GCPAuthentication
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
 
@@ -13,7 +12,6 @@ class GCSObject(ObjectStoreObject):
 
 class GCSInterface(ObjectStoreInterface):
     def __init__(self, gcp_region, bucket_name, use_tls=True):
-        # TODO - figure out how paralllelism handled
         self.bucket_name = bucket_name
         self.auth = GCPAuthentication()
         self._gcs_client = self.auth.get_storage_client()

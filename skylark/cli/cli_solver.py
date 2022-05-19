@@ -5,13 +5,14 @@ Optimal solver using ILP formulation.
 import json
 from pathlib import Path
 
-import typer
 import numpy as np
-from skylark.utils import logger
-from skylark.replicate.solver import GBIT_PER_GBYTE, ThroughputProblem, ThroughputSolverILP, ThroughputSolution
-from skylark import skylark_root
-from skylark.utils.utils import Timer
+import typer
+
 from skylark import GB
+from skylark import skylark_root
+from skylark.replicate.solver import GBIT_PER_GBYTE, ThroughputProblem, ThroughputSolverILP, ThroughputSolution
+from skylark.utils import logger
+from skylark.utils.utils import Timer
 
 app = typer.Typer(name="skylark-solver")
 

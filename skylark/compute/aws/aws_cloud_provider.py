@@ -1,20 +1,21 @@
 import functools
 import json
-import uuid
 import os
 import time
-from typing import List, Optional
+import uuid
 from pathlib import Path
+from typing import List, Optional
 
 import botocore
-from skylark.compute.aws.aws_auth import AWSAuthentication
-from skylark.utils import logger
-from skylark import key_root
-from skylark import exceptions
 from ilock import ILock
+
+from skylark import exceptions
+from skylark import key_root
 from skylark import skylark_root
+from skylark.compute.aws.aws_auth import AWSAuthentication
 from skylark.compute.aws.aws_server import AWSServer
 from skylark.compute.cloud_providers import CloudProvider
+from skylark.utils import logger
 from skylark.utils.utils import do_parallel, wait_for
 
 try:
@@ -35,9 +36,7 @@ class AWSCloudProvider(CloudProvider):
 
     @staticmethod
     def region_list() -> List[str]:
-        # todo query AWS for list of active regions
-        region_list = AWSAuthentication.get_region_config()
-        return region_list
+        return AWSAuthentication.get_region_config()
 
     @staticmethod
     @functools.lru_cache(maxsize=None)
