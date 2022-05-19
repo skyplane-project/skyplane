@@ -1,13 +1,18 @@
 from pathlib import Path
+import uuid
 
+from azure.mgmt.authorization.models import RoleAssignmentCreateParameters
+from azure.mgmt.authorization.models import RoleAssignmentProperties
 import azure.core.exceptions
 import paramiko
 
 from skylark import key_root
 from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.server import Server, ServerState
+from skylark.exceptions import MissingBucketException
 from skylark.utils.cache import ignore_lru_cache
-from skylark.utils.utils import PathLike
+from skylark.utils.utils import PathLike, wait_for
+from skylark.utils import logger
 
 
 class AzureServer(Server):
@@ -162,6 +167,49 @@ class AzureServer(Server):
         _ = nsg_poller.result()
         vnet_poller = network_client.virtual_networks.begin_delete(AzureServer.resource_group_name, self.vnet_name(self.name))
         _ = vnet_poller.result()
+
+    def authorize_storage_account(self, storage_account_name: str):
+        # Assign roles to system MSI, see https://docs.microsoft.com/en-us/samples/azure-samples/compute-python-msi-vm/compute-python-msi-vm/#role-assignment
+        auth_client = self.auth.get_authorization_client()
+
+        def grant_vm_role(principal_id, scope, role_name):
+            try:
+                roles = list(auth_client.role_definitions.list(scope, filter="roleName eq '{}'".format(role_name)))
+                assert len(roles) == 1, f"Got roles {roles}"
+                params = RoleAssignmentCreateParameters(
+                    properties=RoleAssignmentProperties(role_definition_id=roles[0].id, principal_id=principal_id)
+                )
+                auth_client.role_assignments.create(scope, uuid.uuid4(), params)
+                return roles[0]
+            except azure.core.exceptions.ResourceExistsError:
+                logger.fs.warning(f"Role {role_name} already exists")
+                return None
+
+        # get scope for storage account
+        def get_scope_for_storage_account(storage_account_name):
+            for sa in self.auth.get_storage_management_client().storage_accounts.list():
+                if sa.name == storage_account_name:
+                    return sa.id
+            raise MissingBucketException("Storage account not found")
+
+        # grant "Storage Blob Data Contributor" role to the VM (self.get_virtual_machine().identity.principal_id)
+        scope = get_scope_for_storage_account(storage_account_name)
+        principal_id = self.get_virtual_machine().identity.principal_id
+        r1 = grant_vm_role(principal_id, scope, "Storage Blob Data Contributor")
+        r2 = grant_vm_role(principal_id, scope, "Storage Blob Data Reader")
+        r3 = grant_vm_role(principal_id, scope, "Storage Blob Delegator")
+        logger.fs.debug(f"grant_vm_role({principal_id}, {scope}, 'Storage Blob Data Contributor')")
+
+        # wait till the storage account is accessible by checking for roles
+        def check_role(role):
+            if role is None:
+                return True
+            for assignment in auth_client.role_assignments.list_for_scope(scope, filter="principalId eq '{}'".format(principal_id)):
+                if assignment.role_definition_id == role.id:
+                    return True
+            return False
+
+        wait_for(lambda: check_role(r1) and check_role(r2) and check_role(r3), timeout=60, desc="authorize_storage_account")
 
     def get_ssh_client_impl(self, uname="skylark", ssh_key_password="skylark"):
         """Return paramiko client that connects to this instance."""

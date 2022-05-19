@@ -14,6 +14,7 @@ from skylark.benchmark.utils import refresh_instance_list
 from skylark.chunk import Chunk, ChunkRequest, ChunkState
 from skylark.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skylark.compute.azure.azure_cloud_provider import AzureCloudProvider
+from skylark.compute.azure.azure_server import AzureServer
 from skylark.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skylark.compute.server import Server, ServerState
 from skylark.obj_store.object_store_interface import ObjectStoreInterface
@@ -261,6 +262,18 @@ class ReplicatorClient:
             "azure",
             "gcp",
         ], f"Only AWS, Azure, and GCP are supported, but got {job.dest_region}"
+
+        # assign source and destination gateways permission to buckets
+        assign_jobs = []
+        if job.source_region.split(":")[0] == "azure":
+            for location, gateway in self.bound_nodes.items():
+                if isinstance(gateway, AzureServer) and location.region == job.source_region:
+                    assign_jobs.append(partial(gateway.authorize_storage_account, job.source_bucket.split("/", 1)[0]))
+        if job.dest_region.split(":")[0] == "azure":
+            for location, gateway in self.bound_nodes.items():
+                if isinstance(gateway, AzureServer) and location.region == job.dest_region:
+                    assign_jobs.append(partial(gateway.authorize_storage_account, job.dest_bucket.split("/", 1)[0]))
+        do_parallel(lambda fn: fn(), assign_jobs, spinner=True, spinner_persist=True, desc="Assigning gateways permissions to buckets")
 
         with Halo(text="Preparing replication plan", spinner="dots") as spinner:
             # pre-fetch instance IPs for all gateways

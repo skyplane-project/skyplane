@@ -1,9 +1,10 @@
 import os
 import subprocess
+import time
 import uuid
 from typing import Iterator, List
 
-from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
+from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError, HttpResponseError
 from azure.identity import AzureCliCredential
 from azure.mgmt.authorization.models import RoleAssignmentCreateParameters, RoleAssignmentProperties
 
@@ -11,6 +12,7 @@ from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.azure.azure_server import AzureServer
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 from skylark.utils import logger
+from skylark import is_gateway_env
 
 
 class AzureObject(ObjectStoreObject):
@@ -164,9 +166,22 @@ class AzureInterface(ObjectStoreInterface):
     def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = src_object_name if src_object_name[0] != "/" else src_object_name
-        downloader = self.container_client.download_blob(
-            src_object_name, offset=offset_bytes, length=size_bytes, max_concurrency=self.max_concurrency
-        )
+        try:
+            downloader = self.container_client.download_blob(
+                src_object_name, offset=offset_bytes, length=size_bytes, max_concurrency=self.max_concurrency
+            )
+        except HttpResponseError as e:
+            # catch permissions errors if in a gateway environment and auto-retry after 5 seconds as it takes time for Azure to propogate role assignments
+            if "This request is not authorized to perform this operation using this permission." in str(e) and is_gateway_env:
+                logger.fs.error(
+                    f"Unable to download object {src_object_name} as you do not have permission to access it, waiting 5 seconds and retrying"
+                )
+                logger.fs.exception(e)
+                time.sleep(10)
+                downloader = self.container_client.download_blob(
+                    src_object_name, offset=offset_bytes, length=size_bytes, max_concurrency=self.max_concurrency
+                )
+
         if not os.path.exists(dst_file_path):
             open(dst_file_path, "a").close()
         with open(dst_file_path, "rb+") as f:
@@ -180,10 +195,26 @@ class AzureInterface(ObjectStoreInterface):
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
         with open(src_file_path, "rb") as data:
-            self.container_client.upload_blob(
-                name=dst_object_name,
-                data=data,
-                length=os.path.getsize(src_file_path),
-                max_concurrency=self.max_concurrency,
-                overwrite=True,
-            )
+            try:
+                self.container_client.upload_blob(
+                    name=dst_object_name,
+                    data=data,
+                    length=os.path.getsize(src_file_path),
+                    max_concurrency=self.max_concurrency,
+                    overwrite=True,
+                )
+            except HttpResponseError as e:
+                # catch permissions errors if in a gateway environment and auto-retry after 5 seconds as it takes time for Azure to propogate role assignments
+                if "This request is not authorized to perform this operation using this permission." in str(e) and is_gateway_env:
+                    logger.fs.error(
+                        f"Unable to upload object {dst_object_name} as you do not have permission to access it, waiting 5 seconds and retrying"
+                    )
+                    logger.fs.exception(e)
+                    time.sleep(10)
+                    self.container_client.upload_blob(
+                        name=dst_object_name,
+                        data=data,
+                        length=os.path.getsize(src_file_path),
+                        max_concurrency=self.max_concurrency,
+                        overwrite=True,
+                    )
