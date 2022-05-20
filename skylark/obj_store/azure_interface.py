@@ -1,3 +1,4 @@
+from functools import partial
 import os
 import subprocess
 import time
@@ -13,6 +14,7 @@ from skylark.compute.azure.azure_server import AzureServer
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 from skylark.utils import logger
 from skylark import is_gateway_env
+from skylark.utils.utils import wait_for
 
 
 class AzureObject(ObjectStoreObject):
@@ -163,25 +165,36 @@ class AzureInterface(ObjectStoreInterface):
         except ResourceNotFoundError:
             return False
 
-    def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
-        src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
-        src_object_name = src_object_name if src_object_name[0] != "/" else src_object_name
+    @staticmethod
+    def _run_azure_op_with_retry(fn):
         try:
-            downloader = self.container_client.download_blob(
-                src_object_name, offset=offset_bytes, length=size_bytes, max_concurrency=self.max_concurrency
-            )
+            return fn()
         except HttpResponseError as e:
             # catch permissions errors if in a gateway environment and auto-retry after 5 seconds as it takes time for Azure to propogate role assignments
             if "This request is not authorized to perform this operation using this permission." in str(e) and is_gateway_env:
-                logger.fs.error(
-                    f"Unable to download object {src_object_name} as you do not have permission to access it, waiting 5 seconds and retrying"
-                )
-                logger.fs.exception(e)
-                time.sleep(10)
-                downloader = self.container_client.download_blob(
-                    src_object_name, offset=offset_bytes, length=size_bytes, max_concurrency=self.max_concurrency
-                )
+                logger.fs.error("Unable to download object as you do not have permission to access it, waiting 5 seconds and retrying")
+                # permission hasn't propagated yet, retry up to 180s
+                for i in range(1, 180):
+                    time.sleep(1)
+                    try:
+                        return fn()
+                    except HttpResponseError as e:
+                        if "This request is not authorized to perform this operation using this permission." in str(e) and is_gateway_env:
+                            logger.fs.error(f"Azure waiting for roles to propogate, retry {i} failed, retrying again...")
+                            continue
+            raise
 
+    def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
+        src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
+        downloader = self._run_azure_op_with_retry(
+            partial(
+                self.container_client.download_blob,
+                src_object_name,
+                offset=offset_bytes,
+                length=size_bytes,
+                max_concurrency=self.max_concurrency,
+            )
+        )
         if not os.path.exists(dst_file_path):
             open(dst_file_path, "a").close()
         with open(dst_file_path, "rb+") as f:
@@ -193,28 +206,14 @@ class AzureInterface(ObjectStoreInterface):
             # todo implement multipart upload
             raise NotImplementedError("Multipart upload is not implemented for Azure")
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
-        dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
-        with open(src_file_path, "rb") as data:
-            try:
-                self.container_client.upload_blob(
+        with open(src_file_path, "rb") as f:
+            result = self._run_azure_op_with_retry(
+                partial(
+                    self.container_client.upload_blob,
                     name=dst_object_name,
-                    data=data,
+                    data=f,
                     length=os.path.getsize(src_file_path),
                     max_concurrency=self.max_concurrency,
                     overwrite=True,
                 )
-            except HttpResponseError as e:
-                # catch permissions errors if in a gateway environment and auto-retry after 5 seconds as it takes time for Azure to propogate role assignments
-                if "This request is not authorized to perform this operation using this permission." in str(e) and is_gateway_env:
-                    logger.fs.error(
-                        f"Unable to upload object {dst_object_name} as you do not have permission to access it, waiting 5 seconds and retrying"
-                    )
-                    logger.fs.exception(e)
-                    time.sleep(10)
-                    self.container_client.upload_blob(
-                        name=dst_object_name,
-                        data=data,
-                        length=os.path.getsize(src_file_path),
-                        max_concurrency=self.max_concurrency,
-                        overwrite=True,
-                    )
+            )
