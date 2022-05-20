@@ -166,25 +166,26 @@ class AzureInterface(ObjectStoreInterface):
             return False
 
     @staticmethod
-    def _run_azure_op_with_retry(fn, interval=0.5, timeout=180):
+    def _run_azure_op_with_retry(fn, interval=0.1, timeout=180):
         try:
             return fn()
         except HttpResponseError as e:
             # catch permissions errors if in a gateway environment and auto-retry after 5 seconds as it takes time for Azure to propogate role assignments
             if "This request is not authorized to perform this operation using this permission." in str(e) and is_gateway_env:
-                logger.fs.error("Unable to download object as you do not have permission to access it, waiting 5 seconds and retrying")
+                logger.fs.warning("Unable to download object as you do not have permission to access it")
                 # permission hasn't propagated yet, retry up to 180s
                 with Timer("Wait for role assignment to propagate") as timer:
-                    for i in range(interval, timeout, interval):
+                    while timer.elapsed < timeout:
                         time.sleep(interval)
                         try:
+                            logger.fs.error(f"Retrying object operation after {timer.elapsed:.2}s")
                             return fn()
                         except HttpResponseError as e:
                             if (
                                 "This request is not authorized to perform this operation using this permission." in str(e)
                                 and is_gateway_env
                             ):
-                                logger.fs.error(f"Azure waiting for roles to propogate, retry {i} failed, retrying again...")
+                                logger.fs.error(f"Azure waiting for roles to propogate, retry failed after {timer.elapsed:.2}s")
                                 continue
             raise
 
