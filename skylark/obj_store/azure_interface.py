@@ -14,7 +14,7 @@ from skylark.compute.azure.azure_server import AzureServer
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 from skylark.utils import logger
 from skylark import is_gateway_env
-from skylark.utils.utils import wait_for
+from skylark.utils.utils import Timer, wait_for
 
 
 class AzureObject(ObjectStoreObject):
@@ -166,7 +166,7 @@ class AzureInterface(ObjectStoreInterface):
             return False
 
     @staticmethod
-    def _run_azure_op_with_retry(fn):
+    def _run_azure_op_with_retry(fn, interval=0.5, timeout=180):
         try:
             return fn()
         except HttpResponseError as e:
@@ -174,14 +174,18 @@ class AzureInterface(ObjectStoreInterface):
             if "This request is not authorized to perform this operation using this permission." in str(e) and is_gateway_env:
                 logger.fs.error("Unable to download object as you do not have permission to access it, waiting 5 seconds and retrying")
                 # permission hasn't propagated yet, retry up to 180s
-                for i in range(1, 180):
-                    time.sleep(1)
-                    try:
-                        return fn()
-                    except HttpResponseError as e:
-                        if "This request is not authorized to perform this operation using this permission." in str(e) and is_gateway_env:
-                            logger.fs.error(f"Azure waiting for roles to propogate, retry {i} failed, retrying again...")
-                            continue
+                with Timer("Wait for role assignment to propagate") as timer:
+                    for i in range(interval, timeout, interval):
+                        time.sleep(interval)
+                        try:
+                            return fn()
+                        except HttpResponseError as e:
+                            if (
+                                "This request is not authorized to perform this operation using this permission." in str(e)
+                                and is_gateway_env
+                            ):
+                                logger.fs.error(f"Azure waiting for roles to propogate, retry {i} failed, retrying again...")
+                                continue
             raise
 
     def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
