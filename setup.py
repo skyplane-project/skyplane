@@ -56,5 +56,8 @@ setup(
         ],
         "test": ["black", "ipython", "jupyter_console", "pytest", "pytype"],
     },
-    entry_points={"console_scripts": ["skyplane=skyplane.cli.cli:app"]},
+    entry_points={"console_scripts": [
+        "skyplane=skyplane.cli.cli:app",
+        "skylark=skyplane.cli.cli:app",
+    ]},
 )
