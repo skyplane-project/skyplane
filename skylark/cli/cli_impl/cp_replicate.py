@@ -1,17 +1,92 @@
 import json
 import os
 import signal
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from halo import Halo
 import typer
+import pathlib
 
-from skylark import exceptions, MB, GB
+from skylark import exceptions, MB, GB, skylark_root
 from skylark.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skylark.replicate.replication_plan import ReplicationTopology, ReplicationJob
 from skylark.replicate.replicator_client import ReplicatorClient
+from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP
 from skylark.utils import logger
 from skylark.utils.utils import Timer
+
+
+def generate_topology(
+    src_region: str,
+    dst_region: str,
+    src_client: ObjectStoreInterface,
+    bucket_src: str,
+    path_src: str,
+    solve: bool,
+    cached_src_objs: Optional[List[ObjectStoreObject]] = None,
+    num_connections: Optional[int] = 32,
+    max_instances: Optional[int] = 1,
+    solver_required_throughput_gbits: Optional[float] = 4,
+    solver_throughput_grid: Optional[pathlib.Path] = skylark_root / "profiles" / "throughput.csv",
+    solver_verbose: Optional[bool] = False,
+
+) -> Tuple[ReplicationTopology, Optional[List[ObjectStoreObject]]]:
+   
+    cached_src_objs = None  # cache queried src_objs for solver
+    if solve:
+        if src_region == dst_region:
+            typer.secho("Solver is not supported for intra-region transfers, run without the --solve flag", fg="red")
+            raise typer.Exit(1)
+        if not cached_src_objs:
+            with Timer(f"Query {bucket_src} prefix {path_src}"):
+                with Halo(text=f"Querying objects in {bucket_src}", spinner="dots") as spinner:
+                    objs = []
+                    for obj in src_client.list_objects(path_src):
+                        objs.append(obj)
+                        spinner.text = f"Querying objects in {bucket_src} ({len(objs)} objects)"
+            if not objs:
+                logger.error("Specified object does not exist.")
+                raise exceptions.MissingObjectException()
+        else:
+            objs = cached_src_objs
+        
+        total_gbyte_to_transfer = sum([obj.size for obj in objs]) / GB
+
+        # build problem and solve
+        tput = ThroughputSolverILP(solver_throughput_grid)
+        problem = ThroughputProblem(
+            src=src_region,
+            dst=dst_region,
+            required_throughput_gbits=solver_required_throughput_gbits,
+            gbyte_to_transfer=total_gbyte_to_transfer,
+            instance_limit=max_instances,
+        )
+        with Halo(text="Solving...", spinner="dots"):
+            solution = tput.solve_min_cost(
+                problem,
+                solver=ThroughputSolverILP.choose_solver(),
+                solver_verbose=solver_verbose,
+                save_lp_path=None,
+             )
+        topo, _ = tput.to_replication_topology(solution)
+    else:
+        objs = None
+        if src_region == dst_region:
+            topo = ReplicationTopology()
+            for i in range(max_instances):
+                topo.add_objstore_instance_edge(src_region, src_region, i)
+                topo.add_instance_objstore_edge(src_region, i, src_region)
+        else:
+            topo = ReplicationTopology()
+            for i in range(max_instances):
+                topo.add_objstore_instance_edge(src_region, src_region, i)
+                topo.add_instance_instance_edge(src_region, i, dst_region, i, num_connections)
+                topo.add_instance_objstore_edge(dst_region, i, dst_region)
+
+
+    
+    return topo, objs
+
 
 
 def replicate_helper(

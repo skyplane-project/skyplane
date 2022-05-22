@@ -1,5 +1,6 @@
 """CLI for the Skylark object store"""
 import subprocess
+import os
 from functools import partial
 from pathlib import Path
 from shlex import split
@@ -23,7 +24,10 @@ from skylark.cli.cli_impl.cp_local import (
     copy_local_s3,
     copy_s3_local,
 )
-from skylark.cli.cli_impl.cp_replicate import replicate_helper
+from skylark.cli.cli_impl.cp_replicate import (
+        generate_topology,
+        replicate_helper,
+)
 from skylark.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skylark.cli.cli_impl.ls import ls_local, ls_objstore
 from skylark.cli.util import (
@@ -163,51 +167,19 @@ def cp(
 
         # Set up replication topology
         cached_src_objs = None  # cache queried src_objs for solver
-        if solve:
-            if src_region == dst_region:
-                typer.secho("Solver is not supported for intra-region transfers, run without the --solve flag", fg="red")
-                raise typer.Exit(1)
-            with Timer(f"Query {bucket_src} prefix {path_src}"):
-                with Halo(text=f"Querying objects in {bucket_src}", spinner="dots") as spinner:
-                    objs = []
-                    for obj in src_client.list_objects(path_src):
-                        objs.append(obj)
-                        spinner.text = f"Querying objects in {bucket_src} ({len(objs)} objects)"
-            if not objs:
-                logger.error("Specified object does not exist.")
-                raise exceptions.MissingObjectException()
-            total_gbyte_to_transfer = sum([obj.size for obj in objs]) / GB
-            cached_src_objs = objs
-
-            # build problem and solve
-            tput = ThroughputSolverILP(solver_throughput_grid)
-            problem = ThroughputProblem(
-                src=src_region,
-                dst=dst_region,
-                required_throughput_gbits=solver_required_throughput_gbits,
-                gbyte_to_transfer=total_gbyte_to_transfer,
-                instance_limit=max_instances,
-            )
-            with Halo(text="Solving...", spinner="dots"):
-                solution = tput.solve_min_cost(
-                    problem,
-                    solver=ThroughputSolverILP.choose_solver(),
-                    solver_verbose=solver_verbose,
-                    save_lp_path=None,
-                )
-            topo, _ = tput.to_replication_topology(solution)
-        else:
-            if src_region == dst_region:
-                topo = ReplicationTopology()
-                for i in range(max_instances):
-                    topo.add_objstore_instance_edge(src_region, src_region, i)
-                    topo.add_instance_objstore_edge(src_region, i, src_region)
-            else:
-                topo = ReplicationTopology()
-                for i in range(max_instances):
-                    topo.add_objstore_instance_edge(src_region, src_region, i)
-                    topo.add_instance_instance_edge(src_region, i, dst_region, i, num_connections)
-                    topo.add_instance_objstore_edge(dst_region, i, dst_region)
+        topo, cached_src_objs = generate_topology(src_region, 
+            dst_region, 
+            src_client,
+            bucket_src,
+            path_src,
+            solve, 
+            cached_src_objs=cached_src_objs,
+            num_connections=num_connections,
+            max_instances=max_instances,
+            solver_required_throughput_gbits=solver_required_throughput_gbits,
+            solver_throughput_grid=solver_throughput_grid,
+            solver_verbose=solver_verbose,
+        )
 
         replicate_helper(
             topo,
@@ -222,6 +194,139 @@ def cp(
         )
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
+
+
+@app.command()
+def sync(
+    src: str,
+    dst: str,
+    num_connections: int = typer.Option(32, help="Number of connections to open for replication"),
+    max_instances: int = typer.Option(1, help="Max number of instances per overlay region."),
+    reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
+    max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
+    use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
+    solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
+    solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
+    solver_throughput_grid: Path = typer.Option(
+        skylark_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
+    ),
+    solver_verbose: bool = False,
+):
+    """
+    'sync` synchronizes files or folders from one location to another. If the source is on an object store,
+    it will copy all objects with that prefix. If it is a local path, it will copy the entire file
+    or directory tree.
+
+    By default, it will copy objects using a direct connection between instances. However, if you would
+    like to use the solver, call `--solve`. Note that the solver requires a throughput grid file to be
+    specified. We provide a default one but it may be out-of-date.
+
+    For each file in the source, it is copied over if the file does not exist in the destination, it has 
+    a different size in the destination, or if the source version of the file was more recently modified
+    than the destination. This behavior is similar to 'aws sync'. 
+
+    :param src: Source prefix to copy from
+    :type src: str
+    :param dst: The destination of the transfer
+    :type dst: str
+    :param num_connections: Number of connections to use between each gateway instance pair (default: 64)
+    :type num_connections: int
+    :param max_instances: The maximum number of instances to use per region (default: 1)
+    :type max_instances: int
+    :param reuse_gateways: If true, will leave provisioned instances running to be reused. You must run `skylark deprovision` to clean up.
+    :type reuse_gateways: bool
+    :param max_chunk_size_mb: If set, `cp` will subdivide objects into chunks at most this size.
+    :type max_chunk_size_mb: int
+    :param use_bbr: If set, will use BBR for transfers by default.
+    :type use_bbr: bool
+    :param solve: If true, will use solver to optimize transfer, else direct path is chosen
+    :type solve: bool
+    :param solver_required_throughput_gbits: The required throughput in Gbps when using the solver (default: 4)
+    :type solver_required_throughput_gbits: float
+    :param solver_throughput_grid: The throughput grid profile to use for the solver, defaults to author-provided profile
+    :type solver_throughput_grid: Path
+    :param solver_verbose: If true, will print out the solver's output, defaults to False
+    :type solver_verbose: bool (optional)
+    """
+
+    print_header()
+
+    provider_src, bucket_src, path_src = parse_path(src)
+    provider_dst, bucket_dst, path_dst = parse_path(dst)
+
+    clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
+
+    src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)
+    src_region = src_client.region_tag()
+
+    dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
+    dst_region = dst_client.region_tag()
+
+    # Set up replication topology
+    cached_src_objs = []  # cache queried src_objs for solver
+    
+
+    with Timer(f"Query {bucket_src} prefix {path_src}"):
+        with Halo(text=f"Querying objects in {bucket_src}", spinner="dots") as spinner:
+            src_objs = []
+            for obj in src_client.list_objects(path_src):
+                src_objs.append(obj)
+                spinner.text = f"Querying objects in {bucket_src} ({len(src_objs)} objects)"
+            dst_objs = []
+            for obj in dst_client.list_objects(path_dst):
+                dst_objs.append(obj)
+                spinner.txt = f"Querying objects in {bucket_dst} ({len(dst_objs)} objects)"
+    if not src_objs:
+        logger.error("Specified object does not exist.")
+        raise exceptions.MissingObjectException()
+
+
+    dst_dict = dict()
+    for obj in dst_objs:
+        key = obj.key
+        if path_dst == "":
+            dst_dict[key] = obj
+        else:
+            dst_dict[key[len(path_dst) + 1:]] = obj
+    
+    for src_obj in src_objs:
+        if src_obj.key in dst_dict:
+            dst_obj = dst_dict[src_obj.key]
+            if src_obj.last_modified > dst_obj.last_modified or src_obj.size != dst_obj.size:
+                cached_src_objs.append(src_obj)
+        else:
+            cached_src_objs.append(src_obj)
+
+    if len(cached_src_objs) == 0:
+        typer.secho("No objects need updating. Exiting...")
+        os._exit(1)
+   
+    topo, cached_src_objs = generate_topology(src_region, 
+            dst_region, 
+            src_client,
+            bucket_src,
+            path_src, 
+            solve, 
+            cached_src_objs=cached_src_objs,
+            num_connections=num_connections,
+            max_instances=max_instances,
+            solver_required_throughput_gbits=solver_required_throughput_gbits,
+            solver_throughput_grid=solver_throughput_grid,
+            solver_verbose=solver_verbose
+        )
+
+    replicate_helper(
+        topo,
+        source_bucket=bucket_src,
+        dest_bucket=bucket_dst,
+        src_key_prefix=path_src,
+        dest_key_prefix=path_dst,
+        cached_src_objs=cached_src_objs,
+        reuse_gateways=reuse_gateways,
+        max_chunk_size_mb=max_chunk_size_mb,
+        use_bbr=use_bbr,
+    )
+
 
 
 @app.command()
