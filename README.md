@@ -28,10 +28,10 @@ This package represents both components as a single binary. Docker builds a sing
 
 ### Building and deploying the gateway
 
-First, clone and enter the skylark directory:
+First, clone and enter the skyplane directory:
 ```
-$ git clone https://github.com/parasj/skylark
-$ cd skylark
+$ git clone https://github.com/skyplane-project/skyplane
+$ cd skyplane
 ```
 
 Then, configure cloud credentials as needed:
@@ -43,7 +43,7 @@ Then, configure cloud credentials as needed:
 Finally, install and initalize Skyplane:
 ```
 $ pip install -e ".[all]"
-$ skylark init
+$ skyplane init
 ```
 
 To run a sample transfer, first build a new version of the GatewayDaemon Docker image and push it to ghcr.io (ensure you are authenticated as above):
@@ -77,24 +77,24 @@ tltkismwtov5n8zokghil1py9
 u0e2ymhmv64oriiq66ibepn63
 
 Total reclaimed space: 0B
-SKYLARK_DOCKER_IMAGE=ghcr.io/skyplane-project/skyplane:local-PotRzrFT
+SKYPLANE_DOCKER_IMAGE=ghcr.io/skyplane-project/skyplane:local-PotRzrFT
 ```
 
 </details>
 
-The script will export the new image (ghcr.io/skyplane-project/skyplane:local-PotRzrFT in this example) to an environment variable (`SKYLARK_DOCKER_IMAGE`). Ensure you use `source` so the environment variable is published to your shell.
+The script will export the new image (ghcr.io/skyplane-project/skyplane:local-PotRzrFT in this example) to an environment variable (`SKYPLANE_DOCKER_IMAGE`). Ensure you use `source` so the environment variable is published to your shell.
 
 ### Running a basic cloud to cloud transfer job
-We then run the ReplicatorClient with that new Docker image (stored in `$SKYLARK_DOCKER_IMAGE`):
+We then run the ReplicatorClient with that new Docker image (stored in `$SKYPLANE_DOCKER_IMAGE`):
 ```
-$ skylark cp [s3/gs/azure]://[source-bucket-name]/[source-key-prefix] [s3/gs/azure]://[dest-bucket-name]/[dest-key-prefix]
+$ skyplane cp [s3/gs/azure]://[source-bucket-name]/[source-key-prefix] [s3/gs/azure]://[dest-bucket-name]/[dest-key-prefix]
 ```
 <details>
-<summary>skylark cp result</summary>
+<summary>skyplane cp result</summary>
 <br>
  
 ```
-$ skylark skylark cp s3://skylark-example-us-east-1/ s3://skylark-example-us-west-1/
+$ skyplane cp s3://skyplane-example-us-east-1/ s3://skyplane-example-us-west-1/
 11:34:48 [DEBUG] Cloud SSH key initialization: 3.23s
 11:35:20 [DEBUG] Provisioning instances and waiting to boot: 31.87s
 11:35:24 [DEBUG] Install docker: 2.79s
@@ -117,7 +117,7 @@ $ skylark skylark cp s3://skylark-example-us-east-1/ s3://skylark-example-us-wes
 Replication: average 0.02Gbit/s: 100%|███████████████████████████████████████████████████████████████████████████████| 33.5M/33.5M [00:02<00:00, 17.0Mbit/s]
 11:36:17 [INFO]  Copying gateway logs from aws:us-east-1:i-08a9b4f70ee2caca3
 11:36:17 [INFO]  Copying gateway logs from aws:us-west-1:i-09dda9567bcf9ecad
-11:36:21 [DEBUG] Wrote profile to /tmp/skylark/transfer_2022-03-29T11:36:17.755039/traceevent_5cb6dfbf-fac6-4ce6-a61b-1b813e83723d.json, visualize using `about://tracing` in Chrome
+11:36:21 [DEBUG] Wrote profile to /tmp/skyplane/transfer_2022-03-29T11:36:17.755039/traceevent_5cb6dfbf-fac6-4ce6-a61b-1b813e83723d.json, visualize using `about://tracing` in Chrome
 11:36:22 [WARN]  Deprovisioning 2 instances
 11:36:23 [WARN]  Deprovisioned aws:us-west-1:i-09dda9567bcf9ecad
 11:36:24 [WARN]  Deprovisioned aws:us-east-1:i-08a9b4f70ee2caca3
@@ -132,11 +132,11 @@ When done, stop all instances started by Skyplane by running:
 ```skyklark deprovision```
 
 <details>
-<summary>skylark deprovision result</summary>
+<summary>skyplane deprovision result</summary>
 <br>
 
 ```
-$ skylark deprovision
+$ skyplane deprovision
 No GCP project ID given, so will only deprovision AWS instances
 Deprovisioning 3 instances
 Deprovisioning (aws:ap-northeast-1): 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 3/3 [00:01<00:00,  2.33it/s]

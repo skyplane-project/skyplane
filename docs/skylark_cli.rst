@@ -1,7 +1,7 @@
 CLI documentation
 =================
 
-.. automodule:: skylark.cli.cli
+.. automodule:: skyplane.cli.cli
     :members:
     :undoc-members:
     :show-inheritance:

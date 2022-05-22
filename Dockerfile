@@ -24,4 +24,4 @@ WORKDIR /pkg
 COPY . .
 RUN pip3 install --no-dependencies -e ".[gateway]"
 
-CMD ["python3", "skylark/gateway/gateway_daemon.py"]
+CMD ["python3", "skyplane/gateway/gateway_daemon.py"]

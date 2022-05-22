@@ -2,9 +2,9 @@ from setuptools import setup
 
 
 setup(
-    name="skylark",
+    name="skyplane",
     version="0.1",
-    packages=["skylark"],
+    packages=["skyplane"],
     python_requires=">=3.7",
     install_requires=[
         # cloud integrations
@@ -56,5 +56,5 @@ setup(
         ],
         "test": ["black", "ipython", "jupyter_console", "pytest", "pytype"],
     },
-    entry_points={"console_scripts": ["skylark=skylark.cli.cli:app"]},
+    entry_points={"console_scripts": ["skyplane=skyplane.cli.cli:app"]},
 )
