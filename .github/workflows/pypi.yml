@@ -17,8 +17,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
-          pip install -U pytest
+          python -m pip install -e ".[solver,gateway]"
+          python -m pip install pytest
       - name: Run unit tests
         run: pytest skyplane/test/unit_nocloud
   # test-cloud-aws:
@@ -60,9 +60,7 @@ jobs:
           python -m pip install build
       - name: Build wheels
         run: python -m build --sdist --wheel --outdir dist/ .
-      - name: Upload wheels
-        run: twine upload dist/*
-      - name: Publish distribution Test PyPI
+      - name: Publish distribution to test.pypi.org
         uses: pypa/gh-action-pypi-publish@master
         with:
           password: ${{ secrets.TEST_PYPI_API_TOKEN }}
