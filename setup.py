@@ -2,7 +2,7 @@ from setuptools import setup
 
 
 setup(
-    name="skyplane",
+    name="skyplane-dev",
     version="0.1",
     packages=["skyplane"],
     python_requires=">=3.7",
