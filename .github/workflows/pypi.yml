@@ -1,11 +1,9 @@
 name: pypi
-
 on:
   push:
     branches: [ main ]
   pull_request: 
     branches: [ main ]
-
 jobs:
   test-unit:
     runs-on: ubuntu-latest
@@ -23,7 +21,6 @@ jobs:
           pip install -U pytest
       - name: Run unit tests
         run: pytest skyplane/test/unit_nocloud
-
   # test-cloud-aws:
   #   runs-on: ubuntu-latest
   #   needs: [ unittest ]
@@ -46,7 +43,6 @@ jobs:
   #         pytest skyplane/test/unit_aws
   #         pytest skyplane/test/unit_azure
   #         pytest skyplane/test/unit_gcp
-
   deploy-pypi:
     runs-on: ubuntu-latest
     needs: [ test-unit ]
@@ -66,8 +62,8 @@ jobs:
         run: python -m build --sdist --wheel --outdir dist/ .
       - name: Upload wheels
         run: twine upload dist/*
-    - name: Publish distribution Test PyPI
-      uses: pypa/gh-action-pypi-publish@master
-      with:
-        password: ${{ secrets.TEST_PYPI_API_TOKEN }}
-        repository_url: https://test.pypi.org/legacy/
+      - name: Publish distribution Test PyPI
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          repository_url: https://test.pypi.org/legacy/
