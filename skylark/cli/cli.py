@@ -24,7 +24,10 @@ from skylark.cli.cli_impl.cp_local import (
     copy_local_s3,
     copy_s3_local,
 )
-from skylark.cli.cli_impl.cp_replicate import replicate_helper
+from skylark.cli.cli_impl.cp_replicate import (
+        generate_topology,
+        replicate_helper,
+)
 from skylark.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skylark.cli.cli_impl.ls import ls_local, ls_objstore
 from skylark.cli.util import (
@@ -294,45 +297,18 @@ def sync(
     if len(cached_src_objs) == 0:
         typer.secho("No objects need updating. Exiting...")
         os._exit(1)
-
-    if solve:
-        if src_region == dst_region:
-            typer.secho("Solver is not supported for intra-region transfers, run without the --solve flag", fg="red")
-            raise typer.Exit(1)
-        
-            total_gbyte_to_transfer = sum([obj.size for obj in cached_src_objs]) / GB
-            #cached_src_objs = objs
-
-            # build problem and solve
-            tput = ThroughputSolverILP(solver_throughput_grid)
-            problem = ThroughputProblem(
-                src=src_region,
-                dst=dst_region,
-                required_throughput_gbits=solver_required_throughput_gbits,
-                gbyte_to_transfer=total_gbyte_to_transfer,
-                instance_limit=max_instances,
-            )
-            with Halo(text="Solving...", spinner="dots"):
-                solution = tput.solve_min_cost(
-                    problem,
-                    solver=ThroughputSolverILP.choose_solver(),
-                    solver_verbose=solver_verbose,
-                    save_lp_path=None,
-                )
-            topo, _ = tput.to_replication_topology(solution) 
-    else:
-        if src_region == dst_region:
-            topo = ReplicationTopology()
-            for i in range(max_instances):
-                topo.add_objstore_instance_edge(src_region, src_region, i)
-                topo.add_instance_objstore_edge(src_region, i, src_region)
-        else:
-            topo = ReplicationTopology()
-            for i in range(max_instances):
-                topo.add_objstore_instance_edge(src_region, src_region, i)
-                topo.add_instance_instance_edge(src_region, i, dst_region, i, num_connections)
-                topo.add_instance_objstore_edge(dst_region, i, dst_region)
     
+    topo, cached_src_objs = generate_topology(src_region, 
+            dst_region, 
+            path_src, 
+            solve, 
+            cached_src_objs=cached_src_objs,
+            num_connections=num_connections,
+            max_instances=max_instances,
+            solver_required_throughput_gbits=solver_required_throughput_gbits,
+            solver_throughput_grid=solver_throughput_grid,
+        )
+
     replicate_helper(
         topo,
         source_bucket=bucket_src,
