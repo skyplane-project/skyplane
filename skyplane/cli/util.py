@@ -100,14 +100,11 @@ def query_instances():
         aws = AWSCloudProvider()
         for region in aws.region_list():
             query_jobs.append(catch_error(partial(aws.get_matching_instances, region)))
-            query_jobs.append(catch_error(partial(aws.get_matching_instances, region, tags={"skylark": "true"})))
     if AzureAuthentication().enabled():
         query_jobs.append(catch_error(lambda: AzureCloudProvider().get_matching_instances()))
-        query_jobs.append(catch_error(lambda: AzureCloudProvider().get_matching_instances(tags={"skylark": "true"})))
     if GCPAuthentication().enabled():
         query_jobs.append(catch_error(lambda: GCPCloudProvider().get_matching_instances()))
-        query_jobs.append(catch_error(lambda: GCPCloudProvider().get_matching_instances(tags={"skylark": "true"})))
-    # query in parallelsky
+    # query in parallel
     for instance_list in do_parallel(
         lambda f: f(), query_jobs, n=-1, return_args=False, spinner=True, desc="Querying clouds for instances"
     ):
