@@ -20,7 +20,7 @@ jobs:
           pip install -e ".[gateway,solver]"
           pip install pytype
       - name: Run pytype
-        run: pytype skylark --config .pytype.cfg -j auto
+        run: pytype skyplane --config .pytype.cfg -j auto
   # pylint:
   #   runs-on: ubuntu-latest
   #   steps:
@@ -41,4 +41,4 @@ jobs:
   #         pip install -e .
   #         pip install pylint
   #     - name: Run pylint
-  #       run: (find skylark -type f -name "*.py" | xargs pylint --rcfile=.pylintrc) || true
+  #       run: (find skyplane -type f -name "*.py" | xargs pylint --rcfile=.pylintrc) || true

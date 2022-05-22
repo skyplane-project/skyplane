@@ -29,11 +29,11 @@ jobs:
           pip install -U pytest
           
       - name: Run unit tests
-        run: pytest skylark/test/unit_nocloud
+        run: pytest skyplane/test/unit_nocloud
      #- name: Run cloud tests
         ###consider only running cloud tests for PRs to main once we go open source
         ###if: ${{ github.event_name == 'pull_request' && github.base_ref == github.event.repository.default_branch }}
         #run: |
-          #pytest skylark/test/unit_aws
-          #pytest skylark/test/unit_azure
-          #pytest skylark/test/unit_gcp
+          #pytest skyplane/test/unit_aws
+          #pytest skyplane/test/unit_azure
+          #pytest skyplane/test/unit_gcp
