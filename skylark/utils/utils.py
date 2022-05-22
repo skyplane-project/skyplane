@@ -42,6 +42,7 @@ def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, progress_bar=Fal
         while time.time() - start < timeout:
             if fn():
                 pbar.close()
+                logger.fs.debug(f"[wait_for] {desc} fn={fn} completed in {time.time() - start:.2f}s")
                 return True
             pbar.update(interval)
             time.sleep(interval)

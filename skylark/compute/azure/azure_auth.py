@@ -1,15 +1,13 @@
 import os
 import subprocess
-import threading
 from typing import Dict, List, Optional
 
-from azure.identity import DefaultAzureCredential
+from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
 from azure.mgmt.authorization import AuthorizationManagementClient
 from azure.mgmt.storage import StorageManagementClient
 from azure.storage.blob import BlobServiceClient, ContainerClient
 
-from skylark import cloud_config
-from skylark import config_path
+from skylark import config_path, is_gateway_env
 from skylark.compute.utils import query_which_cloud
 from skylark.config import SkylarkConfig
 from skylark import config_path
@@ -42,26 +40,29 @@ except ImportError:
 
 
 class AzureAuthentication:
-    __cached_credentials = threading.local()
-
     def __init__(self, config: Optional[SkylarkConfig] = None):
         self.config = config if config is not None else SkylarkConfig.load_config(config_path)
-        self.credential = self.get_credential(self.subscription_id)
+        self._credential = None
+
+    @property
+    def credential(self) -> DefaultAzureCredential:
+        if self._credential is None:
+            self._credential = self.get_azure_credential()
+        return self._credential
 
     @property
     def subscription_id(self) -> Optional[str]:
         return self.config.azure_subscription_id
 
-    def get_credential(self, subscription_id: str):
-        cached_credential = getattr(self.__cached_credentials, f"credential_{subscription_id}", None)
-        if cached_credential is None:
-            cached_credential = DefaultAzureCredential(
-                exclude_managed_identity_credential=query_which_cloud() != "azure",  # exclude MSI if not Azure
-                exclude_powershell_credential=True,
-                exclude_visual_studio_code_credential=True,
-            )
-            setattr(self.__cached_credentials, f"credential_{subscription_id}", cached_credential)
-        return cached_credential
+    @staticmethod
+    def get_azure_credential() -> DefaultAzureCredential:
+        if is_gateway_env:
+            return ManagedIdentityCredential()
+        return DefaultAzureCredential(
+            exclude_managed_identity_credential=(query_which_cloud() != "azure"),
+            exclude_powershell_credential=True,
+            exclude_visual_studio_code_credential=True,
+        )
 
     def save_region_config(self, config: SkylarkConfig):
         if config.azure_enabled == False:
@@ -107,7 +108,8 @@ class AzureAuthentication:
             return []
         region_list = []
         for region in f.read().split("\n"):
-            region_list.append(region)
+            if not region.endswith("stage") and not region.endswith("euap"):
+                region_list.append(region)
         return region_list
 
     @staticmethod
@@ -125,7 +127,7 @@ class AzureAuthentication:
             f.write("")
 
     def enabled(self) -> bool:
-        return self.config.azure_enabled and self.subscription_id is not None
+        return self.config.azure_enabled and self.credential is not None
 
     @staticmethod
     def infer_subscription_id() -> Optional[str]:

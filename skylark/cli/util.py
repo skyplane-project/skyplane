@@ -44,7 +44,7 @@ def parse_path(path: str):
         if match is None:
             raise ValueError(f"Invalid Azure path: {path}")
         account, container, blob_path = match.groups()
-        return "azure", (account, container), blob_path
+        return "azure", f"{account}/{container}", blob_path
     elif path.startswith("azure://"):
         bucket_name = path[8:]
         region = path[8:].split("-", 2)[-1]

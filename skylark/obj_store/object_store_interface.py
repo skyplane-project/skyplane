@@ -58,9 +58,9 @@ class ObjectStoreInterface:
         elif region_tag.startswith("azure"):
             from skylark.obj_store.azure_interface import AzureInterface
 
-            # TODO (#210): storage account should be configured via argument
+            storage_account, container = bucket.split("/", 1)  # <storage_account>/<container>
             _, region = region_tag.split(":", 1)
-            return AzureInterface(region, None, bucket)
+            return AzureInterface(storage_account, container, region=region)
         else:
             raise ValueError(f"Invalid region_tag {region_tag} - could not create interface")
 

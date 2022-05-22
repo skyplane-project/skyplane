@@ -46,3 +46,4 @@ if config_path.exists():
     cloud_config = SkylarkConfig.load_config(config_path)
 else:
     cloud_config = SkylarkConfig(False, False, False)
+is_gateway_env = os.environ.get("SKYLARK_IS_GATEWAY", None) == "1"

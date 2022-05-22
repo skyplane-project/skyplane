@@ -3,6 +3,7 @@ from datetime import datetime
 from functools import partial
 from types import SimpleNamespace
 
+from skylark import is_gateway_env
 import termcolor
 
 log_file = None
@@ -44,15 +45,12 @@ def exception(msg, print_traceback=True, write_to_file=False, *args, **kwargs):
 
 
 # define fs object to log to disk log
-# from skylark.utils import logger
-# logger.fs.debug("debug message")
-# implemented via SimpleNamespace
 fs = SimpleNamespace(
-    debug=partial(log, LEVEL="DEBUG", color="cyan", write_to_file=True, write_to_stderr=False),
-    info=partial(log, LEVEL="INFO", color="white", write_to_file=True, write_to_stderr=False),
-    warn=partial(log, LEVEL="WARN", color="yellow", write_to_file=True, write_to_stderr=False),
-    warning=partial(log, LEVEL="WARN", color="yellow", write_to_file=True, write_to_stderr=False),
-    error=partial(log, LEVEL="ERROR", color="red", write_to_file=True, write_to_stderr=False),
-    exception=partial(exception, write_to_file=True, write_to_stderr=False),
-    log=partial(log, write_to_file=True, write_to_stderr=False),
+    debug=partial(log, LEVEL="DEBUG", color="cyan", write_to_file=True, write_to_stderr=is_gateway_env),
+    info=partial(log, LEVEL="INFO", color="white", write_to_file=True, write_to_stderr=is_gateway_env),
+    warn=partial(log, LEVEL="WARN", color="yellow", write_to_file=True, write_to_stderr=is_gateway_env),
+    warning=partial(log, LEVEL="WARN", color="yellow", write_to_file=True, write_to_stderr=is_gateway_env),
+    error=partial(log, LEVEL="ERROR", color="red", write_to_file=True, write_to_stderr=is_gateway_env),
+    exception=partial(exception, write_to_file=True, write_to_stderr=is_gateway_env),
+    log=partial(log, write_to_file=True, write_to_stderr=is_gateway_env),
 )

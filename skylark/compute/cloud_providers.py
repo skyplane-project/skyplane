@@ -52,7 +52,8 @@ class CloudProvider:
         if isinstance(region, str):
             results = [self.get_instance_list(region)]
         elif region is None:
-            results = do_parallel(self.get_instance_list, self.region_list(), n=-1, return_args=False)
+            n = -1 if self.name != "azure" else 16  # avoid rate limit for azure
+            results = do_parallel(self.get_instance_list, self.region_list(), n=n, return_args=False)
 
         matching_instances = []
         for instances in results:

@@ -1,9 +1,11 @@
+from functools import partial
 import os
 import subprocess
+import time
 import uuid
 from typing import Iterator, List
 
-from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
+from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError, HttpResponseError
 from azure.identity import AzureCliCredential
 from azure.mgmt.authorization.models import RoleAssignmentCreateParameters, RoleAssignmentProperties
 
@@ -11,6 +13,8 @@ from skylark.compute.azure.azure_auth import AzureAuthentication
 from skylark.compute.azure.azure_server import AzureServer
 from skylark.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 from skylark.utils import logger
+from skylark import is_gateway_env
+from skylark.utils.utils import Timer, wait_for
 
 
 class AzureObject(ObjectStoreObject):
@@ -20,23 +24,17 @@ class AzureObject(ObjectStoreObject):
 
 
 class AzureInterface(ObjectStoreInterface):
-    def __init__(self, azure_region, account_name, container_name, use_tls=True):
-        # TODO (#210): should be configured via argument
-        self.account_name = f"skylark{azure_region.replace(' ', '').lower()}"
-        self.container_name = container_name
-
-        # Create a blob service client
+    def __init__(self, account_name, container_name, region="infer", use_tls=True, max_concurrency=1):
         self.auth = AzureAuthentication()
+        self.account_name = account_name
+        self.container_name = container_name
         self.account_url = f"https://{self.account_name}.blob.core.windows.net"
-
-        # infer azure region from storage account
-        if azure_region is None or azure_region == "infer":
-            self.azure_region = self.get_region_from_storage_account(self.account_name)
+        self.max_concurrency = max_concurrency  # parallel upload/downloads, seems to cause issues if too high
+        if region == "infer":
+            self.storage_account = self.query_storage_account(self.account_name)
+            self.azure_region = self.storage_account.location
         else:
-            self.azure_region = azure_region
-
-        # parallel upload/downloads
-        self.max_concurrency = 1
+            self.azure_region = region
 
     @property
     def blob_service_client(self):
@@ -53,18 +51,19 @@ class AzureInterface(ObjectStoreInterface):
     def region_tag(self):
         return "azure:" + self.azure_region
 
-    def get_region_from_storage_account(self, storage_account_name):
-        storage_account = self.storage_management_client.storage_accounts.get_properties(
-            AzureServer.resource_group_name, storage_account_name
+    def query_storage_account(self, storage_account_name):
+        for account in self.storage_management_client.storage_accounts.list():
+            if account.name == storage_account_name:
+                return account
+        raise ValueError(
+            f"Storage account {storage_account_name} not found (found {[account.name for account in self.storage_management_client.storage_accounts.list()]})"
         )
-        return storage_account.location
 
     def storage_account_exists(self):
-        try:
-            self.storage_management_client.storage_accounts.get_properties(AzureServer.resource_group_name, self.account_name)
-            return True
-        except ResourceNotFoundError:
-            return False
+        for account in self.storage_management_client.storage_accounts.list():
+            if account.name == self.account_name:
+                return True
+        return False
 
     def container_exists(self):
         try:
@@ -166,19 +165,60 @@ class AzureInterface(ObjectStoreInterface):
         except ResourceNotFoundError:
             return False
 
+    @staticmethod
+    def _run_azure_op_with_retry(fn, interval=0.1, timeout=180):
+        try:
+            return fn()
+        except HttpResponseError as e:
+            # catch permissions errors if in a gateway environment and auto-retry after 5 seconds as it takes time for Azure to propogate role assignments
+            if "This request is not authorized to perform this operation using this permission." in str(e) and is_gateway_env:
+                logger.fs.warning("Unable to download object as you do not have permission to access it")
+                # permission hasn't propagated yet, retry up to 180s
+                with Timer("Wait for role assignment to propagate") as timer:
+                    while timer.elapsed < timeout:
+                        time.sleep(interval)
+                        try:
+                            logger.fs.error(f"Retrying object operation after {timer.elapsed:.2}s")
+                            return fn()
+                        except HttpResponseError as e:
+                            if (
+                                "This request is not authorized to perform this operation using this permission." in str(e)
+                                and is_gateway_env
+                            ):
+                                logger.fs.error(f"Azure waiting for roles to propogate, retry failed after {timer.elapsed:.2}s")
+                                continue
+            raise
+
     def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
-        src_object_name = src_object_name if src_object_name[0] != "/" else src_object_name
-        blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=src_object_name)
+        downloader = self._run_azure_op_with_retry(
+            partial(
+                self.container_client.download_blob,
+                src_object_name,
+                offset=offset_bytes,
+                length=size_bytes,
+                max_concurrency=self.max_concurrency,
+            )
+        )
         if not os.path.exists(dst_file_path):
             open(dst_file_path, "a").close()
-        with open(dst_file_path, "rb+") as download_file:
-            download_file.write(blob_client.download_blob(max_concurrency=self.max_concurrency).readall())
+        with open(dst_file_path, "rb+") as f:
+            f.seek(offset_bytes)
+            f.write(downloader.readall())
 
     def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
+        if part_number is not None or upload_id is not None:
+            # todo implement multipart upload
+            raise NotImplementedError("Multipart upload is not implemented for Azure")
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
-        dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
-        os.path.getsize(src_file_path)
-        blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=dst_object_name)
-        with open(src_file_path, "rb") as data:
-            blob_client.upload_blob(data=data, overwrite=True, max_concurrency=self.max_concurrency)
+        with open(src_file_path, "rb") as f:
+            result = self._run_azure_op_with_retry(
+                partial(
+                    self.container_client.upload_blob,
+                    name=dst_object_name,
+                    data=f,
+                    length=os.path.getsize(src_file_path),
+                    max_concurrency=self.max_concurrency,
+                    overwrite=True,
+                )
+            )
