@@ -213,6 +213,42 @@ def sync(
     ),
     solver_verbose: bool = False,
 ):
+    """
+    'sync` synchronizes files or folders from one location to another. If the source is on an object store,
+    it will copy all objects with that prefix. If it is a local path, it will copy the entire file
+    or directory tree.
+
+    By default, it will copy objects using a direct connection between instances. However, if you would
+    like to use the solver, call `--solve`. Note that the solver requires a throughput grid file to be
+    specified. We provide a default one but it may be out-of-date.
+
+    For each file in the source, it is copied over if the file does not exist in the destination, it has 
+    a different size in the destination, or if the source version of the file was more recently modified
+    than the destination. This behavior is similar to 'aws sync'. 
+
+    :param src: Source prefix to copy from
+    :type src: str
+    :param dst: The destination of the transfer
+    :type dst: str
+    :param num_connections: Number of connections to use between each gateway instance pair (default: 64)
+    :type num_connections: int
+    :param max_instances: The maximum number of instances to use per region (default: 1)
+    :type max_instances: int
+    :param reuse_gateways: If true, will leave provisioned instances running to be reused. You must run `skylark deprovision` to clean up.
+    :type reuse_gateways: bool
+    :param max_chunk_size_mb: If set, `cp` will subdivide objects into chunks at most this size.
+    :type max_chunk_size_mb: int
+    :param use_bbr: If set, will use BBR for transfers by default.
+    :type use_bbr: bool
+    :param solve: If true, will use solver to optimize transfer, else direct path is chosen
+    :type solve: bool
+    :param solver_required_throughput_gbits: The required throughput in Gbps when using the solver (default: 4)
+    :type solver_required_throughput_gbits: float
+    :param solver_throughput_grid: The throughput grid profile to use for the solver, defaults to author-provided profile
+    :type solver_throughput_grid: Path
+    :param solver_verbose: If true, will print out the solver's output, defaults to False
+    :type solver_verbose: bool (optional)
+    """
 
     print_header()
 
