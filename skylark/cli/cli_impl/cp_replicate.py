@@ -11,6 +11,7 @@ from skylark import exceptions, MB, GB, skylark_root
 from skylark.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skylark.replicate.replication_plan import ReplicationTopology, ReplicationJob
 from skylark.replicate.replicator_client import ReplicatorClient
+from skylark.replicate.solver import ThroughputProblem, ThroughputSolverILP
 from skylark.utils import logger
 from skylark.utils.utils import Timer
 
@@ -18,6 +19,8 @@ from skylark.utils.utils import Timer
 def generate_topology(
     src_region: str,
     dst_region: str,
+    src_client: ObjectStoreInterface,
+    bucket_src: str,
     path_src: str,
     solve: bool,
     cached_src_objs: Optional[List[ObjectStoreObject]] = None,
@@ -27,7 +30,7 @@ def generate_topology(
     solver_throughput_grid: Optional[pathlib.Path] = skylark_root / "profiles" / "throughput.csv",
     solver_verbose: Optional[bool] = False,
 
-) -> Tuple[ReplicationTopology, List[ObjectStoreObject]]:
+) -> Tuple[ReplicationTopology, Optional[List[ObjectStoreObject]]]:
    
     cached_src_objs = None  # cache queried src_objs for solver
     if solve:

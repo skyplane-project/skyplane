@@ -170,7 +170,9 @@ def cp(
         cached_src_objs = None  # cache queried src_objs for solver
         topo, cached_src_objs = generate_topology(src_region, 
             dst_region, 
-            path_src, 
+            src_client,
+            bucket_src,
+            path_src,
             solve, 
             cached_src_objs=cached_src_objs,
             num_connections=num_connections,
@@ -263,9 +265,11 @@ def sync(
     if len(cached_src_objs) == 0:
         typer.secho("No objects need updating. Exiting...")
         os._exit(1)
-    
+   
     topo, cached_src_objs = generate_topology(src_region, 
             dst_region, 
+            src_client,
+            bucket_src,
             path_src, 
             solve, 
             cached_src_objs=cached_src_objs,
