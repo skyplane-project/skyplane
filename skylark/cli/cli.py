@@ -25,8 +25,8 @@ from skylark.cli.cli_impl.cp_local import (
     copy_s3_local,
 )
 from skylark.cli.cli_impl.cp_replicate import (
-        generate_topology,
-        replicate_helper,
+    generate_topology,
+    replicate_helper,
 )
 from skylark.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skylark.cli.cli_impl.ls import ls_local, ls_objstore
@@ -167,12 +167,13 @@ def cp(
 
         # Set up replication topology
         cached_src_objs = None  # cache queried src_objs for solver
-        topo, cached_src_objs = generate_topology(src_region, 
-            dst_region, 
+        topo, cached_src_objs = generate_topology(
+            src_region,
+            dst_region,
             src_client,
             bucket_src,
             path_src,
-            solve, 
+            solve,
             cached_src_objs=cached_src_objs,
             num_connections=num_connections,
             max_instances=max_instances,
@@ -221,9 +222,9 @@ def sync(
     like to use the solver, call `--solve`. Note that the solver requires a throughput grid file to be
     specified. We provide a default one but it may be out-of-date.
 
-    For each file in the source, it is copied over if the file does not exist in the destination, it has 
+    For each file in the source, it is copied over if the file does not exist in the destination, it has
     a different size in the destination, or if the source version of the file was more recently modified
-    than the destination. This behavior is similar to 'aws sync'. 
+    than the destination. This behavior is similar to 'aws sync'.
 
     :param src: Source prefix to copy from
     :type src: str
@@ -264,7 +265,6 @@ def sync(
 
     # Set up replication topology
     cached_src_objs = []  # cache queried src_objs for solver
-    
 
     with Timer(f"Query {bucket_src} prefix {path_src}"):
         with Halo(text=f"Querying objects in {bucket_src}", spinner="dots") as spinner:
@@ -280,15 +280,14 @@ def sync(
         logger.error("Specified object does not exist.")
         raise exceptions.MissingObjectException()
 
-
     dst_dict = dict()
     for obj in dst_objs:
         key = obj.key
         if path_dst == "":
             dst_dict[key] = obj
         else:
-            dst_dict[key[len(path_dst) + 1:]] = obj
-    
+            dst_dict[key[len(path_dst) + 1 :]] = obj
+
     for src_obj in src_objs:
         if src_obj.key in dst_dict:
             dst_obj = dst_dict[src_obj.key]
@@ -300,20 +299,21 @@ def sync(
     if len(cached_src_objs) == 0:
         typer.secho("No objects need updating. Exiting...")
         os._exit(1)
-   
-    topo, cached_src_objs = generate_topology(src_region, 
-            dst_region, 
-            src_client,
-            bucket_src,
-            path_src, 
-            solve, 
-            cached_src_objs=cached_src_objs,
-            num_connections=num_connections,
-            max_instances=max_instances,
-            solver_required_throughput_gbits=solver_required_throughput_gbits,
-            solver_throughput_grid=solver_throughput_grid,
-            solver_verbose=solver_verbose
-        )
+
+    topo, cached_src_objs = generate_topology(
+        src_region,
+        dst_region,
+        src_client,
+        bucket_src,
+        path_src,
+        solve,
+        cached_src_objs=cached_src_objs,
+        num_connections=num_connections,
+        max_instances=max_instances,
+        solver_required_throughput_gbits=solver_required_throughput_gbits,
+        solver_throughput_grid=solver_throughput_grid,
+        solver_verbose=solver_verbose,
+    )
 
     replicate_helper(
         topo,
@@ -326,7 +326,6 @@ def sync(
         max_chunk_size_mb=max_chunk_size_mb,
         use_bbr=use_bbr,
     )
-
 
 
 @app.command()

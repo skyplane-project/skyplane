@@ -166,7 +166,7 @@ class AzureInterface(ObjectStoreInterface):
             return False
 
     @staticmethod
-    def _run_azure_op_with_retry(fn, interval=0.1, timeout=180):
+    def _run_azure_op_with_retry(fn, interval=0.5, timeout=180):
         try:
             return fn()
         except HttpResponseError as e:

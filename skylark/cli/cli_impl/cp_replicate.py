@@ -29,9 +29,8 @@ def generate_topology(
     solver_required_throughput_gbits: Optional[float] = 4,
     solver_throughput_grid: Optional[pathlib.Path] = skylark_root / "profiles" / "throughput.csv",
     solver_verbose: Optional[bool] = False,
-
 ) -> Tuple[ReplicationTopology, Optional[List[ObjectStoreObject]]]:
-   
+
     cached_src_objs = None  # cache queried src_objs for solver
     if solve:
         if src_region == dst_region:
@@ -49,7 +48,7 @@ def generate_topology(
                 raise exceptions.MissingObjectException()
         else:
             objs = cached_src_objs
-        
+
         total_gbyte_to_transfer = sum([obj.size for obj in objs]) / GB
 
         # build problem and solve
@@ -67,7 +66,7 @@ def generate_topology(
                 solver=ThroughputSolverILP.choose_solver(),
                 solver_verbose=solver_verbose,
                 save_lp_path=None,
-             )
+            )
         topo, _ = tput.to_replication_topology(solution)
     else:
         objs = None
@@ -83,10 +82,7 @@ def generate_topology(
                 topo.add_instance_instance_edge(src_region, i, dst_region, i, num_connections)
                 topo.add_instance_objstore_edge(dst_region, i, dst_region)
 
-
-    
     return topo, objs
-
 
 
 def replicate_helper(
@@ -219,6 +215,8 @@ def replicate_helper(
         else:
             total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
         typer.secho(f"{total_bytes / GB:.2f}GByte replication job launched", fg="green")
+        if topo.source_region().split(":")[0] == "azure" or topo.sink_region().split(":")[0] == "azure":
+            typer.secho(f"Warning: It can take up to 60s for role assignments to propagate on Azure. See issue #355", fg="yellow")
         stats = rc.monitor_transfer(
             job,
             show_spinner=True,
