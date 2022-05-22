@@ -2,7 +2,6 @@ from functools import lru_cache
 from pathlib import Path
 
 import paramiko
-import sshtunnel
 
 from skylark import key_root
 from skylark.compute.gcp.gcp_auth import GCPAuthentication
@@ -102,7 +101,9 @@ class GCPServer(Server):
         t.connect(username=uname, pkey=pkey)
         return paramiko.SFTPClient.from_transport(t)
 
-    def open_ssh_tunnel_impl(self, remote_port, uname="skylark", ssh_key_password="skylark") -> sshtunnel.SSHTunnelForwarder:
+    def open_ssh_tunnel_impl(self, remote_port, uname="skylark", ssh_key_password="skylark"):
+        import sshtunnel
+
         return sshtunnel.SSHTunnelForwarder(
             (self.public_ip(), 22),
             ssh_username=uname,

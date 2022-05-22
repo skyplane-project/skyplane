@@ -4,8 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from skylark.utils import logger
-
 
 @dataclass
 class SkylarkConfig:
@@ -31,7 +29,6 @@ class SkylarkConfig:
         path = Path(path)
         config = configparser.ConfigParser()
         if not path.exists():
-            logger.error(f"Config file not found: {path}")
             raise FileNotFoundError(f"Config file not found: {path}")
         config.read(path)
 

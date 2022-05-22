@@ -7,7 +7,6 @@ from functools import partial
 from pathlib import Path
 from typing import Dict, Optional
 
-import sshtunnel
 
 from skylark import config_path
 from skylark.compute.utils import make_dozzle_command, make_sysctl_tcp_tuning_command, make_autoshutdown_script
@@ -75,7 +74,7 @@ class Server:
         self.gateway_log_viewer_url = None
         self.gateway_api_url = None
         self.init_log_files(log_dir)
-        self.ssh_tunnels: Dict[int, sshtunnel.SSHTunnelForwarder] = {}
+        self.ssh_tunnels: Dict = {}
 
     def __repr__(self):
         return f"Server({self.uuid()})"
@@ -100,7 +99,7 @@ class Server:
     def get_ssh_client_impl(self):
         raise NotImplementedError()
 
-    def open_ssh_tunnel_impl(self, remote_port) -> sshtunnel.SSHTunnelForwarder:
+    def open_ssh_tunnel_impl(self, remote_port):
         raise NotImplementedError()
 
     def get_ssh_cmd(self) -> str:
@@ -265,7 +264,7 @@ class Server:
         self.run_command(make_dozzle_command(log_viewer_port))
 
         # copy cloud configuration
-        docker_envs = {}
+        docker_envs = {"SKYLARK_IS_GATEWAY": "1"}
         if config_path.exists():
             self.upload_file(config_path, f"/tmp/{config_path.name}")
             docker_envs["SKYLARK_CONFIG"] = f"/pkg/data/{config_path.name}"

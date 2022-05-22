@@ -1,4 +1,5 @@
 import os
+import time
 import uuid
 import re
 from multiprocessing import BoundedSemaphore
@@ -93,7 +94,6 @@ class AzureCloudProvider(CloudProvider):
 
     @staticmethod
     def lookup_valid_instance(region: str, instance_name: str) -> Optional[str]:
-        sku_mapping = AzureAuthentication.get_sku_mapping()
         sku_mapping = AzureAuthentication.get_sku_mapping()
         if instance_name in sku_mapping[region]:
             return instance_name
@@ -354,28 +354,5 @@ class AzureCloudProvider(CloudProvider):
                     },
                 )
                 vm_result = poller.result()
-
-        auth_client = self.auth.get_authorization_client()
-
-        def grant_vm_role(scope, role_name):
-            roles = list(auth_client.role_definitions.list(scope, filter="roleName eq '{}'".format(role_name)))
-            assert len(roles) == 1
-            params = RoleAssignmentCreateParameters(
-                properties=RoleAssignmentProperties(role_definition_id=roles[0].id, principal_id=vm_result.identity.principal_id)
-            )
-            auth_client.role_assignments.create(scope, uuid.uuid4(), params)
-
-        with Timer("Role assignment"):
-            # Assign roles to system MSI, see https://docs.microsoft.com/en-us/samples/azure-samples/compute-python-msi-vm/compute-python-msi-vm/#role-assignment
-            # todo only grant storage-blob-data-reader and storage-blob-data-writer for specified buckets
-            scope = f"/subscriptions/{self.auth.subscription_id}"
-            grant_vm_role(scope, "Storage Blob Data Contributor")
-            grant_vm_role(scope, "Contributor")
-
-            # wait for role to propagate
-            wait_for(
-                lambda: (len(list(auth_client.role_assignments.list(f"principalId eq '{vm_result.identity.principal_id}'"))) == 2),
-                timeout=60,
-            )
 
         return AzureServer(name)
