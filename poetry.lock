@@ -318,16 +318,16 @@ test = ["pytest (>=6.2.0)", "pytest-benchmark", "pytest-cov", "pytest-subtests",
 name = "cvxopt"
 version = "1.3.0"
 description = "Convex optimization package"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 
 [[package]]
 name = "cvxpy"
 version = "1.2.1"
 description = "A domain-specific language for modeling convex optimization problems in Python."
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.7"
 
 [package.dependencies]
@@ -341,16 +341,16 @@ scs = ">=1.1.6"
 name = "cycler"
 version = "0.11.0"
 description = "Composable style cycles"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.6"
 
 [[package]]
 name = "ecos"
 version = "2.0.10"
 description = "This is the Python package for ECOS: Embedded Cone Solver. See Github page for more information."
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = "*"
 
 [package.dependencies]
@@ -372,8 +372,8 @@ testing = ["pre-commit"]
 name = "flask"
 version = "2.1.2"
 description = "A simple framework for building complex web applications."
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.7"
 
 [package.dependencies]
@@ -391,8 +391,8 @@ dotenv = ["python-dotenv"]
 name = "fonttools"
 version = "4.33.3"
 description = "Tools to manipulate font files"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.7"
 
 [package.extras]
@@ -564,8 +564,8 @@ grpc = ["grpcio (>=1.0.0)"]
 name = "graphviz"
 version = "0.20"
 description = "Simple Python interface for Graphviz"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.7"
 
 [package.extras]
@@ -699,16 +699,16 @@ six = "*"
 name = "itsdangerous"
 version = "2.1.2"
 description = "Safely pass data to untrusted environments and back."
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.7"
 
 [[package]]
 name = "jinja2"
 version = "3.1.2"
 description = "A very fast and expressive template engine."
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.7"
 
 [package.dependencies]
@@ -729,8 +729,8 @@ python-versions = ">=3.7"
 name = "kiwisolver"
 version = "1.4.2"
 description = "A fast implementation of the Cassowary constraint solver"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.7"
 
 [package.dependencies]
@@ -767,16 +767,16 @@ colorama = ">=0.3.9"
 name = "markupsafe"
 version = "2.1.1"
 description = "Safely add untrusted strings to HTML/XML markup."
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.7"
 
 [[package]]
 name = "matplotlib"
 version = "3.5.2"
 description = "Python plotting package"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.7"
 
 [package.dependencies]
@@ -894,8 +894,8 @@ signedtoken = ["cryptography (>=3.0.0)", "pyjwt (>=2.0.0,<3)"]
 name = "osqp"
 version = "0.6.2.post5"
 description = "OSQP: The Operator Splitting QP Solver"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = "*"
 
 [package.dependencies]
@@ -907,7 +907,7 @@ scipy = ">=0.13.2"
 name = "packaging"
 version = "21.3"
 description = "Core utilities for Python packages"
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=3.6"
 
@@ -967,8 +967,8 @@ python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,>=2.7"
 name = "pillow"
 version = "9.1.1"
 description = "Python Imaging Library (Fork)"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.7"
 
 [package.extras]
@@ -1122,8 +1122,8 @@ tests = ["pytest (>=3.2.1,!=3.3.0)", "hypothesis (>=3.27.0)"]
 name = "pyopenssl"
 version = "22.0.0"
 description = "Python wrapper module around the OpenSSL library"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.6"
 
 [package.dependencies]
@@ -1267,8 +1267,8 @@ python-versions = ">=3.6"
 name = "qdldl"
 version = "0.1.5.post2"
 description = "QDLDL, a free LDL factorization routine."
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = "*"
 
 [package.dependencies]
@@ -1351,8 +1351,8 @@ crt = ["botocore[crt] (>=1.20.29,<2.0a.0)"]
 name = "scipy"
 version = "1.7.3"
 description = "SciPy: Scientific Library for Python"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.7,<3.11"
 
 [package.dependencies]
@@ -1362,8 +1362,8 @@ numpy = ">=1.16.5,<1.23.0"
 name = "scs"
 version = "3.2.0"
 description = "scs: splitting conic solver"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = "*"
 
 [package.dependencies]
@@ -1374,8 +1374,8 @@ scipy = ">=0.13.2"
 name = "setuptools"
 version = "62.3.2"
 description = "Easily download, build, install, upgrade, and uninstall Python packages"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.7"
 
 [package.extras]
@@ -1387,8 +1387,8 @@ testing-integration = ["pytest", "pytest-xdist", "pytest-enabler", "virtualenv (
 name = "setuptools-scm"
 version = "6.4.2"
 description = "the blessed package to manage your versions by scm tags"
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.6"
 
 [package.dependencies]
@@ -1463,7 +1463,7 @@ python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
 name = "tomli"
 version = "2.0.1"
 description = "A lil' TOML parser"
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=3.7"
 
@@ -1562,8 +1562,8 @@ python-versions = "*"
 name = "werkzeug"
 version = "2.1.2"
 description = "The comprehensive WSGI web application library."
-category = "dev"
-optional = false
+category = "main"
+optional = true
 python-versions = ">=3.7"
 
 [package.extras]
@@ -1581,10 +1581,14 @@ python-versions = ">=3.7"
 docs = ["sphinx", "jaraco.packaging (>=9)", "rst.linker (>=1.9)"]
 testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-cov", "pytest-enabler (>=1.0.1)", "jaraco.itertools", "func-timeout", "pytest-black (>=0.3.7)", "pytest-mypy (>=0.9.1)"]
 
+[extras]
+gateway = ["flask", "pyopenssl", "werkzeug"]
+solver = ["cvxopt", "cvxpy", "graphviz", "matplotlib", "numpy"]
+
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7.1,<3.11"
-content-hash = "e6f675dc484a68aee772d341f216ee1d0e5d06030f6d12f39c1022e24e0b3bbc"
+content-hash = "e69cf637e74332c1043141fe56d73581d93b25d2f151ffdab4eb314ec0085cc0"
 
 [metadata.files]
 atomicwrites = [
