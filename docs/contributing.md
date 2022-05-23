@@ -29,6 +29,7 @@ $ echo <PERSONAL_ACCESS_TOKEN> | sudo docker login ghcr.io -u <GITHUB_USERNAME> 
 
 ## Building and testing Skyplane
 
+### Building Docker image for gateway
 After making a change to the Skyplane source, we need to rebuild the gateway Docker image:
 
 ```bash
@@ -43,11 +44,13 @@ $ sudo docker tag skyplane $SKYPLANE_DOCKER_IMAGE
 $ sudo docker push $SKYPLANE_DOCKER_IMAGE
 ```
 
-To build the client, install the Skyplane package in development mode. The package points to your current checked-out version of the code, and any edits to the Skyplane client will immediately apply to the `skyplane` CLI command.
+### Building the Skyplane client
+We use [Poetry](https://python-poetry.org/) to manage package dependencies during development. For convenience, we provide a Poetry wrapper via `setup.py`. To build the client, install the Skyplane package in development mode. The package points to your current checked-out version of the code, and any edits to the Skyplane client will immediately apply to the `skyplane` CLI command.
 ```bash
 $ pip install -e .
 ```
 
+### Testing a transfer
 We can run the `skyplane` CLI to test a transfer. The CLI will read your `SKYPLANE_DOCKER_IMAGE` environment variable and use that Docker image when launching gateways.
 
 ```bash
