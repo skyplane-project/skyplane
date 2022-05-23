@@ -1,8 +1,8 @@
-skylark
+skyplane
 =======
 
 .. toctree::
    :maxdepth: 4
 
    setup
-   skylark
+   skyplane
