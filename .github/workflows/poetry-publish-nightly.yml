@@ -1,15 +1,12 @@
 name: poetry-publish-nightly
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  schedule:
+    - cron: '39 23 * * *'
 
 jobs:
   # nightly release check from https://stackoverflow.com/a/67527144
   check-date:
     runs-on: ubuntu-latest
-    name: Check latest commit
     outputs:
       should_run: ${{ steps.should_run.outputs.should_run }}
     steps:
@@ -57,9 +54,9 @@ jobs:
           sed -i "s/version = \"\([0-9]\+\.[0-9]\+\.[0-9]\+\)\(.*\)\"/version = \"\1.dev`date +%Y%m%d`\"/" pyproject.toml
           poetry build
       - name: Publish package
-        run: poetry publish -r test-pypi --dry-run
+        run: poetry publish -r test-pypi
 
-  nightly-publish-pypi-dev:
+  nightly-publish-pypi:
     runs-on: ubuntu-latest
     needs: [ check-date, nightly-publish-test-pypi ]
     steps:
@@ -92,4 +89,4 @@ jobs:
           sed -i "s/version = \"\([0-9]\+\.[0-9]\+\.[0-9]\+\)\(.*\)\"/version = \"\1.dev`date +%Y%m%d`\"/" pyproject.toml
           poetry build
       - name: Publish package
-        run: poetry publish --dry-run
+        run: poetry publish
