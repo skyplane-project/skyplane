@@ -1,8 +1,11 @@
 name: poetry
+name: poetry
 on:
-  schedule:
-    - cron: '39 23 * * *'
-  
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
 jobs:
   # nightly release check from https://stackoverflow.com/a/67527144
   check_date:
@@ -56,7 +59,7 @@ jobs:
           sed -i "s/version = \"\([0-9]\+\.[0-9]\+\.[0-9]\+\)\(.*\)\"/version = \"\1.dev`date +%Y%m%d`\"/" pyproject.toml
           poetry build
       - name: Publish package
-        run: poetry publish -r test-pypi
+        run: poetry publish -r test-pypi --dry-run
 
   publish-pypi-dev:
     runs-on: ubuntu-latest
@@ -91,4 +94,4 @@ jobs:
           sed -i "s/version = \"\([0-9]\+\.[0-9]\+\.[0-9]\+\)\(.*\)\"/version = \"\1.dev`date +%Y%m%d`\"/" pyproject.toml
           poetry build
       - name: Publish package
-        run: poetry publish
+        run: poetry publish --dry-run
