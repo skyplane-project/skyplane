@@ -82,7 +82,7 @@ jobs:
 
   publish-pypi-test:
     runs-on: ubuntu-latest
-    needs: [ black, unit-test ]
+    needs: [ black-pytype, unit-test ]
     if: ${{ github.event_name == 'pull_request' && github.base_ref == github.event.repository.default_branch }}
     steps:
       - name: Install Poetry
