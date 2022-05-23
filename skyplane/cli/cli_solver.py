@@ -12,7 +12,7 @@ from skyplane import GB
 from skyplane import skyplane_root
 from skyplane.replicate.solver import GBIT_PER_GBYTE, ThroughputProblem, ThroughputSolverILP, ThroughputSolution
 from skyplane.utils import logger
-from skyplane.utils.utils import Timer
+from skyplane.utils.timer import Timer
 
 app = typer.Typer(name="skyplane-solver")
 
@@ -93,10 +93,9 @@ def solve_single_hop(
 ):
     tput = ThroughputSolverILP(throughput_grid)
     p = ThroughputProblem(src, dst, 1, gbyte_to_transfer, 1, const_throughput_grid_gbits=tput.get_throughput_grid())
-    selected_region = None
+    src_region, dst_region, selected_region = None, None, None
     selected_region_num = -1
     throughput = tput.get_path_throughput(src, dst)
-
     for i, region in enumerate(tput.get_regions()):
         if region == src:
             src_region = i
@@ -108,6 +107,7 @@ def solve_single_hop(
                 selected_region = region
                 selected_region_num = i
                 throughput = curr_throughput
+    assert src_region is not None and dst_region is not None, "Source and destination regions not found in throughput grid."
 
     regions = tput.get_regions()
     edge_flow_gigabits = np.zeros((len(regions), len(regions)))

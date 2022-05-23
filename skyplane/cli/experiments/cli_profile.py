@@ -12,20 +12,37 @@ import typer
 from tqdm import tqdm
 
 from skyplane import GB, skyplane_root
-from skyplane.benchmark.utils import provision, split_list
+from skyplane.cli.experiments.provision import provision
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.compute.gcp.gcp_server import GCPServer
 from skyplane.compute.server import Server
-from skyplane.compute.utils import make_sysctl_tcp_tuning_command
+from skyplane.compute.const_cmds import make_sysctl_tcp_tuning_command
 from skyplane.utils import logger
-from skyplane.utils.utils import do_parallel
+from skyplane.utils.fn import do_parallel
 
 all_aws_regions = AWSCloudProvider.region_list()
 all_azure_regions = AzureCloudProvider.region_list()
 all_gcp_regions = GCPCloudProvider.region_list()
 all_gcp_regions_standard = GCPCloudProvider.region_list_standard()
+
+
+def split_list(l):
+    pairs = set(l)
+    groups = []
+    elems_in_last_group = set()
+    while pairs:
+        group = []
+        for x, y in pairs:
+            if x not in elems_in_last_group and y not in elems_in_last_group:
+                group.append((x, y))
+                elems_in_last_group.add(x)
+                elems_in_last_group.add(y)
+        groups.append(group)
+        elems_in_last_group = set()
+        pairs -= set(group)
+    return groups
 
 
 def start_iperf3_client(arg_pair: Tuple[Server, Server], iperf3_log_dir: Path, iperf3_runtime: int, iperf3_connections: int):

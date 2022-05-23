@@ -1,46 +1,17 @@
 from functools import partial
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.compute.aws.aws_server import AWSServer
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skyplane.compute.azure.azure_server import AzureServer
-from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.compute.gcp.gcp_server import GCPServer
 from skyplane.compute.server import Server, ServerState
+from skyplane.replicate.replicator_client import refresh_instance_list
 from skyplane.utils import logger
-from skyplane.utils.utils import Timer, do_parallel
-
-
-def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1) -> Dict[str, List[Server]]:
-    if instance_filter is None:
-        instance_filter = {"tags": {"skyplane": "true"}}
-    results = do_parallel(
-        lambda region: provider.get_matching_instances(region=region, **instance_filter),
-        region_list,
-        spinner=True,
-        n=n,
-        desc="Querying clouds for active instances",
-    )
-    return {r: ilist for r, ilist in results if ilist}
-
-
-def split_list(l):
-    pairs = set(l)
-    groups = []
-    elems_in_last_group = set()
-    while pairs:
-        group = []
-        for x, y in pairs:
-            if x not in elems_in_last_group and y not in elems_in_last_group:
-                group.append((x, y))
-                elems_in_last_group.add(x)
-                elems_in_last_group.add(y)
-        groups.append(group)
-        elems_in_last_group = set()
-        pairs -= set(group)
-    return groups
+from skyplane.utils.fn import do_parallel
+from skyplane.utils.timer import Timer
 
 
 def provision(
@@ -87,7 +58,12 @@ def provision(
             "state": [ServerState.PENDING, ServerState.RUNNING],
         }
         do_parallel(aws.add_ip_to_security_group, aws_regions_to_provision, progress_bar=True, desc="add IP to aws security groups")
-        do_parallel(aws.authorize_client, [(r, "0.0.0.0/0") for r in aws_regions_to_provision], progress_bar=True, desc="authorize client")
+        do_parallel(
+            lambda x: aws.authorize_client(*x),
+            [(r, "0.0.0.0/0") for r in aws_regions_to_provision],
+            progress_bar=True,
+            desc="authorize client",
+        )
         aws_instances = refresh_instance_list(aws, aws_regions_to_provision, aws_instance_filter)
         missing_aws_regions = set(aws_regions_to_provision) - set(aws_instances.keys())
         if missing_aws_regions:

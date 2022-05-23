@@ -6,7 +6,7 @@ import paramiko
 from skyplane import key_root
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.server import Server, ServerState
-from skyplane.utils.utils import PathLike
+from skyplane.utils.fn import PathLike
 
 
 class GCPServer(Server):

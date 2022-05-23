@@ -13,7 +13,7 @@ from skyplane.replicate.replication_plan import ReplicationTopology, Replication
 from skyplane.replicate.replicator_client import ReplicatorClient
 from skyplane.replicate.solver import ThroughputProblem, ThroughputSolverILP
 from skyplane.utils import logger
-from skyplane.utils.utils import Timer
+from skyplane.utils.timer import Timer
 
 
 def generate_topology(
@@ -24,9 +24,9 @@ def generate_topology(
     path_src: str,
     solve: bool,
     cached_src_objs: Optional[List[ObjectStoreObject]] = None,
-    num_connections: Optional[int] = 32,
-    max_instances: Optional[int] = 1,
-    solver_required_throughput_gbits: Optional[float] = 4,
+    num_connections: int = 32,
+    max_instances: int = 1,
+    solver_required_throughput_gbits: float = 4,
     solver_throughput_grid: Optional[pathlib.Path] = skyplane_root / "profiles" / "throughput.csv",
     solver_verbose: Optional[bool] = False,
 ) -> Tuple[ReplicationTopology, Optional[List[ObjectStoreObject]]]:

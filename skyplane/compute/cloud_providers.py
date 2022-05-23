@@ -2,7 +2,7 @@ import functools
 from typing import List, Optional, Union
 
 from skyplane.compute.server import Server, ServerState
-from skyplane.utils.utils import do_parallel
+from skyplane.utils.fn import do_parallel
 
 
 class CloudProvider:
