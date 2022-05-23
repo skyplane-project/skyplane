@@ -32,8 +32,8 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
       - name: black
         run: poetry run black . --check --line-length=140
-      - name: pytype
-        run: poetry run pytype --config .pytype.cfg -j 2
+      # - name: pytype
+      #   run: poetry run pytype --config .pytype.cfg -j 2
 
   unit-test:
     runs-on: ubuntu-latest
@@ -73,7 +73,8 @@ jobs:
   publish-pypi-test:
     runs-on: ubuntu-latest
     needs: [ black-pytype, unit-test ]
-    if: ${{ github.event_name == 'pull_request' && github.base_ref == github.event.repository.default_branch }}
+    # if this is a push to main, then we want to run the test, github.ref == 'refs/heads/main'
+    # if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v1
       - name: Set up Python 3.8
@@ -101,5 +102,42 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
       - name: Build package
         run: poetry build
+      - name: Publish package
+        run: poetry publish -r test-pypi
+
+  publish-pypi-dev:
+    runs-on: ubuntu-latest
+    needs: [ black-pytype, unit-test, publish-pypi-test ]
+    # if this is a push to main, then we want to run the test, github.ref == 'refs/heads/main'
+    # if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v1
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.8
+      - name: Install Poetry
+        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.0b1
+      - name: Cache Poetry virtualenv
+        uses: actions/cache@v1
+        id: cache
+        with:
+          path: ~/.virtualenvs
+          key: poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+      - name: Set Poetry config
+        run: |
+          poetry config virtualenvs.in-project false
+          poetry config virtualenvs.path ~/.virtualenvs
+          poetry config repositories.test-pypi https://test.pypi.org/legacy/
+          poetry config pypi-token.test-pypi ${{ secrets.TEST_PYPI_API_TOKEN }}
+      - name: Install Dependencies
+        run: poetry install --with gateway --with solver
+        if: steps.cache.outputs.cache-hit != 'true'
+      - name: Build package under skyplane-dev name
+        run: |
+          sed -i 's/name = "skyplane"/name = "skyplane-dev"/g' pyproject.toml
+          poetry build
       - name: Publish package
         run: poetry publish -r test-pypi
