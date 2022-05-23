@@ -4,7 +4,7 @@ import tempfile
 
 from skyplane import MB
 from skyplane.obj_store.azure_interface import AzureInterface
-from skyplane.utils.utils import Timer
+from skyplane.utils.timer import Timer
 
 
 def test_azure_interface():

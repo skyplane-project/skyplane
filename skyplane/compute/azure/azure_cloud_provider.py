@@ -16,7 +16,8 @@ from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.utils import logger
-from skyplane.utils.utils import Timer, do_parallel, wait_for
+from skyplane.utils.fn import do_parallel, wait_for
+from skyplane.utils.timer import Timer
 
 
 class AzureCloudProvider(CloudProvider):

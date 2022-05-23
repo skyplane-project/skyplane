@@ -16,7 +16,7 @@ from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_server import AWSServer
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.utils import logger
-from skyplane.utils.utils import do_parallel, wait_for
+from skyplane.utils.fn import do_parallel, wait_for
 
 try:
     import pandas as pd

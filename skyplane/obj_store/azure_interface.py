@@ -14,7 +14,8 @@ from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger
 from skyplane import is_gateway_env
-from skyplane.utils.utils import Timer, wait_for
+from skyplane.utils.fn import wait_for
+from skyplane.utils.timer import Timer
 
 
 class AzureObject(ObjectStoreObject):

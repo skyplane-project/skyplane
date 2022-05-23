@@ -5,7 +5,7 @@ import tempfile
 from skyplane import MB
 from skyplane.obj_store.s3_interface import S3Interface
 from skyplane.utils import logger
-from skyplane.utils.utils import Timer
+from skyplane.utils.timer import Timer
 
 
 def test_s3_interface(region="us-east-1", bucket="sky-us-east-1"):

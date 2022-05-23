@@ -13,7 +13,7 @@ from skyplane.chunk import WireProtocolHeader
 from skyplane.gateway.cert import generate_self_signed_certificate
 from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.utils import logger
-from skyplane.utils.utils import Timer
+from skyplane.utils.timer import Timer
 
 
 class GatewayReceiver:

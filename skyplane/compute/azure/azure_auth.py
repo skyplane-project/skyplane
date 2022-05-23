@@ -8,12 +8,12 @@ from azure.mgmt.storage import StorageManagementClient
 from azure.storage.blob import BlobServiceClient, ContainerClient
 
 from skyplane import config_path, is_gateway_env
-from skyplane.compute.utils import query_which_cloud
+from skyplane.compute.const_cmds import query_which_cloud
 from skyplane.config import SkyplaneConfig
 from skyplane import config_path
 from skyplane import azure_config_path
 from skyplane import azure_sku_path
-from skyplane.utils.utils import do_parallel
+from skyplane.utils.fn import do_parallel
 import subprocess
 import json
 

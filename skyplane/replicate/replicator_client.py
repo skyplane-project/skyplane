@@ -4,17 +4,17 @@ import time
 import uuid
 from datetime import datetime
 from functools import partial
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Iterable
 
 import pandas as pd
 from halo import Halo
 
 from skyplane import GB, MB, tmp_log_dir
-from skyplane.benchmark.utils import refresh_instance_list
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skyplane.compute.azure.azure_server import AzureServer
+from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.compute.server import Server, ServerState
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
@@ -22,7 +22,8 @@ from skyplane.replicate.profiler import status_df_to_traceevent
 from skyplane.replicate.replication_plan import ReplicationJob, ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
 from skyplane.utils.net import retry_requests
-from skyplane.utils.utils import PathLike, Timer, do_parallel
+from skyplane.utils.fn import PathLike, do_parallel
+from skyplane.utils.timer import Timer
 
 
 class ReplicatorClient:
@@ -598,3 +599,16 @@ class ReplicatorClient:
 
                     do_parallel(fn, self.bound_nodes.values(), n=-1)
                     spinner.text = "Cleaning up after transfer, shutting down gateway servers"
+
+
+def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1) -> Dict[str, List[Server]]:
+    if instance_filter is None:
+        instance_filter = {"tags": {"skyplane": "true"}}
+    results = do_parallel(
+        lambda region: provider.get_matching_instances(region=region, **instance_filter),
+        region_list,
+        spinner=True,
+        n=n,
+        desc="Querying clouds for active instances",
+    )
+    return {r: ilist for r, ilist in results if ilist}
