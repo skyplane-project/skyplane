@@ -1,11 +1,11 @@
-name: docs
+name: sphinx
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
 jobs:
-  build:
+  build-docs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
