@@ -7,7 +7,7 @@ on:
 
 jobs:
   # nightly release check from https://stackoverflow.com/a/67527144
-  check_date:
+  check-date:
     runs-on: ubuntu-latest
     name: Check latest commit
     outputs:
