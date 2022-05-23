@@ -1,5 +1,9 @@
 name: poetry
-on: [push]
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 jobs:
   black_pytype:
     runs-on: ubuntu-latest
