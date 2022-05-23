@@ -5,7 +5,7 @@ on:
   pull_request:
     branches: [ main ]
 jobs:
-  black_pytype:
+  black-pytype:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
