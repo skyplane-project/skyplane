@@ -2,7 +2,7 @@ name: poetry
 on: [push]
 jobs:
 
-  black:
+  black_pytype:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
@@ -32,8 +32,10 @@ jobs:
       - name: Install Dependencies
         run: poetry install --with gateway --with solver
         if: steps.cache.outputs.cache-hit != 'true'
-      - name: Code Quality
+      - name: black
         run: poetry run black . --check --line-length=140
+      - name: pytype
+        run: poetry run pytype --config .pytype.cfg -j 2
 
   unit-test:
     runs-on: ubuntu-latest
