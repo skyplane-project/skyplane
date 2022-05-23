@@ -1,0 +1,72 @@
+name: poetry
+on:
+  release:
+    types: [created]
+  
+jobs:
+  publish-test-pypi:
+    runs-on: ubuntu-latest
+    needs: [ black-pytype, unit-test ]
+    steps:
+      - uses: actions/checkout@v1
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.8
+      - name: Install Poetry
+        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.0b1
+      - name: Cache Poetry virtualenv
+        uses: actions/cache@v1
+        id: cache
+        with:
+          path: ~/.virtualenvs
+          key: poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+      - name: Set Poetry config
+        run: |
+          poetry config virtualenvs.in-project false
+          poetry config virtualenvs.path ~/.virtualenvs
+          poetry config repositories.test-pypi https://test.pypi.org/legacy/
+          poetry config pypi-token.test-pypi ${{ secrets.TEST_PYPI_API_TOKEN }}
+      - name: Install Dependencies
+        run: poetry install -E gateway -E solver
+        if: steps.cache.outputs.cache-hit != 'true'
+      - name: Build package
+        run: poetry build
+      - name: Publish package
+        run: poetry publish -r test-pypi
+
+  publish-pypi-dev:
+    runs-on: ubuntu-latest
+    needs: [ publish-pypi-test ]
+    steps:
+      - uses: actions/checkout@v1
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.8
+      - name: Install Poetry
+        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.0b1
+      - name: Cache Poetry virtualenv
+        uses: actions/cache@v1
+        id: cache
+        with:
+          path: ~/.virtualenvs
+          key: poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+      - name: Set Poetry config
+        run: |
+          poetry config virtualenvs.in-project false
+          poetry config virtualenvs.path ~/.virtualenvs
+          poetry config pypi-token.pypi ${{ secrets.PYPI_API_TOKEN }}
+      - name: Install Dependencies
+        run: poetry install -E gateway -E solver
+        if: steps.cache.outputs.cache-hit != 'true'
+      - name: Build package under skyplane-dev name
+        run: |
+          sed -i 's/name = "skyplane"/name = "skyplane-dev"/g' pyproject.toml
+          poetry build
+      - name: Publish package
+        run: poetry publish

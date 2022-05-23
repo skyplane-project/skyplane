@@ -1,0 +1,69 @@
+[tool.poetry]
+name = "skyplane"
+version = "0.0.1-a0.dev0"
+description = "Skyplane efficiently transports data between cloud regions and providers."
+authors = ["Skyplane authors <skyplaneproject@gmail.com>"]
+license = "Apache-2.0"
+homepage = "https://github.com/skyplane-project/skyplane"
+repository = "https://github.com/skyplane-project/skyplane"
+documentation = "https://skyplane-project.github.io/docs/"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.7.1,<3.11"
+awscrt = "^0.13.11"
+azure-identity = "^1.10.0"
+azure-mgmt-compute = "^27.0.0"
+azure-mgmt-network = "^20.0.0"
+azure-mgmt-resource = "^21.1.0"
+azure-mgmt-storage = "^20.0.0"
+azure-mgmt-authorization = "^2.0.0"
+azure-storage-blob = ">=12.0.0"
+boto3 = "^1.23.5"
+google-api-python-client = "^2.48.0"
+google-auth = "^2.6.6"
+google-cloud-compute = "^1.3.1"
+google-cloud-storage = "^2.3.0"
+grpcio-status = ">=1.33.2"
+click = "^8.1.3"
+halo = "^0.0.31"
+pandas = "^1.3"
+questionary = "^1.10.0"
+sshtunnel = "^0.4.0"
+typer = "^0.4.1"
+cachetools = "^5.1.0"
+ilock = "^1.0.3"
+paramiko = "^2.11.0"
+termcolor = "^1.1.0"
+tqdm = "^4.64.0"
+
+# solver dependencies
+cvxopt = { version = "^1.3.0", optional = true }
+cvxpy = { version = "^1.2.1", optional = true }
+graphviz = { version = "^0.20", optional = true }
+matplotlib = { version = "^3.5.2", optional = true }
+numpy = { version = "^1.21.0", optional = true }
+
+# gateway dependencies
+flask = { version = "^2.1.2", optional = true }
+pyopenssl = { version = "^22.0.0", optional = true }
+werkzeug = { version = "^2.1.2", optional = true }
+
+[tool.poetry.extras]
+solver = ["cvxopt", "cvxpy", "graphviz", "matplotlib", "numpy"]
+gateway = ["flask", "pyopenssl", "werkzeug"]
+
+[tool.poetry.dev-dependencies]
+black = "^22.3.0"
+pytest = "^7.1.2"
+pytype = "^2022.5.19"
+pytest-cov = "^3.0.0"
+pytest-xdist = "^2.5.0"
+
+[build-system]
+requires = ["setuptools", "poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+skylark = "skyplane.cli.cli:app"
+skyplane = "skyplane.cli.cli:app"
