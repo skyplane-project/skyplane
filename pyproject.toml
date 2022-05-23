@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "skyplane"
-version = "0.1.0"
+version = "0.0.1"
 description = "Skyplane efficiently transports data between cloud regions and providers."
 authors = ["Skyplane authors <skyplaneproject@gmail.com>"]
 license = "Apache-2.0"
