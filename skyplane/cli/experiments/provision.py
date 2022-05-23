@@ -58,7 +58,12 @@ def provision(
             "state": [ServerState.PENDING, ServerState.RUNNING],
         }
         do_parallel(aws.add_ip_to_security_group, aws_regions_to_provision, progress_bar=True, desc="add IP to aws security groups")
-        do_parallel(lambda x: aws.authorize_client(*x), [(r, "0.0.0.0/0") for r in aws_regions_to_provision], progress_bar=True, desc="authorize client")
+        do_parallel(
+            lambda x: aws.authorize_client(*x),
+            [(r, "0.0.0.0/0") for r in aws_regions_to_provision],
+            progress_bar=True,
+            desc="authorize client",
+        )
         aws_instances = refresh_instance_list(aws, aws_regions_to_provision, aws_instance_filter)
         missing_aws_regions = set(aws_regions_to_provision) - set(aws_instances.keys())
         if missing_aws_regions:
