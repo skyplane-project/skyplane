@@ -1,4 +1,7 @@
 import os
+import datetime
+import requests
+from xml.etree import ElementTree
 from typing import Iterator, List
 from skyplane import exceptions
 
@@ -16,6 +19,7 @@ class GCSInterface(ObjectStoreInterface):
     def __init__(self, bucket_name, gcp_region="infer", create_bucket=False):
         self.bucket_name = bucket_name
         self.auth = GCPAuthentication()
+        #self.auth.set_service_account_credentials("skyplane1") # use service account credentials
         self._gcs_client = self.auth.get_storage_client()
         try:
             self.gcp_region = self.infer_gcp_region(bucket_name) if gcp_region is None or gcp_region == "infer" else gcp_region
@@ -108,7 +112,16 @@ class GCSInterface(ObjectStoreInterface):
         offset = 0
         bucket = self._gcs_client.bucket(self.bucket_name)
         blob = bucket.blob(src_object_name)
-        chunk = blob.download_as_string()
+
+        # download object
+        # TODO: download directly to file?
+        if offset_bytes is None:
+            chunk = blob.download_as_string()
+        else: 
+            assert offset_bytes is not None and size_bytes is not None
+            chunk = blob.download_as_string(start=offset_bytes, end=offset_bytes + size_bytes - 1)
+
+        # write output
         if not os.path.exists(dst_file_path):
             open(dst_file_path, "a").close()
         with open(dst_file_path, "rb+") as f:
@@ -122,3 +135,33 @@ class GCSInterface(ObjectStoreInterface):
         bucket = self._gcs_client.bucket(self.bucket_name)
         blob = bucket.blob(dst_object_name)
         blob.upload_from_filename(src_file_path)
+
+    def initiate_multipart_upload(self, dst_object_name, size_bytes):
+
+        assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
+
+        policy = self._gcs_client.generate_signed_post_policy_v4(
+            self.bucket_name,
+            dst_object_name,
+            expiration=datetime.datetime.now() + datetime.timedelta(hours=24), #TODO: is this ok?
+            service_account_email="skyplane@skylark-sarah.iam.gserviceaccount.com"
+            #conditions=[
+                #["content-length-range", 0, 255]
+            #],
+            #fields=[
+                #"x-goog-meta-hello" => "world"
+            #],
+        )
+        print(policy)
+        headers = {
+            'Authorization': self._gcs_client.credentials.token,
+            'Content-Type': 'application/octet-stream',
+            'Content-Length': str(size_bytes), 
+            'Host': f"{self.bucket_name}.storage.googleapis.com"
+        }
+        req = requests.Request('POST',policy["url"], headers=headers)
+        prepared = req.prepare()
+        s = requests.Session()
+        response = s.send(prepared)
+        tree = ElementTree.fromstring(response.content)
+        return tree.get("InitiateMultipartUploadResult").get("UploadId")

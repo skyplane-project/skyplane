@@ -71,6 +71,7 @@ class ReplicatorClient:
         azure_regions_to_provision = [r for r in regions_to_provision if r.startswith("azure:")]
         gcp_regions_to_provision = [r for r in regions_to_provision if r.startswith("gcp:")]
 
+
         assert (
             len(aws_regions_to_provision) == 0 or self.aws.auth.enabled()
         ), "AWS credentials not configured but job provisions AWS gateways"
@@ -316,7 +317,7 @@ class ReplicatorClient:
                         # TODO: only do if num_chunks > 1
                         # TODO: potentially do this in a seperate thread, and/or after chunks sent
                         obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
-                        upload_id = obj_store_interface.initiate_multipart_upload(dest_obj)
+                        upload_id = obj_store_interface.initiate_multipart_upload(dest_obj, obj_file_size_bytes[src_obj])
 
                         offset = 0
                         part_num = 1
@@ -359,6 +360,9 @@ class ReplicatorClient:
                         Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
                     )
                     idx += 1
+
+            print(chunks)
+            
 
             # partition chunks into roughly equal-sized batches (by bytes)
             def partition(items: List[Chunk], n_batches: int) -> List[List[Chunk]]:
