@@ -6,6 +6,7 @@ from functools import partial
 from multiprocessing import Event, Process, Queue
 from typing import Dict, List, Optional
 
+import lz4.frame
 import requests
 
 from skyplane import MB
@@ -20,16 +21,20 @@ from skyplane.utils.timer import Timer
 class GatewaySender:
     def __init__(
         self,
+        region: str,
         chunk_store: ChunkStore,
-        error_event,
+        error_event: Event,
         error_queue: Queue,
         outgoing_ports: Dict[str, int],
         use_tls: bool = True,
+        use_compression: bool = True,
     ):
+        self.region = region
         self.chunk_store = chunk_store
         self.error_event = error_event
         self.error_queue = error_queue
         self.outgoing_ports = outgoing_ports
+        self.use_compression = use_compression
         self.n_processes = sum(outgoing_ports.values())
         self.processes = []
 
@@ -157,24 +162,34 @@ class GatewaySender:
 
         for idx, chunk_id in enumerate(chunk_ids):
             self.chunk_store.state_start_upload(chunk_id, f"sender:{self.worker_id}")
-            chunk = self.chunk_store.get_chunk_request(chunk_id).chunk
+            chunk_req = self.chunk_store.get_chunk_request(chunk_id)
+            chunk = chunk_req.chunk
+            chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
+
+            # read data from disk (and optionally compress if sending from source region)
+            with open(chunk_file_path, "rb") as f:
+                data = f.read()
+            assert len(data) == chunk.chunk_length_bytes, f"chunk {chunk_id} has size {len(data)} but should be {chunk.chunk_length_bytes}"
+            if self.use_compression and self.region == chunk_req.src_region:
+                data = lz4.frame.compress(data)
+                compressed_len = len(data)
+                logger.debug(
+                    f"[sender:{self.worker_id}]:{chunk_ids} compressed {chunk_id} from {chunk.chunk_length_bytes} to {compressed_len} ({100 * compressed_len / chunk.chunk_length_bytes:.2f}%)"
+                )
+            else:
+                compressed_len = None
 
             # send chunk header
-            header = chunk.to_wire_header(n_chunks_left_on_socket=len(chunk_ids) - idx - 1)
+            header = chunk.to_wire_header(n_chunks_left_on_socket=len(chunk_ids) - idx - 1, compressed_len_bytes=compressed_len)
             logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sending chunk header")
             header.to_socket(sock)
             logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent chunk header")
 
             # send chunk data
-            chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
             assert chunk_file_path.exists(), f"chunk file {chunk_file_path} does not exist"
             with Timer() as t:
-                with open(chunk_file_path, "rb") as fd:
-                    data_buf = fd.read()
-                    sock.sendall(data_buf)
-                    assert (
-                        len(data_buf) == chunk.chunk_length_bytes
-                    ), f"chunk {chunk_id} has size {len(data_buf)} but should be {chunk.chunk_length_bytes}"
+                sock.sendall(data)
+
             logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent at {chunk.chunk_length_bytes * 8 / t.elapsed / MB:.2f}Mbps")
             self.chunk_store.state_finish_upload(chunk_id, f"sender:{self.worker_id}")
             chunk_file_path.unlink()

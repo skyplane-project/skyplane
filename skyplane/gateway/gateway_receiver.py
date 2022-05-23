@@ -8,6 +8,8 @@ from contextlib import closing
 from multiprocessing import Event, Process, Value, Queue
 from typing import Optional, Tuple
 
+import lz4.frame
+
 from skyplane import GB, MB
 from skyplane.chunk import WireProtocolHeader
 from skyplane.gateway.cert import generate_self_signed_certificate
@@ -19,18 +21,22 @@ from skyplane.utils.timer import Timer
 class GatewayReceiver:
     def __init__(
         self,
+        region: str,
         chunk_store: ChunkStore,
-        error_event,
+        error_event: Event,
         error_queue: Queue,
         write_back_block_size=4 * MB,
         max_pending_chunks=1,
         use_tls: bool = True,
+        use_compression: bool = True,
     ):
+        self.region = region
         self.chunk_store = chunk_store
         self.error_event = error_event
         self.error_queue = error_queue
         self.write_back_block_size = write_back_block_size
         self.max_pending_chunks = max_pending_chunks
+        self.use_compression = use_compression
         self.server_processes = []
         self.server_ports = []
         self.next_gateway_worker_id = 0
@@ -130,19 +136,23 @@ class GatewayReceiver:
             logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} Got chunk header {chunk_header}")
 
             # wait for space
-            while self.chunk_store.remaining_bytes() < chunk_header.chunk_len * self.max_pending_chunks:
+            while self.chunk_store.remaining_bytes() < chunk_header.data_len * self.max_pending_chunks:
                 time.sleep(0.1)
 
             # get data
             self.chunk_store.state_queue_download(chunk_header.chunk_id)
             self.chunk_store.state_start_download(chunk_header.chunk_id, f"receiver:{self.worker_id}")
-            logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} wire header length {chunk_header.chunk_len}")
+            logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} wire header length {chunk_header.data_len}")
+            if chunk_header.is_compressed:
+                decompressor_context = lz4.frame.create_decompression_context()
             with Timer() as t:
-                chunk_data_size = chunk_header.chunk_len
+                chunk_data_size = chunk_header.data_len
                 chunk_received_size = 0
                 with self.chunk_store.get_chunk_file_path(chunk_header.chunk_id).open("wb") as f:
                     while chunk_data_size > 0:
                         data = conn.recv(min(chunk_data_size, self.write_back_block_size))
+                        if chunk_header.is_compressed:
+                            data = lz4.frame.decompress_chunk(decompressor_context, data)
                         f.write(data)
                         chunk_data_size -= len(data)
                         chunk_received_size += len(data)
@@ -155,8 +165,8 @@ class GatewayReceiver:
                             )
                         )
             assert (
-                chunk_data_size == 0 and chunk_received_size == chunk_header.chunk_len
-            ), f"Size mismatch: got {chunk_received_size} expected {chunk_header.chunk_len}"
+                chunk_data_size == 0 and chunk_received_size == chunk_header.data_len
+            ), f"Size mismatch: got {chunk_received_size} expected {chunk_header.data_len}"
             logger.info(
                 f"[receiver:{server_port}]:{chunk_header.chunk_id} in {t.elapsed:.2f} seconds ({chunk_received_size * 8 / t.elapsed / GB:.2f}Gbps)"
             )

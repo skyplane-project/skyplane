@@ -23,18 +23,33 @@ from skyplane.utils import logger
 
 
 class GatewayDaemon:
-    def __init__(self, region: str, outgoing_ports: Dict[str, int], chunk_dir: PathLike, max_incoming_ports=64, use_tls=True):
+    def __init__(
+        self, region: str, outgoing_ports: Dict[str, int], chunk_dir: PathLike, max_incoming_ports=64, use_tls=True, use_compression=True
+    ):
         # todo max_incoming_ports should be configurable rather than static
         self.region = region
         self.max_incoming_ports = max_incoming_ports
+        self.use_compression = use_compression
         self.chunk_store = ChunkStore(chunk_dir)
         self.error_event = Event()
         self.error_queue = Queue()
         self.gateway_receiver = GatewayReceiver(
-            self.chunk_store, self.error_event, self.error_queue, max_pending_chunks=max_incoming_ports, use_tls=use_tls
+            region,
+            self.chunk_store,
+            self.error_event,
+            self.error_queue,
+            max_pending_chunks=max_incoming_ports,
+            use_tls=use_tls,
+            use_compression=use_compression,
         )
         self.gateway_sender = GatewaySender(
-            self.chunk_store, self.error_event, self.error_queue, outgoing_ports=outgoing_ports, use_tls=use_tls
+            region,
+            self.chunk_store,
+            self.error_event,
+            self.error_queue,
+            outgoing_ports=outgoing_ports,
+            use_tls=use_tls,
+            use_compression=use_compression,
         )
         self.obj_store_conn = GatewayObjStoreConn(self.chunk_store, self.error_event, self.error_queue, max_conn=32)
 
@@ -78,7 +93,7 @@ class GatewayDaemon:
                     self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
                     self.obj_store_conn.queue_upload_request(chunk_req)
                 elif self.region != chunk_req.dst_region:
-                    self.gateway_sender.queue_request(chunk_req)
+                    self.gateway_sender.queue_request(chunk_req, compress=self.region == chunk_req.src_region and self.use_compression)
                     self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
                 else:
                     self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
