@@ -10,7 +10,7 @@ from skyplane.chunk import ChunkRequest
 from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils import logger
-from skyplane.utils.utils import retry_backoff
+from skyplane.utils.fn import retry_backoff
 
 
 @dataclass

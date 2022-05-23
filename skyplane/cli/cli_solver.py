@@ -12,7 +12,7 @@ from skyplane import GB
 from skyplane import skyplane_root
 from skyplane.replicate.solver import GBIT_PER_GBYTE, ThroughputProblem, ThroughputSolverILP, ThroughputSolution
 from skyplane.utils import logger
-from skyplane.utils.utils import Timer
+from skyplane.utils.timer import Timer
 
 app = typer.Typer(name="skyplane-solver")
 

@@ -11,7 +11,7 @@ from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.server import Server, ServerState
 from skyplane.exceptions import MissingBucketException
 from skyplane.utils.cache import ignore_lru_cache
-from skyplane.utils.utils import PathLike, wait_for
+from skyplane.utils.fn import PathLike, wait_for
 from skyplane.utils import logger
 
 

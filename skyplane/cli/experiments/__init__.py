@@ -1,7 +1,7 @@
 import typer
 
-from skyplane.cli.experiments.profile import latency_grid, throughput_grid
-from skyplane.cli.experiments.util import get_max_throughput, util_grid_throughput, util_grid_cost, dump_full_util_cost_grid
+from skyplane.cli.experiments.cli_profile import latency_grid, throughput_grid
+from skyplane.cli.experiments.cli_query import get_max_throughput, util_grid_throughput, util_grid_cost, dump_full_util_cost_grid
 
 app = typer.Typer(name="experiments")
 app.command()(latency_grid)

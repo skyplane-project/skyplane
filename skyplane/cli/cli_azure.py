@@ -9,7 +9,7 @@ import typer
 
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
-from skyplane.utils.utils import do_parallel
+from skyplane.utils.fn import do_parallel
 
 app = typer.Typer(name="skyplane-azure")
 

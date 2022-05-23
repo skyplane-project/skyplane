@@ -13,7 +13,7 @@ from skyplane.replicate.replication_plan import ReplicationTopology, Replication
 from skyplane.replicate.replicator_client import ReplicatorClient
 from skyplane.replicate.solver import ThroughputProblem, ThroughputSolverILP
 from skyplane.utils import logger
-from skyplane.utils.utils import Timer
+from skyplane.utils.timer import Timer
 
 
 def generate_topology(

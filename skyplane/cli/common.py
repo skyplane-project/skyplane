@@ -15,7 +15,7 @@ from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
-from skyplane.utils.utils import do_parallel
+from skyplane.utils.fn import do_parallel
 
 
 def parse_path(path: str):

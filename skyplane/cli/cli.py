@@ -30,7 +30,7 @@ from skyplane.cli.cli_impl.cp_replicate import (
 )
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.cli_impl.ls import ls_local, ls_objstore
-from skyplane.cli.cli_util import (
+from skyplane.cli.common import (
     check_ulimit,
     parse_path,
     query_instances,
@@ -42,7 +42,8 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.replicate.replication_plan import ReplicationTopology
 from skyplane.replicate.solver import ThroughputProblem, ThroughputSolverILP
 from skyplane.utils import logger
-from skyplane.utils.utils import Timer, do_parallel
+from skyplane.utils.fn import do_parallel
+from skyplane.utils.timer import Timer
 
 app = typer.Typer(name="skyplane")
 app.command()(cli_internal.replicate_random)

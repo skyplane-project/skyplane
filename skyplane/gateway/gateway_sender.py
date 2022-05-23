@@ -13,7 +13,8 @@ from skyplane.chunk import ChunkRequest
 from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.utils import logger
 from skyplane.utils.net import retry_requests
-from skyplane.utils.utils import Timer, retry_backoff, wait_for
+from skyplane.utils.fn import retry_backoff, wait_for
+from skyplane.utils.timer import Timer
 
 
 class GatewaySender:

@@ -6,33 +6,11 @@ from typing import Callable, Iterable, List, Tuple, Union, TypeVar
 from tqdm import tqdm
 
 from skyplane.utils import logger
+from skyplane.utils.timer import Timer
 
 PathLike = Union[str, Path]
 T = TypeVar("T")
 R = TypeVar("R")
-
-
-class Timer:
-    def __init__(self, print_desc=None):
-        self.print_desc = print_desc
-        self.start = time.time()
-        self.end = None
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_typ, exc_val, exc_tb):
-        self.end = time.time()
-        if self.print_desc:
-            logger.fs.debug(f"{self.print_desc}: {self.elapsed:.2f}s")
-
-    @property
-    def elapsed(self):
-        if self.end is None:
-            end = time.time()
-            return end - self.start
-        else:
-            return self.end - self.start
 
 
 def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, progress_bar=False, desc="Waiting", leave_pbar=True) -> bool:
@@ -83,7 +61,6 @@ def do_parallel(
             logger.error(f"Error running {func.__name__} with args {arg_fmt(args)}: {e}")
             raise e
 
-    output = None
     results = []
     if spinner:
         spinner_obj = Halo(f"{desc} ({len(results)}/{len(args_list)})", spinner="dots")
