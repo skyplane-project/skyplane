@@ -1,5 +1,6 @@
 import os
 import datetime
+from re import A
 import requests
 from xml.etree import ElementTree
 from typing import Iterator, List
@@ -134,34 +135,63 @@ class GCSInterface(ObjectStoreInterface):
         os.path.getsize(src_file_path)
         bucket = self._gcs_client.bucket(self.bucket_name)
         blob = bucket.blob(dst_object_name)
-        blob.upload_from_filename(src_file_path)
+
+        if part_number is None:
+            blob.upload_from_filename(src_file_path)
+            return 
+
+        assert part_number is not None and upload_id is not None
+        # generate signed URL
+        url = blob.generate_signed_url(
+            version="v4",
+            # This URL is valid for 15 minutes
+            expiration=datetime.timedelta(minutes=15),
+            # Allow PUT requests using this URL.
+            method="PUT",
+            content_type="application/octet-stream",
+            query_parameters={"uploadId": upload_id, "partNumber": part_number}
+        )
+
+        # send request
+        req = requests.Request('POST', url, headers=headers)
+        prepared = req.prepare()
+        s = requests.Session()
+        response = s.send(prepared)
+
 
     def initiate_multipart_upload(self, dst_object_name, size_bytes):
 
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
 
-        policy = self._gcs_client.generate_signed_post_policy_v4(
-            self.bucket_name,
-            dst_object_name,
-            expiration=datetime.datetime.now() + datetime.timedelta(hours=24), #TODO: is this ok?
-            service_account_email="skyplane@skylark-sarah.iam.gserviceaccount.com"
-            #conditions=[
-                #["content-length-range", 0, 255]
-            #],
-            #fields=[
-                #"x-goog-meta-hello" => "world"
-            #],
-        )
-        print(policy)
+        blob = self._gcs_client.bucket(self.bucket_name).blob(f"{dst_object_name}")
         headers = {
-            'Authorization': self._gcs_client.credentials.token,
             'Content-Type': 'application/octet-stream',
-            'Content-Length': str(size_bytes), 
+            'Content-Length': str(0), 
             'Host': f"{self.bucket_name}.storage.googleapis.com"
         }
-        req = requests.Request('POST',policy["url"], headers=headers)
+
+        # generate signed URL
+        url = blob.generate_signed_url(
+            version="v4",
+            # This URL is valid for 15 minutes
+            expiration=datetime.timedelta(minutes=15),
+            # Allow PUT requests using this URL.
+            method="POST",
+            content_type="application/octet-stream",
+            query_parameters={"uploads": None},
+            headers=headers
+        )
+
+        # send request
+        req = requests.Request('POST', url, headers=headers)
         prepared = req.prepare()
         s = requests.Session()
         response = s.send(prepared)
+
+        # parse response
         tree = ElementTree.fromstring(response.content)
-        return tree.get("InitiateMultipartUploadResult").get("UploadId")
+        bucket = tree[0].text
+        key = tree[1].text
+        upload_id = tree[2].text
+
+        return upload_id

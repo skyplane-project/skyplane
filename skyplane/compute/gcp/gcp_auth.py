@@ -63,7 +63,7 @@ class GCPAuthentication:
     def credentials(self):
         if self._credentials is None:
             self._credentials, _ = self.get_adc_credential(self.project_id)
-            self.service_account = self.create_service_account("skyplane", self.project_id)
+            self.service_account = self.create_service_account("sarah-127", self.project_id)
         return self._credentials
 
     @property
@@ -85,51 +85,53 @@ class GCPAuthentication:
         return inferred_cred, inferred_project
 
     def set_service_account_credentials(self, service_name):
-        _, key_file = self.get_service_account(service_name)
+        key_file = self.get_service_account(service_name)
         key = json.loads(open(key_file, "r").read())
         self._credentails = service_account.Credentials.from_service_account_info(key)
+        self.credentails = service_account.Credentials.from_service_account_info(key)
+        return self.credentials
  
     def get_service_account(self, service_name): 
         service = self.get_gcp_client(service_name="iam")
         service_account_email = f"{service_name}@{self.project_id}.iam.gserviceaccount.com"
         response = service.projects().serviceAccounts().keys().list(
             name='projects/-/serviceAccounts/' + service_account_email).execute()
-        if len(response['keys']) > 0:
-            # use existing key
-            key = response['keys'][0]
-        else:
+        
+        
+        # write key file
+        if not os.path.exists(key_root / "gcp" / "service_account_key.json"):
             # create key
             key = service.projects().serviceAccounts().keys().create(
                 name='projects/-/serviceAccounts/' + service_account_email, body={}
             ).execute()
 
-        # write key file
-        if not os.path.exists(key_root / "gcp" / "service_account.json"):
             open(key_root / "gcp" / "service_account.json", "w").write(json.dumps(key))
+            print(key)
             json_key_file = base64.b64decode(key['privateKeyData']).decode('utf-8')
             open(key_root / "gcp" / "service_account_key.json", "w").write(json_key_file)
 
-        return os.path.join(key_root, "gcp", "service_account.json"), os.path.join(key_root, "gcp", "service_account_key.json")
+        #return os.path.join(key_root, "gcp", "service_account.json"), os.path.join(key_root, "gcp", "service_account_key.json")
+        return os.path.join(key_root, "gcp", "service_account_key.json")
 
     def create_service_account(self, service_name, project_id):
         service = self.get_gcp_client(service_name="iam")
         service_accounts = service.projects().serviceAccounts().list(name='projects/' + project_id).execute()["accounts"]
-        print(service_accounts)
 
-        for account in service_accounts:
-            if account["displayName"] == service_name: 
-                return account
+        account = None 
+        for service_account in service_accounts:
+            if service_account["email"].split("@")[0] == service_name: 
+                account = service_account
 
-        # create service account
-        account = service.projects().serviceAccounts().create(
-            name='projects/' + project_id,
-            body={
-                'accountId': service_name,
-                'serviceAccount': {
-                    'displayName': service_name 
-                }
-            }).execute()
-        print(account)
+        if account is None:
+            # create service account
+            account = service.projects().serviceAccounts().create(
+                name='projects/' + project_id,
+                body={
+                    'accountId': service_name,
+                    'serviceAccount': {
+                        'displayName': service_name 
+                    }
+                }).execute()
         return account
 
 
@@ -139,8 +141,10 @@ class GCPAuthentication:
     def get_gcp_client(self, service_name="compute", version="v1"):
         return discovery.build(service_name, version, credentials=self.credentials, client_options={"quota_project_id": self.project_id})
 
-    def get_storage_client(self):
-        return storage.Client(project=self.project_id, credentials=self.credentials)
+    def get_storage_client(self, service_account = None):
+        if service_account is None:
+            return storage.Client(project=self.project_id, credentials=self.credentials)
+        return storage.Client.from_service_account_json(self.get_service_account(service_account))
 
     def get_gcp_instances(self, gcp_region: str):
         return self.get_gcp_client().instances().list(project=self.project_id, zone=gcp_region).execute()
