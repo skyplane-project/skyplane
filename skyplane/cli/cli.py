@@ -30,7 +30,7 @@ from skyplane.cli.cli_impl.cp_replicate import (
 )
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.cli_impl.ls import ls_local, ls_objstore
-from skyplane.cli.util import (
+from skyplane.cli.cli_util import (
     check_ulimit,
     parse_path,
     query_instances,

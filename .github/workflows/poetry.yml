@@ -32,7 +32,9 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
       - name: black
         run: poetry run black . --check --line-length=140
+      # Only run pytype on main branch due to slow runtime
       - name: pytype
+        if: github.ref == 'refs/heads/main'
         run: poetry run pytype --config .pytype.cfg -j 2
 
   unit-test:
