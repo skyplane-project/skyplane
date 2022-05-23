@@ -25,8 +25,8 @@ jobs:
             poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
       - name: Set Poetry config
         run: |
-          poetry config settings.virtualenvs.in-project false
-          poetry config settings.virtualenvs.path ~/.virtualenvs
+          poetry config virtualenvs.in-project false
+          poetry config virtualenvs.path ~/.virtualenvs
       - name: Install Dependencies
         run: poetry install --with gateway --with solver
         if: steps.cache.outputs.cache-hit != 'true'
@@ -55,8 +55,8 @@ jobs:
             poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
       - name: Set Poetry config
         run: |
-          poetry config settings.virtualenvs.in-project false
-          poetry config settings.virtualenvs.path ~/.virtualenvs
+          poetry config virtualenvs.in-project false
+          poetry config virtualenvs.path ~/.virtualenvs
       - name: Install Dependencies
         run: poetry install --with gateway --with solver
         if: steps.cache.outputs.cache-hit != 'true'
@@ -87,8 +87,8 @@ jobs:
             poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
       - name: Set Poetry config
         run: |
-          poetry config settings.virtualenvs.in-project false
-          poetry config settings.virtualenvs.path ~/.virtualenvs
+          poetry config virtualenvs.in-project false
+          poetry config virtualenvs.path ~/.virtualenvs
           poetry config repositories.test-pypi https://test.pypi.org/legacy/
           poetry config pypi-token.test-pypi ${{ secrets.TEST_PYPI_API_TOKEN }}
       - name: Install Dependencies
