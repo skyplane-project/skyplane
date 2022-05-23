@@ -68,13 +68,13 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
       - name: Run unit tests
         run: poetry run pytest tests/unit_nocloud
-     #- name: Run cloud tests
-        ###consider only running cloud tests for PRs to main once we go open source
-        ###if: ${{ github.event_name == 'pull_request' && github.base_ref == github.event.repository.default_branch }}
-        #run: |
-          #pytest skyplane/test/unit_aws
-          #pytest skyplane/test/unit_azure
-          #pytest skyplane/test/unit_gcp
+    #  - name: Run cloud tests
+    #     # consider only running cloud tests for PRs to main once we go open source
+    #     if: ${{ github.event_name == 'pull_request' && github.base_ref == github.event.repository.default_branch }}
+    #     run: |
+    #       pytest skyplane/test/unit_aws
+    #       pytest skyplane/test/unit_azure
+    #       pytest skyplane/test/unit_gcp
 
   publish-pypi-test:
     runs-on: ubuntu-latest
