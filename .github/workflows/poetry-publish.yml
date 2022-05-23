@@ -1,4 +1,4 @@
-name: poetry
+name: poetry-publish
 on:
   release:
     types: [created]

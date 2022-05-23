@@ -1,5 +1,4 @@
-name: poetry
-name: poetry
+name: poetry-publish-nightly
 on:
   push:
     branches: [ main ]
