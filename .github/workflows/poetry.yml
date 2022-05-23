@@ -14,12 +14,7 @@ jobs:
         with:
           python-version: 3.8
       - name: Install Poetry
-        uses: dschep/install-poetry-action@v1
-        with:
-          version: 1.2.0b1
-          virtualenvs-in-project: false
-          virtualenvs-path: ~/.virtualenvs
-          installer-parallel: true
+        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.0b1
       - name: Cache Poetry virtualenv
         uses: actions/cache@v1
         id: cache
@@ -49,12 +44,7 @@ jobs:
         with:
           python-version: 3.8
       - name: Install Poetry
-        uses: dschep/install-poetry-action@v1
-        with:
-          version: 1.2.0b1
-          virtualenvs-in-project: false
-          virtualenvs-path: ~/.virtualenvs
-          installer-parallel: true
+        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.0b1
       - name: Cache Poetry virtualenv
         uses: actions/cache@v1
         id: cache
@@ -86,12 +76,7 @@ jobs:
     if: ${{ github.event_name == 'pull_request' && github.base_ref == github.event.repository.default_branch }}
     steps:
       - name: Install Poetry
-        uses: dschep/install-poetry-action@v1
-        with:
-          version: 1.2.0b1
-          virtualenvs-in-project: false
-          virtualenvs-path: ~/.virtualenvs
-          installer-parallel: true
+        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.0b1
       - name: Cache Poetry virtualenv
         uses: actions/cache@v1
         id: cache
@@ -102,6 +87,8 @@ jobs:
             poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
       - name: Set Poetry config
         run: |
+          poetry config settings.virtualenvs.in-project false
+          poetry config settings.virtualenvs.path ~/.virtualenvs
           poetry config repositories.test-pypi https://test.pypi.org/legacy/
           poetry config pypi-token.test-pypi ${{ secrets.TEST_PYPI_API_TOKEN }}
       - name: Install Dependencies
