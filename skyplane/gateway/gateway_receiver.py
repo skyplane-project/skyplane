@@ -23,7 +23,7 @@ class GatewayReceiver:
         self,
         region: str,
         chunk_store: ChunkStore,
-        error_event: Event,
+        error_event,
         error_queue: Queue,
         recv_block_size=4 * MB,
         max_pending_chunks=1,

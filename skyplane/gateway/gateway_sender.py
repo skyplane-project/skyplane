@@ -23,7 +23,7 @@ class GatewaySender:
         self,
         region: str,
         chunk_store: ChunkStore,
-        error_event: Event,
+        error_event,
         error_queue: Queue,
         outgoing_ports: Dict[str, int],
         use_tls: bool = True,

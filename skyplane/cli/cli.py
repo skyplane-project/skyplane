@@ -91,7 +91,7 @@ def cp(
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
     use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
-    use_compression: bool = typer.Option(True, help="If true, will use compression for uploads/downloads"),
+    use_compression: bool = typer.Option(False, help="If true, will use compression for uploads/downloads"),
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
     solver_throughput_grid: Path = typer.Option(
@@ -211,7 +211,7 @@ def sync(
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
     use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
-    use_compression: bool = typer.Option(True, help="If true, will use compression for uploads/downloads"),
+    use_compression: bool = typer.Option(False, help="If true, will use compression for uploads/downloads"),
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
     solver_throughput_grid: Path = typer.Option(
