@@ -86,8 +86,8 @@ def ls(directory: str):
 def cp(
     src: str,
     dst: str,
-    num_connections: int = typer.Option(32, help="Number of connections to open for replication"),
-    max_instances: int = typer.Option(1, help="Max number of instances per overlay region."),
+    num_connections: int = typer.Option(32, "--num-connections", "-c", help="Number of connections between gateways"),
+    max_instances: int = typer.Option(1, "--max-instances", "-n", help="Number of gateways"),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
     debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
@@ -210,8 +210,8 @@ def cp(
 def sync(
     src: str,
     dst: str,
-    num_connections: int = typer.Option(32, help="Number of connections to open for replication"),
-    max_instances: int = typer.Option(1, help="Max number of instances per overlay region."),
+    num_connections: int = typer.Option(32, "--num-connections", "-c", help="Number of connections between gateways"),
+    max_instances: int = typer.Option(1, "--max-instances", "-n", help="Number of gateways"),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
     debug: bool = typer.Option(False, help="If true, will write debug info to debug directory"),
