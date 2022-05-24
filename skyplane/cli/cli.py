@@ -90,6 +90,7 @@ def cp(
     max_instances: int = typer.Option(1, help="Max number of instances per overlay region."),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
+    debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
     use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
     use_compression: bool = typer.Option(False, help="If true, will use compression for uploads/downloads"),
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
@@ -120,6 +121,8 @@ def cp(
     :type reuse_gateways: bool
     :param max_chunk_size_mb: If set, `cp` will subdivide objects into chunks at most this size.
     :type max_chunk_size_mb: int
+    :param debug: If true, will write debug information to debug directory.
+    :type debug: bool
     :param use_bbr: If set, will use BBR for transfers by default.
     :type use_bbr: bool
     :param use_compression: If set, will use compression for transfers.
@@ -195,6 +198,7 @@ def cp(
             cached_src_objs=cached_src_objs,
             reuse_gateways=reuse_gateways,
             max_chunk_size_mb=max_chunk_size_mb,
+            debug=debug,
             use_bbr=use_bbr,
             use_compression=use_compression,
         )
@@ -210,6 +214,7 @@ def sync(
     max_instances: int = typer.Option(1, help="Max number of instances per overlay region."),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
+    debug: bool = typer.Option(False, help="If true, will write debug info to debug directory"),
     use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
     use_compression: bool = typer.Option(False, help="If true, will use compression for uploads/downloads"),
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
@@ -244,6 +249,8 @@ def sync(
     :type reuse_gateways: bool
     :param max_chunk_size_mb: If set, `cp` will subdivide objects into chunks at most this size.
     :type max_chunk_size_mb: int
+    :param debug: If true, will write debug info to debug directory
+    :type debug: bool
     :param use_bbr: If set, will use BBR for transfers by default.
     :type use_bbr: bool
     :param use_compression: If set, will use compression for transfers by default.
@@ -332,6 +339,7 @@ def sync(
         cached_src_objs=cached_src_objs,
         reuse_gateways=reuse_gateways,
         max_chunk_size_mb=max_chunk_size_mb,
+        debug=debug,
         use_bbr=use_bbr,
         use_compression=use_compression,
     )

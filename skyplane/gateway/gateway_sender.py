@@ -191,5 +191,5 @@ class GatewaySender:
                 sock.sendall(data)
 
             logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent at {chunk.chunk_length_bytes * 8 / t.elapsed / MB:.2f}Mbps")
-            self.chunk_store.state_finish_upload(chunk_id, f"sender:{self.worker_id}")
+            self.chunk_store.state_finish_upload(chunk_id, f"sender:{self.worker_id}", compressed_size_bytes=compressed_len)
             chunk_file_path.unlink()

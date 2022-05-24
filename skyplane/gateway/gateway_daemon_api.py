@@ -223,7 +223,7 @@ class GatewayDaemonAPI(threading.Thread):
                 return jsonify({"errors": error_list_str})
 
     def register_socket_profiling_routes(self):
-        @self.app.route("/api/v1/socket_profiles/receiver", methods=["GET"])
+        @self.app.route("/api/v1/profile/socket/receiver", methods=["GET"])
         def get_receiver_socket_profiles():
             with self.receiver_socket_profiles_lock:
                 while True:
@@ -233,3 +233,19 @@ class GatewayDaemonAPI(threading.Thread):
                     except Empty:
                         break
                 return jsonify({"socket_profiles": self.receiver_socket_profiles})
+
+        @self.app.route("/api/v1/profile/compression", methods=["GET"])
+        def get_receiver_compression_profile():
+            total_size_compressed_bytes, total_size_uncompressed_bytes = 0, 0
+            for k, v in self.chunk_store.sender_compressed_sizes.items():
+                total_size_compressed_bytes += v
+                total_size_uncompressed_bytes += self.chunk_store.get_chunk_request(k).chunk.chunk_length_bytes
+            return jsonify(
+                {
+                    "compressed_bytes_sent": total_size_compressed_bytes,
+                    "uncompressed_bytes_sent": total_size_uncompressed_bytes,
+                    "compression_ratio": total_size_uncompressed_bytes / total_size_compressed_bytes
+                    if total_size_compressed_bytes > 0
+                    else 0,
+                }
+            )

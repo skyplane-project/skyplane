@@ -392,8 +392,6 @@ class ReplicatorClient:
                             )
                         )
                     logger.fs.debug(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")
-                    for chunk_request in chunk_requests_sharded[batch_idx]:
-                        logger.fs.debug(f"\t{chunk_request}")
 
                 # send chunk requests to start gateways in parallel
                 spinner.text = "Preparing replication plan, dispatching chunk requests to source gateways"
@@ -463,6 +461,8 @@ class ReplicatorClient:
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in job.chunk_requests])
         last_log = None
 
+        sources = self.topology.source_instances()
+        source_regions = set(s.region for s in sources)
         sinks = self.topology.sink_instances()
         sink_regions = set(s.region for s in sinks)
 
@@ -565,6 +565,23 @@ class ReplicatorClient:
             if show_spinner:
                 spinner.stop()
             with Halo(text="Cleaning up after transfer", spinner="dots") as spinner:
+                # get compression ratio information from destination gateways using "/api/v1/profile/compression"
+                total_sent_compressed, total_sent_uncompressed = 0, 0
+                for gateway in {v for v in self.bound_nodes.values() if v.region_tag in source_regions}:
+                    stats = retry_requests().get(f"{gateway.gateway_api_url}/api/v1/profile/compression")
+                    if stats.status_code == 200:
+                        stats = stats.json()
+                        total_sent_compressed += stats.get("compressed_bytes_sent", 0)
+                        total_sent_uncompressed += stats.get("uncompressed_bytes_sent", 0)
+                logger.fs.info(f"Total compressed bytes sent: {total_sent_compressed / GB:.2f}GB")
+                logger.fs.info(f"Total uncompressed bytes sent: {total_sent_uncompressed / GB:.2f}GB")
+                logger.fs.info(
+                    f"Compression ratio: {total_sent_compressed / total_sent_uncompressed if total_sent_uncompressed > 0 else 0:.2f}"
+                )
+                print(
+                    f"Sent {total_sent_compressed / GB:.2f}GB compressed, {total_sent_uncompressed / GB:.2f}GB uncompressed w/ compression ratio {total_sent_compressed / total_sent_uncompressed if total_sent_uncompressed > 0 else 0:.2f}"
+                )
+
                 if copy_gateway_logs:
 
                     def copy_log(instance):
@@ -585,7 +602,7 @@ class ReplicatorClient:
                 if write_socket_profile:
 
                     def write_socket_profile(instance):
-                        receiver_reply = retry_requests().get(f"{instance.gateway_api_url}/api/v1/socket_profiles/receiver")
+                        receiver_reply = retry_requests().get(f"{instance.gateway_api_url}/api/v1/profile/socket/receiver")
                         if receiver_reply.status_code != 200:
                             logger.fs.error(
                                 f"Failed to get receiver socket profile from {instance.gateway_api_url}: {receiver_reply.status_code} {receiver_reply.text}"
@@ -604,6 +621,7 @@ class ReplicatorClient:
 
                     do_parallel(fn, self.bound_nodes.values(), n=-1)
                     spinner.text = "Cleaning up after transfer, shutting down gateway servers"
+                spinner.succeed(f"Cleaned up after transfer, see log directory: {self.transfer_dir}")
 
 
 def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1) -> Dict[str, List[Server]]:

@@ -101,6 +101,7 @@ def replicate_helper(
     # gateway provisioning options
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYPLANE_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
+    debug: bool = False,
     use_bbr: bool = False,
     use_compression: bool = False,
     # cloud provider specific options
@@ -224,6 +225,9 @@ def replicate_helper(
             log_interval_s=log_interval_s,
             time_limit_seconds=time_limit_seconds,
             multipart=max_chunk_size_mb is not None,
+            write_profile=debug,
+            write_socket_profile=debug,
+            copy_gateway_logs=debug,
         )
     except KeyboardInterrupt:
         if not reuse_gateways:

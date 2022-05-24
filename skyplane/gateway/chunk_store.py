@@ -28,6 +28,9 @@ class ChunkStore:
         # state log
         self.chunk_status_queue: Queue[Dict] = Queue()
 
+        # metric log
+        self.sender_compressed_sizes: Dict[int, float] = self.manager.dict()
+
     def get_chunk_file_path(self, chunk_id: int) -> Path:
         return self.chunk_dir / f"{chunk_id:05d}.chunk"
 
@@ -89,10 +92,12 @@ class ChunkStore:
         else:
             raise ValueError(f"Invalid transition start_upload from {state} (id={chunk_id})")
 
-    def state_finish_upload(self, chunk_id: int, sender_id: Optional[str] = None):
+    def state_finish_upload(self, chunk_id: int, sender_id: Optional[str] = None, compressed_size_bytes: Optional[int] = None):
         state = self.get_chunk_state(chunk_id)
         if state in [ChunkState.upload_in_progress, ChunkState.upload_complete]:
             self.set_chunk_state(chunk_id, ChunkState.upload_complete, {"sender_id": sender_id})
+            if compressed_size_bytes is not None:
+                self.sender_compressed_sizes[chunk_id] = compressed_size_bytes
         else:
             raise ValueError(f"Invalid transition finish_upload from {state} (id={chunk_id})")
 
