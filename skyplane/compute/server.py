@@ -285,7 +285,7 @@ class Server:
         docker_run_flags += " --mount type=tmpfs,dst=/skyplane,tmpfs-size=$(($(free -b  | head -n2 | tail -n1 | awk '{print $2}')/2))"
         docker_run_flags += f" -v /tmp/{config_path.name}:/pkg/data/{config_path.name}"
         docker_run_flags += " " + " ".join(f"--env {k}={v}" for k, v in docker_envs.items())
-        gateway_daemon_cmd = f"python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag}"
+        gateway_daemon_cmd = f"python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag} {'--use-compression' if use_compression else ''}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skyplane_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         start_out, start_err = self.run_command(docker_launch_cmd)
         logger.fs.debug(desc_prefix + f": Gateway started {start_out.strip()}")

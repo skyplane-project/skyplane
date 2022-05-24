@@ -24,7 +24,7 @@ from skyplane.utils import logger
 
 class GatewayDaemon:
     def __init__(
-        self, region: str, outgoing_ports: Dict[str, int], chunk_dir: PathLike, max_incoming_ports=64, use_tls=True, use_compression=True
+        self, region: str, outgoing_ports: Dict[str, int], chunk_dir: PathLike, max_incoming_ports=64, use_tls=True, use_compression=False
     ):
         # todo max_incoming_ports should be configurable rather than static
         self.region = region
@@ -159,10 +159,15 @@ if __name__ == "__main__":
     )
     parser.add_argument("--chunk-dir", type=Path, default="/tmp/skyplane/chunks", help="Directory to store chunks")
     parser.add_argument("--disable-tls", action="store_true")
+    parser.add_argument("--use-compression", action="store_true")
     args = parser.parse_args()
 
     os.makedirs(args.chunk_dir)
     daemon = GatewayDaemon(
-        region=args.region, outgoing_ports=json.loads(args.outgoing_ports), chunk_dir=args.chunk_dir, use_tls=not args.disable_tls
+        region=args.region,
+        outgoing_ports=json.loads(args.outgoing_ports),
+        chunk_dir=args.chunk_dir,
+        use_tls=not args.disable_tls,
+        use_compression=args.use_compression,
     )
     daemon.run()
