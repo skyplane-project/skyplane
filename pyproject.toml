@@ -52,7 +52,7 @@ pyopenssl = { version = "^22.0.0", optional = true }
 werkzeug = { version = "^2.1.2", optional = true }
 
 [tool.poetry.extras]
-gateway = ["blosc", "flask", "pyopenssl", "werkzeug"]
+gateway = ["flask", "lz4", "pyopenssl", "werkzeug"]
 solver = ["cvxopt", "cvxpy", "graphviz", "matplotlib", "numpy"]
 
 [tool.poetry.dev-dependencies]
