@@ -192,23 +192,15 @@ jupyter = ["ipython (>=7.8.0)", "tokenize-rt (>=3.2.0)"]
 uvloop = ["uvloop (>=0.15.2)"]
 
 [[package]]
-name = "blosc"
-version = "1.10.6"
-description = "Blosc data compressor"
-category = "main"
-optional = false
-python-versions = "*"
-
-[[package]]
 name = "boto3"
-version = "1.23.5"
+version = "1.23.6"
 description = "The AWS SDK for Python"
 category = "main"
 optional = false
 python-versions = ">= 3.6"
 
 [package.dependencies]
-botocore = ">=1.26.5,<1.27.0"
+botocore = ">=1.26.6,<1.27.0"
 jmespath = ">=0.7.1,<2.0.0"
 s3transfer = ">=0.5.0,<0.6.0"
 
@@ -217,7 +209,7 @@ crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
 
 [[package]]
 name = "botocore"
-version = "1.26.5"
+version = "1.26.6"
 description = "Low-level, data-driven core of boto 3."
 category = "main"
 optional = false
@@ -776,7 +768,7 @@ name = "lz4"
 version = "4.0.1"
 description = "LZ4 Bindings for Python"
 category = "main"
-optional = false
+optional = true
 python-versions = ">=3.7"
 
 [package.extras]
@@ -1628,7 +1620,7 @@ solver = ["cvxopt", "cvxpy", "graphviz", "matplotlib", "numpy"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7.1,<3.11"
-content-hash = "49234e10339f7584f12000c5f2447f85852f9291baa8418b31498e03dce5dda3"
+content-hash = "0ab00c80dc9808d45751e1fe50b3b32fad54d212129a38745f0ca0a950f6e187"
 
 [metadata.files]
 atomicwrites = [
@@ -1753,31 +1745,13 @@ black = [
     {file = "black-22.3.0-py3-none-any.whl", hash = "sha256:bc58025940a896d7e5356952228b68f793cf5fcb342be703c3a2669a1488cb72"},
     {file = "black-22.3.0.tar.gz", hash = "sha256:35020b8886c022ced9282b51b5a875b6d1ab0c387b31a065b84db7c33085ca79"},
 ]
-blosc = [
-    {file = "blosc-1.10.6-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:cab567bcda075dde74ec80c406a48d36d8fc886ac8a989bb58cc9f7cb60ec6bf"},
-    {file = "blosc-1.10.6-cp37-cp37m-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:daa06af88b5264bab13659bfb4dd84dedf3541b4972cf0ce4a3c957e4a40ce41"},
-    {file = "blosc-1.10.6-cp37-cp37m-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:cfe447f6b8778ec5140f7671a283c396b15a269188ee3697f932c66abfbc26d1"},
-    {file = "blosc-1.10.6-cp37-cp37m-win32.whl", hash = "sha256:4c7af607edfd2f56916f78346ae1e49b016d470f0675bed1d5292ef7c324a181"},
-    {file = "blosc-1.10.6-cp37-cp37m-win_amd64.whl", hash = "sha256:2874ac08785913818dd4fc6ee59ed456b732f5b14a1ca12093a1eafcbff039b7"},
-    {file = "blosc-1.10.6-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:094ea5de87e2765868a87c5c03daa88297bda2e6d6b9fe1ed42e87f9d5c2335e"},
-    {file = "blosc-1.10.6-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:0ce3f50b357f65f24d47ef5ff0265426dd149a3916d0feb061fa9e9b12af4a19"},
-    {file = "blosc-1.10.6-cp38-cp38-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:b30326c84b745e307ed35766a231572cc66b65a2e15a06acf9a68ec946043224"},
-    {file = "blosc-1.10.6-cp38-cp38-win32.whl", hash = "sha256:fb135356ab39bb7222b214958f2c6794c65801ecfe45a52116adc23e1d956b4c"},
-    {file = "blosc-1.10.6-cp38-cp38-win_amd64.whl", hash = "sha256:67e5c9be04de7cfc64be6a3385ea1da7228eb25b84a5cc6f1d16e53319ec8d2a"},
-    {file = "blosc-1.10.6-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:3260832994f10ecde7f2c1b27ed6c9e2581b8584ea60554ab35b436153af7556"},
-    {file = "blosc-1.10.6-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:b1d8c9779625cc001ea35d893da769f155d38a67b052797eb4cab11147886533"},
-    {file = "blosc-1.10.6-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:1c11cf9b9915ca43a8a8557f3412f974051510712790a170b46fa481581e07fe"},
-    {file = "blosc-1.10.6-cp39-cp39-win32.whl", hash = "sha256:d9a9ec1eda375b35ab64c0f9b9295e8219b29fbaf8646d1f54251102411544db"},
-    {file = "blosc-1.10.6-cp39-cp39-win_amd64.whl", hash = "sha256:4d166c0ef9363c6ff5d163b81b2089103d8012651520487408bea49eb664f9ce"},
-    {file = "blosc-1.10.6.tar.gz", hash = "sha256:55d9d57b85d6eeec010c6c399f2820f96f566dccbc6ddfeefb60501f8e10b548"},
-]
 boto3 = [
-    {file = "boto3-1.23.5-py3-none-any.whl", hash = "sha256:5cbbd985171b1e278b722dca48f71455b4938378962734828daeb76f73be6fba"},
-    {file = "boto3-1.23.5.tar.gz", hash = "sha256:73a0d092aaea1649150f43fb3f41451d5a0883940549a64d72781a23ce6b2d44"},
+    {file = "boto3-1.23.6-py3-none-any.whl", hash = "sha256:6fed94cfe8e4502ec176821d3fefed9c1973d18ef491530b158108966cfc8ae1"},
+    {file = "boto3-1.23.6.tar.gz", hash = "sha256:725e507211cde015184e2b5921512df89f63852fb079eda6ab6c282af66f45bd"},
 ]
 botocore = [
-    {file = "botocore-1.26.5-py3-none-any.whl", hash = "sha256:805db3ecf85ff89edfb6788f862b87426f990e3e6383ef3fca3076f7659a5454"},
-    {file = "botocore-1.26.5.tar.gz", hash = "sha256:32541873924e3ff0ad95f02dc331e9f278721a3b864a4e2a8d514346b2598ce5"},
+    {file = "botocore-1.26.6-py3-none-any.whl", hash = "sha256:2846ee4a548462ba6db70125bea1542b4ed39793240aabc62ddf96fb6ec7e4d1"},
+    {file = "botocore-1.26.6.tar.gz", hash = "sha256:ce3fb008ffb041d142cf3949b13529e8dc9a0db5f2ec0e86b159f10f2b56a46e"},
 ]
 cachetools = [
     {file = "cachetools-5.1.0-py3-none-any.whl", hash = "sha256:4ebbd38701cdfd3603d1f751d851ed248ab4570929f2d8a7ce69e30c420b141c"},
