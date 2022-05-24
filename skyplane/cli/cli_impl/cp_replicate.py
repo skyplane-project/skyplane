@@ -102,6 +102,7 @@ def replicate_helper(
     reuse_gateways: bool = False,
     gateway_docker_image: str = os.environ.get("SKYPLANE_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
     use_bbr: bool = False,
+    use_compression: bool = False,
     # cloud provider specific options
     aws_instance_class: str = "m5.8xlarge",
     azure_instance_class: str = "Standard_D32_v4",
@@ -204,7 +205,7 @@ def replicate_helper(
 
     stats = {}
     try:
-        rc.provision_gateways(reuse_gateways, use_bbr=use_bbr)
+        rc.provision_gateways(reuse_gateways, use_bbr=use_bbr, use_compression=use_compression)
         for node, gw in rc.bound_nodes.items():
             logger.fs.info(f"Log URLs for {gw.uuid()} ({node.region}:{node.instance})")
             logger.fs.info(f"\tLog viewer: {gw.gateway_log_viewer_url}")

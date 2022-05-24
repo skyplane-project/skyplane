@@ -29,7 +29,6 @@ class GatewayDaemon:
         # todo max_incoming_ports should be configurable rather than static
         self.region = region
         self.max_incoming_ports = max_incoming_ports
-        self.use_compression = use_compression
         self.chunk_store = ChunkStore(chunk_dir)
         self.error_event = Event()
         self.error_queue = Queue()
@@ -81,61 +80,67 @@ class GatewayDaemon:
         signal.signal(signal.SIGTERM, exit_handler)
 
         logger.info("[gateway_daemon] Starting daemon loop")
-        while not exit_flag.is_set() and not self.error_event.is_set():
-            # queue object uploads and relays
-            for chunk_req in self.chunk_store.get_chunk_requests(ChunkState.downloaded):
-                if self.region == chunk_req.dst_region and chunk_req.dst_type == "save_local":  # do nothing, save to ChunkStore
-                    self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
-                    self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id, "save_local")
-                    self.chunk_store.state_finish_upload(chunk_req.chunk.chunk_id, "save_local")
-                    self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).unlink()
-                elif self.region == chunk_req.dst_region and chunk_req.dst_type == "object_store":
-                    self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
-                    self.obj_store_conn.queue_upload_request(chunk_req)
-                elif self.region != chunk_req.dst_region:
-                    self.gateway_sender.queue_request(chunk_req, compress=self.region == chunk_req.src_region and self.use_compression)
-                    self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
-                else:
-                    self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
-                    self.error_queue.put(ValueError("[gateway_daemon] Unknown destination type"))
-                    self.error_event.set()
+        try:
+            while not exit_flag.is_set() and not self.error_event.is_set():
+                # queue object uploads and relays
+                for chunk_req in self.chunk_store.get_chunk_requests(ChunkState.downloaded):
+                    if self.region == chunk_req.dst_region and chunk_req.dst_type == "save_local":  # do nothing, save to ChunkStore
+                        self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
+                        self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id, "save_local")
+                        self.chunk_store.state_finish_upload(chunk_req.chunk.chunk_id, "save_local")
+                        self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).unlink()
+                    elif self.region == chunk_req.dst_region and chunk_req.dst_type == "object_store":
+                        self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
+                        self.obj_store_conn.queue_upload_request(chunk_req)
+                    elif self.region != chunk_req.dst_region:
+                        self.gateway_sender.queue_request(chunk_req)
+                        self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
+                    else:
+                        self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
+                        self.error_queue.put(ValueError("[gateway_daemon] Unknown destination type"))
+                        self.error_event.set()
 
-            # queue object store downloads and relays (if space is available)
-            for chunk_req in self.chunk_store.get_chunk_requests(ChunkState.registered):
-                if self.region == chunk_req.src_region and chunk_req.src_type == "read_local":  # do nothing, read from local ChunkStore
-                    self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
-                    self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, "read_local")
-                    self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, "read_local")
-                elif self.region == chunk_req.src_region and chunk_req.src_type == "random":
-                    size_mb = chunk_req.src_random_size_mb
-                    assert chunk_req.src_random_size_mb is not None, "Random chunk size not set"
-                    if self.chunk_store.remaining_bytes() >= size_mb * MB * self.max_incoming_ports:
-
-                        def fn(chunk_req, size_mb):
-                            while self.chunk_store.remaining_bytes() < size_mb * MB * self.max_incoming_ports:
-                                time.sleep(0.1)
-                            self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, "random")
-                            fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
-                            with self.dl_pool_semaphore:
-                                size_bytes = int(size_mb * MB)
-                                assert size_bytes > 0, f"Invalid size {size_bytes} for fallocate"
-                                os.system(f"fallocate -l {size_bytes} {fpath}")
-                            chunk_req.chunk.chunk_length_bytes = os.path.getsize(fpath)
-                            self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
-                            self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, "random")
-
+                # queue object store downloads and relays (if space is available)
+                for chunk_req in self.chunk_store.get_chunk_requests(ChunkState.registered):
+                    if self.region == chunk_req.src_region and chunk_req.src_type == "read_local":  # do nothing, read from local ChunkStore
                         self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
-                        threading.Thread(target=fn, args=(chunk_req, size_mb)).start()
-                elif self.region == chunk_req.src_region and chunk_req.src_type == "object_store":
-                    self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
-                    self.obj_store_conn.queue_download_request(chunk_req)
-                elif self.region != chunk_req.src_region:  # do nothing, waiting for chunk to be be ready_to_upload
-                    continue
-                else:
-                    self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
-                    self.error_queue.put(ValueError("[gateway_daemon] Unknown source type"))
-                    self.error_event.set()
-            time.sleep(0.1)  # yield
+                        self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, "read_local")
+                        self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, "read_local")
+                    elif self.region == chunk_req.src_region and chunk_req.src_type == "random":
+                        size_mb = chunk_req.src_random_size_mb
+                        assert chunk_req.src_random_size_mb is not None, "Random chunk size not set"
+                        if self.chunk_store.remaining_bytes() >= size_mb * MB * self.max_incoming_ports:
+
+                            def fn(chunk_req, size_mb):
+                                while self.chunk_store.remaining_bytes() < size_mb * MB * self.max_incoming_ports:
+                                    time.sleep(0.1)
+                                self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, "random")
+                                fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
+                                with self.dl_pool_semaphore:
+                                    size_bytes = int(size_mb * MB)
+                                    assert size_bytes > 0, f"Invalid size {size_bytes} for fallocate"
+                                    os.system(f"fallocate -l {size_bytes} {fpath}")
+                                chunk_req.chunk.chunk_length_bytes = os.path.getsize(fpath)
+                                self.chunk_store.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
+                                self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, "random")
+
+                            self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
+                            threading.Thread(target=fn, args=(chunk_req, size_mb)).start()
+                    elif self.region == chunk_req.src_region and chunk_req.src_type == "object_store":
+                        self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
+                        self.obj_store_conn.queue_download_request(chunk_req)
+                    elif self.region != chunk_req.src_region:  # do nothing, waiting for chunk to be be ready_to_upload
+                        continue
+                    else:
+                        self.chunk_store.state_fail(chunk_req.chunk.chunk_id)
+                        self.error_queue.put(ValueError("[gateway_daemon] Unknown source type"))
+                        self.error_event.set()
+                time.sleep(0.1)  # yield
+        except Exception as e:
+            self.error_queue.put(e)
+            self.error_event.set()
+            logger.error(f"[gateway_daemon] Exception in daemon loop: {e}")
+            logger.exception(e)
 
         # shut down workers except for API to report status
         logger.info("[gateway_daemon] Exiting all workers except for API")

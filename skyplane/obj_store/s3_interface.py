@@ -35,7 +35,7 @@ class S3Interface(ObjectStoreInterface):
             if "An error occurred (AccessDenied) when calling the GetBucketLocation operation" in str(e):
                 logger.error(f"Bucket location {bucket_name} is not public. Assuming region is us-east-1.")
                 return "us-east-1"
-            logger.error("Specified bucket does not exist.")
+            logger.error(f"Specified bucket {bucket_name} does not exist, got AWS error: {e}")
             raise exceptions.MissingBucketException() from e
 
     def bucket_exists(self):

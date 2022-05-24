@@ -25,7 +25,7 @@ class GatewayReceiver:
         chunk_store: ChunkStore,
         error_event: Event,
         error_queue: Queue,
-        write_back_block_size=4 * MB,
+        recv_block_size=4 * MB,
         max_pending_chunks=1,
         use_tls: bool = True,
         use_compression: bool = True,
@@ -34,7 +34,7 @@ class GatewayReceiver:
         self.chunk_store = chunk_store
         self.error_event = error_event
         self.error_queue = error_queue
-        self.write_back_block_size = write_back_block_size
+        self.recv_block_size = recv_block_size
         self.max_pending_chunks = max_pending_chunks
         self.use_compression = use_compression
         self.server_processes = []
@@ -134,6 +134,8 @@ class GatewayReceiver:
             logger.debug(f"[receiver:{server_port}] Blocking for next header")
             chunk_header = WireProtocolHeader.from_socket(conn)
             logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} Got chunk header {chunk_header}")
+            chunk_request = self.chunk_store.get_chunk_request(chunk_header.chunk_id)
+            should_decompress = chunk_header.is_compressed and chunk_request.dst_region == self.region
 
             # wait for space
             while self.chunk_store.remaining_bytes() < chunk_header.data_len * self.max_pending_chunks:
@@ -143,33 +145,43 @@ class GatewayReceiver:
             self.chunk_store.state_queue_download(chunk_header.chunk_id)
             self.chunk_store.state_start_download(chunk_header.chunk_id, f"receiver:{self.worker_id}")
             logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} wire header length {chunk_header.data_len}")
-            if chunk_header.is_compressed:
-                decompressor_context = lz4.frame.create_decompression_context()
             with Timer() as t:
-                chunk_data_size = chunk_header.data_len
-                chunk_received_size = 0
-                with self.chunk_store.get_chunk_file_path(chunk_header.chunk_id).open("wb") as f:
-                    while chunk_data_size > 0:
-                        data = conn.recv(min(chunk_data_size, self.write_back_block_size))
-                        if chunk_header.is_compressed:
-                            data = lz4.frame.decompress_chunk(decompressor_context, data)
-                        f.write(data)
-                        chunk_data_size -= len(data)
-                        chunk_received_size += len(data)
-                        self.socket_profiler_event_queue.put(
-                            dict(
-                                receiver_id=self.worker_id,
-                                chunk_id=chunk_header.chunk_id,
-                                time_ms=t.elapsed * 1000.0,
-                                bytes=chunk_received_size,
+                with lz4.frame.LZ4FrameDecompressor() as decompressor:
+                    with self.chunk_store.get_chunk_file_path(chunk_header.chunk_id).open("wb") as f:
+                        socket_data_len = chunk_header.data_len
+                        chunk_received_size = 0
+                        chunk_received_size_decompressed = 0
+                        while socket_data_len > 0:
+                            data_batch = conn.recv(min(socket_data_len, self.recv_block_size))
+                            socket_data_len -= len(data_batch)
+                            chunk_received_size += len(data_batch)
+                            self.socket_profiler_event_queue.put(
+                                dict(
+                                    receiver_id=self.worker_id,
+                                    chunk_id=chunk_header.chunk_id,
+                                    time_ms=t.elapsed * 1000.0,
+                                    bytes=chunk_received_size,
+                                )
                             )
-                        )
+
+                            if should_decompress:
+                                data_batch_decompressed = decompressor.decompress(data_batch)
+                                chunk_received_size_decompressed += len(data_batch_decompressed)
+                                if len(data_batch_decompressed) > 0:
+                                    f.write(data_batch_decompressed)
+                            else:
+                                f.write(data_batch)
             assert (
-                chunk_data_size == 0 and chunk_received_size == chunk_header.data_len
-            ), f"Size mismatch: got {chunk_received_size} expected {chunk_header.data_len}"
-            logger.info(
-                f"[receiver:{server_port}]:{chunk_header.chunk_id} in {t.elapsed:.2f} seconds ({chunk_received_size * 8 / t.elapsed / GB:.2f}Gbps)"
-            )
+                socket_data_len == 0 and chunk_received_size == chunk_header.data_len
+            ), f"Size mismatch: got {chunk_received_size} expected {chunk_header.data_len} and had {socket_data_len} bytes remaining"
+            if should_decompress:
+                logger.info(
+                    f"[receiver:{server_port}]:{chunk_header.chunk_id} in {t.elapsed:.2f} seconds ({chunk_received_size_decompressed * 8 / t.elapsed / GB:.2f}Gbps) at {chunk_received_size / chunk_received_size_decompressed:.2f}x compression ratio"
+                )
+            else:
+                logger.info(
+                    f"[receiver:{server_port}]:{chunk_header.chunk_id} in {t.elapsed:.2f} seconds ({chunk_received_size * 8 / t.elapsed / GB:.2f}Gbps)"
+                )
             # todo check hash
             self.chunk_store.state_finish_download(chunk_header.chunk_id, f"receiver:{self.worker_id}")
             chunks_received.append(chunk_header.chunk_id)

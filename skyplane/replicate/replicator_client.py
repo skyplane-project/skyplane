@@ -59,7 +59,12 @@ class ReplicatorClient:
         self.multipart_upload_requests = []
 
     def provision_gateways(
-        self, reuse_instances=False, log_dir: Optional[PathLike] = None, authorize_ssh_pub_key: Optional[PathLike] = None, use_bbr=False
+        self,
+        reuse_instances=False,
+        log_dir: Optional[PathLike] = None,
+        authorize_ssh_pub_key: Optional[PathLike] = None,
+        use_bbr=False,
+        use_compression=False,
     ):
         regions_to_provision = [node.region for node in self.topology.gateway_nodes]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]

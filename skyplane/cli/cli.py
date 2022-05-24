@@ -91,6 +91,7 @@ def cp(
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
     use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
+    use_compression: bool = typer.Option(True, help="If true, will use compression for uploads/downloads"),
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
     solver_throughput_grid: Path = typer.Option(
@@ -121,6 +122,8 @@ def cp(
     :type max_chunk_size_mb: int
     :param use_bbr: If set, will use BBR for transfers by default.
     :type use_bbr: bool
+    :param use_compression: If set, will use compression for transfers.
+    :type use_compression: bool
     :param solve: If true, will use solver to optimize transfer, else direct path is chosen
     :type solve: bool
     :param solver_required_throughput_gbits: The required throughput in Gbps when using the solver (default: 4)
@@ -193,6 +196,7 @@ def cp(
             reuse_gateways=reuse_gateways,
             max_chunk_size_mb=max_chunk_size_mb,
             use_bbr=use_bbr,
+            use_compression=use_compression,
         )
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
@@ -207,6 +211,7 @@ def sync(
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
     use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
+    use_compression: bool = typer.Option(True, help="If true, will use compression for uploads/downloads"),
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
     solver_throughput_grid: Path = typer.Option(
@@ -241,6 +246,8 @@ def sync(
     :type max_chunk_size_mb: int
     :param use_bbr: If set, will use BBR for transfers by default.
     :type use_bbr: bool
+    :param use_compression: If set, will use compression for transfers by default.
+    :type use_compression: bool
     :param solve: If true, will use solver to optimize transfer, else direct path is chosen
     :type solve: bool
     :param solver_required_throughput_gbits: The required throughput in Gbps when using the solver (default: 4)
@@ -326,6 +333,7 @@ def sync(
         reuse_gateways=reuse_gateways,
         max_chunk_size_mb=max_chunk_size_mb,
         use_bbr=use_bbr,
+        use_compression=use_compression,
     )
 
 
