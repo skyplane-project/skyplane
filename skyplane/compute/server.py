@@ -250,6 +250,7 @@ class Server:
         gateway_docker_image: str,
         log_viewer_port=8888,
         use_bbr=False,
+        use_compression=False,
     ):
         def check_stderr(tup):
             assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"

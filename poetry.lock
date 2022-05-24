@@ -193,14 +193,14 @@ uvloop = ["uvloop (>=0.15.2)"]
 
 [[package]]
 name = "boto3"
-version = "1.23.5"
+version = "1.23.6"
 description = "The AWS SDK for Python"
 category = "main"
 optional = false
 python-versions = ">= 3.6"
 
 [package.dependencies]
-botocore = ">=1.26.5,<1.27.0"
+botocore = ">=1.26.6,<1.27.0"
 jmespath = ">=0.7.1,<2.0.0"
 s3transfer = ">=0.5.0,<0.6.0"
 
@@ -209,7 +209,7 @@ crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
 
 [[package]]
 name = "botocore"
-version = "1.26.5"
+version = "1.26.6"
 description = "Low-level, data-driven core of boto 3."
 category = "main"
 optional = false
@@ -764,6 +764,19 @@ python-versions = "*"
 colorama = ">=0.3.9"
 
 [[package]]
+name = "lz4"
+version = "4.0.1"
+description = "LZ4 Bindings for Python"
+category = "main"
+optional = true
+python-versions = ">=3.7"
+
+[package.extras]
+docs = ["sphinx (>=1.6.0)", "sphinx-bootstrap-theme"]
+flake8 = ["flake8"]
+tests = ["pytest (!=3.3.0)", "psutil", "pytest-cov"]
+
+[[package]]
 name = "markupsafe"
 version = "2.1.1"
 description = "Safely add untrusted strings to HTML/XML markup."
@@ -839,7 +852,7 @@ async = ["aiohttp (>=3.0)", "aiodns"]
 name = "mypy"
 version = "0.950"
 description = "Optional static typing for Python"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=3.6"
 
@@ -858,7 +871,7 @@ reports = ["lxml"]
 name = "mypy-extensions"
 version = "0.4.3"
 description = "Experimental type system extensions for programs checked with the mypy typechecker."
-category = "main"
+category = "dev"
 optional = false
 python-versions = "*"
 
@@ -1507,7 +1520,7 @@ telegram = ["requests"]
 name = "typed-ast"
 version = "1.5.4"
 description = "a fork of Python 2 and 3 ast modules with type comment support"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=3.6"
 
@@ -1601,13 +1614,13 @@ docs = ["sphinx", "jaraco.packaging (>=9)", "rst.linker (>=1.9)"]
 testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-cov", "pytest-enabler (>=1.0.1)", "jaraco.itertools", "func-timeout", "pytest-black (>=0.3.7)", "pytest-mypy (>=0.9.1)"]
 
 [extras]
-gateway = ["flask", "pyopenssl", "werkzeug"]
+gateway = ["flask", "lz4", "pyopenssl", "werkzeug"]
 solver = ["cvxopt", "cvxpy", "graphviz", "matplotlib", "numpy"]
 
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7.1,<3.11"
-content-hash = "7222762a7d635374d69ae43560373c69fbfc17048bee55c7882321e81356da9c"
+content-hash = "f031ca64be5f82f4ed5bee43f9e7ab7626f6c66966eab394a776150cf489aa1d"
 
 [metadata.files]
 atomicwrites = [
@@ -1733,12 +1746,12 @@ black = [
     {file = "black-22.3.0.tar.gz", hash = "sha256:35020b8886c022ced9282b51b5a875b6d1ab0c387b31a065b84db7c33085ca79"},
 ]
 boto3 = [
-    {file = "boto3-1.23.5-py3-none-any.whl", hash = "sha256:5cbbd985171b1e278b722dca48f71455b4938378962734828daeb76f73be6fba"},
-    {file = "boto3-1.23.5.tar.gz", hash = "sha256:73a0d092aaea1649150f43fb3f41451d5a0883940549a64d72781a23ce6b2d44"},
+    {file = "boto3-1.23.6-py3-none-any.whl", hash = "sha256:6fed94cfe8e4502ec176821d3fefed9c1973d18ef491530b158108966cfc8ae1"},
+    {file = "boto3-1.23.6.tar.gz", hash = "sha256:725e507211cde015184e2b5921512df89f63852fb079eda6ab6c282af66f45bd"},
 ]
 botocore = [
-    {file = "botocore-1.26.5-py3-none-any.whl", hash = "sha256:805db3ecf85ff89edfb6788f862b87426f990e3e6383ef3fca3076f7659a5454"},
-    {file = "botocore-1.26.5.tar.gz", hash = "sha256:32541873924e3ff0ad95f02dc331e9f278721a3b864a4e2a8d514346b2598ce5"},
+    {file = "botocore-1.26.6-py3-none-any.whl", hash = "sha256:2846ee4a548462ba6db70125bea1542b4ed39793240aabc62ddf96fb6ec7e4d1"},
+    {file = "botocore-1.26.6.tar.gz", hash = "sha256:ce3fb008ffb041d142cf3949b13529e8dc9a0db5f2ec0e86b159f10f2b56a46e"},
 ]
 cachetools = [
     {file = "cachetools-5.1.0-py3-none-any.whl", hash = "sha256:4ebbd38701cdfd3603d1f751d851ed248ab4570929f2d8a7ce69e30c420b141c"},
@@ -2212,6 +2225,29 @@ libcst = [
 log-symbols = [
     {file = "log_symbols-0.0.14-py3-none-any.whl", hash = "sha256:4952106ff8b605ab7d5081dd2c7e6ca7374584eff7086f499c06edd1ce56dcca"},
     {file = "log_symbols-0.0.14.tar.gz", hash = "sha256:cf0bbc6fe1a8e53f0d174a716bc625c4f87043cc21eb55dd8a740cfe22680556"},
+]
+lz4 = [
+    {file = "lz4-4.0.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:5621c9ba9ef10c2a70429ff4950ce599d333feb9a0dcb13331b2707ee7a27d8f"},
+    {file = "lz4-4.0.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:be3ffd413fa3fe8bc84075d94104aadeb430fbd33976828537345691b954e8c9"},
+    {file = "lz4-4.0.1-cp310-cp310-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:ca911cc13debdea55eb1b99cfbdf48f8d65166ff39132c9ec1e156bd0b8f827f"},
+    {file = "lz4-4.0.1-cp310-cp310-win32.whl", hash = "sha256:b041956b81905f17afbff2d10c5445a79c86fc7ca0adb2e6dc5885025812faa9"},
+    {file = "lz4-4.0.1-cp310-cp310-win_amd64.whl", hash = "sha256:6dd216093fd202e0c3d8ece82012ecbaf083288549a834f9fa1f4094990fc44c"},
+    {file = "lz4-4.0.1-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:ba375be2c2f31eee5720c77ca870acf38a20bc94b1c8744536e54c17562c6ffb"},
+    {file = "lz4-4.0.1-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d0d9fe54043a9879952595f00ac8128dda33113d1289e41b648ac966b814c12b"},
+    {file = "lz4-4.0.1-cp37-cp37m-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:3db0ae359a97802c7a9702871669ac66a6e224b06876c22a38c6665c7004ac82"},
+    {file = "lz4-4.0.1-cp37-cp37m-win32.whl", hash = "sha256:0f14081851117131c7315fdc07f8d7ac29dba0c1d426a5d818d0b2a39f85f1dd"},
+    {file = "lz4-4.0.1-cp37-cp37m-win_amd64.whl", hash = "sha256:f3bb11af528a6d01b20c8d5dafa87930a4341cad856f8ad9a5333e7f6292fd6e"},
+    {file = "lz4-4.0.1-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:5e8e525fe6e8104d2afe8ad2fd2f9ac07321d6e40ee601a7b4bca4dde3ed2a01"},
+    {file = "lz4-4.0.1-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:feb92e638a7a166d4c3f574777b07adbae0ce158e66f54ed2788ad29f6bcf311"},
+    {file = "lz4-4.0.1-cp38-cp38-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:21be98218d0366227cd62151c8f8d6ef39fb0672f824893a85ceef4934d27a73"},
+    {file = "lz4-4.0.1-cp38-cp38-win32.whl", hash = "sha256:d23d14f45c64da187d313c4ca61804485296f3c1380b1f4898eaac3ed82ae3cd"},
+    {file = "lz4-4.0.1-cp38-cp38-win_amd64.whl", hash = "sha256:a76a0b21e2263c210b30c7e44a9d1b6e36924667004e7054986f533d2839e160"},
+    {file = "lz4-4.0.1-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:5ea6e188acf61e0a0866ebc9f966c8dc81df6fb3c4b3b50f578d58922c2de298"},
+    {file = "lz4-4.0.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:387b94ab237e1f5186dbb0d0587f3bb16912211a52a8654e2a97c322732dd5a1"},
+    {file = "lz4-4.0.1-cp39-cp39-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:957186cf822649ffd8cb08b39395749ec6997a61d5f05483c5bde7463d0293f5"},
+    {file = "lz4-4.0.1-cp39-cp39-win32.whl", hash = "sha256:3a8b77310fd460139401cec9784caf9b5aa1fbbcb2e0d44c19bfa10c2c5ee473"},
+    {file = "lz4-4.0.1-cp39-cp39-win_amd64.whl", hash = "sha256:0712e0c6cb25ffbeb55fcb1318db94ecf8f88ef81e18eb5e70180f1df7703899"},
+    {file = "lz4-4.0.1.tar.gz", hash = "sha256:efdfec2175715bf2d814ed72a7a185406f3456464eb3f343db1b87ed813e039c"},
 ]
 markupsafe = [
     {file = "MarkupSafe-2.1.1-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:86b1f75c4e7c2ac2ccdaec2b9022845dbb81880ca318bb7a0a01fbf7813e3812"},
