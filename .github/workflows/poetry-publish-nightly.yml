@@ -2,6 +2,7 @@ name: poetry-publish-nightly
 on:
   schedule:
     - cron: '39 23 * * *'
+  workflow_dispatch:
 
 jobs:
   # nightly release check from https://stackoverflow.com/a/67527144
