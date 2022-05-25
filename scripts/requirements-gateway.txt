@@ -22,5 +22,6 @@ termcolor
 tqdm
 # gateway dependencies
 flask
+lz4
 pyopenssl
 werkzeug
