@@ -230,7 +230,7 @@ class ReplicatorClient:
                 if isinstance(n, ReplicationTopologyGateway)
             }
             args.append((server, setup_args))
-        do_parallel(setup, args, n=-1, spinner=True, spinner_persist=True, desc="Install gateway package on instances")
+        do_parallel(setup, args, n=-1, spinner=True, spinner_persist=True, desc="Installing gateway package")
 
     def deprovision_gateways(self):
         # This is a good place to tear down Security Groups and the instance since this is invoked by CLI too.
@@ -357,9 +357,11 @@ class ReplicatorClient:
             def partition(items: List[Chunk], n_batches: int) -> List[List[Chunk]]:
                 batches = [[] for _ in range(n_batches)]
                 items.sort(key=lambda c: c.chunk_length_bytes, reverse=True)
+                batch_sizes = [0 for _ in range(n_batches)]
                 for item in items:
-                    batch_sizes = [sum(b.chunk_length_bytes for b in bs) for bs in batches]
-                    batches[batch_sizes.index(min(batch_sizes))].append(item)
+                    min_batch = batch_sizes.index(min(batch_sizes))
+                    batches[min_batch].append(item)
+                    batch_sizes[min_batch] += item.chunk_length_bytes
                 return batches
 
             spinner.text = "Preparing replication plan, partitioning chunks into batches"
