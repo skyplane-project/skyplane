@@ -2,11 +2,11 @@ import hashlib
 import time
 import os
 import tempfile
-from skylark import MB
+from skyplane import MB
 
-from skylark.obj_store.object_store_interface import ObjectStoreInterface
-from skylark.utils.utils import Timer
-from skylark.utils import logger
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface
+from skyplane.utils.timer import Timer
+from skyplane.utils import logger
 
 def interface_test_framework(region, bucket, multipart: bool):
     logger.info("creating interfaces...")

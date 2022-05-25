@@ -1,6 +1,5 @@
-from skylark.test.test_interface import interface_test_framework
-
-from skylark.utils import logger
+from tests.test_interface import interface_test_framework
+from skyplane.utils import logger
 
 def test_aws_singlepart():
     assert interface_test_framework("aws:us-east-1", "sky-us-east-1", False)
