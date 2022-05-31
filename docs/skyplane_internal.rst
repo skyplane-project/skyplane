@@ -1,8 +1,5 @@
-skyplane package
-==================
-
-Submodules
-----------
+Internal package documentation
+=======================================
 
 skyplane.chunk module
 -----------------------
@@ -28,10 +25,10 @@ skyplane.exceptions module
    :undoc-members:
    :show-inheritance:
 
-Module contents
----------------
+.. Module contents
+.. ---------------
 
-.. automodule:: skyplane
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. .. automodule:: skyplane
+..    :members:
+..    :undoc-members:
+..    :show-inheritance:
