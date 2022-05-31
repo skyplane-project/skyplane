@@ -85,6 +85,7 @@ Contents
 
 .. toctree::
    :maxdepth: 2
-   :caption: API documentation
+   :caption: Package documentation
 
    skyplane_cli
+   skyplane_internal
