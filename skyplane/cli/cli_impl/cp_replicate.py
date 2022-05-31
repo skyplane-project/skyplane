@@ -11,7 +11,6 @@ from skyplane import exceptions, MB, GB, skyplane_root
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
 from skyplane.replicate.replicator_client import ReplicatorClient
-from skyplane.replicate.solver import ThroughputProblem, ThroughputSolverILP
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
 
@@ -52,6 +51,8 @@ def generate_topology(
         total_gbyte_to_transfer = sum([obj.size for obj in objs]) / GB
 
         # build problem and solve
+        from skyplane.replicate.solver import ThroughputProblem, ThroughputSolverILP
+
         tput = ThroughputSolverILP(solver_throughput_grid)
         problem = ThroughputProblem(
             src=src_region,

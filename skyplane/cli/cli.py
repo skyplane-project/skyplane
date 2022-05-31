@@ -1,46 +1,33 @@
 """CLI for the Skyplane object store"""
-import subprocess
 import os
+import subprocess
 from functools import partial
 from pathlib import Path
 from shlex import split
 
 import questionary
-import typer
-from halo import Halo
-
 import skyplane.cli.cli_aws
 import skyplane.cli.cli_azure
 import skyplane.cli.cli_internal as cli_internal
 import skyplane.cli.cli_solver
 import skyplane.cli.experiments
+import typer
+from halo import Halo
 from skyplane import GB, config_path, exceptions, print_header, skyplane_root
-from skyplane.cli.cli_impl.cp_local import (
-    copy_local_local,
-    copy_local_gcs,
-    copy_gcs_local,
-    copy_local_azure,
-    copy_azure_local,
-    copy_local_s3,
-    copy_s3_local,
-)
-from skyplane.cli.cli_impl.cp_replicate import (
-    generate_topology,
-    replicate_helper,
-)
-from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
+from skyplane.cli.cli_impl.cp_local import (copy_azure_local, copy_gcs_local,
+                                            copy_local_azure, copy_local_gcs,
+                                            copy_local_local, copy_local_s3,
+                                            copy_s3_local)
+from skyplane.cli.cli_impl.cp_replicate import (generate_topology,
+                                                replicate_helper)
+from skyplane.cli.cli_impl.init import (load_aws_config, load_azure_config,
+                                        load_gcp_config)
 from skyplane.cli.cli_impl.ls import ls_local, ls_objstore
-from skyplane.cli.common import (
-    check_ulimit,
-    parse_path,
-    query_instances,
-)
+from skyplane.cli.common import check_ulimit, parse_path, query_instances
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.config import SkyplaneConfig
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
-from skyplane.replicate.replication_plan import ReplicationTopology
-from skyplane.replicate.solver import ThroughputProblem, ThroughputSolverILP
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
 from skyplane.utils.timer import Timer
