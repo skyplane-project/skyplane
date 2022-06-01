@@ -27,6 +27,7 @@ from skyplane.cli.common import check_ulimit, parse_path, query_instances
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.config import SkyplaneConfig
+from skyplane.exceptions import MissingObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
@@ -160,15 +161,13 @@ def cp(
         dst_region = dst_client.region_tag()
 
         # Query source and destination buckets
-        src_objs_all = []
-        with Timer(f"Query {bucket_src} prefix {path_src}"):
-            with Halo(text=f"Querying objects in {bucket_src}", spinner="dots") as spinner:
-                for obj in src_client.list_objects(path_src):
-                    src_objs_all.append(obj)
-                    spinner.text = f"Querying objects in {bucket_src} ({len(src_objs_all)} objects)"
-        if not src_objs_all:
-            logger.error("Specified object does not exist.")
-            raise exceptions.MissingObjectException()
+        if solve:
+            src_objs_all = list(src_client.list_objects(path_src))
+            gbyte_to_transfer = sum(obj.size for obj in src_objs_all) / GB
+            if len(src_objs_all) == 0:
+                raise MissingObjectException(f"No objects found in source bucket {bucket_src}")
+        else:
+            gbyte_to_transfer, src_objs_all = None, None
 
         # Set up replication topology
         topo = generate_topology(
@@ -177,7 +176,7 @@ def cp(
             solve,
             num_connections=num_connections,
             max_instances=max_instances,
-            solver_total_gbyte_to_transfer=sum(obj.size for obj in src_objs_all) / GB,
+            solver_total_gbyte_to_transfer=gbyte_to_transfer if solve else None,
             solver_required_throughput_gbits=solver_required_throughput_gbits,
             solver_throughput_grid=solver_throughput_grid,
             solver_verbose=solver_verbose,
