@@ -7,6 +7,8 @@ import typer
 
 from skyplane import print_header, skyplane_root
 from skyplane.cli.cli_impl.cp_replicate import replicate_helper
+from skyplane.cli.common import parse_path
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.replicate.replication_plan import ReplicationTopology
 from skyplane.utils import logger
 
@@ -110,7 +112,7 @@ def replicate_random_solve(
                 max_instances=num_gateways,
                 throughput_grid=solver_throughput_grid,
                 solver_verbose=solver_verbose,
-                out=f.name,
+                out=Path(f.name),
             )
             topo = ReplicationTopology.from_json(Path(f.name).read_text())
     elif inter_region:
