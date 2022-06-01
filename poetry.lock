@@ -1491,15 +1491,6 @@ category = "main"
 optional = false
 python-versions = ">=3.7"
 
-[package.dependencies]
-colorama = {version = "*", markers = "platform_system == \"Windows\""}
-
-[package.extras]
-dev = ["py-make (>=0.1.0)", "twine", "wheel"]
-notebook = ["ipywidgets (>=6)"]
-slack = ["slack-sdk"]
-telegram = ["requests"]
-
 [[package]]
 name = "typed-ast"
 version = "1.5.4"
