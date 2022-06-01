@@ -59,7 +59,7 @@ $ gcloud auth login
 $ gcloud auth application-default login
 ```
 
-If you already had GCP credentials configured, make sure to run `gcloud auth application-default login` which generates application credentials for Skyplane.
+⚠️ If you already had GCP credentials configured, make sure to run `gcloud auth application-default login` which generates application credentials for Skyplane.
 </details>
 
 <details>
@@ -87,7 +87,7 @@ $ skyplane init
 <summary>skyplane init output</summary>
 <br>
 
-```bash
+```
 $ skyplane init
 
 ====================================================
@@ -122,3 +122,48 @@ Config file saved to /home/ubuntu/.skyplane/config
 ```
 
 </details>
+
+# Using Skyplane
+
+The easiest way to use Skyplane is to use the CLI. `skyplane cp` supports any local path or cloud object store destination as an argument.
+
+```bash
+# copy files between two AWS S3 buckets
+$ skyplane cp s3://... s3://...
+
+# copy files from an AWS S3 bucket to a GCP GCS bucket
+$ skyplane cp s3://... gs://...
+
+# copy files from a local directory to/from a cloud object store
+$ skyplane cp /path/to/local/files gs://...
+```
+
+Skyplane also supports incremental copies via `skyplane sync`:    
+```bash
+# copy changed files from S3 to GCS
+$ skyplane sync s3://... gcs://...
+```
+
+`skyplane sync` will diff the contents of the source and destination and only copy the files that are different or have changed. It will not delete files that are no longer present in the source so it's always safe to run `skyplane sync`.
+
+## Accelerating transfers
+### Use multiple VMs
+
+With default arguments, Skyplane sets up a one VM (called gateway) in the source and destination regions. We can further accelerate the transfer by using more VMs.
+
+To double the transfer speeds by using two VMs in each region, run:
+```bash
+$ skyplane cp s3://... s3://... -n 2
+```
+
+⚠️ If you do not have enough vCPU capacity in each region, you may get a InsufficientVCPUException. Either request more vCPUs or reduce the number of parallel VMs.
+
+### Stripe large objects across multiple VMs
+Skyplane can transfer a single large object across multiple VMs to accelerate transfers. Internally, Skyplane will stripe the large object into many small chunks which can be transferred in parallel.
+
+To stripe large objects into multiple chunks, run:
+```bash
+$ skyplane cp s3://... s3://... --max_chunk_size_mb 16
+```
+
+⚠️ Large object transfers are only supported for transfers between AWS S3 buckets at the moment.
