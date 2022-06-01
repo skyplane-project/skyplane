@@ -21,8 +21,8 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.replicate.profiler import status_df_to_traceevent
 from skyplane.replicate.replication_plan import ReplicationJob, ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
-from skyplane.utils.net import retry_requests
 from skyplane.utils.fn import PathLike, do_parallel
+from skyplane.utils.net import retry_requests
 from skyplane.utils.timer import Timer
 
 

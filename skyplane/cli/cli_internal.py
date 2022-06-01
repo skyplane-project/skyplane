@@ -110,7 +110,7 @@ def replicate_random_solve(
                 max_instances=num_gateways,
                 throughput_grid=solver_throughput_grid,
                 solver_verbose=solver_verbose,
-                out=f.name,
+                out=Path(f.name),
             )
             topo = ReplicationTopology.from_json(Path(f.name).read_text())
     elif inter_region:

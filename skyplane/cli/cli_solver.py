@@ -10,7 +10,8 @@ import typer
 
 from skyplane import GB
 from skyplane import skyplane_root
-from skyplane.replicate.solver import GBIT_PER_GBYTE, ThroughputProblem, ThroughputSolverILP, ThroughputSolution
+from skyplane.replicate.solver import GBIT_PER_GBYTE, ThroughputProblem, ThroughputSolution
+from skyplane.replicate.solver_ilp import ThroughputSolverILP
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
 

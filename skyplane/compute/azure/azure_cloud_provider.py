@@ -1,14 +1,11 @@
 import os
-import time
-import uuid
 import re
+import uuid
 from multiprocessing import BoundedSemaphore
 from pathlib import Path
 from typing import List, Optional
 
 import paramiko
-from azure.mgmt.authorization.models import RoleAssignmentCreateParameters
-from azure.mgmt.authorization.models import RoleAssignmentProperties
 from azure.mgmt.compute.models import ResourceIdentityType
 
 from skyplane import key_root
@@ -16,7 +13,7 @@ from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.utils import logger
-from skyplane.utils.fn import do_parallel, wait_for
+from skyplane.utils.fn import do_parallel
 from skyplane.utils.timer import Timer
 
 

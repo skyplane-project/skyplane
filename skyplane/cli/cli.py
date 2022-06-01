@@ -1,6 +1,5 @@
 """CLI for the Skyplane object store"""
 import subprocess
-import os
 from functools import partial
 from pathlib import Path
 from shlex import split
@@ -16,31 +15,23 @@ import skyplane.cli.cli_solver
 import skyplane.cli.experiments
 from skyplane import GB, config_path, exceptions, print_header, skyplane_root
 from skyplane.cli.cli_impl.cp_local import (
-    copy_local_local,
-    copy_local_gcs,
+    copy_azure_local,
     copy_gcs_local,
     copy_local_azure,
-    copy_azure_local,
+    copy_local_gcs,
+    copy_local_local,
     copy_local_s3,
     copy_s3_local,
 )
-from skyplane.cli.cli_impl.cp_replicate import (
-    generate_topology,
-    replicate_helper,
-)
+from skyplane.cli.cli_impl.cp_replicate import generate_topology, replicate_helper
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.cli_impl.ls import ls_local, ls_objstore
-from skyplane.cli.common import (
-    check_ulimit,
-    parse_path,
-    query_instances,
-)
+from skyplane.cli.common import check_ulimit, parse_path, query_instances
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.config import SkyplaneConfig
+from skyplane.exceptions import MissingObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
-from skyplane.replicate.replication_plan import ReplicationTopology
-from skyplane.replicate.solver import ThroughputProblem, ThroughputSolverILP
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
 from skyplane.utils.timer import Timer
@@ -172,18 +163,23 @@ def cp(
         dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
         dst_region = dst_client.region_tag()
 
+        # Query source and destination buckets
+        if solve:
+            src_objs_all = list(src_client.list_objects(path_src))
+            gbyte_to_transfer = sum(obj.size for obj in src_objs_all) / GB
+            if len(src_objs_all) == 0:
+                raise MissingObjectException(f"No objects found in source bucket {bucket_src}")
+        else:
+            gbyte_to_transfer, src_objs_all = None, None
+
         # Set up replication topology
-        cached_src_objs = None  # cache queried src_objs for solver
-        topo, cached_src_objs = generate_topology(
+        topo = generate_topology(
             src_region,
             dst_region,
-            src_client,
-            bucket_src,
-            path_src,
             solve,
-            cached_src_objs=cached_src_objs,
             num_connections=num_connections,
             max_instances=max_instances,
+            solver_total_gbyte_to_transfer=gbyte_to_transfer if solve else None,
             solver_required_throughput_gbits=solver_required_throughput_gbits,
             solver_throughput_grid=solver_throughput_grid,
             solver_verbose=solver_verbose,
@@ -195,7 +191,7 @@ def cp(
             dest_bucket=bucket_dst,
             src_key_prefix=path_src,
             dest_key_prefix=path_dst,
-            cached_src_objs=cached_src_objs,
+            cached_src_objs=src_objs_all,
             reuse_gateways=reuse_gateways,
             max_chunk_size_mb=max_chunk_size_mb,
             debug=debug,
@@ -278,53 +274,50 @@ def sync(
     dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
     dst_region = dst_client.region_tag()
 
-    # Set up replication topology
-    cached_src_objs = []  # cache queried src_objs for solver
-
+    # Query source and destination buckets
+    src_objs_all = []
+    dst_objs_all = []
     with Timer(f"Query {bucket_src} prefix {path_src}"):
         with Halo(text=f"Querying objects in {bucket_src}", spinner="dots") as spinner:
-            src_objs = []
             for obj in src_client.list_objects(path_src):
-                src_objs.append(obj)
-                spinner.text = f"Querying objects in {bucket_src} ({len(src_objs)} objects)"
-            dst_objs = []
+                src_objs_all.append(obj)
+                spinner.text = f"Querying objects in {bucket_src} ({len(src_objs_all)} objects)"
             for obj in dst_client.list_objects(path_dst):
-                dst_objs.append(obj)
-                spinner.txt = f"Querying objects in {bucket_dst} ({len(dst_objs)} objects)"
-    if not src_objs:
+                dst_objs_all.append(obj)
+                spinner.txt = f"Querying objects in {bucket_dst} ({len(dst_objs_all)} objects)"
+    if not src_objs_all:
         logger.error("Specified object does not exist.")
         raise exceptions.MissingObjectException()
 
+    # Match destination objects to source objects and determine if they need to be copied
     dst_dict = dict()
-    for obj in dst_objs:
+    for obj in dst_objs_all:
         key = obj.key
         if path_dst == "":
             dst_dict[key] = obj
         else:
             dst_dict[key[len(path_dst) + 1 :]] = obj
 
-    for src_obj in src_objs:
+    src_obs_new = []
+    for src_obj in src_objs_all:
         if src_obj.key in dst_dict:
             dst_obj = dst_dict[src_obj.key]
             if src_obj.last_modified > dst_obj.last_modified or src_obj.size != dst_obj.size:
-                cached_src_objs.append(src_obj)
+                src_obs_new.append(src_obj)
         else:
-            cached_src_objs.append(src_obj)
+            src_obs_new.append(src_obj)
 
-    if len(cached_src_objs) == 0:
+    if len(src_obs_new) == 0:
         typer.secho("No objects need updating. Exiting...")
-        os._exit(1)
+        raise typer.Exit(0)
 
-    topo, cached_src_objs = generate_topology(
+    topo = generate_topology(
         src_region,
         dst_region,
-        src_client,
-        bucket_src,
-        path_src,
         solve,
-        cached_src_objs=cached_src_objs,
         num_connections=num_connections,
         max_instances=max_instances,
+        solver_total_gbyte_to_transfer=sum(obj.size for obj in src_obs_new) / GB,
         solver_required_throughput_gbits=solver_required_throughput_gbits,
         solver_throughput_grid=solver_throughput_grid,
         solver_verbose=solver_verbose,
@@ -336,7 +329,7 @@ def sync(
         dest_bucket=bucket_dst,
         src_key_prefix=path_src,
         dest_key_prefix=path_dst,
-        cached_src_objs=cached_src_objs,
+        cached_src_objs=src_obs_new,
         reuse_gateways=reuse_gateways,
         max_chunk_size_mb=max_chunk_size_mb,
         debug=debug,

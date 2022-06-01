@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 from typing import Dict, List, Optional
@@ -7,15 +8,13 @@ from azure.mgmt.authorization import AuthorizationManagementClient
 from azure.mgmt.storage import StorageManagementClient
 from azure.storage.blob import BlobServiceClient, ContainerClient
 
-from skyplane import config_path, is_gateway_env
-from skyplane.compute.const_cmds import query_which_cloud
-from skyplane.config import SkyplaneConfig
-from skyplane import config_path
 from skyplane import azure_config_path
 from skyplane import azure_sku_path
+from skyplane import config_path
+from skyplane import is_gateway_env
+from skyplane.compute.const_cmds import query_which_cloud
+from skyplane.config import SkyplaneConfig
 from skyplane.utils.fn import do_parallel
-import subprocess
-import json
 
 # optional imports due to large package size
 try:

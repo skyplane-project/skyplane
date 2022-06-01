@@ -15,10 +15,10 @@ from skyplane import GB, skyplane_root
 from skyplane.cli.experiments.provision import provision
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
+from skyplane.compute.const_cmds import make_sysctl_tcp_tuning_command
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.compute.gcp.gcp_server import GCPServer
 from skyplane.compute.server import Server
-from skyplane.compute.const_cmds import make_sysctl_tcp_tuning_command
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
 
