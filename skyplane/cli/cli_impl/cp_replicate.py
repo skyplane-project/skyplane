@@ -69,7 +69,7 @@ def generate_topology(
         return topo
 
 
-def replicate_heiper(
+def replicate_helper(
     topo: ReplicationTopology,
     size_total_mb: int = 2048,
     n_chunks: int = 512,
