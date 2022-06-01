@@ -14,14 +14,17 @@ import skyplane.cli.cli_internal as cli_internal
 import skyplane.cli.cli_solver
 import skyplane.cli.experiments
 from skyplane import GB, config_path, exceptions, print_header, skyplane_root
-from skyplane.cli.cli_impl.cp_local import (copy_azure_local, copy_gcs_local,
-                                            copy_local_azure, copy_local_gcs,
-                                            copy_local_local, copy_local_s3,
-                                            copy_s3_local)
-from skyplane.cli.cli_impl.cp_replicate import (generate_topology,
-                                                replicate_helper)
-from skyplane.cli.cli_impl.init import (load_aws_config, load_azure_config,
-                                        load_gcp_config)
+from skyplane.cli.cli_impl.cp_local import (
+    copy_azure_local,
+    copy_gcs_local,
+    copy_local_azure,
+    copy_local_gcs,
+    copy_local_local,
+    copy_local_s3,
+    copy_s3_local,
+)
+from skyplane.cli.cli_impl.cp_replicate import generate_topology, replicate_helper
+from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.cli_impl.ls import ls_local, ls_objstore
 from skyplane.cli.common import check_ulimit, parse_path, query_instances
 from skyplane.compute.aws.aws_auth import AWSAuthentication
@@ -293,7 +296,7 @@ def sync(
         if path_dst == "":
             dst_dict[key] = obj
         else:
-            dst_dict[key[len(path_dst) + 1:]] = obj
+            dst_dict[key[len(path_dst) + 1 :]] = obj
 
     src_obs_new = []
     for src_obj in src_objs_all:

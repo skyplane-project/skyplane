@@ -175,4 +175,3 @@ class ThroughputSolver:
         fig.subplots_adjust(hspace=0.6)
         ax.figure.colorbar(ax.images[0], ax=ax)
         return fig, ax
-
