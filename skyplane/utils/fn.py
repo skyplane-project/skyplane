@@ -3,7 +3,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, Iterable, List, Tuple, Union, TypeVar
 
-from tqdm import tqdm
 
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
@@ -13,16 +12,19 @@ T = TypeVar("T")
 R = TypeVar("R")
 
 
-def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, progress_bar=False, desc="Waiting", leave_pbar=True) -> bool:
+def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, spinner=False, desc="Waiting", leave_spinner=True) -> bool:
+    if spinner:  # check to avoid importing on gateway
+        from halo import Halo
+
     # wait for fn to return True
     start = time.time()
-    with tqdm(desc=desc, leave=leave_pbar, disable=not progress_bar) as pbar:
+    with Halo({desc}, spinner="dots", enabled=spinner) as spinner_obj:
         while time.time() - start < timeout:
             if fn():
-                pbar.close()
                 logger.fs.debug(f"[wait_for] {desc} fn={fn} completed in {time.time() - start:.2f}s")
+                if leave_spinner:
+                    spinner_obj.succeed(f"[wait_for] {desc} fn={fn} completed in {time.time() - start:.2f}s")
                 return True
-            pbar.update(interval)
             time.sleep(interval)
         raise TimeoutError(f"Timeout waiting for {desc}")
 
@@ -31,16 +33,12 @@ def do_parallel(
     func: Callable[[T], R],
     args_list: Iterable[T],
     n=-1,
-    progress_bar=False,
-    leave_pbar=True,
     desc=None,
     arg_fmt=None,
-    hide_args=False,
     return_args=True,
     spinner=False,
     spinner_persist=False,
 ) -> List[Union[Tuple[T, R], R]]:
-    """Run list of jobs in parallel with tqdm progress bar"""
     if spinner:  # check to avoid importing on gateway
         from halo import Halo
 
@@ -66,23 +64,17 @@ def do_parallel(
         spinner_obj = Halo(f"{desc} ({len(results)}/{len(args_list)})", spinner="dots")
         spinner_obj.start()
     with Timer() as t:
-        with tqdm(total=len(args_list), leave=leave_pbar, desc=desc, disable=not progress_bar) as pbar:
-            with ThreadPoolExecutor(max_workers=n) as executor:
-                future_list = [executor.submit(wrapped_fn, args) for args in args_list]
-                for future in as_completed(future_list):
-                    args, result = future.result()
-                    results.append((args, result))
-                    if not hide_args:
-                        pbar.set_description(f"{desc} ({str(arg_fmt(args))})" if desc else str(arg_fmt(args)))
-                    else:
-                        pbar.set_description(desc)
-                    if spinner:
-                        spinner_obj.text = f"{desc} ({len(results)}/{len(args_list)})"
-                    pbar.update()
-            if return_args:
-                output = results
-            else:
-                output = [result for _, result in results]
+        with ThreadPoolExecutor(max_workers=n) as executor:
+            future_list = [executor.submit(wrapped_fn, args) for args in args_list]
+            for future in as_completed(future_list):
+                args, result = future.result()
+                results.append((args, result))
+                if spinner:
+                    spinner_obj.text = f"{desc} ({len(results)}/{len(args_list)})"
+        if return_args:
+            output = results
+        else:
+            output = [result for _, result in results]
     if spinner and spinner_persist:
         spinner_obj.succeed(f"{desc} ({len(output)}/{len(args_list)}) in {t.elapsed:.2f}s")
     elif spinner:

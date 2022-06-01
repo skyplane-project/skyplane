@@ -41,6 +41,19 @@ def print_header():
 KB = 1024
 MB = 1024 * 1024
 GB = 1024 * 1024 * 1024
+
+
+def format_bytes(bytes: int):
+    if bytes < KB:
+        return f"{bytes}B"
+    elif bytes < MB:
+        return f"{bytes / KB:.2f}KB"
+    elif bytes < GB:
+        return f"{bytes / MB:.2f}MB"
+    else:
+        return f"{bytes / GB:.2f}GB"
+
+
 if config_path.exists():
     cloud_config = SkyplaneConfig.load_config(config_path)
 else:

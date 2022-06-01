@@ -4,9 +4,9 @@ from pathlib import Path
 from shutil import copyfile
 from typing import List, Dict
 
-from tqdm import tqdm
+from halo import Halo
 
-from skyplane import exceptions
+from skyplane import exceptions, format_bytes
 from skyplane.obj_store.azure_interface import AzureInterface
 from skyplane.obj_store.gcs_interface import GCSInterface
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
@@ -46,12 +46,12 @@ def copy_local_objstore(object_interface: ObjectStoreInterface, src: Path, dst_k
                 return path.stat().st_size
 
         total_bytes = _copy(src, dst_key)
-
-        # wait for all uploads to complete, displaying a progress bar
-        with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Uploading") as pbar:
+        bytes_copied = 0
+        with Halo(text=f"Uploading ({format_bytes(bytes_copied)} / {format_bytes(total_bytes)}", spinner="dots") as spinner:
             for op in concurrent.futures.as_completed(ops):
                 op.result()
-                pbar.update(path_mapping[op].stat().st_size)
+                bytes_copied += path_mapping[op].stat().st_size
+                spinner.text = f"Uploading ({format_bytes(bytes_copied)} / {format_bytes(total_bytes)})"
 
 
 def copy_objstore_local(object_interface: ObjectStoreInterface, src_key: str, dst: Path):
@@ -81,10 +81,12 @@ def copy_objstore_local(object_interface: ObjectStoreInterface, src_key: str, ds
             raise exceptions.MissingObjectException()
 
         # wait for all downloads to complete, displaying a progress bar
-        with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Downloading") as pbar:
+        bytes_copied = 0
+        with Halo(text=f"Uploading ({format_bytes(bytes_copied)} / {format_bytes(total_bytes)}", spinner="dots") as spinner:
             for op in concurrent.futures.as_completed(ops):
                 op.result()
-                pbar.update(obj_mapping[op].size)
+                bytes_copied += obj_mapping[op].stat().st_size
+                spinner.text = f"Uploading ({format_bytes(bytes_copied)} / {format_bytes(total_bytes)})"
 
 
 def copy_local_gcs(src: Path, dst_bucket: str, dst_key: str):

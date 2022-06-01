@@ -9,7 +9,7 @@ from typing import List, Optional, Tuple
 import pandas as pd
 import questionary
 import typer
-from tqdm import tqdm
+from tqdm import tqdm  # type: ignore
 
 from skyplane import GB, skyplane_root
 from skyplane.cli.experiments.provision import provision
@@ -205,7 +205,7 @@ def throughput_grid(
         )
         check_stderr(server.run_command(make_sysctl_tcp_tuning_command(cc="cubic")))
 
-    do_parallel(setup, instance_list, progress_bar=True, n=-1, desc="Setup")
+    do_parallel(setup, instance_list, spinner=True, n=-1, desc="Setup")
 
     # build experiment
     instance_pairs_all = [(i1, i2) for i1 in instance_list for i2 in instance_list if i1 != i2]
@@ -290,7 +290,7 @@ def throughput_grid(
         for group_idx, group in enumerate(groups):
             tag_fmt = lambda x: f"{x[0].region_tag}:{x[0].network_tier()} to {x[1].region_tag}:{x[1].network_tier()}"
             results = do_parallel(
-                client_fn, group, progress_bar=True, desc=f"Parallel eval group {group_idx}", n=-1, arg_fmt=tag_fmt, return_args=False
+                client_fn, group, spinner=True, desc=f"Parallel eval group {group_idx}", n=-1, arg_fmt=tag_fmt, return_args=False
             )
             new_througput_results.extend([rec for rec in results if rec is not None])
 
@@ -403,7 +403,7 @@ def latency_grid(
     def setup(server: Server):
         check_stderr(server.run_command(make_sysctl_tcp_tuning_command(cc="cubic")))
 
-    do_parallel(setup, instance_list, progress_bar=True, n=-1, desc="Setup")
+    do_parallel(setup, instance_list, spinner=True, n=-1, desc="Setup")
 
     # build experiment
     instance_pairs_all = [(i1, i2) for i1 in instance_list for i2 in instance_list if i1 != i2]
@@ -470,7 +470,7 @@ def latency_grid(
     log_dir.mkdir(parents=True, exist_ok=True)
     output_file = log_dir / "latency.csv"
     with tqdm(total=len(instance_pairs), desc="Total latency evaluation") as pbar:
-        results = do_parallel(client_fn, instance_pairs, progress_bar=False, n=16, return_args=False)
+        results = do_parallel(client_fn, instance_pairs, n=16, return_args=False)
         new_througput_results.extend([rec for rec in results if rec is not None])
 
     # build dataframe from results
