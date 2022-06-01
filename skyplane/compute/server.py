@@ -307,7 +307,7 @@ class Server:
 
         try:
             logging.disable(logging.CRITICAL)
-            wait_for(is_api_ready, timeout=5, interval=0.1, desc=f"Waiting for gateway {self.uuid()} to start", leave_pbar=False)
+            wait_for(is_api_ready, timeout=5, interval=0.1, desc=f"Waiting for gateway {self.uuid()} to start", leave_spinner=False)
         except TimeoutError as e:
             logger.fs.error(f"Gateway {self.instance_name()} is not ready {e}")
             logger.fs.warning(desc_prefix + " gateway launch command: " + docker_launch_cmd)

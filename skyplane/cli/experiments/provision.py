@@ -57,11 +57,11 @@ def provision(
             "instance_type": aws_instance_class,
             "state": [ServerState.PENDING, ServerState.RUNNING],
         }
-        do_parallel(aws.add_ips_to_security_group, aws_regions_to_provision, progress_bar=True, desc="add IP to aws security groups")
+        do_parallel(aws.add_ips_to_security_group, aws_regions_to_provision, spinner=True, desc="Add IP to aws security groups")
         do_parallel(
             lambda x: aws.authorize_client(*x),
             [(r, "0.0.0.0/0") for r in aws_regions_to_provision],
-            progress_bar=True,
+            spinner=True,
             desc="authorize client",
         )
         aws_instances = refresh_instance_list(aws, aws_regions_to_provision, aws_instance_filter)
@@ -69,7 +69,7 @@ def provision(
         if missing_aws_regions:
             logger.info(f"(AWS) provisioning missing regions: {missing_aws_regions}")
             aws_provisioner = lambda r: aws.provision_instance(r, aws_instance_class)
-            results = do_parallel(aws_provisioner, missing_aws_regions, progress_bar=True, desc="provision aws")
+            results = do_parallel(aws_provisioner, missing_aws_regions, spinner=True, desc="provision aws")
             for region, result in results:
                 aws_instances[region] = [result]
             aws_instances = refresh_instance_list(aws, aws_regions_to_provision, aws_instance_filter)
@@ -94,7 +94,7 @@ def provision(
                     logger.error(f"Skipping region {r}")
                     return None
 
-            results = do_parallel(azure_provisioner, missing_azure_regions, progress_bar=True, desc="provision Azure")
+            results = do_parallel(azure_provisioner, missing_azure_regions, spinner=True, desc="provision Azure")
             for region, result in results:
                 assert region not in azure_instances
                 if result is not None:
@@ -139,7 +139,7 @@ def provision(
                     return None
 
             results = do_parallel(
-                gcp_provisioner, missing_gcp_regions, progress_bar=True, desc=f"provision GCP (premium network = {gcp_use_premium_network})"
+                gcp_provisioner, missing_gcp_regions, spinner=True, desc=f"provision GCP (premium network = {gcp_use_premium_network})"
             )
             for region, result in results:
                 gcp_instances[region] = [result]
@@ -155,5 +155,5 @@ def provision(
         + [i for ilist in azure_instances.values() for i in ilist]
         + [i for ilist in gcp_instances.values() for i in ilist]
     )
-    do_parallel(init, all_instances, progress_bar=True, desc="Provisioning init")
+    do_parallel(init, all_instances, spinner=True, desc="Provisioning init")
     return aws_instances, azure_instances, gcp_instances  # pytype: disable=bad-return-type
