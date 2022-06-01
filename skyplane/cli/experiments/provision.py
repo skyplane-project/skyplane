@@ -57,7 +57,7 @@ def provision(
             "instance_type": aws_instance_class,
             "state": [ServerState.PENDING, ServerState.RUNNING],
         }
-        do_parallel(aws.add_ip_to_security_group, aws_regions_to_provision, progress_bar=True, desc="add IP to aws security groups")
+        do_parallel(aws.add_ips_to_security_group, aws_regions_to_provision, progress_bar=True, desc="add IP to aws security groups")
         do_parallel(
             lambda x: aws.authorize_client(*x),
             [(r, "0.0.0.0/0") for r in aws_regions_to_provision],

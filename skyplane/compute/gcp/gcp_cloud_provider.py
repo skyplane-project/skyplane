@@ -6,7 +6,6 @@ from typing import List
 
 import googleapiclient
 import paramiko
-from ilock import ILock
 
 from skyplane import key_root
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
@@ -171,12 +170,11 @@ class GCPCloudProvider(CloudProvider):
         compute = self.auth.get_gcp_client()
 
         def create_firewall(body, update_firewall=False):
-            with ILock(f"gcp_configure_default_firewall"):
-                if update_firewall:
-                    op = compute.firewalls().update(project=self.auth.project_id, firewall="default", body=fw_body).execute()
-                else:
-                    op = compute.firewalls().insert(project=self.auth.project_id, body=fw_body).execute()
-                self.wait_for_operation_to_complete("global", op["name"])
+            if update_firewall:
+                op = compute.firewalls().update(project=self.auth.project_id, firewall="default", body=fw_body).execute()
+            else:
+                op = compute.firewalls().insert(project=self.auth.project_id, body=fw_body).execute()
+            self.wait_for_operation_to_complete("global", op["name"])
 
         try:
             current_firewall = compute.firewalls().get(project=self.auth.project_id, firewall="default").execute()
