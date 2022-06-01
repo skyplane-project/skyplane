@@ -83,15 +83,16 @@ class ReplicatorClient:
 
         # init clouds
         jobs = []
-        jobs.append(partial(self.aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
-        for r in set(aws_regions_to_provision):
+        if aws_regions_to_provision:
+            jobs.append(partial(self.aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
+            for r in set(aws_regions_to_provision):
 
-            def init_aws_vpc(r):
-                self.aws.make_vpc(r)
-                self.aws.authorize_client(r, "0.0.0.0/0")
+                def init_aws_vpc(r):
+                    self.aws.make_vpc(r)
+                    self.aws.authorize_client(r, "0.0.0.0/0")
 
-            jobs.append(partial(init_aws_vpc, r.split(":")[1]))
-            jobs.append(partial(self.aws.ensure_keyfile_exists, r.split(":")[1]))
+                jobs.append(partial(init_aws_vpc, r.split(":")[1]))
+                jobs.append(partial(self.aws.ensure_keyfile_exists, r.split(":")[1]))
         if azure_regions_to_provision:
             jobs.append(self.azure.create_ssh_key)
             jobs.append(self.azure.set_up_resource_group)
@@ -208,9 +209,7 @@ class ReplicatorClient:
         # Firewall rules
         # todo add firewall rules for Azure and GCP
         public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.gateway_nodes]
-        aws_jobs = [
-            partial(self.aws.add_ip_to_security_group, r.split(":")[1], ip) for r in set(aws_regions_to_provision) for ip in public_ips
-        ]
+        aws_jobs = [partial(self.aws.add_ips_to_security_group, r.split(":")[1], public_ips) for r in set(aws_regions_to_provision)]
         do_parallel(lambda fn: fn(), aws_jobs, spinner=True, desc="Applying firewall rules")
 
         # setup instances
@@ -243,7 +242,7 @@ class ReplicatorClient:
         # todo remove firewall rules for Azure and GCP
         public_ips = [i.public_ip() for i in self.bound_nodes.values()] + [i.public_ip() for i in self.temp_nodes]
         aws_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("aws:")]
-        aws_jobs = [partial(self.aws.remove_ip_from_security_group, r.split(":")[1], ip) for r in set(aws_regions) for ip in public_ips]
+        aws_jobs = [partial(self.aws.remove_ips_from_security_group, r.split(":")[1], public_ips) for r in set(aws_regions)]
         do_parallel(lambda fn: fn(), aws_jobs)
 
         # Terminate instances
