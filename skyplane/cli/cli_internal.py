@@ -7,8 +7,6 @@ import typer
 
 from skyplane import print_header, skyplane_root
 from skyplane.cli.cli_impl.cp_replicate import replicate_helper
-from skyplane.cli.common import parse_path
-from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.replicate.replication_plan import ReplicationTopology
 from skyplane.utils import logger
 

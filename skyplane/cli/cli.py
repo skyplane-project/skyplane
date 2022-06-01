@@ -1,5 +1,4 @@
 """CLI for the Skyplane object store"""
-import os
 import subprocess
 from functools import partial
 from pathlib import Path

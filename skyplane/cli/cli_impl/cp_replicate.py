@@ -1,7 +1,7 @@
 import json
 import os
 import signal
-from typing import List, Optional, Tuple
+from typing import List, Optional 
 
 from halo import Halo
 import typer
