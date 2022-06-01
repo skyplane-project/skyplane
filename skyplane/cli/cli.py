@@ -297,7 +297,7 @@ def sync(
             dst_dict[key] = obj
         else:
             dst_dict[key[len(path_dst) + 1 :]] = obj
-    
+
     src_obs_new = []
     for src_obj in src_objs_all:
         if src_obj.key in dst_dict:
@@ -306,7 +306,7 @@ def sync(
                 src_obs_new.append(src_obj)
         else:
             src_obs_new.append(src_obj)
-    
+
     if len(src_obs_new) == 0:
         typer.secho("No objects need updating. Exiting...")
         raise typer.Exit(0)
