@@ -1,11 +1,11 @@
 import json
 import os
-import signal
-from typing import List, Optional 
-
-from halo import Halo
-import typer
 import pathlib
+import signal
+from typing import List, Optional
+
+import typer
+from halo import Halo
 
 from skyplane import exceptions, MB, GB, skyplane_root
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject

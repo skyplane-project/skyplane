@@ -5,13 +5,14 @@ from pathlib import Path
 from shlex import split
 
 import questionary
+import typer
+from halo import Halo
+
 import skyplane.cli.cli_aws
 import skyplane.cli.cli_azure
 import skyplane.cli.cli_internal as cli_internal
 import skyplane.cli.cli_solver
 import skyplane.cli.experiments
-import typer
-from halo import Halo
 from skyplane import GB, config_path, exceptions, print_header, skyplane_root
 from skyplane.cli.cli_impl.cp_local import (copy_azure_local, copy_gcs_local,
                                             copy_local_azure, copy_local_gcs,

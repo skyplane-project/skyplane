@@ -3,8 +3,9 @@ from datetime import datetime
 from functools import partial
 from types import SimpleNamespace
 
-from skyplane import is_gateway_env
 import termcolor
+
+from skyplane import is_gateway_env
 
 log_file = None
 

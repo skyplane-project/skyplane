@@ -7,12 +7,11 @@ from functools import partial
 from pathlib import Path
 from typing import Dict, Optional
 
-
 from skyplane import config_path
 from skyplane.compute.const_cmds import make_dozzle_command, make_sysctl_tcp_tuning_command, make_autoshutdown_script
 from skyplane.utils import logger
-from skyplane.utils.net import retry_requests
 from skyplane.utils.fn import PathLike, retry_backoff, wait_for
+from skyplane.utils.net import retry_requests
 from skyplane.utils.timer import Timer
 
 
