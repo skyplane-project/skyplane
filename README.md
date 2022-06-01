@@ -17,7 +17,7 @@ You can use skyplane to transfer data:
 
 We recommend installation from PyPi: `pip install skyplane-nightly`
 
-From source:
+To install Skyplane from source:
 ```bash
 $ git clone https://github.com/skyplane-project/skyplane
 $ cd skyplane
