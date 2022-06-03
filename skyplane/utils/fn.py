@@ -16,16 +16,21 @@ def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, spinner=False, d
     if spinner:  # check to avoid importing on gateway
         from halo import Halo
 
+        spinner_obj = Halo({desc}, spinner="dots")
+
     # wait for fn to return True
     start = time.time()
-    with Halo({desc}, spinner="dots", enabled=spinner) as spinner_obj:
-        while time.time() - start < timeout:
-            if fn():
-                logger.fs.debug(f"[wait_for] {desc} fn={fn} completed in {time.time() - start:.2f}s")
-                if leave_spinner:
-                    spinner_obj.succeed(f"[wait_for] {desc} fn={fn} completed in {time.time() - start:.2f}s")
-                return True
-            time.sleep(interval)
+    while time.time() - start < timeout:
+        if fn():
+            logger.fs.debug(f"[wait_for] {desc} fn={fn} completed in {time.time() - start:.2f}s")
+            if spinner and leave_spinner:
+                spinner_obj.succeed(f"[wait_for] {desc} fn={fn} completed in {time.time() - start:.2f}s")
+            elif spinner:
+                spinner_obj.stop()
+            return True
+        time.sleep(interval)
+        if spinner:
+            spinner_obj.fail(f"[wait_for] {desc} fn={fn} timed out after {time.time() - start:.2f}s")
         raise TimeoutError(f"Timeout waiting for {desc}")
 
 
