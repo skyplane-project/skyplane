@@ -46,6 +46,7 @@ lz4 = { version = "^4.0.0", optional = true }
 flask = { version = "^2.1.2", optional = true }
 pyopenssl = { version = "^22.0.0", optional = true }
 werkzeug = { version = "^2.1.2", optional = true }
+rich = "^12.4.4"
 
 [tool.poetry.extras]
 gateway = ["flask", "lz4", "pyopenssl", "werkzeug"]

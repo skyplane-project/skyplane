@@ -9,7 +9,9 @@ from typing import List, Optional, Tuple
 import pandas as pd
 import questionary
 import typer
-from tqdm import tqdm  # type: ignore
+
+from rich.progress import Progress
+from rich.console import Console
 
 from skyplane import GB, skyplane_root
 from skyplane.cli.experiments.provision import provision
@@ -279,14 +281,15 @@ def throughput_grid(
         )
         if rec is not None:
             result_rec.update(rec)
-        pbar.update(1)
-        tqdm.write(f"{result_rec['tag']}: {result_rec.get('throughput_sent', 0.) / GB:.2f}Gbps")
+        pbar.console.print(f"{result_rec['tag']}: {result_rec.get('throughput_sent', 0.) / GB:.2f}Gbps")
+        pbar.update(task_total, advance=1)
         return result_rec
 
     # run experiment
     new_througput_results = []
     output_file = log_dir / "throughput.csv"
-    with tqdm(total=len(instance_pairs), desc="Total throughput evaluation") as pbar:
+    with Progress() as pbar:
+        task_total = pbar.add_task("Total throughput evaluation", total=len(instance_pairs))
         for group_idx, group in enumerate(groups):
             tag_fmt = lambda x: f"{x[0].region_tag}:{x[0].network_tier()} to {x[1].region_tag}:{x[1].network_tier()}"
             results = do_parallel(
@@ -295,7 +298,7 @@ def throughput_grid(
             new_througput_results.extend([rec for rec in results if rec is not None])
 
             # build dataframe from results
-            tqdm.write(f"Saving intermediate results to {output_file}")
+            pbar.console.print(f"Saving intermediate results to {output_file}")
             df = pd.DataFrame(new_througput_results)
             if resume and copy_resume_file:
                 logger.debug(f"Copying old CSV entries from {resume}")
@@ -461,19 +464,20 @@ def latency_grid(
         result_rec["avg_rtt"] = avg_rtt
         result_rec["max_rtt"] = max_rtt
         result_rec["mdev_rtt"] = mdev_rtt
-        pbar.update(1)
-        pbar.write(f"{instance_src.region_tag} -> {instance_dst.region_tag}: {avg_rtt} ms")
+        pbar.console.print(f"{instance_src.region_tag} -> {instance_dst.region_tag}: {avg_rtt} ms")
+        pbar.update(task_total, advance=1)
         return result_rec
 
     # run experiment
     new_througput_results = []
     log_dir.mkdir(parents=True, exist_ok=True)
     output_file = log_dir / "latency.csv"
-    with tqdm(total=len(instance_pairs), desc="Total latency evaluation") as pbar:
+    with Progress() as pbar:
+        task_total = pbar.add_task("Total latency evaluation", total=len(instance_pairs))
         results = do_parallel(client_fn, instance_pairs, n=16, return_args=False)
         new_througput_results.extend([rec for rec in results if rec is not None])
 
     # build dataframe from results
-    tqdm.write(f"Saving intermediate results to {output_file}")
+    print(f"Saving intermediate results to {output_file}")
     df = pd.DataFrame(new_througput_results)
     df.to_csv(output_file, index=False)
