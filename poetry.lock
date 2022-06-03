@@ -38,7 +38,7 @@ python-versions = "*"
 
 [[package]]
 name = "azure-core"
-version = "1.24.0"
+version = "1.24.1"
 description = "Microsoft Azure Core Library for Python"
 category = "main"
 optional = false
@@ -193,14 +193,14 @@ uvloop = ["uvloop (>=0.15.2)"]
 
 [[package]]
 name = "boto3"
-version = "1.24.0"
+version = "1.24.1"
 description = "The AWS SDK for Python"
 category = "main"
 optional = false
 python-versions = ">= 3.7"
 
 [package.dependencies]
-botocore = ">=1.27.0,<1.28.0"
+botocore = ">=1.27.1,<1.28.0"
 jmespath = ">=0.7.1,<2.0.0"
 s3transfer = ">=0.6.0,<0.7.0"
 
@@ -209,7 +209,7 @@ crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
 
 [[package]]
 name = "botocore"
-version = "1.27.0"
+version = "1.27.1"
 description = "Low-level, data-driven core of boto 3."
 category = "main"
 optional = false
@@ -1595,7 +1595,7 @@ solver = ["cvxpy", "graphviz", "matplotlib", "numpy"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7.1,<3.11"
-content-hash = "0a03fd22d6b0ec7f7b46988ebe9257eae0c917ba34fac18a1522f343d7ca3aea"
+content-hash = "0220a1145d26267b219a49e6252b035b2071fecf764ec051b526ac859857746c"
 
 [metadata.files]
 atomicwrites = [
@@ -1647,8 +1647,8 @@ azure-common = [
     {file = "azure_common-1.1.28-py2.py3-none-any.whl", hash = "sha256:5c12d3dcf4ec20599ca6b0d3e09e86e146353d443e7fcc050c9a19c1f9df20ad"},
 ]
 azure-core = [
-    {file = "azure-core-1.24.0.zip", hash = "sha256:345b1b041faad7d0205b20d5697f1d0df344302e7aaa8501905580ff87bd0be5"},
-    {file = "azure_core-1.24.0-py3-none-any.whl", hash = "sha256:923e492e72d103c768a643dfad331ce6b8ec1669575c7d0832fed19bffd119f7"},
+    {file = "azure-core-1.24.1.zip", hash = "sha256:39c5d59d04209bb70a1a7ee879cef05d07bc76472cd3fb5eaa2e607a90d312bb"},
+    {file = "azure_core-1.24.1-py3-none-any.whl", hash = "sha256:f48a640affa59fa45ac770565b3bead4c4f834242d16983c1ae2bb173a4b8a6d"},
 ]
 azure-identity = [
     {file = "azure-identity-1.10.0.zip", hash = "sha256:656e5034d9cef297cf9b35376ed620085273c18cfa52cea4a625bf0d5d2d6409"},
@@ -1721,12 +1721,12 @@ black = [
     {file = "black-22.3.0.tar.gz", hash = "sha256:35020b8886c022ced9282b51b5a875b6d1ab0c387b31a065b84db7c33085ca79"},
 ]
 boto3 = [
-    {file = "boto3-1.24.0-py3-none-any.whl", hash = "sha256:a42900a0ea75600a76b371b03ac645461e4f3c97bb13ae5136bb4d3c87c6c110"},
-    {file = "boto3-1.24.0.tar.gz", hash = "sha256:8df0215521969e229a6a004eedc6a484a3656611ddee698419d3658ae9c53c50"},
+    {file = "boto3-1.24.1-py3-none-any.whl", hash = "sha256:ce924b71306a98ff9fb49645f98ddafe50f297d7aecbf7d4d9b08f4d79c3f855"},
+    {file = "boto3-1.24.1.tar.gz", hash = "sha256:cf705c0c2d049b0adb564b2cd60b9ac0d4405653b29c33e2a1f1fdde37f476c0"},
 ]
 botocore = [
-    {file = "botocore-1.27.0-py3-none-any.whl", hash = "sha256:40823d9c3e2e707e74112aa0b1073e9eeb6c7f6a7d123518b5f768fc11b250f7"},
-    {file = "botocore-1.27.0.tar.gz", hash = "sha256:505ba80201dd577cb4c704fea5b16142c85473e4e2ef3eb55ebd991037b70142"},
+    {file = "botocore-1.27.1-py3-none-any.whl", hash = "sha256:628a3176103b7b233bb456bed4d495c445e7eaa801faecf63989698ecc2e8bae"},
+    {file = "botocore-1.27.1.tar.gz", hash = "sha256:2702181c3b7cad75b64b4a758f862d46da50ed8dd5329870d69c8c187b877b94"},
 ]
 cachetools = [
     {file = "cachetools-5.2.0-py3-none-any.whl", hash = "sha256:f9f17d2aec496a9aa6b76f53e3b614c965223c061982d434d160f930c698a9db"},
