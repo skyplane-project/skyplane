@@ -6,7 +6,7 @@ from shlex import split
 
 import questionary
 import typer
-from halo import Halo
+from rich.progress import Progress
 
 import skyplane.cli.cli_aws
 import skyplane.cli.cli_azure
@@ -278,13 +278,14 @@ def sync(
     src_objs_all = []
     dst_objs_all = []
     with Timer(f"Query {bucket_src} prefix {path_src}"):
-        with Halo(text=f"Querying objects in {bucket_src}", spinner="dots") as spinner:
+        with Progress(transient=True) as progress:
+            query_task = progress.add_task(f"Querying objects in {bucket_src}", total=None)
             for obj in src_client.list_objects(path_src):
                 src_objs_all.append(obj)
-                spinner.text = f"Querying objects in {bucket_src} ({len(src_objs_all)} objects)"
+                progress.update(query_task, description=f"Querying objects in {bucket_src} (found {len(src_objs_all)} objects so far)")
             for obj in dst_client.list_objects(path_dst):
                 dst_objs_all.append(obj)
-                spinner.txt = f"Querying objects in {bucket_dst} ({len(dst_objs_all)} objects)"
+                progress.update(query_task, description=f"Querying objects in {bucket_dst} (found {len(dst_objs_all)} objects so far)")
     if not src_objs_all:
         logger.error("Specified object does not exist.")
         raise exceptions.MissingObjectException()

@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Tuple, Iterable
 
 import pandas as pd
 from halo import Halo
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from skyplane import GB, MB, tmp_log_dir
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
@@ -280,13 +281,19 @@ class ReplicatorClient:
                     assign_jobs.append(partial(gateway.authorize_storage_account, job.dest_bucket.split("/", 1)[0]))
         do_parallel(lambda fn: fn(), assign_jobs, spinner=True, spinner_persist=True, desc="Assigning gateways permissions to buckets")
 
-        with Halo(text="Preparing replication plan", spinner="dots") as spinner:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("Preparing replication plan"),
+            transient=True,
+        ) as progress:
+            prepare_task = progress.add_task("", total=None)
+
             # pre-fetch instance IPs for all gateways
-            spinner.text = "Preparing replication plan, fetching instance IPs"
+            progress.update(prepare_task, description="fetching instance IPs")
             gateway_ips: Dict[Server, str] = {s: s.public_ip() for s in self.bound_nodes.values()}
 
             # make list of chunks
-            spinner.text = "Preparing replication plan, querying source object store for matching keys"
+            progress.update(prepare_task, description="querying source object store for matching keys")
             chunks = []
 
             # calculate object sizes
@@ -565,8 +572,15 @@ class ReplicatorClient:
         finally:
             if show_spinner:
                 spinner.stop()
-            with Halo(text="Cleaning up after transfer", spinner="dots") as spinner:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("Cleaning up after transfer"),
+                transient=True,
+            ) as progress:
+                cleanup_task = progress.add_task("", total=None)
+
                 # get compression ratio information from destination gateways using "/api/v1/profile/compression"
+                progress.update(cleanup_task, "Getting compression ratio information")
                 total_sent_compressed, total_sent_uncompressed = 0, 0
                 for gateway in {v for v in self.bound_nodes.values() if v.region_tag in source_regions}:
                     stats = retry_requests().get(f"{gateway.gateway_api_url}/api/v1/profile/compression")
@@ -574,14 +588,12 @@ class ReplicatorClient:
                         stats = stats.json()
                         total_sent_compressed += stats.get("compressed_bytes_sent", 0)
                         total_sent_uncompressed += stats.get("uncompressed_bytes_sent", 0)
-                logger.fs.info(f"Total compressed bytes sent: {total_sent_compressed / GB:.2f}GB")
-                logger.fs.info(f"Total uncompressed bytes sent: {total_sent_uncompressed / GB:.2f}GB")
-                logger.fs.info(
-                    f"Compression ratio: {total_sent_compressed / total_sent_uncompressed if total_sent_uncompressed > 0 else 0:.2f}"
-                )
-                print(
-                    f"Sent {total_sent_compressed / GB:.2f}GB compressed, {total_sent_uncompressed / GB:.2f}GB uncompressed w/ compression ratio {total_sent_compressed / total_sent_uncompressed if total_sent_uncompressed > 0 else 0:.2f}"
-                )
+                compression_ratio = total_sent_compressed / total_sent_uncompressed if total_sent_uncompressed > 0 else 0
+                if compression_ratio > 0:
+                    logger.fs.info(f"Total compressed bytes sent: {total_sent_compressed / GB:.2f}GB")
+                    logger.fs.info(f"Total uncompressed bytes sent: {total_sent_uncompressed / GB:.2f}GB")
+                    logger.fs.info(f"Compression ratio: {compression_ratio}")
+                    progress.print(f"[bold yellow]Compression saved {(1. - compression_ratio)*100.:.2f}% of egress fees")
 
                 if copy_gateway_logs:
 
@@ -590,10 +602,10 @@ class ReplicatorClient:
                         instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
                         instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 
-                    spinner.text = "Cleaning up after transfer, copying gateway logs from all nodes"
+                    progress.update(cleanup_task, "Copying gateway logs")
                     do_parallel(copy_log, self.bound_nodes.values(), n=-1)
                 if write_profile:
-                    spinner.text = "Cleaning up after transfer, writing profile of transfer"
+                    progress.update(cleanup_task, "Writing chunk profiles")
                     chunk_status_df = self.get_chunk_status_log_df()
                     (self.transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
                     traceevent = status_df_to_traceevent(chunk_status_df)
@@ -610,7 +622,7 @@ class ReplicatorClient:
                             )
                         (self.transfer_dir / f"receiver_socket_profile_{instance.uuid()}.json").write_text(receiver_reply.text)
 
-                    spinner.text = "Cleaning up after transfer, writing socket profile of transfer"
+                    progress.update(cleanup_task, "Writing socket profiles")
                     do_parallel(write_socket_profile, self.bound_nodes.values(), n=-1)
                 if cleanup_gateway:
 
@@ -621,8 +633,7 @@ class ReplicatorClient:
                             return  # ignore connection errors since server may be shutting down
 
                     do_parallel(fn, self.bound_nodes.values(), n=-1)
-                    spinner.text = "Cleaning up after transfer, shutting down gateway servers"
-                spinner.succeed(f"Cleaned up after transfer, see log directory: {self.transfer_dir}")
+                    progress.update(cleanup_task, "Shutting down gateways")
 
 
 def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1) -> Dict[str, List[Server]]:

@@ -83,17 +83,14 @@ class S3Interface(ObjectStoreInterface):
             return False
 
     def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
-        logger.info(f"Download {src_object_name}, {dst_file_path}, {offset_bytes}")
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         assert len(src_object_name) > 0, f"Source object name must be non-empty: '{src_object_name}'"
 
         if size_bytes:
             byte_range = f"bytes={offset_bytes}-{offset_bytes + size_bytes - 1}"
-            logger.info(f"Download {byte_range}")
             response = s3_client.get_object(Bucket=self.bucket_name, Key=src_object_name, Range=byte_range)
         else:
-            logger.info(f"Download all {offset_bytes}, {size_bytes}")
             response = s3_client.get_object(
                 Bucket=self.bucket_name,
                 Key=src_object_name,
@@ -108,8 +105,6 @@ class S3Interface(ObjectStoreInterface):
         response["Body"].close()
 
     def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
-        logger.info(f"Upload {src_file_path}, {dst_object_name}, {part_number}, {upload_id}, {self.bucket_name}")
-        logger.info(f"id {upload_id}")
         dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
 
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
