@@ -7,7 +7,7 @@ from functools import partial
 from typing import Dict, List, Optional, Tuple, Iterable
 
 import pandas as pd
-from halo import Halo
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, DownloadColumn, BarColumn, TransferSpeedColumn
 
 from skyplane import GB, MB, tmp_log_dir
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
@@ -280,13 +280,19 @@ class ReplicatorClient:
                     assign_jobs.append(partial(gateway.authorize_storage_account, job.dest_bucket.split("/", 1)[0]))
         do_parallel(lambda fn: fn(), assign_jobs, spinner=True, spinner_persist=True, desc="Assigning gateways permissions to buckets")
 
-        with Halo(text="Preparing replication plan", spinner="dots") as spinner:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("Preparing replication plan{task.description}"),
+            transient=True,
+        ) as progress:
+            prepare_task = progress.add_task("", total=None)
+
             # pre-fetch instance IPs for all gateways
-            spinner.text = "Preparing replication plan, fetching instance IPs"
+            progress.update(prepare_task, description=": Fetching instance IPs")
             gateway_ips: Dict[Server, str] = {s: s.public_ip() for s in self.bound_nodes.values()}
 
             # make list of chunks
-            spinner.text = "Preparing replication plan, querying source object store for matching keys"
+            progress.update(prepare_task, description=": Querying source object store for matching keys")
             chunks = []
 
             # calculate object sizes
@@ -363,7 +369,7 @@ class ReplicatorClient:
                     batch_sizes[min_batch] += item.chunk_length_bytes
                 return batches
 
-            spinner.text = "Preparing replication plan, partitioning chunks into batches"
+            progress.update(prepare_task, description=": Partitioning chunks into batches")
             src_instances = [self.bound_nodes[n] for n in self.topology.source_instances()]
             chunk_batches = partition(chunks, len(src_instances))
             assert (len(chunk_batches) == (len(src_instances) - 1)) or (
@@ -375,7 +381,7 @@ class ReplicatorClient:
             # make list of ChunkRequests
             with Timer("Building chunk requests"):
                 # make list of ChunkRequests
-                spinner.text = "Preparing replication plan, building list of chunk requests"
+                progress.update(prepare_task, description=": Building list of chunk requests")
                 chunk_requests_sharded: Dict[int, List[ChunkRequest]] = {}
                 for batch_idx, batch in enumerate(chunk_batches):
                     chunk_requests_sharded[batch_idx] = []
@@ -395,7 +401,7 @@ class ReplicatorClient:
                     logger.fs.debug(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")
 
                 # send chunk requests to start gateways in parallel
-                spinner.text = "Preparing replication plan, dispatching chunk requests to source gateways"
+                progress.update(prepare_task, description=": Dispatching chunk requests to source gateways")
 
                 def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
                     hop_instance, chunk_requests = args
@@ -469,104 +475,106 @@ class ReplicatorClient:
 
         completed_chunk_ids = []
 
-        # wait for VMs to start
-        if show_spinner:
-            spinner = Halo(text="Transfer starting", spinner="dots")
-            spinner.start()
         if save_log:
-            if show_spinner:
-                spinner.text = "Transfer starting, saving job log"
             (self.transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
         try:
-            with Timer() as t:
-                while True:
-                    # refresh shutdown status by running noop
-                    do_parallel(lambda i: i.run_command("echo 1"), self.bound_nodes.values(), n=-1)
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("Transfer progress{task.description}"),
+                BarColumn(),
+                DownloadColumn(binary_units=True),
+                TransferSpeedColumn(),
+                TimeElapsedColumn(),
+                disable=not show_spinner,
+            ) as progress:
+                copy_task = progress.add_task("", total=total_bytes)
+                with Timer() as t:
+                    while True:
+                        # refresh shutdown status by running noop
+                        do_parallel(lambda i: i.run_command("echo 1"), self.bound_nodes.values(), n=-1)
 
-                    # check for errors and exit if there are any
-                    errors = self.check_error_logs()
-                    if any(errors.values()):
-                        return {
-                            "errors": errors,
-                            "monitor_status": "error",
-                        }
+                        # check for errors and exit if there are any
+                        errors = self.check_error_logs()
+                        if any(errors.values()):
+                            return {
+                                "errors": errors,
+                                "monitor_status": "error",
+                            }
 
-                    log_df = self.get_chunk_status_log_df()
-                    if log_df.empty:
-                        logger.warning("No chunk status log entries yet")
-                        time.sleep(0.5)
-                        continue
+                        log_df = self.get_chunk_status_log_df()
+                        if log_df.empty:
+                            logger.warning("No chunk status log entries yet")
+                            time.sleep(0.5)
+                            continue
 
-                    is_complete_rec = (
-                        lambda row: row["state"] == ChunkState.upload_complete
-                        and row["instance"] in [s.instance for s in sinks]
-                        and row["region"] in [s.region for s in sinks]
-                    )
-                    sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
-                    completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region"].unique()) == set(sink_regions))
-                    completed_chunk_ids = completed_status[completed_status].index
-                    completed_bytes = sum(
-                        [cr.chunk.chunk_length_bytes for cr in job.chunk_requests if cr.chunk.chunk_id in completed_chunk_ids]
-                    )
+                        is_complete_rec = (
+                            lambda row: row["state"] == ChunkState.upload_complete
+                            and row["instance"] in [s.instance for s in sinks]
+                            and row["region"] in [s.region for s in sinks]
+                        )
+                        sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
+                        completed_status = sink_status_df.groupby("chunk_id").apply(
+                            lambda x: set(x["region"].unique()) == set(sink_regions)
+                        )
+                        completed_chunk_ids = completed_status[completed_status].index
+                        completed_bytes = sum(
+                            [cr.chunk.chunk_length_bytes for cr in job.chunk_requests if cr.chunk.chunk_id in completed_chunk_ids]
+                        )
 
-                    # update progress bar
-                    total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
-                    throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
+                        # update progress bar
+                        total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
+                        throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
 
-                    # make log line
-                    gbits_remaining = (total_bytes - completed_bytes) * 8 / GB
-                    eta = int(gbits_remaining / throughput_gbits) if throughput_gbits > 0 else None
-                    log_line_detail = f"{len(completed_chunk_ids)}/{len(job.chunk_requests)} chunks done, {completed_bytes / GB:.2f}/{total_bytes / GB:.2f}GB, ETA={str(eta) + 's' if eta is not None else 'unknown'}"
-                    log_line = f"{completed_bytes / total_bytes * 100.:.1f}% at {throughput_gbits:.2f}Gbit/s ({log_line_detail})"
-                    if show_spinner:
-                        spinner.text = f"Transfered {log_line}"
-                    if len(completed_chunk_ids) == len(job.chunk_requests):
-                        if show_spinner:
-                            spinner.succeed(f"Transfer complete ({log_line})")
+                        # make log line
+                        progress.update(
+                            copy_task,
+                            description=f" ({len(completed_chunk_ids)} done of {len(job.chunk_requests)} chunks)",
+                            completed=completed_bytes,
+                        )
+                        if len(completed_chunk_ids) == len(job.chunk_requests):
+                            if multipart:
+                                # Complete multi-part uploads
+                                def complete_upload(req):
+                                    obj_store_interface = ObjectStoreInterface.create(req["region"], req["bucket"])
+                                    succ = obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"], req["parts"])
+                                    if not succ:
+                                        raise ValueError(f"Failed to complete upload {req['upload_id']}")
 
-                        if multipart:
-                            # Complete multi-part uploads
-                            def complete_upload(req):
-                                obj_store_interface = ObjectStoreInterface.create(req["region"], req["bucket"])
-                                succ = obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"], req["parts"])
-                                if not succ:
-                                    raise ValueError(f"Failed to complete upload {req['upload_id']}")
-
-                            do_parallel(
-                                complete_upload, self.multipart_upload_requests, n=-1, desc="Completing multipart uploads", spinner=True
+                                do_parallel(
+                                    complete_upload, self.multipart_upload_requests, n=-1, desc="Completing multipart uploads", spinner=True
+                                )
+                            return dict(
+                                completed_chunk_ids=completed_chunk_ids,
+                                total_runtime_s=total_runtime_s,
+                                throughput_gbits=throughput_gbits,
+                                monitor_status="completed",
                             )
-                        return dict(
-                            completed_chunk_ids=completed_chunk_ids,
-                            total_runtime_s=total_runtime_s,
-                            throughput_gbits=throughput_gbits,
-                            monitor_status="completed",
-                        )
-                    elif time_limit_seconds is not None and t.elapsed > time_limit_seconds or t.elapsed > 600 and completed_bytes == 0:
-                        if show_spinner:
-                            spinner.fail(f"Transfer timed out with no progress ({log_line})")
-                        logger.fs.error("Transfer timed out! Please retry.")
-                        logger.error(f"Please share debug logs from: {self.transfer_dir}")
-                        return dict(
-                            completed_chunk_ids=completed_chunk_ids,
-                            total_runtime_s=total_runtime_s,
-                            throughput_gbits=throughput_gbits,
-                            monitor_status="timed_out",
-                        )
-                    else:
-                        current_time = datetime.now()
-                        if log_interval_s and (not last_log or (current_time - last_log).seconds > float(log_interval_s)):
-                            last_log = current_time
-                            if show_spinner:  # log only to file
-                                logger.fs.info(log_line)
-                            else:
-                                logger.info(log_line)
-                        time.sleep(0.01 if show_spinner else 0.25)
+                        elif time_limit_seconds is not None and t.elapsed > time_limit_seconds or t.elapsed > 600 and completed_bytes == 0:
+                            logger.error("Transfer timed out without progress, please check the debug log!")
+                            logger.fs.error("Transfer timed out! Please retry.")
+                            logger.error(f"Please share debug logs from: {self.transfer_dir}")
+                            return dict(
+                                completed_chunk_ids=completed_chunk_ids,
+                                total_runtime_s=total_runtime_s,
+                                throughput_gbits=throughput_gbits,
+                                monitor_status="timed_out",
+                            )
+                        else:
+                            current_time = datetime.now()
+                            if log_interval_s and (not last_log or (current_time - last_log).seconds > float(log_interval_s)):
+                                last_log = current_time
+                            time.sleep(0.01 if show_spinner else 0.25)
         # always run cleanup, even if there's an exception
         finally:
-            if show_spinner:
-                spinner.stop()
-            with Halo(text="Cleaning up after transfer", spinner="dots") as spinner:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("Cleaning up after transfer{task.description}"),
+                transient=True,
+            ) as progress:
+                cleanup_task = progress.add_task("", total=None)
+
                 # get compression ratio information from destination gateways using "/api/v1/profile/compression"
+                progress.update(cleanup_task, description=": Getting compression ratio information")
                 total_sent_compressed, total_sent_uncompressed = 0, 0
                 for gateway in {v for v in self.bound_nodes.values() if v.region_tag in source_regions}:
                     stats = retry_requests().get(f"{gateway.gateway_api_url}/api/v1/profile/compression")
@@ -574,14 +582,12 @@ class ReplicatorClient:
                         stats = stats.json()
                         total_sent_compressed += stats.get("compressed_bytes_sent", 0)
                         total_sent_uncompressed += stats.get("uncompressed_bytes_sent", 0)
-                logger.fs.info(f"Total compressed bytes sent: {total_sent_compressed / GB:.2f}GB")
-                logger.fs.info(f"Total uncompressed bytes sent: {total_sent_uncompressed / GB:.2f}GB")
-                logger.fs.info(
-                    f"Compression ratio: {total_sent_compressed / total_sent_uncompressed if total_sent_uncompressed > 0 else 0:.2f}"
-                )
-                print(
-                    f"Sent {total_sent_compressed / GB:.2f}GB compressed, {total_sent_uncompressed / GB:.2f}GB uncompressed w/ compression ratio {total_sent_compressed / total_sent_uncompressed if total_sent_uncompressed > 0 else 0:.2f}"
-                )
+                compression_ratio = total_sent_compressed / total_sent_uncompressed if total_sent_uncompressed > 0 else 0
+                if compression_ratio > 0:
+                    logger.fs.info(f"Total compressed bytes sent: {total_sent_compressed / GB:.2f}GB")
+                    logger.fs.info(f"Total uncompressed bytes sent: {total_sent_uncompressed / GB:.2f}GB")
+                    logger.fs.info(f"Compression ratio: {compression_ratio}")
+                    progress.print(f"[bold yellow]Compression saved {(1. - compression_ratio)*100.:.2f}% of egress fees")
 
                 if copy_gateway_logs:
 
@@ -590,10 +596,10 @@ class ReplicatorClient:
                         instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
                         instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 
-                    spinner.text = "Cleaning up after transfer, copying gateway logs from all nodes"
+                    progress.update(cleanup_task, description=": Copying gateway logs")
                     do_parallel(copy_log, self.bound_nodes.values(), n=-1)
                 if write_profile:
-                    spinner.text = "Cleaning up after transfer, writing profile of transfer"
+                    progress.update(cleanup_task, ": Writing chunk profiles")
                     chunk_status_df = self.get_chunk_status_log_df()
                     (self.transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
                     traceevent = status_df_to_traceevent(chunk_status_df)
@@ -610,7 +616,7 @@ class ReplicatorClient:
                             )
                         (self.transfer_dir / f"receiver_socket_profile_{instance.uuid()}.json").write_text(receiver_reply.text)
 
-                    spinner.text = "Cleaning up after transfer, writing socket profile of transfer"
+                    progress.update(cleanup_task, description=": Writing socket profiles")
                     do_parallel(write_socket_profile, self.bound_nodes.values(), n=-1)
                 if cleanup_gateway:
 
@@ -621,8 +627,7 @@ class ReplicatorClient:
                             return  # ignore connection errors since server may be shutting down
 
                     do_parallel(fn, self.bound_nodes.values(), n=-1)
-                    spinner.text = "Cleaning up after transfer, shutting down gateway servers"
-                spinner.succeed(f"Cleaned up after transfer, see log directory: {self.transfer_dir}")
+                    progress.update(cleanup_task, description=": Shutting down gateways")
 
 
 def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1) -> Dict[str, List[Server]]:

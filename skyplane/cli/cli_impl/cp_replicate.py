@@ -5,7 +5,7 @@ import signal
 from typing import List, Optional
 
 import typer
-from halo import Halo
+from rich.console import Console
 
 from skyplane import exceptions, MB, GB, skyplane_root
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
@@ -26,7 +26,7 @@ def generate_topology(
     solver_throughput_grid: Optional[pathlib.Path] = skyplane_root / "profiles" / "throughput.csv",
     solver_verbose: Optional[bool] = False,
 ) -> ReplicationTopology:
-
+    console = Console()
     if solve:
         if src_region == dst_region:
             typer.secho("Solver is not supported for intra-region transfers, run without the --solve flag", fg="red")
@@ -45,13 +45,15 @@ def generate_topology(
             gbyte_to_transfer=solver_total_gbyte_to_transfer,
             instance_limit=max_instances,
         )
-        with Halo(text="Solving...", spinner="dots"):
-            solution = tput.solve_min_cost(
-                problem,
-                solver=ThroughputSolverILP.choose_solver(),
-                solver_verbose=solver_verbose,
-                save_lp_path=None,
-            )
+        with Timer() as t:
+            with console.status("Solving for the optimal transfer plan"):
+                solution = tput.solve_min_cost(
+                    problem,
+                    solver=ThroughputSolverILP.choose_solver(),
+                    solver_verbose=solver_verbose,
+                    save_lp_path=None,
+                )
+        typer.secho(f"Solving for the optimal transfer plan took {t.elapsed:.2f}s", fg="green")
         topo, _ = tput.to_replication_topology(solution)
         return topo
     else:
@@ -97,8 +99,9 @@ def replicate_helper(
     time_limit_seconds: Optional[int] = None,
     log_interval_s: float = 1.0,
 ):
+    console = Console()
     if "SKYPLANE_DOCKER_IMAGE" in os.environ:
-        logger.debug(f"Using docker image: {gateway_docker_image}")
+        typer.secho(f"Using docker image: {gateway_docker_image}")
     if reuse_gateways:
         typer.secho(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skyplane deprovision` to deprovision gateways.",
@@ -140,12 +143,11 @@ def replicate_helper(
         else:
             source_iface = ObjectStoreInterface.create(topo.source_region(), source_bucket)
             logger.fs.debug(f"Querying objects in {source_bucket}")
-            with Timer(f"Query {source_bucket} prefix {src_key_prefix}"):
-                with Halo(text=f"Querying objects in {source_bucket}", spinner="dots") as spinner:
-                    src_objs = []
-                    for obj in source_iface.list_objects(src_key_prefix):
-                        src_objs.append(obj)
-                        spinner.text = f"Querying objects in {source_bucket} ({len(src_objs)} objects)"
+            with console.status(f"Querying objects in {source_bucket}") as status:
+                src_objs = []
+                for obj in source_iface.list_objects(src_key_prefix):
+                    src_objs.append(obj)
+                    status.update(f"Querying objects in {source_bucket} (found {len(src_objs)} objects so far)")
 
         if not src_objs:
             logger.error("Specified object does not exist.")

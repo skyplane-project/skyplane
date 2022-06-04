@@ -3,7 +3,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, Iterable, List, Tuple, Union, TypeVar
 
-from halo import Halo
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, MofNCompleteColumn, TimeElapsedColumn
+import typer
 
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
@@ -13,20 +14,15 @@ T = TypeVar("T")
 R = TypeVar("R")
 
 
-def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, spinner=False, desc="Waiting", leave_spinner=True) -> bool:
+def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, desc="Waiting") -> bool:
     """Wait for fn to return True"""
-    with Halo(desc, spinner="dots", enabled=spinner) as spinner_obj:
-        start = time.time()
-        while time.time() - start < timeout:
-            if fn():
-                logger.fs.debug(f"[wait_for] {desc} fn={fn} completed in {time.time() - start:.2f}s")
-                if spinner and leave_spinner:
-                    spinner_obj.succeed(f"[wait_for] {desc} fn={fn} completed in {time.time() - start:.2f}s")
-                return True
-            time.sleep(interval)
-            if spinner:
-                spinner_obj.fail(f"[wait_for] {desc} fn={fn} timed out after {time.time() - start:.2f}s")
-            raise TimeoutError(f"Timeout waiting for {desc}")
+    start = time.time()
+    while time.time() - start < timeout:
+        if fn():
+            logger.fs.debug(f"[wait_for] {desc} fn={fn} completed in {time.time() - start:.2f}s")
+            return True
+        time.sleep(interval)
+        raise TimeoutError(f"Timeout waiting for {desc}")
 
 
 def do_parallel(
@@ -57,19 +53,17 @@ def do_parallel(
             raise e
 
     results = []
-    with Halo(f"{desc} ({len(results)}/{len(args_list)})", spinner="dots", enabled=spinner) as spinner_obj:
+    with Progress(
+        SpinnerColumn(), TextColumn(desc), BarColumn(), MofNCompleteColumn(), TimeElapsedColumn(), disable=not spinner, transient=True
+    ) as progress:
+        progress_task = progress.add_task("", total=len(args_list))
         with Timer() as t:
             with ThreadPoolExecutor(max_workers=n) as executor:
                 future_list = [executor.submit(wrapped_fn, args) for args in args_list]
                 for future in as_completed(future_list):
                     args, result = future.result()
                     results.append((args, result))
-                    if spinner:
-                        spinner_obj.text = f"{desc} ({len(results)}/{len(args_list)})"
-            if return_args:
-                output = results
-            else:
-                output = [result for _, result in results]
-        if spinner_persist:
-            spinner_obj.succeed(f"{desc} ({len(output)}/{len(args_list)}) in {t.elapsed:.2f}s")
-        return output
+                    progress.update(progress_task, advance=1)
+    if spinner_persist:
+        typer.secho(f"✓ {desc} ({len(results)}/{len(args_list)}) in {t.elapsed:.2f}s")
+    return results if return_args else [result for _, result in results]
