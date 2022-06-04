@@ -31,8 +31,8 @@ $ pip install -e .
 
 To transfer files from cloud A to cloud B, Skyplane will start VMs (called gateways) in both A and B. The CLI therefore requires authentication with each cloud provider. Skyplane will infer credentials from each cloud providers CLI. Therefore, log into each cloud.
 
-<details>
-<summary>Setting up AWS credentials</summary>
+<details open>
+<summary>⤵️&nbsp;&nbsp;Setting up AWS credentials</summary>
 <br>
 
 To set up AWS credentials on your local machine, first [install the AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html).
@@ -50,8 +50,8 @@ See AWS documentation for further [instructions on how to configure the AWS CLI]
 
 </details>
 
-<details>
-<summary>Setting up GCP credentials</summary>
+<details open>
+<summary>⤵️&nbsp;&nbsp;Setting up GCP credentials</summary>
 <br>
 
 To set up GCP credentials on your local machine, first [install the gcloud CLI](https://cloud.google.com/sdk/docs/install-sdk).
@@ -65,8 +65,8 @@ $ gcloud auth application-default login
 ⚠️ If you already had GCP credentials configured, make sure to run `gcloud auth application-default login` which generates application credentials for Skyplane.
 </details>
 
-<details>
-<summary>Setting up Azure credentials</summary>
+<details open>
+<summary>⤵️&nbsp;&nbsp;Setting up Azure credentials</summary>
 <br>
 
 To set up Azure credentials on your local machine, first [install the Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest).
