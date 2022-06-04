@@ -15,7 +15,7 @@ R = TypeVar("R")
 
 def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, spinner=False, desc="Waiting", leave_spinner=True) -> bool:
     """Wait for fn to return True"""
-    with Halo({desc}, spinner="dots", enabled=spinner) as spinner_obj:
+    with Halo(desc, spinner="dots", enabled=spinner) as spinner_obj:
         start = time.time()
         while time.time() - start < timeout:
             if fn():
