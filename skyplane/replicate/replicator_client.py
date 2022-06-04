@@ -485,7 +485,6 @@ class ReplicatorClient:
                 DownloadColumn(binary_units=True),
                 TransferSpeedColumn(),
                 TimeElapsedColumn(),
-                total=total_bytes,
                 disable=not show_spinner,
             ) as progress:
                 copy_task = progress.add_task("", total=total_bytes)
@@ -527,7 +526,11 @@ class ReplicatorClient:
                         throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
 
                         # make log line
-                        progress.update(copy_task, description=f" ({len(completed_chunk_ids)} done of {len(job.chunk_requests)} chunks)")
+                        progress.update(
+                            copy_task,
+                            description=f" ({len(completed_chunk_ids)} done of {len(job.chunk_requests)} chunks)",
+                            completed=completed_bytes,
+                        )
                         if len(completed_chunk_ids) == len(job.chunk_requests):
                             if multipart:
                                 # Complete multi-part uploads
