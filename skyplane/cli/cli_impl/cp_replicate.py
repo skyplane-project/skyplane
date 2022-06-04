@@ -101,7 +101,7 @@ def replicate_helper(
 ):
     console = Console()
     if "SKYPLANE_DOCKER_IMAGE" in os.environ:
-        logger.debug(f"Using docker image: {gateway_docker_image}")
+        typer.secho(f"Using docker image: {gateway_docker_image}")
     if reuse_gateways:
         typer.secho(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skyplane deprovision` to deprovision gateways.",

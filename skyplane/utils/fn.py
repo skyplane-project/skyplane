@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, Iterable, List, Tuple, Union, TypeVar
 
-from rich.progress import Progress
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, MofNCompleteColumn, TimeElapsedColumn
 import typer
 
 from skyplane.utils import logger
@@ -53,8 +53,10 @@ def do_parallel(
             raise e
 
     results = []
-    with Progress(disable=not spinner, transient=True) as progress:
-        progress_task = progress.add_task(desc, total=len(args_list))
+    with Progress(
+        SpinnerColumn(), TextColumn(desc), BarColumn(), MofNCompleteColumn(), TimeElapsedColumn(), disable=not spinner, transient=True
+    ) as progress:
+        progress_task = progress.add_task("", total=len(args_list))
         with Timer() as t:
             with ThreadPoolExecutor(max_workers=n) as executor:
                 future_list = [executor.submit(wrapped_fn, args) for args in args_list]
@@ -63,5 +65,5 @@ def do_parallel(
                     results.append((args, result))
                     progress.update(progress_task, advance=1)
     if spinner_persist:
-        typer.secho(f"{desc} ({len(results)}/{len(args_list)}) in {t.elapsed:.2f}s")
+        typer.secho(f"✓ {desc} ({len(results)}/{len(args_list)}) in {t.elapsed:.2f}s")
     return results if return_args else [result for _, result in results]

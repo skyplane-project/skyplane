@@ -1,8 +1,6 @@
 import os
 from pathlib import Path
 
-from rich.console import Console
-
 from skyplane.config import SkyplaneConfig
 
 # paths
@@ -61,6 +59,3 @@ if config_path.exists():
 else:
     cloud_config = SkyplaneConfig(False, False, False)
 is_gateway_env = os.environ.get("SKYPLANE_IS_GATEWAY", None) == "1"
-
-# rich console
-console = Console()

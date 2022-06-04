@@ -283,17 +283,17 @@ class ReplicatorClient:
 
         with Progress(
             SpinnerColumn(),
-            TextColumn("Preparing replication plan"),
+            TextColumn("Preparing replication plan{task.description}"),
             transient=True,
         ) as progress:
             prepare_task = progress.add_task("", total=None)
 
             # pre-fetch instance IPs for all gateways
-            progress.update(prepare_task, description="fetching instance IPs")
+            progress.update(prepare_task, description=": Fetching instance IPs")
             gateway_ips: Dict[Server, str] = {s: s.public_ip() for s in self.bound_nodes.values()}
 
             # make list of chunks
-            progress.update(prepare_task, description="querying source object store for matching keys")
+            progress.update(prepare_task, description=": Querying source object store for matching keys")
             chunks = []
 
             # calculate object sizes
@@ -370,7 +370,7 @@ class ReplicatorClient:
                     batch_sizes[min_batch] += item.chunk_length_bytes
                 return batches
 
-            spinner.text = "Preparing replication plan, partitioning chunks into batches"
+            progress.update(prepare_task, description=": Partitioning chunks into batches")
             src_instances = [self.bound_nodes[n] for n in self.topology.source_instances()]
             chunk_batches = partition(chunks, len(src_instances))
             assert (len(chunk_batches) == (len(src_instances) - 1)) or (
@@ -382,7 +382,7 @@ class ReplicatorClient:
             # make list of ChunkRequests
             with Timer("Building chunk requests"):
                 # make list of ChunkRequests
-                spinner.text = "Preparing replication plan, building list of chunk requests"
+                progress.update(prepare_task, description=": Building list of chunk requests")
                 chunk_requests_sharded: Dict[int, List[ChunkRequest]] = {}
                 for batch_idx, batch in enumerate(chunk_batches):
                     chunk_requests_sharded[batch_idx] = []
@@ -402,7 +402,7 @@ class ReplicatorClient:
                     logger.fs.debug(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")
 
                 # send chunk requests to start gateways in parallel
-                spinner.text = "Preparing replication plan, dispatching chunk requests to source gateways"
+                progress.update(prepare_task, description=": Dispatching chunk requests to source gateways")
 
                 def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
                     hop_instance, chunk_requests = args
@@ -574,13 +574,13 @@ class ReplicatorClient:
                 spinner.stop()
             with Progress(
                 SpinnerColumn(),
-                TextColumn("Cleaning up after transfer"),
+                TextColumn("Cleaning up after transfer{task.description}"),
                 transient=True,
             ) as progress:
                 cleanup_task = progress.add_task("", total=None)
 
                 # get compression ratio information from destination gateways using "/api/v1/profile/compression"
-                progress.update(cleanup_task, "Getting compression ratio information")
+                progress.update(cleanup_task, description=": Getting compression ratio information")
                 total_sent_compressed, total_sent_uncompressed = 0, 0
                 for gateway in {v for v in self.bound_nodes.values() if v.region_tag in source_regions}:
                     stats = retry_requests().get(f"{gateway.gateway_api_url}/api/v1/profile/compression")
@@ -602,10 +602,10 @@ class ReplicatorClient:
                         instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
                         instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 
-                    progress.update(cleanup_task, "Copying gateway logs")
+                    progress.update(cleanup_task, description=": Copying gateway logs")
                     do_parallel(copy_log, self.bound_nodes.values(), n=-1)
                 if write_profile:
-                    progress.update(cleanup_task, "Writing chunk profiles")
+                    progress.update(cleanup_task, ": Writing chunk profiles")
                     chunk_status_df = self.get_chunk_status_log_df()
                     (self.transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
                     traceevent = status_df_to_traceevent(chunk_status_df)
@@ -622,7 +622,7 @@ class ReplicatorClient:
                             )
                         (self.transfer_dir / f"receiver_socket_profile_{instance.uuid()}.json").write_text(receiver_reply.text)
 
-                    progress.update(cleanup_task, "Writing socket profiles")
+                    progress.update(cleanup_task, description=": Writing socket profiles")
                     do_parallel(write_socket_profile, self.bound_nodes.values(), n=-1)
                 if cleanup_gateway:
 
@@ -633,7 +633,7 @@ class ReplicatorClient:
                             return  # ignore connection errors since server may be shutting down
 
                     do_parallel(fn, self.bound_nodes.values(), n=-1)
-                    progress.update(cleanup_task, "Shutting down gateways")
+                    progress.update(cleanup_task, description=": Shutting down gateways")
 
 
 def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1) -> Dict[str, List[Server]]:
