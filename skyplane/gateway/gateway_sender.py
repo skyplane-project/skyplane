@@ -1,6 +1,7 @@
 import queue
 import socket
 import ssl
+import time
 import traceback
 from functools import partial
 from multiprocessing import Event, Process, Queue
@@ -13,7 +14,7 @@ from skyplane import MB
 from skyplane.chunk import ChunkRequest
 from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.utils import logger
-from skyplane.utils.fn import retry_backoff, wait_for
+from skyplane.utils.retry import retry_backoff
 from skyplane.utils.net import retry_requests
 from skyplane.utils.timer import Timer
 
@@ -111,7 +112,14 @@ class GatewaySender:
             return all(status not in ["registered", "download_queued", "download_in_progress"] for status in cr_status.values())
 
         logger.info(f"[sender:{worker_id}] waiting for chunks to reach state 'downloaded'")
-        wait_for(wait_for_chunks)
+        wait_success = False
+        for _ in range(60):
+            if wait_for_chunks():
+                wait_success = True
+                break
+            time.sleep(1)
+        if not wait_success:
+            raise Exception("Timed out waiting for chunks to reach state 'downloaded'")
         logger.info(f"[sender:{worker_id}] all chunks reached state 'downloaded'")
 
         # close servers
