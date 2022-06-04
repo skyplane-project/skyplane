@@ -7,8 +7,7 @@ from functools import partial
 from typing import Dict, List, Optional, Tuple, Iterable
 
 import pandas as pd
-from halo import Halo
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, DownloadColumn, BarColumn, TransferSpeedColumn
 
 from skyplane import GB, MB, tmp_log_dir
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
@@ -476,102 +475,94 @@ class ReplicatorClient:
 
         completed_chunk_ids = []
 
-        # wait for VMs to start
-        if show_spinner:
-            spinner = Halo(text="Transfer starting", spinner="dots")
-            spinner.start()
         if save_log:
-            if show_spinner:
-                spinner.text = "Transfer starting, saving job log"
             (self.transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
         try:
-            with Timer() as t:
-                while True:
-                    # refresh shutdown status by running noop
-                    do_parallel(lambda i: i.run_command("echo 1"), self.bound_nodes.values(), n=-1)
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("Transfer progress{task.description}"),
+                BarColumn(),
+                DownloadColumn(binary_units=True),
+                TransferSpeedColumn(),
+                TimeElapsedColumn(),
+                total=total_bytes,
+                disable=not show_spinner,
+            ) as progress:
+                copy_task = progress.add_task("", total=total_bytes)
+                with Timer() as t:
+                    while True:
+                        # refresh shutdown status by running noop
+                        do_parallel(lambda i: i.run_command("echo 1"), self.bound_nodes.values(), n=-1)
 
-                    # check for errors and exit if there are any
-                    errors = self.check_error_logs()
-                    if any(errors.values()):
-                        return {
-                            "errors": errors,
-                            "monitor_status": "error",
-                        }
+                        # check for errors and exit if there are any
+                        errors = self.check_error_logs()
+                        if any(errors.values()):
+                            return {
+                                "errors": errors,
+                                "monitor_status": "error",
+                            }
 
-                    log_df = self.get_chunk_status_log_df()
-                    if log_df.empty:
-                        logger.warning("No chunk status log entries yet")
-                        time.sleep(0.5)
-                        continue
+                        log_df = self.get_chunk_status_log_df()
+                        if log_df.empty:
+                            logger.warning("No chunk status log entries yet")
+                            time.sleep(0.5)
+                            continue
 
-                    is_complete_rec = (
-                        lambda row: row["state"] == ChunkState.upload_complete
-                        and row["instance"] in [s.instance for s in sinks]
-                        and row["region"] in [s.region for s in sinks]
-                    )
-                    sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
-                    completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region"].unique()) == set(sink_regions))
-                    completed_chunk_ids = completed_status[completed_status].index
-                    completed_bytes = sum(
-                        [cr.chunk.chunk_length_bytes for cr in job.chunk_requests if cr.chunk.chunk_id in completed_chunk_ids]
-                    )
+                        is_complete_rec = (
+                            lambda row: row["state"] == ChunkState.upload_complete
+                            and row["instance"] in [s.instance for s in sinks]
+                            and row["region"] in [s.region for s in sinks]
+                        )
+                        sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
+                        completed_status = sink_status_df.groupby("chunk_id").apply(
+                            lambda x: set(x["region"].unique()) == set(sink_regions)
+                        )
+                        completed_chunk_ids = completed_status[completed_status].index
+                        completed_bytes = sum(
+                            [cr.chunk.chunk_length_bytes for cr in job.chunk_requests if cr.chunk.chunk_id in completed_chunk_ids]
+                        )
 
-                    # update progress bar
-                    total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
-                    throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
+                        # update progress bar
+                        total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
+                        throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
 
-                    # make log line
-                    gbits_remaining = (total_bytes - completed_bytes) * 8 / GB
-                    eta = int(gbits_remaining / throughput_gbits) if throughput_gbits > 0 else None
-                    log_line_detail = f"{len(completed_chunk_ids)}/{len(job.chunk_requests)} chunks done, {completed_bytes / GB:.2f}/{total_bytes / GB:.2f}GB, ETA={str(eta) + 's' if eta is not None else 'unknown'}"
-                    log_line = f"{completed_bytes / total_bytes * 100.:.1f}% at {throughput_gbits:.2f}Gbit/s ({log_line_detail})"
-                    if show_spinner:
-                        spinner.text = f"Transfered {log_line}"
-                    if len(completed_chunk_ids) == len(job.chunk_requests):
-                        if show_spinner:
-                            spinner.succeed(f"Transfer complete ({log_line})")
+                        # make log line
+                        progress.update(copy_task, description=f" ({len(completed_chunk_ids)} done of {len(job.chunk_requests)} chunks)")
+                        if len(completed_chunk_ids) == len(job.chunk_requests):
+                            if multipart:
+                                # Complete multi-part uploads
+                                def complete_upload(req):
+                                    obj_store_interface = ObjectStoreInterface.create(req["region"], req["bucket"])
+                                    succ = obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"], req["parts"])
+                                    if not succ:
+                                        raise ValueError(f"Failed to complete upload {req['upload_id']}")
 
-                        if multipart:
-                            # Complete multi-part uploads
-                            def complete_upload(req):
-                                obj_store_interface = ObjectStoreInterface.create(req["region"], req["bucket"])
-                                succ = obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"], req["parts"])
-                                if not succ:
-                                    raise ValueError(f"Failed to complete upload {req['upload_id']}")
-
-                            do_parallel(
-                                complete_upload, self.multipart_upload_requests, n=-1, desc="Completing multipart uploads", spinner=True
+                                do_parallel(
+                                    complete_upload, self.multipart_upload_requests, n=-1, desc="Completing multipart uploads", spinner=True
+                                )
+                            return dict(
+                                completed_chunk_ids=completed_chunk_ids,
+                                total_runtime_s=total_runtime_s,
+                                throughput_gbits=throughput_gbits,
+                                monitor_status="completed",
                             )
-                        return dict(
-                            completed_chunk_ids=completed_chunk_ids,
-                            total_runtime_s=total_runtime_s,
-                            throughput_gbits=throughput_gbits,
-                            monitor_status="completed",
-                        )
-                    elif time_limit_seconds is not None and t.elapsed > time_limit_seconds or t.elapsed > 600 and completed_bytes == 0:
-                        if show_spinner:
-                            spinner.fail(f"Transfer timed out with no progress ({log_line})")
-                        logger.fs.error("Transfer timed out! Please retry.")
-                        logger.error(f"Please share debug logs from: {self.transfer_dir}")
-                        return dict(
-                            completed_chunk_ids=completed_chunk_ids,
-                            total_runtime_s=total_runtime_s,
-                            throughput_gbits=throughput_gbits,
-                            monitor_status="timed_out",
-                        )
-                    else:
-                        current_time = datetime.now()
-                        if log_interval_s and (not last_log or (current_time - last_log).seconds > float(log_interval_s)):
-                            last_log = current_time
-                            if show_spinner:  # log only to file
-                                logger.fs.info(log_line)
-                            else:
-                                logger.info(log_line)
-                        time.sleep(0.01 if show_spinner else 0.25)
+                        elif time_limit_seconds is not None and t.elapsed > time_limit_seconds or t.elapsed > 600 and completed_bytes == 0:
+                            logger.error("Transfer timed out without progress, please check the debug log!")
+                            logger.fs.error("Transfer timed out! Please retry.")
+                            logger.error(f"Please share debug logs from: {self.transfer_dir}")
+                            return dict(
+                                completed_chunk_ids=completed_chunk_ids,
+                                total_runtime_s=total_runtime_s,
+                                throughput_gbits=throughput_gbits,
+                                monitor_status="timed_out",
+                            )
+                        else:
+                            current_time = datetime.now()
+                            if log_interval_s and (not last_log or (current_time - last_log).seconds > float(log_interval_s)):
+                                last_log = current_time
+                            time.sleep(0.01 if show_spinner else 0.25)
         # always run cleanup, even if there's an exception
         finally:
-            if show_spinner:
-                spinner.stop()
             with Progress(
                 SpinnerColumn(),
                 TextColumn("Cleaning up after transfer{task.description}"),

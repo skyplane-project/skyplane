@@ -4,7 +4,7 @@ from pathlib import Path
 from shutil import copyfile
 from typing import List, Dict
 
-from rich.progress import Progress, TextColumn, SpinnerColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
+from rich.progress import Progress, TextColumn, SpinnerColumn, DownloadColumn, TransferSpeedColumn, TimeElapsedColumn
 
 from skyplane import exceptions
 from skyplane.obj_store.azure_interface import AzureInterface
@@ -52,7 +52,7 @@ def copy_local_objstore(object_interface: ObjectStoreInterface, src: Path, dst_k
             TextColumn("[bold yellow]Uploading (from local to object store)"),
             DownloadColumn(binary_units=True),
             TransferSpeedColumn(),
-            TimeRemainingColumn(),
+            TimeElapsedColumn(),
         ) as progress:
             copy_task = progress.add_task("", total=total_bytes)
             for op in concurrent.futures.as_completed(ops):
@@ -93,7 +93,7 @@ def copy_objstore_local(object_interface: ObjectStoreInterface, src_key: str, ds
             TextColumn("[bold yellow]Downloading (from object store to local)"),
             DownloadColumn(binary_units=True),
             TransferSpeedColumn(),
-            TimeRemainingColumn(),
+            TimeElapsedColumn(),
         ) as progress:
             copy_task = progress.add_task("", total=total_bytes)
             for op in concurrent.futures.as_completed(ops):
