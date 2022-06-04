@@ -69,6 +69,65 @@ def generate_topology(
         return topo
 
 
+def query_src_dest_objs(
+    topo: ReplicationTopology,
+    source_bucket: str = None,
+    dest_bucket: str = None,
+    src_key_prefix: str = "",
+    dest_key_prefix: str = "",
+    cached_src_objs: Optional[List[ObjectStoreObject]] = None,
+
+    ):
+    logger.fs.debug(f"Creating replication job from {source_bucket} to {dest_bucket}")
+    if cached_src_objs:
+        src_objs = cached_src_objs
+    else:
+        source_iface = ObjectStoreInterface.create(topo.source_region(), source_bucket)
+        logger.fs.debug(f"Querying objects in {source_bucket}")
+        with Timer(f"Query {source_bucket} prefix {src_key_prefix}"):
+            with Halo(text=f"Querying objects in {source_bucket}", spinner="dots") as spinner:
+                src_objs = []
+                for obj in source_iface.list_objects(src_key_prefix):
+                    src_objs.append(obj)
+                    spinner.text = f"Querying objects in {source_bucket} ({len(src_objs)} objects)"
+
+    if not src_objs:
+        logger.error("Specified object does not exist.")
+        raise exceptions.MissingObjectException()
+
+    # map objects to destination object paths
+    # todo isolate this logic and test independently
+    logger.fs.debug(f"Mapping objects to destination paths")
+    src_objs_job = []
+    dest_objs_job = []
+    # if only one object exists, replicate it
+    if len(src_objs) == 1 and src_objs[0].key == src_key_prefix:
+        src_objs_job.append(src_objs[0].key)
+        if dest_key_prefix.endswith("/"):
+            dest_objs_job.append(dest_key_prefix + src_objs[0].key.split("/")[-1])
+        else:
+            dest_objs_job.append(dest_key_prefix)
+    # multiple objects to replicate
+    else:
+        for src_obj in src_objs:
+            src_objs_job.append(src_obj.key)
+            # remove prefix from object key
+            src_path_no_prefix = src_obj.key[len(src_key_prefix) :] if src_obj.key.startswith(src_key_prefix) else src_obj.key
+            # remove single leading slash if present
+            src_path_no_prefix = src_path_no_prefix[1:] if src_path_no_prefix.startswith("/") else src_path_no_prefix
+            if len(dest_key_prefix) == 0:
+                dest_objs_job.append(src_path_no_prefix)
+            elif dest_key_prefix.endswith("/"):
+                dest_objs_job.append(dest_key_prefix + src_path_no_prefix)
+            else:
+                dest_objs_job.append(dest_key_prefix + "/" + src_path_no_prefix)
+    
+    obj_sizes={obj.key: obj.size for obj in src_objs}
+
+
+    return src_objs_job, dest_objs_job, obj_sizes
+
+
 def replicate_helper(
     topo: ReplicationTopology,
     size_total_mb: int = 2048,
@@ -134,49 +193,13 @@ def replicate_helper(
         )
     else:
         # make replication job
-        logger.fs.debug(f"Creating replication job from {source_bucket} to {dest_bucket}")
-        if cached_src_objs:
-            src_objs = cached_src_objs
-        else:
-            source_iface = ObjectStoreInterface.create(topo.source_region(), source_bucket)
-            logger.fs.debug(f"Querying objects in {source_bucket}")
-            with Timer(f"Query {source_bucket} prefix {src_key_prefix}"):
-                with Halo(text=f"Querying objects in {source_bucket}", spinner="dots") as spinner:
-                    src_objs = []
-                    for obj in source_iface.list_objects(src_key_prefix):
-                        src_objs.append(obj)
-                        spinner.text = f"Querying objects in {source_bucket} ({len(src_objs)} objects)"
+        src_objs_job, dest_objs_job, obj_sizes = query_src_dest_objs(topo, 
+                source_bucket,
+                dest_bucket,
+                src_key_prefix, 
+                dest_key_prefix,
+                cached_src_objs=cached_src_objs,)
 
-        if not src_objs:
-            logger.error("Specified object does not exist.")
-            raise exceptions.MissingObjectException()
-
-        # map objects to destination object paths
-        # todo isolate this logic and test independently
-        logger.fs.debug(f"Mapping objects to destination paths")
-        src_objs_job = []
-        dest_objs_job = []
-        # if only one object exists, replicate it
-        if len(src_objs) == 1 and src_objs[0].key == src_key_prefix:
-            src_objs_job.append(src_objs[0].key)
-            if dest_key_prefix.endswith("/"):
-                dest_objs_job.append(dest_key_prefix + src_objs[0].key.split("/")[-1])
-            else:
-                dest_objs_job.append(dest_key_prefix)
-        # multiple objects to replicate
-        else:
-            for src_obj in src_objs:
-                src_objs_job.append(src_obj.key)
-                # remove prefix from object key
-                src_path_no_prefix = src_obj.key[len(src_key_prefix) :] if src_obj.key.startswith(src_key_prefix) else src_obj.key
-                # remove single leading slash if present
-                src_path_no_prefix = src_path_no_prefix[1:] if src_path_no_prefix.startswith("/") else src_path_no_prefix
-                if len(dest_key_prefix) == 0:
-                    dest_objs_job.append(src_path_no_prefix)
-                elif dest_key_prefix.endswith("/"):
-                    dest_objs_job.append(dest_key_prefix + src_path_no_prefix)
-                else:
-                    dest_objs_job.append(dest_key_prefix + "/" + src_path_no_prefix)
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=source_bucket,
@@ -184,7 +207,7 @@ def replicate_helper(
             dest_bucket=dest_bucket,
             src_objs=src_objs_job,
             dest_objs=dest_objs_job,
-            obj_sizes={obj.key: obj.size for obj in src_objs},
+            obj_sizes=obj_sizes,
             max_chunk_size_mb=max_chunk_size_mb,
         )
 
