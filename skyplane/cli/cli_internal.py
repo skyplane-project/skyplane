@@ -5,7 +5,8 @@ from typing import Optional
 
 import typer
 
-from skyplane import print_header, skyplane_root
+from skyplane.cli.common import print_header
+from skyplane import skyplane_root
 from skyplane.cli.cli_impl.cp_replicate import replicate_helper
 from skyplane.replicate.replication_plan import ReplicationTopology
 from skyplane.utils import logger

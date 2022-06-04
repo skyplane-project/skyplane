@@ -13,7 +13,8 @@ import skyplane.cli.cli_azure
 import skyplane.cli.cli_internal as cli_internal
 import skyplane.cli.cli_solver
 import skyplane.cli.experiments
-from skyplane import GB, config_path, exceptions, print_header, skyplane_root
+from skyplane import GB, config_path, exceptions, skyplane_root
+from skyplane.cli.common import print_header
 from skyplane.cli.cli_impl.cp_local import (
     copy_azure_local,
     copy_gcs_local,

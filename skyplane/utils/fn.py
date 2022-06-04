@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Callable, Iterable, List, Tuple, Union, TypeVar
 
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, MofNCompleteColumn, TimeElapsedColumn
+from rich import print as rprint
 import typer
 
 from skyplane.utils import logger
@@ -65,5 +66,5 @@ def do_parallel(
                     results.append((args, result))
                     progress.update(progress_task, advance=1)
     if spinner_persist:
-        typer.secho(f"✓ {desc} ({len(results)}/{len(args_list)}) in {t.elapsed:.2f}s")
+        rprint(f"[bold green]✓[/] [bright_black]{desc} ({len(results)}/{len(args_list)}) in {t.elapsed:.2f}s[/]")
     return results if return_args else [result for _, result in results]

@@ -459,9 +459,9 @@ class ReplicatorClient:
         time_limit_seconds: Optional[float] = None,
         cleanup_gateway: bool = True,
         save_log: bool = True,
-        write_profile: bool = True,
+        write_profile: bool = False,
         write_socket_profile: bool = False,  # slow but useful for debugging
-        copy_gateway_logs: bool = True,
+        copy_gateway_logs: bool = False,
         multipart: bool = False,  # multipart object uploads/downloads
     ) -> Optional[Dict]:
         assert job.chunk_requests is not None
@@ -493,9 +493,13 @@ class ReplicatorClient:
                         # refresh shutdown status by running noop
                         do_parallel(lambda i: i.run_command("echo 1"), self.bound_nodes.values(), n=-1)
 
-                        # check for errors and exit if there are any
+                        # check for errors and exit if there are any (while setting debug flags)
                         errors = self.check_error_logs()
                         if any(errors.values()):
+                            copy_gateway_logs = True
+                            write_profile = True
+                            write_socket_profile = True
+
                             return {
                                 "errors": errors,
                                 "monitor_status": "error",
@@ -528,7 +532,7 @@ class ReplicatorClient:
                         # make log line
                         progress.update(
                             copy_task,
-                            description=f" ({len(completed_chunk_ids)} done of {len(job.chunk_requests)} chunks)",
+                            description=f" ({len(completed_chunk_ids)} of {len(job.chunk_requests)} chunks)",
                             completed=completed_bytes,
                         )
                         if len(completed_chunk_ids) == len(job.chunk_requests):
@@ -587,7 +591,7 @@ class ReplicatorClient:
                     logger.fs.info(f"Total compressed bytes sent: {total_sent_compressed / GB:.2f}GB")
                     logger.fs.info(f"Total uncompressed bytes sent: {total_sent_uncompressed / GB:.2f}GB")
                     logger.fs.info(f"Compression ratio: {compression_ratio}")
-                    progress.print(f"[bold yellow]Compression saved {(1. - compression_ratio)*100.:.2f}% of egress fees")
+                    progress.console.print(f"[bold yellow]Compression saved {(1. - compression_ratio)*100.:.2f}% of egress fees")
 
                 if copy_gateway_logs:
 

@@ -3,7 +3,7 @@ from datetime import datetime
 from functools import partial
 from types import SimpleNamespace
 
-import termcolor
+from rich import print as rprint
 
 from skyplane import is_gateway_env
 
@@ -24,7 +24,7 @@ def log(msg, LEVEL="INFO", color="white", write_to_file=True, write_to_stderr=Tr
         log_file.write(f"{time} {level_prefix} {msg}\n")
         log_file.flush()
     if write_to_stderr:
-        print(f"{time} {level_prefix} {termcolor.colored(msg, color)}", flush=True, file=sys.stderr)
+        rprint(f"{time} {level_prefix} [{color}]{msg}[/]", flush=True, file=sys.stderr)
 
 
 debug = partial(log, LEVEL="DEBUG", color="cyan")
