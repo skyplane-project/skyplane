@@ -13,7 +13,9 @@ jobs:
       uses: ammaraskar/sphinx-action@0.4
       with:
         docs-folder: "docs/"
-        build-command: "sphinx-build -b html -d build/doctrees . build/html"
+        build-command: |
+          sphinx-build -b html -d build/doctrees . build/html
+          echo 'skyplane.org' > build/html/CNAME
     # - name: Upload artifacts
     #   uses: actions/upload-artifact@v1
     #   with:
