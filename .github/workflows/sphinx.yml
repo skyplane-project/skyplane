@@ -12,10 +12,10 @@ jobs:
     - name: Build HTML
       uses: ammaraskar/sphinx-action@0.4
       with:
-        docs-folder: "docs/"
-        build-command: |
-          sphinx-build -b html -d build/doctrees . build/html
-          echo 'skyplane.org' > build/html/CNAME
+        docs-folder: docs/
+        build-command: sphinx-build -b html -d build/doctrees . build/html
+    - name: Write CNAME
+      run: echo 'skyplane.org' > build/html/CNAME
     # - name: Upload artifacts
     #   uses: actions/upload-artifact@v1
     #   with:
