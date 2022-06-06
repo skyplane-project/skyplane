@@ -81,27 +81,6 @@ class ReplicatorClient:
             len(gcp_regions_to_provision) == 0 or self.gcp.auth.enabled()
         ), "GCP credentials not configured but job provisions GCP gateways"
 
-        # init clouds
-        jobs = []
-        if aws_regions_to_provision:
-            jobs.append(partial(self.aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
-            for r in set(aws_regions_to_provision):
-
-                def init_aws_vpc(r):
-                    self.aws.make_vpc(r)
-                    self.aws.authorize_client(r, "0.0.0.0/0")
-
-                jobs.append(partial(init_aws_vpc, r.split(":")[1]))
-                jobs.append(partial(self.aws.ensure_keyfile_exists, r.split(":")[1]))
-        if azure_regions_to_provision:
-            jobs.append(self.azure.create_ssh_key)
-            jobs.append(self.azure.set_up_resource_group)
-        if gcp_regions_to_provision:
-            jobs.append(self.gcp.create_ssh_key)
-            jobs.append(self.gcp.configure_default_network)
-            jobs.append(self.gcp.configure_default_firewall)
-        do_parallel(lambda fn: fn(), jobs, spinner=True, spinner_persist=True, desc="Initializing cloud keys")
-
         # reuse existing AWS instances
         if reuse_instances:
             if self.aws.auth.enabled():
@@ -151,6 +130,27 @@ class ReplicatorClient:
                             gcp_regions_to_provision.remove(f"gcp:{r}")
             else:
                 current_gcp_instances = {}
+
+        # init clouds
+        jobs = []
+        if aws_regions_to_provision:
+            jobs.append(partial(self.aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
+            for r in set(aws_regions_to_provision):
+
+                def init_aws_vpc(r):
+                    self.aws.make_vpc(r)
+                    self.aws.authorize_client(r, "0.0.0.0/0")
+
+                jobs.append(partial(init_aws_vpc, r.split(":")[1]))
+                jobs.append(partial(self.aws.ensure_keyfile_exists, r.split(":")[1]))
+        if azure_regions_to_provision:
+            jobs.append(self.azure.create_ssh_key)
+            jobs.append(self.azure.set_up_resource_group)
+        if gcp_regions_to_provision:
+            jobs.append(self.gcp.create_ssh_key)
+            jobs.append(self.gcp.configure_default_network)
+            jobs.append(self.gcp.configure_default_firewall)
+        do_parallel(lambda fn: fn(), jobs, spinner=True, spinner_persist=True, desc="Initializing cloud keys")
 
         # provision instances
         def provision_gateway_instance(region: str) -> Server:
@@ -219,7 +219,9 @@ class ReplicatorClient:
                 server.init_log_files(log_dir)
             if authorize_ssh_pub_key:
                 server.copy_public_key(authorize_ssh_pub_key)
-            server.start_gateway(outgoing_ports, gateway_docker_image=self.gateway_docker_image, use_bbr=use_bbr)
+            server.start_gateway(
+                outgoing_ports, gateway_docker_image=self.gateway_docker_image, use_bbr=use_bbr, use_compression=use_compression
+            )
 
         args = []
         for node, server in self.bound_nodes.items():
