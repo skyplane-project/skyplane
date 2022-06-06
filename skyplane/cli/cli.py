@@ -14,7 +14,7 @@ import skyplane.cli.cli_config
 import skyplane.cli.cli_internal as cli_internal
 import skyplane.cli.cli_solver
 import skyplane.cli.experiments
-from skyplane import GB, config_path, exceptions, skyplane_root
+from skyplane import GB, config_path, exceptions, skyplane_root, cloud_config
 from skyplane.cli.common import print_header
 from skyplane.cli.cli_impl.cp_local import (
     copy_azure_local,
@@ -84,6 +84,7 @@ def cp(
     max_instances: int = typer.Option(1, "--max-instances", "-n", help="Number of gateways"),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
+    confirm: bool = typer.Option(False, "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
     debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
     use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
     use_compression: bool = typer.Option(False, help="If true, will use compression for uploads/downloads"),
@@ -115,6 +116,8 @@ def cp(
     :type reuse_gateways: bool
     :param max_chunk_size_mb: If set, `cp` will subdivide objects into chunks at most this size.
     :type max_chunk_size_mb: int
+    :param confirm: If true, will not prompt for confirmation of transfer.
+    :type confirm: bool
     :param debug: If true, will write debug information to debug directory.
     :type debug: bool
     :param use_bbr: If set, will use BBR for transfers by default.
@@ -200,6 +203,7 @@ def cp(
             debug=debug,
             use_bbr=use_bbr,
             use_compression=use_compression,
+            ask_to_confirm_transfer=not cloud_config.get_flag("autoconfirm") and not confirm,
         )
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
@@ -213,6 +217,7 @@ def sync(
     max_instances: int = typer.Option(1, "--max-instances", "-n", help="Number of gateways"),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
+    confirm: bool = typer.Option(False, "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
     debug: bool = typer.Option(False, help="If true, will write debug info to debug directory"),
     use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
     use_compression: bool = typer.Option(False, help="If true, will use compression for uploads/downloads"),
@@ -248,6 +253,8 @@ def sync(
     :type reuse_gateways: bool
     :param max_chunk_size_mb: If set, `cp` will subdivide objects into chunks at most this size.
     :type max_chunk_size_mb: int
+    :param confirm: If true, will not prompt for confirmation of transfer.
+    :type confirm: bool
     :param debug: If true, will write debug info to debug directory
     :type debug: bool
     :param use_bbr: If set, will use BBR for transfers by default.
@@ -339,6 +346,7 @@ def sync(
         debug=debug,
         use_bbr=use_bbr,
         use_compression=use_compression,
+        ask_to_confirm_transfer=not cloud_config.get_flag("autoconfirm") and not confirm,
     )
 
 

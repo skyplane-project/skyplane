@@ -8,7 +8,8 @@ import typer
 from rich import print as rprint
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, DownloadColumn, BarColumn, TransferSpeedColumn
 
-from skyplane import exceptions, MB, GB, skyplane_root
+from skyplane import exceptions, MB, GB, format_bytes, skyplane_root, cloud_config
+from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
 from skyplane.replicate.replicator_client import ReplicatorClient
@@ -55,7 +56,9 @@ def generate_topology(
                     save_lp_path=None,
                 )
         typer.secho(f"Solving for the optimal transfer plan took {t.elapsed:.2f}s", fg="green")
-        topo, _ = tput.to_replication_topology(solution)
+        topo, scale_factor = tput.to_replication_topology(solution)
+        logger.fs.debug(f"Scaled solution by {scale_factor:.2f}x")
+        topo.cost_per_gb = solution.cost_egress / solution.problem.gbyte_to_transfer
         return topo
     else:
         if src_region == dst_region:
@@ -63,20 +66,23 @@ def generate_topology(
             for i in range(max_instances):
                 topo.add_objstore_instance_edge(src_region, src_region, i)
                 topo.add_instance_objstore_edge(src_region, i, src_region)
+            topo.cost_per_gb = 0
         else:
             topo = ReplicationTopology()
             for i in range(max_instances):
                 topo.add_objstore_instance_edge(src_region, src_region, i)
                 topo.add_instance_instance_edge(src_region, i, dst_region, i, num_connections)
                 topo.add_instance_objstore_edge(dst_region, i, dst_region)
+            topo.cost_per_gb = CloudProvider.get_transfer_cost(src_region, dst_region)
         return topo
 
 
 def replicate_helper(
     topo: ReplicationTopology,
-    size_total_mb: int = 2048,
-    n_chunks: int = 512,
+    # flags for random transfers (to debug)
     random: bool = False,
+    random_size_total_mb: int = 2048,
+    random_n_chunks: int = 512,
     # bucket options
     source_bucket: Optional[str] = None,
     dest_bucket: Optional[str] = None,
@@ -99,6 +105,7 @@ def replicate_helper(
     # logging options
     time_limit_seconds: Optional[int] = None,
     log_interval_s: float = 1.0,
+    ask_to_confirm_transfer: bool = True,
 ):
     if "SKYPLANE_DOCKER_IMAGE" in os.environ:
         rprint(f"[bright_black]Using overridden docker image: {gateway_docker_image}[/bright_black]")
@@ -122,7 +129,7 @@ def replicate_helper(
     (rc.transfer_dir / "topology.json").write_text(topo.to_json())
 
     if random:
-        random_chunk_size_mb = size_total_mb // n_chunks
+        random_chunk_size_mb = random_size_total_mb // random_n_chunks
         if max_chunk_size_mb:
             logger.error("Cannot set chunk size for random data replication, set `random_chunk_size_mb` instead")
             raise ValueError("Cannot set max chunk size")
@@ -131,8 +138,8 @@ def replicate_helper(
             source_bucket=None,
             dest_region=topo.sink_region(),
             dest_bucket=None,
-            src_objs=[str(i) for i in range(n_chunks)],
-            dest_objs=[str(i) for i in range(n_chunks)],
+            src_objs=[str(i) for i in range(random_n_chunks)],
+            dest_objs=[str(i) for i in range(random_n_chunks)],
             random_chunk_size_mb=random_chunk_size_mb,
         )
     else:
@@ -190,6 +197,30 @@ def replicate_helper(
             max_chunk_size_mb=max_chunk_size_mb,
         )
 
+    # confirm transfer with user
+    est_size = sum(job.obj_sizes.values()) if not random else job.random_chunk_size_mb * random_n_chunks * MB
+    console.print(f"\n[bold yellow]Will transfer {len(job.src_objs)} objects totaling {format_bytes(est_size)}[/bold yellow]")
+    sorted_counts = sorted(topo.per_region_count().items(), key=lambda x: x[0])
+    console.print(
+        f"    [bold][blue]VMs to provision:[/blue][/bold] [bright_black]{', '.join(f'{c}x {r}' for r, c in sorted_counts)}[/bright_black]"
+    )
+    if topo.cost_per_gb:
+        console.print(
+            f"    [bold][blue]Estimated egress cost:[/blue][/bold] [bright_black]${est_size / GB * topo.cost_per_gb:,.2f} at ${topo.cost_per_gb:,.2f}/GB[/bright_black]"
+        )
+
+    if ask_to_confirm_transfer:
+        if typer.confirm("Continue?", default=True):
+            logger.fs.debug("User confirmed transfer")
+            console.print(
+                "[bold green]Transfer starting[/bold green] (Tip: Enable auto-confirmation with `skyplane config set autoconfirm true`)"
+            )
+        else:
+            logger.fs.error("Transfer cancelled by user.")
+            console.print("[bold][red]Transfer cancelled by user.[/red][/bold]")
+            raise typer.Abort()
+    console.print("")
+
     stats = {}
     try:
         rc.provision_gateways(reuse_gateways, use_bbr=use_bbr, use_compression=use_compression)
@@ -199,7 +230,7 @@ def replicate_helper(
             logger.fs.info(f"\tAPI: {gw.gateway_api_url}")
         job = rc.run_replication_plan(job)
         if random:
-            total_bytes = n_chunks * random_chunk_size_mb * MB
+            total_bytes = random_n_chunks * random_chunk_size_mb * MB
         else:
             total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
         console.print(f":rocket: [bold blue]{total_bytes / GB:.2f}GB transfer job launched[/bold blue]")
