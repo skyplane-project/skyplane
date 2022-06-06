@@ -10,6 +10,7 @@ from rich.progress import Progress
 
 import skyplane.cli.cli_aws
 import skyplane.cli.cli_azure
+import skyplane.cli.cli_config
 import skyplane.cli.cli_internal as cli_internal
 import skyplane.cli.cli_solver
 import skyplane.cli.experiments
@@ -44,6 +45,7 @@ app.command()(cli_internal.replicate_json)
 app.add_typer(skyplane.cli.experiments.app, name="experiments")
 app.add_typer(skyplane.cli.cli_aws.app, name="aws")
 app.add_typer(skyplane.cli.cli_azure.app, name="azure")
+app.add_typer(skyplane.cli.cli_config.app, name="config")
 app.add_typer(skyplane.cli.cli_solver.app, name="solver")
 
 
