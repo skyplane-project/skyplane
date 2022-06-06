@@ -1,3 +1,4 @@
+from distutils.command.config import config
 import os
 import tempfile
 from pathlib import Path
@@ -55,8 +56,8 @@ def replicate_random(
 
     return replicate_helper(
         topo,
-        size_total_mb=total_transfer_size_mb,
-        n_chunks=n_chunks,
+        random_size_total_mb=total_transfer_size_mb,
+        random_n_chunks=n_chunks,
         random=True,
         reuse_gateways=reuse_gateways,
         gateway_docker_image=gateway_docker_image,
@@ -67,6 +68,7 @@ def replicate_random(
         time_limit_seconds=time_limit_seconds,
         log_interval_s=log_interval_s,
         use_bbr=use_bbr,
+        ask_to_confirm_transfer=False,
     )
 
 
@@ -132,8 +134,8 @@ def replicate_random_solve(
 
     return replicate_helper(
         topo,
-        size_total_mb=total_transfer_size_mb,
-        n_chunks=n_chunks,
+        random_size_total_mb=total_transfer_size_mb,
+        random_n_chunks=n_chunks,
         random=True,
         reuse_gateways=reuse_gateways,
         gateway_docker_image=gateway_docker_image,
@@ -144,6 +146,7 @@ def replicate_random_solve(
         time_limit_seconds=time_limit_seconds,
         log_interval_s=log_interval_s,
         use_bbr=use_bbr,
+        ask_to_confirm_transfer=False,
     )
 
 
@@ -178,8 +181,8 @@ def replicate_json(
 
     return replicate_helper(
         topo,
-        size_total_mb=size_total_mb,
-        n_chunks=n_chunks,
+        random_size_total_mb=size_total_mb,
+        random_n_chunks=n_chunks,
         random=use_random_data,
         source_bucket=source_bucket,
         dest_bucket=dest_bucket,
@@ -194,4 +197,5 @@ def replicate_json(
         time_limit_seconds=time_limit_seconds,
         log_interval_s=log_interval_s,
         use_bbr=use_bbr,
+        ask_to_confirm_transfer=False,
     )

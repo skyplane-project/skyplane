@@ -2,7 +2,6 @@ import functools
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
@@ -147,6 +146,8 @@ class ThroughputSolver:
         return throughput, egress_cost, instance_cost
 
     def plot_throughput_grid(self, data_grid, title="Throughput (Gbps)"):
+        import matplotlib.pyplot as plt
+
         for i in range(data_grid.shape[0]):
             for j in range(data_grid.shape[1]):
                 if i <= j:

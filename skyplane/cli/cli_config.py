@@ -1,5 +1,6 @@
 """
 Config interface:
+* skyplane config list
 * skyplane config get <key>
 * skyplane config set <key> <value>
 
@@ -16,10 +17,19 @@ app = typer.Typer(name="skyplane-config")
 
 
 @app.command()
+def list():
+    """List all available config keys"""
+    for key in cloud_config.valid_flags():
+        value = cloud_config.get_flag(key)
+        console.print(f"[bold][blue]{key}[/blue] = [italic][green]{value}[/italic][/green][/bold]")
+
+
+@app.command()
 def get(key: str):
     """Get a config value."""
     try:
-        console.print(f"[bold][blue]{key}[/blue] = [green]{cloud_config.get_flag(key)}[/green][/bold]")
+        value = cloud_config.get_flag(key)
+        console.print(f"[bold][blue]{key}[/blue] = [italic][green]{value}[/italic][/green]")
     except KeyError:
         console.print(f"[red][bold]{key}[/bold] is not a valid config key[/red]")
 
@@ -34,4 +44,4 @@ def set(key: str, value: str):
     cloud_config.set_flag(key, value)
     new = cloud_config.get_flag(key)
     cloud_config.to_config_file(config_path)
-    console.print(f"[bold][blue]{key}[/blue] = [green]{new}[/green][/bold] [bright_black](was {old})[/bright_black]")
+    console.print(f"[bold][blue]{key}[/blue] = [italic][green]{new}[/italic][/green][/bold] [bright_black](was {old})[/bright_black]")
