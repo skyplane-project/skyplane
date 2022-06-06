@@ -4,6 +4,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+_FLAG_TYPES = {
+    "autoconfirm": bool,
+}
+
+
+def _map_type(value, val_type):
+    if val_type is bool:
+        if value.lower() in ["true", "yes", "1"]:
+            return True
+        elif value.lower() in ["false", "no", "0"]:
+            return False
+        else:
+            raise ValueError(f"Invalid boolean value: {value}")
+    else:
+        return val_type(value)
+
 
 @dataclass
 class SkyplaneConfig:
@@ -13,6 +29,9 @@ class SkyplaneConfig:
     azure_subscription_id: Optional[str] = None
     gcp_project_id: Optional[str] = None
 
+    # skyplane flags
+    flag_autoconfirm: bool = False
+
     @staticmethod
     def default_config() -> "SkyplaneConfig":
         return SkyplaneConfig(
@@ -21,6 +40,7 @@ class SkyplaneConfig:
             gcp_enabled=False,
             azure_subscription_id=None,
             gcp_project_id=None,
+            flag_autoconfirm=False,
         )
 
     @staticmethod
@@ -53,12 +73,18 @@ class SkyplaneConfig:
             if "project_id" in config["gcp"]:
                 gcp_project_id = config.get("gcp", "project_id")
 
+        flag_autoconfirm = False
+        if "flags" in config:
+            if "autoconfirm" in config["flags"]:
+                flag_autoconfirm = config.getboolean("flags", "autoconfirm")
+
         return SkyplaneConfig(
             aws_enabled=aws_enabled,
             azure_enabled=azure_enabled,
             gcp_enabled=gcp_enabled,
             azure_subscription_id=azure_subscription_id,
             gcp_project_id=gcp_project_id,
+            flag_autoconfirm=flag_autoconfirm,
         )
 
     def to_config_file(self, path):
@@ -85,5 +111,22 @@ class SkyplaneConfig:
         if self.gcp_project_id:
             config.set("gcp", "project_id", self.gcp_project_id)
 
+        if "flags" not in config:
+            config.add_section("flags")
+        config.set("flags", "autoconfirm", str(self.flag_autoconfirm))
+
         with path.open("w") as f:
             config.write(f)
+
+    def valid_flags(self):
+        return list(_FLAG_TYPES.keys())
+
+    def get_flag(self, flag_name):
+        if flag_name not in self.valid_flags():
+            raise KeyError(f"Invalid flag: {flag_name}")
+        return getattr(self, f"flag_{flag_name}")
+
+    def set_flag(self, flag_name, value):
+        if flag_name not in self.valid_flags():
+            raise KeyError(f"Invalid flag: {flag_name}")
+        setattr(self, f"flag_{flag_name}", _map_type(value, _FLAG_TYPES.get(flag_name, str)))

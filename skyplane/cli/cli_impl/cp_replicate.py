@@ -5,7 +5,8 @@ import signal
 from typing import List, Optional
 
 import typer
-from rich.console import Console
+from rich import print as rprint
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, DownloadColumn, BarColumn, TransferSpeedColumn
 
 from skyplane import exceptions, MB, GB, skyplane_root
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
@@ -13,6 +14,7 @@ from skyplane.replicate.replication_plan import ReplicationTopology, Replication
 from skyplane.replicate.replicator_client import ReplicatorClient
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
+from skyplane.cli.common import console
 
 
 def generate_topology(
@@ -26,7 +28,6 @@ def generate_topology(
     solver_throughput_grid: Optional[pathlib.Path] = skyplane_root / "profiles" / "throughput.csv",
     solver_verbose: Optional[bool] = False,
 ) -> ReplicationTopology:
-    console = Console()
     if solve:
         if src_region == dst_region:
             typer.secho("Solver is not supported for intra-region transfers, run without the --solve flag", fg="red")
@@ -99,9 +100,8 @@ def replicate_helper(
     time_limit_seconds: Optional[int] = None,
     log_interval_s: float = 1.0,
 ):
-    console = Console()
     if "SKYPLANE_DOCKER_IMAGE" in os.environ:
-        typer.secho(f"Using docker image: {gateway_docker_image}")
+        rprint(f"[bright_black]Using overridden docker image: {gateway_docker_image}[/bright_black]")
     if reuse_gateways:
         typer.secho(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skyplane deprovision` to deprovision gateways.",
@@ -202,7 +202,7 @@ def replicate_helper(
             total_bytes = n_chunks * random_chunk_size_mb * MB
         else:
             total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
-        typer.secho(f"{total_bytes / GB:.2f}GByte replication job launched", fg="green")
+        console.print(f":rocket: [bold blue]{total_bytes / GB:.2f}GB transfer job launched[/bold blue]")
         if topo.source_region().split(":")[0] == "azure" or topo.sink_region().split(":")[0] == "azure":
             typer.secho(f"Warning: It can take up to 60s for role assignments to propagate on Azure. See issue #355", fg="yellow")
         stats = rc.monitor_transfer(
@@ -241,6 +241,10 @@ def replicate_helper(
                 typer.secho(error, fg="red")
         raise typer.Exit(1)
 
-    out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
-    typer.echo(f"\n{json.dumps(out_json)}")
+    # print stats
+    if stats["success"]:
+        rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
+        runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{stats.get('total_runtime_s'):.2f}s[/bright_black]"
+        throughput_line = f"[white]Throughput:[/white] [bright_black]{stats.get('throughput_gbits'):.2f}Gbps[/bright_black]"
+        rprint(f"{runtime_line}, {throughput_line}")
     return 0 if stats["success"] else 1
