@@ -31,6 +31,7 @@ jobs:
           #(github.event_name == 'push' && github.head_ref == github.event.repository.default_branch)
           #|| (github.event_name == 'pull_request' && github.base_ref == github.event.repository.default_branch)
         run: |
+          skyplane init -y
           pytest -s tests/unit_aws
           pytest -s tests/unit_azure
           pytest -s tests/unit_gcs

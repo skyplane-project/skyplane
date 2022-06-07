@@ -391,7 +391,11 @@ def ssh():
 
 
 @app.command()
-def init(reinit_azure: bool = False, reinit_gcp: bool = False):
+def init(
+    non_interactive: bool = typer.Option("--non-interactive", "-y", help="Run non-interactively"),
+    reinit_azure: bool = False,
+    reinit_gcp: bool = False,
+):
     """
     It loads the configuration file, and if it doesn't exist, it creates a default one. Then it creates
     AWS, Azure, and GCP region list configurations.
@@ -409,15 +413,15 @@ def init(reinit_azure: bool = False, reinit_gcp: bool = False):
 
     # load AWS config
     typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)
-    cloud_config = load_aws_config(cloud_config)
+    cloud_config = load_aws_config(cloud_config, non_interactive=non_interactive)
 
     # load Azure config
     typer.secho("\n(2) Configuring Azure:", fg="yellow", bold=True)
-    cloud_config = load_azure_config(cloud_config, force_init=reinit_azure)
+    cloud_config = load_azure_config(cloud_config, force_init=reinit_azure, non_interactive=non_interactive)
 
     # load GCP config
     typer.secho("\n(3) Configuring GCP:", fg="yellow", bold=True)
-    cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp)
+    cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
 
     cloud_config.to_config_file(config_path)
     typer.secho(f"\nConfig file saved to {config_path}", fg="green")

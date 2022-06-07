@@ -43,7 +43,7 @@ class ObjectStoreInterface:
 
     def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
         raise NotImplementedError()
-    
+
     def delete_objects(self, keys: List[str]):
         raise NotImplementedError()
 

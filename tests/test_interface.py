@@ -8,6 +8,7 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils.timer import Timer
 from skyplane.utils import logger
 
+
 def interface_test_framework(region, bucket, multipart: bool):
     logger.info("creating interfaces...")
     interface = ObjectStoreInterface.create(region, bucket)
@@ -68,7 +69,7 @@ def interface_test_framework(region, bucket, multipart: bool):
             dl_file_md5 = hashlib.md5(f.read()).hexdigest()
 
         assert dl_file_md5 == file_md5
-        
+
     interface.delete_objects([obj_name])
     assert not interface.exists(obj_name)
     if not is_bucket_preexisting:
