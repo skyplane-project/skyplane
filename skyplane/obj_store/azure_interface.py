@@ -72,8 +72,8 @@ class AzureInterface(ObjectStoreInterface):
         except ResourceNotFoundError:
             return False
 
-    def exists(self):
-        return self.blob_service_client.get_blob_client(container=self.container_name, blob=key).exists()
+    def exists(self, obj_name):
+        return self.blob_service_client.get_blob_client(container=self.container_name, blob=obj_name).exists()
 
     def create_storage_account(self, tier="Premium_LRS"):
         try:
@@ -159,14 +159,6 @@ class AzureInterface(ObjectStoreInterface):
 
     def get_obj_size(self, obj_name):
         return self.get_obj_metadata(obj_name).size
-
-    def exists(self, obj_name):
-        blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=obj_name)
-        try:
-            blob_client.get_blob_properties()
-            return True
-        except ResourceNotFoundError:
-            return False
 
     @staticmethod
     def _run_azure_op_with_retry(fn, interval=0.5, timeout=180):
