@@ -93,7 +93,7 @@ def solve_single_hop(
     out: Path = typer.Option(None, "--out", "-o", help="Output file for path."),
 ):
     from skyplane.replicate.solver_ilp import ThroughputSolverILP
-    
+
     tput = ThroughputSolverILP(throughput_grid)
     p = ThroughputProblem(src, dst, 1, gbyte_to_transfer, 1, const_throughput_grid_gbits=tput.get_throughput_grid())
     src_region, dst_region, selected_region = None, None, None
