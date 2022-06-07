@@ -13,14 +13,12 @@ google-api-python-client
 google-auth
 google-cloud-compute
 google-cloud-storage
-grpcio-status>=1.33.2
 # shared dependencies
 cachetools
-ilock
 paramiko
-termcolor
-tqdm
+rich
 # gateway dependencies
 flask
+lz4
 pyopenssl
 werkzeug

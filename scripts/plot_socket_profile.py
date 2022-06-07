@@ -6,7 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt  # type: ignore
 from tqdm import tqdm
 
-from skylark import skylark_root
+from skyplane import skyplane_root
 
 
 def plot(file):
@@ -28,7 +28,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("profile_file", help="Path to the profile file")
     parser.add_argument(
-        "--plot_dir", default=skylark_root / "data" / "figures" / "socket_profiles", help="Path to the directory where to save the plot"
+        "--plot_dir", default=skyplane_root / "data" / "figures" / "socket_profiles", help="Path to the directory where to save the plot"
     )
     args = parser.parse_args()
 

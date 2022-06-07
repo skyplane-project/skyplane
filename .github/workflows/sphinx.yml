@@ -1,19 +1,21 @@
-name: docs
+name: sphinx
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
 jobs:
-  build:
+  build-docs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
+    - name: Write CNAME
+      run: mkdir -p docs/build/html && (echo 'skyplane.org' > docs/build/html/CNAME)
     - name: Build HTML
       uses: ammaraskar/sphinx-action@0.4
       with:
-        docs-folder: "docs/"
-        build-command: "sphinx-build -b html -d build/doctrees . build/html"
+        docs-folder: docs/
+        build-command: sphinx-build -b html -d build/doctrees . build/html
     # - name: Upload artifacts
     #   uses: actions/upload-artifact@v1
     #   with:
