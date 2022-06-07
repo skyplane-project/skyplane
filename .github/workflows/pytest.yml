@@ -34,7 +34,7 @@ jobs:
         run: poetry run pytest tests/unit_nocloud
   test-aws:
     runs-on: ubuntu-latest
-    depends-on: test-unit
+    needs: test-unit
     steps:
       - uses: actions/checkout@v1
       - name: Set up Python 3.8
@@ -64,7 +64,7 @@ jobs:
           poetry run pytest -s tests/unit_aws
   test-gcp:
     runs-on: ubuntu-latest
-    depends-on: test-unit
+    needs: test-unit
     steps:
       - uses: actions/checkout@v1
       - name: Set up Python 3.8
@@ -94,7 +94,7 @@ jobs:
           poetry run pytest -s tests/unit_gcp
   test-azure:
     runs-on: ubuntu-latest
-    depends-on: test-unit
+    needs: test-unit
     steps:
       - uses: actions/checkout@v1
       - name: Set up Python 3.8
