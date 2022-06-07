@@ -2,7 +2,7 @@ import json
 import os
 import pathlib
 import signal
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import typer
 from halo import Halo
@@ -70,19 +70,19 @@ def generate_topology(
 
 
 def query_src_dest_objs(
-    topo: ReplicationTopology,
+    src_region: str = None,
+    dst_region: str = None,
     source_bucket: str = None,
     dest_bucket: str = None,
     src_key_prefix: str = "",
     dest_key_prefix: str = "",
     cached_src_objs: Optional[List[ObjectStoreObject]] = None,
-
-    ):
+) -> Tuple[List[ObjectStoreObject], List[ObjectStoreObject], List[float]]:
     logger.fs.debug(f"Creating replication job from {source_bucket} to {dest_bucket}")
     if cached_src_objs:
         src_objs = cached_src_objs
     else:
-        source_iface = ObjectStoreInterface.create(topo.source_region(), source_bucket)
+        source_iface = ObjectStoreInterface.create(src_region, source_bucket)
         logger.fs.debug(f"Querying objects in {source_bucket}")
         with Timer(f"Query {source_bucket} prefix {src_key_prefix}"):
             with Halo(text=f"Querying objects in {source_bucket}", spinner="dots") as spinner:
@@ -125,7 +125,18 @@ def query_src_dest_objs(
     obj_sizes={obj.key: obj.size for obj in src_objs}
 
 
-    return src_objs_job, dest_objs_job, obj_sizes
+    dest_iface = ObjectStoreInterface.create(dst_region, dest_bucket)
+    logger.fs.debug(f"Querying objects in {dest_bucket}")
+    with Timer(f"Query {source_bucket} prefix {dest_key_prefix}"):
+        with Halo(text=f"Querying objects in {dest_bucket}", spinner="dots") as spinner:
+            dest_objs = []
+            for obj in source_iface.list_objects(dest_key_prefix):
+                if obj.key in dest_objs_job:
+                    dest_objs.append(obj)
+                spinner.text = f"Querying objects in {dest_bucket} ({len(dest_objs)} objects)"
+
+
+    return src_objs, dest_objs, obj_sizes
 
 
 def replicate_helper(
@@ -138,6 +149,7 @@ def replicate_helper(
     dest_bucket: Optional[str] = None,
     src_key_prefix: str = "",
     dest_key_prefix: str = "",
+    transfer_list: Optional[Tuple[List[ObjectStoreObject], List[ObjectStoreObject], List[float]]] = None,
     cached_src_objs: Optional[List[ObjectStoreObject]] = None,
     # maximum chunk size to breakup objects into
     max_chunk_size_mb: Optional[int] = None,
@@ -193,12 +205,17 @@ def replicate_helper(
         )
     else:
         # make replication job
-        src_objs_job, dest_objs_job, obj_sizes = query_src_dest_objs(topo, 
-                source_bucket,
-                dest_bucket,
-                src_key_prefix, 
-                dest_key_prefix,
-                cached_src_objs=cached_src_objs,)
+        if transfer_list:
+            src_objs_job, dest_objs_job, obj_sizes = transfer_list
+        else:
+            src_objs_job, dest_objs_job, obj_sizes = query_src_dest_objs(
+                    topo.source_region(), 
+                    source_bucket,
+                    dest_bucket,
+                    src_key_prefix, 
+                    dest_key_prefix,
+                    cached_src_objs=cached_src_objs,
+                )
 
         job = ReplicationJob(
             source_region=topo.source_region(),

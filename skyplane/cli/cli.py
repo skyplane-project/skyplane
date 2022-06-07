@@ -23,7 +23,7 @@ from skyplane.cli.cli_impl.cp_local import (
     copy_local_s3,
     copy_s3_local,
 )
-from skyplane.cli.cli_impl.cp_replicate import generate_topology, replicate_helper
+from skyplane.cli.cli_impl.cp_replicate import generate_topology, query_src_dest_objs, replicate_helper
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.cli_impl.ls import ls_local, ls_objstore
 from skyplane.cli.common import check_ulimit, parse_path, query_instances
@@ -275,6 +275,7 @@ def sync(
     dst_region = dst_client.region_tag()
 
     # Query source and destination buckets
+    '''
     src_objs_all = []
     dst_objs_all = []
     with Timer(f"Query {bucket_src} prefix {path_src}"):
@@ -300,6 +301,7 @@ def sync(
 
     src_obs_new = []
     for src_obj in src_objs_all:
+        #src_string = src_obj.key[len(path_src) + 1:]
         if src_obj.key in dst_dict:
             dst_obj = dst_dict[src_obj.key]
             if src_obj.last_modified > dst_obj.last_modified or src_obj.size != dst_obj.size:
@@ -310,6 +312,54 @@ def sync(
     if len(src_obs_new) == 0:
         typer.secho("No objects need updating. Exiting...")
         raise typer.Exit(0)
+    '''
+
+    src_objs, dst_objs, obj_sizes = query_src_dest_objs(
+        src_region,
+        dst_region,
+        bucket_src,
+        bucket_dst,
+        path_src,
+        path_dst,
+    )
+
+    print(src_objs)
+    print(dst_objs)
+
+    dst_dict = dict()
+    for obj in dst_objs:
+        key = obj.key
+        if path_dst == "":
+            dst_dict[key] = obj
+        else:
+            dst_dict[key[len(path_dst) + 1 :]] = obj
+
+
+    
+    src_objs_new = []
+    dst_objs_new = []
+    obj_sizes_new = dict()
+    for src_obj in src_objs:
+        src_string = src_obj.key[len(path_src) + 1:]
+        if src_string in dst_dict:
+            dst_obj = dst_dict[src_string]
+            if src_obj.last_modified > dst_obj.last_modified or src_obj.size != dst_obj.size:
+                src_objs_job.append(src_obj.key)
+                dst_objs_job.append(dst_obj.key)
+                obj_sizes_new[src_obj.key] = obj_sizes[src_obj.key]
+        else:
+            src_objs_new.append(src_obj.key)
+            src_path_no_prefix = src_obj.key[len(path_src):] if src_obj.key.startswith(path_src) else src_obj.key
+            src_path_no_prefix = src_path_no_prefix[1:] if src_path_no_prefix.startswith("/") else src_path_no_prefix
+            dst_objs_new.append(path_dst + src_path_no_prefix)
+            obj_sizes_new[src_obj.key] = obj_sizes[src_obj.key]
+
+
+    if len(src_objs_new) == 0:
+        typer.secho("No objects need updating. Exiting...")
+        raise typer.Exit(0)
+
+    transfer_list = (src_objs_new, dst_objs_new, obj_sizes_new,)
 
     topo = generate_topology(
         src_region,
@@ -317,11 +367,12 @@ def sync(
         solve,
         num_connections=num_connections,
         max_instances=max_instances,
-        solver_total_gbyte_to_transfer=sum(obj.size for obj in src_obs_new) / GB,
+        solver_total_gbyte_to_transfer=sum(obj_sizes_new[obj] for obj in obj_sizes_new) / GB,
         solver_required_throughput_gbits=solver_required_throughput_gbits,
         solver_throughput_grid=solver_throughput_grid,
         solver_verbose=solver_verbose,
     )
+
 
     replicate_helper(
         topo,
@@ -329,7 +380,8 @@ def sync(
         dest_bucket=bucket_dst,
         src_key_prefix=path_src,
         dest_key_prefix=path_dst,
-        cached_src_objs=src_obs_new,
+        transfer_list=transfer_list,
+        cached_src_objs=src_objs_new,
         reuse_gateways=reuse_gateways,
         max_chunk_size_mb=max_chunk_size_mb,
         debug=debug,
