@@ -1,5 +1,5 @@
 """
-AWS convenience interface
+Azure convenience interface
 """
 
 from collections import defaultdict
@@ -30,7 +30,7 @@ def get_valid_skus(
                 valid_skus.append(sku.name)
         return set(valid_skus)
 
-    result = do_parallel(get_skus, regions, progress_bar=True, leave_pbar=False, desc="Query SKUs")
+    result = do_parallel(get_skus, regions, spinner=True, desc="Query SKUs")
 
     sku_regions = defaultdict(set)
     for region, skus in result:

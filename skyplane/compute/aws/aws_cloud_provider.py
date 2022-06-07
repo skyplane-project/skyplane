@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import List, Optional
 
 import botocore
-from ilock import ILock
 
 from skyplane import exceptions
 from skyplane import key_root
@@ -96,73 +95,72 @@ class AWSCloudProvider(CloudProvider):
         ec2client = ec2.meta.client
         vpcs = list(ec2.vpcs.filter(Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]).all())
 
-        with ILock(f"aws_make_vpc_{region}"):
-            # find matching valid VPC
-            matching_vpc = None
-            for vpc in vpcs:
-                subsets_azs = [subnet.availability_zone for subnet in vpc.subnets.all()]
-                if (
-                    vpc.cidr_block == "10.0.0.0/16"
-                    and vpc.describe_attribute(Attribute="enableDnsSupport")["EnableDnsSupport"]
-                    and vpc.describe_attribute(Attribute="enableDnsHostnames")["EnableDnsHostnames"]
-                    and all(az in subsets_azs for az in self.auth.get_azs_in_region(region))
-                    and any(sg.group_name == "skyplane" for sg in vpc.security_groups.all())
-                ):
-                    matching_vpc = vpc
-                    # delete all other vpcs
-                    for vpc in vpcs:
-                        if vpc != matching_vpc:
-                            try:
-                                self.delete_vpc(region, vpc.id)
-                            except botocore.exceptions.ClientError as e:
-                                logger.warning(f"Failed to delete VPC {vpc.id} in {region}: {e}")
-                    break
-
-            # make vpc if none found
-            if matching_vpc is None:
-                # delete old skyplane vpcs
+        # find matching valid VPC
+        matching_vpc = None
+        for vpc in vpcs:
+            subsets_azs = [subnet.availability_zone for subnet in vpc.subnets.all()]
+            if (
+                vpc.cidr_block == "10.0.0.0/16"
+                and vpc.describe_attribute(Attribute="enableDnsSupport")["EnableDnsSupport"]
+                and vpc.describe_attribute(Attribute="enableDnsHostnames")["EnableDnsHostnames"]
+                and all(az in subsets_azs for az in self.auth.get_azs_in_region(region))
+                and any(sg.group_name == "skyplane" for sg in vpc.security_groups.all())
+            ):
+                matching_vpc = vpc
+                # delete all other vpcs
                 for vpc in vpcs:
-                    self.delete_vpc(region, vpc.id)
+                    if vpc != matching_vpc:
+                        try:
+                            self.delete_vpc(region, vpc.id)
+                        except botocore.exceptions.ClientError as e:
+                            logger.warning(f"Failed to delete VPC {vpc.id} in {region}: {e}")
+                break
 
-                # enable dns support, enable dns hostnames
-                matching_vpc = ec2.create_vpc(CidrBlock="10.0.0.0/16", InstanceTenancy="default")
-                matching_vpc.modify_attribute(EnableDnsSupport={"Value": True})
-                matching_vpc.modify_attribute(EnableDnsHostnames={"Value": True})
-                matching_vpc.create_tags(Tags=[{"Key": "Name", "Value": vpc_name}])
-                matching_vpc.wait_until_available()
+        # make vpc if none found
+        if matching_vpc is None:
+            # delete old skyplane vpcs
+            for vpc in vpcs:
+                self.delete_vpc(region, vpc.id)
 
-                # make subnet for each AZ in region
-                def make_subnet(az):
-                    subnet_cidr_id = ord(az[-1]) - ord("a")
-                    subnet = self.auth.get_boto3_resource("ec2", region).create_subnet(
-                        CidrBlock=f"10.0.{subnet_cidr_id}.0/24", VpcId=matching_vpc.id, AvailabilityZone=az
-                    )
-                    subnet.meta.client.modify_subnet_attribute(SubnetId=subnet.id, MapPublicIpOnLaunch={"Value": True})
-                    return subnet.id
+            # enable dns support, enable dns hostnames
+            matching_vpc = ec2.create_vpc(CidrBlock="10.0.0.0/16", InstanceTenancy="default")
+            matching_vpc.modify_attribute(EnableDnsSupport={"Value": True})
+            matching_vpc.modify_attribute(EnableDnsHostnames={"Value": True})
+            matching_vpc.create_tags(Tags=[{"Key": "Name", "Value": vpc_name}])
+            matching_vpc.wait_until_available()
 
-                subnet_ids = do_parallel(make_subnet, self.auth.get_azs_in_region(region), return_args=False)
-
-                # make internet gateway
-                igw = ec2.create_internet_gateway()
-                igw.attach_to_vpc(VpcId=matching_vpc.id)
-                public_route_table = list(matching_vpc.route_tables.all())[0]
-
-                # add a default route, for Public Subnet, pointing to Internet Gateway
-                ec2client.create_route(RouteTableId=public_route_table.id, DestinationCidrBlock="0.0.0.0/0", GatewayId=igw.id)
-                for subnet_id in subnet_ids:
-                    public_route_table.associate_with_subnet(SubnetId=subnet_id)
-
-                # make security group named "skyplane"
-                tagSpecifications = [
-                    {"Tags": [{"Key": "skyplane", "Value": "true"}], "ResourceType": "security-group"},
-                ]
-                sg = ec2.create_security_group(
-                    GroupName="skyplane",
-                    Description="Default security group for Skyplane VPC",
-                    VpcId=matching_vpc.id,
-                    TagSpecifications=tagSpecifications,
+            # make subnet for each AZ in region
+            def make_subnet(az):
+                subnet_cidr_id = ord(az[-1]) - ord("a")
+                subnet = self.auth.get_boto3_resource("ec2", region).create_subnet(
+                    CidrBlock=f"10.0.{subnet_cidr_id}.0/24", VpcId=matching_vpc.id, AvailabilityZone=az
                 )
-            return matching_vpc
+                subnet.meta.client.modify_subnet_attribute(SubnetId=subnet.id, MapPublicIpOnLaunch={"Value": True})
+                return subnet.id
+
+            subnet_ids = do_parallel(make_subnet, self.auth.get_azs_in_region(region), return_args=False)
+
+            # make internet gateway
+            igw = ec2.create_internet_gateway()
+            igw.attach_to_vpc(VpcId=matching_vpc.id)
+            public_route_table = list(matching_vpc.route_tables.all())[0]
+
+            # add a default route, for Public Subnet, pointing to Internet Gateway
+            ec2client.create_route(RouteTableId=public_route_table.id, DestinationCidrBlock="0.0.0.0/0", GatewayId=igw.id)
+            for subnet_id in subnet_ids:
+                public_route_table.associate_with_subnet(SubnetId=subnet_id)
+
+            # make security group named "skyplane"
+            tagSpecifications = [
+                {"Tags": [{"Key": "skyplane", "Value": "true"}], "ResourceType": "security-group"},
+            ]
+            sg = ec2.create_security_group(
+                GroupName="skyplane",
+                Description="Default security group for Skyplane VPC",
+                VpcId=matching_vpc.id,
+                TagSpecifications=tagSpecifications,
+            )
+        return matching_vpc
 
     def delete_vpc(self, region: str, vpcid: str):
         """Delete VPC, from https://gist.github.com/vernhart/c6a0fc94c0aeaebe84e5cd6f3dede4ce"""
@@ -242,17 +240,16 @@ class AWSCloudProvider(CloudProvider):
     def create_iam(self, iam_name: str = "skyplane_gateway", attach_policy_arn: Optional[str] = None):
         """Create IAM role if it doesn't exist and grant managed role if given."""
         iam = self.auth.get_boto3_client("iam")
-        with ILock(f"aws_create_iam_{iam_name}"):
-            try:
-                iam.get_role(RoleName=iam_name)
-            except iam.exceptions.NoSuchEntityException:
-                doc = {
-                    "Version": "2012-10-17",
-                    "Statement": [{"Effect": "Allow", "Principal": {"Service": "ec2.amazonaws.com"}, "Action": "sts:AssumeRole"}],
-                }
-                iam.create_role(RoleName=iam_name, AssumeRolePolicyDocument=json.dumps(doc), Tags=[{"Key": "skyplane", "Value": "true"}])
-            if attach_policy_arn:
-                iam.attach_role_policy(RoleName=iam_name, PolicyArn=attach_policy_arn)
+        try:
+            iam.get_role(RoleName=iam_name)
+        except iam.exceptions.NoSuchEntityException:
+            doc = {
+                "Version": "2012-10-17",
+                "Statement": [{"Effect": "Allow", "Principal": {"Service": "ec2.amazonaws.com"}, "Action": "sts:AssumeRole"}],
+            }
+            iam.create_role(RoleName=iam_name, AssumeRolePolicyDocument=json.dumps(doc), Tags=[{"Key": "skyplane", "Value": "true"}])
+        if attach_policy_arn:
+            iam.attach_role_policy(RoleName=iam_name, PolicyArn=attach_policy_arn)
 
     def authorize_client(self, aws_region: str, client_ip: str, port=22):
         sg = self.get_security_group(aws_region)
@@ -267,36 +264,37 @@ class AWSCloudProvider(CloudProvider):
         logger.fs.debug(f"[AWS] Authorizing {client_ip}:{port} in {sg.group_name}")
         sg.authorize_ingress(IpPermissions=[{"IpProtocol": "tcp", "FromPort": port, "ToPort": port, "IpRanges": [{"CidrIp": client_ip}]}])
 
-    def add_ip_to_security_group(self, aws_region: str, ip: Optional[str] = None):
-        """Add IP to security group. If security group ID is None, use group named skyplane (create if not exists). If ip is None, authorize all IPs."""
-        with ILock(f"aws_add_ip_to_security_group_{aws_region}"):
-            sg = self.get_security_group(aws_region)
-            try:
-                logger.fs.debug(f"[AWS] Adding IP {ip} to security group {sg.group_name}")
-                sg.authorize_ingress(
-                    IpPermissions=[
-                        {"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": f"{ip}/32" if ip else "0.0.0.0/0"}]}
-                    ]
-                )
-            except botocore.exceptions.ClientError as e:
-                logger.fs.error(f"[AWS] Error adding IP {ip} to security group {sg.group_name}: {e}")
-                if not str(e).endswith("already exists"):
-                    logger.warn("[AWS] Error adding IP to security group, since it already exits")
+    def add_ips_to_security_group(self, aws_region: str, ips: Optional[List[str]] = None):
+        """Add IPs to security group. If security group ID is None, use group named skyplane (create if not exists). If ip is None, authorize all IPs."""
+        sg = self.get_security_group(aws_region)
+        try:
+            logger.fs.debug(f"[AWS] Adding IPs {ips} to security group {sg.group_name}")
+            sg.authorize_ingress(
+                IpPermissions=[
+                    {"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": f"{ip}/32" if ip else "0.0.0.0/0"}]}
+                    for ip in ips
+                ]
+            )
+        except botocore.exceptions.ClientError as e:
+            logger.fs.error(f"[AWS] Error adding IPs {ips} to security group {sg.group_name}: {e}")
+            if not str(e).endswith("already exists"):
+                logger.warn("[AWS] Error adding IPs to security group, since it already exits")
 
-    def remove_ip_from_security_group(self, aws_region: str, ip: str):
+    def remove_ips_from_security_group(self, aws_region: str, ips: List[str]):
         """Remove IP from security group. If security group ID is None, return."""
-        with ILock(f"aws_remove_ip_to_security_group_{aws_region}"):
-            # Remove instance IP from security group
-            sg = self.get_security_group(aws_region)
-            try:
-                logger.fs.debug(f"[AWS] Removing IP {ip} from security group {sg.group_name}")
-                sg.revoke_ingress(
-                    IpPermissions=[{"IpProtocol": "tcp", "FromPort": 12000, "ToPort": 65535, "IpRanges": [{"CidrIp": ip + "/32"}]}]
-                )
-            except botocore.exceptions.ClientError as e:
-                logger.fs.error(f"[AWS] Error removing IP {ip} from security group {sg.group_name}: {e}")
-                if "The specified rule does not exist in this security group." not in str(e):
-                    logger.warn(f"[AWS] Error removing IP from security group: {e}")
+        # Remove instance IP from security group
+        sg = self.get_security_group(aws_region)
+        try:
+            logger.fs.debug(f"[AWS] Removing IPs {ips} from security group {sg.group_name}")
+            sg.revoke_ingress(
+                IpPermissions=[
+                    {"IpProtocol": "tcp", "FromPort": 12000, "ToPort": 65535, "IpRanges": [{"CidrIp": ip + "/32"}]} for ip in ips
+                ]
+            )
+        except botocore.exceptions.ClientError as e:
+            logger.fs.error(f"[AWS] Error removing IPs {ips} from security group {sg.group_name}: {e}")
+            if "The specified rule does not exist in this security group." not in str(e):
+                logger.warn(f"[AWS] Error removing IPs from security group: {e}")
 
     def ensure_keyfile_exists(self, aws_region, prefix=key_root / "aws"):
         ec2 = self.auth.get_boto3_resource("ec2", aws_region)
@@ -306,20 +304,19 @@ class AWSCloudProvider(CloudProvider):
         local_key_file = prefix / f"{key_name}.pem"
 
         if not local_key_file.exists():
-            with ILock(f"aws_keyfile_lock_{aws_region}"):
-                if not local_key_file.exists():  # double check due to lock
-                    local_key_file.parent.mkdir(parents=True, exist_ok=True)
-                    if key_name in set(p["KeyName"] for p in ec2_client.describe_key_pairs()["KeyPairs"]):
-                        logger.fs.warning(f"Deleting key {key_name} in region {aws_region}")
-                        ec2_client.delete_key_pair(KeyName=key_name)
-                    key_pair = ec2.create_key_pair(KeyName=f"skyplane-{aws_region}", KeyType="rsa")
-                    with local_key_file.open("w") as f:
-                        key_str = key_pair.key_material
-                        if not key_str.endswith("\n"):
-                            key_str += "\n"
-                        f.write(key_str)
-                    os.chmod(local_key_file, 0o600)
-                    logger.fs.info(f"Created key file {local_key_file}")
+            if not local_key_file.exists():  # double check due to lock
+                local_key_file.parent.mkdir(parents=True, exist_ok=True)
+                if key_name in set(p["KeyName"] for p in ec2_client.describe_key_pairs()["KeyPairs"]):
+                    logger.fs.warning(f"Deleting key {key_name} in region {aws_region}")
+                    ec2_client.delete_key_pair(KeyName=key_name)
+                key_pair = ec2.create_key_pair(KeyName=f"skyplane-{aws_region}", KeyType="rsa")
+                with local_key_file.open("w") as f:
+                    key_str = key_pair.key_material
+                    if not key_str.endswith("\n"):
+                        key_str += "\n"
+                    f.write(key_str)
+                os.chmod(local_key_file, 0o600)
+                logger.fs.info(f"Created key file {local_key_file}")
 
         return local_key_file
 

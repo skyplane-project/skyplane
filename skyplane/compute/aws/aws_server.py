@@ -1,3 +1,4 @@
+import logging
 from typing import Dict, Optional
 
 import boto3
@@ -98,6 +99,7 @@ class AWSServer(Server):
     def open_ssh_tunnel_impl(self, remote_port):
         import sshtunnel
 
+        sshtunnel.DEFAULT_LOGLEVEL = logging.FATAL
         return sshtunnel.SSHTunnelForwarder(
             (self.public_ip(), 22),
             ssh_username="ec2-user",

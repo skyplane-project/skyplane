@@ -10,7 +10,7 @@ import typer
 
 from skyplane import GB
 from skyplane import skyplane_root
-from skyplane.replicate.solver import GBIT_PER_GBYTE, ThroughputProblem, ThroughputSolverILP, ThroughputSolution
+from skyplane.replicate.solver import GBIT_PER_GBYTE, ThroughputProblem, ThroughputSolution
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
 
@@ -29,6 +29,7 @@ def solve_throughput(
     out: Path = typer.Option(None, "--out", "-o", help="Output file for path."),
     visualize: bool = False,
 ):
+    from skyplane.replicate.solver_ilp import ThroughputSolverILP
 
     # build problem and solve
     tput = ThroughputSolverILP(throughput_grid)
@@ -91,6 +92,8 @@ def solve_single_hop(
     gbyte_to_transfer: float = typer.Option(1, help="Gigabytes to transfer"),
     out: Path = typer.Option(None, "--out", "-o", help="Output file for path."),
 ):
+    from skyplane.replicate.solver_ilp import ThroughputSolverILP
+
     tput = ThroughputSolverILP(throughput_grid)
     p = ThroughputProblem(src, dst, 1, gbyte_to_transfer, 1, const_throughput_grid_gbits=tput.get_throughput_grid())
     src_region, dst_region, selected_region = None, None, None

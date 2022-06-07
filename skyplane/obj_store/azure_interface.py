@@ -1,20 +1,19 @@
-from functools import partial
 import os
 import subprocess
 import time
 import uuid
+from functools import partial
 from typing import Iterator, List
 
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError, HttpResponseError
 from azure.identity import AzureCliCredential
 from azure.mgmt.authorization.models import RoleAssignmentCreateParameters, RoleAssignmentProperties
 
+from skyplane import is_gateway_env
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger
-from skyplane import is_gateway_env
-from skyplane.utils.fn import wait_for
 from skyplane.utils.timer import Timer
 
 

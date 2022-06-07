@@ -22,25 +22,23 @@ key_root = config_root / "keys"
 tmp_log_dir = Path("/tmp/skyplane")
 tmp_log_dir.mkdir(exist_ok=True)
 
-# header
-def print_header():
-    header = "\n"
-    header += """=================================================
- _____ _   ____   _______ _       ___   _   _  _____ 
-/  ___| | / /\ \ / / ___ \ |     / _ \ | \ | ||  ___|
-\ `--.| |/ /  \ V /| |_/ / |    / /_\ \|  \| || |__  
- `--. \    \   \ / |  __/| |    |  _  || . ` ||  __| 
-/\__/ / |\  \  | | | |   | |____| | | || |\  || |___ 
-\____/\_| \_/  \_/ \_|   \_____/\_| |_/\_| \_/\____/                                
-================================================="""
-    header += "\n"
-    print(header, flush=True)
-
-
 # definitions
 KB = 1024
 MB = 1024 * 1024
 GB = 1024 * 1024 * 1024
+
+
+def format_bytes(bytes: int):
+    if bytes < KB:
+        return f"{bytes}B"
+    elif bytes < MB:
+        return f"{bytes / KB:.2f}KB"
+    elif bytes < GB:
+        return f"{bytes / MB:.2f}MB"
+    else:
+        return f"{bytes / GB:.2f}GB"
+
+
 if config_path.exists():
     cloud_config = SkyplaneConfig.load_config(config_path)
 else:

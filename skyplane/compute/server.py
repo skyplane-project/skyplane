@@ -7,12 +7,12 @@ from functools import partial
 from pathlib import Path
 from typing import Dict, Optional
 
-
 from skyplane import config_path
 from skyplane.compute.const_cmds import make_dozzle_command, make_sysctl_tcp_tuning_command, make_autoshutdown_script
 from skyplane.utils import logger
+from skyplane.utils.fn import PathLike, wait_for
+from skyplane.utils.retry import retry_backoff
 from skyplane.utils.net import retry_requests
-from skyplane.utils.fn import PathLike, retry_backoff, wait_for
 from skyplane.utils.timer import Timer
 
 
@@ -308,7 +308,7 @@ class Server:
 
         try:
             logging.disable(logging.CRITICAL)
-            wait_for(is_api_ready, timeout=5, interval=0.1, desc=f"Waiting for gateway {self.uuid()} to start", leave_pbar=False)
+            wait_for(is_api_ready, timeout=5, interval=0.1, desc=f"Waiting for gateway {self.uuid()} to start")
         except TimeoutError as e:
             logger.fs.error(f"Gateway {self.instance_name()} is not ready {e}")
             logger.fs.warning(desc_prefix + " gateway launch command: " + docker_launch_cmd)

@@ -4,7 +4,7 @@ from pathlib import Path
 from shutil import copyfile
 from typing import List, Dict
 
-from tqdm import tqdm
+from rich.progress import Progress, TextColumn, SpinnerColumn, DownloadColumn, TransferSpeedColumn, TimeElapsedColumn
 
 from skyplane import exceptions
 from skyplane.obj_store.azure_interface import AzureInterface
@@ -30,7 +30,7 @@ def copy_local_local(src: Path, dst: Path):
 
 
 def copy_local_objstore(object_interface: ObjectStoreInterface, src: Path, dst_key: str):
-    with concurrent.futures.ThreadPoolExecutor(max_workers=64) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
         ops: List[concurrent.futures.Future] = []
         path_mapping: Dict[concurrent.futures.Future, Path] = {}
 
@@ -46,16 +46,22 @@ def copy_local_objstore(object_interface: ObjectStoreInterface, src: Path, dst_k
                 return path.stat().st_size
 
         total_bytes = _copy(src, dst_key)
-
-        # wait for all uploads to complete, displaying a progress bar
-        with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Uploading") as pbar:
+        bytes_copied = 0
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold yellow]Uploading (from local to object store)"),
+            DownloadColumn(binary_units=True),
+            TransferSpeedColumn(),
+            TimeElapsedColumn(),
+        ) as progress:
+            copy_task = progress.add_task("", total=total_bytes)
             for op in concurrent.futures.as_completed(ops):
                 op.result()
-                pbar.update(path_mapping[op].stat().st_size)
+                progress.update(copy_task, advance=path_mapping[op].stat().st_size)
 
 
 def copy_objstore_local(object_interface: ObjectStoreInterface, src_key: str, dst: Path):
-    with concurrent.futures.ThreadPoolExecutor(max_workers=64) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
         ops: List[concurrent.futures.Future] = []
         obj_mapping: Dict[concurrent.futures.Future, ObjectStoreObject] = {}
 
@@ -81,10 +87,18 @@ def copy_objstore_local(object_interface: ObjectStoreInterface, src_key: str, ds
             raise exceptions.MissingObjectException()
 
         # wait for all downloads to complete, displaying a progress bar
-        with tqdm(total=total_bytes, unit="B", unit_scale=True, unit_divisor=1024, desc="Downloading") as pbar:
+        bytes_copied = 0
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold yellow]Downloading (from object store to local)"),
+            DownloadColumn(binary_units=True),
+            TransferSpeedColumn(),
+            TimeElapsedColumn(),
+        ) as progress:
+            copy_task = progress.add_task("", total=total_bytes)
             for op in concurrent.futures.as_completed(ops):
                 op.result()
-                pbar.update(obj_mapping[op].size)
+                progress.update(copy_task, advance=obj_mapping[op].stat().st_size)
 
 
 def copy_local_gcs(src: Path, dst_bucket: str, dst_key: str):
