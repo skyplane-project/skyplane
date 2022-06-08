@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import os
 from typing import Iterator, List, Optional
@@ -128,10 +129,18 @@ class GCSInterface(ObjectStoreInterface):
                 m.update(chunk)
         return m.digest() if generate_md5 else None
 
-    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
+    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None)
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
         os.path.getsize(src_file_path)
         bucket = self._gcs_client.bucket(self.bucket_name)
         blob = bucket.blob(dst_object_name)
         blob.upload_from_filename(src_file_path)
+        if check_md5:
+            b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
+            blob_md5 = blob.md5_hash
+            if b64_md5sum != blob_md5:
+                raise exceptions.ObjectStoreChecksumMismatchException(
+                    f"Checksum mismatch for object {dst_object_name} in bucket {self.bucket_name}, "
+                    + f"expected {b64_md5sum}, got {blob_md5}"
+                )
