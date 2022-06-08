@@ -59,12 +59,12 @@ class ObjectStoreInterface:
             from skyplane.obj_store.s3_interface import S3Interface
 
             _, region = region_tag.split(":", 1)
-            return S3Interface(region, bucket)
+            return S3Interface(bucket, aws_region=region)
         elif region_tag.startswith("gcp"):
             from skyplane.obj_store.gcs_interface import GCSInterface
 
             _, region = region_tag.split(":", 1)
-            return GCSInterface(region, bucket)
+            return GCSInterface(bucket, gcp_region=region)
         elif region_tag.startswith("azure"):
             from skyplane.obj_store.azure_interface import AzureInterface
 

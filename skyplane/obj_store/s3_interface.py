@@ -15,13 +15,18 @@ class S3Object(ObjectStoreObject):
 
 
 class S3Interface(ObjectStoreInterface):
-    def __init__(self, aws_region, bucket_name):
+    def __init__(self, bucket_name, aws_region="infer", create_bucket=False):
         self.auth = AWSAuthentication()
-        self.aws_region = self.infer_s3_region(bucket_name) if aws_region is None or aws_region == "infer" else aws_region
         self.bucket_name = bucket_name
-        if not self.bucket_exists():
-            logger.error("Specified bucket does not exist.")
-            raise exceptions.MissingBucketException()
+        try:
+            self.aws_region = self.infer_s3_region(bucket_name) if aws_region is None or aws_region == "infer" else aws_region
+        except exceptions.MissingBucketException:
+            if create_bucket:
+                assert aws_region is not None and aws_region != "infer", "Must specify AWS region when creating bucket"
+                self.aws_region = aws_region
+                self.create_bucket()
+            else:
+                raise
 
     def region_tag(self):
         return "aws:" + self.aws_region
@@ -36,7 +41,7 @@ class S3Interface(ObjectStoreInterface):
                 logger.error(f"Bucket location {bucket_name} is not public. Assuming region is us-east-1.")
                 return "us-east-1"
             logger.error(f"Specified bucket {bucket_name} does not exist, got AWS error: {e}")
-            raise exceptions.MissingBucketException() from e
+            raise exceptions.MissingBucketException(f"S3 bucket {bucket_name} does not exist") from e
 
     def bucket_exists(self):
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)

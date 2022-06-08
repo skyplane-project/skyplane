@@ -1,5 +1,6 @@
 import os
 from typing import Iterator, List
+from skyplane import exceptions
 
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
@@ -11,11 +12,19 @@ class GCSObject(ObjectStoreObject):
 
 
 class GCSInterface(ObjectStoreInterface):
-    def __init__(self, gcp_region, bucket_name, use_tls=True):
+    def __init__(self, bucket_name, gcp_region="infer", create_bucket=False):
         self.bucket_name = bucket_name
         self.auth = GCPAuthentication()
         self._gcs_client = self.auth.get_storage_client()
-        self.gcp_region = self.infer_gcp_region(bucket_name) if gcp_region is None or gcp_region == "infer" else gcp_region
+        try:
+            self.gcp_region = self.infer_gcp_region(bucket_name) if gcp_region is None or gcp_region == "infer" else gcp_region
+        except exceptions.MissingBucketException:
+            if create_bucket:
+                assert gcp_region is not None and gcp_region != "infer", "Must specify AWS region when creating bucket"
+                self.gcp_region = self.map_region_to_zone(gcp_region)
+                self.create_bucket()
+            else:
+                raise
 
     def region_tag(self):
         return "gcp:" + self.gcp_region
@@ -36,6 +45,8 @@ class GCSInterface(ObjectStoreInterface):
 
     def infer_gcp_region(self, bucket_name: str):
         bucket = self._gcs_client.lookup_bucket(bucket_name)
+        if bucket is None:
+            raise exceptions.MissingBucketException(f"GCS bucket {bucket_name} does not exist")
         return self.map_region_to_zone(bucket.location.lower())
 
     def bucket_exists(self):

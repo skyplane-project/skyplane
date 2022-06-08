@@ -9,7 +9,7 @@ from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError, Ht
 from azure.identity import AzureCliCredential
 from azure.mgmt.authorization.models import RoleAssignmentCreateParameters, RoleAssignmentProperties
 
-from skyplane import is_gateway_env
+from skyplane import exceptions, is_gateway_env
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
@@ -24,12 +24,26 @@ class AzureObject(ObjectStoreObject):
 
 
 class AzureInterface(ObjectStoreInterface):
-    def __init__(self, account_name, container_name, region="infer", use_tls=True, max_concurrency=1):
+    def __init__(self, account_name, container_name, region="infer", create_bucket=False, max_concurrency=1):
         self.auth = AzureAuthentication()
         self.account_name = account_name
         self.container_name = container_name
         self.account_url = f"https://{self.account_name}.blob.core.windows.net"
         self.max_concurrency = max_concurrency  # parallel upload/downloads, seems to cause issues if too high
+
+        # check container exists
+        if not self.storage_account_exists():
+            if create_bucket:
+                self.create_storage_account()
+            else:
+                raise exceptions.MissingBucketException(f"Azure storage account {self.account_name} not found")
+        if not self.container_exists():
+            if create_bucket:
+                self.create_container()
+            else:
+                raise exceptions.MissingBucketException(f"Azure container {self.container_name} not found")
+
+        # infer region
         if region == "infer":
             self.storage_account = self.query_storage_account(self.account_name)
             self.azure_region = self.storage_account.location
