@@ -54,33 +54,67 @@ def parse_path(path: str):
     raise ValueError(f"Parse error {path}")
 
 
-def check_ulimit(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
-    current_limit_soft, current_limit_hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+def check_limits(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
+    check_ulimit(hard_limit=1024 * 1024)
+    check_prlimit(hard_limit=1024 * 1024, soft_limit=1024 * 1024)
+
+def check_ulimit(hard_limit=1024 * 1024):
+    # Get the current fs.file-max limit
+    check_hard_limit = ["sysctl", "--values", "fs.file-max"]
+    fs_hard_limit = subprocess.check_output(check_hard_limit)
+    current_limit_hard = int(fs_hard_limit.decode('UTF-8'))
+
+    # check/update fs.file-max limit
     if current_limit_hard < hard_limit:
         typer.secho(
-            f"Warning: hard file limit is set to {current_limit_hard}, which is less than the recommended minimum of {hard_limit}", fg="red"
+            f"    Warning: file limit is set to {current_limit_hard}, which is less than the recommended minimum of {hard_limit}", fg="red"
         )
         increase_hard_limit = ["sudo", "sysctl", "-w", f"fs.file-max={hard_limit}"]
-        typer.secho(f"Will run the following commands:")
-        typer.secho(f"    {' '.join(increase_hard_limit)}", fg="yellow")
-        if typer.confirm("sudo required; Do you want to increase the limit?", default=True):
+        typer.secho(f"    Will run the following commands to increase the hard file limit:")
+        typer.secho(f"        {' '.join(increase_hard_limit)}", fg="yellow")
+        if typer.confirm("    sudo required; Do you want to increase the limit?", default=True):
             subprocess.check_output(increase_hard_limit)
-            new_limit = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
-            if new_limit < soft_limit:
-                typer.secho(
-                    f"Failed to increase ulimit to {soft_limit}, please set manually with 'ulimit -n {soft_limit}'. Current limit is {new_limit}",
-                    fg="red",
+            fs_hard_limit = subprocess.check_output(check_hard_limit)
+            new_limit = int(fs_hard_limit.decode('UTF-8'))
+            if new_limit < hard_limit:
+                logger.Warning(
+                    f"    Failed to increase ulimit to {hard_limit}, please set manually with 'sudo sysctl -w fs.file-max={hard_limit}'. Current limit is {new_limit}",
                 )
-                raise typer.Abort()
             else:
-                typer.secho(f"Successfully increased ulimit to {new_limit}", fg="green")
-    if current_limit_soft < soft_limit and (platform == "linux" or platform == "linux2"):
-        increase_soft_limit = ["sudo", "prlimit", "--pid", str(os.getpid()), f"--nofile={soft_limit}:{hard_limit}"]
-        logger.warning(
-            f"Warning: soft file limit is set to {current_limit_soft}, increasing for process with `{' '.join(increase_soft_limit)}`"
+                typer.secho(f"    Successfully increased file limit to {new_limit}", fg="green")
+        else:
+            typer.secho(f"    File limit unchanged.")
+    else:
+        typer.secho(
+            f"    ulimit: File limit is set to {current_limit_hard}, which is greater than or equal to the recommended minimum of {hard_limit}.", 
+            fg="green"
         )
-        subprocess.check_output(increase_soft_limit)
 
+def check_prlimit(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
+    current_prlimit_soft, current_prlimit_hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    if current_prlimit_soft < soft_limit or current_prlimit_hard < hard_limit and (platform == "linux" or platform == "linux2"):
+        increase_prlimit = ["sudo", "-n", "prlimit", "--pid", str(os.getpid()), f"--nofile={soft_limit}:{hard_limit}"]
+        typer.secho(
+            f"    Warning: process's soft file limit is set to {current_prlimit_soft}, process's hard file limit is set_to {current_prlimit_hard}, increasing for process with `{' '.join(increase_prlimit)}`",
+            fg="yellow"
+        )
+        if typer.confirm("    sudo required; Do you want to increase the process limit?", default=True):
+            subprocess.check_output(increase_prlimit)
+            current_prlimit_soft, current_prlimit_hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+            if current_prlimit_soft < soft_limit or current_prlimit_hard < hard_limit:
+                typer.secho(
+                    f"    Warning: failed increasing process file limits, the process file limit is too low and needs to be raised.",
+                    fg="yellow"
+                )
+            else:
+                typer.secho(f"    prlimit: Successfully increased process file limit", fg="green")
+        else:
+            typer.secho(f"    Process File limit unchanged.")  
+    else:
+        typer.secho(
+            f"    prlimit: process's soft file limit is set to {current_prlimit_soft}, which is greater than or equal to the recommended minimum of {soft_limit}`",
+            fg="green"
+        )
 
 def query_instances():
     instances = []
