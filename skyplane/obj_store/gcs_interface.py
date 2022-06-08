@@ -140,6 +140,11 @@ class GCSInterface(ObjectStoreInterface):
             blob.upload_from_filename(src_file_path)
             return 
 
+        headers = {
+            #'Content-Type': 'application/octet-stream',
+            'Host': f"{self.bucket_name}.storage.googleapis.com"
+        }
+
         assert part_number is not None and upload_id is not None
         # generate signed URL
         url = blob.generate_signed_url(
@@ -149,20 +154,29 @@ class GCSInterface(ObjectStoreInterface):
             # Allow PUT requests using this URL.
             method="PUT",
             content_type="application/octet-stream",
-            query_parameters={"uploadId": upload_id, "partNumber": part_number}
+            query_parameters={"uploadId": upload_id, "partNumber": part_number},
+            headers=headers
         )
 
+        response = requests.put(url, data=open(src_file_path, "rb"), headers=headers)
+        response_data = dict(response.headers)
+
         # send request
-        req = requests.Request('POST', url, headers=headers)
-        prepared = req.prepare()
-        s = requests.Session()
-        response = s.send(prepared)
+        #req = requests.Request('PUT', url, headers=headers)
+        #prepared = req.prepare()
+        #s = requests.Session()
+        #response = s.send(prepared)
+
+        if "ETag" not in response_data: 
+            raise ValueError(f"Invalid response {response} {response_data}") 
+        return response_data["ETag"]        
 
 
     def initiate_multipart_upload(self, dst_object_name, size_bytes):
 
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
 
+        print(dst_object_name)
         blob = self._gcs_client.bucket(self.bucket_name).blob(f"{dst_object_name}")
         headers = {
             'Content-Type': 'application/octet-stream',
@@ -181,12 +195,7 @@ class GCSInterface(ObjectStoreInterface):
             query_parameters={"uploads": None},
             headers=headers
         )
-
-        # send request
-        req = requests.Request('POST', url, headers=headers)
-        prepared = req.prepare()
-        s = requests.Session()
-        response = s.send(prepared)
+        response = requests.post(url, headers=headers)
 
         # parse response
         tree = ElementTree.fromstring(response.content)
@@ -195,3 +204,64 @@ class GCSInterface(ObjectStoreInterface):
         upload_id = tree[2].text
 
         return upload_id
+
+    def complete_multipart_upload(self, dst_object_name, upload_id, parts):
+        bucket = self._gcs_client.bucket(self.bucket_name)
+        blob = bucket.blob(dst_object_name)
+
+        headers = {
+            'Content-Type': 'application/octet-stream',
+            'Host': f"{self.bucket_name}.storage.googleapis.com"
+        }
+        # TODO: list with fixed size
+        # get parts
+        url = blob.generate_signed_url(
+            version="v4",
+            # This URL is valid for 15 minutes
+            expiration=datetime.timedelta(minutes=15),
+            # Allow PUT requests using this URL.
+            method="GET",
+            #content_type="application/octet-stream",
+            query_parameters={"uploadId": upload_id},
+            headers=headers
+        )
+        req = requests.Request('GET', url, headers=headers)
+        prepared = req.prepare()
+        print(prepared)
+        s = requests.Session()
+        response = s.send(prepared)
+        print(response.content)
+
+        # build request xml tree
+        tree = ElementTree.fromstring(response.content)
+        ns = {"ns": tree.tag.split("}")[0][1:]}
+        print(ns)
+        xml_data = ElementTree.Element("CompleteMultipartUpload")
+        for part in tree.findall("ns:Part", ns):
+            part_xml = ElementTree.Element("Part")
+            etag = part.find("ns:ETag", ns).text
+            part_num = part.find("ns:PartNumber", ns).text
+            print(part_num)
+            ElementTree.SubElement(part_xml, "PartNumber").text = part_num
+            ElementTree.SubElement(part_xml, "ETag").text = etag 
+            xml_data.append(part_xml)
+        xml_data = ElementTree.tostring(xml_data, encoding="utf-8", method="xml")
+        xml_data = xml_data.replace(b'ns0:', b'')
+        print(xml_data)
+
+        url = blob.generate_signed_url(
+            version="v4",
+            # This URL is valid for 15 minutes
+            expiration=datetime.timedelta(minutes=15),
+            # Allow PUT requests using this URL.
+            method="POST",
+            #content_type="application/octet-stream",
+            query_parameters={"uploadId": upload_id},
+            headers=headers
+        )
+        response = requests.post(url, data=xml_data, headers=headers)
+        print(response)
+        print(response.content)
+        print(response.headers)
+        return True
+       

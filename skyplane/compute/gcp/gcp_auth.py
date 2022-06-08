@@ -1,4 +1,5 @@
 from re import I
+from pathlib import Path
 from typing import Optional
 import base64
 import json
@@ -94,24 +95,34 @@ class GCPAuthentication:
     def get_service_account(self, service_name): 
         service = self.get_gcp_client(service_name="iam")
         service_account_email = f"{service_name}@{self.project_id}.iam.gserviceaccount.com"
-        response = service.projects().serviceAccounts().keys().list(
-            name='projects/-/serviceAccounts/' + service_account_email).execute()
-        
-        
+
+        if "GCP_SERVICE_ACCOUNT_FILE" in os.environ:
+            key_path = Path(os.environ["GCP_SERVICE_ACCOUNT_FILE"]).expanduser()
+        else:
+            key_path = key_root / "gcp" / "service_account_key.json"
         # write key file
-        if not os.path.exists(key_root / "gcp" / "service_account_key.json"):
+        if not os.path.exists(key_path):
+
+            # list existing keys
+            keys = service.projects().serviceAccounts().keys().list(
+                name='projects/-/serviceAccounts/' + service_account_email).execute()
+
+            # cannot have more than 10 keys per service account
+            if len(keys['keys']) >= 10: 
+                raise ValueError(f"Service account {service_account_email} has too many keys. Make sure to copy keys to {key_path} or create a new service account.")
+
             # create key
             key = service.projects().serviceAccounts().keys().create(
                 name='projects/-/serviceAccounts/' + service_account_email, body={}
             ).execute()
 
-            open(key_root / "gcp" / "service_account.json", "w").write(json.dumps(key))
-            print(key)
+            # create service key files
+            os.makedirs(key_path, exist_ok=True)
+            open(key_path / "service_account.json", "w").write(json.dumps(key))
             json_key_file = base64.b64decode(key['privateKeyData']).decode('utf-8')
-            open(key_root / "gcp" / "service_account_key.json", "w").write(json_key_file)
+            open(key_path / "service_account_key.json", "w").write(json_key_file)
 
-        #return os.path.join(key_root, "gcp", "service_account.json"), os.path.join(key_root, "gcp", "service_account_key.json")
-        return os.path.join(key_root, "gcp", "service_account_key.json")
+        return key_path
 
     def create_service_account(self, service_name, project_id):
         service = self.get_gcp_client(service_name="iam")
