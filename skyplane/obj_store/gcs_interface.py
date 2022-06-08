@@ -24,7 +24,7 @@ class GCSInterface(ObjectStoreInterface):
         except exceptions.MissingBucketException:
             if create_bucket:
                 assert gcp_region is not None and gcp_region != "infer", "Must specify AWS region when creating bucket"
-                self.gcp_region = self.map_region_to_zone(gcp_region)
+                self.gcp_region = gcp_region
                 self.create_bucket()
                 logger.info(f"Created GCS bucket {self.bucket_name} in region {self.gcp_region}")
             else:
