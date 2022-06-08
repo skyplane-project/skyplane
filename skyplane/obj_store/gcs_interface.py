@@ -67,6 +67,9 @@ class GCSInterface(ObjectStoreInterface):
             self._gcs_client.create_bucket(bucket, location=self.gcp_region)
         assert self.bucket_exists()
 
+    def delete_bucket(self):
+        self._gcs_client.delete_bucket(self.bucket_name)
+
     def list_objects(self, prefix="") -> Iterator[GCSObject]:
         blobs = self._gcs_client.list_blobs(self.bucket_name, prefix=prefix)
         for blob in blobs:
