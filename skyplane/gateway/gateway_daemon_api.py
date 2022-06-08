@@ -1,6 +1,7 @@
 import logging
 import logging.handlers
 import os
+import ssl
 import threading
 from multiprocessing import Queue
 from queue import Empty
@@ -41,6 +42,7 @@ class GatewayDaemonAPI(threading.Thread):
     ):
         super().__init__()
         self.app = Flask("gateway_metadata_server")
+        self.app_http = Flask("gateway_metadata_server_http")
         self.chunk_store = chunk_store
         self.gateway_receiver = gateway_receiver
         self.error_event = error_event
@@ -49,16 +51,19 @@ class GatewayDaemonAPI(threading.Thread):
         self.error_list_lock = threading.Lock()
 
         # load routes
-        self.register_global_routes()
-        self.register_server_routes()
-        self.register_request_routes()
-        self.register_error_routes()
-        self.register_socket_profiling_routes()
+        for app in (self.app, self.app_http):
+            self.register_global_routes(app)
+            self.register_server_routes(app)
+            self.register_request_routes(app)
+            self.register_error_routes(app)
+            self.register_socket_profiling_routes(app)
 
         # make server
         self.host = host
         self.port = port
-        self.url = "http://{}:{}".format(host, port)
+        self.port_http = port + 1
+        self.url = "https://{}:{}".format(host, port)
+        self.url_http = "http://{}:{}".format(host, self.port_http)
 
         # chunk status log
         self.chunk_status_log: List[Dict] = []
@@ -70,23 +75,28 @@ class GatewayDaemonAPI(threading.Thread):
         self.receiver_socket_profiles: List[Dict] = []
         self.receiver_socket_profiles_lock = threading.Lock()
 
-        logging.getLogger("werkzeug").setLevel(logging.WARNING)
-        self.server = make_server(host, port, self.app, threaded=True)
+        # logging.getLogger("werkzeug").setLevel(logging.WARNING)
+        self.server = make_server(host, port, self.app, threaded=True, ssl_context="adhoc")
+        self.server_http = make_server(host, self.port_http, self.app_http, threaded=True)
 
     def run(self):
+        self.server_http_thread = threading.Thread(target=self.server_http.serve_forever)
+        self.server_http_thread.start()
         self.server.serve_forever()
 
     def shutdown(self):
         self.server.shutdown()
+        self.server_http.shutdown()
+        self.server_http_thread.join()
 
-    def register_global_routes(self):
+    def register_global_routes(self, app):
         # index route returns API version
-        @self.app.route("/", methods=["GET"])
+        @app.route("/", methods=["GET"])
         def get_index():
             return jsonify({"version": "v1"})
 
         # index for v1 api routes, return all available routes as HTML page with links
-        @self.app.route("/api/v1", methods=["GET"])
+        @app.route("/api/v1", methods=["GET"])
         def get_v1_index():
             output = ""
             for rule in sorted(self.app.url_map.iter_rules(), key=lambda r: r.rule):
@@ -96,31 +106,31 @@ class GatewayDaemonAPI(threading.Thread):
             return output
 
         # status route returns if API is up
-        @self.app.route("/api/v1/status", methods=["GET"])
+        @app.route("/api/v1/status", methods=["GET"])
         def get_status():
             return jsonify({"status": "ok"})
 
         # shutdown route
-        @self.app.route("/api/v1/shutdown", methods=["POST"])
+        @app.route("/api/v1/shutdown", methods=["POST"])
         def shutdown():
             self.shutdown()
             logger.error("Shutdown complete. Hard exit.")
             os._exit(1)
 
-    def register_server_routes(self):
+    def register_server_routes(self, app):
         # list running gateway servers w/ ports
-        @self.app.route("/api/v1/servers", methods=["GET"])
+        @app.route("/api/v1/servers", methods=["GET"])
         def get_server_ports():
             return jsonify({"server_ports": self.gateway_receiver.server_ports})
 
         # add a new server
-        @self.app.route("/api/v1/servers", methods=["POST"])
+        @app.route("/api/v1/servers", methods=["POST"])
         def add_server():
             new_port = self.gateway_receiver.start_server()
             return jsonify({"server_port": new_port})
 
         # remove a server
-        @self.app.route("/api/v1/servers/<int:port>", methods=["DELETE"])
+        @app.route("/api/v1/servers/<int:port>", methods=["DELETE"])
         def remove_server(port: int):
             try:
                 self.gateway_receiver.stop_server(port)
@@ -128,7 +138,7 @@ class GatewayDaemonAPI(threading.Thread):
             except ValueError as e:
                 return jsonify({"error": str(e)}), 400
 
-    def register_request_routes(self):
+    def register_request_routes(self, app):
         def make_chunk_req_payload(chunk_req: ChunkRequest):
             state = self.chunk_store.get_chunk_state(chunk_req.chunk.chunk_id)
             state_name = state.name if state is not None else "unknown"
@@ -152,7 +162,7 @@ class GatewayDaemonAPI(threading.Thread):
         # list all chunk requests
         # body json options:
         #   if state is set in body, then filter by state
-        @self.app.route("/api/v1/chunk_requests", methods=["GET"])
+        @app.route("/api/v1/chunk_requests", methods=["GET"])
         def get_chunk_requests():
             state_param = request.args.get("state")
             if state_param is not None:
@@ -164,12 +174,12 @@ class GatewayDaemonAPI(threading.Thread):
             else:
                 return jsonify({"chunk_requests": get_chunk_reqs()})
 
-        @self.app.route("/api/v1/incomplete_chunk_requests", methods=["GET"])
+        @app.route("/api/v1/incomplete_chunk_requests", methods=["GET"])
         def get_incomplete_chunk_requests():
             return jsonify({"chunk_requests": {k: v for k, v in get_chunk_reqs().items() if v["state"] != "upload_complete"}})
 
         # lookup chunk request given chunk worker_id
-        @self.app.route("/api/v1/chunk_requests/<int:chunk_id>", methods=["GET"])
+        @app.route("/api/v1/chunk_requests/<int:chunk_id>", methods=["GET"])
         def get_chunk_request(chunk_id: int):
             chunk_req = self.chunk_store.get_chunk_request(chunk_id)
             if chunk_req:
@@ -178,14 +188,14 @@ class GatewayDaemonAPI(threading.Thread):
                 return jsonify({"error": f"Chunk {chunk_id} not found"}), 404
 
         # add a new chunk request with default state registered
-        @self.app.route("/api/v1/chunk_requests", methods=["POST"])
+        @app.route("/api/v1/chunk_requests", methods=["POST"])
         def add_chunk_request():
             state_param = request.args.get("state", "registered")
             n_added = add_chunk_req(request.json, ChunkState.from_str(state_param))
             return jsonify({"status": "ok", "n_added": n_added})
 
         # update chunk request
-        @self.app.route("/api/v1/chunk_requests/<int:chunk_id>", methods=["PUT"])
+        @app.route("/api/v1/chunk_requests/<int:chunk_id>", methods=["PUT"])
         def update_chunk_request(chunk_id: int):
             chunk_req = self.chunk_store.get_chunk_request(chunk_id)
             if chunk_req is None:
@@ -202,14 +212,14 @@ class GatewayDaemonAPI(threading.Thread):
                     return jsonify({"error": "update not supported"}), 400
 
         # list chunk status log
-        @self.app.route("/api/v1/chunk_status_log", methods=["GET"])
+        @app.route("/api/v1/chunk_status_log", methods=["GET"])
         def get_chunk_status_log():
             with self.chunk_status_log_lock:
                 self.chunk_status_log.extend(self.chunk_store.drain_chunk_status_queue())
                 return jsonify({"chunk_status_log": self.chunk_status_log})
 
-    def register_error_routes(self):
-        @self.app.route("/api/v1/errors", methods=["GET"])
+    def register_error_routes(self, app):
+        @app.route("/api/v1/errors", methods=["GET"])
         def get_errors():
             with self.error_list_lock:
                 while True:
@@ -222,8 +232,8 @@ class GatewayDaemonAPI(threading.Thread):
                 error_list_str = [str(e) for e in self.error_list]
                 return jsonify({"errors": error_list_str})
 
-    def register_socket_profiling_routes(self):
-        @self.app.route("/api/v1/profile/socket/receiver", methods=["GET"])
+    def register_socket_profiling_routes(self, app):
+        @app.route("/api/v1/profile/socket/receiver", methods=["GET"])
         def get_receiver_socket_profiles():
             with self.receiver_socket_profiles_lock:
                 while True:
@@ -234,7 +244,7 @@ class GatewayDaemonAPI(threading.Thread):
                         break
                 return jsonify({"socket_profiles": self.receiver_socket_profiles})
 
-        @self.app.route("/api/v1/profile/compression", methods=["GET"])
+        @app.route("/api/v1/profile/compression", methods=["GET"])
         def get_receiver_compression_profile():
             total_size_compressed_bytes, total_size_uncompressed_bytes = 0, 0
             for k, v in self.chunk_store.sender_compressed_sizes.items():

@@ -1,5 +1,6 @@
 import json
 import logging
+import requests
 import socket
 from contextlib import closing
 from enum import Enum, auto
@@ -124,7 +125,9 @@ class Server:
                 return tunnel
 
             self.ssh_tunnels[remote_port] = retry_backoff(start)
-        return self.ssh_tunnels[remote_port].local_bind_port
+        local_bind_port = self.ssh_tunnels[remote_port].local_bind_port
+        logger.fs.debug(f"Bound remote port {self.uuid()}:{remote_port} to localhost:{local_bind_port}")
+        return local_bind_port
 
     @property
     def provider(self) -> str:
@@ -293,7 +296,7 @@ class Server:
 
         gateway_container_hash = start_out.strip().split("\n")[-1][:12]
         self.gateway_log_viewer_url = f"http://127.0.0.1:{self.tunnel_port(8888)}/container/{gateway_container_hash}"
-        self.gateway_api_url = f"http://127.0.0.1:{self.tunnel_port(8080)}"
+        self.gateway_api_url = f"http://127.0.0.1:{self.tunnel_port(8080 + 1)}"
 
         # wait for gateways to start (check status API)
         def is_api_ready():

@@ -33,7 +33,8 @@ def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> Sk
         typer.secho("    AWS credentials not found in boto3 session, please use the AWS CLI to set them via `aws configure`", fg="red")
         typer.secho("    https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html", fg="red")
         typer.secho("    Disabling AWS support", fg="blue")
-        auth.clear_region_config()
+        if auth is not None:
+            auth.clear_region_config()
         return config
 
 
