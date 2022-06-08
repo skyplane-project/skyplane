@@ -1,6 +1,8 @@
 import os
 from typing import Iterator, List
+from skyplane import exceptions
 
+from skyplane.utils import logger
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
@@ -11,11 +13,22 @@ class GCSObject(ObjectStoreObject):
 
 
 class GCSInterface(ObjectStoreInterface):
-    def __init__(self, gcp_region, bucket_name, use_tls=True):
+    def __init__(self, bucket_name, gcp_region="infer", create_bucket=False):
         self.bucket_name = bucket_name
         self.auth = GCPAuthentication()
         self._gcs_client = self.auth.get_storage_client()
-        self.gcp_region = self.infer_gcp_region(bucket_name) if gcp_region is None or gcp_region == "infer" else gcp_region
+        try:
+            self.gcp_region = self.infer_gcp_region(bucket_name) if gcp_region is None or gcp_region == "infer" else gcp_region
+            if not self.bucket_exists():
+                raise exceptions.MissingBucketException()
+        except exceptions.MissingBucketException:
+            if create_bucket:
+                assert gcp_region is not None and gcp_region != "infer", "Must specify AWS region when creating bucket"
+                self.gcp_region = gcp_region
+                self.create_bucket()
+                logger.info(f"Created GCS bucket {self.bucket_name} in region {self.gcp_region}")
+            else:
+                raise
 
     def region_tag(self):
         return "gcp:" + self.gcp_region
@@ -36,6 +49,8 @@ class GCSInterface(ObjectStoreInterface):
 
     def infer_gcp_region(self, bucket_name: str):
         bucket = self._gcs_client.lookup_bucket(bucket_name)
+        if bucket is None:
+            raise exceptions.MissingBucketException(f"GCS bucket {bucket_name} does not exist")
         return self.map_region_to_zone(bucket.location.lower())
 
     def bucket_exists(self):
@@ -49,8 +64,12 @@ class GCSInterface(ObjectStoreInterface):
         if not self.bucket_exists():
             bucket = self._gcs_client.bucket(self.bucket_name)
             bucket.storage_class = "STANDARD"
-            self._gcs_client.create_bucket(bucket, location=self.gcp_region)
+            region_without_zone = "-".join(self.gcp_region.split("-")[:1])
+            self._gcs_client.create_bucket(bucket, location=region_without_zone)
         assert self.bucket_exists()
+
+    def delete_bucket(self):
+        self._gcs_client.get_bucket(self.bucket_name).delete()
 
     def list_objects(self, prefix="") -> Iterator[GCSObject]:
         blobs = self._gcs_client.list_blobs(self.bucket_name, prefix=prefix)

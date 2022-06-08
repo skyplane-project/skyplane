@@ -15,13 +15,21 @@ class S3Object(ObjectStoreObject):
 
 
 class S3Interface(ObjectStoreInterface):
-    def __init__(self, aws_region, bucket_name):
+    def __init__(self, bucket_name, aws_region="infer", create_bucket=False):
         self.auth = AWSAuthentication()
-        self.aws_region = self.infer_s3_region(bucket_name) if aws_region is None or aws_region == "infer" else aws_region
         self.bucket_name = bucket_name
-        if not self.bucket_exists():
-            logger.error("Specified bucket does not exist.")
-            raise exceptions.MissingBucketException()
+        try:
+            self.aws_region = self.infer_s3_region(bucket_name) if aws_region is None or aws_region == "infer" else aws_region
+            if not self.bucket_exists():
+                raise exceptions.MissingBucketException()
+        except exceptions.MissingBucketException:
+            if create_bucket:
+                assert aws_region is not None and aws_region != "infer", "Must specify AWS region when creating bucket"
+                self.aws_region = aws_region
+                self.create_bucket()
+                logger.info(f"Created S3 bucket {self.bucket_name} in region {self.aws_region}")
+            else:
+                raise
 
     def region_tag(self):
         return "aws:" + self.aws_region
@@ -36,7 +44,7 @@ class S3Interface(ObjectStoreInterface):
                 logger.error(f"Bucket location {bucket_name} is not public. Assuming region is us-east-1.")
                 return "us-east-1"
             logger.error(f"Specified bucket {bucket_name} does not exist, got AWS error: {e}")
-            raise exceptions.MissingBucketException() from e
+            raise exceptions.MissingBucketException(f"S3 bucket {bucket_name} does not exist") from e
 
     def bucket_exists(self):
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
@@ -50,6 +58,10 @@ class S3Interface(ObjectStoreInterface):
             else:
                 s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": self.aws_region})
         assert self.bucket_exists()
+
+    def delete_bucket(self):
+        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
+        s3_client.delete_bucket(Bucket=self.bucket_name)
 
     def list_objects(self, prefix="") -> Iterator[S3Object]:
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
@@ -66,14 +78,14 @@ class S3Interface(ObjectStoreInterface):
             s3_client.delete_objects(Bucket=self.bucket_name, Delete={"Objects": [{"Key": k} for k in batch]})
 
     def get_obj_metadata(self, obj_name):
-        s3_resource = self.auth.get_boto3_resource("s3", self.aws_region).Bucket(self.bucket_name)
+        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         try:
-            return s3_resource.Object(str(obj_name))
+            return s3_client.head_object(Bucket=self.bucket_name, Key=str(obj_name))
         except botocore.exceptions.ClientError as e:
             raise NoSuchObjectException(f"Object {obj_name} does not exist, or you do not have permission to access it") from e
 
     def get_obj_size(self, obj_name):
-        return self.get_obj_metadata(obj_name).content_length
+        return self.get_obj_metadata(obj_name)["ContentLength"]
 
     def exists(self, obj_name):
         try:
@@ -132,7 +144,7 @@ class S3Interface(ObjectStoreInterface):
         )
         return response["UploadId"]
 
-    def complete_multipart_upload(self, dst_object_name, upload_id, parts):
+    def complete_multipart_upload(self, dst_object_name, upload_id):
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
 
         all_parts = []
@@ -146,12 +158,6 @@ class S3Interface(ObjectStoreInterface):
                 if len(response["Parts"]) == 0:
                     break
                 all_parts += response["Parts"]
-
-        if len(all_parts) != len(parts):
-            # abort if number of parts doesn't match expected
-            logger.error(f"Parts length mismatch for {upload_id}: expected {len(parts)}, got {len(all_parts)}")
-            response = s3_client.abort_multipart_upload(Bucket=self.bucket_name, Key=dst_object_name, UploadId=upload_id)
-            return False
 
         # sort by part-number
         all_parts = sorted(all_parts, key=lambda d: d["PartNumber"])

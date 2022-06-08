@@ -50,7 +50,6 @@ class GCPAuthentication:
         try:
             f = open(gcp_config_path, "r")
         except FileNotFoundError:
-            print("    No GCP config detected! Consquently, the GCP region list is empty. Run 'skyplane init --reinit-gcp' to remedy this.")
             return []
         return [r for r in map(str.strip, f.readlines()) if r]
 
@@ -69,7 +68,7 @@ class GCPAuthentication:
         try:
             inferred_cred, inferred_project = google.auth.default(quota_project_id=project_id)
         except google.auth.exceptions.DefaultCredentialsError as e:
-            logger.error(f"Failed to load GCP credentials for project {project_id}: {e}")
+            logger.warning(f"Failed to load GCP credentials for project {project_id}: {e}")
             inferred_cred, inferred_project = (None, None)
         if project_id is not None and project_id != inferred_project:
             logger.warning(

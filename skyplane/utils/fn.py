@@ -5,7 +5,6 @@ from typing import Callable, Iterable, List, Tuple, Union, TypeVar
 
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, MofNCompleteColumn, TimeElapsedColumn
 from rich import print as rprint
-import typer
 
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer

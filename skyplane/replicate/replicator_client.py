@@ -542,7 +542,7 @@ class ReplicatorClient:
                                 # Complete multi-part uploads
                                 def complete_upload(req):
                                     obj_store_interface = ObjectStoreInterface.create(req["region"], req["bucket"])
-                                    succ = obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"], req["parts"])
+                                    succ = obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"])
                                     if not succ:
                                         raise ValueError(f"Failed to complete upload {req['upload_id']}")
 
