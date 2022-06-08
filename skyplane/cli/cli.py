@@ -397,7 +397,7 @@ def ssh():
 
 @app.command()
 def init(
-    non_interactive: bool = typer.Option("--non-interactive", "-y", help="Run non-interactively"),
+    non_interactive: bool = typer.Option(False, "--non-interactive", "-y", help="Run non-interactively"),
     reinit_azure: bool = False,
     reinit_gcp: bool = False,
 ):

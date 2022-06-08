@@ -65,7 +65,10 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
     typer.secho("    Azure credentials found in Azure CLI", fg="blue")
     inferred_subscription_id = AzureAuthentication.infer_subscription_id()
     if non_interactive or typer.confirm("    Azure credentials found, do you want to enable Azure support in Skyplane?", default=True):
-        config.azure_subscription_id = typer.prompt("    Enter the Azure subscription ID:", default=inferred_subscription_id)
+        if not non_interactive:
+            config.azure_subscription_id = typer.prompt("    Enter the Azure subscription ID:", default=inferred_subscription_id)
+        else:
+            config.azure_subscription_id = inferred_subscription_id
         config.azure_enabled = True
     else:
         config.azure_subscription_id = None
@@ -103,7 +106,10 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
     else:
         typer.secho("    GCP credentials found in GCP CLI", fg="blue")
         if non_interactive or typer.confirm("    GCP credentials found, do you want to enable GCP support in Skyplane?", default=True):
-            config.gcp_project_id = typer.prompt("    Enter the GCP project ID", default=inferred_project)
+            if not non_interactive:
+                config.gcp_project_id = typer.prompt("    Enter the GCP project ID", default=inferred_project)
+            else:
+                config.gcp_project_id = inferred_project
             assert config.gcp_project_id is not None, "GCP project ID must not be None"
             config.gcp_enabled = True
             auth = GCPAuthentication(config=config)
