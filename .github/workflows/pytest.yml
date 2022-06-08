@@ -67,7 +67,7 @@ jobs:
           poetry run pytest -s tests/unit_aws
   test-gcp:
     runs-on: ubuntu-latest
-    needs: test-unit
+    # needs: test-unit
     steps:
       - uses: actions/checkout@v1
       - name: Set up Python 3.8
