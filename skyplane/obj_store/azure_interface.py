@@ -35,11 +35,13 @@ class AzureInterface(ObjectStoreInterface):
         if not self.storage_account_exists():
             if create_bucket:
                 self.create_storage_account()
+                logger.info(f"Created Azure storage account {self.account_name}")
             else:
                 raise exceptions.MissingBucketException(f"Azure storage account {self.account_name} not found")
         if not self.container_exists():
             if create_bucket:
                 self.create_container()
+                logger.info(f"Created Azure container {self.container_name}")
             else:
                 raise exceptions.MissingBucketException(f"Azure container {self.container_name} not found")
 

@@ -25,6 +25,7 @@ class S3Interface(ObjectStoreInterface):
                 assert aws_region is not None and aws_region != "infer", "Must specify AWS region when creating bucket"
                 self.aws_region = aws_region
                 self.create_bucket()
+                logger.info(f"Created S3 bucket {self.bucket_name} in region {self.aws_region}")
             else:
                 raise
 

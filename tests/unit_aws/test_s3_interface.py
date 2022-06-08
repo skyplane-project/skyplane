@@ -3,7 +3,7 @@ from skyplane.utils import logger
 
 
 def test_aws_singlepart():
-    assert interface_test_framework("aws:us-east-1", "sky-us-east-1", False)
+    assert interface_test_framework("aws:us-east-1", "skyplane-ci-us-east-1", False)
 
 
 def test_aws_multipart():
