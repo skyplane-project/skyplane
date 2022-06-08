@@ -8,4 +8,4 @@ def test_azure_singlepart():
 
 def test_azure_multipart():
     logger.warning("Multipart tests disabled!")
-    # assert test_interface("azure: eastus", "sky-us-east-1", True)
+    # assert test_interface("azure:eastus", "sky-us-east-1", True)
