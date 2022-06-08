@@ -142,7 +142,7 @@ class GCSInterface(ObjectStoreInterface):
 
         headers = {
             #'Content-Type': 'application/octet-stream',
-            'Host': f"{self.bucket_name}.storage.googleapis.com"
+            #'Host': f"{self.bucket_name}.storage.googleapis.com"
         }
 
         assert part_number is not None and upload_id is not None
@@ -181,7 +181,7 @@ class GCSInterface(ObjectStoreInterface):
         headers = {
             'Content-Type': 'application/octet-stream',
             'Content-Length': str(0), 
-            'Host': f"{self.bucket_name}.storage.googleapis.com"
+            #'Host': f"{self.bucket_name}.storage.googleapis.com"
         }
 
         # generate signed URL
@@ -203,6 +203,8 @@ class GCSInterface(ObjectStoreInterface):
         key = tree[1].text
         upload_id = tree[2].text
 
+        print("UPLOAD", upload_id)
+
         return upload_id
 
     def complete_multipart_upload(self, dst_object_name, upload_id, parts):
@@ -211,7 +213,7 @@ class GCSInterface(ObjectStoreInterface):
 
         headers = {
             'Content-Type': 'application/octet-stream',
-            'Host': f"{self.bucket_name}.storage.googleapis.com"
+            #'Host': f"{self.bucket_name}.storage.googleapis.com"
         }
         # TODO: list with fixed size
         # get parts
@@ -225,12 +227,10 @@ class GCSInterface(ObjectStoreInterface):
             query_parameters={"uploadId": upload_id},
             headers=headers
         )
-        req = requests.Request('GET', url, headers=headers)
-        prepared = req.prepare()
-        print(prepared)
-        s = requests.Session()
-        response = s.send(prepared)
-        print(response.content)
+        response = requests.get(url, headers=headers)
+        print(response)
+        if response.status_code != 200: 
+            raise ValueError(f"Error with querying upload parts {upload_id}: {response.content}")
 
         # build request xml tree
         tree = ElementTree.fromstring(response.content)

@@ -23,6 +23,9 @@ class GCPAuthentication:
         else:
             self.config = SkyplaneConfig.load_config(config_path)
         self._credentials = None
+        self._service_credentials_file = None
+        #self.service_account_name = "skylark-service-account"
+        self.service_account_name = "skyplane-test3"
 
     def save_region_config(self):
         if self.project_id is None:
@@ -64,8 +67,14 @@ class GCPAuthentication:
     def credentials(self):
         if self._credentials is None:
             self._credentials, _ = self.get_adc_credential(self.project_id)
-            self.service_account = self.create_service_account("sarah-127", self.project_id)
         return self._credentials
+
+    @property
+    def service_account_credentials(self):
+        if self._service_credentials_file is None:
+            self._service_account_email = self.create_service_account(self.service_account_name, self.project_id)
+            self._service_credentials_file = self.get_service_account_key(self._service_account_email)
+        return self._service_credentials_file
 
     @property
     def project_id(self):
@@ -85,19 +94,11 @@ class GCPAuthentication:
             inferred_project = project_id
         return inferred_cred, inferred_project
 
-    def set_service_account_credentials(self, service_name):
-        key_file = self.get_service_account(service_name)
-        key = json.loads(open(key_file, "r").read())
-        self._credentails = service_account.Credentials.from_service_account_info(key)
-        self.credentails = service_account.Credentials.from_service_account_info(key)
-        return self.credentials
- 
-    def get_service_account(self, service_name): 
+    def get_service_account_key(self, service_account_email): 
         service = self.get_gcp_client(service_name="iam")
-        service_account_email = f"{service_name}@{self.project_id}.iam.gserviceaccount.com"
 
         if "GCP_SERVICE_ACCOUNT_FILE" in os.environ:
-            key_path = Path(os.environ["GCP_SERVICE_ACCOUNT_FILE"]).expanduser()
+            key_path = Path(os.environ["GCP_SERVICE_ACCOUNT_FILE"]).expanduser() 
         else:
             key_path = key_root / "gcp" / "service_account_key.json"
         # write key file
@@ -117,10 +118,9 @@ class GCPAuthentication:
             ).execute()
 
             # create service key files
-            os.makedirs(key_path, exist_ok=True)
-            open(key_path / "service_account.json", "w").write(json.dumps(key))
+            os.makedirs(os.path.basename(key_path), exist_ok=True)
             json_key_file = base64.b64decode(key['privateKeyData']).decode('utf-8')
-            open(key_path / "service_account_key.json", "w").write(json_key_file)
+            open(key_path, "w").write(json_key_file)
 
         return key_path
 
@@ -143,7 +143,26 @@ class GCPAuthentication:
                         'displayName': service_name 
                     }
                 }).execute()
-        return account
+            #service.projects().setIamPolicy(resource=project_id, body={"policy": policy}).execute()
+
+        print(account)
+        policy = service.projects().serviceAccounts().getIamPolicy(resource=account["name"]).execute()
+        print(policy)
+
+
+        #request = service.projects().serviceAccounts().setIamPolicy(resource=account["name"], body={"policy": policy})
+        #request = service.projects().serviceAccounts().setIamPolicy(resource=self.project_id, body={"policy": policy})
+        service = googleapiclient.discovery.build(
+            "cloudresourcemanager", "v1", credentials=self.credentials
+        )
+        policy = service.projects().getIamPolicy(resource=self.project_id).execute()
+        print("current policy", policy)
+        policy["bindings"] = [{"role": "roles/owner", "members":[f"serviceAccount:{account['email']}"]}]
+        request = service.projects().setIamPolicy(resource=self.project_id, body={"policy": policy})
+        response = request.execute()
+        print(response)
+
+        return account["email"]
 
 
     def enabled(self):
@@ -153,9 +172,9 @@ class GCPAuthentication:
         return discovery.build(service_name, version, credentials=self.credentials, client_options={"quota_project_id": self.project_id})
 
     def get_storage_client(self, service_account = None):
-        if service_account is None:
-            return storage.Client(project=self.project_id, credentials=self.credentials)
-        return storage.Client.from_service_account_json(self.get_service_account(service_account))
+        #if service_account is None:
+            #return storage.Client(project=self.project_id, credentials=self.credentials)
+        return storage.Client.from_service_account_json(self.service_account_credentials)
 
     def get_gcp_instances(self, gcp_region: str):
         return self.get_gcp_client().instances().list(project=self.project_id, zone=gcp_region).execute()

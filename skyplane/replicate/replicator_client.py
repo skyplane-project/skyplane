@@ -362,8 +362,6 @@ class ReplicatorClient:
                     )
                     idx += 1
 
-            print(chunks)
-            
 
             # partition chunks into roughly equal-sized batches (by bytes)
             def partition(items: List[Chunk], n_batches: int) -> List[List[Chunk]]:
