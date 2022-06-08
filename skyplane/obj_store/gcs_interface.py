@@ -105,6 +105,38 @@ class GCSInterface(ObjectStoreInterface):
         except NoSuchObjectException:
             return False
 
+    def send_xml_request(self, blob_name: str, params: dict, method: str, content_length=0, expiration=datetime.timedelta(minutes=15), data=None):
+
+        blob = self._gcs_client.bucket(self.bucket_name).blob(blob_name)
+        
+        headers = {
+            'Content-Type': 'application/octet-stream',
+            'Content-Length': str(content_length), 
+        }
+
+        # generate signed URL
+        url = blob.generate_signed_url(
+            version="v4",
+            expiration=expiration,
+            method=method,
+            content_type="application/octet-stream",
+            query_parameters=params,
+            headers=headers
+        )
+
+        # prepare request
+        if data:
+            req = requests.Request(method, url, headers=headers, data=data)
+        else:
+            req = requests.Request(method, url, headers=headers)
+        prepared = req.prepare()
+        response = requests.Session().send(prepared)
+        if response.status_code != 200:
+            raise ValueError(f"Invalid status code {response.status_code}")
+
+        return response
+
+
     # todo: implement range request for download
     def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
@@ -134,41 +166,22 @@ class GCSInterface(ObjectStoreInterface):
         dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
         os.path.getsize(src_file_path)
         bucket = self._gcs_client.bucket(self.bucket_name)
-        blob = bucket.blob(dst_object_name)
 
         if part_number is None:
+            blob = bucket.blob(dst_object_name)
             blob.upload_from_filename(src_file_path)
             return 
 
-        headers = {
-            #'Content-Type': 'application/octet-stream',
-            #'Host': f"{self.bucket_name}.storage.googleapis.com"
-        }
-
+        # multipart upload
         assert part_number is not None and upload_id is not None
-        # generate signed URL
-        url = blob.generate_signed_url(
-            version="v4",
-            # This URL is valid for 15 minutes
-            expiration=datetime.timedelta(minutes=15),
-            # Allow PUT requests using this URL.
-            method="PUT",
-            content_type="application/octet-stream",
-            query_parameters={"uploadId": upload_id, "partNumber": part_number},
-            headers=headers
-        )
 
-        response = requests.put(url, data=open(src_file_path, "rb"), headers=headers)
+        # send XML api request
+        response = self.send_xml_request(dst_object_name, {"uploadId": upload_id, "partNumber": part_number}, "PUT")
         response_data = dict(response.headers)
-
-        # send request
-        #req = requests.Request('PUT', url, headers=headers)
-        #prepared = req.prepare()
-        #s = requests.Session()
-        #response = s.send(prepared)
 
         if "ETag" not in response_data: 
             raise ValueError(f"Invalid response {response} {response_data}") 
+
         return response_data["ETag"]        
 
 
@@ -176,34 +189,12 @@ class GCSInterface(ObjectStoreInterface):
 
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
 
-        print(dst_object_name)
-        blob = self._gcs_client.bucket(self.bucket_name).blob(f"{dst_object_name}")
-        headers = {
-            'Content-Type': 'application/octet-stream',
-            'Content-Length': str(0), 
-            #'Host': f"{self.bucket_name}.storage.googleapis.com"
-        }
-
-        # generate signed URL
-        url = blob.generate_signed_url(
-            version="v4",
-            # This URL is valid for 15 minutes
-            expiration=datetime.timedelta(minutes=15),
-            # Allow PUT requests using this URL.
-            method="POST",
-            content_type="application/octet-stream",
-            query_parameters={"uploads": None},
-            headers=headers
-        )
-        response = requests.post(url, headers=headers)
+        # send XML api request
+        response = self.send_xml_request(dst_object_name, {"uploads": None}, "POST")
 
         # parse response
         tree = ElementTree.fromstring(response.content)
-        bucket = tree[0].text
-        key = tree[1].text
         upload_id = tree[2].text
-
-        print("UPLOAD", upload_id)
 
         return upload_id
 
@@ -211,31 +202,12 @@ class GCSInterface(ObjectStoreInterface):
         bucket = self._gcs_client.bucket(self.bucket_name)
         blob = bucket.blob(dst_object_name)
 
-        headers = {
-            'Content-Type': 'application/octet-stream',
-            #'Host': f"{self.bucket_name}.storage.googleapis.com"
-        }
-        # TODO: list with fixed size
-        # get parts
-        url = blob.generate_signed_url(
-            version="v4",
-            # This URL is valid for 15 minutes
-            expiration=datetime.timedelta(minutes=15),
-            # Allow PUT requests using this URL.
-            method="GET",
-            #content_type="application/octet-stream",
-            query_parameters={"uploadId": upload_id},
-            headers=headers
-        )
-        response = requests.get(url, headers=headers)
-        print(response)
-        if response.status_code != 200: 
-            raise ValueError(f"Error with querying upload parts {upload_id}: {response.content}")
+        # get parts 
+        response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "GET")
 
         # build request xml tree
         tree = ElementTree.fromstring(response.content)
         ns = {"ns": tree.tag.split("}")[0][1:]}
-        print(ns)
         xml_data = ElementTree.Element("CompleteMultipartUpload")
         for part in tree.findall("ns:Part", ns):
             part_xml = ElementTree.Element("Part")
@@ -247,21 +219,9 @@ class GCSInterface(ObjectStoreInterface):
             xml_data.append(part_xml)
         xml_data = ElementTree.tostring(xml_data, encoding="utf-8", method="xml")
         xml_data = xml_data.replace(b'ns0:', b'')
-        print(xml_data)
 
-        url = blob.generate_signed_url(
-            version="v4",
-            # This URL is valid for 15 minutes
-            expiration=datetime.timedelta(minutes=15),
-            # Allow PUT requests using this URL.
-            method="POST",
-            #content_type="application/octet-stream",
-            query_parameters={"uploadId": upload_id},
-            headers=headers
-        )
-        response = requests.post(url, data=xml_data, headers=headers)
-        print(response)
-        print(response.content)
-        print(response.headers)
+        # complete multipart upload
+        response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "POST", data=xml_data)
+
         return True
        
