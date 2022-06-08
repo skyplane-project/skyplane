@@ -11,13 +11,8 @@ from skyplane.utils import logger
 
 def interface_test_framework(region, bucket, multipart: bool):
     logger.info("creating interfaces...")
-    interface = ObjectStoreInterface.create(region, bucket)
-    is_bucket_preexisting = True
-    if not interface.bucket_exists():
-        interface.create_bucket()
-        assert interface.bucket_exists()
-        is_bucket_preexisting = False
-
+    interface = ObjectStoreInterface.create(region, bucket, create_bucket=True)
+    assert interface.bucket_exists()
     debug_time = lambda n, s, e: logger.info(f"{n} {s}MB in {round(e, 2)}s ({round(s / e, 2)}MB/s)")
 
     # generate file and upload

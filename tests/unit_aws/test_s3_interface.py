@@ -1,4 +1,4 @@
-from tests.test_interface import interface_test_framework
+from tests.interface_util import interface_test_framework
 from skyplane.utils import logger
 
 
