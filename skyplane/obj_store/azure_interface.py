@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import os
 import subprocess
@@ -238,13 +239,13 @@ class AzureInterface(ObjectStoreInterface):
 
         return m.digest() if generate_md5 else None
 
-    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
+    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None):
         if part_number is not None or upload_id is not None:
             # todo implement multipart upload
             raise NotImplementedError("Multipart upload is not implemented for Azure")
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         with open(src_file_path, "rb") as f:
-            result = self._run_azure_op_with_retry(
+            blob_client = self._run_azure_op_with_retry(
                 partial(
                     self.container_client.upload_blob,
                     name=dst_object_name,
@@ -254,3 +255,11 @@ class AzureInterface(ObjectStoreInterface):
                     overwrite=True,
                 )
             )
+        if check_md5:
+            b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
+            blob_md5 = blob_client.get_blob_properties().properties.content_settings.content_md5
+            if b64_md5sum != blob_md5:
+                raise exceptions.ObjectStoreChecksumMismatchException(
+                    f"Checksum mismatch for object {dst_object_name} in bucket {self.bucket_name}, "
+                    + f"expected {b64_md5sum}, got {blob_md5}"
+                )

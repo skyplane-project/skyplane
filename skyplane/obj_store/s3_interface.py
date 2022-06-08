@@ -141,24 +141,30 @@ class S3Interface(ObjectStoreInterface):
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
 
-        with open(src_file_path, "rb") as f:
-            b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
-            if upload_id:
-                s3_client.upload_part(
-                    Body=f,
-                    Key=dst_object_name,
-                    Bucket=self.bucket_name,
-                    PartNumber=part_number,
-                    UploadId=upload_id.strip(),  # TODO: figure out why whitespace gets added,
-                    ContentMD5=b64_md5sum,
-                )
-            else:
-                s3_client.put_object(
-                    Body=f,
-                    Key=dst_object_name,
-                    Bucket=self.bucket_name,
-                    ContentMD5=b64_md5sum,
-                )
+        try:
+            with open(src_file_path, "rb") as f:
+                b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
+                if upload_id:
+                    s3_client.upload_part(
+                        Body=f,
+                        Key=dst_object_name,
+                        Bucket=self.bucket_name,
+                        PartNumber=part_number,
+                        UploadId=upload_id.strip(),  # TODO: figure out why whitespace gets added,
+                        ContentMD5=b64_md5sum,
+                    )
+                else:
+                    s3_client.put_object(
+                        Body=f,
+                        Key=dst_object_name,
+                        Bucket=self.bucket_name,
+                        ContentMD5=b64_md5sum,
+                    )
+        except botocore.exceptions.ClientError as e:
+            # catch MD5 mismatch error and raise appropriate exception
+            if "Error" in e.response and "Code" in e.response["Error"] and e.response["Error"]["Code"] == "InvalidDigest":
+                raise exceptions.ObjectStoreChecksumMismatchException(f"Checksum mismatch for object {dst_object_name}") from e
+            raise
 
     def initiate_multipart_upload(self, dst_object_name):
         # cannot infer content type here
