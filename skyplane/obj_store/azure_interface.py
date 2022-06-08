@@ -1,9 +1,10 @@
+import hashlib
 import os
 import subprocess
 import time
 import uuid
 from functools import partial
-from typing import Iterator, List
+from typing import Iterator, List, Optional
 
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError, HttpResponseError
 from azure.identity import AzureCliCredential
@@ -200,7 +201,16 @@ class AzureInterface(ObjectStoreInterface):
                                 continue
             raise
 
-    def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
+    def download_object(
+        self,
+        src_object_name,
+        dst_file_path,
+        offset_bytes=None,
+        size_bytes=None,
+        write_at_offset=False,
+        generate_md5=False,
+        write_block_size=2**16,
+    ) -> Optional[bytes]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         downloader = self._run_azure_op_with_retry(
             partial(
@@ -211,11 +221,22 @@ class AzureInterface(ObjectStoreInterface):
                 max_concurrency=self.max_concurrency,
             )
         )
+
         if not os.path.exists(dst_file_path):
             open(dst_file_path, "a").close()
-        with open(dst_file_path, "rb+") as f:
-            f.seek(offset_bytes)
-            f.write(downloader.readall())
+        if generate_md5:
+            m = hashlib.md5()
+        with open(dst_file_path, "wb+" if write_at_offset else "wb") as f:
+            f.seek(offset_bytes if write_at_offset else 0)
+            b = downloader.read(write_block_size)
+            while b:
+                if generate_md5:
+                    m.update(b)
+                f.write(b)
+                b = downloader.read(write_block_size)
+        downloader.close()
+
+        return m.digest() if generate_md5 else None
 
     def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
         if part_number is not None or upload_id is not None:

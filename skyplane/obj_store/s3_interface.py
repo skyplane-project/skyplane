@@ -1,5 +1,6 @@
+import hashlib
 import os
-from typing import Iterator, List
+from typing import Iterator, List, Optional
 
 import botocore.exceptions
 
@@ -94,7 +95,16 @@ class S3Interface(ObjectStoreInterface):
         except NoSuchObjectException:
             return False
 
-    def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
+    def download_object(
+        self,
+        src_object_name,
+        dst_file_path,
+        offset_bytes=None,
+        size_bytes=None,
+        write_at_offset=False,
+        generate_md5=False,
+        write_block_size=2**16,
+    ) -> Optional[bytes]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         assert len(src_object_name) > 0, f"Source object name must be non-empty: '{src_object_name}'"
@@ -111,10 +121,18 @@ class S3Interface(ObjectStoreInterface):
         # write response data
         if not os.path.exists(dst_file_path):
             open(dst_file_path, "a").close()
-        with open(dst_file_path, "rb+") as f:
-            f.seek(0)
-            f.write(response["Body"].read())
+        if generate_md5:
+            m = hashlib.md5()
+        with open(dst_file_path, "wb+" if write_at_offset else "wb") as f:
+            f.seek(offset_bytes if write_at_offset else 0)
+            b = response["Body"].read(write_block_size)
+            while b:
+                if generate_md5:
+                    m.update(b)
+                f.write(b)
+                b = response["Body"].read(write_block_size)
         response["Body"].close()
+        return m.digest() if generate_md5 else None
 
     def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
         dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)

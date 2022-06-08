@@ -1,5 +1,6 @@
+import hashlib
 import os
-from typing import Iterator, List
+from typing import Iterator, List, Optional
 from skyplane import exceptions
 
 from skyplane.utils import logger
@@ -100,20 +101,32 @@ class GCSInterface(ObjectStoreInterface):
         except NoSuchObjectException:
             return False
 
-    # todo: implement range request for download
-    def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
+    def download_object(
+        self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5=False
+    ) -> Optional[bytes]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = src_object_name if src_object_name[0] != "/" else src_object_name
-
-        offset = 0
         bucket = self._gcs_client.bucket(self.bucket_name)
         blob = bucket.blob(src_object_name)
-        chunk = blob.download_as_string()
+
+        # download object
+        if offset_bytes is None:
+            chunk = blob.download_as_bytes()
+        else:
+            assert offset_bytes is not None and size_bytes is not None
+            chunk = blob.download_as_bytes(start=offset_bytes, end=offset_bytes + size_bytes - 1)
+
+        # write response data
         if not os.path.exists(dst_file_path):
             open(dst_file_path, "a").close()
-        with open(dst_file_path, "rb+") as f:
-            f.seek(offset)
+        if generate_md5:
+            m = hashlib.md5()
+        with open(dst_file_path, "wb+" if write_at_offset else "wb") as f:
+            f.seek(offset_bytes if write_at_offset else 0)
             f.write(chunk)
+            if generate_md5:
+                m.update(chunk)
+        return m.digest() if generate_md5 else None
 
     def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
