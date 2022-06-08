@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import os
 from typing import Iterator, List, Optional
@@ -134,22 +135,30 @@ class S3Interface(ObjectStoreInterface):
         response["Body"].close()
         return m.digest() if generate_md5 else None
 
-    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
+    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None):
         dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
 
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
 
-        if upload_id:
-            s3_client.upload_part(
-                Body=open(src_file_path, "rb"),
-                Key=dst_object_name,
-                Bucket=self.bucket_name,
-                PartNumber=part_number,
-                UploadId=upload_id.strip(),  # TODO: figure out why whitespace gets added
-            )
-        else:
-            s3_client.upload_file(src_file_path, self.bucket_name, dst_object_name)
+        with open(src_file_path, "rb") as f:
+            b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
+            if upload_id:
+                s3_client.upload_part(
+                    Body=f,
+                    Key=dst_object_name,
+                    Bucket=self.bucket_name,
+                    PartNumber=part_number,
+                    UploadId=upload_id.strip(),  # TODO: figure out why whitespace gets added,
+                    ContentMD5=b64_md5sum,
+                )
+            else:
+                s3_client.put_object(
+                    Body=f,
+                    Key=dst_object_name,
+                    Bucket=self.bucket_name,
+                    ContentMD5=b64_md5sum,
+                )
 
     def initiate_multipart_upload(self, dst_object_name):
         # cannot infer content type here

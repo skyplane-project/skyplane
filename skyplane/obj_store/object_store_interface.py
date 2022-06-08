@@ -64,7 +64,7 @@ class ObjectStoreInterface:
         :param part_number: For multipart uploads, the part number to upload.
         :param upload_id: For multipart uploads, the upload ID for the whole file to upload to.
         :param check_md5: The MD5 checksum of the file. If this is provided, the server will check the
-        MD5 checksum of the file and return an error if it doesn't match
+        MD5 checksum of the file and raise ObjectStoreChecksumMismatchException if it doesn't match.
         """
         raise NotImplementedError()
 
