@@ -2,6 +2,7 @@ import hashlib
 import time
 import os
 import tempfile
+import uuid
 from skyplane import MB
 
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
@@ -16,7 +17,7 @@ def interface_test_framework(region, bucket, multipart: bool):
     debug_time = lambda n, s, e: logger.info(f"{n} {s}MB in {round(e, 2)}s ({round(s / e, 2)}MB/s)")
 
     # generate file and upload
-    obj_name = f"test_{time.time_ns()}.txt"
+    obj_name = f"test_{uuid.uuid4()}.txt"
     file_size_mb = 1024
     with tempfile.NamedTemporaryFile() as tmp:
         fpath = tmp.name
@@ -67,8 +68,4 @@ def interface_test_framework(region, bucket, multipart: bool):
 
     interface.delete_objects([obj_name])
     assert not interface.exists(obj_name)
-    if not is_bucket_preexisting:
-        interface.delete_bucket()
-        assert not interface.bucket_exists()
-
     return True
