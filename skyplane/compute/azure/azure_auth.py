@@ -101,9 +101,6 @@ class AzureAuthentication:
         try:
             f = open(azure_config_path, "r")
         except FileNotFoundError:
-            print(
-                "     No Azure config detected! Consquently, the Azure region list is empty. Run skyplane init --reinit-azure to remedy this."
-            )
             return []
         region_list = []
         for region in f.read().split("\n"):
