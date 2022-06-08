@@ -58,69 +58,96 @@ def check_limits(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
     check_ulimit(hard_limit=1024 * 1024)
     check_prlimit(hard_limit=1024 * 1024, soft_limit=1024 * 1024)
 
+
 def check_ulimit(hard_limit=1024 * 1024):
     # Get the current fs.file-max limit
     check_hard_limit = ["sysctl", "--values", "fs.file-max"]
     fs_hard_limit = subprocess.check_output(check_hard_limit)
-    current_limit_hard = int(fs_hard_limit.decode('UTF-8'))
+    current_limit_hard = int(fs_hard_limit.decode("UTF-8"))
 
     # check/update fs.file-max limit
     if current_limit_hard < hard_limit:
         typer.secho(
-            f"    Warning: file limit is set to {current_limit_hard}, which is less than the recommended minimum of {hard_limit}", fg="red"
+            f"    Warning: file limit is set to {current_limit_hard}, which is less than the recommended minimum of {hard_limit}",
+            fg="red",
         )
         increase_ulimit = ["sudo", "sysctl", "-w", f"fs.file-max={hard_limit}"]
-        typer.secho(f"    Will run the following commands to increase the hard file limit:", fg="yellow")
+        typer.secho(
+            f"    Will run the following commands to increase the hard file limit:",
+            fg="yellow",
+        )
         typer.secho(f"        {' '.join(increase_ulimit)}", fg="yellow")
         if typer.confirm("    sudo required; Do you want to increase the limit?", default=True):
             subprocess.check_output(increase_ulimit)
             fs_hard_limit = subprocess.check_output(check_hard_limit)
-            new_limit = int(fs_hard_limit.decode('UTF-8'))
+            new_limit = int(fs_hard_limit.decode("UTF-8"))
             if new_limit < hard_limit:
                 typer.secho(
                     f"    Warning: failed to increase ulimit to {hard_limit}, please set manually with 'sudo sysctl -w fs.file-max={hard_limit}'. Current limit is {new_limit}",
-                    fg="red"
+                    fg="red",
                 )
             else:
-                typer.secho(f"    ulimit: Successfully increased file limit to {new_limit}", fg="green")
+                typer.secho(
+                    f"    ulimit: Successfully increased file limit to {new_limit}",
+                    fg="green",
+                )
         else:
             typer.secho(f"    ulimit File limit unchanged.")
     else:
         typer.secho(
-            f"    ulimit: File limit is set to {current_limit_hard}, which is greater than or equal to the recommended minimum of {hard_limit}.", 
-            fg="green"
+            f"    ulimit: File limit is set to {current_limit_hard}, which is greater than or equal to the recommended minimum of {hard_limit}.",
+            fg="green",
         )
+
 
 def check_prlimit(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
     current_prlimit_soft, current_prlimit_hard = resource.getrlimit(resource.RLIMIT_NOFILE)
     if current_prlimit_soft < soft_limit or current_prlimit_hard < hard_limit and (platform == "linux" or platform == "linux2"):
-        increase_prlimit = ["sudo", "-n", "prlimit", "--pid", str(os.getpid()), f"--nofile={soft_limit}:{hard_limit}"]
+        increase_prlimit = [
+            "sudo",
+            "-n",
+            "prlimit",
+            "--pid",
+            str(os.getpid()),
+            f"--nofile={soft_limit}:{hard_limit}",
+        ]
         typer.secho(
             f"    Warning: process's soft file limit is set to {current_prlimit_soft}.",
-            fg="red"
+            fg="red",
         )
-        typer.secho(f"    Warning: process's hard file limit is set_to {current_prlimit_hard}.",
-            fg="red"
+        typer.secho(
+            f"    Warning: process's hard file limit is set_to {current_prlimit_hard}.",
+            fg="red",
         )
-        typer.secho(f"    Will run the following commands to increase the process's file limit:", fg="yellow")
+        typer.secho(
+            f"    Will run the following commands to increase the process's file limit:",
+            fg="yellow",
+        )
         typer.secho(f"        {' '.join(increase_prlimit)}", fg="yellow")
-        if typer.confirm("    sudo required; Do you want to increase the process limit?", default=True):
+        if typer.confirm(
+            "    sudo required; Do you want to increase the process limit?",
+            default=True,
+        ):
             subprocess.check_output(increase_prlimit)
             current_prlimit_soft, current_prlimit_hard = resource.getrlimit(resource.RLIMIT_NOFILE)
             if current_prlimit_soft < soft_limit or current_prlimit_hard < hard_limit:
                 typer.secho(
                     f"    Warning: failed increasing process file limits, the process file limit is too low and needs to be raised.",
-                    fg="red"
+                    fg="red",
                 )
             else:
-                typer.secho(f"    prlimit: Successfully increased process file limit", fg="green")
+                typer.secho(
+                    f"    prlimit: Successfully increased process file limit",
+                    fg="green",
+                )
         else:
-            typer.secho(f"    prlimit File limit unchanged.")  
+            typer.secho(f"    prlimit File limit unchanged.")
     else:
         typer.secho(
             f"    prlimit: process's soft file limit is set to {current_prlimit_soft}, which is greater than or equal to the recommended minimum of {soft_limit}`",
-            fg="green"
+            fg="green",
         )
+
 
 def query_instances():
     instances = []
@@ -146,7 +173,12 @@ def query_instances():
         query_jobs.append(catch_error(lambda: GCPCloudProvider().get_matching_instances()))
     # query in parallel
     for instance_list in do_parallel(
-        lambda f: f(), query_jobs, n=-1, return_args=False, spinner=True, desc="Querying clouds for instances"
+        lambda f: f(),
+        query_jobs,
+        n=-1,
+        return_args=False,
+        spinner=True,
+        desc="Querying clouds for instances",
     ):
         instances.extend(instance_list)
     return instances
