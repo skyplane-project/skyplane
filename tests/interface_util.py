@@ -10,7 +10,7 @@ from skyplane.utils.timer import Timer
 from skyplane.utils import logger
 
 
-def interface_test_framework(region, bucket, multipart: bool):
+def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket: bool = False):
     logger.info("creating interfaces...")
     interface = ObjectStoreInterface.create(region, bucket, create_bucket=True)
     assert interface.bucket_exists()
@@ -68,4 +68,9 @@ def interface_test_framework(region, bucket, multipart: bool):
 
     interface.delete_objects([obj_name])
     assert not interface.exists(obj_name)
+
+    if test_delete_bucket:
+        interface.delete_bucket()
+        assert not interface.bucket_exists()
+
     return True
