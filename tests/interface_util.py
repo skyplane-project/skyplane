@@ -18,7 +18,7 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
 
     # generate file and upload
     obj_name = f"test_{uuid.uuid4()}.txt"
-    file_size_mb = 1024
+    file_size_mb = 1
     with tempfile.NamedTemporaryFile() as tmp:
         fpath = tmp.name
         with open(fpath, "rb+") as f:
