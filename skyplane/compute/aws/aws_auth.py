@@ -51,7 +51,6 @@ class AWSAuthentication:
         try:
             f = open(aws_config_path, "r")
         except FileNotFoundError:
-            print("    No AWS config detected! Consquently, the AWS region list is empty. Run 'skyplane init --reinit-aws' to remedy this.")
             return []
         region_list = []
         for region in f.read().split("\n"):

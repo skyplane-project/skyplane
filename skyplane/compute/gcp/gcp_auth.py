@@ -50,7 +50,6 @@ class GCPAuthentication:
         try:
             f = open(gcp_config_path, "r")
         except FileNotFoundError:
-            print("    No GCP config detected! Consquently, the GCP region list is empty. Run 'skyplane init --reinit-gcp' to remedy this.")
             return []
         return [r for r in map(str.strip, f.readlines()) if r]
 
