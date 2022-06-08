@@ -9,4 +9,4 @@ def test_gcs_singlepart():
 
 def test_gcs_multipart():
     logger.warning("Multipart tests disabled!")
-    # assert test_interface("gcp:us-central1-a", "skylark-test-us-east1", True)
+    # assert test_interface("gcp:us-central1-a", "skyplane-test-us-east1", True)

@@ -411,6 +411,10 @@ def init(
     :type reinit_gcp: bool
     """
     print_header()
+
+    if non_interactive:
+        logger.warning("Non-interactive mode enabled. Automatically confirming interactive questions.")
+
     if config_path.exists():
         cloud_config = SkyplaneConfig.load_config(config_path)
     else:
