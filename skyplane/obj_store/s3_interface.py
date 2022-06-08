@@ -59,6 +59,10 @@ class S3Interface(ObjectStoreInterface):
                 s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": self.aws_region})
         assert self.bucket_exists()
 
+    def delete_bucket(self):
+        s3_client = self.auth.get_boto3_client("s3", self.aws_region)
+        s3_client.delete_bucket(Bucket=self.bucket_name)
+
     def list_objects(self, prefix="") -> Iterator[S3Object]:
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         paginator = s3_client.get_paginator("list_objects_v2")
