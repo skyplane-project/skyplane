@@ -103,7 +103,7 @@ class GatewaySender:
         def wait_for_chunks():
             cr_status = {}
             for ip, ip_chunk_ids in self.sent_chunk_ids.items():
-                response = retry_requests().get(f"https://{ip}:8080/api/v1/incomplete_chunk_requests", verify = False)
+                response = retry_requests().get(f"https://{ip}:8080/api/v1/incomplete_chunk_requests", verify=False)
                 assert response.status_code == 200, f"{response.status_code} {response.text}"
                 host_state = response.json()["chunk_requests"]
                 for chunk_id in ip_chunk_ids:
@@ -125,7 +125,7 @@ class GatewaySender:
         # close servers
         logger.info(f"[sender:{worker_id}] exiting, closing servers")
         for dst_host, dst_port in self.destination_ports.items():
-            response = retry_requests().delete(f"https://{dst_host}:8080/api/v1/servers/{dst_port}", verify = False)
+            response = retry_requests().delete(f"https://{dst_host}:8080/api/v1/servers/{dst_port}", verify=False)
             assert response.status_code == 200 and response.json() == {"status": "ok"}, response.json()
             logger.info(f"[sender:{worker_id}] closed destination socket {dst_host}:{dst_port}")
 
@@ -133,7 +133,7 @@ class GatewaySender:
         self.worker_queue.put(chunk_request.chunk.chunk_id)
 
     def make_socket(self, dst_host):
-        response = retry_requests().post(f"https://{dst_host}:8080/api/v1/servers", verify = False)
+        response = retry_requests().post(f"https://{dst_host}:8080/api/v1/servers", verify=False)
         assert response.status_code == 200, f"{response.status_code} {response.text}"
         self.destination_ports[dst_host] = int(response.json()["server_port"])
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -154,7 +154,9 @@ class GatewaySender:
         # notify server of upcoming ChunkRequests
         logger.debug(f"[sender:{self.worker_id}]:{chunk_ids} pre-registering chunks")
         chunk_reqs = [self.chunk_store.get_chunk_request(chunk_id) for chunk_id in chunk_ids]
-        post_req = lambda: retry_requests().post(f"https://{dst_host}:8080/api/v1/chunk_requests", json=[c.as_dict() for c in chunk_reqs], verify = False)
+        post_req = lambda: retry_requests().post(
+            f"https://{dst_host}:8080/api/v1/chunk_requests", json=[c.as_dict() for c in chunk_reqs], verify=False
+        )
         response = retry_backoff(post_req, exception_class=requests.exceptions.ConnectionError)
         assert response.status_code == 200 and response.json()["status"] == "ok"
         logger.debug(f"[sender:{self.worker_id}]:{chunk_ids} registered chunks")

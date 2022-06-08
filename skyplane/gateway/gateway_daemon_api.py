@@ -80,7 +80,7 @@ class GatewayDaemonAPI(threading.Thread):
         self.server_http = make_server(host, self.port_http, self.app_http, threaded=True)
 
     def run(self):
-        self.server_http_thread = threading.Thread(target = self.server_http.serve_forever)
+        self.server_http_thread = threading.Thread(target=self.server_http.serve_forever)
         self.server_http_thread.start()
         self.server.serve_forever()
 
