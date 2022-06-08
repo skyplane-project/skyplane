@@ -7,7 +7,7 @@ from functools import partial
 from typing import Dict, List, Optional, Tuple, Iterable
 
 import pandas as pd
-from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, DownloadColumn, BarColumn, TransferSpeedColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, DownloadColumn, BarColumn, TransferSpeedColumn
 
 from skyplane import GB, MB, tmp_log_dir
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
@@ -486,7 +486,7 @@ class ReplicatorClient:
                 BarColumn(),
                 DownloadColumn(binary_units=True),
                 TransferSpeedColumn(),
-                TimeElapsedColumn(),
+                TimeRemainingColumn(),
                 disable=not show_spinner,
             ) as progress:
                 copy_task = progress.add_task("", total=total_bytes)
