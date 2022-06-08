@@ -97,6 +97,7 @@ class GatewayObjStoreConn:
                             chunk_req.chunk.dest_key,
                             chunk_req.chunk.part_number,
                             chunk_req.chunk.upload_id,
+                            check_md5=chunk_req.chunk.md5_hash,
                         ),
                         max_retries=4,
                     )
@@ -116,16 +117,24 @@ class GatewayObjStoreConn:
                     logger.debug(f"[obj_store:{self.worker_id}] Start download {chunk_req.chunk.chunk_id} from {bucket}")
 
                     obj_store_interface = self.get_obj_store_interface(chunk_req.src_region, bucket)
-                    retry_backoff(
+                    md5sum = retry_backoff(
                         partial(
                             obj_store_interface.download_object,
                             chunk_req.chunk.src_key,
                             fpath,
                             chunk_req.chunk.file_offset_bytes,
                             chunk_req.chunk.chunk_length_bytes,
+                            generate_md5=True,
                         ),
                         max_retries=4,
                     )
+
+                    # update md5sum for chunk requests
+                    if not md5sum:
+                        logger.error(f"[obj_store:{self.worker_id}] Checksum was not generated for {chunk_req.chunk.src_key}")
+                    else:
+                        self.chunk_store.update_chunk_checksum(chunk_req.chunk.chunk_id, md5sum)
+
                     self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
                     recieved_chunk_size = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).stat().st_size
                     assert (

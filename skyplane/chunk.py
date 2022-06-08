@@ -13,6 +13,10 @@ class Chunk:
     dest_key: str  # human readable path where object is stored
     chunk_id: int
     chunk_length_bytes: int
+
+    # checksum
+    md5_hash: Optional[bytes] = None  # 128 bits
+
     # multi-part upload/download info
     file_offset_bytes: Optional[int] = None
     part_number: Optional[int] = None
