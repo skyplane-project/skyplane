@@ -137,14 +137,13 @@ class S3Interface(ObjectStoreInterface):
 
     def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None):
         dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
-
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
+        b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
+        checksum_args = dict(ContentMD5=b64_md5sum) if b64_md5sum else dict()
 
         try:
             with open(src_file_path, "rb") as f:
-                b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
-                checksum_args = dict(ContentMD5=b64_md5sum) if b64_md5sum else dict()
                 if upload_id:
                     s3_client.upload_part(
                         Body=f,

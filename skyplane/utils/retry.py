@@ -14,6 +14,7 @@ def retry_backoff(
     max_backoff=8,
     exception_class=Exception,
     log_errors=True,
+    always_raise_exceptions=(),
 ) -> R:
     """Retry fn until it does not raise an exception.
     If it fails, sleep for a bit and try again.
@@ -25,7 +26,7 @@ def retry_backoff(
         try:
             return fn()
         except exception_class as e:
-            if i == max_retries - 1:
+            if i == max_retries - 1 or type(e) in always_raise_exceptions:
                 raise e
             else:
                 # ignore retries due to IAM instance profile propagation
