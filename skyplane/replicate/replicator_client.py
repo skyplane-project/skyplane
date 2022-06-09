@@ -72,7 +72,6 @@ class ReplicatorClient:
         azure_regions_to_provision = [r for r in regions_to_provision if r.startswith("azure:")]
         gcp_regions_to_provision = [r for r in regions_to_provision if r.startswith("gcp:")]
 
-
         assert (
             len(aws_regions_to_provision) == 0 or self.aws.auth.enabled()
         ), "AWS credentials not configured but job provisions AWS gateways"
@@ -362,7 +361,6 @@ class ReplicatorClient:
                         Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
                     )
                     idx += 1
-
 
             # partition chunks into roughly equal-sized batches (by bytes)
             def partition(items: List[Chunk], n_batches: int) -> List[List[Chunk]]:

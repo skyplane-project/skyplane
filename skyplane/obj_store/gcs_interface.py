@@ -20,7 +20,7 @@ class GCSInterface(ObjectStoreInterface):
     def __init__(self, bucket_name, gcp_region="infer", create_bucket=False):
         self.bucket_name = bucket_name
         self.auth = GCPAuthentication()
-        #self.auth.set_service_account_credentials("skyplane1") # use service account credentials
+        # self.auth.set_service_account_credentials("skyplane1") # use service account credentials
         self._gcs_client = self.auth.get_storage_client()
         try:
             self.gcp_region = self.infer_gcp_region(bucket_name) if gcp_region is None or gcp_region == "infer" else gcp_region
@@ -105,22 +105,26 @@ class GCSInterface(ObjectStoreInterface):
         except NoSuchObjectException:
             return False
 
-    def send_xml_request(self, blob_name: str, params: dict, method: str, content_length=0, expiration=datetime.timedelta(minutes=15), data=None, content_type='application/octet-stream'):
+    def send_xml_request(
+        self,
+        blob_name: str,
+        params: dict,
+        method: str,
+        content_length=0,
+        expiration=datetime.timedelta(minutes=15),
+        data=None,
+        content_type="application/octet-stream",
+    ):
 
         blob = self._gcs_client.bucket(self.bucket_name).blob(blob_name)
-        
+
         headers = {
-            'Content-Type': content_type,
+            "Content-Type": content_type,
         }
 
         # generate signed URL
         url = blob.generate_signed_url(
-            version="v4",
-            expiration=expiration,
-            method=method,
-            content_type=content_type,
-            query_parameters=params,
-            headers=headers
+            version="v4", expiration=expiration, method=method, content_type=content_type, query_parameters=params, headers=headers
         )
 
         # prepare request
@@ -137,7 +141,6 @@ class GCSInterface(ObjectStoreInterface):
 
         return response
 
-
     # todo: implement range request for download
     def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
@@ -152,7 +155,7 @@ class GCSInterface(ObjectStoreInterface):
         # TODO: download directly to file?
         if offset_bytes is None:
             chunk = blob.download_as_string()
-        else: 
+        else:
             assert offset_bytes is not None and size_bytes is not None
             chunk = blob.download_as_string(start=offset_bytes, end=offset_bytes + size_bytes - 1)
 
@@ -173,22 +176,23 @@ class GCSInterface(ObjectStoreInterface):
             blob = bucket.blob(dst_object_name)
             blob.upload_from_filename(src_file_path)
             print("Uploaded", dst_object_name)
-            return 
+            return
 
         # multipart upload
         assert part_number is not None and upload_id is not None
 
         # send XML api request
-        response = self.send_xml_request(dst_object_name, {"uploadId": upload_id, "partNumber": part_number}, "PUT", data=open(src_file_path, "rb"))
+        response = self.send_xml_request(
+            dst_object_name, {"uploadId": upload_id, "partNumber": part_number}, "PUT", data=open(src_file_path, "rb")
+        )
         response_data = dict(response.headers)
 
-        if "ETag" not in response_data: 
-            raise ValueError(f"Invalid response {response} {response_data}") 
+        if "ETag" not in response_data:
+            raise ValueError(f"Invalid response {response} {response_data}")
 
         print("Uploaded", upload_id, response, response_data)
 
-        return response_data["ETag"]        
-
+        return response_data["ETag"]
 
     def initiate_multipart_upload(self, dst_object_name, size_bytes):
 
@@ -204,7 +208,7 @@ class GCSInterface(ObjectStoreInterface):
         return upload_id
 
     def complete_multipart_upload(self, dst_object_name, upload_id):
-        # get parts 
+        # get parts
         response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "GET")
 
         # build request xml tree
@@ -216,18 +220,19 @@ class GCSInterface(ObjectStoreInterface):
             etag = part.find("ns:ETag", ns).text
             part_num = part.find("ns:PartNumber", ns).text
             ElementTree.SubElement(part_xml, "PartNumber").text = part_num
-            ElementTree.SubElement(part_xml, "ETag").text = etag 
+            ElementTree.SubElement(part_xml, "ETag").text = etag
             xml_data.append(part_xml)
         xml_data = ElementTree.tostring(xml_data, encoding="utf-8", method="xml")
-        xml_data = xml_data.replace(b'ns0:', b'')
+        xml_data = xml_data.replace(b"ns0:", b"")
 
         try:
             # complete multipart upload
-            response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "POST", data=xml_data, content_type="application/xml")
+            response = self.send_xml_request(
+                dst_object_name, {"uploadId": upload_id}, "POST", data=xml_data, content_type="application/xml"
+            )
         except Exception as e:
             # cancel upload
             response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "DELETE")
             return False
 
         return True
-       
