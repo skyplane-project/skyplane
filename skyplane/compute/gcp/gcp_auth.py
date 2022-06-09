@@ -37,6 +37,7 @@ class GCPAuthentication:
         with gcp_config_path.open("w") as f:
             region_list = []
             credentials = self.credentials
+            service_account_credentials_file = self.service_account_credentials # force creation of file
             service = discovery.build("compute", "beta", credentials=credentials)
             request = service.zones().list(project=self.project_id)
             while request is not None:
@@ -118,7 +119,7 @@ class GCPAuthentication:
             ).execute()
 
             # create service key files
-            os.makedirs(os.path.basename(key_path), exist_ok=True)
+            os.makedirs(os.path.dirname(key_path), exist_ok=True)
             json_key_file = base64.b64decode(key['privateKeyData']).decode('utf-8')
             open(key_path, "w").write(json_key_file)
 
@@ -145,7 +146,7 @@ class GCPAuthentication:
                     }
                 }).execute()
         policy = service.projects().serviceAccounts().getIamPolicy(resource=account["name"]).execute()
-        service = googleapiclient.discovery.build(
+        service = discovery.build(
             "cloudresourcemanager", "v1", credentials=self.credentials
         )
         policy = service.projects().getIamPolicy(resource=self.project_id).execute()

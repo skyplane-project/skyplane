@@ -8,9 +8,8 @@ from functools import partial
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
-import paramiko
-from skyplane import config_path
-from skyplane.compute.const_cmds import make_autoshutdown_script, make_dozzle_command, make_sysctl_tcp_tuning_command
+from skyplane import config_path, key_root
+from skyplane.compute.const_cmds import make_dozzle_command, make_sysctl_tcp_tuning_command, make_autoshutdown_script
 from skyplane.utils import logger
 from skyplane.utils.fn import PathLike, wait_for
 from skyplane.utils.net import retry_requests
@@ -297,7 +296,7 @@ class Server:
         # copy service account files
         if self.provider == "gcp":
             service_key_file = "service_account_key.json"
-            self.upload_file(os.path.expanduser(f"~/.skylark/keys/gcp/{service_key_file}"), f"/tmp/{service_key_file}")
+            self.upload_file(os.path.expanduser(f"{key_root}/gcp/{service_key_file}"), f"/tmp/{service_key_file}")
             docker_envs["GCP_SERVICE_ACCOUNT_FILE"] = f"/pkg/data/{service_key_file}"
             docker_run_flags += f" -v /tmp/{service_key_file}:/pkg/data/{service_key_file}"
 

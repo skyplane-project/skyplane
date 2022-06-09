@@ -203,10 +203,7 @@ class GCSInterface(ObjectStoreInterface):
 
         return upload_id
 
-    def complete_multipart_upload(self, dst_object_name, upload_id, parts):
-        bucket = self._gcs_client.bucket(self.bucket_name)
-        blob = bucket.blob(dst_object_name)
-
+    def complete_multipart_upload(self, dst_object_name, upload_id):
         # get parts 
         response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "GET")
 
