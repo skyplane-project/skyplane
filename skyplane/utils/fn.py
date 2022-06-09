@@ -1,7 +1,7 @@
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Callable, Iterable, List, Tuple, Union, TypeVar
+from typing import Callable, Iterable, List, Optional, Tuple, Union, TypeVar
 
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, MofNCompleteColumn, TimeElapsedColumn
 from rich import print as rprint
@@ -14,7 +14,7 @@ T = TypeVar("T")
 R = TypeVar("R")
 
 
-def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, desc="Waiting") -> float:
+def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, desc="Waiting") -> Optional[float]:
     """Wait for fn to return True. Returns number of seconds waited."""
     start = time.time()
     while time.time() - start < timeout:
