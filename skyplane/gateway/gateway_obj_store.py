@@ -97,7 +97,7 @@ class GatewayObjStoreConn:
                             chunk_req.chunk.dest_key,
                             chunk_req.chunk.part_number,
                             chunk_req.chunk.upload_id,
-                            check_md5=chunk_req.chunk.md5_hash,
+                            # check_md5=chunk_req.chunk.md5_hash,
                         ),
                         max_retries=4,
                     )
@@ -124,7 +124,7 @@ class GatewayObjStoreConn:
                             fpath,
                             chunk_req.chunk.file_offset_bytes,
                             chunk_req.chunk.chunk_length_bytes,
-                            generate_md5=True,
+                            generate_md5=False,
                         ),
                         max_retries=4,
                     )

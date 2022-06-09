@@ -129,7 +129,7 @@ class GCSInterface(ObjectStoreInterface):
                 m.update(chunk)
         return m.digest() if generate_md5 else None
 
-    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None)
+    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None):
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
         os.path.getsize(src_file_path)

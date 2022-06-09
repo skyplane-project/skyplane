@@ -144,6 +144,7 @@ class S3Interface(ObjectStoreInterface):
         try:
             with open(src_file_path, "rb") as f:
                 b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
+                checksum_args = dict(ContentMD5=b64_md5sum) if b64_md5sum else dict()
                 if upload_id:
                     s3_client.upload_part(
                         Body=f,
@@ -151,14 +152,14 @@ class S3Interface(ObjectStoreInterface):
                         Bucket=self.bucket_name,
                         PartNumber=part_number,
                         UploadId=upload_id.strip(),  # TODO: figure out why whitespace gets added,
-                        ContentMD5=b64_md5sum,
+                        **checksum_args,
                     )
                 else:
                     s3_client.put_object(
                         Body=f,
                         Key=dst_object_name,
                         Bucket=self.bucket_name,
-                        ContentMD5=b64_md5sum,
+                        **checksum_args,
                     )
         except botocore.exceptions.ClientError as e:
             # catch MD5 mismatch error and raise appropriate exception
