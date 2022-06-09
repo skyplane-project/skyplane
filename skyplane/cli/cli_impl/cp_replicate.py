@@ -278,4 +278,7 @@ def replicate_helper(
         runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{stats.get('total_runtime_s'):.2f}s[/bright_black]"
         throughput_line = f"[white]Throughput:[/white] [bright_black]{stats.get('throughput_gbits'):.2f}Gbps[/bright_black]"
         rprint(f"{runtime_line}, {throughput_line}")
+    else:
+        rprint(f"\n:x: [bold red]Transfer failed[/bold red]")
+        rprint(stats)
     return 0 if stats["success"] else 1

@@ -14,15 +14,15 @@ T = TypeVar("T")
 R = TypeVar("R")
 
 
-def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, desc="Waiting") -> bool:
-    """Wait for fn to return True"""
+def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, desc="Waiting") -> float:
+    """Wait for fn to return True. Returns number of seconds waited."""
     start = time.time()
     while time.time() - start < timeout:
         if fn():
             logger.fs.debug(f"[wait_for] {desc} fn={fn} completed in {time.time() - start:.2f}s")
-            return True
+            return time.time() - start
         time.sleep(interval)
-        raise TimeoutError(f"Timeout waiting for {desc}")
+        raise TimeoutError(f"Timeout waiting for '{desc}' (timeout {timeout:.2}s, interval {interval:.2}s)")
 
 
 def do_parallel(

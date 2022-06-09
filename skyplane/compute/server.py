@@ -1,6 +1,5 @@
 import json
 import logging
-import requests
 import socket
 from contextlib import closing
 from enum import Enum, auto
@@ -184,7 +183,11 @@ class Server:
                     return sock.connect_ex((ip, 22)) == 0
             return False
 
-        wait_for(is_up, timeout=timeout, interval=interval, desc=f"Waiting for {self.uuid()} to be ready")
+        try:
+            wait_for(is_up, timeout=timeout, interval=interval, desc=f"Waiting for {self.uuid()} to be ready")
+        except TimeoutError:
+            logger.error(f"Gateway {self.uuid()} is not ready after {timeout} seconds, run `skyplane deprovision` to clean up resources")
+            raise TimeoutError(f"{self.uuid()} is not ready after {timeout} seconds")
 
     def close_server(self):
         if hasattr(self, "_ssh_client"):
@@ -311,7 +314,7 @@ class Server:
 
         try:
             logging.disable(logging.CRITICAL)
-            wait_for(is_api_ready, timeout=5, interval=0.1, desc=f"Waiting for gateway {self.uuid()} to start")
+            wait_for(is_api_ready, timeout=30, interval=0.1, desc=f"Waiting for gateway {self.uuid()} to start")
         except TimeoutError as e:
             logger.fs.error(f"Gateway {self.instance_name()} is not ready {e}")
             logger.fs.warning(desc_prefix + " gateway launch command: " + docker_launch_cmd)
