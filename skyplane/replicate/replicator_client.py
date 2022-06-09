@@ -318,6 +318,7 @@ class ReplicatorClient:
                         # TODO: only do if num_chunks > 1
                         # TODO: potentially do this in a seperate thread, and/or after chunks sent
                         obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
+                        logger.fs.info(f"Initiate multipart upload {dest_obj}")
                         upload_id = obj_store_interface.initiate_multipart_upload(dest_obj, obj_file_size_bytes[src_obj])
 
                         offset = 0

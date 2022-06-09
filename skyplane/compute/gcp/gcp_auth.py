@@ -150,16 +150,20 @@ class GCPAuthentication:
         )
         policy = service.projects().getIamPolicy(resource=self.project_id).execute()
         account_handle = f"serviceAccount:{account['email']}"
+
+        # modify policy 
         modified = False
         roles = [role['role'] for role in policy['bindings']] 
-        if 'roles/storage.admin' not in roles:
-            policy['bindings'].append({"role": 'roles/storage.admin', 'members': [account_handle]})
+        target_role = 'roles/storage.admin'
+        if target_role not in roles:
+            # role does not exist
+            policy['bindings'].append({"role": target_role, 'members': [account_handle]})
             modified = True
         else:
             for role in policy['bindings']: 
-                if role['role'] == 'roles/storage.admin': 
+                if role['role'] == target_role: 
                     if account_handle not in role['members']:
-                        role['members'].append(account_handle)
+                        role['members'].append(account_handle) # do NOT override 
                         modified = True
         if modified:
             # execute policy change 
@@ -176,8 +180,7 @@ class GCPAuthentication:
         return discovery.build(service_name, version, credentials=self.credentials, client_options={"quota_project_id": self.project_id})
 
     def get_storage_client(self, service_account = None):
-        #if service_account is None:
-            #return storage.Client(project=self.project_id, credentials=self.credentials)
+        # must use service account for XML storage API 
         return storage.Client.from_service_account_json(self.service_account_credentials)
 
     def get_gcp_instances(self, gcp_region: str):

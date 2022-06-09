@@ -105,13 +105,12 @@ class GCSInterface(ObjectStoreInterface):
         except NoSuchObjectException:
             return False
 
-    def send_xml_request(self, blob_name: str, params: dict, method: str, content_length=0, expiration=datetime.timedelta(minutes=15), data=None):
+    def send_xml_request(self, blob_name: str, params: dict, method: str, content_length=0, expiration=datetime.timedelta(minutes=15), data=None, content_type='application/octet-stream'):
 
         blob = self._gcs_client.bucket(self.bucket_name).blob(blob_name)
         
         headers = {
-            'Content-Type': 'application/octet-stream',
-            'Content-Length': str(content_length), 
+            'Content-Type': content_type,
         }
 
         # generate signed URL
@@ -119,7 +118,7 @@ class GCSInterface(ObjectStoreInterface):
             version="v4",
             expiration=expiration,
             method=method,
-            content_type="application/octet-stream",
+            content_type=content_type,
             query_parameters=params,
             headers=headers
         )
@@ -129,9 +128,11 @@ class GCSInterface(ObjectStoreInterface):
             req = requests.Request(method, url, headers=headers, data=data)
         else:
             req = requests.Request(method, url, headers=headers)
+
         prepared = req.prepare()
         response = requests.Session().send(prepared)
-        if response.status_code != 200:
+
+        if not response.ok:
             raise ValueError(f"Invalid status code {response.status_code}")
 
         return response
@@ -141,6 +142,7 @@ class GCSInterface(ObjectStoreInterface):
     def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = src_object_name if src_object_name[0] != "/" else src_object_name
+        print("download", dst_file_path, offset_bytes, size_bytes)
 
         offset = 0
         bucket = self._gcs_client.bucket(self.bucket_name)
@@ -170,17 +172,20 @@ class GCSInterface(ObjectStoreInterface):
         if part_number is None:
             blob = bucket.blob(dst_object_name)
             blob.upload_from_filename(src_file_path)
+            print("Uploaded", dst_object_name)
             return 
 
         # multipart upload
         assert part_number is not None and upload_id is not None
 
         # send XML api request
-        response = self.send_xml_request(dst_object_name, {"uploadId": upload_id, "partNumber": part_number}, "PUT")
+        response = self.send_xml_request(dst_object_name, {"uploadId": upload_id, "partNumber": part_number}, "PUT", data=open(src_file_path, "rb"))
         response_data = dict(response.headers)
 
         if "ETag" not in response_data: 
             raise ValueError(f"Invalid response {response} {response_data}") 
+
+        print("Uploaded", upload_id, response, response_data)
 
         return response_data["ETag"]        
 
@@ -213,15 +218,19 @@ class GCSInterface(ObjectStoreInterface):
             part_xml = ElementTree.Element("Part")
             etag = part.find("ns:ETag", ns).text
             part_num = part.find("ns:PartNumber", ns).text
-            print(part_num)
             ElementTree.SubElement(part_xml, "PartNumber").text = part_num
             ElementTree.SubElement(part_xml, "ETag").text = etag 
             xml_data.append(part_xml)
         xml_data = ElementTree.tostring(xml_data, encoding="utf-8", method="xml")
         xml_data = xml_data.replace(b'ns0:', b'')
 
-        # complete multipart upload
-        response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "POST", data=xml_data)
+        try:
+            # complete multipart upload
+            response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "POST", data=xml_data, content_type="application/xml")
+        except Exception as e:
+            # cancel upload
+            response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "DELETE")
+            return False
 
         return True
        
