@@ -131,7 +131,7 @@ class GatewayObjStoreConn:
                     assert (
                         recieved_chunk_size == chunk_req.chunk.chunk_length_bytes
                     ), f"Downloaded chunk {chunk_req.chunk.chunk_id} has incorrect size (expected {chunk_req.chunk.chunk_length_bytes} but got {recieved_chunk_size}, {chunk_req.chunk.chunk_length_bytes})"
-                    logger.debug(f"[obj_store:{self.worker_id}] Downloaded {chunk_req.chunk.src_key} from {bucket}")
+                    logger.debug(f"[obj_store:{self.worker_id}] Downloaded {chunk_req.chunk.chunk_id} from {bucket}")
                 else:
                     raise ValueError(f"Invalid location for chunk req, {req_type}: {chunk_req.src_type}->{chunk_req.dst_type}")
             except Exception as e:
