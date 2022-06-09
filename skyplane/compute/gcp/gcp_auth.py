@@ -25,7 +25,7 @@ class GCPAuthentication:
         self._credentials = None
         self._service_credentials_file = None
         #self.service_account_name = "skylark-service-account"
-        self.service_account_name = "skyplane-test3"
+        self.service_account_name = "skyplane-manual"
 
     def save_region_config(self):
         if self.project_id is None:
@@ -132,6 +132,7 @@ class GCPAuthentication:
         for service_account in service_accounts:
             if service_account["email"].split("@")[0] == service_name: 
                 account = service_account
+                break
 
         if account is None:
             # create service account
@@ -143,24 +144,27 @@ class GCPAuthentication:
                         'displayName': service_name 
                     }
                 }).execute()
-            #service.projects().setIamPolicy(resource=project_id, body={"policy": policy}).execute()
-
-        print(account)
         policy = service.projects().serviceAccounts().getIamPolicy(resource=account["name"]).execute()
-        print(policy)
-
-
-        #request = service.projects().serviceAccounts().setIamPolicy(resource=account["name"], body={"policy": policy})
-        #request = service.projects().serviceAccounts().setIamPolicy(resource=self.project_id, body={"policy": policy})
         service = googleapiclient.discovery.build(
             "cloudresourcemanager", "v1", credentials=self.credentials
         )
         policy = service.projects().getIamPolicy(resource=self.project_id).execute()
-        print("current policy", policy)
-        policy["bindings"] = [{"role": "roles/owner", "members":[f"serviceAccount:{account['email']}"]}]
-        request = service.projects().setIamPolicy(resource=self.project_id, body={"policy": policy})
-        response = request.execute()
-        print(response)
+        account_handle = f"serviceAccount:{account['email']}"
+        modified = False
+        roles = [role['role'] for role in policy['bindings']] 
+        if 'roles/storage.admin' not in roles:
+            policy['bindings'].append({"role": 'roles/storage.admin', 'members': [account_handle]})
+            modified = True
+        else:
+            for role in policy['bindings']: 
+                if role['role'] == 'roles/storage.admin': 
+                    if account_handle not in role['members']:
+                        role['members'].append(account_handle)
+                        modified = True
+        if modified:
+            # execute policy change 
+            request = service.projects().setIamPolicy(resource=self.project_id, body={"policy": policy})
+            response = request.execute()
 
         return account["email"]
 
