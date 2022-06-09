@@ -262,13 +262,16 @@ class GCPCloudProvider(CloudProvider):
 
         # wait for server to reach RUNNING state
         server = GCPServer(f"gcp:{region}", name)
-        wait_for(
-            lambda: server.instance_state() == ServerState.RUNNING,
-            timeout=120,
-            interval=0.1,
-            desc=f"Wait for RUNNING status on {server.uuid()}",
-        )
-
-        server.wait_for_ready()
+        try:
+            wait_for(
+                lambda: server.instance_state() == ServerState.RUNNING,
+                timeout=120,
+                interval=0.1,
+                desc=f"Wait for RUNNING status on {server.uuid()}",
+            )
+        except:
+            logger.error(f"Instance {server.uuid()} did not reach RUNNING status")
+            server.terminate_instance()
+            raise
         server.run_command("sudo /sbin/iptables -A INPUT -j ACCEPT")
         return server

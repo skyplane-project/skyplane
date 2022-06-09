@@ -22,7 +22,7 @@ def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, desc="Waiting") 
             logger.fs.debug(f"[wait_for] {desc} fn={fn} completed in {time.time() - start:.2f}s")
             return time.time() - start
         time.sleep(interval)
-        raise TimeoutError(f"Timeout waiting for '{desc}' (timeout {timeout:.2}s, interval {interval:.2}s)")
+        raise TimeoutError(f"Timeout waiting for '{desc}' (timeout {timeout:.2f}s, interval {interval:.2f}s)")
 
 
 def do_parallel(
