@@ -252,9 +252,7 @@ class GCPCloudProvider(CloudProvider):
                     ],
                 }
             ],
-            "serviceAccounts": [
-                {"email": "default", "scopes": ["https://www.googleapis.com/auth/cloud-platform"]}
-            ],
+            "serviceAccounts": [{"email": "default", "scopes": ["https://www.googleapis.com/auth/cloud-platform"]}],
             "metadata": {"items": [{"key": "ssh-keys", "value": f"{uname}:{pub_key}\n"}]},
             "scheduling": {"onHostMaintenance": "TERMINATE", "automaticRestart": False},
             "deletionProtection": False,

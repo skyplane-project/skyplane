@@ -8,8 +8,9 @@ from functools import partial
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
+import paramiko
 from skyplane import config_path, key_root
-from skyplane.compute.const_cmds import make_dozzle_command, make_sysctl_tcp_tuning_command, make_autoshutdown_script
+from skyplane.compute.const_cmds import make_autoshutdown_script, make_dozzle_command, make_sysctl_tcp_tuning_command
 from skyplane.utils import logger
 from skyplane.utils.fn import PathLike, wait_for
 from skyplane.utils.net import retry_requests

@@ -549,7 +549,11 @@ class ReplicatorClient:
                                         raise ValueError(f"Failed to complete upload {req['upload_id']}")
 
                                 do_parallel(
-                                    complete_upload, self.multipart_upload_requests, n=-1, desc="Completing multipart uploads", spinner=True
+                                    complete_upload,
+                                    self.multipart_upload_requests,
+                                    n=-1,
+                                    desc="Completing multipart uploads",
+                                    spinner=False,
                                 )
                             return dict(
                                 completed_chunk_ids=completed_chunk_ids,
