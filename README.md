@@ -1,6 +1,6 @@
 # Skyplane
 
-[![poetry](https://github.com/skyplane-project/skyplane/actions/workflows/poetry.yml/badge.svg)](https://github.com/skyplane-project/skyplane/actions/workflows/poetry.yml)
+[![poetry-publish-nightly](https://github.com/skyplane-project/skyplane/actions/workflows/poetry-publish-nightly.yml/badge.svg)](https://github.com/skyplane-project/skyplane/actions/workflows/poetry-publish-nightly.yml)
 [![docker](https://github.com/skyplane-project/skyplane/actions/workflows/docker-publish.yml/badge.svg?branch=main)](https://github.com/skyplane-project/skyplane/actions/workflows/docker-publish.yml)
 [![sphinx](https://github.com/skyplane-project/skyplane/actions/workflows/sphinx.yml/badge.svg)](https://github.com/skyplane-project/skyplane/actions/workflows/sphinx.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
