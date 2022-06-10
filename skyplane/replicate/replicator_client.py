@@ -605,7 +605,7 @@ class ReplicatorClient:
                     progress.update(cleanup_task, description=": Copying gateway logs")
                     do_parallel(copy_log, self.bound_nodes.values(), n=-1)
                 if write_profile:
-                    progress.update(cleanup_task, ": Writing chunk profiles")
+                    progress.update(cleanup_task, description=": Writing chunk profiles")
                     chunk_status_df = self.get_chunk_status_log_df()
                     (self.transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
                     traceevent = status_df_to_traceevent(chunk_status_df)

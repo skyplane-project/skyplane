@@ -5,14 +5,15 @@ from contextlib import closing
 from enum import Enum, auto
 from functools import partial
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
+import paramiko
 from skyplane import config_path
-from skyplane.compute.const_cmds import make_dozzle_command, make_sysctl_tcp_tuning_command, make_autoshutdown_script
+from skyplane.compute.const_cmds import make_autoshutdown_script, make_dozzle_command, make_sysctl_tcp_tuning_command
 from skyplane.utils import logger
 from skyplane.utils.fn import PathLike, wait_for
-from skyplane.utils.retry import retry_backoff
 from skyplane.utils.net import retry_requests
+from skyplane.utils.retry import retry_backoff
 from skyplane.utils.timer import Timer
 
 
@@ -172,7 +173,7 @@ class Server:
         self.auto_shutdown_timeout_minutes = None
         self.run_command("(kill -9 $(cat /tmp/autoshutdown.pid) && rm -f /tmp/autoshutdown.pid) || true")
 
-    def wait_for_ready(self, timeout=120, interval=0.25) -> bool:
+    def wait_for_ssh_ready(self, timeout=120, interval=0.25) -> bool:
         def is_up():
             try:
                 ip = self.public_ip()
@@ -180,6 +181,7 @@ class Server:
                 return False
             if ip is not None:
                 with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+                    sock.settimeout(2)
                     return sock.connect_ex((ip, 22)) == 0
             return False
 
@@ -207,7 +209,7 @@ class Server:
         self.command_log.append(dict(command=command, runtime=runtime, **kwargs))
         self.flush_command_log()
 
-    def run_command(self, command):
+    def run_command(self, command) -> Tuple[str, str]:
         client = self.ssh_client
         with Timer() as t:
             if self.auto_shutdown_timeout_minutes:
@@ -262,7 +264,6 @@ class Server:
             assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
 
         desc_prefix = f"Starting gateway {self.uuid()}, host: {self.public_ip()}"
-        self.wait_for_ready()
 
         # increase TCP connections, enable BBR optionally and raise file limits
         check_stderr(self.run_command(make_sysctl_tcp_tuning_command(cc="bbr" if use_bbr else "cubic")))
