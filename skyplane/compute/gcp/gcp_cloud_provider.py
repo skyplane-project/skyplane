@@ -12,8 +12,9 @@ from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.gcp.gcp_server import GCPServer
-from skyplane.compute.server import Server
+from skyplane.compute.server import Server, ServerState
 from skyplane.utils import logger
+from skyplane.utils.fn import wait_for
 
 
 class GCPCloudProvider(CloudProvider):
@@ -258,7 +259,20 @@ class GCPCloudProvider(CloudProvider):
         }
         result = compute.instances().insert(project=self.auth.project_id, zone=region, body=req_body).execute()
         self.wait_for_operation_to_complete(region, result["name"])
+
+        # wait for server to reach RUNNING state
         server = GCPServer(f"gcp:{region}", name)
-        server.wait_for_ready()
+        try:
+            wait_for(
+                lambda: server.instance_state() == ServerState.RUNNING,
+                timeout=120,
+                interval=0.1,
+                desc=f"Wait for RUNNING status on {server.uuid()}",
+            )
+            server.wait_for_ssh_ready()
+        except:
+            logger.error(f"Instance {server.uuid()} did not reach RUNNING status")
+            server.terminate_instance()
+            raise
         server.run_command("sudo /sbin/iptables -A INPUT -j ACCEPT")
         return server
