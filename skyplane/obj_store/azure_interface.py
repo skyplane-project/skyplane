@@ -162,7 +162,7 @@ class AzureInterface(ObjectStoreInterface):
         return self.delete_container()
 
     def list_objects(self, prefix="") -> Iterator[AzureObject]:
-        blobs = self.container_client.list_blobs()
+        blobs = self.container_client.list_blobs(name_starts_with=prefix)
         for blob in blobs:
             yield AzureObject("azure", f"{self.account_name}/{blob.container}", blob.name, blob.size, blob.last_modified)
 
@@ -180,6 +180,9 @@ class AzureInterface(ObjectStoreInterface):
 
     def get_obj_size(self, obj_name):
         return self.get_obj_metadata(obj_name).size
+
+    def get_obj_last_modified(self, obj_name):
+        return self.get_obj_metadata(obj_name).last_modified
 
     @staticmethod
     def _run_azure_op_with_retry(fn, interval=0.5, timeout=180):

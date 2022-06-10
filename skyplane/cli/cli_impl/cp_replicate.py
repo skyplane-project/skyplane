@@ -1,3 +1,4 @@
+from calendar import c
 import json
 import os
 import pathlib
@@ -200,6 +201,8 @@ def replicate_helper(
     # confirm transfer with user
     est_size = sum(job.obj_sizes.values()) if not random else job.random_chunk_size_mb * random_n_chunks * MB
     console.print(f"\n[bold yellow]Will transfer {len(job.src_objs)} objects totaling {format_bytes(est_size)}[/bold yellow]")
+    console.print(f"    [bold][blue]Source:[/bold][/blue] [bright_black]{job.source_region}/{job.source_bucket}[/bright_black]")
+    console.print(f"    [bold][blue]Destination:[/bold][/blue] [bright_black]{job.dest_region}/{job.dest_bucket}[/bright_black]")
     sorted_counts = sorted(topo.per_region_count().items(), key=lambda x: x[0])
     console.print(
         f"    [bold][blue]VMs to provision:[/blue][/bold] [bright_black]{', '.join(f'{c}x {r}' for r, c in sorted_counts)}[/bright_black]"
@@ -208,6 +211,20 @@ def replicate_helper(
         console.print(
             f"    [bold][blue]Estimated egress cost:[/blue][/bold] [bright_black]${est_size / GB * topo.cost_per_gb:,.2f} at ${topo.cost_per_gb:,.2f}/GB[/bright_black]"
         )
+
+    # print summary of source and destination pairs
+    pairs = list(zip(job.src_objs, job.dest_objs))
+    if len(pairs) > 8:
+        for i in range(4):
+            src_obj, dest_obj = pairs[i]
+            console.print(f"    [bright_black]{src_obj} => {dest_obj}[/bright_black]")
+        console.print(f"    [bright_black]... {len(pairs) - 8} more ...[/bright_black]")
+        for i in range(-4, 0):
+            src_obj, dest_obj = pairs[i]
+            console.print(f"    [bright_black]{src_obj} => {dest_obj}[/bright_black]")
+    else:
+        for src_obj, dest_obj in pairs:
+            console.print(f"    [bright_black]{src_obj} => {dest_obj}[/bright_black]")
 
     if ask_to_confirm_transfer:
         if typer.confirm("Continue?", default=True):
@@ -262,6 +279,10 @@ def replicate_helper(
         s = signal.signal(signal.SIGINT, signal.SIG_IGN)
         rc.deprovision_gateways()
         signal.signal(signal.SIGINT, s)
+
+    # verify transfer
+    rc.verify_transfer(job)
+
     stats = stats if stats else {}
     stats["success"] = stats["monitor_status"] == "completed"
 

@@ -93,6 +93,9 @@ class GCSInterface(ObjectStoreInterface):
     def get_obj_size(self, obj_name):
         return self.get_obj_metadata(obj_name).size
 
+    def get_obj_last_modified(self, obj_name):
+        return self.get_obj_metadata(obj_name).updated
+
     def exists(self, obj_name):
         try:
             self.get_obj_metadata(obj_name)

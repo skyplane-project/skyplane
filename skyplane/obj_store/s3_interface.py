@@ -87,6 +87,9 @@ class S3Interface(ObjectStoreInterface):
     def get_obj_size(self, obj_name):
         return self.get_obj_metadata(obj_name)["ContentLength"]
 
+    def get_obj_last_modified(self, obj_name):
+        return self.get_obj_metadata(obj_name)["LastModified"]
+
     def exists(self, obj_name):
         try:
             self.get_obj_metadata(obj_name)
