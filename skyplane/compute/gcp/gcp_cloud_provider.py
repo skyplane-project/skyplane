@@ -269,6 +269,7 @@ class GCPCloudProvider(CloudProvider):
                 interval=0.1,
                 desc=f"Wait for RUNNING status on {server.uuid()}",
             )
+            server.wait_for_ssh_ready()
         except:
             logger.error(f"Instance {server.uuid()} did not reach RUNNING status")
             server.terminate_instance()
