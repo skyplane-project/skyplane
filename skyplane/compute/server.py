@@ -1,4 +1,5 @@
 import json
+import os
 import logging
 import socket
 from contextlib import closing
@@ -8,7 +9,7 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 import paramiko
-from skyplane import config_path
+from skyplane import config_path, key_root
 from skyplane.compute.const_cmds import make_autoshutdown_script, make_dozzle_command, make_sysctl_tcp_tuning_command
 from skyplane.utils import logger
 from skyplane.utils.fn import PathLike, wait_for
@@ -291,6 +292,14 @@ class Server:
         docker_run_flags = f"-d --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024}"
         docker_run_flags += " --mount type=tmpfs,dst=/skyplane,tmpfs-size=$(($(free -b  | head -n2 | tail -n1 | awk '{print $2}')/2))"
         docker_run_flags += f" -v /tmp/{config_path.name}:/pkg/data/{config_path.name}"
+
+        # copy service account files
+        if self.provider == "gcp":
+            service_key_file = "service_account_key.json"
+            self.upload_file(os.path.expanduser(f"{key_root}/gcp/{service_key_file}"), f"/tmp/{service_key_file}")
+            docker_envs["GCP_SERVICE_ACCOUNT_FILE"] = f"/pkg/data/{service_key_file}"
+            docker_run_flags += f" -v /tmp/{service_key_file}:/pkg/data/{service_key_file}"
+
         docker_run_flags += " " + " ".join(f"--env {k}={v}" for k, v in docker_envs.items())
         gateway_daemon_cmd = f"python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag} {'--use-compression' if use_compression else ''}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skyplane_gateway {gateway_docker_image} {gateway_daemon_cmd}"
