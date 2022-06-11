@@ -79,16 +79,16 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
     return config
 
 
-def check_gcp_service(gcp_auth: GCPAuthentication):
+def check_gcp_service(gcp_auth: GCPAuthentication, non_interactive: bool = False):
     if not gcp_auth.check_api_enabled("compute"):
         typer.secho("    GCP Compute API not enabled", fg="red")
-        if typer.confirm("    Do you want to enable it?", default=True):
+        if non_interactive or typer.confirm("    Do you want to enable it?", default=True):
             gcp_auth.enable_api("compute")
         else:
             return False
     if not gcp_auth.check_api_enabled("cloudresourcemanager"):
         typer.secho("    GCP Resource Manager API not enabled", fg="red")
-        if typer.confirm("    Do you want to enable it?", default=True):
+        if non_interactive or typer.confirm("    Do you want to enable it?", default=True):
             gcp_auth.enable_api("cloudresourcemanager")
         else:
             return False
@@ -134,7 +134,7 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
             assert config.gcp_project_id is not None, "GCP project ID must not be None"
             config.gcp_enabled = True
             auth = GCPAuthentication(config=config)
-            if not check_gcp_service(auth):
+            if not check_gcp_service(auth, non_interactive):
                 return disable_gcp_support()
             auth.save_region_config()
             return config
