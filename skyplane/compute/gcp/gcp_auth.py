@@ -143,7 +143,9 @@ class GCPAuthentication:
             account = (
                 service.projects()
                 .serviceAccounts()
-                .create(name="projects/" + self.project_id, body={"accountId": service_name, "serviceAccount": {"displayName": service_name}})
+                .create(
+                    name="projects/" + self.project_id, body={"accountId": service_name, "serviceAccount": {"displayName": service_name}}
+                )
                 .execute()
             )
         policy = service.projects().serviceAccounts().getIamPolicy(resource=account["name"]).execute()
@@ -166,10 +168,7 @@ class GCPAuthentication:
                         role["members"].append(account_handle)  # do NOT override
                         modified = True
         if modified:  # execute policy change
-            service.projects().setIamPolicy(
-                resource=self.project_id,
-                body={"policy": policy}
-            ).execute()
+            service.projects().setIamPolicy(resource=self.project_id, body={"policy": policy}).execute()
 
         return account["email"]
 
