@@ -111,7 +111,7 @@ class GCSInterface(ObjectStoreInterface):
         blob_name: str,
         params: dict,
         method: str,
-        content_length=0,
+        headers: Optional[dict] = None,
         expiration=datetime.timedelta(minutes=15),
         data=None,
         content_type="application/octet-stream",
@@ -119,9 +119,8 @@ class GCSInterface(ObjectStoreInterface):
 
         blob = self._gcs_client.bucket(self.bucket_name).blob(blob_name)
 
-        headers = {
-            "Content-Type": content_type,
-        }
+        headers = headers or {}
+        headers["Content-Type"] = content_type
 
         # generate signed URL
         url = blob.generate_signed_url(
@@ -175,12 +174,12 @@ class GCSInterface(ObjectStoreInterface):
         dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
         os.path.getsize(src_file_path)
         bucket = self._gcs_client.bucket(self.bucket_name)
+        b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
 
         if part_number is None:
             blob = bucket.blob(dst_object_name)
             blob.upload_from_filename(src_file_path)
             if check_md5:
-                b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
                 blob_md5 = blob.md5_hash
                 if b64_md5sum != blob_md5:
                     raise exceptions.ObjectStoreChecksumMismatchException(
@@ -194,13 +193,18 @@ class GCSInterface(ObjectStoreInterface):
 
         # send XML api request
         response = self.send_xml_request(
-            dst_object_name, {"uploadId": upload_id, "partNumber": part_number}, "PUT", data=open(src_file_path, "rb")
+            dst_object_name,
+            {"uploadId": upload_id, "partNumber": part_number},
+            "PUT",
+            headers={"x-goog-hash": f"md5={b64_md5sum}"},
+            data=open(src_file_path, "rb"),
         )
-        response_data = dict(response.headers)
-        if "ETag" not in response_data:
-            raise ValueError(f"Invalid response {response} {response_data}")
-        if check_md5:
-            raise NotImplementedError()
+
+        # check response
+        if response.status_code != 200 or "ETag" not in response.headers:
+            raise exceptions.ObjectStoreUploadFailedException(
+                f"Upload of object {dst_object_name} in bucket {self.bucket_name} failed, got status code {response.status_code}"
+            )
 
     def initiate_multipart_upload(self, dst_object_name):
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
