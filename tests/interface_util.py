@@ -67,9 +67,6 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
         assert dl_file_md5 == file_md5
 
     interface.delete_objects([obj_name])
-    time.sleep(1)
-    assert not interface.exists(obj_name)
-
     if test_delete_bucket:
         interface.delete_bucket()
         time.sleep(1)
