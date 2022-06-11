@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+import traceback
 
 import boto3
 import typer
@@ -91,6 +92,7 @@ def check_gcp_service(gcp_auth: GCPAuthentication, non_interactive: bool = False
             typer.secho(f"    GCP {name} API not enabled", fg="red")
             if non_interactive or typer.confirm(f"    Do you want to enable the {name} API?", default=True):
                 gcp_auth.enable_api(service)
+                typer.secho(f"    Enabled GCP {name} API", fg="blue")
             else:
                 return False
     return True
@@ -137,7 +139,12 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
             auth = GCPAuthentication(config=config)
             if not check_gcp_service(auth, non_interactive):
                 return disable_gcp_support()
-            auth.save_region_config()
+            try:
+                auth.save_region_config()
+            except Exception as e:
+                typer.secho(f"    Error saving GCP region config", fg="red")
+                typer.secho(f"    {e}\n{traceback.format_exc()}", fg="red")
+                return disable_gcp_support()
             return config
         else:
             return disable_gcp_support()
