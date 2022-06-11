@@ -80,18 +80,19 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
 
 
 def check_gcp_service(gcp_auth: GCPAuthentication, non_interactive: bool = False):
-    if not gcp_auth.check_api_enabled("compute"):
-        typer.secho("    GCP Compute API not enabled", fg="red")
-        if non_interactive or typer.confirm("    Do you want to enable it?", default=True):
-            gcp_auth.enable_api("compute")
-        else:
-            return False
-    if not gcp_auth.check_api_enabled("cloudresourcemanager"):
-        typer.secho("    GCP Resource Manager API not enabled", fg="red")
-        if non_interactive or typer.confirm("    Do you want to enable it?", default=True):
-            gcp_auth.enable_api("cloudresourcemanager")
-        else:
-            return False
+    services = {
+        "iam": "IAM",
+        "compute": "Compute Engine",
+        "storage": "Storage",
+        "cloudresourcemanager": "Cloud Resource Manager",
+    }
+    for service, name in services.items():
+        if not gcp_auth.check_api_enabled(service):
+            typer.secho(f"    GCP {name} API not enabled", fg="red")
+            if non_interactive or typer.confirm(f"    Do you want to enable the {name} API?", default=True):
+                gcp_auth.enable_api(service)
+            else:
+                return False
     return True
 
 
