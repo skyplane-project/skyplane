@@ -167,7 +167,7 @@ class GCPAuthentication:
                         modified = True
         if modified:  # execute policy change
             service.projects().setIamPolicy(
-                resource=f"projects/{self.project_id}",
+                resource=self.project_id,
                 body={"policy": policy}
             ).execute()
 
