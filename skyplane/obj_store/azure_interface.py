@@ -2,7 +2,7 @@ import os
 import subprocess
 import time
 import uuid
-from functools import partial
+from functools import lru_cache, partial
 from typing import Iterator, List
 
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError, HttpResponseError
@@ -171,7 +171,8 @@ class AzureInterface(ObjectStoreInterface):
             blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=key)
             blob_client.delete_blob()
 
-    def get_obj_metadata(self, obj_name):  # Not Tested
+    @lru_cache(maxsize=1024)
+    def get_obj_metadata(self, obj_name):
         blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=obj_name)
         try:
             return blob_client.get_blob_properties()

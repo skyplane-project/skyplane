@@ -1,3 +1,4 @@
+from functools import lru_cache
 import os
 from typing import Iterator, List
 
@@ -77,6 +78,7 @@ class S3Interface(ObjectStoreInterface):
             batch, keys = keys[:1000], keys[1000:]  # take up to 1000 keys at a time
             s3_client.delete_objects(Bucket=self.bucket_name, Delete={"Objects": [{"Key": k} for k in batch]})
 
+    @lru_cache(maxsize=1024)
     def get_obj_metadata(self, obj_name):
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         try:

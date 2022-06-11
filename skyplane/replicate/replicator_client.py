@@ -408,11 +408,18 @@ class ReplicatorClient:
 
                 def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
                     hop_instance, chunk_requests = args
-                    reply = retry_requests().post(
-                        f"{hop_instance.gateway_api_url}/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests]
-                    )
-                    if reply.status_code != 200:
-                        raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
+                    while chunk_requests:
+                        batch, chunk_requests = chunk_requests[: 1024 * 16], chunk_requests[1024 * 16 :]
+                        reply = retry_requests().post(
+                            f"{hop_instance.gateway_api_url}/api/v1/chunk_requests", json=[c.as_dict() for c in batch]
+                        )
+                        if reply.status_code != 200:
+                            raise Exception(
+                                f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}"
+                            )
+                        logger.fs.debug(
+                            f"Sent {len(batch)} chunk requests to {hop_instance.instance_name()}, {len(chunk_requests)} remaining"
+                        )
 
                 start_instances = list(zip(src_instances, chunk_requests_sharded.values()))
                 do_parallel(send_chunk_requests, start_instances, n=-1)
@@ -654,7 +661,9 @@ class ReplicatorClient:
                 return False
 
         # verify that all objects in src_interface are present in dst_interface
-        matches = do_parallel(verify, zip(job.src_objs, job.dest_objs), n=16, spinner=True, spinner_persist=True, desc="Verifying transfer")
+        matches = do_parallel(
+            verify, zip(job.src_objs, job.dest_objs), n=512, spinner=True, spinner_persist=True, desc="Verifying transfer"
+        )
         failed_src_objs = [src_key for (src_key, dst_key), match in matches if not match]
         if len(failed_src_objs) > 0:
             raise exceptions.TransferFailedException(

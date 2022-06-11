@@ -1,3 +1,4 @@
+from functools import lru_cache
 import os
 from typing import Iterator, List
 from skyplane import exceptions
@@ -81,6 +82,7 @@ class GCSInterface(ObjectStoreInterface):
             self._gcs_client.bucket(self.bucket_name).blob(key).delete()
             assert not self.exists(key)
 
+    @lru_cache(maxsize=1024)
     def get_obj_metadata(self, obj_name):
         bucket = self._gcs_client.bucket(self.bucket_name)
         blob = bucket.get_blob(obj_name)
