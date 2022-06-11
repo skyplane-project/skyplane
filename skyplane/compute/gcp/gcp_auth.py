@@ -71,7 +71,7 @@ class GCPAuthentication:
     @property
     def service_account_credentials(self):
         if self._service_credentials_file is None:
-            self._service_account_email = self.create_service_account(self.service_account_name, self.project_id)
+            self._service_account_email = self.create_service_account(self.service_account_name)
             self._service_credentials_file = self.get_service_account_key(self._service_account_email)
         return self._service_credentials_file
 
@@ -128,9 +128,9 @@ class GCPAuthentication:
 
         return key_path
 
-    def create_service_account(self, service_name, project_id):
+    def create_service_account(self, service_name):
         service = self.get_gcp_client(service_name="iam")
-        service_accounts = service.projects().serviceAccounts().list(name="projects/" + project_id).execute()["accounts"]
+        service_accounts = service.projects().serviceAccounts().list(name="projects/" + self.project_id).execute()["accounts"]
 
         account = None
         for service_account in service_accounts:
@@ -143,7 +143,7 @@ class GCPAuthentication:
             account = (
                 service.projects()
                 .serviceAccounts()
-                .create(name="projects/" + project_id, body={"accountId": service_name, "serviceAccount": {"displayName": service_name}})
+                .create(name="projects/" + self.project_id, body={"accountId": service_name, "serviceAccount": {"displayName": service_name}})
                 .execute()
             )
         policy = service.projects().serviceAccounts().getIamPolicy(resource=account["name"]).execute()
@@ -165,10 +165,11 @@ class GCPAuthentication:
                     if account_handle not in role["members"]:
                         role["members"].append(account_handle)  # do NOT override
                         modified = True
-        if modified:
-            # execute policy change
-            request = service.projects().setIamPolicy(resource=self.project_id, body={"policy": policy})
-            response = request.execute()
+        if modified:  # execute policy change
+            service.projects().setIamPolicy(
+                resource=f"projects/{self.project_id}",
+                body={"policy": policy}
+            ).execute()
 
         return account["email"]
 
