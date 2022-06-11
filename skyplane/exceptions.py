@@ -14,5 +14,5 @@ class InsufficientVCPUException(SkyplaneException):
     pass
 
 
-class ObjectStoreChecksumMismatchException(SkyplaneException):
+class ObjectStoreException(SkyplaneException):
     pass

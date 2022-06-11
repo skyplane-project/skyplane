@@ -264,7 +264,7 @@ class AzureInterface(ObjectStoreInterface):
             b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
             blob_md5 = blob_client.get_blob_properties().properties.content_settings.content_md5
             if b64_md5sum != blob_md5:
-                raise exceptions.ObjectStoreChecksumMismatchException(
+                raise exceptions.ObjectStoreException(
                     f"Checksum mismatch for object {dst_object_name} in bucket {self.bucket_name}, "
                     + f"expected {b64_md5sum}, got {blob_md5}"
                 )
