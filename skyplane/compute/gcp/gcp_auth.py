@@ -175,6 +175,15 @@ class GCPAuthentication:
     def enabled(self):
         return self.config.gcp_enabled and self.credentials is not None and self.project_id is not None
 
+    def check_api_enabled(self, api_name: str):
+        service_usage = self.get_gcp_client(service_name="serviceusage")
+        services = service_usage.services().get(name=f"projects/{self.project_id}/services/{api_name}.googleapis.com").execute()
+        return services.get("state") == "ENABLED"
+
+    def enable_api(self, service_name: str):
+        service_usage = self.get_gcp_client(service_name="serviceusage")
+        return service_usage.services().enable(name=f"projects/{self.project_id}/services/{service_name}.googleapis.com").execute()
+
     def get_gcp_client(self, service_name="compute", version="v1"):
         return discovery.build(service_name, version, credentials=self.credentials, client_options={"quota_project_id": self.project_id})
 
@@ -184,3 +193,6 @@ class GCPAuthentication:
 
     def get_gcp_instances(self, gcp_region: str):
         return self.get_gcp_client().instances().list(project=self.project_id, zone=gcp_region).execute()
+
+    def check_compute_engine_enabled(self):
+        """Check if the GCP compute engine API is enabled"""

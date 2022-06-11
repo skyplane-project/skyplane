@@ -79,7 +79,30 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
     return config
 
 
+def check_gcp_service(gcp_auth: GCPAuthentication):
+    if not gcp_auth.check_api_enabled("compute"):
+        typer.secho("    GCP Compute API not enabled", fg="red")
+        if typer.confirm("    Do you want to enable it?", default=True):
+            gcp_auth.enable_api("compute")
+        else:
+            return False
+    if not gcp_auth.check_api_enabled("cloudresourcemanager"):
+        typer.secho("    GCP Resource Manager API not enabled", fg="red")
+        if typer.confirm("    Do you want to enable it?", default=True):
+            gcp_auth.enable_api("cloudresourcemanager")
+        else:
+            return False
+    return True
+
+
 def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_interactive: bool = False) -> SkyplaneConfig:
+    def disable_gcp_support():
+        typer.secho("    Disabling Google Cloud support", fg="blue")
+        config.gcp_enabled = False
+        config.gcp_project_id = None
+        GCPAuthentication.clear_region_config()
+        return config
+
     if force_init:
         typer.secho("    GCP credentials will be re-initialized", fg="red")
         config.gcp_project_id = None
@@ -100,10 +123,7 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
             fg="red",
         )
         typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red")
-        typer.secho("    Disabling GCP support", fg="blue")
-        config.gcp_enabled = False
-        GCPAuthentication.clear_region_config()
-        return config
+        return disable_gcp_support()
     else:
         typer.secho("    GCP credentials found in GCP CLI", fg="blue")
         if non_interactive or typer.confirm("    GCP credentials found, do you want to enable GCP support in Skyplane?", default=True):
@@ -114,11 +134,9 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
             assert config.gcp_project_id is not None, "GCP project ID must not be None"
             config.gcp_enabled = True
             auth = GCPAuthentication(config=config)
+            if not check_gcp_service(auth):
+                return disable_gcp_support()
             auth.save_region_config()
             return config
         else:
-            config.gcp_project_id = None
-            typer.secho("    Disabling GCP support", fg="blue")
-            config.gcp_enabled = False
-            GCPAuthentication.clear_region_config()
-            return config
+            return disable_gcp_support()
