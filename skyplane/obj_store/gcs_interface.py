@@ -80,7 +80,6 @@ class GCSInterface(ObjectStoreInterface):
     def delete_objects(self, keys: List[str]):
         for key in keys:
             self._gcs_client.bucket(self.bucket_name).blob(key).delete()
-            assert not self.exists(key)
 
     @lru_cache(maxsize=1024)
     def get_obj_metadata(self, obj_name):
