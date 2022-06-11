@@ -141,11 +141,9 @@ class GCSInterface(ObjectStoreInterface):
 
         return response
 
-    # todo: implement range request for download
     def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = src_object_name if src_object_name[0] != "/" else src_object_name
-        print("download", dst_file_path, offset_bytes, size_bytes)
 
         offset = 0
         bucket = self._gcs_client.bucket(self.bucket_name)
@@ -175,7 +173,6 @@ class GCSInterface(ObjectStoreInterface):
         if part_number is None:
             blob = bucket.blob(dst_object_name)
             blob.upload_from_filename(src_file_path)
-            print("Uploaded", dst_object_name)
             return
 
         # multipart upload
@@ -186,25 +183,15 @@ class GCSInterface(ObjectStoreInterface):
             dst_object_name, {"uploadId": upload_id, "partNumber": part_number}, "PUT", data=open(src_file_path, "rb")
         )
         response_data = dict(response.headers)
-
         if "ETag" not in response_data:
             raise ValueError(f"Invalid response {response} {response_data}")
-
-        print("Uploaded", upload_id, response, response_data)
-
         return response_data["ETag"]
 
-    def initiate_multipart_upload(self, dst_object_name, size_bytes):
-
+    def initiate_multipart_upload(self, dst_object_name):
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
-
-        # send XML api request
         response = self.send_xml_request(dst_object_name, {"uploads": None}, "POST")
-
-        # parse response
         tree = ElementTree.fromstring(response.content)
         upload_id = tree[2].text
-
         return upload_id
 
     def complete_multipart_upload(self, dst_object_name, upload_id):
@@ -217,8 +204,12 @@ class GCSInterface(ObjectStoreInterface):
         xml_data = ElementTree.Element("CompleteMultipartUpload")
         for part in tree.findall("ns:Part", ns):
             part_xml = ElementTree.Element("Part")
-            etag = part.find("ns:ETag", ns).text
-            part_num = part.find("ns:PartNumber", ns).text
+            etag_match = part.find("ns:ETag", ns)
+            assert etag_match is not None
+            etag = etag_match.text
+            part_num_match = part.find("ns:PartNumber", ns)
+            assert part_num_match is not None
+            part_num = part_num_match.text
             ElementTree.SubElement(part_xml, "PartNumber").text = part_num
             ElementTree.SubElement(part_xml, "ETag").text = etag
             xml_data.append(part_xml)

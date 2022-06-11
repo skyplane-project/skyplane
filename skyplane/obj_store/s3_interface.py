@@ -133,7 +133,7 @@ class S3Interface(ObjectStoreInterface):
         else:
             s3_client.upload_file(src_file_path, self.bucket_name, dst_object_name)
 
-    def initiate_multipart_upload(self, dst_object_name, size_bytes):
+    def initiate_multipart_upload(self, dst_object_name):
         # cannot infer content type here
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
