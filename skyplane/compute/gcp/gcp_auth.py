@@ -169,7 +169,6 @@ class GCPAuthentication:
                         modified = True
         if modified:  # execute policy change
             service.projects().setIamPolicy(resource=self.project_id, body={"policy": policy}).execute()
-
         return account["email"]
 
     def enabled(self):
