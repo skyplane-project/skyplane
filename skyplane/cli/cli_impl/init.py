@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+import traceback
 
 import boto3
 import typer
@@ -79,7 +80,32 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
     return config
 
 
+def check_gcp_service(gcp_auth: GCPAuthentication, non_interactive: bool = False):
+    services = {
+        "iam": "IAM",
+        "compute": "Compute Engine",
+        "storage": "Storage",
+        "cloudresourcemanager": "Cloud Resource Manager",
+    }
+    for service, name in services.items():
+        if not gcp_auth.check_api_enabled(service):
+            typer.secho(f"    GCP {name} API not enabled", fg="red")
+            if non_interactive or typer.confirm(f"    Do you want to enable the {name} API?", default=True):
+                gcp_auth.enable_api(service)
+                typer.secho(f"    Enabled GCP {name} API", fg="blue")
+            else:
+                return False
+    return True
+
+
 def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_interactive: bool = False) -> SkyplaneConfig:
+    def disable_gcp_support():
+        typer.secho("    Disabling Google Cloud support", fg="blue")
+        config.gcp_enabled = False
+        config.gcp_project_id = None
+        GCPAuthentication.clear_region_config()
+        return config
+
     if force_init:
         typer.secho("    GCP credentials will be re-initialized", fg="red")
         config.gcp_project_id = None
@@ -100,10 +126,7 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
             fg="red",
         )
         typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red")
-        typer.secho("    Disabling GCP support", fg="blue")
-        config.gcp_enabled = False
-        GCPAuthentication.clear_region_config()
-        return config
+        return disable_gcp_support()
     else:
         typer.secho("    GCP credentials found in GCP CLI", fg="blue")
         if non_interactive or typer.confirm("    GCP credentials found, do you want to enable GCP support in Skyplane?", default=True):
@@ -114,11 +137,14 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
             assert config.gcp_project_id is not None, "GCP project ID must not be None"
             config.gcp_enabled = True
             auth = GCPAuthentication(config=config)
-            auth.save_region_config()
+            if not check_gcp_service(auth, non_interactive):
+                return disable_gcp_support()
+            try:
+                auth.save_region_config()
+            except Exception as e:
+                typer.secho(f"    Error saving GCP region config", fg="red")
+                typer.secho(f"    {e}\n{traceback.format_exc()}", fg="red")
+                return disable_gcp_support()
             return config
         else:
-            config.gcp_project_id = None
-            typer.secho("    Disabling GCP support", fg="blue")
-            config.gcp_enabled = False
-            GCPAuthentication.clear_region_config()
-            return config
+            return disable_gcp_support()

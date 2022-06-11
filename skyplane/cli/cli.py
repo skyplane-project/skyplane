@@ -140,8 +140,8 @@ def cp(
 
     clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
 
-    if (provider_src != "s3" or provider_dst != "s3") and max_chunk_size_mb:
-        raise ValueError(f"Multipart uploads not supported outside of S3")
+    if (provider_src == "azure" or provider_dst == "azure") and max_chunk_size_mb:
+        raise ValueError(f"Multipart uploads not supported for Azure")
 
     # raise file limits for local transfers
     if provider_src == "local" or provider_dst == "local":

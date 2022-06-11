@@ -1,5 +1,6 @@
 import json
 import pickle
+from re import S
 import time
 import uuid
 from datetime import datetime
@@ -316,6 +317,7 @@ class ReplicatorClient:
                         # TODO: only do if num_chunks > 1
                         # TODO: potentially do this in a seperate thread, and/or after chunks sent
                         obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
+                        logger.fs.info(f"Initiate multipart upload {dest_obj}")
                         upload_id = obj_store_interface.initiate_multipart_upload(dest_obj)
 
                         offset = 0
@@ -547,7 +549,11 @@ class ReplicatorClient:
                                         raise ValueError(f"Failed to complete upload {req['upload_id']}")
 
                                 do_parallel(
-                                    complete_upload, self.multipart_upload_requests, n=-1, desc="Completing multipart uploads", spinner=True
+                                    complete_upload,
+                                    self.multipart_upload_requests,
+                                    n=-1,
+                                    desc="Completing multipart uploads",
+                                    spinner=False,
                                 )
                             return dict(
                                 completed_chunk_ids=completed_chunk_ids,
