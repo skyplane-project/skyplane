@@ -299,68 +299,80 @@ class ReplicatorClient:
             chunks = []
 
             # calculate object sizes
-            if job.obj_sizes:
-                obj_file_size_bytes = job.obj_sizes
-            elif job.obj_sizes is None and job.random_chunk_size_mb:
-                obj_file_size_bytes = {obj: job.random_chunk_size_mb * MB for obj in job.src_objs}
-            else:
-                raise ValueError("Either obj_sizes or random_chunk_size_mb must be specified")
+            with Timer("Calculate object sizes"):
+                if job.obj_sizes:
+                    obj_file_size_bytes = job.obj_sizes
+                elif job.obj_sizes is None and job.random_chunk_size_mb:
+                    obj_file_size_bytes = {obj: job.random_chunk_size_mb * MB for obj in job.src_objs}
+                else:
+                    raise ValueError("Either obj_sizes or random_chunk_size_mb must be specified")
 
-            idx = 0
-            for (src_obj, dest_obj) in zip(job.src_objs, job.dest_objs):
-                if obj_file_size_bytes:
-                    if job.max_chunk_size_mb:  # split objects into sub-chunks
-                        chunk_size_bytes = int(job.max_chunk_size_mb * 1e6)
-                        num_chunks = int(obj_file_size_bytes[src_obj] / chunk_size_bytes) + 1
+            with Timer("Build chunks"):
+                idx = 0
+                for (src_obj, dest_obj) in zip(job.src_objs, job.dest_objs):
+                    if obj_file_size_bytes:
+                        if job.max_chunk_size_mb:  # split objects into sub-chunks
+                            chunk_size_bytes = int(job.max_chunk_size_mb * 1e6)
+                            num_chunks = int(obj_file_size_bytes[src_obj] / chunk_size_bytes) + 1
 
-                        # TODO: figure out what to do on # part limits per object
-                        # TODO: only do if num_chunks > 1
-                        # TODO: potentially do this in a seperate thread, and/or after chunks sent
-                        obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
-                        logger.fs.info(f"Initiate multipart upload {dest_obj}")
-                        upload_id = obj_store_interface.initiate_multipart_upload(dest_obj)
+                            # TODO: figure out what to do on # part limits per object
+                            # TODO: only do if num_chunks > 1
+                            # TODO: potentially do this in a seperate thread, and/or after chunks sent
+                            obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
+                            logger.fs.info(f"Initiate multipart upload {dest_obj}")
+                            upload_id = obj_store_interface.initiate_multipart_upload(dest_obj)
 
-                        offset = 0
-                        part_num = 1
-                        parts = []
-                        for chunk in range(num_chunks):
-                            # size is min(chunk_size, remaining data)
-                            file_size_bytes = min(chunk_size_bytes, obj_file_size_bytes[src_obj] - offset)
-                            assert file_size_bytes > 0, f"File size <= 0 {file_size_bytes}"
+                            offset = 0
+                            part_num = 1
+                            parts = []
+                            for chunk in range(num_chunks):
+                                # size is min(chunk_size, remaining data)
+                                file_size_bytes = min(chunk_size_bytes, obj_file_size_bytes[src_obj] - offset)
+                                assert file_size_bytes > 0, f"File size <= 0 {file_size_bytes}"
+                                chunks.append(
+                                    Chunk(
+                                        src_key=src_obj,
+                                        dest_key=dest_obj,
+                                        chunk_id=idx,
+                                        file_offset_bytes=offset,
+                                        chunk_length_bytes=file_size_bytes,
+                                        part_number=part_num,
+                                        upload_id=upload_id,
+                                    )
+                                )
+                                parts.append(part_num)
+
+                                idx += 1
+                                part_num += 1
+                                offset += chunk_size_bytes
+                            # add multipart upload request
+                            self.multipart_upload_requests.append(
+                                {
+                                    "region": job.dest_region,
+                                    "bucket": job.dest_bucket,
+                                    "upload_id": upload_id,
+                                    "key": dest_obj,
+                                    "parts": parts,
+                                }
+                            )
+                        else:  # transfer entire object
+                            file_size_bytes = obj_file_size_bytes[src_obj]
                             chunks.append(
                                 Chunk(
                                     src_key=src_obj,
                                     dest_key=dest_obj,
                                     chunk_id=idx,
-                                    file_offset_bytes=offset,
+                                    file_offset_bytes=0,
                                     chunk_length_bytes=file_size_bytes,
-                                    part_number=part_num,
-                                    upload_id=upload_id,
                                 )
                             )
-                            parts.append(part_num)
-
                             idx += 1
-                            part_num += 1
-                            offset += chunk_size_bytes
-
-                        # add multipart upload request
-                        self.multipart_upload_requests.append(
-                            {"region": job.dest_region, "bucket": job.dest_bucket, "upload_id": upload_id, "key": dest_obj, "parts": parts}
-                        )
-
-                    else:  # transfer entire object
-                        file_size_bytes = obj_file_size_bytes[src_obj]
+                    else:  # random data replication
+                        file_size_bytes = job.random_chunk_size_mb * MB
                         chunks.append(
                             Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
                         )
                         idx += 1
-                else:  # random data replication
-                    file_size_bytes = job.random_chunk_size_mb * MB
-                    chunks.append(
-                        Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
-                    )
-                    idx += 1
 
             # partition chunks into roughly equal-sized batches (by bytes)
             def partition(items: List[Chunk], n_batches: int) -> List[List[Chunk]]:

@@ -137,7 +137,7 @@ class GCSInterface(ObjectStoreInterface):
         response = requests.Session().send(prepared)
 
         if not response.ok:
-            raise ValueError(f"Invalid status code {response.status_code}")
+            raise ValueError(f"Invalid status code {response.status_code}: {response.text}")
 
         return response
 
@@ -196,14 +196,14 @@ class GCSInterface(ObjectStoreInterface):
             dst_object_name,
             {"uploadId": upload_id, "partNumber": part_number},
             "PUT",
-            headers={"x-goog-hash": f"md5={b64_md5sum}"},
+            headers={"Content-MD5": b64_md5sum} if check_md5 else None,
             data=open(src_file_path, "rb"),
         )
 
         # check response
-        if response.status_code != 200 or "ETag" not in response.headers:
+        if "ETag" not in response.headers:
             raise exceptions.ObjectStoreException(
-                f"Upload of object {dst_object_name} in bucket {self.bucket_name} failed, got status code {response.status_code}"
+                f"Upload of object {dst_object_name} in bucket {self.bucket_name} failed, got status code {response.status_code} w/ response {response.text}"
             )
 
     def initiate_multipart_upload(self, dst_object_name):
