@@ -44,6 +44,7 @@ class AzureInterface(ObjectStoreInterface):
                 raise exceptions.MissingBucketException(
                     f"Azure storage account {self.account_name} not found, "
                     + f"found the following storage accounts: {avail_storage_accounts}"
+                    + f"with credential {self.auth.get_azure_credential()}"
                 )
         if not self.container_exists():
             if create_bucket:
