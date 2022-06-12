@@ -85,6 +85,7 @@ def query_src_dest_objs(
     src_key_prefix: str = "",
     dest_key_prefix: str = "",
     cached_src_objs: Optional[List[ObjectStoreObject]] = None,
+    names: Optional[bool] = False,
 ) -> Tuple[List[ObjectStoreObject], List[ObjectStoreObject], List[float]]:
    
     if cached_src_objs:
@@ -131,6 +132,9 @@ def query_src_dest_objs(
 
     obj_sizes={obj.key: obj.size for obj in src_objs}
 
+    if names:
+        return src_objs_job, dest_objs_job, obj_sizes
+
     dst_iface = ObjectStoreInterface.create(dst_region, dest_bucket)
     logger.fs.debug(f"Querying objects in {dest_bucket}")
     with console.status(f"Querying objects in {dest_bucket}") as status:
@@ -140,7 +144,7 @@ def query_src_dest_objs(
                 dst_objs.append(obj)
             status.update(f"Querying objects in {dest_bucket} (found {len(dst_objs)} objects so far)")
 
-    return src_objs, dst_objs, obj_sizes
+    return src_objs_job, dest_objs_job, obj_sizes, src_objs, dst_objs
 
 
 def replicate_helper(
@@ -223,6 +227,7 @@ def replicate_helper(
                     src_key_prefix, 
                     dest_key_prefix,
                     cached_src_objs=cached_src_objs,
+                    names=True,
                 )
 
         job = ReplicationJob(

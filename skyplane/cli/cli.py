@@ -285,46 +285,7 @@ def sync(
     dst_region = dst_client.region_tag()
 
     # Query source and destination buckets
-    '''
-    src_objs_all = []
-    dst_objs_all = []
-    with Timer(f"Query {bucket_src} prefix {path_src}"):
-        with Progress(transient=True) as progress:
-            query_task = progress.add_task(f"Querying objects in {bucket_src}", total=None)
-            for obj in src_client.list_objects(path_src):
-                src_objs_all.append(obj)
-                progress.update(query_task, description=f"Querying objects in {bucket_src} (found {len(src_objs_all)} objects so far)")
-            for obj in dst_client.list_objects(path_dst):
-                dst_objs_all.append(obj)
-                progress.update(query_task, description=f"Querying objects in {bucket_dst} (found {len(dst_objs_all)} objects so far)")
-    if not src_objs_all:
-        logger.error("Specified object does not exist.")
-        raise exceptions.MissingObjectException()
-
-    # Match destination objects to source objects and determine if they need to be copied
-    dst_dict = dict()
-    for obj in dst_objs_all:
-        key = obj.key
-        if path_dst == "":
-            dst_dict[key] = obj
-        else:
-            dst_dict[key[len(path_dst) + 1 :]] = obj
-
-    src_obs_new = []
-    for src_obj in src_objs_all:
-        #src_string = src_obj.key[len(path_src) + 1:]
-        if src_obj.key in dst_dict:
-            dst_obj = dst_dict[src_obj.key]
-            if src_obj.last_modified > dst_obj.last_modified or src_obj.size != dst_obj.size:
-                src_obs_new.append(src_obj)
-        else:
-            src_obs_new.append(src_obj)
-
-    if len(src_obs_new) == 0:
-        typer.secho("No objects need updating. Exiting...")
-        raise typer.Exit(0)
-    '''
-    src_objs, dst_objs, obj_sizes = query_src_dest_objs(
+    src_objs_job, dst_objs_job, obj_sizes, src_objs, dst_objs = query_src_dest_objs(
         src_region,
         dst_region,
         bucket_src,
@@ -338,38 +299,47 @@ def sync(
 
     dst_dict = dict()
     for obj in dst_objs:
-        key = obj.key
-        if path_dst == "":
-            dst_dict[key] = obj
-        else:
-            dst_dict[key[len(path_dst) + 1 :]] = obj
-
+        dst_dict[obj.key] = obj
 
     
     src_objs_new = []
     dst_objs_new = []
     obj_sizes_new = dict()
-    for src_obj in src_objs:
-        src_string = src_obj.key[len(path_src) + 1:]
-        if src_string in dst_dict:
-            dst_obj = dst_dict[src_string]
+    for i in range(len(src_objs)):
+        src_obj = src_objs[i]
+        src_path_no_prefix = src_obj.key[len(path_src) :] if src_obj.key.startswith(path_src) else src_obj.key
+        # remove single leading slash if present
+        src_path_no_prefix = src_path_no_prefix[1:] if src_path_no_prefix.startswith("/") else src_path_no_prefix
+        if len(path_dst) == 0:
+            dst_string = src_path_no_prefix
+        elif path_dst.endswith("/"):
+            dst_string = path_dst + src_path_no_prefix
+        else:
+            dst_string = path_dst + "/" + src_path_no_prefix
+
+        print(dst_string)
+        if dst_string in dst_dict:
+            dst_obj = dst_dict[dst_string]
             if src_obj.last_modified > dst_obj.last_modified or src_obj.size != dst_obj.size:
-                src_objs_job.append(src_obj.key)
-                dst_objs_job.append(dst_obj.key)
+                print("hi")
+                src_objs_new.append(src_obj.key)
+                dst_objs_new.append(dst_obj.key)
                 obj_sizes_new[src_obj.key] = obj_sizes[src_obj.key]
         else:
             src_objs_new.append(src_obj.key)
-            src_path_no_prefix = src_obj.key[len(path_src):] if src_obj.key.startswith(path_src) else src_obj.key
-            src_path_no_prefix = src_path_no_prefix[1:] if src_path_no_prefix.startswith("/") else src_path_no_prefix
-            dst_objs_new.append(path_dst + src_path_no_prefix)
+            dst_objs_new.append(dst_objs_job[i])
             obj_sizes_new[src_obj.key] = obj_sizes[src_obj.key]
 
+    print(src_objs_new)
+    print(dst_objs_new)
 
-    if len(src_objs_new) == 0:
+
+    if len(dst_objs_new) == 0:
         typer.secho("No objects need updating. Exiting...")
         raise typer.Exit(0)
 
     transfer_list = (src_objs_new, dst_objs_new, obj_sizes_new,)
+
 
     topo = generate_topology(
         src_region,
