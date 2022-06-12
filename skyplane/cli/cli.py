@@ -286,19 +286,13 @@ def sync(
 
     # Query source and destination buckets
     src_objs_job, dst_objs_job, obj_sizes, src_objs, dst_objs = query_src_dest_objs(
-        src_region,
-        dst_region,
-        bucket_src,
-        bucket_dst,
-        path_src,
-        path_dst,
+        src_region, dst_region, bucket_src, bucket_dst, path_src, path_dst
     )
 
     dst_dict = dict()
     for obj in dst_objs:
         dst_dict[obj.key] = obj
 
-    
     src_objs_new = []
     dst_objs_new = []
     obj_sizes_new = dict()
@@ -325,13 +319,11 @@ def sync(
             dst_objs_new.append(dst_objs_job[i])
             obj_sizes_new[src_obj.key] = obj_sizes[src_obj.key]
 
-
     if len(dst_objs_new) == 0:
         typer.secho("No objects need updating. Exiting...")
         raise typer.Exit(0)
 
-    transfer_list = (src_objs_new, dst_objs_new, obj_sizes_new,)
-
+    transfer_list = (src_objs_new, dst_objs_new, obj_sizes_new)
 
     topo = generate_topology(
         src_region,
@@ -344,7 +336,6 @@ def sync(
         solver_throughput_grid=solver_throughput_grid,
         solver_verbose=solver_verbose,
     )
-
 
     replicate_helper(
         topo,

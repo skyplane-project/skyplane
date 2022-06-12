@@ -50,10 +50,7 @@ def generate_topology(
         with Timer() as t:
             with console.status("Solving for the optimal transfer plan"):
                 solution = tput.solve_min_cost(
-                    problem,
-                    solver=ThroughputSolverILP.choose_solver(),
-                    solver_verbose=solver_verbose,
-                    save_lp_path=None,
+                    problem, solver=ThroughputSolverILP.choose_solver(), solver_verbose=solver_verbose, save_lp_path=None
                 )
         typer.secho(f"Solving for the optimal transfer plan took {t.elapsed:.2f}s", fg="green")
         topo, scale_factor = tput.to_replication_topology(solution)
@@ -86,7 +83,7 @@ def query_src_dest_objs(
     dest_key_prefix: str = "",
     cached_src_objs: Optional[List[ObjectStoreObject]] = None,
 ) -> Tuple[List[str], List[str], Dict[str, int], List[ObjectStoreObject], List[ObjectStoreObject]]:
-   
+
     if cached_src_objs:
         src_objs = cached_src_objs
     else:
@@ -129,7 +126,7 @@ def query_src_dest_objs(
             else:
                 dest_objs_job.append(dest_key_prefix + "/" + src_path_no_prefix)
 
-    obj_sizes={obj.key: obj.size for obj in src_objs}
+    obj_sizes = {obj.key: obj.size for obj in src_objs}
 
     dst_iface = ObjectStoreInterface.create(dst_region, dest_bucket)
     logger.fs.debug(f"Querying objects in {dest_bucket}")
@@ -216,14 +213,14 @@ def replicate_helper(
             src_objs_job, dest_objs_job, obj_sizes = transfer_list
         else:
             src_objs_job, dest_objs_job, obj_sizes, src_objs, dst_objs = query_src_dest_objs(
-                    topo.source_region(), 
-                    topo.sink_region(),
-                    source_bucket,
-                    dest_bucket,
-                    src_key_prefix, 
-                    dest_key_prefix,
-                    cached_src_objs=cached_src_objs,
-                )
+                topo.source_region(),
+                topo.sink_region(),
+                source_bucket,
+                dest_bucket,
+                src_key_prefix,
+                dest_key_prefix,
+                cached_src_objs=cached_src_objs,
+            )
 
         job = ReplicationJob(
             source_region=topo.source_region(),
