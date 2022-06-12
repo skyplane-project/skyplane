@@ -294,9 +294,6 @@ def sync(
         path_dst,
     )
 
-    print(src_objs)
-    print(dst_objs)
-
     dst_dict = dict()
     for obj in dst_objs:
         dst_dict[obj.key] = obj
@@ -310,18 +307,16 @@ def sync(
         src_path_no_prefix = src_obj.key[len(path_src) :] if src_obj.key.startswith(path_src) else src_obj.key
         # remove single leading slash if present
         src_path_no_prefix = src_path_no_prefix[1:] if src_path_no_prefix.startswith("/") else src_path_no_prefix
-        if len(path_dst) == 0:
+        if path_dst == None or len(path_dst) == 0:
             dst_string = src_path_no_prefix
         elif path_dst.endswith("/"):
             dst_string = path_dst + src_path_no_prefix
         else:
             dst_string = path_dst + "/" + src_path_no_prefix
 
-        print(dst_string)
         if dst_string in dst_dict:
             dst_obj = dst_dict[dst_string]
             if src_obj.last_modified > dst_obj.last_modified or src_obj.size != dst_obj.size:
-                print("hi")
                 src_objs_new.append(src_obj.key)
                 dst_objs_new.append(dst_obj.key)
                 obj_sizes_new[src_obj.key] = obj_sizes[src_obj.key]
@@ -329,9 +324,6 @@ def sync(
             src_objs_new.append(src_obj.key)
             dst_objs_new.append(dst_objs_job[i])
             obj_sizes_new[src_obj.key] = obj_sizes[src_obj.key]
-
-    print(src_objs_new)
-    print(dst_objs_new)
 
 
     if len(dst_objs_new) == 0:
@@ -361,7 +353,7 @@ def sync(
         src_key_prefix=path_src,
         dest_key_prefix=path_dst,
         transfer_list=transfer_list,
-        cached_src_objs=src_objs_new,
+        cached_src_objs=src_objs,
         reuse_gateways=reuse_gateways,
         max_chunk_size_mb=max_chunk_size_mb,
         debug=debug,

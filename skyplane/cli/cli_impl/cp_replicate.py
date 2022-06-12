@@ -78,15 +78,14 @@ def generate_topology(
 
 
 def query_src_dest_objs(
-    src_region: str = None,
-    dst_region: str = None,
-    source_bucket: str = None,
-    dest_bucket: str = None,
+    src_region: str,
+    dst_region: str,
+    source_bucket: str,
+    dest_bucket: str,
     src_key_prefix: str = "",
     dest_key_prefix: str = "",
     cached_src_objs: Optional[List[ObjectStoreObject]] = None,
-    names: Optional[bool] = False,
-) -> Tuple[List[ObjectStoreObject], List[ObjectStoreObject], List[float]]:
+) -> Tuple[List[str], List[str], dict[str, int], List[ObjectStoreObject], List[ObjectStoreObject]]:
    
     if cached_src_objs:
         src_objs = cached_src_objs
@@ -132,9 +131,6 @@ def query_src_dest_objs(
 
     obj_sizes={obj.key: obj.size for obj in src_objs}
 
-    if names:
-        return src_objs_job, dest_objs_job, obj_sizes
-
     dst_iface = ObjectStoreInterface.create(dst_region, dest_bucket)
     logger.fs.debug(f"Querying objects in {dest_bucket}")
     with console.status(f"Querying objects in {dest_bucket}") as status:
@@ -158,7 +154,7 @@ def replicate_helper(
     dest_bucket: Optional[str] = None,
     src_key_prefix: str = "",
     dest_key_prefix: str = "",
-    transfer_list: Optional[Tuple[List[ObjectStoreObject], List[ObjectStoreObject], List[float]]] = None,
+    transfer_list: Optional[Tuple[List[str], List[str], dict[str, float]]] = None,
     cached_src_objs: Optional[List[ObjectStoreObject]] = None,
     # maximum chunk size to breakup objects into
     max_chunk_size_mb: Optional[int] = None,
@@ -219,7 +215,7 @@ def replicate_helper(
         if transfer_list:
             src_objs_job, dest_objs_job, obj_sizes = transfer_list
         else:
-            src_objs_job, dest_objs_job, obj_sizes = query_src_dest_objs(
+            src_objs_job, dest_objs_job, obj_sizes, src_objs, dst_objs = query_src_dest_objs(
                     topo.source_region(), 
                     topo.sink_region(),
                     source_bucket,
@@ -227,7 +223,6 @@ def replicate_helper(
                     src_key_prefix, 
                     dest_key_prefix,
                     cached_src_objs=cached_src_objs,
-                    names=True,
                 )
 
         job = ReplicationJob(
