@@ -2,7 +2,7 @@ import json
 import os
 import pathlib
 import signal
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 
 import typer
 from rich import print as rprint
@@ -85,7 +85,7 @@ def query_src_dest_objs(
     src_key_prefix: str = "",
     dest_key_prefix: str = "",
     cached_src_objs: Optional[List[ObjectStoreObject]] = None,
-) -> Tuple[List[str], List[str], dict[str, int], List[ObjectStoreObject], List[ObjectStoreObject]]:
+) -> Tuple[List[str], List[str], Dict[str, int], List[ObjectStoreObject], List[ObjectStoreObject]]:
    
     if cached_src_objs:
         src_objs = cached_src_objs
@@ -154,7 +154,7 @@ def replicate_helper(
     dest_bucket: Optional[str] = None,
     src_key_prefix: str = "",
     dest_key_prefix: str = "",
-    transfer_list: Optional[Tuple[List[str], List[str], dict[str, float]]] = None,
+    transfer_list: Optional[Tuple[List[str], List[str], Dict[str, float]]] = None,
     cached_src_objs: Optional[List[ObjectStoreObject]] = None,
     # maximum chunk size to breakup objects into
     max_chunk_size_mb: Optional[int] = None,
