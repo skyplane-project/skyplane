@@ -7,6 +7,7 @@ from pathlib import Path
 from sys import platform
 
 import typer
+from rich.console import Console
 
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
@@ -16,6 +17,19 @@ from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
+
+
+console = Console()
+
+
+def print_header():
+    header = """ _____ _   ____   _______ _       ___   _   _  _____ 
+/  ___| | / /\ \ / / ___ \ |     / _ \ | \ | ||  ___|
+\ `--.| |/ /  \ V /| |_/ / |    / /_\ \|  \| || |__  
+ `--. \    \   \ / |  __/| |    |  _  || . ` ||  __| 
+/\__/ / |\  \  | | | |   | |____| | | || |\  || |___ 
+\____/\_| \_/  \_/ \_|   \_____/\_| |_/\_| \_/\____/"""
+    console.print(f"[blue]{header}[/blue]\n")
 
 
 def parse_path(path: str):

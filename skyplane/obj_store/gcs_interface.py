@@ -1,6 +1,12 @@
 import os
+import datetime
+from re import A
+import requests
+from xml.etree import ElementTree
 from typing import Iterator, List
+from skyplane import exceptions
 
+from skyplane.utils import logger
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
@@ -11,11 +17,23 @@ class GCSObject(ObjectStoreObject):
 
 
 class GCSInterface(ObjectStoreInterface):
-    def __init__(self, gcp_region, bucket_name, use_tls=True):
+    def __init__(self, bucket_name, gcp_region="infer", create_bucket=False):
         self.bucket_name = bucket_name
         self.auth = GCPAuthentication()
+        # self.auth.set_service_account_credentials("skyplane1") # use service account credentials
         self._gcs_client = self.auth.get_storage_client()
-        self.gcp_region = self.infer_gcp_region(bucket_name) if gcp_region is None or gcp_region == "infer" else gcp_region
+        try:
+            self.gcp_region = self.infer_gcp_region(bucket_name) if gcp_region is None or gcp_region == "infer" else gcp_region
+            if not self.bucket_exists():
+                raise exceptions.MissingBucketException()
+        except exceptions.MissingBucketException:
+            if create_bucket:
+                assert gcp_region is not None and gcp_region != "infer", "Must specify AWS region when creating bucket"
+                self.gcp_region = gcp_region
+                self.create_bucket()
+                logger.info(f"Created GCS bucket {self.bucket_name} in region {self.gcp_region}")
+            else:
+                raise
 
     def region_tag(self):
         return "gcp:" + self.gcp_region
@@ -36,6 +54,8 @@ class GCSInterface(ObjectStoreInterface):
 
     def infer_gcp_region(self, bucket_name: str):
         bucket = self._gcs_client.lookup_bucket(bucket_name)
+        if bucket is None:
+            raise exceptions.MissingBucketException(f"GCS bucket {bucket_name} does not exist")
         return self.map_region_to_zone(bucket.location.lower())
 
     def bucket_exists(self):
@@ -49,8 +69,12 @@ class GCSInterface(ObjectStoreInterface):
         if not self.bucket_exists():
             bucket = self._gcs_client.bucket(self.bucket_name)
             bucket.storage_class = "STANDARD"
-            self._gcs_client.create_bucket(bucket, location=self.gcp_region)
+            region_without_zone = "-".join(self.gcp_region.split("-")[:2])
+            self._gcs_client.create_bucket(bucket, location=region_without_zone)
         assert self.bucket_exists()
+
+    def delete_bucket(self):
+        self._gcs_client.get_bucket(self.bucket_name).delete()
 
     def list_objects(self, prefix="") -> Iterator[GCSObject]:
         blobs = self._gcs_client.list_blobs(self.bucket_name, prefix=prefix)
@@ -81,7 +105,42 @@ class GCSInterface(ObjectStoreInterface):
         except NoSuchObjectException:
             return False
 
-    # todo: implement range request for download
+    def send_xml_request(
+        self,
+        blob_name: str,
+        params: dict,
+        method: str,
+        content_length=0,
+        expiration=datetime.timedelta(minutes=15),
+        data=None,
+        content_type="application/octet-stream",
+    ):
+
+        blob = self._gcs_client.bucket(self.bucket_name).blob(blob_name)
+
+        headers = {
+            "Content-Type": content_type,
+        }
+
+        # generate signed URL
+        url = blob.generate_signed_url(
+            version="v4", expiration=expiration, method=method, content_type=content_type, query_parameters=params, headers=headers
+        )
+
+        # prepare request
+        if data:
+            req = requests.Request(method, url, headers=headers, data=data)
+        else:
+            req = requests.Request(method, url, headers=headers)
+
+        prepared = req.prepare()
+        response = requests.Session().send(prepared)
+
+        if not response.ok:
+            raise ValueError(f"Invalid status code {response.status_code}")
+
+        return response
+
     def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = src_object_name if src_object_name[0] != "/" else src_object_name
@@ -89,7 +148,16 @@ class GCSInterface(ObjectStoreInterface):
         offset = 0
         bucket = self._gcs_client.bucket(self.bucket_name)
         blob = bucket.blob(src_object_name)
-        chunk = blob.download_as_string()
+
+        # download object
+        # TODO: download directly to file?
+        if offset_bytes is None:
+            chunk = blob.download_as_string()
+        else:
+            assert offset_bytes is not None and size_bytes is not None
+            chunk = blob.download_as_string(start=offset_bytes, end=offset_bytes + size_bytes - 1)
+
+        # write output
         if not os.path.exists(dst_file_path):
             open(dst_file_path, "a").close()
         with open(dst_file_path, "rb+") as f:
@@ -101,5 +169,61 @@ class GCSInterface(ObjectStoreInterface):
         dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
         os.path.getsize(src_file_path)
         bucket = self._gcs_client.bucket(self.bucket_name)
-        blob = bucket.blob(dst_object_name)
-        blob.upload_from_filename(src_file_path)
+
+        if part_number is None:
+            blob = bucket.blob(dst_object_name)
+            blob.upload_from_filename(src_file_path)
+            return
+
+        # multipart upload
+        assert part_number is not None and upload_id is not None
+
+        # send XML api request
+        response = self.send_xml_request(
+            dst_object_name, {"uploadId": upload_id, "partNumber": part_number}, "PUT", data=open(src_file_path, "rb")
+        )
+        response_data = dict(response.headers)
+        if "ETag" not in response_data:
+            raise ValueError(f"Invalid response {response} {response_data}")
+        return response_data["ETag"]
+
+    def initiate_multipart_upload(self, dst_object_name):
+        assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
+        response = self.send_xml_request(dst_object_name, {"uploads": None}, "POST")
+        tree = ElementTree.fromstring(response.content)
+        upload_id = tree[2].text
+        return upload_id
+
+    def complete_multipart_upload(self, dst_object_name, upload_id):
+        # get parts
+        response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "GET")
+
+        # build request xml tree
+        tree = ElementTree.fromstring(response.content)
+        ns = {"ns": tree.tag.split("}")[0][1:]}
+        xml_data = ElementTree.Element("CompleteMultipartUpload")
+        for part in tree.findall("ns:Part", ns):
+            part_xml = ElementTree.Element("Part")
+            etag_match = part.find("ns:ETag", ns)
+            assert etag_match is not None
+            etag = etag_match.text
+            part_num_match = part.find("ns:PartNumber", ns)
+            assert part_num_match is not None
+            part_num = part_num_match.text
+            ElementTree.SubElement(part_xml, "PartNumber").text = part_num
+            ElementTree.SubElement(part_xml, "ETag").text = etag
+            xml_data.append(part_xml)
+        xml_data = ElementTree.tostring(xml_data, encoding="utf-8", method="xml")
+        xml_data = xml_data.replace(b"ns0:", b"")
+
+        try:
+            # complete multipart upload
+            response = self.send_xml_request(
+                dst_object_name, {"uploadId": upload_id}, "POST", data=xml_data, content_type="application/xml"
+            )
+        except Exception as e:
+            # cancel upload
+            response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "DELETE")
+            return False
+
+        return True

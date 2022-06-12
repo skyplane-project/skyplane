@@ -16,7 +16,7 @@ google-cloud-storage
 # shared dependencies
 cachetools
 paramiko
-termcolor
+rich
 # gateway dependencies
 flask
 lz4

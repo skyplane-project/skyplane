@@ -53,9 +53,14 @@ class ReplicationTopology:
     associated number of connections (e.g. 64).
     """
 
-    def __init__(self, edges: Optional[List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int]]] = None):
+    def __init__(
+        self,
+        edges: Optional[List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int]]] = None,
+        cost_per_gb: Optional[float] = None,
+    ):
         self.edges: List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int]] = edges or []
         self.nodes: Set[ReplicationTopologyNode] = set(k[0] for k in self.edges) | set(k[1] for k in self.edges)
+        self.cost_per_gb: Optional[float] = cost_per_gb
 
     @property
     def gateway_nodes(self) -> Set[ReplicationTopologyGateway]:
@@ -116,6 +121,13 @@ class ReplicationTopology:
         instances = list(self.sink_instances())
         assert all(i.region == instances[0].region for i in instances), "All sink instances must be in the same region"
         return instances[0].region
+
+    def per_region_count(self) -> Dict[str, int]:
+        counts = {}
+        for node in self.nodes:
+            if isinstance(node, ReplicationTopologyGateway):
+                counts[node.region] = counts.get(node.region, 0) + 1
+        return counts
 
     def to_json(self):
         """

@@ -353,4 +353,6 @@ class AzureCloudProvider(CloudProvider):
                 )
                 vm_result = poller.result()
 
-        return AzureServer(name)
+        server = AzureServer(name)
+        server.wait_for_ssh_ready()
+        return server

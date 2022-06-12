@@ -1,6 +1,6 @@
 # Skyplane
 
-[![poetry](https://github.com/skyplane-project/skyplane/actions/workflows/poetry.yml/badge.svg)](https://github.com/skyplane-project/skyplane/actions/workflows/poetry.yml)
+[![poetry-publish-nightly](https://github.com/skyplane-project/skyplane/actions/workflows/poetry-publish-nightly.yml/badge.svg)](https://github.com/skyplane-project/skyplane/actions/workflows/poetry-publish-nightly.yml)
 [![docker](https://github.com/skyplane-project/skyplane/actions/workflows/docker-publish.yml/badge.svg?branch=main)](https://github.com/skyplane-project/skyplane/actions/workflows/docker-publish.yml)
 [![sphinx](https://github.com/skyplane-project/skyplane/actions/workflows/sphinx.yml/badge.svg)](https://github.com/skyplane-project/skyplane/actions/workflows/sphinx.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
@@ -9,10 +9,10 @@
 
 Skyplane is a tool for blazingly fast bulk data transfers in the cloud. Skyplane manages parallelism, data partitioning, and network paths to optimize data transfers, and can also spin up VM instances to increase transfer throughput. 
 
-You can use skyplane to transfer data: 
+You can use Skyplane to transfer data: 
 * Between buckets within a cloud provider
 * Between object stores across multiple cloud providers
-* To/from local storage to a cloud object store
+* (experimental) Between local storage and cloud object stores
 
 # Getting started
 
@@ -27,17 +27,24 @@ $ cd skyplane
 $ pip install -e .
 ```
 
+**Installation on M1 Mac** If you are using an M1 Mac with the arm64 architecture, you will need to install Skyplane as follows:
+```
+$ GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 GRPC_PYTHON_BUILD_SYSTEM_ZLIB=1 pip install skyplane-nightly
+```
+
 ## Authenticating with cloud providers
 
 To transfer files from cloud A to cloud B, Skyplane will start VMs (called gateways) in both A and B. The CLI therefore requires authentication with each cloud provider. Skyplane will infer credentials from each cloud providers CLI. Therefore, log into each cloud.
 
-<details open>
-<summary>⤵️&nbsp;&nbsp;Setting up AWS credentials</summary>
-<br>
+### Setting up AWS credentials
 
 To set up AWS credentials on your local machine, first [install the AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html).
 
-After installing the AWS CLI, configure your AWS IAM access ID and secret with `aws configure`:
+After installing the AWS CLI, configure your AWS IAM access ID and secret with `aws configure` ([more details](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-quickstart.html#getting-started-quickstart-new)).
+<!-- <details>
+<summary>"aws configure" output</summary>
+<br>
+ 
 ```bash
 $ aws configure
 AWS Access Key ID [None]: AKIAIOSFODNN7EXAMPLE
@@ -45,29 +52,18 @@ AWS Secret Access Key [None]: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 Default region name [None]: us-west-2
 Default output format [None]: json
 ```
+</details> -->
 
-See AWS documentation for further [instructions on how to configure the AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-quickstart.html#getting-started-quickstart-new).
-
-</details>
-
-<details open>
-<summary>⤵️&nbsp;&nbsp;Setting up GCP credentials</summary>
-<br>
-
+### Setting up GCP credentials
 To set up GCP credentials on your local machine, first [install the gcloud CLI](https://cloud.google.com/sdk/docs/install-sdk).
 
-After installing the gcloud CLI, configure your GCP CLI credentials with `gcloud auth` as follows:
+After installing the gcloud CLI, configure your GCP CLI credentials with `gcloud auth` as follows
 ```bash
 $ gcloud auth login
 $ gcloud auth application-default login
 ```
 
-⚠️ If you already had GCP credentials configured, make sure to run `gcloud auth application-default login` which generates application credentials for Skyplane.
-</details>
-
-<details open>
-<summary>⤵️&nbsp;&nbsp;Setting up Azure credentials</summary>
-<br>
+### Setting up Azure credentials
 
 To set up Azure credentials on your local machine, first [install the Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest).
 
@@ -77,9 +73,8 @@ $ az login
 ```
 
 Skyplane should now be able to authenticate with Azure although you may need to pass your subscription ID to `skyplane init` later.
-</details>
 
-### Importing cloud credentials into Skyplane
+## Importing cloud credentials into Skyplane
 
 After authenticating with each cloud provider, you can run `skyplane init` to create a configuration file for Skyplane.
 

@@ -1,5 +1,5 @@
 """
-AWS convenience interface
+Azure convenience interface
 """
 
 from collections import defaultdict

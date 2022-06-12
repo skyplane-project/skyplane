@@ -11,7 +11,6 @@ import questionary
 import typer
 
 from rich.progress import Progress
-from rich.console import Console
 
 from skyplane import GB, skyplane_root
 from skyplane.cli.experiments.provision import provision

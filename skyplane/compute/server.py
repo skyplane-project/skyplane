@@ -1,18 +1,20 @@
 import json
+import os
 import logging
 import socket
 from contextlib import closing
 from enum import Enum, auto
 from functools import partial
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
-from skyplane import config_path
-from skyplane.compute.const_cmds import make_dozzle_command, make_sysctl_tcp_tuning_command, make_autoshutdown_script
+import paramiko
+from skyplane import config_path, key_root
+from skyplane.compute.const_cmds import make_autoshutdown_script, make_dozzle_command, make_sysctl_tcp_tuning_command
 from skyplane.utils import logger
 from skyplane.utils.fn import PathLike, wait_for
-from skyplane.utils.retry import retry_backoff
 from skyplane.utils.net import retry_requests
+from skyplane.utils.retry import retry_backoff
 from skyplane.utils.timer import Timer
 
 
@@ -124,7 +126,9 @@ class Server:
                 return tunnel
 
             self.ssh_tunnels[remote_port] = retry_backoff(start)
-        return self.ssh_tunnels[remote_port].local_bind_port
+        local_bind_port = self.ssh_tunnels[remote_port].local_bind_port
+        logger.fs.debug(f"Bound remote port {self.uuid()}:{remote_port} to localhost:{local_bind_port}")
+        return local_bind_port
 
     @property
     def provider(self) -> str:
@@ -170,7 +174,7 @@ class Server:
         self.auto_shutdown_timeout_minutes = None
         self.run_command("(kill -9 $(cat /tmp/autoshutdown.pid) && rm -f /tmp/autoshutdown.pid) || true")
 
-    def wait_for_ready(self, timeout=120, interval=0.25) -> bool:
+    def wait_for_ssh_ready(self, timeout=120, interval=0.25) -> bool:
         def is_up():
             try:
                 ip = self.public_ip()
@@ -178,10 +182,15 @@ class Server:
                 return False
             if ip is not None:
                 with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+                    sock.settimeout(2)
                     return sock.connect_ex((ip, 22)) == 0
             return False
 
-        wait_for(is_up, timeout=timeout, interval=interval, desc=f"Waiting for {self.uuid()} to be ready")
+        try:
+            wait_for(is_up, timeout=timeout, interval=interval, desc=f"Waiting for {self.uuid()} to be ready")
+        except TimeoutError:
+            logger.error(f"Gateway {self.uuid()} is not ready after {timeout} seconds, run `skyplane deprovision` to clean up resources")
+            raise TimeoutError(f"{self.uuid()} is not ready after {timeout} seconds")
 
     def close_server(self):
         if hasattr(self, "_ssh_client"):
@@ -201,7 +210,7 @@ class Server:
         self.command_log.append(dict(command=command, runtime=runtime, **kwargs))
         self.flush_command_log()
 
-    def run_command(self, command):
+    def run_command(self, command) -> Tuple[str, str]:
         client = self.ssh_client
         with Timer() as t:
             if self.auto_shutdown_timeout_minutes:
@@ -256,7 +265,6 @@ class Server:
             assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
 
         desc_prefix = f"Starting gateway {self.uuid()}, host: {self.public_ip()}"
-        self.wait_for_ready()
 
         # increase TCP connections, enable BBR optionally and raise file limits
         check_stderr(self.run_command(make_sysctl_tcp_tuning_command(cc="bbr" if use_bbr else "cubic")))
@@ -284,6 +292,14 @@ class Server:
         docker_run_flags = f"-d --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024}"
         docker_run_flags += " --mount type=tmpfs,dst=/skyplane,tmpfs-size=$(($(free -b  | head -n2 | tail -n1 | awk '{print $2}')/2))"
         docker_run_flags += f" -v /tmp/{config_path.name}:/pkg/data/{config_path.name}"
+
+        # copy service account files
+        if self.provider == "gcp":
+            service_key_file = "service_account_key.json"
+            self.upload_file(os.path.expanduser(f"{key_root}/gcp/{service_key_file}"), f"/tmp/{service_key_file}")
+            docker_envs["GCP_SERVICE_ACCOUNT_FILE"] = f"/pkg/data/{service_key_file}"
+            docker_run_flags += f" -v /tmp/{service_key_file}:/pkg/data/{service_key_file}"
+
         docker_run_flags += " " + " ".join(f"--env {k}={v}" for k, v in docker_envs.items())
         gateway_daemon_cmd = f"python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag} {'--use-compression' if use_compression else ''}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skyplane_gateway {gateway_docker_image} {gateway_daemon_cmd}"
@@ -293,7 +309,7 @@ class Server:
 
         gateway_container_hash = start_out.strip().split("\n")[-1][:12]
         self.gateway_log_viewer_url = f"http://127.0.0.1:{self.tunnel_port(8888)}/container/{gateway_container_hash}"
-        self.gateway_api_url = f"http://127.0.0.1:{self.tunnel_port(8080)}"
+        self.gateway_api_url = f"http://127.0.0.1:{self.tunnel_port(8080 + 1)}"
 
         # wait for gateways to start (check status API)
         def is_api_ready():
@@ -308,7 +324,7 @@ class Server:
 
         try:
             logging.disable(logging.CRITICAL)
-            wait_for(is_api_ready, timeout=5, interval=0.1, desc=f"Waiting for gateway {self.uuid()} to start", leave_spinner=False)
+            wait_for(is_api_ready, timeout=30, interval=0.1, desc=f"Waiting for gateway {self.uuid()} to start")
         except TimeoutError as e:
             logger.fs.error(f"Gateway {self.instance_name()} is not ready {e}")
             logger.fs.warning(desc_prefix + " gateway launch command: " + docker_launch_cmd)

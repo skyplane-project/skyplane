@@ -41,7 +41,7 @@ def vcpu_limits(quota_code="L-1216C47A"):
 @app.command()
 def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
     aws_auth = AWSAuthentication()
-    s3_interface = S3Interface("us-east-1", None)
+    s3_interface = S3Interface(None, aws_region="us-east-1")
     src_region = s3_interface.infer_s3_region(src_bucket)
     dst_region = s3_interface.infer_s3_region(dst_bucket)
 

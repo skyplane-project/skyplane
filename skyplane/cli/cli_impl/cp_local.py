@@ -4,9 +4,9 @@ from pathlib import Path
 from shutil import copyfile
 from typing import List, Dict
 
-from halo import Halo
+from rich.progress import Progress, TextColumn, SpinnerColumn, DownloadColumn, TransferSpeedColumn, TimeElapsedColumn
 
-from skyplane import exceptions, format_bytes
+from skyplane import exceptions
 from skyplane.obj_store.azure_interface import AzureInterface
 from skyplane.obj_store.gcs_interface import GCSInterface
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
@@ -30,7 +30,7 @@ def copy_local_local(src: Path, dst: Path):
 
 
 def copy_local_objstore(object_interface: ObjectStoreInterface, src: Path, dst_key: str):
-    with concurrent.futures.ThreadPoolExecutor(max_workers=64) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
         ops: List[concurrent.futures.Future] = []
         path_mapping: Dict[concurrent.futures.Future, Path] = {}
 
@@ -47,15 +47,21 @@ def copy_local_objstore(object_interface: ObjectStoreInterface, src: Path, dst_k
 
         total_bytes = _copy(src, dst_key)
         bytes_copied = 0
-        with Halo(text=f"Uploading ({format_bytes(bytes_copied)} / {format_bytes(total_bytes)}", spinner="dots") as spinner:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold yellow]Uploading (from local to object store)"),
+            DownloadColumn(binary_units=True),
+            TransferSpeedColumn(),
+            TimeElapsedColumn(),
+        ) as progress:
+            copy_task = progress.add_task("", total=total_bytes)
             for op in concurrent.futures.as_completed(ops):
                 op.result()
-                bytes_copied += path_mapping[op].stat().st_size
-                spinner.text = f"Uploading ({format_bytes(bytes_copied)} / {format_bytes(total_bytes)})"
+                progress.update(copy_task, advance=path_mapping[op].stat().st_size)
 
 
 def copy_objstore_local(object_interface: ObjectStoreInterface, src_key: str, dst: Path):
-    with concurrent.futures.ThreadPoolExecutor(max_workers=64) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
         ops: List[concurrent.futures.Future] = []
         obj_mapping: Dict[concurrent.futures.Future, ObjectStoreObject] = {}
 
@@ -82,20 +88,26 @@ def copy_objstore_local(object_interface: ObjectStoreInterface, src_key: str, ds
 
         # wait for all downloads to complete, displaying a progress bar
         bytes_copied = 0
-        with Halo(text=f"Uploading ({format_bytes(bytes_copied)} / {format_bytes(total_bytes)}", spinner="dots") as spinner:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold yellow]Downloading (from object store to local)"),
+            DownloadColumn(binary_units=True),
+            TransferSpeedColumn(),
+            TimeElapsedColumn(),
+        ) as progress:
+            copy_task = progress.add_task("", total=total_bytes)
             for op in concurrent.futures.as_completed(ops):
                 op.result()
-                bytes_copied += obj_mapping[op].stat().st_size
-                spinner.text = f"Uploading ({format_bytes(bytes_copied)} / {format_bytes(total_bytes)})"
+                progress.update(copy_task, advance=obj_mapping[op].stat().st_size)
 
 
 def copy_local_gcs(src: Path, dst_bucket: str, dst_key: str):
-    gcs = GCSInterface(None, dst_bucket)
+    gcs = GCSInterface(dst_bucket)
     return copy_local_objstore(gcs, src, dst_key)
 
 
 def copy_gcs_local(src_bucket: str, src_key: str, dst: Path):
-    gcs = GCSInterface(None, src_bucket)
+    gcs = GCSInterface(src_bucket)
     return copy_objstore_local(gcs, src_key, dst)
 
 
@@ -110,10 +122,10 @@ def copy_azure_local(src_account_name: str, src_container_name: str, src_key: st
 
 
 def copy_local_s3(src: Path, dst_bucket: str, dst_key: str):
-    s3 = S3Interface(None, dst_bucket)
+    s3 = S3Interface(dst_bucket)
     return copy_local_objstore(s3, src, dst_key)
 
 
 def copy_s3_local(src_bucket: str, src_key: str, dst: Path):
-    s3 = S3Interface(None, src_bucket)
+    s3 = S3Interface(src_bucket)
     return copy_objstore_local(s3, src_key, dst)

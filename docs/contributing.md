@@ -30,6 +30,15 @@ $ echo <PERSONAL_ACCESS_TOKEN> | sudo docker login ghcr.io -u <GITHUB_USERNAME> 
 ## Building and testing Skyplane
 
 ### Building Docker image for gateway
+**TLDR:** We've packaged the code to build and push the gateway Docker image into a single script:
+```
+source scripts/pack_docker.sh
+```
+
+`source` will run the script and capture the exported `SKYPLANE_DOCKER_IMAGE` environment variable.
+
+#### Manual steps to build and push the Skyplane gateway Docker image
+
 After making a change to the Skyplane source, we need to rebuild the gateway Docker image:
 
 ```bash

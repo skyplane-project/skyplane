@@ -6,14 +6,16 @@ from shlex import split
 
 import questionary
 import typer
-from halo import Halo
+from rich.progress import Progress
 
 import skyplane.cli.cli_aws
 import skyplane.cli.cli_azure
+import skyplane.cli.cli_config
 import skyplane.cli.cli_internal as cli_internal
 import skyplane.cli.cli_solver
 import skyplane.cli.experiments
-from skyplane import GB, config_path, exceptions, print_header, skyplane_root
+from skyplane import GB, config_path, exceptions, skyplane_root, cloud_config
+from skyplane.cli.common import print_header
 from skyplane.cli.cli_impl.cp_local import (
     copy_azure_local,
     copy_gcs_local,
@@ -43,6 +45,7 @@ app.command()(cli_internal.replicate_json)
 app.add_typer(skyplane.cli.experiments.app, name="experiments")
 app.add_typer(skyplane.cli.cli_aws.app, name="aws")
 app.add_typer(skyplane.cli.cli_azure.app, name="azure")
+app.add_typer(skyplane.cli.cli_config.app, name="config")
 app.add_typer(skyplane.cli.cli_solver.app, name="solver")
 
 
@@ -81,6 +84,7 @@ def cp(
     max_instances: int = typer.Option(1, "--max-instances", "-n", help="Number of gateways"),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
+    confirm: bool = typer.Option(False, "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
     debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
     use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
     use_compression: bool = typer.Option(False, help="If true, will use compression for uploads/downloads"),
@@ -112,6 +116,8 @@ def cp(
     :type reuse_gateways: bool
     :param max_chunk_size_mb: If set, `cp` will subdivide objects into chunks at most this size.
     :type max_chunk_size_mb: int
+    :param confirm: If true, will not prompt for confirmation of transfer.
+    :type confirm: bool
     :param debug: If true, will write debug information to debug directory.
     :type debug: bool
     :param use_bbr: If set, will use BBR for transfers by default.
@@ -134,8 +140,8 @@ def cp(
 
     clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
 
-    if (provider_src != "s3" or provider_dst != "s3") and max_chunk_size_mb:
-        raise ValueError(f"Multipart uploads not supported outside of S3")
+    if (provider_src == "azure" or provider_dst == "azure") and max_chunk_size_mb:
+        raise ValueError(f"Multipart uploads not supported for Azure")
 
     # raise file limits for local transfers
     if provider_src == "local" or provider_dst == "local":
@@ -197,6 +203,7 @@ def cp(
             debug=debug,
             use_bbr=use_bbr,
             use_compression=use_compression,
+            ask_to_confirm_transfer=not cloud_config.get_flag("autoconfirm") and not confirm,
         )
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
@@ -210,6 +217,7 @@ def sync(
     max_instances: int = typer.Option(1, "--max-instances", "-n", help="Number of gateways"),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
+    confirm: bool = typer.Option(False, "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
     debug: bool = typer.Option(False, help="If true, will write debug info to debug directory"),
     use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
     use_compression: bool = typer.Option(False, help="If true, will use compression for uploads/downloads"),
@@ -245,6 +253,8 @@ def sync(
     :type reuse_gateways: bool
     :param max_chunk_size_mb: If set, `cp` will subdivide objects into chunks at most this size.
     :type max_chunk_size_mb: int
+    :param confirm: If true, will not prompt for confirmation of transfer.
+    :type confirm: bool
     :param debug: If true, will write debug info to debug directory
     :type debug: bool
     :param use_bbr: If set, will use BBR for transfers by default.
@@ -279,13 +289,14 @@ def sync(
     src_objs_all = []
     dst_objs_all = []
     with Timer(f"Query {bucket_src} prefix {path_src}"):
-        with Halo(text=f"Querying objects in {bucket_src}", spinner="dots") as spinner:
+        with Progress(transient=True) as progress:
+            query_task = progress.add_task(f"Querying objects in {bucket_src}", total=None)
             for obj in src_client.list_objects(path_src):
                 src_objs_all.append(obj)
-                spinner.text = f"Querying objects in {bucket_src} ({len(src_objs_all)} objects)"
+                progress.update(query_task, description=f"Querying objects in {bucket_src} (found {len(src_objs_all)} objects so far)")
             for obj in dst_client.list_objects(path_dst):
                 dst_objs_all.append(obj)
-                spinner.txt = f"Querying objects in {bucket_dst} ({len(dst_objs_all)} objects)"
+                progress.update(query_task, description=f"Querying objects in {bucket_dst} (found {len(dst_objs_all)} objects so far)")
     if not src_objs_all:
         logger.error("Specified object does not exist.")
         raise exceptions.MissingObjectException()
@@ -313,7 +324,6 @@ def sync(
         typer.secho("No objects need updating. Exiting...")
         raise typer.Exit(0)
     '''
-
     src_objs, dst_objs, obj_sizes = query_src_dest_objs(
         src_region,
         dst_region,
@@ -387,6 +397,7 @@ def sync(
         debug=debug,
         use_bbr=use_bbr,
         use_compression=use_compression,
+        ask_to_confirm_transfer=not cloud_config.get_flag("autoconfirm") and not confirm,
     )
 
 
@@ -436,7 +447,11 @@ def ssh():
 
 
 @app.command()
-def init(reinit_azure: bool = False, reinit_gcp: bool = False):
+def init(
+    non_interactive: bool = typer.Option(False, "--non-interactive", "-y", help="Run non-interactively"),
+    reinit_azure: bool = False,
+    reinit_gcp: bool = False,
+):
     """
     It loads the configuration file, and if it doesn't exist, it creates a default one. Then it creates
     AWS, Azure, and GCP region list configurations.
@@ -447,6 +462,10 @@ def init(reinit_azure: bool = False, reinit_gcp: bool = False):
     :type reinit_gcp: bool
     """
     print_header()
+
+    if non_interactive:
+        logger.warning("Non-interactive mode enabled. Automatically confirming interactive questions.")
+
     if config_path.exists():
         cloud_config = SkyplaneConfig.load_config(config_path)
     else:
@@ -454,15 +473,15 @@ def init(reinit_azure: bool = False, reinit_gcp: bool = False):
 
     # load AWS config
     typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)
-    cloud_config = load_aws_config(cloud_config)
+    cloud_config = load_aws_config(cloud_config, non_interactive=non_interactive)
 
     # load Azure config
     typer.secho("\n(2) Configuring Azure:", fg="yellow", bold=True)
-    cloud_config = load_azure_config(cloud_config, force_init=reinit_azure)
+    cloud_config = load_azure_config(cloud_config, force_init=reinit_azure, non_interactive=non_interactive)
 
     # load GCP config
     typer.secho("\n(3) Configuring GCP:", fg="yellow", bold=True)
-    cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp)
+    cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
 
     cloud_config.to_config_file(config_path)
     typer.secho(f"\nConfig file saved to {config_path}", fg="green")

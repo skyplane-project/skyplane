@@ -12,7 +12,7 @@ from pathlib import Path
 from threading import BoundedSemaphore
 from typing import Dict
 
-from skyplane import MB, print_header
+from skyplane import MB
 from skyplane.chunk import ChunkState
 from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.gateway.gateway_daemon_api import GatewayDaemonAPI
@@ -151,7 +151,6 @@ class GatewayDaemon:
 
 
 if __name__ == "__main__":
-    print_header()
     parser = argparse.ArgumentParser(description="Skyplane Gateway Daemon")
     parser.add_argument("--region", type=str, required=True, help="Region tag (provider:region")
     parser.add_argument(
