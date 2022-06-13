@@ -7,52 +7,7 @@ Welcome to Skyplane!
 
    This project is under active development.
 
-How to install Skyplane
------------------------
 
-Before using Skyplane, you should log into each cloud provider's CLI:
-
-.. code-block:: bash
-
-   ---> For AWS:
-   $ aws configure
-
-   ---> For Google Cloud:
-   $ gcloud auth application-default login
-
-   ---> For Azure:
-   $ az login
-
-
-We're ready to install Skyplane. It's as easy as:
-
-.. code-block:: bash
-
-   ---> Install skyplane from PyPI:
-   $ pip install skyplane-nightly
-
-.. dropdown for M1 Macbook users
-.. note::
-
-   If you are using an M1 Macbook with the arm64 architecture, you will need to install skyplane as follows:
-
-   .. code-block:: bash
-
-      $ GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 GRPC_PYTHON_BUILD_SYSTEM_ZLIB=1 pip install skyplane-nightly
-
-Skyplane autodetects cloud credentials and valid regions from your CLI environment.
-
-.. code-block:: bash
-   
-   ---> Setup cloud provider connectors:
-   $ skyplane init
-
-We're ready to use Skyplane! Let's use `skyplane cp` to copy files from AWS to GCP:
-
-.. code-block:: bash
-
-   ---> 🎸 Ready to rock and roll! Copy some files:
-   $ skyplane cp s3://... gs://...
 
 
 What can you do with Skyplane?
@@ -96,12 +51,36 @@ It determines if an object is new by comparing the last modified time as well as
 Contents
 --------
 
+
 .. toctree::
    :maxdepth: 2
+   :caption: Overview
+
+   quickstart
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Tutorials
+   
+   vm_to_vm
+
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Advanced Configuration
+
+   configure
+
+
+
+.. toctree::
+   :maxdepth: 4
    :caption: Developer documentation
 
    contributing
    build_guide
+   development_guide
+   debugging
 
 .. toctree::
    :maxdepth: 2
