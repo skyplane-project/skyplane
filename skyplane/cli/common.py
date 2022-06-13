@@ -37,7 +37,9 @@ def parse_path(path: str):
         bucket, *keys = parsed.split("/", 1)
         key = keys[0] if len(keys) > 0 else ""
         return provider, bucket, key
-    elif (path.startswith("https://") or path.startswith("http://")) and "blob.core.windows.net" in path:
+    elif (
+        path.startswith("https://") or path.startswith("http://")
+    ) and "blob.core.windows.net" in path:
         # Azure blob storage
         regex = re.compile(r"https?://([^/]+).blob.core.windows.net/([^/]+)/?(.*)")
         match = regex.match(path)
@@ -56,7 +58,6 @@ def parse_path(path: str):
 
 def check_limits(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
     check_ulimit(hard_limit=1024 * 1024)
-    
 
 
 def check_ulimit(hard_limit=1024 * 1024):
@@ -83,6 +84,7 @@ def check_ulimit(hard_limit=1024 * 1024):
             fg="blue",
         )
 
+
 def query_instances():
     instances = []
     query_jobs = []
@@ -102,9 +104,13 @@ def query_instances():
         for region in aws.region_list():
             query_jobs.append(catch_error(partial(aws.get_matching_instances, region)))
     if AzureAuthentication().enabled():
-        query_jobs.append(catch_error(lambda: AzureCloudProvider().get_matching_instances()))
+        query_jobs.append(
+            catch_error(lambda: AzureCloudProvider().get_matching_instances())
+        )
     if GCPAuthentication().enabled():
-        query_jobs.append(catch_error(lambda: GCPCloudProvider().get_matching_instances()))
+        query_jobs.append(
+            catch_error(lambda: GCPCloudProvider().get_matching_instances())
+        )
     # query in parallel
     for instance_list in do_parallel(
         lambda f: f(),
