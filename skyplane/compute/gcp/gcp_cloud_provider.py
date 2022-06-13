@@ -212,19 +212,21 @@ class GCPCloudProvider(CloudProvider):
                 raise e
 
     def make_vpc(self, vpc_name="skyplane"):
-        '''
+        """
         Create a glocal VPC called "skyplane". sub-nets are auto created for every region.
-        '''
-        compute = self.auth.get_gcp_client()    
+        """
+        compute = self.auth.get_gcp_client()
         # VPC's are global. Sub-nets are region specific and define the instances ip-addresses
-        request = compute.networks().insert(project=self.auth.project_id, body={"name": vpc_name, "subnetMode": "auto", "autoCreateSubnetworks": True})
+        request = compute.networks().insert(
+            project=self.auth.project_id, body={"name": vpc_name, "subnetMode": "auto", "autoCreateSubnetworks": True}
+        )
         make_vpc_response = request.execute()
         self.wait_for_operation_to_complete("global", make_vpc_response)
 
         # Allow ssh connection
         fw_body = {
             "name": "ssh",
-            "network":"skyplane",
+            "network": "skyplane",
             "allowed": [{"IPProtocol": "tcp", "ports": ["22"]}],
             "description": "Allow ssh traffic from all IPs on port 22",
             "sourceRanges": ["0.0.0.0/0"],
@@ -239,22 +241,22 @@ class GCPCloudProvider(CloudProvider):
         self.wait_for_operation_to_complete("global", delete_vpc_response)
 
     def add_ips_to_firewall(self, ips: Optional[List[str]] = None):
-        '''
+        """
         Otherthan "default" VPCs start with 2 rules at 65535 priority:
          - Allow all egress
          - Block all ingress
         If you do not specify a priority when creating a rule, it is assigned a priority of 1000
-        '''
-        if (len(ips)==0):
-            return # No ip to be added to the VPC
+        """
+        if len(ips) == 0:
+            return  # No ip to be added to the VPC
         compute = self.auth.get_gcp_client()
         # Let's call each firewall rule by the ip name, so it's easier to delete
         #  individual ips during concurrent transfers
         for ip in ips:
             try:
-                firewall_name = "skyplane"+ip.replace('.','')
+                firewall_name = "skyplane" + ip.replace(".", "")
                 fw_body = {
-                    "name": firewall_name, # Name should be [a-z]([-a-z0-9]*[a-z0-9]
+                    "name": firewall_name,  # Name should be [a-z]([-a-z0-9]*[a-z0-9]
                     "network": "skyplane",
                     "allowed": [{"IPProtocol": "tcp", "ports": ["1-65535"]}],
                     "description": f"Allow all traffic from ip {ip}",
@@ -265,20 +267,20 @@ class GCPCloudProvider(CloudProvider):
                 fw_insert_response = fw_insert_request.execute()
             except googleapiclient.errors.HttpError as e:
                 raise e
-        # TODO: If needed insert a wait_for_operation_to_complete() here if it takes too long to propogate. 
+        # TODO: If needed insert a wait_for_operation_to_complete() here if it takes too long to propogate.
 
     def remove_ips_from_firewall(self, ips: List[str] = None):
-        if (len(ips)==0):
-            return # No ip to be added to the VPC
+        if len(ips) == 0:
+            return  # No ip to be added to the VPC
         compute = self.auth.get_gcp_client()
         # Each firewall rule is called by the ip name, so it's easier to delete
         for ip in ips:
             try:
-                firewall_name = "skyplane"+ip.replace('.','')
+                firewall_name = "skyplane" + ip.replace(".", "")
                 fw_delete_request = compute.firewalls().delete(project=self.auth.project_id, firewall=firewall_name)
                 fw_delete_response = fw_delete_request.execute()
             except googleapiclient.errors.HttpError as e:
-                if e.resp.status == 404: # Firewall doesnt exist. Continue
+                if e.resp.status == 404:  # Firewall doesnt exist. Continue
                     logger.warning(f"[GCP] Unable to delete {firewall_name} - does not exist.")
                 else:
                     raise e
