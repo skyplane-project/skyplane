@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Tuple
 
 from skyplane.chunk import ChunkRequest
+from skyplane.obj_store.object_store_interface import ObjectStoreObject
 from skyplane.utils import logger
 
 
@@ -208,6 +209,15 @@ class ReplicationTopology:
 
 
 @dataclass
+class TransferObjectList:
+    src_objs_job: List[str]
+    dst_objs_job: List[str]
+    obj_sizes: Dict[str, int]
+    src_objs: Optional[List[ObjectStoreObject]] = None
+    dst_objs: Optional[List[ObjectStoreObject]] = None
+
+
+@dataclass
 class ReplicationJob:
     source_region: str
     source_bucket: Optional[str]
@@ -215,7 +225,6 @@ class ReplicationJob:
     dest_bucket: Optional[str]
     src_objs: List[str]
     dest_objs: List[str]
-    # object sizes (computed using source objects)
     obj_sizes: Optional[Dict[str, int]] = None
     # progress tracking via a list of chunk_requests
     chunk_requests: Optional[List[ChunkRequest]] = None

@@ -6,7 +6,6 @@ from shlex import split
 
 import questionary
 import typer
-from rich.progress import Progress
 
 import skyplane.cli.cli_aws
 import skyplane.cli.cli_azure
@@ -14,7 +13,7 @@ import skyplane.cli.cli_config
 import skyplane.cli.cli_internal as cli_internal
 import skyplane.cli.cli_solver
 import skyplane.cli.experiments
-from skyplane import GB, config_path, exceptions, skyplane_root, cloud_config
+from skyplane import GB, config_path, skyplane_root, cloud_config
 from skyplane.cli.common import print_header
 from skyplane.cli.cli_impl.cp_local import (
     copy_azure_local,
@@ -25,23 +24,21 @@ from skyplane.cli.cli_impl.cp_local import (
     copy_local_s3,
     copy_s3_local,
 )
-from skyplane.cli.cli_impl.cp_replicate import generate_topology, replicate_helper
+from skyplane.cli.cli_impl.cp_replicate import generate_topology, generate_transfer_obj_list, confirm_transfer, launch_replication_job
+from skyplane.replicate.replication_plan import TransferObjectList, ReplicationJob
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.cli_impl.ls import ls_local, ls_objstore
 from skyplane.cli.common import check_ulimit, parse_path, query_instances
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.config import SkyplaneConfig
-from skyplane.exceptions import MissingObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
-from skyplane.utils.timer import Timer
 
 app = typer.Typer(name="skyplane")
 app.command()(cli_internal.replicate_random)
 app.command()(cli_internal.replicate_random_solve)
-app.command()(cli_internal.replicate_json)
 app.add_typer(skyplane.cli.experiments.app, name="experiments")
 app.add_typer(skyplane.cli.cli_aws.app, name="aws")
 app.add_typer(skyplane.cli.cli_azure.app, name="azure")
@@ -169,42 +166,43 @@ def cp(
         dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
         dst_region = dst_client.region_tag()
 
-        # Query source and destination buckets
-        if solve:
-            src_objs_all = list(src_client.list_objects(path_src))
-            gbyte_to_transfer = sum(obj.size for obj in src_objs_all) / GB
-            if len(src_objs_all) == 0:
-                raise MissingObjectException(f"No objects found in source bucket {bucket_src}")
-        else:
-            gbyte_to_transfer, src_objs_all = None, None
-
-        # Set up replication topology
+        transfer_list = generate_transfer_obj_list(src_region, dst_region, bucket_src, bucket_dst, path_src, path_dst)
         topo = generate_topology(
             src_region,
             dst_region,
             solve,
             num_connections=num_connections,
             max_instances=max_instances,
-            solver_total_gbyte_to_transfer=gbyte_to_transfer if solve else None,
+            solver_total_gbyte_to_transfer=sum(obj.size for obj in transfer_list.src_objs) if solve else None,
             solver_required_throughput_gbits=solver_required_throughput_gbits,
             solver_throughput_grid=solver_throughput_grid,
             solver_verbose=solver_verbose,
         )
-
-        replicate_helper(
-            topo,
+        job = ReplicationJob(
+            source_region=topo.source_region(),
             source_bucket=bucket_src,
+            dest_region=topo.sink_region(),
             dest_bucket=bucket_dst,
-            src_key_prefix=path_src,
-            dest_key_prefix=path_dst,
-            cached_src_objs=src_objs_all,
-            reuse_gateways=reuse_gateways,
+            src_objs=transfer_list.src_objs_job,
+            dest_objs=transfer_list.dst_objs_job,
+            obj_sizes=transfer_list.obj_sizes,
             max_chunk_size_mb=max_chunk_size_mb,
-            debug=debug,
-            use_bbr=use_bbr,
-            use_compression=use_compression,
+        )
+        confirm_transfer(
+            topo=topo,
+            n_objs=len(transfer_list.src_objs_job),
+            est_size_bytes=sum(job.obj_sizes.values()),
             ask_to_confirm_transfer=not cloud_config.get_flag("autoconfirm") and not confirm,
         )
+        stats = launch_replication_job(
+            topo=topo,
+            job=job,
+            debug=debug,
+            reuse_gateways=reuse_gateways,
+            use_bbr=use_bbr,
+            use_compression=use_compression,
+        )
+        return 0 if stats["success"] else 1
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
 
@@ -285,42 +283,42 @@ def sync(
     dst_region = dst_client.region_tag()
 
     # Query source and destination buckets
-    src_objs_all = []
-    dst_objs_all = []
-    with Timer(f"Query {bucket_src} prefix {path_src}"):
-        with Progress(transient=True) as progress:
-            query_task = progress.add_task(f"Querying objects in {bucket_src}", total=None)
-            for obj in src_client.list_objects(path_src):
-                src_objs_all.append(obj)
-                progress.update(query_task, description=f"Querying objects in {bucket_src} (found {len(src_objs_all)} objects so far)")
-            for obj in dst_client.list_objects(path_dst):
-                dst_objs_all.append(obj)
-                progress.update(query_task, description=f"Querying objects in {bucket_dst} (found {len(dst_objs_all)} objects so far)")
-    if not src_objs_all:
-        logger.error("Specified object does not exist.")
-        raise exceptions.MissingObjectException()
+    transfer_list = generate_transfer_obj_list(src_region, dst_region, bucket_src, bucket_dst, path_src, path_dst)
 
-    # Match destination objects to source objects and determine if they need to be copied
     dst_dict = dict()
-    for obj in dst_objs_all:
-        key = obj.key
-        if path_dst == "":
-            dst_dict[key] = obj
+    src_objs_new = []
+    dst_objs_new = []
+    obj_sizes_new = dict()
+    for obj in transfer_list.dst_objs:
+        dst_dict[obj.key] = obj
+    for i in range(len(transfer_list.src_objs)):
+        src_obj = transfer_list.src_objs[i]
+        src_path_no_prefix = src_obj.key[len(path_src) :] if src_obj.key.startswith(path_src) else src_obj.key
+        # remove single leading slash if present
+        src_path_no_prefix = src_path_no_prefix[1:] if src_path_no_prefix.startswith("/") else src_path_no_prefix
+        if path_dst == None or len(path_dst) == 0:
+            dst_string = src_path_no_prefix
+        elif path_dst.endswith("/"):
+            dst_string = path_dst + src_path_no_prefix
         else:
-            dst_dict[key[len(path_dst) + 1 :]] = obj
+            dst_string = path_dst + "/" + src_path_no_prefix
 
-    src_obs_new = []
-    for src_obj in src_objs_all:
-        if src_obj.key in dst_dict:
-            dst_obj = dst_dict[src_obj.key]
+        if dst_string in dst_dict:
+            dst_obj = dst_dict[dst_string]
             if src_obj.last_modified > dst_obj.last_modified or src_obj.size != dst_obj.size:
-                src_obs_new.append(src_obj)
+                src_objs_new.append(src_obj.key)
+                dst_objs_new.append(dst_obj.key)
+                obj_sizes_new[src_obj.key] = transfer_list.obj_sizes[src_obj.key]
         else:
-            src_obs_new.append(src_obj)
+            src_objs_new.append(src_obj.key)
+            dst_objs_new.append(transfer_list.dst_objs_job[i])
+            obj_sizes_new[src_obj.key] = transfer_list.obj_sizes[src_obj.key]
 
-    if len(src_obs_new) == 0:
+    if len(dst_objs_new) == 0:
         typer.secho("No objects need updating. Exiting...")
         raise typer.Exit(0)
+
+    new_transfer_list = TransferObjectList(src_objs_new, dst_objs_new, transfer_list.obj_sizes)
 
     topo = generate_topology(
         src_region,
@@ -328,26 +326,36 @@ def sync(
         solve,
         num_connections=num_connections,
         max_instances=max_instances,
-        solver_total_gbyte_to_transfer=sum(obj.size for obj in src_obs_new) / GB,
+        solver_total_gbyte_to_transfer=sum(obj_sizes_new[obj] for obj in obj_sizes_new) / GB,
         solver_required_throughput_gbits=solver_required_throughput_gbits,
         solver_throughput_grid=solver_throughput_grid,
         solver_verbose=solver_verbose,
     )
-
-    replicate_helper(
-        topo,
+    job = ReplicationJob(
+        source_region=topo.source_region(),
         source_bucket=bucket_src,
+        dest_region=topo.sink_region(),
         dest_bucket=bucket_dst,
-        src_key_prefix=path_src,
-        dest_key_prefix=path_dst,
-        cached_src_objs=src_obs_new,
-        reuse_gateways=reuse_gateways,
+        src_objs=new_transfer_list.src_objs_job,
+        dest_objs=new_transfer_list.dst_objs_job,
+        obj_sizes=new_transfer_list.obj_sizes,
         max_chunk_size_mb=max_chunk_size_mb,
-        debug=debug,
-        use_bbr=use_bbr,
-        use_compression=use_compression,
+    )
+    confirm_transfer(
+        topo=topo,
+        n_objs=len(new_transfer_list.src_objs_job),
+        est_size_bytes=sum(job.obj_sizes.values()),
         ask_to_confirm_transfer=not cloud_config.get_flag("autoconfirm") and not confirm,
     )
+    stats = launch_replication_job(
+        topo=topo,
+        job=job,
+        debug=debug,
+        reuse_gateways=reuse_gateways,
+        use_bbr=use_bbr,
+        use_compression=use_compression,
+    )
+    return 0 if stats["success"] else 1
 
 
 @app.command()
