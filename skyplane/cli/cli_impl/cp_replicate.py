@@ -2,30 +2,19 @@ import json
 import os
 import pathlib
 import signal
-from typing import List, Optional, Tuple, Dict
-from dataclasses import dataclass
+from typing import List, Optional
 
 import typer
 from rich import print as rprint
-from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, DownloadColumn, BarColumn, TransferSpeedColumn
 
-from skyplane import exceptions, MB, GB, format_bytes, skyplane_root, cloud_config
+from skyplane import exceptions, MB, GB, format_bytes, skyplane_root
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
-from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
+from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob, TransferObjectList
 from skyplane.replicate.replicator_client import ReplicatorClient
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
 from skyplane.cli.common import console
-
-
-@dataclass
-class TransferObjectList:
-    src_objs_job: List[str]
-    dst_objs_job: List[str]
-    obj_sizes: Dict[str, int]
-    src_objs: Optional[List[ObjectStoreObject]] = None
-    dst_objs: Optional[List[ObjectStoreObject]] = None
 
 
 def generate_topology(

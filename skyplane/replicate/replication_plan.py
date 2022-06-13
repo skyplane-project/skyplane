@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Tuple
 
 from skyplane.chunk import ChunkRequest
+from skyplane.obj_store.object_store_interface import ObjectStoreObject
 from skyplane.utils import logger
 
 
@@ -205,6 +206,15 @@ class ReplicationTopology:
             g.subgraph(subgraph)
 
         return g
+
+
+@dataclass
+class TransferObjectList:
+    src_objs_job: List[str]
+    dst_objs_job: List[str]
+    obj_sizes: Dict[str, int]
+    src_objs: Optional[List[ObjectStoreObject]] = None
+    dst_objs: Optional[List[ObjectStoreObject]] = None
 
 
 @dataclass

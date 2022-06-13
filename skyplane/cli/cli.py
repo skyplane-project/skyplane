@@ -24,7 +24,8 @@ from skyplane.cli.cli_impl.cp_local import (
     copy_local_s3,
     copy_s3_local,
 )
-from skyplane.cli.cli_impl.cp_replicate import generate_topology, query_src_dest_objs, replicate_helper, TransferObjectList
+from skyplane.cli.cli_impl.cp_replicate import generate_topology, query_src_dest_objs, replicate_helper
+from skyplane.replicate.replication_plan import TransferObjectList
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.cli_impl.ls import ls_local, ls_objstore
 from skyplane.cli.common import check_ulimit, parse_path, query_instances
