@@ -24,7 +24,7 @@ from skyplane.cli.cli_impl.cp_local import (
     copy_local_s3,
     copy_s3_local,
 )
-from skyplane.cli.cli_impl.cp_replicate import generate_topology, query_src_dest_objs, replicate_helper
+from skyplane.cli.cli_impl.cp_replicate import generate_topology, generate_transfer_obj_list, replicate_helper_cp
 from skyplane.replicate.replication_plan import TransferObjectList
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.cli_impl.ls import ls_local, ls_objstore
@@ -169,7 +169,7 @@ def cp(
         dst_region = dst_client.region_tag()
 
         # Query source and destination buckets
-        transfer_list = query_src_dest_objs(src_region, dst_region, bucket_src, bucket_dst, path_src, path_dst)
+        transfer_list = generate_transfer_obj_list(src_region, dst_region, bucket_src, bucket_dst, path_src, path_dst)
         topo = generate_topology(
             src_region,
             dst_region,
@@ -182,7 +182,7 @@ def cp(
             solver_verbose=solver_verbose,
         )
 
-        replicate_helper(
+        replicate_helper_cp(
             topo,
             transfer_list,
             source_bucket=bucket_src,
@@ -274,7 +274,7 @@ def sync(
     dst_region = dst_client.region_tag()
 
     # Query source and destination buckets
-    transfer_list = query_src_dest_objs(src_region, dst_region, bucket_src, bucket_dst, path_src, path_dst)
+    transfer_list = generate_transfer_obj_list(src_region, dst_region, bucket_src, bucket_dst, path_src, path_dst)
 
     dst_dict = dict()
     src_objs_new = []
@@ -323,7 +323,7 @@ def sync(
         solver_verbose=solver_verbose,
     )
 
-    replicate_helper(
+    replicate_helper_cp(
         topo,
         new_transfer_list,
         source_bucket=bucket_src,
