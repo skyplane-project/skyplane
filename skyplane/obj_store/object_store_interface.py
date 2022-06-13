@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 
 @dataclass
@@ -9,8 +9,8 @@ class ObjectStoreObject:
     provider: str
     bucket: str
     key: str
-    size: int
-    last_modified: str
+    size: Optional[int] = None
+    last_modified: Optional[str] = None
 
     def full_path(self):
         raise NotImplementedError()
