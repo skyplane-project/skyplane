@@ -7,7 +7,7 @@ from typing import List, Optional
 import typer
 from rich import print as rprint
 
-from skyplane import exceptions, MB, GB, format_bytes, skyplane_root
+from skyplane import exceptions, GB, format_bytes, skyplane_root
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob, TransferObjectList
@@ -260,84 +260,3 @@ def launch_replication_job(
         rprint(f"\n:x: [bold red]Transfer failed[/bold red]")
         rprint(stats)
     return stats
-
-
-def replicate_helper_cp(
-    topo: ReplicationTopology,
-    transfer_list: TransferObjectList,
-    source_bucket: Optional[str] = None,
-    dest_bucket: Optional[str] = None,
-    max_chunk_size_mb: Optional[int] = None,  # maximum chunk size to breakup objects into
-    # transfer flags
-    debug: bool = False,
-    reuse_gateways: bool = False,
-    use_bbr: bool = False,
-    use_compression: bool = False,
-    ask_to_confirm_transfer: bool = True,
-    **kwargs,
-):
-    job = ReplicationJob(
-        source_region=topo.source_region(),
-        source_bucket=source_bucket,
-        dest_region=topo.sink_region(),
-        dest_bucket=dest_bucket,
-        src_objs=transfer_list.src_objs_job,
-        dest_objs=transfer_list.dst_objs_job,
-        obj_sizes=transfer_list.obj_sizes,
-        max_chunk_size_mb=max_chunk_size_mb,
-    )
-    confirm_transfer(
-        topo=topo,
-        n_objs=len(transfer_list.src_objs_job),
-        est_size_bytes=sum(job.obj_sizes.values()),
-        ask_to_confirm_transfer=ask_to_confirm_transfer,
-    )
-    stats = launch_replication_job(
-        topo=topo,
-        job=job,
-        debug=debug,
-        reuse_gateways=reuse_gateways,
-        use_bbr=use_bbr,
-        use_compression=use_compression,
-        **kwargs,
-    )
-    return 0 if stats["success"] else 1
-
-
-def replicate_helper_random(
-    topo: ReplicationTopology,
-    random_size_total_mb: int = 2048,
-    random_n_chunks: int = 512,
-    # transfer flags
-    debug: bool = False,
-    reuse_gateways: bool = False,
-    use_bbr: bool = False,
-    use_compression: bool = False,
-    ask_to_confirm_transfer: bool = True,
-    **kwargs,
-):
-    job = ReplicationJob(
-        source_region=topo.source_region(),
-        source_bucket=None,
-        dest_region=topo.sink_region(),
-        dest_bucket=None,
-        src_objs=[str(i) for i in range(random_n_chunks)],
-        dest_objs=[str(i) for i in range(random_n_chunks)],
-        random_chunk_size_mb=random_size_total_mb // random_n_chunks,
-    )
-    confirm_transfer(
-        topo=topo,
-        n_objs=random_n_chunks,
-        est_size_bytes=job.random_chunk_size_mb * random_n_chunks * MB,
-        ask_to_confirm_transfer=ask_to_confirm_transfer,
-    )
-    stats = launch_replication_job(
-        topo=topo,
-        job=job,
-        debug=debug,
-        reuse_gateways=reuse_gateways,
-        use_bbr=use_bbr,
-        use_compression=use_compression,
-        **kwargs,
-    )
-    return 0 if stats["success"] else 1

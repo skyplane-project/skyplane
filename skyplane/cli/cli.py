@@ -24,19 +24,17 @@ from skyplane.cli.cli_impl.cp_local import (
     copy_local_s3,
     copy_s3_local,
 )
-from skyplane.cli.cli_impl.cp_replicate import generate_topology, generate_transfer_obj_list, replicate_helper_cp
-from skyplane.replicate.replication_plan import TransferObjectList
+from skyplane.cli.cli_impl.cp_replicate import generate_topology, generate_transfer_obj_list, confirm_transfer, launch_replication_job
+from skyplane.replicate.replication_plan import TransferObjectList, ReplicationJob
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.cli_impl.ls import ls_local, ls_objstore
 from skyplane.cli.common import check_ulimit, parse_path, query_instances
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.config import SkyplaneConfig
-from skyplane.exceptions import MissingObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
-from skyplane.utils.timer import Timer
 
 app = typer.Typer(name="skyplane")
 app.command()(cli_internal.replicate_random)
@@ -168,7 +166,6 @@ def cp(
         dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
         dst_region = dst_client.region_tag()
 
-        # Query source and destination buckets
         transfer_list = generate_transfer_obj_list(src_region, dst_region, bucket_src, bucket_dst, path_src, path_dst)
         topo = generate_topology(
             src_region,
@@ -181,19 +178,31 @@ def cp(
             solver_throughput_grid=solver_throughput_grid,
             solver_verbose=solver_verbose,
         )
-
-        replicate_helper_cp(
-            topo,
-            transfer_list,
+        job = ReplicationJob(
+            source_region=topo.source_region(),
             source_bucket=bucket_src,
+            dest_region=topo.sink_region(),
             dest_bucket=bucket_dst,
-            reuse_gateways=reuse_gateways,
+            src_objs=transfer_list.src_objs_job,
+            dest_objs=transfer_list.dst_objs_job,
+            obj_sizes=transfer_list.obj_sizes,
             max_chunk_size_mb=max_chunk_size_mb,
-            debug=debug,
-            use_bbr=use_bbr,
-            use_compression=use_compression,
+        )
+        confirm_transfer(
+            topo=topo,
+            n_objs=len(transfer_list.src_objs_job),
+            est_size_bytes=sum(job.obj_sizes.values()),
             ask_to_confirm_transfer=not cloud_config.get_flag("autoconfirm") and not confirm,
         )
+        stats = launch_replication_job(
+            topo=topo,
+            job=job,
+            debug=debug,
+            reuse_gateways=reuse_gateways,
+            use_bbr=use_bbr,
+            use_compression=use_compression,
+        )
+        return 0 if stats["success"] else 1
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
 
@@ -322,19 +331,31 @@ def sync(
         solver_throughput_grid=solver_throughput_grid,
         solver_verbose=solver_verbose,
     )
-
-    replicate_helper_cp(
-        topo,
-        new_transfer_list,
+    job = ReplicationJob(
+        source_region=topo.source_region(),
         source_bucket=bucket_src,
+        dest_region=topo.sink_region(),
         dest_bucket=bucket_dst,
-        reuse_gateways=reuse_gateways,
+        src_objs=new_transfer_list.src_objs_job,
+        dest_objs=new_transfer_list.dst_objs_job,
+        obj_sizes=new_transfer_list.obj_sizes,
         max_chunk_size_mb=max_chunk_size_mb,
-        debug=debug,
-        use_bbr=use_bbr,
-        use_compression=use_compression,
+    )
+    confirm_transfer(
+        topo=topo,
+        n_objs=len(new_transfer_list.src_objs_job),
+        est_size_bytes=sum(job.obj_sizes.values()),
         ask_to_confirm_transfer=not cloud_config.get_flag("autoconfirm") and not confirm,
     )
+    stats = launch_replication_job(
+        topo=topo,
+        job=job,
+        debug=debug,
+        reuse_gateways=reuse_gateways,
+        use_bbr=use_bbr,
+        use_compression=use_compression,
+    )
+    return 0 if stats["success"] else 1
 
 
 @app.command()
