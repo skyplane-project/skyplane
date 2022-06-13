@@ -41,7 +41,6 @@ from skyplane.utils.timer import Timer
 app = typer.Typer(name="skyplane")
 app.command()(cli_internal.replicate_random)
 app.command()(cli_internal.replicate_random_solve)
-app.command()(cli_internal.replicate_json)
 app.add_typer(skyplane.cli.experiments.app, name="experiments")
 app.add_typer(skyplane.cli.cli_aws.app, name="aws")
 app.add_typer(skyplane.cli.cli_azure.app, name="azure")
@@ -180,11 +179,6 @@ def cp(
             gbyte_to_transfer, src_objs_all = None, None
         """
         transfer_list = query_src_dest_objs(src_region, dst_region, bucket_src, bucket_dst, path_src, path_dst)
-        if solve:
-            gbyte_to_transfer = sum(obj.size for obj in transfer_list.src_objs)
-        else:
-            gbyte_to_transfer = None
-
         # Set up replication topology
         topo = generate_topology(
             src_region,
@@ -192,7 +186,7 @@ def cp(
             solve,
             num_connections=num_connections,
             max_instances=max_instances,
-            solver_total_gbyte_to_transfer=gbyte_to_transfer if solve else None,
+            solver_total_gbyte_to_transfer=sum(obj.size for obj in transfer_list.src_objs) if solve else None,
             solver_required_throughput_gbits=solver_required_throughput_gbits,
             solver_throughput_grid=solver_throughput_grid,
             solver_verbose=solver_verbose,
@@ -203,8 +197,6 @@ def cp(
             transfer_list,
             source_bucket=bucket_src,
             dest_bucket=bucket_dst,
-            src_key_prefix=path_src,
-            dest_key_prefix=path_dst,
             reuse_gateways=reuse_gateways,
             max_chunk_size_mb=max_chunk_size_mb,
             debug=debug,
@@ -351,8 +343,6 @@ def sync(
         new_transfer_list,
         source_bucket=bucket_src,
         dest_bucket=bucket_dst,
-        src_key_prefix=path_src,
-        dest_key_prefix=path_dst,
         reuse_gateways=reuse_gateways,
         max_chunk_size_mb=max_chunk_size_mb,
         debug=debug,
