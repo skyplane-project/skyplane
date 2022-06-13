@@ -3,6 +3,7 @@ import os
 import pathlib
 import signal
 from typing import List, Optional, Tuple, Dict
+from dataclasses import dataclass
 
 import typer
 from rich import print as rprint
@@ -16,6 +17,16 @@ from skyplane.replicate.replicator_client import ReplicatorClient
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
 from skyplane.cli.common import console
+
+
+@dataclass
+class TransferObjectList:
+
+    src_objs_job: List[str]
+    dst_objs_job: List[str]
+    obj_sizes: Dict[str, int]
+    src_objs: Optional[List[ObjectStoreObject]] = None
+    dst_objs: Optional[List[ObjectStoreObject]] = None
 
 
 def generate_topology(
@@ -82,7 +93,7 @@ def query_src_dest_objs(
     src_key_prefix: str = "",
     dest_key_prefix: str = "",
     cached_src_objs: Optional[List[ObjectStoreObject]] = None,
-) -> Tuple[List[str], List[str], Dict[str, int], List[ObjectStoreObject], List[ObjectStoreObject]]:
+) -> TransferObjectList:
 
     if cached_src_objs:
         src_objs = cached_src_objs
@@ -137,11 +148,12 @@ def query_src_dest_objs(
                 dst_objs.append(obj)
             status.update(f"Querying objects in {dest_bucket} (found {len(dst_objs)} objects so far)")
 
-    return src_objs_job, dest_objs_job, obj_sizes, src_objs, dst_objs
+    return TransferObjectList(src_objs_job, dest_objs_job, obj_sizes, src_objs, dst_objs)
 
 
 def replicate_helper(
     topo: ReplicationTopology,
+    transfer_list: Optional[TransferObjectList] = None,
     # flags for random transfers (to debug)
     random: bool = False,
     random_size_total_mb: int = 2048,
@@ -151,8 +163,6 @@ def replicate_helper(
     dest_bucket: Optional[str] = None,
     src_key_prefix: str = "",
     dest_key_prefix: str = "",
-    transfer_list: Optional[Tuple[List[str], List[str], Dict[str, float]]] = None,
-    cached_src_objs: Optional[List[ObjectStoreObject]] = None,
     # maximum chunk size to breakup objects into
     max_chunk_size_mb: Optional[int] = None,
     # gateway provisioning options
@@ -179,6 +189,11 @@ def replicate_helper(
             fg="red",
             bold=True,
         )
+
+    if transfer_list and transfer_list.src_objs:
+        cached_src_objs = transfer_list.src_objs
+    else:
+        cached_src_objs = None
 
     # make replicator client
     rc = ReplicatorClient(
@@ -210,9 +225,11 @@ def replicate_helper(
         # make replication job
         logger.fs.debug(f"Creating replication job from {source_bucket} to {dest_bucket}")
         if transfer_list:
-            src_objs_job, dest_objs_job, obj_sizes = transfer_list
+            src_objs_job = transfer_list.src_objs_job
+            dest_objs_job = transfer_list.dst_objs_job
+            obj_sizes = transfer_list.obj_sizes
         else:
-            src_objs_job, dest_objs_job, obj_sizes, src_objs, dst_objs = query_src_dest_objs(
+            transfer_list = query_src_dest_objs(
                 topo.source_region(),
                 topo.sink_region(),
                 source_bucket,
@@ -221,6 +238,9 @@ def replicate_helper(
                 dest_key_prefix,
                 cached_src_objs=cached_src_objs,
             )
+            src_objs_job = transfer_list.src_objs_job
+            dst_objs_job = transfer_list.dst_objs_job
+            obj_sizes = transfer_list.obj_sizes
 
         job = ReplicationJob(
             source_region=topo.source_region(),

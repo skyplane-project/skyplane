@@ -25,7 +25,7 @@ from skyplane.cli.cli_impl.cp_local import (
     copy_local_s3,
     copy_s3_local,
 )
-from skyplane.cli.cli_impl.cp_replicate import generate_topology, query_src_dest_objs, replicate_helper
+from skyplane.cli.cli_impl.cp_replicate import generate_topology, query_src_dest_objs, replicate_helper, TransferObjectList
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.cli_impl.ls import ls_local, ls_objstore
 from skyplane.cli.common import check_ulimit, parse_path, query_instances
@@ -170,6 +170,7 @@ def cp(
         dst_region = dst_client.region_tag()
 
         # Query source and destination buckets
+        """
         if solve:
             src_objs_all = list(src_client.list_objects(path_src))
             gbyte_to_transfer = sum(obj.size for obj in src_objs_all) / GB
@@ -177,6 +178,12 @@ def cp(
                 raise MissingObjectException(f"No objects found in source bucket {bucket_src}")
         else:
             gbyte_to_transfer, src_objs_all = None, None
+        """
+        transfer_list = query_src_dest_objs(src_region, dst_region, bucket_src, bucket_dst, path_src, path_dst)
+        if solve:
+            gbyte_to_transfer = sum(obj.size for obj in transfer_list.src_objs)
+        else:
+            gbyte_to_transfer = None
 
         # Set up replication topology
         topo = generate_topology(
@@ -193,11 +200,11 @@ def cp(
 
         replicate_helper(
             topo,
+            transfer_list,
             source_bucket=bucket_src,
             dest_bucket=bucket_dst,
             src_key_prefix=path_src,
             dest_key_prefix=path_dst,
-            cached_src_objs=src_objs_all,
             reuse_gateways=reuse_gateways,
             max_chunk_size_mb=max_chunk_size_mb,
             debug=debug,
@@ -285,9 +292,11 @@ def sync(
     dst_region = dst_client.region_tag()
 
     # Query source and destination buckets
-    src_objs_job, dst_objs_job, obj_sizes, src_objs, dst_objs = query_src_dest_objs(
-        src_region, dst_region, bucket_src, bucket_dst, path_src, path_dst
-    )
+    transfer_list = query_src_dest_objs(src_region, dst_region, bucket_src, bucket_dst, path_src, path_dst)
+    src_objs = transfer_list.src_objs
+    dst_objs = transfer_list.dst_objs
+    obj_sizes = transfer_list.obj_sizes
+    dst_objs_job = transfer_list.dst_objs_job
 
     dst_dict = dict()
     for obj in dst_objs:
@@ -323,7 +332,7 @@ def sync(
         typer.secho("No objects need updating. Exiting...")
         raise typer.Exit(0)
 
-    transfer_list = (src_objs_new, dst_objs_new, obj_sizes_new)
+    new_transfer_list = TransferObjectList(src_objs_new, dst_objs_new, obj_sizes)
 
     topo = generate_topology(
         src_region,
@@ -339,12 +348,11 @@ def sync(
 
     replicate_helper(
         topo,
+        new_transfer_list,
         source_bucket=bucket_src,
         dest_bucket=bucket_dst,
         src_key_prefix=path_src,
         dest_key_prefix=path_dst,
-        transfer_list=transfer_list,
-        cached_src_objs=src_objs,
         reuse_gateways=reuse_gateways,
         max_chunk_size_mb=max_chunk_size_mb,
         debug=debug,
