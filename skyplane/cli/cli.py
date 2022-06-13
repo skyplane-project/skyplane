@@ -6,7 +6,6 @@ from shlex import split
 
 import questionary
 import typer
-from rich.progress import Progress
 
 import skyplane.cli.cli_aws
 import skyplane.cli.cli_azure
@@ -14,7 +13,7 @@ import skyplane.cli.cli_config
 import skyplane.cli.cli_internal as cli_internal
 import skyplane.cli.cli_solver
 import skyplane.cli.experiments
-from skyplane import GB, config_path, exceptions, skyplane_root, cloud_config
+from skyplane import GB, config_path, skyplane_root, cloud_config
 from skyplane.cli.common import print_header
 from skyplane.cli.cli_impl.cp_local import (
     copy_azure_local,
@@ -169,17 +168,7 @@ def cp(
         dst_region = dst_client.region_tag()
 
         # Query source and destination buckets
-        """
-        if solve:
-            src_objs_all = list(src_client.list_objects(path_src))
-            gbyte_to_transfer = sum(obj.size for obj in src_objs_all) / GB
-            if len(src_objs_all) == 0:
-                raise MissingObjectException(f"No objects found in source bucket {bucket_src}")
-        else:
-            gbyte_to_transfer, src_objs_all = None, None
-        """
         transfer_list = query_src_dest_objs(src_region, dst_region, bucket_src, bucket_dst, path_src, path_dst)
-        # Set up replication topology
         topo = generate_topology(
             src_region,
             dst_region,
@@ -285,20 +274,15 @@ def sync(
 
     # Query source and destination buckets
     transfer_list = query_src_dest_objs(src_region, dst_region, bucket_src, bucket_dst, path_src, path_dst)
-    src_objs = transfer_list.src_objs
-    dst_objs = transfer_list.dst_objs
-    obj_sizes = transfer_list.obj_sizes
-    dst_objs_job = transfer_list.dst_objs_job
 
     dst_dict = dict()
-    for obj in dst_objs:
-        dst_dict[obj.key] = obj
-
     src_objs_new = []
     dst_objs_new = []
     obj_sizes_new = dict()
-    for i in range(len(src_objs)):
-        src_obj = src_objs[i]
+    for obj in transfer_list.dst_objs:
+        dst_dict[obj.key] = obj
+    for i in range(len(transfer_list.src_objs)):
+        src_obj = transfer_list.src_objs[i]
         src_path_no_prefix = src_obj.key[len(path_src) :] if src_obj.key.startswith(path_src) else src_obj.key
         # remove single leading slash if present
         src_path_no_prefix = src_path_no_prefix[1:] if src_path_no_prefix.startswith("/") else src_path_no_prefix
@@ -314,17 +298,17 @@ def sync(
             if src_obj.last_modified > dst_obj.last_modified or src_obj.size != dst_obj.size:
                 src_objs_new.append(src_obj.key)
                 dst_objs_new.append(dst_obj.key)
-                obj_sizes_new[src_obj.key] = obj_sizes[src_obj.key]
+                obj_sizes_new[src_obj.key] = transfer_list.obj_sizes[src_obj.key]
         else:
             src_objs_new.append(src_obj.key)
-            dst_objs_new.append(dst_objs_job[i])
-            obj_sizes_new[src_obj.key] = obj_sizes[src_obj.key]
+            dst_objs_new.append(transfer_list.dst_objs_job[i])
+            obj_sizes_new[src_obj.key] = transfer_list.obj_sizes[src_obj.key]
 
     if len(dst_objs_new) == 0:
         typer.secho("No objects need updating. Exiting...")
         raise typer.Exit(0)
 
-    new_transfer_list = TransferObjectList(src_objs_new, dst_objs_new, obj_sizes)
+    new_transfer_list = TransferObjectList(src_objs_new, dst_objs_new, transfer_list.obj_sizes)
 
     topo = generate_topology(
         src_region,
