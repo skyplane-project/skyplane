@@ -416,14 +416,11 @@ class AWSCloudProvider(CloudProvider):
         for i in range(max_retries):
             try:
                 instance = start_instance(subnets[current_subnet_id].id)
-                break
-            except botocore.exceptions.ClientError as e:
-                if i == max_retries - 1:
-                    raise e
-                elif "VcpuLimitExceeded" in str(e):
-                    raise exceptions.InsufficientVCPUException() from e
+            except Exception as e:
+                if i == max_retries - 1 or "VcpuLimitExceeded" in str(e):
+                    raise exceptions.SkyplaneException(f"Error encountered while starting instance: {e}")
                 elif "Invalid IAM Instance Profile name" not in str(e):
-                    logger.warning(str(e))
+                    logger.error(f"Error encountered while starting instance: {e}")
                 elif "InsufficientInstanceCapacity" in str(e):
                     # try another subnet
                     current_subnet_id = (current_subnet_id + 1) % len(subnets)
