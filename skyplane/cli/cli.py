@@ -26,7 +26,7 @@ from skyplane.cli.cli_impl.cp_local import (
 from skyplane.cli.cli_impl.cp_replicate import generate_topology, replicate_helper
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.cli_impl.ls import ls_local, ls_objstore
-from skyplane.cli.common import check_limits, check_ulimit, parse_path, query_instances
+from skyplane.cli.common import check_ulimit, parse_path, query_instances
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.config import SkyplaneConfig
@@ -137,11 +137,10 @@ def cp(
     if (provider_src != "s3" or provider_dst != "s3") and max_chunk_size_mb:
         raise ValueError(f"Multipart uploads not supported outside of S3")
 
-    # raise file limits for local transfers, check ulimit and check prlimit
+    # raise file limits for local transfers
     if provider_src == "local" or provider_dst == "local":
         typer.secho("Checking File Limits: ", fg="yellow", bold=True)
-        check_limits()
-
+        check_ulimit()
     if provider_src == "local" and provider_dst == "local":
         copy_local_local(Path(path_src), Path(path_dst))
     elif provider_src == "local" and provider_dst == "s3":
