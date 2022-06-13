@@ -1,6 +1,7 @@
 class SkyplaneException(SystemExit):
     pass
 
+
 class MissingBucketException(Exception):
     pass
 
