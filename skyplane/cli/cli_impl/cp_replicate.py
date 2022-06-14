@@ -312,6 +312,10 @@ def launch_replication_job(
         s = signal.signal(signal.SIGINT, signal.SIG_IGN)
         rc.deprovision_gateways()
         signal.signal(signal.SIGINT, s)
+
+    # verify transfer
+    rc.verify_transfer(job)
+
     stats = stats if stats else {}
     stats["success"] = stats["monitor_status"] == "completed"
 

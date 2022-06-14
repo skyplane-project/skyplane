@@ -4,7 +4,7 @@ import os
 import subprocess
 import time
 import uuid
-from functools import partial
+from functools import lru_cache, partial
 from typing import Iterator, List, Optional
 
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError, HttpResponseError
@@ -165,7 +165,7 @@ class AzureInterface(ObjectStoreInterface):
         return self.delete_container()
 
     def list_objects(self, prefix="") -> Iterator[AzureObject]:
-        blobs = self.container_client.list_blobs()
+        blobs = self.container_client.list_blobs(name_starts_with=prefix)
         for blob in blobs:
             yield AzureObject("azure", f"{self.account_name}/{blob.container}", blob.name, blob.size, blob.last_modified)
 
@@ -174,7 +174,8 @@ class AzureInterface(ObjectStoreInterface):
             blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=key)
             blob_client.delete_blob()
 
-    def get_obj_metadata(self, obj_name):  # Not Tested
+    @lru_cache(maxsize=1024)
+    def get_obj_metadata(self, obj_name):
         blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=obj_name)
         try:
             return blob_client.get_blob_properties()
@@ -183,6 +184,9 @@ class AzureInterface(ObjectStoreInterface):
 
     def get_obj_size(self, obj_name):
         return self.get_obj_metadata(obj_name).size
+
+    def get_obj_last_modified(self, obj_name):
+        return self.get_obj_metadata(obj_name).last_modified
 
     @staticmethod
     def _run_azure_op_with_retry(fn, interval=0.5, timeout=180):

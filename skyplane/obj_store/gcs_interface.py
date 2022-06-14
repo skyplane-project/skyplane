@@ -1,3 +1,5 @@
+from functools import lru_cache
+import os
 import base64
 import datetime
 import hashlib
@@ -85,8 +87,8 @@ class GCSInterface(ObjectStoreInterface):
     def delete_objects(self, keys: List[str]):
         for key in keys:
             self._gcs_client.bucket(self.bucket_name).blob(key).delete()
-            assert not self.exists(key)
 
+    @lru_cache(maxsize=1024)
     def get_obj_metadata(self, obj_name):
         bucket = self._gcs_client.bucket(self.bucket_name)
         blob = bucket.get_blob(obj_name)
@@ -98,6 +100,9 @@ class GCSInterface(ObjectStoreInterface):
 
     def get_obj_size(self, obj_name):
         return self.get_obj_metadata(obj_name).size
+
+    def get_obj_last_modified(self, obj_name):
+        return self.get_obj_metadata(obj_name).updated
 
     def exists(self, obj_name):
         try:

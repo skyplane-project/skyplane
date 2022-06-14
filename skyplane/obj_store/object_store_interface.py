@@ -42,6 +42,9 @@ class ObjectStoreInterface:
     def get_obj_size(self, obj_name):
         raise NotImplementedError()
 
+    def get_obj_last_modified(self, obj_name):
+        raise NotImplementedError()
+
     def download_object(
         self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5: bool = False
     ) -> Optional[bytes]:

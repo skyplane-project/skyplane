@@ -1,3 +1,4 @@
+from functools import lru_cache
 import base64
 import hashlib
 import os
@@ -79,6 +80,7 @@ class S3Interface(ObjectStoreInterface):
             batch, keys = keys[:1000], keys[1000:]  # take up to 1000 keys at a time
             s3_client.delete_objects(Bucket=self.bucket_name, Delete={"Objects": [{"Key": k} for k in batch]})
 
+    @lru_cache(maxsize=1024)
     def get_obj_metadata(self, obj_name):
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
         try:
@@ -88,6 +90,9 @@ class S3Interface(ObjectStoreInterface):
 
     def get_obj_size(self, obj_name):
         return self.get_obj_metadata(obj_name)["ContentLength"]
+
+    def get_obj_last_modified(self, obj_name):
+        return self.get_obj_metadata(obj_name)["LastModified"]
 
     def exists(self, obj_name):
         try:
