@@ -7,6 +7,7 @@ import typer
 from skyplane.cli.common import print_header
 from skyplane import skyplane_root, MB
 from skyplane.cli.cli_impl.cp_replicate import confirm_transfer, launch_replication_job
+from skyplane.obj_store.object_store_interface import ObjectStoreObject
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
 from skyplane.utils import logger
 
@@ -45,13 +46,18 @@ def replicate_random(
         logger.warning(f"total_transfer_size_mb ({total_transfer_size_mb}) is not a multiple of chunk_size_mb ({chunk_size_mb})")
     n_chunks = int(total_transfer_size_mb / chunk_size_mb)
 
+    transfer_list = []
+    for i in range(n_chunks):
+        src_obj = ObjectStoreObject(src_region.split(":")[0], "", str(i))
+        dst_obj = ObjectStoreObject(dst_region.split(":")[0], "", str(i))
+        transfer_list.append((src_obj, dst_obj))
+
     job = ReplicationJob(
         source_region=topo.source_region(),
         source_bucket=None,
         dest_region=topo.sink_region(),
         dest_bucket=None,
-        src_objs=[str(i1) for i1 in range(n_chunks)],
-        dest_objs=[str(i1) for i1 in range(n_chunks)],
+        transfer_pairs=transfer_list,
         random_chunk_size_mb=total_transfer_size_mb // n_chunks,
     )
     confirm_transfer(
@@ -124,13 +130,18 @@ def replicate_random_solve(
         logger.warning(f"total_transfer_size_mb ({total_transfer_size_mb}) is not a multiple of chunk_size_mb ({chunk_size_mb})")
     n_chunks = int(total_transfer_size_mb / chunk_size_mb)
 
+    transfer_list = []
+    for i in range(n_chunks):
+        src_obj = ObjectStoreObject(src_region.split(":")[0], "", str(i))
+        dst_obj = ObjectStoreObject(dst_region.split(":")[0], "", str(i))
+        transfer_list.append((src_obj, dst_obj))
+
     job = ReplicationJob(
         source_region=topo.source_region(),
         source_bucket=None,
         dest_region=topo.sink_region(),
         dest_bucket=None,
-        src_objs=[str(i1) for i1 in range(n_chunks)],
-        dest_objs=[str(i1) for i1 in range(n_chunks)],
+        transfer_pairs=transfer_list,
         random_chunk_size_mb=total_transfer_size_mb // n_chunks,
     )
     confirm_transfer(
