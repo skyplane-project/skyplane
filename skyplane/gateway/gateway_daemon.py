@@ -24,7 +24,7 @@ from skyplane.utils import logger
 
 class GatewayDaemon:
     def __init__(
-        self, region: str, outgoing_ports: Dict[str, int], chunk_dir: PathLike, max_incoming_ports=64, use_tls=True, use_compression=False
+        self, region: str, outgoing_ports: Dict[str, int], chunk_dir: PathLike, max_incoming_ports=64, use_tls=True, use_compression=False, use_e2ee=True
     ):
         # todo max_incoming_ports should be configurable rather than static
         self.region = region
@@ -32,6 +32,12 @@ class GatewayDaemon:
         self.chunk_store = ChunkStore(chunk_dir)
         self.error_event = Event()
         self.error_queue = Queue()
+        if use_e2ee:
+            e2ee_key_path = Path(os.environ["E2EE_KEY_FILE"]).expanduser()
+            with open(e2ee_key_path, "rb") as f:
+                e2ee_key_bytes = f.read()
+        else:
+            e2ee_key_bytes = None
         self.gateway_receiver = GatewayReceiver(
             region,
             self.chunk_store,
@@ -40,6 +46,7 @@ class GatewayDaemon:
             max_pending_chunks=max_incoming_ports,
             use_tls=use_tls,
             use_compression=use_compression,
+            e2ee_key_bytes = e2ee_key_bytes,
         )
         self.gateway_sender = GatewaySender(
             region,
@@ -49,6 +56,7 @@ class GatewayDaemon:
             outgoing_ports=outgoing_ports,
             use_tls=use_tls,
             use_compression=use_compression,
+            e2ee_key_bytes = e2ee_key_bytes,
         )
         self.obj_store_conn = GatewayObjStoreConn(self.chunk_store, self.error_event, self.error_queue, max_conn=32)
 
@@ -159,6 +167,7 @@ if __name__ == "__main__":
     parser.add_argument("--chunk-dir", type=Path, default="/tmp/skyplane/chunks", help="Directory to store chunks")
     parser.add_argument("--disable-tls", action="store_true")
     parser.add_argument("--use-compression", action="store_true")
+    parser.add_argument("--disable-e2ee", action="store_true")
     args = parser.parse_args()
 
     os.makedirs(args.chunk_dir)
@@ -168,5 +177,6 @@ if __name__ == "__main__":
         chunk_dir=args.chunk_dir,
         use_tls=not args.disable_tls,
         use_compression=args.use_compression,
+        use_e2ee=not args.disable_e2ee,
     )
     daemon.run()

@@ -4,6 +4,7 @@ import socket
 import ssl
 import time
 import traceback
+import nacl.secret
 from contextlib import closing
 from multiprocessing import Event, Process, Value, Queue
 from typing import Optional, Tuple
@@ -29,6 +30,7 @@ class GatewayReceiver:
         max_pending_chunks=1,
         use_tls: bool = True,
         use_compression: bool = True,
+        e2ee_key_bytes: Optional[bytes] = None,
     ):
         self.region = region
         self.chunk_store = chunk_store
@@ -37,6 +39,10 @@ class GatewayReceiver:
         self.recv_block_size = recv_block_size
         self.max_pending_chunks = max_pending_chunks
         self.use_compression = use_compression
+        if e2ee_key_bytes is None:
+            self.e2ee_secretbox = None
+        else:
+            self.e2ee_secretbox = nacl.secret.SecretBox(e2ee_key_bytes)
         self.server_processes = []
         self.server_ports = []
         self.next_gateway_worker_id = 0
@@ -135,6 +141,7 @@ class GatewayReceiver:
             chunk_header = WireProtocolHeader.from_socket(conn)
             logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} Got chunk header {chunk_header}")
             chunk_request = self.chunk_store.get_chunk_request(chunk_header.chunk_id)
+            should_decrypt = self.e2ee_secretbox is not None and chunk_request.dst_region == self.region
             should_decompress = chunk_header.is_compressed and chunk_request.dst_region == self.region
 
             # wait for space
@@ -151,6 +158,7 @@ class GatewayReceiver:
                         socket_data_len = chunk_header.data_len
                         chunk_received_size = 0
                         chunk_received_size_decompressed = 0
+                        to_write = b""
                         while socket_data_len > 0:
                             data_batch = conn.recv(min(socket_data_len, self.recv_block_size))
                             socket_data_len -= len(data_batch)
@@ -163,14 +171,16 @@ class GatewayReceiver:
                                     bytes=chunk_received_size,
                                 )
                             )
+                            to_write += data_batch
 
-                            if should_decompress:
-                                data_batch_decompressed = decompressor.decompress(data_batch)
-                                chunk_received_size_decompressed += len(data_batch_decompressed)
-                                if len(data_batch_decompressed) > 0:
-                                    f.write(data_batch_decompressed)
-                            else:
-                                f.write(data_batch)
+                        if should_decrypt:
+                            to_write = self.e2ee_secretbox.decrypt(to_write)
+                        if should_decompress:
+                            data_batch_decompressed = decompressor.decompress(to_write)
+                            chunk_received_size_decompressed += len(data_batch_decompressed)
+                            to_write = data_batch_decompressed
+                        if len(to_write) > 0:
+                            f.write(to_write)
             assert (
                 socket_data_len == 0 and chunk_received_size == chunk_header.data_len
             ), f"Size mismatch: got {chunk_received_size} expected {chunk_header.data_len} and had {socket_data_len} bytes remaining"
