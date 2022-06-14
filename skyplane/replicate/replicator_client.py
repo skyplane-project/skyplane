@@ -663,7 +663,7 @@ class ReplicatorClient:
 
         # only check metadata (src.size == dst.size) && (src.modified <= dst.modified)
         def verify(tup):
-            src_key, dst_key = tup
+            src_key, dst_key = tup[0].key, tup[1].key
             try:
                 if src_interface.get_obj_size(src_key) != dst_interface.get_obj_size(dst_key):
                     return False
@@ -675,9 +675,7 @@ class ReplicatorClient:
                 return False
 
         # verify that all objects in src_interface are present in dst_interface
-        matches = do_parallel(
-            verify, zip(job.src_objs, job.dest_objs), n=512, spinner=True, spinner_persist=True, desc="Verifying transfer"
-        )
+        matches = do_parallel(verify, job.transfer_pairs, n=512, spinner=True, spinner_persist=True, desc="Verifying transfer")
         failed_src_objs = [src_key for (src_key, dst_key), match in matches if not match]
         if len(failed_src_objs) > 0:
             raise exceptions.TransferFailedException(
