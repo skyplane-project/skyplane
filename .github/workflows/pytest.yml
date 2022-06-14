@@ -100,6 +100,8 @@ jobs:
         with:
           project_id: '${{ secrets.GCP_PROJECT_ID }}'
           export_default_credentials: true
+      - name: Delete existing service account keys
+        run: (gcloud iam service-accounts keys list --project skyplane-ci --iam-account skyplane-manual@skyplane-ci.iam.gserviceaccount.com --format="value(KEY_ID)" | xargs -I {} gcloud iam service-accounts keys delete --project skyplane-ci --iam-account skyplane-manual@skyplane-ci.iam.gserviceaccount.com -q {}) || true
       - name: Run cloud tests
         run: |
           poetry run skyplane init -y
