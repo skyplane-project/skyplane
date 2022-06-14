@@ -335,7 +335,6 @@ class ReplicatorClient:
                             idx += 1
                             part_num += 1
                             offset += chunk_size_bytes
-
                         # add multipart upload request
                         self.multipart_upload_requests.append(
                             {

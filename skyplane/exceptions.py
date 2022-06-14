@@ -1,10 +1,18 @@
-class MissingBucketException(Exception):
+class SkyplaneException(Exception):
     pass
 
 
-class MissingObjectException(Exception):
+class MissingBucketException(SkyplaneException):
     pass
 
 
-class InsufficientVCPUException(Exception):
+class MissingObjectException(SkyplaneException):
+    pass
+
+
+class InsufficientVCPUException(SkyplaneException):
+    pass
+
+
+class ObjectStoreException(SkyplaneException):
     pass
