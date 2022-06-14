@@ -12,6 +12,10 @@ class ObjectStoreObject:
     size: Optional[int] = None
     last_modified: Optional[str] = None
 
+    @property
+    def exists(self):
+        return self.size is not None and self.last_modified is not None
+
     def full_path(self):
         raise NotImplementedError()
 

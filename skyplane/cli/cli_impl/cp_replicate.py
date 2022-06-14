@@ -2,7 +2,7 @@ import json
 import os
 import pathlib
 import signal
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import typer
 from rich import print as rprint
@@ -137,6 +137,78 @@ def generate_transfer_obj_list(
             status.update(f"Querying objects in {dest_bucket} (found {len(dst_objs)} objects so far)")
 
     return TransferObjectList(src_objs_job, dest_objs_job, obj_sizes, src_objs, dst_objs)
+
+
+def map_object_key_prefix(
+    source_prefix: str,
+    dest_prefix: str,
+    source_key: str,
+):
+    # if path is a single object, copy it directly
+    if source_key == source_prefix:
+        fname = source_key.split("/")[-1]
+        return os.path.join(dest_prefix, fname)
+
+    # else, object must be in a subdirectory of the source prefix
+    # source prefix must end with a slash
+    if not source_prefix.endswith("/"):
+        raise exceptions.MissingObjectException(f"To copy a directory, the source prefix must end with a slash: {source_prefix}")
+
+    # source key must start with the source prefix
+    if not source_key.startswith(source_prefix):
+        raise exceptions.MissingObjectException(f"Source key must start with source prefix {source_prefix} but key was {source_key}")
+
+    # remove source prefix from key and append to destination prefix
+    return os.path.join(dest_prefix, source_key[len(source_prefix) :])
+
+
+def generate_full_transferobjlist(
+    source_region: str,
+    source_bucket: str,
+    source_prefix: str,
+    dest_region: str,
+    dest_bucket: str,
+    dest_prefix: str,
+) -> List[Tuple[ObjectStoreObject, ObjectStoreObject]]:
+    """Query source region and destination region buckets and return list of objects to transfer."""
+    source_iface = ObjectStoreInterface.create(source_region, source_bucket)
+    dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
+    source_objs, dest_objs = [], []
+
+    # query all source region objects
+    logger.fs.debug(f"Querying objects in {source_bucket}")
+    with console.status(f"Querying objects in {source_bucket}") as status:
+        for obj in source_iface.list_objects(source_prefix):
+            source_objs.append(obj)
+            status.update(f"Querying objects in {source_bucket} (found {len(source_objs)} objects so far)")
+    if not source_objs:
+        logger.error("Specified object does not exist.")
+        raise exceptions.MissingObjectException()
+
+    # map objects to destination object paths
+    for source_obj in source_objs:
+        dest_key = map_object_key_prefix(source_prefix, dest_prefix, source_obj.key)
+        dest_obj = ObjectStoreObject(dest_region.split(":")[0], dest_bucket, dest_key)
+        dest_objs.append(dest_obj)
+
+    # query destination at dest_key
+    logger.fs.debug(f"Querying objects in {dest_bucket}")
+    dest_objs_keys = {obj.key for obj in dest_objs}
+    found_dest_objs = {}
+    with console.status(f"Querying objects in {dest_bucket}") as status:
+        dst_objs = []
+        for obj in dest_iface.list_objects(dest_prefix):
+            if obj.key in dest_objs_keys:
+                found_dest_objs[obj.key] = obj
+            status.update(f"Querying objects in {dest_bucket} (found {len(dst_objs)} objects so far)")
+
+    # enrich dest_objs with found_dest_objs
+    for dest_obj in dest_objs:
+        if dest_obj.key in found_dest_objs:
+            dest_obj.size = found_dest_objs[dest_obj.key].size
+            dest_obj.last_modified = found_dest_objs[dest_obj.key].last_modified
+
+    return list(zip(source_objs, dest_objs))
 
 
 def confirm_transfer(topo: ReplicationTopology, n_objs: int, est_size_bytes: int, ask_to_confirm_transfer=True):
