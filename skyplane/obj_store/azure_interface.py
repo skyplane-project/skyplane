@@ -1,9 +1,11 @@
+import base64
+import hashlib
 import os
 import subprocess
 import time
 import uuid
 from functools import lru_cache, partial
-from typing import Iterator, List
+from typing import Iterator, List, Optional
 
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError, HttpResponseError
 from azure.identity import AzureCliCredential
@@ -42,6 +44,7 @@ class AzureInterface(ObjectStoreInterface):
                 raise exceptions.MissingBucketException(
                     f"Azure storage account {self.account_name} not found, "
                     + f"found the following storage accounts: {avail_storage_accounts}"
+                    + f"with credential {self.auth.get_azure_credential()}"
                 )
         if not self.container_exists():
             if create_bucket:
@@ -209,7 +212,16 @@ class AzureInterface(ObjectStoreInterface):
                                 continue
             raise
 
-    def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
+    def download_object(
+        self,
+        src_object_name,
+        dst_file_path,
+        offset_bytes=None,
+        size_bytes=None,
+        write_at_offset=False,
+        generate_md5=False,
+        write_block_size=2**16,
+    ) -> Optional[bytes]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         downloader = self._run_azure_op_with_retry(
             partial(
@@ -220,19 +232,30 @@ class AzureInterface(ObjectStoreInterface):
                 max_concurrency=self.max_concurrency,
             )
         )
+
         if not os.path.exists(dst_file_path):
             open(dst_file_path, "a").close()
-        with open(dst_file_path, "rb+") as f:
-            f.seek(offset_bytes)
-            f.write(downloader.readall())
+        if generate_md5:
+            m = hashlib.md5()
+        with open(dst_file_path, "wb+" if write_at_offset else "wb") as f:
+            f.seek(offset_bytes if write_at_offset else 0)
+            b = downloader.read(write_block_size)
+            while b:
+                if generate_md5:
+                    m.update(b)
+                f.write(b)
+                b = downloader.read(write_block_size)
+        downloader.close()
 
-    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
+        return m.digest() if generate_md5 else None
+
+    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None):
         if part_number is not None or upload_id is not None:
             # todo implement multipart upload
             raise NotImplementedError("Multipart upload is not implemented for Azure")
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         with open(src_file_path, "rb") as f:
-            result = self._run_azure_op_with_retry(
+            blob_client = self._run_azure_op_with_retry(
                 partial(
                     self.container_client.upload_blob,
                     name=dst_object_name,
@@ -242,3 +265,11 @@ class AzureInterface(ObjectStoreInterface):
                     overwrite=True,
                 )
             )
+        if check_md5:
+            b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
+            blob_md5 = blob_client.get_blob_properties().properties.content_settings.content_md5
+            if b64_md5sum != blob_md5:
+                raise exceptions.ObjectStoreException(
+                    f"Checksum mismatch for object {dst_object_name} in bucket {self.bucket_name}, "
+                    + f"expected {b64_md5sum}, got {blob_md5}"
+                )

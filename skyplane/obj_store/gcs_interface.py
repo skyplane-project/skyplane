@@ -1,15 +1,17 @@
 from functools import lru_cache
 import os
+import base64
 import datetime
-from re import A
-import requests
+import hashlib
+import os
+from typing import Iterator, List, Optional
 from xml.etree import ElementTree
-from typing import Iterator, List
-from skyplane import exceptions
 
-from skyplane.utils import logger
+import requests
+from skyplane import exceptions
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
+from skyplane.utils import logger
 
 
 class GCSObject(ObjectStoreObject):
@@ -114,7 +116,7 @@ class GCSInterface(ObjectStoreInterface):
         blob_name: str,
         params: dict,
         method: str,
-        content_length=0,
+        headers: Optional[dict] = None,
         expiration=datetime.timedelta(minutes=15),
         data=None,
         content_type="application/octet-stream",
@@ -122,9 +124,8 @@ class GCSInterface(ObjectStoreInterface):
 
         blob = self._gcs_client.bucket(self.bucket_name).blob(blob_name)
 
-        headers = {
-            "Content-Type": content_type,
-        }
+        headers = headers or {}
+        headers["Content-Type"] = content_type
 
         # generate signed URL
         url = blob.generate_signed_url(
@@ -141,15 +142,15 @@ class GCSInterface(ObjectStoreInterface):
         response = requests.Session().send(prepared)
 
         if not response.ok:
-            raise ValueError(f"Invalid status code {response.status_code}")
+            raise ValueError(f"Invalid status code {response.status_code}: {response.text}")
 
         return response
 
-    def download_object(self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None):
+    def download_object(
+        self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5=False
+    ) -> Optional[bytes]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = src_object_name if src_object_name[0] != "/" else src_object_name
-
-        offset = 0
         bucket = self._gcs_client.bucket(self.bucket_name)
         blob = bucket.blob(src_object_name)
 
@@ -164,19 +165,32 @@ class GCSInterface(ObjectStoreInterface):
         # write output
         if not os.path.exists(dst_file_path):
             open(dst_file_path, "a").close()
-        with open(dst_file_path, "rb+") as f:
-            f.seek(offset)
+        if generate_md5:
+            m = hashlib.md5()
+        with open(dst_file_path, "wb+" if write_at_offset else "wb") as f:
+            f.seek(offset_bytes if write_at_offset else 0)
             f.write(chunk)
+            if generate_md5:
+                m.update(chunk)
+        return m.digest() if generate_md5 else None
 
-    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
+    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None):
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
         os.path.getsize(src_file_path)
         bucket = self._gcs_client.bucket(self.bucket_name)
+        b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
 
         if part_number is None:
             blob = bucket.blob(dst_object_name)
             blob.upload_from_filename(src_file_path)
+            if check_md5:
+                blob_md5 = blob.md5_hash
+                if b64_md5sum != blob_md5:
+                    raise exceptions.ObjectStoreException(
+                        f"Checksum mismatch for object {dst_object_name} in bucket {self.bucket_name}, "
+                        + f"expected {b64_md5sum}, got {blob_md5}"
+                    )
             return
 
         # multipart upload
@@ -184,12 +198,18 @@ class GCSInterface(ObjectStoreInterface):
 
         # send XML api request
         response = self.send_xml_request(
-            dst_object_name, {"uploadId": upload_id, "partNumber": part_number}, "PUT", data=open(src_file_path, "rb")
+            dst_object_name,
+            {"uploadId": upload_id, "partNumber": part_number},
+            "PUT",
+            headers={"Content-MD5": b64_md5sum} if check_md5 else None,
+            data=open(src_file_path, "rb"),
         )
-        response_data = dict(response.headers)
-        if "ETag" not in response_data:
-            raise ValueError(f"Invalid response {response} {response_data}")
-        return response_data["ETag"]
+
+        # check response
+        if "ETag" not in response.headers:
+            raise exceptions.ObjectStoreException(
+                f"Upload of object {dst_object_name} in bucket {self.bucket_name} failed, got status code {response.status_code} w/ response {response.text}"
+            )
 
     def initiate_multipart_upload(self, dst_object_name):
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
