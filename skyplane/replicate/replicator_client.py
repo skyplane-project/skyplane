@@ -12,6 +12,7 @@ import pandas as pd
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, DownloadColumn, BarColumn, TransferSpeedColumn
 
 from skyplane import GB, MB, tmp_log_dir
+from skyplane import exceptions
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
@@ -19,7 +20,7 @@ from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.compute.server import Server, ServerState
-from skyplane.obj_store.object_store_interface import ObjectStoreInterface
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface, NoSuchObjectException
 from skyplane.replicate.profiler import status_df_to_traceevent
 from skyplane.replicate.replication_plan import ReplicationJob, ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
@@ -335,7 +336,6 @@ class ReplicatorClient:
                             idx += 1
                             part_num += 1
                             offset += chunk_size_bytes
-
                         # add multipart upload request
                         self.multipart_upload_requests.append(
                             {
@@ -418,12 +418,18 @@ class ReplicatorClient:
 
                 def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
                     hop_instance, chunk_requests = args
-                    ip = gateway_ips[hop_instance]
-                    reply = retry_requests().post(
-                        f"{hop_instance.gateway_api_url}/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests]
-                    )
-                    if reply.status_code != 200:
-                        raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
+                    while chunk_requests:
+                        batch, chunk_requests = chunk_requests[: 1024 * 16], chunk_requests[1024 * 16 :]
+                        reply = retry_requests().post(
+                            f"{hop_instance.gateway_api_url}/api/v1/chunk_requests", json=[c.as_dict() for c in batch]
+                        )
+                        if reply.status_code != 200:
+                            raise Exception(
+                                f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}"
+                            )
+                        logger.fs.debug(
+                            f"Sent {len(batch)} chunk requests to {hop_instance.instance_name()}, {len(chunk_requests)} remaining"
+                        )
 
                 start_instances = list(zip(src_instances, chunk_requests_sharded.values()))
                 do_parallel(send_chunk_requests, start_instances, n=-1)
@@ -649,6 +655,35 @@ class ReplicatorClient:
 
                     do_parallel(fn, self.bound_nodes.values(), n=-1)
                     progress.update(cleanup_task, description=": Shutting down gateways")
+
+    def verify_transfer(self, job: ReplicationJob):
+        """Check that all objects to copy are present in the destination"""
+        src_interface = ObjectStoreInterface.create(job.source_region, job.source_bucket)
+        dst_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
+
+        # only check metadata (src.size == dst.size) && (src.modified <= dst.modified)
+        def verify(tup):
+            src_key, dst_key = tup
+            try:
+                if src_interface.get_obj_size(src_key) != dst_interface.get_obj_size(dst_key):
+                    return False
+                elif src_interface.get_obj_last_modified(src_key) > dst_interface.get_obj_last_modified(dst_key):
+                    return False
+                else:
+                    return True
+            except NoSuchObjectException:
+                return False
+
+        # verify that all objects in src_interface are present in dst_interface
+        matches = do_parallel(
+            verify, zip(job.src_objs, job.dest_objs), n=512, spinner=True, spinner_persist=True, desc="Verifying transfer"
+        )
+        failed_src_objs = [src_key for (src_key, dst_key), match in matches if not match]
+        if len(failed_src_objs) > 0:
+            raise exceptions.TransferFailedException(
+                f"{len(failed_src_objs)} objects failed verification",
+                failed_src_objs,
+            )
 
 
 def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1) -> Dict[str, List[Server]]:
