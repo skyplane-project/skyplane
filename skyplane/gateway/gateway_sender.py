@@ -211,7 +211,9 @@ class GatewaySender:
                 logger.info("Not encrypting")
 
             # send chunk header
-            header = chunk.to_wire_header(n_chunks_left_on_socket=len(chunk_ids) - idx - 1, wire_length=wire_length, is_compressed=(compressed_length is not None))
+            header = chunk.to_wire_header(
+                n_chunks_left_on_socket=len(chunk_ids) - idx - 1, wire_length=wire_length, is_compressed=(compressed_length is not None)
+            )
             logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sending chunk header")
             header.to_socket(sock)
             logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent chunk header")

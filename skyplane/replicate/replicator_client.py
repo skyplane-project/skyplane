@@ -231,7 +231,11 @@ class ReplicatorClient:
             if authorize_ssh_pub_key:
                 server.copy_public_key(authorize_ssh_pub_key)
             server.start_gateway(
-                outgoing_ports, gateway_docker_image=self.gateway_docker_image, use_bbr=use_bbr, use_compression=use_compression, e2ee_key_bytes=e2ee_key_bytes if (am_source or am_sink) else None
+                outgoing_ports,
+                gateway_docker_image=self.gateway_docker_image,
+                use_bbr=use_bbr,
+                use_compression=use_compression,
+                e2ee_key_bytes=e2ee_key_bytes if (am_source or am_sink) else None,
             )
 
         args = []

@@ -24,7 +24,14 @@ from skyplane.utils import logger
 
 class GatewayDaemon:
     def __init__(
-        self, region: str, outgoing_ports: Dict[str, int], chunk_dir: PathLike, max_incoming_ports=64, use_tls=True, use_compression=False, use_e2ee=True
+        self,
+        region: str,
+        outgoing_ports: Dict[str, int],
+        chunk_dir: PathLike,
+        max_incoming_ports=64,
+        use_tls=True,
+        use_compression=False,
+        use_e2ee=True,
     ):
         # todo max_incoming_ports should be configurable rather than static
         self.region = region
@@ -46,7 +53,7 @@ class GatewayDaemon:
             max_pending_chunks=max_incoming_ports,
             use_tls=use_tls,
             use_compression=use_compression,
-            e2ee_key_bytes = e2ee_key_bytes,
+            e2ee_key_bytes=e2ee_key_bytes,
         )
         self.gateway_sender = GatewaySender(
             region,
@@ -56,7 +63,7 @@ class GatewayDaemon:
             outgoing_ports=outgoing_ports,
             use_tls=use_tls,
             use_compression=use_compression,
-            e2ee_key_bytes = e2ee_key_bytes,
+            e2ee_key_bytes=e2ee_key_bytes,
         )
         self.obj_store_conn = GatewayObjStoreConn(self.chunk_store, self.error_event, self.error_queue, max_conn=32)
 

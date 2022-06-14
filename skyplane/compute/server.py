@@ -234,7 +234,7 @@ class Server:
     def write_file(self, content_bytes, remote_path):
         """Write a file on the server"""
         sftp_client = self.get_sftp_client()
-        with sftp_client.file(remote_path, mode = "wb") as f:
+        with sftp_client.file(remote_path, mode="wb") as f:
             f.write(content_bytes)
         sftp_client.close()
 
