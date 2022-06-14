@@ -7,8 +7,9 @@ from typing import List, Optional
 
 import paramiko
 from azure.mgmt.compute.models import ResourceIdentityType
+from azure.core.exceptions import HttpResponseError
 
-from skyplane import key_root
+from skyplane import exceptions, key_root
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.compute.cloud_providers import CloudProvider
@@ -316,42 +317,50 @@ class AzureCloudProvider(CloudProvider):
         # Create the VM
         with Timer("Creating Azure VM"):
             with self.provisioning_semaphore:
-                poller = compute_client.virtual_machines.begin_create_or_update(
-                    resource_group,
-                    AzureServer.vm_name(name),
-                    {
-                        "location": location,
-                        "tags": {"skyplane": "true"},
-                        "hardware_profile": {"vm_size": self.lookup_valid_instance(location, vm_size)},
-                        "storage_profile": {
-                            # "image_reference": {
-                            #     "publisher": "canonical",
-                            #     "offer": "0001-com-ubuntu-server-focal",
-                            #     "sku": "20_04-lts",
-                            #     "version": "latest",
-                            # },
-                            "image_reference": {
-                                "publisher": "microsoft-aks",
-                                "offer": "aks",
-                                "sku": "aks-engine-ubuntu-1804-202112",
-                                "version": "latest",
+                try:
+                    poller = compute_client.virtual_machines.begin_create_or_update(
+                        resource_group,
+                        AzureServer.vm_name(name),
+                        {
+                            "location": location,
+                            "tags": {"skyplane": "true"},
+                            "hardware_profile": {"vm_size": self.lookup_valid_instance(location, vm_size)},
+                            "storage_profile": {
+                                # "image_reference": {
+                                #     "publisher": "canonical",
+                                #     "offer": "0001-com-ubuntu-server-focal",
+                                #     "sku": "20_04-lts",
+                                #     "version": "latest",
+                                # },
+                                "image_reference": {
+                                    "publisher": "microsoft-aks",
+                                    "offer": "aks",
+                                    "sku": "aks-engine-ubuntu-1804-202112",
+                                    "version": "latest",
+                                },
+                                "os_disk": {"create_option": "FromImage", "delete_option": "Delete"},
                             },
-                            "os_disk": {"create_option": "FromImage", "delete_option": "Delete"},
-                        },
-                        "os_profile": {
-                            "computer_name": AzureServer.vm_name(name),
-                            "admin_username": uname,
-                            "linux_configuration": {
-                                "disable_password_authentication": True,
-                                "ssh": {"public_keys": [{"path": f"/home/{uname}/.ssh/authorized_keys", "key_data": pub_key}]},
+                            "os_profile": {
+                                "computer_name": AzureServer.vm_name(name),
+                                "admin_username": uname,
+                                "linux_configuration": {
+                                    "disable_password_authentication": True,
+                                    "ssh": {"public_keys": [{"path": f"/home/{uname}/.ssh/authorized_keys", "key_data": pub_key}]},
+                                },
                             },
+                            "network_profile": {"network_interfaces": [{"id": nic_result.id}]},
+                            # give VM managed identity w/ system assigned identity
+                            "identity": {"type": ResourceIdentityType.system_assigned},
                         },
-                        "network_profile": {"network_interfaces": [{"id": nic_result.id}]},
-                        # give VM managed identity w/ system assigned identity
-                        "identity": {"type": ResourceIdentityType.system_assigned},
-                    },
-                )
-                vm_result = poller.result()
+                    )
+                    vm_result = poller.result()
+                except HttpResponseError as e:
+                    if "ResourceQuotaExceeded" in str(e):
+                        raise exceptions.InsufficientVCPUException(f"Got ResourceQuotaExceeded error in Azure region {location}") from e
+                    elif "QuotaExceeded" in str(e):
+                        raise exceptions.InsufficientVCPUException(f"Got QuotaExceeded error in Azure region {location}") from e
+                    else:
+                        raise
 
         server = AzureServer(name)
         server.wait_for_ssh_ready()

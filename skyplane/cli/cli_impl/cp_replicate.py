@@ -2,6 +2,7 @@ import json
 import os
 import pathlib
 import signal
+import traceback
 from typing import List, Optional, Tuple
 
 import typer
@@ -10,7 +11,7 @@ from rich import print as rprint
 from skyplane import exceptions, GB, format_bytes, skyplane_root
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
-from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob, TransferObjectList
+from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
 from skyplane.replicate.replicator_client import ReplicatorClient
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
@@ -73,72 +74,6 @@ def generate_topology(
         return topo
 
 
-def generate_transfer_obj_list(
-    src_region: str,
-    dst_region: str,
-    source_bucket: str,
-    dest_bucket: str,
-    src_key_prefix: str = "",
-    dest_key_prefix: str = "",
-    cached_src_objs: Optional[List[ObjectStoreObject]] = None,
-) -> TransferObjectList:
-
-    if cached_src_objs:
-        src_objs = cached_src_objs
-    else:
-        source_iface = ObjectStoreInterface.create(src_region, source_bucket)
-        logger.fs.debug(f"Querying objects in {source_bucket}")
-        with console.status(f"Querying objects in {source_bucket}") as status:
-            src_objs = []
-            for obj in source_iface.list_objects(src_key_prefix):
-                src_objs.append(obj)
-                status.update(f"Querying objects in {source_bucket} (found {len(src_objs)} objects so far)")
-
-    if not src_objs:
-        logger.error("Specified object does not exist.")
-        raise exceptions.MissingObjectException()
-
-    # map objects to destination object paths
-    # todo isolate this logic and test independently
-    logger.fs.debug(f"Mapping objects to destination paths")
-    src_objs_job = []
-    dest_objs_job = []
-    # if only one object exists, replicate it
-    if len(src_objs) == 1 and src_objs[0].key == src_key_prefix:
-        src_objs_job.append(src_objs[0].key)
-        if dest_key_prefix.endswith("/"):
-            dest_objs_job.append(dest_key_prefix + src_objs[0].key.split("/")[-1])
-        else:
-            dest_objs_job.append(dest_key_prefix)
-    # multiple objects to replicate
-    else:
-        for src_obj in src_objs:
-            src_objs_job.append(src_obj.key)
-            # remove prefix from object key
-            src_path_no_prefix = src_obj.key[len(src_key_prefix) :] if src_obj.key.startswith(src_key_prefix) else src_obj.key
-            # remove single leading slash if present
-            src_path_no_prefix = src_path_no_prefix[1:] if src_path_no_prefix.startswith("/") else src_path_no_prefix
-            if len(dest_key_prefix) == 0:
-                dest_objs_job.append(src_path_no_prefix)
-            elif dest_key_prefix.endswith("/"):
-                dest_objs_job.append(dest_key_prefix + src_path_no_prefix)
-            else:
-                dest_objs_job.append(dest_key_prefix + "/" + src_path_no_prefix)
-
-    obj_sizes = {obj.key: obj.size for obj in src_objs}
-
-    dst_iface = ObjectStoreInterface.create(dst_region, dest_bucket)
-    logger.fs.debug(f"Querying objects in {dest_bucket}")
-    with console.status(f"Querying objects in {dest_bucket}") as status:
-        dst_objs = []
-        for obj in dst_iface.list_objects(dest_key_prefix):
-            if obj.key in dest_objs_job:
-                dst_objs.append(obj)
-            status.update(f"Querying objects in {dest_bucket} (found {len(dst_objs)} objects so far)")
-
-    return TransferObjectList(src_objs_job, dest_objs_job, obj_sizes, src_objs, dst_objs)
-
-
 def map_object_key_prefix(
     source_prefix: str,
     dest_prefix: str,
@@ -183,7 +118,7 @@ def generate_full_transferobjlist(
             status.update(f"Querying objects in {source_bucket} (found {len(source_objs)} objects so far)")
     if not source_objs:
         logger.error("Specified object does not exist.")
-        raise exceptions.MissingObjectException()
+        raise exceptions.MissingObjectException(f"No objects were found in the specified prefix {source_prefix} in {source_bucket}")
 
     # map objects to destination object paths
     for source_obj in source_objs:
@@ -296,9 +231,14 @@ def launch_replication_job(
             write_socket_profile=debug,
             copy_gateway_logs=debug,
         )
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, exceptions.SkyplaneException) as e:
+        if isinstance(e, KeyboardInterrupt):
+            rprint("\n[bold red]Transfer cancelled by user. Exiting.[/bold red]")
+        elif isinstance(e, exceptions.SkyplaneException):
+            console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+            console.print(e.pretty_print_str())
         if not reuse_gateways:
-            logger.fs.warning("Deprovisioning gateways then exiting...")
+            logger.fs.warning("Deprovisioning gateways then exiting. Please wait...")
             # disable sigint to prevent repeated KeyboardInterrupts
             s = signal.signal(signal.SIGINT, signal.SIG_IGN)
             rc.deprovision_gateways()

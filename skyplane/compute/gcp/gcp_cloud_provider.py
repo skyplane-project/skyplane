@@ -7,7 +7,7 @@ from typing import List
 import googleapiclient
 import paramiko
 
-from skyplane import key_root
+from skyplane import exceptions, key_root
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
@@ -257,8 +257,21 @@ class GCPCloudProvider(CloudProvider):
             "scheduling": {"onHostMaintenance": "TERMINATE", "automaticRestart": False},
             "deletionProtection": False,
         }
-        result = compute.instances().insert(project=self.auth.project_id, zone=region, body=req_body).execute()
-        self.wait_for_operation_to_complete(region, result["name"])
+        try:
+            result = compute.instances().insert(project=self.auth.project_id, zone=region, body=req_body).execute()
+            self.wait_for_operation_to_complete(region, result["name"])
+        except googleapiclient.errors.HttpError as e:
+            if e.resp.status == 409:
+                if "ZONE_RESOURCE_POOL_EXHAUSTED" in e.content:
+                    raise exceptions.InsufficientVCPUException(f"Got ZONE_RESOURCE_POOL_EXHAUSTED in region {region}") from e
+                elif "RESOURCE_EXHAUSTED" in e.content:
+                    raise exceptions.InsufficientVCPUException(f"Got RESOURCE_EXHAUSTED in region {region}") from e
+                elif "QUOTA_EXCEEDED" in e.content:
+                    raise exceptions.InsufficientVCPUException(f"Got QUOTA_EXCEEDED in region {region}") from e
+                elif "QUOTA_LIMIT" in e.content:
+                    raise exceptions.InsufficientVCPUException(f"Got QUOTA_LIMIT in region {region}") from e
+                else:
+                    raise e
 
         # wait for server to reach RUNNING state
         server = GCPServer(f"gcp:{region}", name)

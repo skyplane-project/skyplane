@@ -209,15 +209,6 @@ class ReplicationTopology:
 
 
 @dataclass
-class TransferObjectList:
-    src_objs_job: List[str]
-    dst_objs_job: List[str]
-    obj_sizes: Dict[str, int]
-    src_objs: Optional[List[ObjectStoreObject]] = None
-    dst_objs: Optional[List[ObjectStoreObject]] = None
-
-
-@dataclass
 class ReplicationJob:
     source_region: str
     source_bucket: Optional[str]
