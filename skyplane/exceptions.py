@@ -32,10 +32,8 @@ class InsufficientVCPUException(SkyplaneException):
         # todo print link to a documentation page to request more vCPUs
         return err
 
-    pass
 
-
-class TransferFailedException(Exception):
+class TransferFailedException(SkyplaneException):
     def __init__(self, message, failed_objects=None):
         super().__init__(message)
         self.failed_objects = failed_objects
