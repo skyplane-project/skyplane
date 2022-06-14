@@ -24,7 +24,13 @@ from skyplane.cli.cli_impl.cp_local import (
     copy_local_s3,
     copy_s3_local,
 )
-from skyplane.cli.cli_impl.cp_replicate import generate_topology, generate_transfer_obj_list, confirm_transfer, launch_replication_job
+from skyplane.cli.cli_impl.cp_replicate import (
+    generate_full_transferobjlist,
+    generate_topology,
+    generate_transfer_obj_list,
+    confirm_transfer,
+    launch_replication_job,
+)
 from skyplane.replicate.replication_plan import TransferObjectList, ReplicationJob
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.cli_impl.ls import ls_local, ls_objstore
@@ -165,15 +171,14 @@ def cp(
         src_region = src_client.region_tag()
         dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
         dst_region = dst_client.region_tag()
-
-        transfer_list = generate_transfer_obj_list(src_region, dst_region, bucket_src, bucket_dst, path_src, path_dst)
+        transfer_pairs = generate_full_transferobjlist(src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst)
         topo = generate_topology(
             src_region,
             dst_region,
             solve,
             num_connections=num_connections,
             max_instances=max_instances,
-            solver_total_gbyte_to_transfer=sum(obj.size for obj in transfer_list.src_objs) if solve else None,
+            solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
             solver_required_throughput_gbits=solver_required_throughput_gbits,
             solver_throughput_grid=solver_throughput_grid,
             solver_verbose=solver_verbose,
@@ -183,15 +188,13 @@ def cp(
             source_bucket=bucket_src,
             dest_region=topo.sink_region(),
             dest_bucket=bucket_dst,
-            src_objs=transfer_list.src_objs_job,
-            dest_objs=transfer_list.dst_objs_job,
-            obj_sizes=transfer_list.obj_sizes,
+            transfer_pairs=transfer_pairs,
             max_chunk_size_mb=max_chunk_size_mb,
         )
         confirm_transfer(
             topo=topo,
-            n_objs=len(transfer_list.src_objs_job),
-            est_size_bytes=sum(job.obj_sizes.values()),
+            n_objs=len(transfer_pairs),
+            est_size_bytes=job.transfer_size,
             ask_to_confirm_transfer=not cloud_config.get_flag("autoconfirm") and not confirm,
         )
         stats = launch_replication_job(
@@ -278,47 +281,19 @@ def sync(
 
     src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)
     src_region = src_client.region_tag()
-
     dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
     dst_region = dst_client.region_tag()
+    full_transfer_pairs = generate_full_transferobjlist(src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst)
 
-    # Query source and destination buckets
-    transfer_list = generate_transfer_obj_list(src_region, dst_region, bucket_src, bucket_dst, path_src, path_dst)
+    # filter out any transfer pairs that are already in the destination
+    transfer_pairs = []
+    for src_obj, dst_obj in full_transfer_pairs:
+        if not dst_obj.exists or (src_obj.last_modified > dst_obj.last_modified or src_obj.size != dst_obj.size):
+            transfer_pairs.append((src_obj, dst_obj))
 
-    dst_dict = dict()
-    src_objs_new = []
-    dst_objs_new = []
-    obj_sizes_new = dict()
-    for obj in transfer_list.dst_objs:
-        dst_dict[obj.key] = obj
-    for i in range(len(transfer_list.src_objs)):
-        src_obj = transfer_list.src_objs[i]
-        src_path_no_prefix = src_obj.key[len(path_src) :] if src_obj.key.startswith(path_src) else src_obj.key
-        # remove single leading slash if present
-        src_path_no_prefix = src_path_no_prefix[1:] if src_path_no_prefix.startswith("/") else src_path_no_prefix
-        if path_dst == None or len(path_dst) == 0:
-            dst_string = src_path_no_prefix
-        elif path_dst.endswith("/"):
-            dst_string = path_dst + src_path_no_prefix
-        else:
-            dst_string = path_dst + "/" + src_path_no_prefix
-
-        if dst_string in dst_dict:
-            dst_obj = dst_dict[dst_string]
-            if src_obj.last_modified > dst_obj.last_modified or src_obj.size != dst_obj.size:
-                src_objs_new.append(src_obj.key)
-                dst_objs_new.append(dst_obj.key)
-                obj_sizes_new[src_obj.key] = transfer_list.obj_sizes[src_obj.key]
-        else:
-            src_objs_new.append(src_obj.key)
-            dst_objs_new.append(transfer_list.dst_objs_job[i])
-            obj_sizes_new[src_obj.key] = transfer_list.obj_sizes[src_obj.key]
-
-    if len(dst_objs_new) == 0:
+    if not transfer_pairs:
         typer.secho("No objects need updating. Exiting...")
         raise typer.Exit(0)
-
-    new_transfer_list = TransferObjectList(src_objs_new, dst_objs_new, transfer_list.obj_sizes)
 
     topo = generate_topology(
         src_region,
@@ -326,25 +301,24 @@ def sync(
         solve,
         num_connections=num_connections,
         max_instances=max_instances,
-        solver_total_gbyte_to_transfer=sum(obj_sizes_new[obj] for obj in obj_sizes_new) / GB,
+        solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
         solver_required_throughput_gbits=solver_required_throughput_gbits,
         solver_throughput_grid=solver_throughput_grid,
         solver_verbose=solver_verbose,
     )
+
     job = ReplicationJob(
         source_region=topo.source_region(),
         source_bucket=bucket_src,
         dest_region=topo.sink_region(),
         dest_bucket=bucket_dst,
-        src_objs=new_transfer_list.src_objs_job,
-        dest_objs=new_transfer_list.dst_objs_job,
-        obj_sizes=new_transfer_list.obj_sizes,
+        transfer_pairs=transfer_pairs,
         max_chunk_size_mb=max_chunk_size_mb,
     )
     confirm_transfer(
         topo=topo,
-        n_objs=len(new_transfer_list.src_objs_job),
-        est_size_bytes=sum(job.obj_sizes.values()),
+        n_objs=len(transfer_pairs),
+        est_size_bytes=job.transfer_size,
         ask_to_confirm_transfer=not cloud_config.get_flag("autoconfirm") and not confirm,
     )
     stats = launch_replication_job(
