@@ -147,7 +147,6 @@ def provision(
 
     # init log files
     def init(i: Server):
-        i.wait_for_ready()
         i.init_log_files(log_dir)
 
     all_instances = (

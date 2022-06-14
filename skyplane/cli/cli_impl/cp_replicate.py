@@ -2,16 +2,15 @@ import json
 import os
 import pathlib
 import signal
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import typer
 from rich import print as rprint
-from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, DownloadColumn, BarColumn, TransferSpeedColumn
 
-from skyplane import exceptions, MB, GB, format_bytes, skyplane_root, cloud_config
+from skyplane import exceptions, GB, format_bytes, skyplane_root
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
-from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
+from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob, TransferObjectList
 from skyplane.replicate.replicator_client import ReplicatorClient
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
@@ -50,10 +49,7 @@ def generate_topology(
         with Timer() as t:
             with console.status("Solving for the optimal transfer plan"):
                 solution = tput.solve_min_cost(
-                    problem,
-                    solver=ThroughputSolverILP.choose_solver(),
-                    solver_verbose=solver_verbose,
-                    save_lp_path=None,
+                    problem, solver=ThroughputSolverILP.choose_solver(), solver_verbose=solver_verbose, save_lp_path=None
                 )
         typer.secho(f"Solving for the optimal transfer plan took {t.elapsed:.2f}s", fg="green")
         topo, scale_factor = tput.to_replication_topology(solution)
@@ -77,35 +73,185 @@ def generate_topology(
         return topo
 
 
-def replicate_helper(
-    topo: ReplicationTopology,
-    # flags for random transfers (to debug)
-    random: bool = False,
-    random_size_total_mb: int = 2048,
-    random_n_chunks: int = 512,
-    # bucket options
-    source_bucket: Optional[str] = None,
-    dest_bucket: Optional[str] = None,
+def generate_transfer_obj_list(
+    src_region: str,
+    dst_region: str,
+    source_bucket: str,
+    dest_bucket: str,
     src_key_prefix: str = "",
     dest_key_prefix: str = "",
     cached_src_objs: Optional[List[ObjectStoreObject]] = None,
-    # maximum chunk size to breakup objects into
-    max_chunk_size_mb: Optional[int] = None,
-    # gateway provisioning options
-    reuse_gateways: bool = False,
+) -> TransferObjectList:
+
+    if cached_src_objs:
+        src_objs = cached_src_objs
+    else:
+        source_iface = ObjectStoreInterface.create(src_region, source_bucket)
+        logger.fs.debug(f"Querying objects in {source_bucket}")
+        with console.status(f"Querying objects in {source_bucket}") as status:
+            src_objs = []
+            for obj in source_iface.list_objects(src_key_prefix):
+                src_objs.append(obj)
+                status.update(f"Querying objects in {source_bucket} (found {len(src_objs)} objects so far)")
+
+    if not src_objs:
+        logger.error("Specified object does not exist.")
+        raise exceptions.MissingObjectException()
+
+    # map objects to destination object paths
+    # todo isolate this logic and test independently
+    logger.fs.debug(f"Mapping objects to destination paths")
+    src_objs_job = []
+    dest_objs_job = []
+    # if only one object exists, replicate it
+    if len(src_objs) == 1 and src_objs[0].key == src_key_prefix:
+        src_objs_job.append(src_objs[0].key)
+        if dest_key_prefix.endswith("/"):
+            dest_objs_job.append(dest_key_prefix + src_objs[0].key.split("/")[-1])
+        else:
+            dest_objs_job.append(dest_key_prefix)
+    # multiple objects to replicate
+    else:
+        for src_obj in src_objs:
+            src_objs_job.append(src_obj.key)
+            # remove prefix from object key
+            src_path_no_prefix = src_obj.key[len(src_key_prefix) :] if src_obj.key.startswith(src_key_prefix) else src_obj.key
+            # remove single leading slash if present
+            src_path_no_prefix = src_path_no_prefix[1:] if src_path_no_prefix.startswith("/") else src_path_no_prefix
+            if len(dest_key_prefix) == 0:
+                dest_objs_job.append(src_path_no_prefix)
+            elif dest_key_prefix.endswith("/"):
+                dest_objs_job.append(dest_key_prefix + src_path_no_prefix)
+            else:
+                dest_objs_job.append(dest_key_prefix + "/" + src_path_no_prefix)
+
+    obj_sizes = {obj.key: obj.size for obj in src_objs}
+
+    dst_iface = ObjectStoreInterface.create(dst_region, dest_bucket)
+    logger.fs.debug(f"Querying objects in {dest_bucket}")
+    with console.status(f"Querying objects in {dest_bucket}") as status:
+        dst_objs = []
+        for obj in dst_iface.list_objects(dest_key_prefix):
+            if obj.key in dest_objs_job:
+                dst_objs.append(obj)
+            status.update(f"Querying objects in {dest_bucket} (found {len(dst_objs)} objects so far)")
+
+    return TransferObjectList(src_objs_job, dest_objs_job, obj_sizes, src_objs, dst_objs)
+
+
+def map_object_key_prefix(
+    source_prefix: str,
+    dest_prefix: str,
+    source_key: str,
+):
+    # if path is a single object, copy it directly
+    if source_key == source_prefix:
+        fname = source_key.split("/")[-1]
+        return os.path.join(dest_prefix, fname)
+
+    # else, object must be in a subdirectory of the source prefix
+    # source prefix must end with a slash
+    if not source_prefix.endswith("/"):
+        raise exceptions.MissingObjectException(f"To copy a directory, the source prefix must end with a slash: {source_prefix}")
+
+    # source key must start with the source prefix
+    if not source_key.startswith(source_prefix):
+        raise exceptions.MissingObjectException(f"Source key must start with source prefix {source_prefix} but key was {source_key}")
+
+    # remove source prefix from key and append to destination prefix
+    return os.path.join(dest_prefix, source_key[len(source_prefix) :])
+
+
+def generate_full_transferobjlist(
+    source_region: str,
+    source_bucket: str,
+    source_prefix: str,
+    dest_region: str,
+    dest_bucket: str,
+    dest_prefix: str,
+) -> List[Tuple[ObjectStoreObject, ObjectStoreObject]]:
+    """Query source region and destination region buckets and return list of objects to transfer."""
+    source_iface = ObjectStoreInterface.create(source_region, source_bucket)
+    dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
+    source_objs, dest_objs = [], []
+
+    # query all source region objects
+    logger.fs.debug(f"Querying objects in {source_bucket}")
+    with console.status(f"Querying objects in {source_bucket}") as status:
+        for obj in source_iface.list_objects(source_prefix):
+            source_objs.append(obj)
+            status.update(f"Querying objects in {source_bucket} (found {len(source_objs)} objects so far)")
+    if not source_objs:
+        logger.error("Specified object does not exist.")
+        raise exceptions.MissingObjectException()
+
+    # map objects to destination object paths
+    for source_obj in source_objs:
+        dest_key = map_object_key_prefix(source_prefix, dest_prefix, source_obj.key)
+        dest_obj = ObjectStoreObject(dest_region.split(":")[0], dest_bucket, dest_key)
+        dest_objs.append(dest_obj)
+
+    # query destination at dest_key
+    logger.fs.debug(f"Querying objects in {dest_bucket}")
+    dest_objs_keys = {obj.key for obj in dest_objs}
+    found_dest_objs = {}
+    with console.status(f"Querying objects in {dest_bucket}") as status:
+        dst_objs = []
+        for obj in dest_iface.list_objects(dest_prefix):
+            if obj.key in dest_objs_keys:
+                found_dest_objs[obj.key] = obj
+            status.update(f"Querying objects in {dest_bucket} (found {len(dst_objs)} objects so far)")
+
+    # enrich dest_objs with found_dest_objs
+    for dest_obj in dest_objs:
+        if dest_obj.key in found_dest_objs:
+            dest_obj.size = found_dest_objs[dest_obj.key].size
+            dest_obj.last_modified = found_dest_objs[dest_obj.key].last_modified
+
+    return list(zip(source_objs, dest_objs))
+
+
+def confirm_transfer(topo: ReplicationTopology, n_objs: int, est_size_bytes: int, ask_to_confirm_transfer=True):
+    console.print(f"\n[bold yellow]Will transfer {n_objs} objects totaling {format_bytes(est_size_bytes)}[/bold yellow]")
+    sorted_counts = sorted(topo.per_region_count().items(), key=lambda x: x[0])
+    console.print(
+        f"    [bold][blue]VMs to provision:[/blue][/bold] [bright_black]{', '.join(f'{c}x {r}' for r, c in sorted_counts)}[/bright_black]"
+    )
+    if topo.cost_per_gb:
+        console.print(
+            f"    [bold][blue]Estimated egress cost:[/blue][/bold] [bright_black]${est_size_bytes / GB * topo.cost_per_gb:,.2f} at ${topo.cost_per_gb:,.2f}/GB[/bright_black]"
+        )
+
+    if ask_to_confirm_transfer:
+        if typer.confirm("Continue?", default=True):
+            logger.fs.debug("User confirmed transfer")
+            console.print(
+                "[bold green]Transfer starting[/bold green] (Tip: Enable auto-confirmation with `skyplane config set autoconfirm true`)"
+            )
+        else:
+            logger.fs.error("Transfer cancelled by user.")
+            console.print("[bold][red]Transfer cancelled by user.[/red][/bold]")
+            raise typer.Abort()
+    console.print("")
+
+
+def launch_replication_job(
+    topo: ReplicationTopology,
+    job: ReplicationJob,
     gateway_docker_image: str = os.environ.get("SKYPLANE_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
+    # transfer flags
     debug: bool = False,
+    reuse_gateways: bool = False,
     use_bbr: bool = False,
     use_compression: bool = False,
     # cloud provider specific options
     aws_instance_class: str = "m5.8xlarge",
     azure_instance_class: str = "Standard_D32_v4",
-    gcp_instance_class: Optional[str] = "n2-standard-32",
+    gcp_instance_class: str = "n2-standard-32",
     gcp_use_premium_network: bool = True,
     # logging options
     time_limit_seconds: Optional[int] = None,
     log_interval_s: float = 1.0,
-    ask_to_confirm_transfer: bool = True,
 ):
     if "SKYPLANE_DOCKER_IMAGE" in os.environ:
         rprint(f"[bright_black]Using overridden docker image: {gateway_docker_image}[/bright_black]")
@@ -128,99 +274,6 @@ def replicate_helper(
     typer.secho(f"Storing debug information for transfer in {rc.transfer_dir / 'client.log'}", fg="yellow")
     (rc.transfer_dir / "topology.json").write_text(topo.to_json())
 
-    if random:
-        random_chunk_size_mb = random_size_total_mb // random_n_chunks
-        if max_chunk_size_mb:
-            logger.error("Cannot set chunk size for random data replication, set `random_chunk_size_mb` instead")
-            raise ValueError("Cannot set max chunk size")
-        job = ReplicationJob(
-            source_region=topo.source_region(),
-            source_bucket=None,
-            dest_region=topo.sink_region(),
-            dest_bucket=None,
-            src_objs=[str(i) for i in range(random_n_chunks)],
-            dest_objs=[str(i) for i in range(random_n_chunks)],
-            random_chunk_size_mb=random_chunk_size_mb,
-        )
-    else:
-        # make replication job
-        logger.fs.debug(f"Creating replication job from {source_bucket} to {dest_bucket}")
-        if cached_src_objs:
-            src_objs = cached_src_objs
-        else:
-            source_iface = ObjectStoreInterface.create(topo.source_region(), source_bucket)
-            logger.fs.debug(f"Querying objects in {source_bucket}")
-            with console.status(f"Querying objects in {source_bucket}") as status:
-                src_objs = []
-                for obj in source_iface.list_objects(src_key_prefix):
-                    src_objs.append(obj)
-                    status.update(f"Querying objects in {source_bucket} (found {len(src_objs)} objects so far)")
-
-        if not src_objs:
-            logger.error("Specified object does not exist.")
-            raise exceptions.MissingObjectException()
-
-        # map objects to destination object paths
-        # todo isolate this logic and test independently
-        logger.fs.debug(f"Mapping objects to destination paths")
-        src_objs_job = []
-        dest_objs_job = []
-        # if only one object exists, replicate it
-        if len(src_objs) == 1 and src_objs[0].key == src_key_prefix:
-            src_objs_job.append(src_objs[0].key)
-            if dest_key_prefix.endswith("/"):
-                dest_objs_job.append(dest_key_prefix + src_objs[0].key.split("/")[-1])
-            else:
-                dest_objs_job.append(dest_key_prefix)
-        # multiple objects to replicate
-        else:
-            for src_obj in src_objs:
-                src_objs_job.append(src_obj.key)
-                # remove prefix from object key
-                src_path_no_prefix = src_obj.key[len(src_key_prefix) :] if src_obj.key.startswith(src_key_prefix) else src_obj.key
-                # remove single leading slash if present
-                src_path_no_prefix = src_path_no_prefix[1:] if src_path_no_prefix.startswith("/") else src_path_no_prefix
-                if len(dest_key_prefix) == 0:
-                    dest_objs_job.append(src_path_no_prefix)
-                elif dest_key_prefix.endswith("/"):
-                    dest_objs_job.append(dest_key_prefix + src_path_no_prefix)
-                else:
-                    dest_objs_job.append(dest_key_prefix + "/" + src_path_no_prefix)
-        job = ReplicationJob(
-            source_region=topo.source_region(),
-            source_bucket=source_bucket,
-            dest_region=topo.sink_region(),
-            dest_bucket=dest_bucket,
-            src_objs=src_objs_job,
-            dest_objs=dest_objs_job,
-            obj_sizes={obj.key: obj.size for obj in src_objs},
-            max_chunk_size_mb=max_chunk_size_mb,
-        )
-
-    # confirm transfer with user
-    est_size = sum(job.obj_sizes.values()) if not random else job.random_chunk_size_mb * random_n_chunks * MB
-    console.print(f"\n[bold yellow]Will transfer {len(job.src_objs)} objects totaling {format_bytes(est_size)}[/bold yellow]")
-    sorted_counts = sorted(topo.per_region_count().items(), key=lambda x: x[0])
-    console.print(
-        f"    [bold][blue]VMs to provision:[/blue][/bold] [bright_black]{', '.join(f'{c}x {r}' for r, c in sorted_counts)}[/bright_black]"
-    )
-    if topo.cost_per_gb:
-        console.print(
-            f"    [bold][blue]Estimated egress cost:[/blue][/bold] [bright_black]${est_size / GB * topo.cost_per_gb:,.2f} at ${topo.cost_per_gb:,.2f}/GB[/bright_black]"
-        )
-
-    if ask_to_confirm_transfer:
-        if typer.confirm("Continue?", default=True):
-            logger.fs.debug("User confirmed transfer")
-            console.print(
-                "[bold green]Transfer starting[/bold green] (Tip: Enable auto-confirmation with `skyplane config set autoconfirm true`)"
-            )
-        else:
-            logger.fs.error("Transfer cancelled by user.")
-            console.print("[bold][red]Transfer cancelled by user.[/red][/bold]")
-            raise typer.Abort()
-    console.print("")
-
     stats = {}
     try:
         rc.provision_gateways(reuse_gateways, use_bbr=use_bbr, use_compression=use_compression)
@@ -229,10 +282,7 @@ def replicate_helper(
             logger.fs.info(f"\tLog viewer: {gw.gateway_log_viewer_url}")
             logger.fs.info(f"\tAPI: {gw.gateway_api_url}")
         job = rc.run_replication_plan(job)
-        if random:
-            total_bytes = random_n_chunks * random_chunk_size_mb * MB
-        else:
-            total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
+        total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
         console.print(f":rocket: [bold blue]{total_bytes / GB:.2f}GB transfer job launched[/bold blue]")
         if topo.source_region().split(":")[0] == "azure" or topo.sink_region().split(":")[0] == "azure":
             typer.secho(f"Warning: It can take up to 60s for role assignments to propagate on Azure. See issue #355", fg="yellow")
@@ -241,7 +291,7 @@ def replicate_helper(
             show_spinner=True,
             log_interval_s=log_interval_s,
             time_limit_seconds=time_limit_seconds,
-            multipart=max_chunk_size_mb is not None,
+            multipart=job.max_chunk_size_mb is not None,
             write_profile=debug,
             write_socket_profile=debug,
             copy_gateway_logs=debug,
@@ -278,4 +328,7 @@ def replicate_helper(
         runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{stats.get('total_runtime_s'):.2f}s[/bright_black]"
         throughput_line = f"[white]Throughput:[/white] [bright_black]{stats.get('throughput_gbits'):.2f}Gbps[/bright_black]"
         rprint(f"{runtime_line}, {throughput_line}")
-    return 0 if stats["success"] else 1
+    else:
+        rprint(f"\n:x: [bold red]Transfer failed[/bold red]")
+        rprint(stats)
+    return stats

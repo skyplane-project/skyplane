@@ -430,5 +430,5 @@ class AWSCloudProvider(CloudProvider):
         assert len(instance) == 1, f"Expected 1 instance, got {len(instance)}"
         instance[0].wait_until_running()
         server = AWSServer(f"aws:{region}", instance[0].id)
-        server.wait_for_ready()
+        server.wait_for_ssh_ready()
         return server
