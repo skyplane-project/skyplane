@@ -139,7 +139,6 @@ def cp(
 
     # raise file limits for local transfers
     if provider_src == "local" or provider_dst == "local":
-        typer.secho("Checking File Limits: ", fg="yellow", bold=True)
         check_ulimit()
     if provider_src == "local" and provider_dst == "local":
         copy_local_local(Path(path_src), Path(path_dst))
@@ -413,7 +412,6 @@ def init(reinit_azure: bool = False, reinit_gcp: bool = False):
     cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp)
 
     # check file limit
-    typer.secho("\nChecking File Limit:", fg="yellow", bold=True)
     check_ulimit()
 
     cloud_config.to_config_file(config_path)
