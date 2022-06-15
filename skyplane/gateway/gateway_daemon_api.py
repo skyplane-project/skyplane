@@ -1,7 +1,10 @@
+from distutils.spawn import spawn
+from gevent import monkey
+monkey.patch_all()
+
 import logging
 import logging.handlers
 import os
-import ssl
 import threading
 from multiprocessing import Queue
 from queue import Empty
@@ -9,6 +12,7 @@ from traceback import TracebackException
 from typing import Dict, List
 
 from flask import Flask, jsonify, request
+from gevent.pywsgi import WSGIServer
 from werkzeug.serving import make_server
 
 from skyplane.chunk import ChunkRequest, ChunkState
@@ -38,11 +42,10 @@ class GatewayDaemonAPI(threading.Thread):
         error_event,
         error_queue: Queue,
         host="0.0.0.0",
-        port=8080,
+        port=8081,
     ):
         super().__init__()
         self.app = Flask("gateway_metadata_server")
-        self.app_http = Flask("gateway_metadata_server_http")
         self.chunk_store = chunk_store
         self.gateway_receiver = gateway_receiver
         self.error_event = error_event
@@ -51,19 +54,16 @@ class GatewayDaemonAPI(threading.Thread):
         self.error_list_lock = threading.Lock()
 
         # load routes
-        for app in (self.app, self.app_http):
-            self.register_global_routes(app)
-            self.register_server_routes(app)
-            self.register_request_routes(app)
-            self.register_error_routes(app)
-            self.register_socket_profiling_routes(app)
+        self.register_global_routes(self.app)
+        self.register_server_routes(self.app)
+        self.register_request_routes(self.app)
+        self.register_error_routes(self.app)
+        self.register_socket_profiling_routes(self.app)
 
         # make server
         self.host = host
         self.port = port
-        self.port_http = port + 1
-        self.url = "https://{}:{}".format(host, port)
-        self.url_http = "http://{}:{}".format(host, self.port_http)
+        self.url = "http://{}:{}".format(host, port)
 
         # chunk status log
         self.chunk_status_log: List[Dict] = []
@@ -76,18 +76,13 @@ class GatewayDaemonAPI(threading.Thread):
         self.receiver_socket_profiles_lock = threading.Lock()
 
         logging.getLogger("werkzeug").setLevel(logging.WARNING)
-        self.server = make_server(host, port, self.app, threaded=True, ssl_context="adhoc")
-        self.server_http = make_server(host, self.port_http, self.app_http, threaded=True)
+        self.server = make_server(host, port, self.app, threaded=True)
 
     def run(self):
-        self.server_http_thread = threading.Thread(target=self.server_http.serve_forever)
-        self.server_http_thread.start()
         self.server.serve_forever()
 
     def shutdown(self):
         self.server.shutdown()
-        self.server_http.shutdown()
-        self.server_http_thread.join()
 
     def register_global_routes(self, app):
         # index route returns API version
