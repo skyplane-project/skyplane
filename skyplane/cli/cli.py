@@ -149,7 +149,6 @@ def cp(
     # raise file limits for local transfers
     if provider_src == "local" or provider_dst == "local":
         check_ulimit()
-
     if provider_src == "local" and provider_dst == "local":
         copy_local_local(Path(path_src), Path(path_dst))
     elif provider_src == "local" and provider_dst == "s3":
@@ -414,8 +413,12 @@ def init(
     typer.secho("\n(3) Configuring GCP:", fg="yellow", bold=True)
     cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
 
+    # check file limit
+    check_ulimit()
+
     cloud_config.to_config_file(config_path)
     typer.secho(f"\nConfig file saved to {config_path}", fg="green")
+
     return 0
 
 
