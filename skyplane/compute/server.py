@@ -300,7 +300,7 @@ class Server:
             docker_run_flags += f" -v /tmp/{service_key_file}:/pkg/data/{service_key_file}"
 
         docker_run_flags += " " + " ".join(f"--env {k}={v}" for k, v in docker_envs.items())
-        gateway_daemon_cmd = f"python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag} {'--use-compression' if use_compression else ''}"
+        gateway_daemon_cmd = f"/etc/init.d/stunnel4 start & && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag} {'--use-compression' if use_compression else ''}"
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skyplane_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         logger.fs.info(f"{desc_prefix}: {docker_launch_cmd}")
         start_out, start_err = self.run_command(docker_launch_cmd)

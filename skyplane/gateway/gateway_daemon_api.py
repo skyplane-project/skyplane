@@ -1,7 +1,3 @@
-from distutils.spawn import spawn
-from gevent import monkey
-monkey.patch_all()
-
 import logging
 import logging.handlers
 import os
@@ -12,7 +8,6 @@ from traceback import TracebackException
 from typing import Dict, List
 
 from flask import Flask, jsonify, request
-from gevent.pywsgi import WSGIServer
 from werkzeug.serving import make_server
 
 from skyplane.chunk import ChunkRequest, ChunkState

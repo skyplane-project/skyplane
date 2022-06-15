@@ -9,13 +9,16 @@ RUN --mount=type=cache,target=/var/cache/apt apt update \
 
 # configure stunnel
 RUN mkdir -p /etc/stunnel \
-    && mkdir -p /usr/local/var/run \
+    && openssl genrsa -out key.pem 2048 \
+    && openssl req -new -x509 -key key.pem -out cert.pem -days 1095 -subj "/C=US/ST=California/L=San Francisco" \
+    && cat key.pem cert.pem >> /etc/stunnel/stunnel.pem \
+    && rm key.pem cert.pem \
+    && mkdir -p /usr/local/var/run/ \
     && echo "client = no" >> /etc/stunnel/stunnel.conf \
-    && echo "pid = /usr/local/var/run/stunnel.pid" >> /etc/stunnel/stunnel.conf \
     && echo "[gateway]" >> /etc/stunnel/stunnel.conf \
     && echo "accept = 8080" >> /etc/stunnel/stunnel.conf \
-    && echo "connect = 127.0.0.1:8081" >> /etc/stunnel/stunnel.conf \
-    && /etc/init.d/stunnel4 start
+    && echo "connect = 8081" >> /etc/stunnel/stunnel.conf \
+    && echo "cert = /etc/stunnel/stunnel.pem" >> /etc/stunnel/stunnel.conf
 
 # increase number of open files and concurrent TCP connections
 RUN (echo 'net.ipv4.ip_local_port_range = 12000 65535' >> /etc/sysctl.conf) \
@@ -34,4 +37,4 @@ WORKDIR /pkg
 COPY . .
 RUN pip3 install --no-dependencies -e ".[gateway]"
 
-CMD ["python3", "skyplane/gateway/gateway_daemon.py"]
+CMD /etc/init.d/stunnel4 start && python3 skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks --outgoing-ports '{}' --region local
