@@ -6,11 +6,13 @@ import uuid
 from datetime import datetime
 from functools import partial
 from typing import Dict, List, Optional, Tuple, Iterable
+from numpy import source
 
 import pandas as pd
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, DownloadColumn, BarColumn, TransferSpeedColumn
 
 from skyplane import GB, MB, tmp_log_dir
+from skyplane import exceptions
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
@@ -18,7 +20,7 @@ from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.compute.server import Server, ServerState
-from skyplane.obj_store.object_store_interface import ObjectStoreInterface
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface, NoSuchObjectException
 from skyplane.replicate.profiler import status_df_to_traceevent
 from skyplane.replicate.replication_plan import ReplicationJob, ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
@@ -297,40 +299,31 @@ class ReplicatorClient:
             # make list of chunks
             progress.update(prepare_task, description=": Querying source object store for matching keys")
             chunks = []
-
-            # calculate object sizes
-            if job.obj_sizes:
-                obj_file_size_bytes = job.obj_sizes
-            elif job.obj_sizes is None and job.random_chunk_size_mb:
-                obj_file_size_bytes = {obj: job.random_chunk_size_mb * MB for obj in job.src_objs}
-            else:
-                raise ValueError("Either obj_sizes or random_chunk_size_mb must be specified")
-
             idx = 0
-            for (src_obj, dest_obj) in zip(job.src_objs, job.dest_objs):
-                if obj_file_size_bytes:
+            for (src_object, dest_object) in job.transfer_pairs:
+                if not job.random_chunk_size_mb:
                     if job.max_chunk_size_mb:  # split objects into sub-chunks
                         chunk_size_bytes = int(job.max_chunk_size_mb * 1e6)
-                        num_chunks = int(obj_file_size_bytes[src_obj] / chunk_size_bytes) + 1
+                        num_chunks = int(src_object.size / chunk_size_bytes) + 1
 
                         # TODO: figure out what to do on # part limits per object
                         # TODO: only do if num_chunks > 1
                         # TODO: potentially do this in a seperate thread, and/or after chunks sent
                         obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
-                        logger.fs.info(f"Initiate multipart upload {dest_obj}")
-                        upload_id = obj_store_interface.initiate_multipart_upload(dest_obj)
+                        logger.fs.info(f"Initiate multipart upload on {dest_object}")
+                        upload_id = obj_store_interface.initiate_multipart_upload(dest_object.key)
 
                         offset = 0
                         part_num = 1
                         parts = []
                         for chunk in range(num_chunks):
                             # size is min(chunk_size, remaining data)
-                            file_size_bytes = min(chunk_size_bytes, obj_file_size_bytes[src_obj] - offset)
+                            file_size_bytes = min(chunk_size_bytes, src_object.size - offset)
                             assert file_size_bytes > 0, f"File size <= 0 {file_size_bytes}"
                             chunks.append(
                                 Chunk(
-                                    src_key=src_obj,
-                                    dest_key=dest_obj,
+                                    src_key=src_object.key,
+                                    dest_key=dest_object.key,
                                     chunk_id=idx,
                                     file_offset_bytes=offset,
                                     chunk_length_bytes=file_size_bytes,
@@ -343,22 +336,38 @@ class ReplicatorClient:
                             idx += 1
                             part_num += 1
                             offset += chunk_size_bytes
-
                         # add multipart upload request
                         self.multipart_upload_requests.append(
-                            {"region": job.dest_region, "bucket": job.dest_bucket, "upload_id": upload_id, "key": dest_obj, "parts": parts}
+                            {
+                                "region": job.dest_region,
+                                "bucket": job.dest_bucket,
+                                "upload_id": upload_id,
+                                "key": dest_object.key,
+                                "parts": parts,
+                            }
                         )
-
-                    else:  # transfer entire object
-                        file_size_bytes = obj_file_size_bytes[src_obj]
+                    # transfer entire object
+                    else:
                         chunks.append(
-                            Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
+                            Chunk(
+                                src_key=src_object.key,
+                                dest_key=dest_object.key,
+                                chunk_id=idx,
+                                file_offset_bytes=0,
+                                chunk_length_bytes=src_object.size,
+                            )
                         )
                         idx += 1
-                else:  # random data replication
-                    file_size_bytes = job.random_chunk_size_mb * MB
+                # random data replication
+                else:
                     chunks.append(
-                        Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
+                        Chunk(
+                            src_key=src_object.key,
+                            dest_key=dest_object.key,
+                            chunk_id=idx,
+                            file_offset_bytes=0,
+                            chunk_length_bytes=job.random_chunk_size_mb * MB,
+                        )
                     )
                     idx += 1
 
@@ -409,12 +418,18 @@ class ReplicatorClient:
 
                 def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
                     hop_instance, chunk_requests = args
-                    ip = gateway_ips[hop_instance]
-                    reply = retry_requests().post(
-                        f"{hop_instance.gateway_api_url}/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests]
-                    )
-                    if reply.status_code != 200:
-                        raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
+                    while chunk_requests:
+                        batch, chunk_requests = chunk_requests[: 1024 * 16], chunk_requests[1024 * 16 :]
+                        reply = retry_requests().post(
+                            f"{hop_instance.gateway_api_url}/api/v1/chunk_requests", json=[c.as_dict() for c in batch]
+                        )
+                        if reply.status_code != 200:
+                            raise Exception(
+                                f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}"
+                            )
+                        logger.fs.debug(
+                            f"Sent {len(batch)} chunk requests to {hop_instance.instance_name()}, {len(chunk_requests)} remaining"
+                        )
 
                 start_instances = list(zip(src_instances, chunk_requests_sharded.values()))
                 do_parallel(send_chunk_requests, start_instances, n=-1)
@@ -640,6 +655,33 @@ class ReplicatorClient:
 
                     do_parallel(fn, self.bound_nodes.values(), n=-1)
                     progress.update(cleanup_task, description=": Shutting down gateways")
+
+    def verify_transfer(self, job: ReplicationJob):
+        """Check that all objects to copy are present in the destination"""
+        src_interface = ObjectStoreInterface.create(job.source_region, job.source_bucket)
+        dst_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
+
+        # only check metadata (src.size == dst.size) && (src.modified <= dst.modified)
+        def verify(tup):
+            src_key, dst_key = tup[0].key, tup[1].key
+            try:
+                if src_interface.get_obj_size(src_key) != dst_interface.get_obj_size(dst_key):
+                    return False
+                elif src_interface.get_obj_last_modified(src_key) > dst_interface.get_obj_last_modified(dst_key):
+                    return False
+                else:
+                    return True
+            except NoSuchObjectException:
+                return False
+
+        # verify that all objects in src_interface are present in dst_interface
+        matches = do_parallel(verify, job.transfer_pairs, n=512, spinner=True, spinner_persist=True, desc="Verifying transfer")
+        failed_src_objs = [src_key for (src_key, dst_key), match in matches if not match]
+        if len(failed_src_objs) > 0:
+            raise exceptions.TransferFailedException(
+                f"{len(failed_src_objs)} objects failed verification",
+                failed_src_objs,
+            )
 
 
 def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1) -> Dict[str, List[Server]]:

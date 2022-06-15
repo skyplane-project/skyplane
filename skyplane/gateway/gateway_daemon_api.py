@@ -75,7 +75,7 @@ class GatewayDaemonAPI(threading.Thread):
         self.receiver_socket_profiles: List[Dict] = []
         self.receiver_socket_profiles_lock = threading.Lock()
 
-        # logging.getLogger("werkzeug").setLevel(logging.WARNING)
+        logging.getLogger("werkzeug").setLevel(logging.WARNING)
         self.server = make_server(host, port, self.app, threaded=True, ssl_context="adhoc")
         self.server_http = make_server(host, self.port_http, self.app_http, threaded=True)
 
