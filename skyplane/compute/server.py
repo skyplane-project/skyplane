@@ -300,12 +300,12 @@ class Server:
             docker_run_flags += f" -v /tmp/{service_key_file}:/pkg/data/{service_key_file}"
 
         docker_run_flags += " " + " ".join(f"--env {k}={v}" for k, v in docker_envs.items())
-        gateway_daemon_cmd = f"/etc/init.d/stunnel4 start & && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag} {'--use-compression' if use_compression else ''}"
+        gateway_daemon_cmd = f"\"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag} {'--use-compression' if use_compression else ''}\""
         docker_launch_cmd = f"sudo docker run {docker_run_flags} --name skyplane_gateway {gateway_docker_image} {gateway_daemon_cmd}"
         logger.fs.info(f"{desc_prefix}: {docker_launch_cmd}")
         start_out, start_err = self.run_command(docker_launch_cmd)
         logger.fs.debug(desc_prefix + f": Gateway started {start_out.strip()}")
-        assert not start_err.strip(), f"Error starting gateway: {start_err.strip()}"
+        assert not start_err.strip(), f"Error starting gateway:\n{start_out.strip()}\n{start_err.strip()}"
 
         gateway_container_hash = start_out.strip().split("\n")[-1][:12]
         self.gateway_log_viewer_url = f"http://127.0.0.1:{self.tunnel_port(8888)}/container/{gateway_container_hash}"
@@ -331,9 +331,6 @@ class Server:
             logger.fs.warning(desc_prefix + " gateway launch command: " + docker_launch_cmd)
             logs, err = self.run_command(f"sudo docker logs skyplane_gateway --tail=100")
             logger.fs.error(f"Docker logs: {logs}\nerr: {err}")
-
-            out, err = self.run_command(docker_launch_cmd.replace(" -d ", " "))
-            logger.fs.error(f"Relaunching gateway in foreground\nout: {out}\nerr: {err}")
             logger.fs.exception(e)
             raise e
         finally:
