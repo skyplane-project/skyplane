@@ -60,23 +60,3 @@ $ skyplane cp s3://... s3://...
 If testing transfers repeatedly, we recommend using the `--reuse-gateways` to reduce setup time. 
 
 Skyplane has debugging tools to `ssh` into gateway instances, view detailed transfer logs, and query chunk states during transfers. See [Debugging Tools](debugging.md) for more. 
-
-## Submitting pull requests
-
-Basic knowledge of git is assumed. To contribute to Skyplane:
-
-1. Fork the Skyplane repository to create a copy of the project in your own account.
-2. Set up a developer environment as described as above.
-3. Create a development branch (`git checkout -b feature_name`)
-4. Test your changes manually using `skyplane cp` and with the unit test suite:
-```bash
-$ pytest -n auto skyplane/test
-```
-5. Ensure your code is autoformatted and passes type checks:
-```bash
-$ pip install black pytype
-$ black -l 140 .
-$ pytype --config .pytype.cfg skyplane
-```
-5. Commit your changes using a [descriptive commit message](https://cbea.ms/git-commit/).
-6. Create a pull request on the main Skyplane repo from your fork. Consult [Github Help](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests) for more details.
