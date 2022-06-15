@@ -25,6 +25,7 @@ class GCSInterface(ObjectStoreInterface):
         self.auth = GCPAuthentication()
         # self.auth.set_service_account_credentials("skyplane1") # use service account credentials
         self._gcs_client = self.auth.get_storage_client()
+        self._requests_session = requests.Session()
         try:
             self.gcp_region = self.infer_gcp_region(bucket_name) if gcp_region is None or gcp_region == "infer" else gcp_region
             if not self.bucket_exists():
@@ -139,7 +140,7 @@ class GCSInterface(ObjectStoreInterface):
             req = requests.Request(method, url, headers=headers)
 
         prepared = req.prepare()
-        response = requests.Session().send(prepared)
+        response = self._requests_session.send(prepared)
 
         if not response.ok:
             raise ValueError(f"Invalid status code {response.status_code}: {response.text}")

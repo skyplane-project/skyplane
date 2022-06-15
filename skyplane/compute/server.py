@@ -8,12 +8,11 @@ from functools import partial
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
-import paramiko
+import urllib3
 from skyplane import config_path, key_root
 from skyplane.compute.const_cmds import make_autoshutdown_script, make_dozzle_command, make_sysctl_tcp_tuning_command
 from skyplane.utils import logger
 from skyplane.utils.fn import PathLike, wait_for
-from skyplane.utils.net import retry_requests
 from skyplane.utils.retry import retry_backoff
 from skyplane.utils.timer import Timer
 
@@ -312,14 +311,16 @@ class Server:
         self.gateway_api_url = f"http://127.0.0.1:{self.tunnel_port(8080 + 1)}"
 
         # wait for gateways to start (check status API)
+        http_pool = urllib3.PoolManager()
+
         def is_api_ready():
             try:
                 api_url = f"{self.gateway_api_url}/api/v1/status"
-                status_val = retry_requests().get(api_url)
-                is_up = status_val.json().get("status") == "ok"
+                status_val = json.loads(http_pool.request("GET", api_url).data.decode("utf-8"))
+                is_up = status_val.get("status") == "ok"
                 return is_up
             except Exception as e:
-                logger.error(f"{desc_prefix}: Failed to check gateway status: {e}")
+                logger.fs.error(f"{desc_prefix}: Failed to check gateway status: {e}")
                 return False
 
         try:
