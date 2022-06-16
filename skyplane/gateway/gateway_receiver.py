@@ -153,34 +153,32 @@ class GatewayReceiver:
             self.chunk_store.state_start_download(chunk_header.chunk_id, f"receiver:{self.worker_id}")
             logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} wire header length {chunk_header.data_len}")
             with Timer() as t:
-                with lz4.frame.LZ4FrameDecompressor() as decompressor:
-                    with self.chunk_store.get_chunk_file_path(chunk_header.chunk_id).open("wb") as f:
-                        socket_data_len = chunk_header.data_len
-                        chunk_received_size = 0
-                        chunk_received_size_decompressed = 0
-                        to_write = b""
-                        while socket_data_len > 0:
-                            data_batch = conn.recv(min(socket_data_len, self.recv_block_size))
-                            socket_data_len -= len(data_batch)
-                            chunk_received_size += len(data_batch)
-                            self.socket_profiler_event_queue.put(
-                                dict(
-                                    receiver_id=self.worker_id,
-                                    chunk_id=chunk_header.chunk_id,
-                                    time_ms=t.elapsed * 1000.0,
-                                    bytes=chunk_received_size,
-                                )
+                with self.chunk_store.get_chunk_file_path(chunk_header.chunk_id).open("wb") as f:
+                    socket_data_len = chunk_header.data_len
+                    chunk_received_size = 0
+                    chunk_received_size_decompressed = 0
+                    to_write = bytearray(socket_data_len)
+                    to_write_view = memoryview(to_write)
+                    while socket_data_len > 0:
+                        nbytes = conn.recv_into(to_write_view[chunk_received_size:], min(socket_data_len, self.recv_block_size))
+                        socket_data_len -= nbytes
+                        chunk_received_size += nbytes
+                        self.socket_profiler_event_queue.put(
+                            dict(
+                                receiver_id=self.worker_id,
+                                chunk_id=chunk_header.chunk_id,
+                                time_ms=t.elapsed * 1000.0,
+                                bytes=chunk_received_size,
                             )
-                            to_write += data_batch
-
-                        if should_decrypt:
-                            to_write = self.e2ee_secretbox.decrypt(to_write)
-                        if should_decompress:
-                            data_batch_decompressed = decompressor.decompress(to_write)
-                            chunk_received_size_decompressed += len(data_batch_decompressed)
-                            to_write = data_batch_decompressed
-                        if len(to_write) > 0:
-                            f.write(to_write)
+                        )
+                    to_write = bytes(to_write)
+                    if should_decrypt:
+                        to_write = self.e2ee_secretbox.decrypt(to_write)
+                    if should_decompress:
+                        data_batch_decompressed = lz4.frame.decompress(to_write)
+                        chunk_received_size_decompressed += len(data_batch_decompressed)
+                        to_write = data_batch_decompressed
+                    f.write(to_write)
             assert (
                 socket_data_len == 0 and chunk_received_size == chunk_header.data_len
             ), f"Size mismatch: got {chunk_received_size} expected {chunk_header.data_len} and had {socket_data_len} bytes remaining"
