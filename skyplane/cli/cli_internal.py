@@ -24,6 +24,7 @@ def replicate_random(
     chunk_size_mb: int = typer.Option(8, "--chunk-size-mb", help="Chunk size in MB."),
     use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
     reuse_gateways: bool = False,
+    debug: bool = False,
 ):
     """Replicate objects from remote object store to another remote object store."""
     print_header()
@@ -69,10 +70,11 @@ def replicate_random(
     stats = launch_replication_job(
         topo=topo,
         job=job,
-        debug=False,
+        debug=debug,
         reuse_gateways=reuse_gateways,
         use_bbr=use_bbr,
         use_compression=False,
+        verify_checksums=False,
     )
     return 0 if stats["success"] else 1
 
@@ -95,6 +97,7 @@ def replicate_random_solve(
         skyplane_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
     ),
     solver_verbose: bool = False,
+    debug: bool = False,
 ):
     """Replicate objects from remote object store to another remote object store."""
     print_header()
@@ -153,9 +156,10 @@ def replicate_random_solve(
     stats = launch_replication_job(
         topo=topo,
         job=job,
-        debug=False,
+        debug=debug,
         reuse_gateways=reuse_gateways,
         use_bbr=use_bbr,
         use_compression=False,
+        verify_checksums=False,
     )
     return 0 if stats["success"] else 1

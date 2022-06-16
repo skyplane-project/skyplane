@@ -1,15 +1,14 @@
 import json
 import pickle
-from re import S
 import time
 import uuid
 from datetime import datetime
 from functools import partial
 from typing import Dict, List, Optional, Tuple, Iterable
-from numpy import source
 
 import pandas as pd
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, DownloadColumn, BarColumn, TransferSpeedColumn
+import urllib3
 
 from skyplane import GB, MB, tmp_log_dir
 from skyplane import exceptions
@@ -25,7 +24,6 @@ from skyplane.replicate.profiler import status_df_to_traceevent
 from skyplane.replicate.replication_plan import ReplicationJob, ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
 from skyplane.utils.fn import PathLike, do_parallel
-from skyplane.utils.net import retry_requests
 from skyplane.utils.timer import Timer
 
 
@@ -39,6 +37,7 @@ class ReplicatorClient:
         gcp_instance_class: Optional[str] = "n2-standard-16",  # set to None to disable GCP
         gcp_use_premium_network: bool = True,
     ):
+        self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         self.topology = topology
         self.gateway_docker_image = gateway_docker_image
         self.aws_instance_class = aws_instance_class
@@ -420,12 +419,15 @@ class ReplicatorClient:
                     hop_instance, chunk_requests = args
                     while chunk_requests:
                         batch, chunk_requests = chunk_requests[: 1024 * 16], chunk_requests[1024 * 16 :]
-                        reply = retry_requests().post(
-                            f"{hop_instance.gateway_api_url}/api/v1/chunk_requests", json=[c.as_dict() for c in batch]
+                        reply = self.http_pool.request(
+                            "POST",
+                            f"{hop_instance.gateway_api_url}/api/v1/chunk_requests",
+                            body=json.dumps([c.as_dict() for c in batch]).encode("utf-8"),
+                            headers={"Content-Type": "application/json"},
                         )
-                        if reply.status_code != 200:
+                        if reply.status != 200:
                             raise Exception(
-                                f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}"
+                                f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.data.decode('utf-8')}"
                             )
                         logger.fs.debug(
                             f"Sent {len(batch)} chunk requests to {hop_instance.instance_name()}, {len(chunk_requests)} remaining"
@@ -440,11 +442,13 @@ class ReplicatorClient:
     def get_chunk_status_log_df(self) -> pd.DataFrame:
         def get_chunk_status(args):
             node, instance = args
-            reply = retry_requests().get(f"{instance.gateway_api_url}/api/v1/chunk_status_log")
-            if reply.status_code != 200:
-                raise Exception(f"Failed to get chunk status from gateway instance {instance.instance_name()}: {reply.text}")
+            reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/chunk_status_log")
+            if reply.status != 200:
+                raise Exception(
+                    f"Failed to get chunk status from gateway instance {instance.instance_name()}: {reply.data.decode('utf-8')}"
+                )
             logs = []
-            for log_entry in reply.json()["chunk_status_log"]:
+            for log_entry in json.loads(reply.data.decode("utf-8"))["chunk_status_log"]:
                 log_entry["region"] = node.region
                 log_entry["instance"] = node.instance
                 log_entry["time"] = datetime.fromisoformat(log_entry["time"])
@@ -460,10 +464,10 @@ class ReplicatorClient:
     def check_error_logs(self) -> Dict[str, List[str]]:
         def get_error_logs(args):
             _, instance = args
-            reply = retry_requests().get(f"{instance.gateway_api_url}/api/v1/errors")
-            if reply.status_code != 200:
-                raise Exception(f"Failed to get error logs from gateway instance {instance.instance_name()}: {reply.text}")
-            return reply.json()["errors"]
+            reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/errors")
+            if reply.status != 200:
+                raise Exception(f"Failed to get error logs from gateway instance {instance.instance_name()}: {reply.data.decode('utf-8')}")
+            return json.loads(reply.data.decode("utf-8"))["errors"]
 
         errors: Dict[str, List[str]] = {}
         for (_, instance), result in do_parallel(get_error_logs, self.bound_nodes.items(), n=-1):
@@ -604,9 +608,9 @@ class ReplicatorClient:
                 progress.update(cleanup_task, description=": Getting compression ratio information")
                 total_sent_compressed, total_sent_uncompressed = 0, 0
                 for gateway in {v for v in self.bound_nodes.values() if v.region_tag in source_regions}:
-                    stats = retry_requests().get(f"{gateway.gateway_api_url}/api/v1/profile/compression")
-                    if stats.status_code == 200:
-                        stats = stats.json()
+                    stats = self.http_pool.request("GET", f"{gateway.gateway_api_url}/api/v1/profile/compression")
+                    if stats.status == 200:
+                        stats = json.loads(stats.data.decode("utf-8"))
                         total_sent_compressed += stats.get("compressed_bytes_sent", 0)
                         total_sent_uncompressed += stats.get("uncompressed_bytes_sent", 0)
                 compression_ratio = total_sent_compressed / total_sent_uncompressed if total_sent_uncompressed > 0 else 0
@@ -636,12 +640,13 @@ class ReplicatorClient:
                 if write_socket_profile:
 
                     def write_socket_profile(instance):
-                        receiver_reply = retry_requests().get(f"{instance.gateway_api_url}/api/v1/profile/socket/receiver")
-                        if receiver_reply.status_code != 200:
+                        receiver_reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/profile/socket/receiver")
+                        text = receiver_reply.data.decode("utf-8")
+                        if receiver_reply.status != 200:
                             logger.fs.error(
-                                f"Failed to get receiver socket profile from {instance.gateway_api_url}: {receiver_reply.status_code} {receiver_reply.text}"
+                                f"Failed to get receiver socket profile from {instance.gateway_api_url}: {receiver_reply.status} {text}"
                             )
-                        (self.transfer_dir / f"receiver_socket_profile_{instance.uuid()}.json").write_text(receiver_reply.text)
+                        (self.transfer_dir / f"receiver_socket_profile_{instance.uuid()}.json").write_text(text)
 
                     progress.update(cleanup_task, description=": Writing socket profiles")
                     do_parallel(write_socket_profile, self.bound_nodes.values(), n=-1)
@@ -649,7 +654,7 @@ class ReplicatorClient:
 
                     def fn(s: Server):
                         try:
-                            retry_requests().post(f"{s.gateway_api_url}/api/v1/shutdown")
+                            self.http_pool.request("POST", f"{s.gateway_api_url}/api/v1/shutdown")
                         except:
                             return  # ignore connection errors since server may be shutting down
 

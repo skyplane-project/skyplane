@@ -179,6 +179,7 @@ def launch_replication_job(
     reuse_gateways: bool = False,
     use_bbr: bool = False,
     use_compression: bool = False,
+    verify_checksums: bool = True,
     # cloud provider specific options
     aws_instance_class: str = "m5.8xlarge",
     azure_instance_class: str = "Standard_D32_v4",
@@ -254,7 +255,8 @@ def launch_replication_job(
         signal.signal(signal.SIGINT, s)
 
     # verify transfer
-    rc.verify_transfer(job)
+    if verify_checksums:
+        rc.verify_transfer(job)
 
     stats = stats if stats else {}
     stats["success"] = stats["monitor_status"] == "completed"
