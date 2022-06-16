@@ -1,9 +1,5 @@
 name: pytest
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+on: [push]
 jobs:
   test-unit:
     runs-on: ubuntu-latest
