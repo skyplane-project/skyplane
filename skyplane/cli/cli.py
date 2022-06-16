@@ -91,6 +91,7 @@ def cp(
     debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
     use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
     use_compression: bool = typer.Option(False, help="If true, will use compression for uploads/downloads"),
+    disable_e2ee: bool = typer.Option(False, help="If true, will not use end-to-end encryption for replication jobs"),
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
     solver_throughput_grid: Path = typer.Option(
@@ -127,6 +128,8 @@ def cp(
     :type use_bbr: bool
     :param use_compression: If set, will use compression for transfers.
     :type use_compression: bool
+    :param use_e2ee: If set, will use E2EE for transfers
+    :type use_e2ee: bool
     :param solve: If true, will use solver to optimize transfer, else direct path is chosen
     :type solve: bool
     :param solver_required_throughput_gbits: The required throughput in Gbps when using the solver (default: 4)
@@ -208,6 +211,7 @@ def cp(
             reuse_gateways=reuse_gateways,
             use_bbr=use_bbr,
             use_compression=use_compression,
+            use_e2ee=(not disable_e2ee),
         )
         return 0 if stats["success"] else 1
     else:

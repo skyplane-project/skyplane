@@ -75,6 +75,7 @@ def replicate_random(
         use_bbr=use_bbr,
         use_compression=False,
         verify_checksums=False,
+        use_e2ee=True,
     )
     return 0 if stats["success"] else 1
 
