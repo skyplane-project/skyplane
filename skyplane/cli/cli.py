@@ -3,6 +3,7 @@ import subprocess
 from functools import partial
 from pathlib import Path
 from shlex import split
+import traceback
 
 import questionary
 import typer
@@ -13,8 +14,8 @@ import skyplane.cli.cli_config
 import skyplane.cli.cli_internal as cli_internal
 import skyplane.cli.cli_solver
 import skyplane.cli.experiments
-from skyplane import GB, config_path, skyplane_root, cloud_config
-from skyplane.cli.common import print_header
+from skyplane import config_path, exceptions, skyplane_root, cloud_config
+from skyplane.cli.common import print_header, console
 from skyplane.cli.cli_impl.cp_local import (
     copy_azure_local,
     copy_gcs_local,
@@ -27,11 +28,10 @@ from skyplane.cli.cli_impl.cp_local import (
 from skyplane.cli.cli_impl.cp_replicate import (
     generate_full_transferobjlist,
     generate_topology,
-    generate_transfer_obj_list,
     confirm_transfer,
     launch_replication_job,
 )
-from skyplane.replicate.replication_plan import TransferObjectList, ReplicationJob
+from skyplane.replicate.replication_plan import ReplicationJob
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.cli_impl.ls import ls_local, ls_objstore
 from skyplane.cli.common import check_ulimit, parse_path, query_instances
@@ -166,11 +166,16 @@ def cp(
         account_name, container_name = bucket_dst
         copy_azure_local(account_name, container_name, path_src, Path(path_dst))
     elif provider_src in clouds and provider_dst in clouds:
-        src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)
-        src_region = src_client.region_tag()
-        dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
-        dst_region = dst_client.region_tag()
-        transfer_pairs = generate_full_transferobjlist(src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst)
+        try:
+            src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)
+            src_region = src_client.region_tag()
+            dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
+            dst_region = dst_client.region_tag()
+            transfer_pairs = generate_full_transferobjlist(src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst)
+        except exceptions.SkyplaneException as e:
+            console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+            console.print(e.pretty_print_str())
+            raise typer.Exit(1)
         topo = generate_topology(
             src_region,
             dst_region,
@@ -278,11 +283,16 @@ def sync(
 
     clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
 
-    src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)
-    src_region = src_client.region_tag()
-    dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
-    dst_region = dst_client.region_tag()
-    full_transfer_pairs = generate_full_transferobjlist(src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst)
+    try:
+        src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)
+        src_region = src_client.region_tag()
+        dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
+        dst_region = dst_client.region_tag()
+        full_transfer_pairs = generate_full_transferobjlist(src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst)
+    except exceptions.SkyplaneException as e:
+        console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+        console.print(e.pretty_print_str())
+        raise typer.Exit(1)
 
     # filter out any transfer pairs that are already in the destination
     transfer_pairs = []

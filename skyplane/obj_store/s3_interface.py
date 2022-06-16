@@ -168,7 +168,7 @@ class S3Interface(ObjectStoreInterface):
         except botocore.exceptions.ClientError as e:
             # catch MD5 mismatch error and raise appropriate exception
             if "Error" in e.response and "Code" in e.response["Error"] and e.response["Error"]["Code"] == "InvalidDigest":
-                raise exceptions.ObjectStoreException(f"Checksum mismatch for object {dst_object_name}") from e
+                raise exceptions.ChecksumMismatchException(f"Checksum mismatch for object {dst_object_name}") from e
             raise
 
     def initiate_multipart_upload(self, dst_object_name):

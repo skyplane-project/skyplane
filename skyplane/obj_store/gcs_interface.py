@@ -187,7 +187,7 @@ class GCSInterface(ObjectStoreInterface):
             if check_md5:
                 blob_md5 = blob.md5_hash
                 if b64_md5sum != blob_md5:
-                    raise exceptions.ObjectStoreException(
+                    raise exceptions.ChecksumMismatchException(
                         f"Checksum mismatch for object {dst_object_name} in bucket {self.bucket_name}, "
                         + f"expected {b64_md5sum}, got {blob_md5}"
                     )
@@ -207,7 +207,7 @@ class GCSInterface(ObjectStoreInterface):
 
         # check response
         if "ETag" not in response.headers:
-            raise exceptions.ObjectStoreException(
+            raise exceptions.ChecksumMismatchException(
                 f"Upload of object {dst_object_name} in bucket {self.bucket_name} failed, got status code {response.status_code} w/ response {response.text}"
             )
 
