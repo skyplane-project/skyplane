@@ -5,6 +5,8 @@ import uuid
 from datetime import datetime
 from functools import partial
 from typing import Dict, List, Optional, Tuple, Iterable
+import nacl.secret
+import nacl.utils
 
 import pandas as pd
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, DownloadColumn, BarColumn, TransferSpeedColumn
@@ -67,6 +69,7 @@ class ReplicatorClient:
         authorize_ssh_pub_key: Optional[PathLike] = None,
         use_bbr=False,
         use_compression=False,
+        use_e2ee=True,
     ):
         regions_to_provision = [node.region for node in self.topology.gateway_nodes]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
@@ -214,25 +217,37 @@ class ReplicatorClient:
         aws_jobs = [partial(self.aws.add_ips_to_security_group, r.split(":")[1], public_ips) for r in set(aws_regions_to_provision)]
         do_parallel(lambda fn: fn(), aws_jobs, spinner=True, desc="Applying firewall rules")
 
+        # generate E2EE key
+        if use_e2ee:
+            e2ee_key_bytes = nacl.utils.random(nacl.secret.SecretBox.KEY_SIZE)
+        else:
+            e2ee_key_bytes = None
+
         # setup instances
-        def setup(args: Tuple[Server, Dict[str, int]]):
-            server, outgoing_ports = args
+        def setup(args: Tuple[Server, Dict[str, int], bool, bool]):
+            server, outgoing_ports, am_source, am_sink = args
             if log_dir:
                 server.init_log_files(log_dir)
             if authorize_ssh_pub_key:
                 server.copy_public_key(authorize_ssh_pub_key)
             server.start_gateway(
-                outgoing_ports, gateway_docker_image=self.gateway_docker_image, use_bbr=use_bbr, use_compression=use_compression
+                outgoing_ports,
+                gateway_docker_image=self.gateway_docker_image,
+                use_bbr=use_bbr,
+                use_compression=use_compression,
+                e2ee_key_bytes=e2ee_key_bytes if (am_source or am_sink) else None,
             )
 
         args = []
+        sources = self.topology.source_instances()
+        sinks = self.topology.sink_instances()
         for node, server in self.bound_nodes.items():
             setup_args = {
                 self.bound_nodes[n].public_ip(): v
                 for n, v in self.topology.get_outgoing_paths(node).items()
                 if isinstance(n, ReplicationTopologyGateway)
             }
-            args.append((server, setup_args))
+            args.append((server, setup_args, node in sources, node in sinks))
         do_parallel(setup, args, n=-1, spinner=True, spinner_persist=True, desc="Installing gateway package")
 
     def deprovision_gateways(self):
