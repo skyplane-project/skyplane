@@ -76,25 +76,32 @@ def generate_topology(
 
 def map_object_key_prefix(
     source_prefix: str,
-    dest_prefix: str,
     source_key: str,
+    dest_prefix: str,
+    recursive: bool = False,
 ):
-    # if path is a single object, copy it directly
-    if source_key == source_prefix:
-        fname = source_key.split("/")[-1]
-        return os.path.join(dest_prefix, fname)
-
-    # else, object must be in a subdirectory of the source prefix
-    # source prefix must end with a slash
-    if not source_prefix.endswith("/"):
-        raise exceptions.MissingObjectException(f"To copy a directory, the source prefix must end with a slash: {source_prefix}")
-
-    # source key must start with the source prefix
-    if not source_key.startswith(source_prefix):
-        raise exceptions.MissingObjectException(f"Source key must start with source prefix {source_prefix} but key was {source_key}")
-
-    # remove source prefix from key and append to destination prefix
-    return os.path.join(dest_prefix, source_key[len(source_prefix) :])
+    """
+    map_object_key_prefix computes the mapping of a source key in a bucket prefix to the destination.
+    Users invoke a transfer via the CLI; aws s3 cp s3://bucket/source_prefix s3://bucket/dest_prefix.
+    The CLI will query the object store for all objects in the source prefix and map them to the
+    destination prefix using this function.
+    """
+    if not recursive:
+        if source_key.startswith(source_prefix):
+            if dest_prefix.endswith("/"):
+                src_name = source_key.split("/")[-1]
+                return f"{dest_prefix}{src_name}"
+            elif source_prefix == source_key:
+                return dest_prefix
+        raise exceptions.MissingObjectException(f"Source key {source_key} does not start with source prefix {source_prefix}")
+    else:
+        dest_prefix = dest_prefix if dest_prefix.endswith("/") else f"{dest_prefix}/"
+        source_prefix = source_prefix if source_prefix.endswith("/") else f"{source_prefix}/"
+        if source_key.startswith(source_prefix):
+            file_path = source_key[len(source_prefix) :]
+            return f"{dest_prefix}{file_path}"
+        else:
+            raise exceptions.MissingObjectException(f"Source key {source_key} does not start with source prefix {source_prefix}")
 
 
 def generate_full_transferobjlist(
@@ -122,7 +129,7 @@ def generate_full_transferobjlist(
 
     # map objects to destination object paths
     for source_obj in source_objs:
-        dest_key = map_object_key_prefix(source_prefix, dest_prefix, source_obj.key)
+        dest_key = map_object_key_prefix(source_prefix, source_obj.key, dest_prefix)
         dest_obj = ObjectStoreObject(dest_region.split(":")[0], dest_bucket, dest_key)
         dest_objs.append(dest_obj)
 
