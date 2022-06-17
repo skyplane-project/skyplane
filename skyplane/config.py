@@ -2,10 +2,28 @@ import configparser
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 _FLAG_TYPES = {
     "autoconfirm": bool,
+    "compress": bool,
+    "encrypt_e2e": bool,
+    "encrypt_socket_tls": bool,
+    "multipart_enabled": bool,
+    "multipart_min_threshold_mb": int,
+    "multipart_min_size_mb": int,
+    "multipart_max_chunks": int,
+}
+
+_DEFAULT_FLAGS = {
+    "autoconfirm": False,
+    "compress": True,
+    "encrypt_e2e": True,
+    "encrypt_socket_tls": False,
+    "multipart_enabled": True,
+    "multipart_min_threshold_mb": 128,
+    "multipart_min_size_mb": 8,
+    "multipart_max_chunks": 9990,  # AWS limit is 10k chunks
 }
 
 
@@ -30,7 +48,16 @@ class SkyplaneConfig:
     gcp_project_id: Optional[str] = None
 
     # skyplane flags
-    flag_autoconfirm: bool = False
+    flag_autoconfirm: Optional[bool] = None
+    flag_compress: Optional[bool] = None
+    flag_encrypt_e2e: Optional[bool] = None
+    flag_encrypt_socket_tls: Optional[bool] = None
+
+    # multipart configuration
+    flag_multipart_enabled: Optional[bool] = None
+    flag_multipart_min_threshold_mb: Optional[int] = None
+    flag_multipart_min_size_mb: Optional[int] = None
+    flag_multipart_max_chunks: Optional[int] = None
 
     @staticmethod
     def default_config() -> "SkyplaneConfig":
@@ -38,9 +65,6 @@ class SkyplaneConfig:
             aws_enabled=False,
             azure_enabled=False,
             gcp_enabled=False,
-            azure_subscription_id=None,
-            gcp_project_id=None,
-            flag_autoconfirm=False,
         )
 
     @staticmethod
@@ -73,10 +97,10 @@ class SkyplaneConfig:
             if "project_id" in config["gcp"]:
                 gcp_project_id = config.get("gcp", "project_id")
 
-        flag_autoconfirm = False
-        if "flags" in config:
-            if "autoconfirm" in config["flags"]:
-                flag_autoconfirm = config.getboolean("flags", "autoconfirm")
+        flags = {}
+        for flag_name, flag_type in _FLAG_TYPES.items():
+            if "flags" in config and flag_name in config["flags"]:
+                flags[f"flag_{flag_name}"] = _map_type(config.get("flags", flag_name), flag_type)
 
         return SkyplaneConfig(
             aws_enabled=aws_enabled,
@@ -84,7 +108,7 @@ class SkyplaneConfig:
             gcp_enabled=gcp_enabled,
             azure_subscription_id=azure_subscription_id,
             gcp_project_id=gcp_project_id,
-            flag_autoconfirm=flag_autoconfirm,
+            **flags,
         )
 
     def to_config_file(self, path):
@@ -113,7 +137,14 @@ class SkyplaneConfig:
 
         if "flags" not in config:
             config.add_section("flags")
-        config.set("flags", "autoconfirm", str(self.flag_autoconfirm))
+
+        for flag_name in _FLAG_TYPES:
+            val = getattr(self, f"flag_{flag_name}")
+            if val is not None:
+                config.set("flags", flag_name, str(val))
+            else:
+                if "flags" in config and flag_name in config["flags"]:
+                    config.remove_option("flags", flag_name)
 
         with path.open("w") as f:
             config.write(f)
@@ -124,9 +155,13 @@ class SkyplaneConfig:
     def get_flag(self, flag_name):
         if flag_name not in self.valid_flags():
             raise KeyError(f"Invalid flag: {flag_name}")
-        return getattr(self, f"flag_{flag_name}")
+        flag_value = getattr(self, f"flag_{flag_name}")
+        return flag_value if flag_value is not None else _DEFAULT_FLAGS[flag_name]
 
-    def set_flag(self, flag_name, value):
+    def set_flag(self, flag_name, value: Optional[Any]):
         if flag_name not in self.valid_flags():
             raise KeyError(f"Invalid flag: {flag_name}")
-        setattr(self, f"flag_{flag_name}", _map_type(value, _FLAG_TYPES.get(flag_name, str)))
+        if value is not None:
+            setattr(self, f"flag_{flag_name}", _map_type(value, _FLAG_TYPES.get(flag_name, str)))
+        else:
+            setattr(self, f"flag_{flag_name}", None)
