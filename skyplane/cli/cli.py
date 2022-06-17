@@ -83,15 +83,24 @@ def ls(directory: str):
 def cp(
     src: str,
     dst: str,
-    num_connections: int = typer.Option(32, "--num-connections", "-c", help="Number of connections between gateways"),
-    max_instances: int = typer.Option(1, "--max-instances", "-n", help="Number of gateways"),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
-    max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
-    confirm: bool = typer.Option(False, "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
     debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
-    use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
-    use_compression: bool = typer.Option(False, help="If true, will use compression for uploads/downloads"),
-    disable_e2ee: bool = typer.Option(False, help="If true, will not use end-to-end encryption for replication jobs"),
+    # transfer flags
+    confirm: bool = typer.Option(cloud_config.get_flag("autoconfirm"), "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
+    num_connections: int = typer.Option(
+        cloud_config.get_flag("num_connections"), "--num-connections", "-c", help="Number of connections between gateways"
+    ),
+    max_instances: int = typer.Option(cloud_config.get_flag("max_instances"), "--max-instances", "-n", help="Number of gateways"),
+    max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
+    use_bbr: bool = typer.Option(cloud_config.get_flag("bbr"), help="If true, will use BBR congestion control"),
+    use_compression: bool = typer.Option(cloud_config.get_flag("compression"), help="If true, will use compression for uploads/downloads"),
+    encrypt_e2ee: bool = typer.Option(
+        cloud_config.get_flag("encrypt_e2ee"), help="If true, will not use end-to-end encryption for replication jobs"
+    ),
+    encrypt_socket_tls: bool = typer.Option(
+        cloud_config.get_flag("encrypt_socket_tls"), help="If true, will use TLS for socket encryption"
+    ),
+    # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
     solver_throughput_grid: Path = typer.Option(
@@ -112,24 +121,26 @@ def cp(
     :type src: str
     :param dst: The destination of the transfer
     :type dst: str
+    :param reuse_gateways: If true, will leave provisioned instances running to be reused. You must run `skyplane deprovision` to clean up.
+    :type reuse_gateways: bool
+    :param debug: If true, will write debug information to debug directory.
+    :type debug: bool
+    :param confirm: If true, will not prompt for confirmation of transfer.
+    :type confirm: bool
     :param num_connections: Number of connections to use between each gateway instance pair (default: 64)
     :type num_connections: int
     :param max_instances: The maximum number of instances to use per region (default: 1)
     :type max_instances: int
-    :param reuse_gateways: If true, will leave provisioned instances running to be reused. You must run `skyplane deprovision` to clean up.
-    :type reuse_gateways: bool
     :param max_chunk_size_mb: If set, `cp` will subdivide objects into chunks at most this size.
     :type max_chunk_size_mb: int
-    :param confirm: If true, will not prompt for confirmation of transfer.
-    :type confirm: bool
-    :param debug: If true, will write debug information to debug directory.
-    :type debug: bool
     :param use_bbr: If set, will use BBR for transfers by default.
     :type use_bbr: bool
     :param use_compression: If set, will use compression for transfers.
     :type use_compression: bool
-    :param use_e2ee: If set, will use E2EE for transfers
-    :type use_e2ee: bool
+    :param encrypt_e2ee: If set, will use E2EE for transfers
+    :type encrypt_e2ee: bool
+    :param encrypt_socket_tls: If set, will use TLS for socket encryption
+    :type encrypt_socket_tls: bool
     :param solve: If true, will use solver to optimize transfer, else direct path is chosen
     :type solve: bool
     :param solver_required_throughput_gbits: The required throughput in Gbps when using the solver (default: 4)
@@ -202,7 +213,7 @@ def cp(
             topo=topo,
             n_objs=len(transfer_pairs),
             est_size_bytes=job.transfer_size,
-            ask_to_confirm_transfer=not cloud_config.get_flag("autoconfirm") and not confirm,
+            ask_to_confirm_transfer=not confirm,
         )
         stats = launch_replication_job(
             topo=topo,
@@ -211,7 +222,8 @@ def cp(
             reuse_gateways=reuse_gateways,
             use_bbr=use_bbr,
             use_compression=use_compression,
-            use_e2ee=(not disable_e2ee),
+            use_e2ee=encrypt_e2ee,
+            use_socket_tls=encrypt_socket_tls,
         )
         return 0 if stats["success"] else 1
     else:
@@ -222,14 +234,24 @@ def cp(
 def sync(
     src: str,
     dst: str,
-    num_connections: int = typer.Option(32, "--num-connections", "-c", help="Number of connections between gateways"),
-    max_instances: int = typer.Option(1, "--max-instances", "-n", help="Number of gateways"),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
+    debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
+    # transfer flags
+    confirm: bool = typer.Option(cloud_config.get_flag("autoconfirm"), "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
+    num_connections: int = typer.Option(
+        cloud_config.get_flag("num_connections"), "--num-connections", "-c", help="Number of connections between gateways"
+    ),
+    max_instances: int = typer.Option(cloud_config.get_flag("max_instances"), "--max-instances", "-n", help="Number of gateways"),
     max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
-    confirm: bool = typer.Option(False, "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
-    debug: bool = typer.Option(False, help="If true, will write debug info to debug directory"),
-    use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
-    use_compression: bool = typer.Option(False, help="If true, will use compression for uploads/downloads"),
+    use_bbr: bool = typer.Option(cloud_config.get_flag("bbr"), help="If true, will use BBR congestion control"),
+    use_compression: bool = typer.Option(cloud_config.get_flag("compression"), help="If true, will use compression for uploads/downloads"),
+    encrypt_e2ee: bool = typer.Option(
+        cloud_config.get_flag("encrypt_e2ee"), help="If true, will not use end-to-end encryption for replication jobs"
+    ),
+    encrypt_socket_tls: bool = typer.Option(
+        cloud_config.get_flag("encrypt_socket_tls"), help="If true, will use TLS for socket encryption"
+    ),
+    # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
     solver_throughput_grid: Path = typer.Option(
@@ -254,22 +276,26 @@ def sync(
     :type src: str
     :param dst: The destination of the transfer
     :type dst: str
+    :param reuse_gateways: If true, will leave provisioned instances running to be reused. You must run `skyplane deprovision` to clean up.
+    :type reuse_gateways: bool
+    :param debug: If true, will write debug information to debug directory.
+    :type debug: bool
+    :param confirm: If true, will not prompt for confirmation of transfer.
+    :type confirm: bool
     :param num_connections: Number of connections to use between each gateway instance pair (default: 64)
     :type num_connections: int
     :param max_instances: The maximum number of instances to use per region (default: 1)
     :type max_instances: int
-    :param reuse_gateways: If true, will leave provisioned instances running to be reused. You must run `skyplane deprovision` to clean up.
-    :type reuse_gateways: bool
     :param max_chunk_size_mb: If set, `cp` will subdivide objects into chunks at most this size.
     :type max_chunk_size_mb: int
-    :param confirm: If true, will not prompt for confirmation of transfer.
-    :type confirm: bool
-    :param debug: If true, will write debug info to debug directory
-    :type debug: bool
     :param use_bbr: If set, will use BBR for transfers by default.
     :type use_bbr: bool
-    :param use_compression: If set, will use compression for transfers by default.
+    :param use_compression: If set, will use compression for transfers.
     :type use_compression: bool
+    :param encrypt_e2ee: If set, will use E2EE for transfers
+    :type encrypt_e2ee: bool
+    :param encrypt_socket_tls: If set, will use TLS for socket encryption
+    :type encrypt_socket_tls: bool
     :param solve: If true, will use solver to optimize transfer, else direct path is chosen
     :type solve: bool
     :param solver_required_throughput_gbits: The required throughput in Gbps when using the solver (default: 4)
@@ -332,7 +358,7 @@ def sync(
         topo=topo,
         n_objs=len(transfer_pairs),
         est_size_bytes=job.transfer_size,
-        ask_to_confirm_transfer=not cloud_config.get_flag("autoconfirm") and not confirm,
+        ask_to_confirm_transfer=not confirm,
     )
     stats = launch_replication_job(
         topo=topo,
@@ -341,6 +367,8 @@ def sync(
         reuse_gateways=reuse_gateways,
         use_bbr=use_bbr,
         use_compression=use_compression,
+        use_e2ee=encrypt_e2ee,
+        use_socket_tls=encrypt_socket_tls,
     )
     return 0 if stats["success"] else 1
 

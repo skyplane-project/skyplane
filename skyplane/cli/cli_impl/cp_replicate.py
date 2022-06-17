@@ -180,6 +180,7 @@ def launch_replication_job(
     use_bbr: bool = False,
     use_compression: bool = False,
     use_e2ee: bool = True,
+    use_socket_tls: bool = False,
     verify_checksums: bool = True,
     # cloud provider specific options
     aws_instance_class: str = "m5.8xlarge",
@@ -213,7 +214,9 @@ def launch_replication_job(
 
     stats = {}
     try:
-        rc.provision_gateways(reuse_gateways, use_bbr=use_bbr, use_compression=use_compression, use_e2ee=use_e2ee)
+        rc.provision_gateways(
+            reuse_gateways, use_bbr=use_bbr, use_compression=use_compression, use_e2ee=use_e2ee, use_socket_tls=use_socket_tls
+        )
         for node, gw in rc.bound_nodes.items():
             logger.fs.info(f"Log URLs for {gw.uuid()} ({node.region}:{node.instance})")
             logger.fs.info(f"\tLog viewer: {gw.gateway_log_viewer_url}")

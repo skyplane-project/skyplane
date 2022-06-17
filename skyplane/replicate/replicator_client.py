@@ -67,9 +67,10 @@ class ReplicatorClient:
         reuse_instances=False,
         log_dir: Optional[PathLike] = None,
         authorize_ssh_pub_key: Optional[PathLike] = None,
-        use_bbr=False,
-        use_compression=False,
+        use_bbr=True,
+        use_compression=True,
         use_e2ee=True,
+        use_socket_tls=False,
     ):
         regions_to_provision = [node.region for node in self.topology.gateway_nodes]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
@@ -236,6 +237,7 @@ class ReplicatorClient:
                 use_bbr=use_bbr,
                 use_compression=use_compression,
                 e2ee_key_bytes=e2ee_key_bytes if (am_source or am_sink) else None,
+                use_socket_tls=use_socket_tls,
             )
 
         args = []

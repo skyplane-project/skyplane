@@ -6,6 +6,7 @@ from typing import Any, Optional
 
 _FLAG_TYPES = {
     "autoconfirm": bool,
+    "bbr": bool,
     "compress": bool,
     "encrypt_e2e": bool,
     "encrypt_socket_tls": bool,
@@ -13,10 +14,13 @@ _FLAG_TYPES = {
     "multipart_min_threshold_mb": int,
     "multipart_min_size_mb": int,
     "multipart_max_chunks": int,
+    "num_connections": int,
+    "max_instances": int,
 }
 
 _DEFAULT_FLAGS = {
     "autoconfirm": False,
+    "bbr": True,
     "compress": True,
     "encrypt_e2e": True,
     "encrypt_socket_tls": False,
@@ -24,6 +28,8 @@ _DEFAULT_FLAGS = {
     "multipart_min_threshold_mb": 128,
     "multipart_min_size_mb": 8,
     "multipart_max_chunks": 9990,  # AWS limit is 10k chunks
+    "num_connections": 32,
+    "max_instances": 1,
 }
 
 

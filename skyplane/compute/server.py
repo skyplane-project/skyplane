@@ -269,6 +269,7 @@ class Server:
         use_bbr=False,
         use_compression=False,
         e2ee_key_bytes=None,
+        use_socket_tls=False,
     ):
         def check_stderr(tup):
             assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
@@ -317,7 +318,11 @@ class Server:
             docker_run_flags += f" -v /tmp/{e2ee_key_file}:/pkg/data/{e2ee_key_file}"
 
         docker_run_flags += " " + " ".join(f"--env {k}={v}" for k, v in docker_envs.items())
-        gateway_daemon_cmd = f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks --outgoing-ports '{json.dumps(outgoing_ports)}' --region {self.region_tag} {'--use-compression' if use_compression else ''} {'--disable-e2ee' if e2ee_key_bytes is None else ''}"
+        gateway_daemon_cmd = f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
+        gateway_daemon_cmd += f" --outgoing-ports '{json.dumps(outgoing_ports)}'"
+        gateway_daemon_cmd += f" --region {self.region_tag} {'--use-compression' if use_compression else ''}"
+        gateway_daemon_cmd += f" {'--disable-e2ee' if e2ee_key_bytes is None else ''}"
+        gateway_daemon_cmd += f" {'--disable-tls' if not use_socket_tls else ''}"
         escaped_gateway_daemon_cmd = gateway_daemon_cmd.replace('"', '\\"')
         docker_launch_cmd = (
             f'sudo docker run {docker_run_flags} --name skyplane_gateway {gateway_docker_image} /bin/bash -c "{escaped_gateway_daemon_cmd}"'
