@@ -10,12 +10,17 @@ _FLAG_TYPES = {
     "compress": bool,
     "encrypt_e2e": bool,
     "encrypt_socket_tls": bool,
+    "verify_checksums": bool,
     "multipart_enabled": bool,
     "multipart_min_threshold_mb": int,
     "multipart_min_size_mb": int,
     "multipart_max_chunks": int,
     "num_connections": int,
     "max_instances": int,
+    "aws_instance_class": str,
+    "azure_instance_class": str,
+    "gcp_instance_class": str,
+    "gcp_use_premium_network": bool,
 }
 
 _DEFAULT_FLAGS = {
@@ -24,12 +29,17 @@ _DEFAULT_FLAGS = {
     "compress": True,
     "encrypt_e2e": True,
     "encrypt_socket_tls": False,
+    "verify_checksums": True,
     "multipart_enabled": True,
     "multipart_min_threshold_mb": 128,
     "multipart_min_size_mb": 8,
     "multipart_max_chunks": 9990,  # AWS limit is 10k chunks
     "num_connections": 32,
     "max_instances": 1,
+    "aws_instance_class": "m5.8xlarge",
+    "azure_instance_class": "Standard_D32_v4",
+    "gcp_instance_class": "n2-standard-32",
+    "gcp_use_premium_network": True,
 }
 
 
@@ -52,18 +62,6 @@ class SkyplaneConfig:
     gcp_enabled: bool
     azure_subscription_id: Optional[str] = None
     gcp_project_id: Optional[str] = None
-
-    # skyplane flags
-    flag_autoconfirm: Optional[bool] = None
-    flag_compress: Optional[bool] = None
-    flag_encrypt_e2e: Optional[bool] = None
-    flag_encrypt_socket_tls: Optional[bool] = None
-
-    # multipart configuration
-    flag_multipart_enabled: Optional[bool] = None
-    flag_multipart_min_threshold_mb: Optional[int] = None
-    flag_multipart_min_size_mb: Optional[int] = None
-    flag_multipart_max_chunks: Optional[int] = None
 
     @staticmethod
     def default_config() -> "SkyplaneConfig":
@@ -103,18 +101,12 @@ class SkyplaneConfig:
             if "project_id" in config["gcp"]:
                 gcp_project_id = config.get("gcp", "project_id")
 
-        flags = {}
-        for flag_name, flag_type in _FLAG_TYPES.items():
-            if "flags" in config and flag_name in config["flags"]:
-                flags[f"flag_{flag_name}"] = _map_type(config.get("flags", flag_name), flag_type)
-
         return SkyplaneConfig(
             aws_enabled=aws_enabled,
             azure_enabled=azure_enabled,
             gcp_enabled=gcp_enabled,
             azure_subscription_id=azure_subscription_id,
             gcp_project_id=gcp_project_id,
-            **flags,
         )
 
     def to_config_file(self, path):
@@ -145,7 +137,7 @@ class SkyplaneConfig:
             config.add_section("flags")
 
         for flag_name in _FLAG_TYPES:
-            val = getattr(self, f"flag_{flag_name}")
+            val = getattr(self, f"flag_{flag_name}", None)
             if val is not None:
                 config.set("flags", flag_name, str(val))
             else:
@@ -161,8 +153,7 @@ class SkyplaneConfig:
     def get_flag(self, flag_name):
         if flag_name not in self.valid_flags():
             raise KeyError(f"Invalid flag: {flag_name}")
-        flag_value = getattr(self, f"flag_{flag_name}")
-        return flag_value if flag_value is not None else _DEFAULT_FLAGS[flag_name]
+        return getattr(self, f"flag_{flag_name}", _DEFAULT_FLAGS[flag_name])
 
     def set_flag(self, flag_name, value: Optional[Any]):
         if flag_name not in self.valid_flags():

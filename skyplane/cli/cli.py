@@ -87,19 +87,8 @@ def cp(
     debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
     # transfer flags
     confirm: bool = typer.Option(cloud_config.get_flag("autoconfirm"), "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
-    num_connections: int = typer.Option(
-        cloud_config.get_flag("num_connections"), "--num-connections", "-c", help="Number of connections between gateways"
-    ),
     max_instances: int = typer.Option(cloud_config.get_flag("max_instances"), "--max-instances", "-n", help="Number of gateways"),
     max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
-    use_bbr: bool = typer.Option(cloud_config.get_flag("bbr"), help="If true, will use BBR congestion control"),
-    use_compression: bool = typer.Option(cloud_config.get_flag("compression"), help="If true, will use compression for uploads/downloads"),
-    encrypt_e2ee: bool = typer.Option(
-        cloud_config.get_flag("encrypt_e2ee"), help="If true, will not use end-to-end encryption for replication jobs"
-    ),
-    encrypt_socket_tls: bool = typer.Option(
-        cloud_config.get_flag("encrypt_socket_tls"), help="If true, will use TLS for socket encryption"
-    ),
     # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
@@ -127,20 +116,10 @@ def cp(
     :type debug: bool
     :param confirm: If true, will not prompt for confirmation of transfer.
     :type confirm: bool
-    :param num_connections: Number of connections to use between each gateway instance pair (default: 64)
-    :type num_connections: int
     :param max_instances: The maximum number of instances to use per region (default: 1)
     :type max_instances: int
     :param max_chunk_size_mb: If set, `cp` will subdivide objects into chunks at most this size.
     :type max_chunk_size_mb: int
-    :param use_bbr: If set, will use BBR for transfers by default.
-    :type use_bbr: bool
-    :param use_compression: If set, will use compression for transfers.
-    :type use_compression: bool
-    :param encrypt_e2ee: If set, will use E2EE for transfers
-    :type encrypt_e2ee: bool
-    :param encrypt_socket_tls: If set, will use TLS for socket encryption
-    :type encrypt_socket_tls: bool
     :param solve: If true, will use solver to optimize transfer, else direct path is chosen
     :type solve: bool
     :param solver_required_throughput_gbits: The required throughput in Gbps when using the solver (default: 4)
@@ -190,7 +169,7 @@ def cp(
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
             console.print(e.pretty_print_str())
             raise typer.Exit(1)
-        
+
         # always disable encryption and compression for same region transfers
         if src_region == dst_region:
             use_compression = False
@@ -201,7 +180,7 @@ def cp(
             src_region,
             dst_region,
             solve,
-            num_connections=num_connections,
+            num_connections=cloud_config.get_flag("num_connections"),
             max_instances=max_instances,
             solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
             solver_required_throughput_gbits=solver_required_throughput_gbits,
@@ -227,10 +206,15 @@ def cp(
             job=job,
             debug=debug,
             reuse_gateways=reuse_gateways,
-            use_bbr=use_bbr,
-            use_compression=use_compression,
-            use_e2ee=encrypt_e2ee,
-            use_socket_tls=encrypt_socket_tls,
+            use_bbr=cloud_config.get_flag("bbr"),
+            use_compression=cloud_config.get_flag("compress"),
+            use_e2ee=cloud_config.get_flag("encrypt_e2ee"),
+            use_socket_tls=cloud_config.get_flag("encrypt_socket_tls"),
+            verify_checksums=cloud_config.get_flag("verify_checksums"),
+            aws_instance_class=cloud_config.get_flag("aws_instance_class"),
+            azure_instance_class=cloud_config.get_flag("azure_instance_class"),
+            gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
+            gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
         )
         return 0 if stats["success"] else 1
     else:
@@ -245,19 +229,8 @@ def sync(
     debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
     # transfer flags
     confirm: bool = typer.Option(cloud_config.get_flag("autoconfirm"), "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
-    num_connections: int = typer.Option(
-        cloud_config.get_flag("num_connections"), "--num-connections", "-c", help="Number of connections between gateways"
-    ),
     max_instances: int = typer.Option(cloud_config.get_flag("max_instances"), "--max-instances", "-n", help="Number of gateways"),
     max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
-    use_bbr: bool = typer.Option(cloud_config.get_flag("bbr"), help="If true, will use BBR congestion control"),
-    use_compression: bool = typer.Option(cloud_config.get_flag("compression"), help="If true, will use compression for uploads/downloads"),
-    encrypt_e2ee: bool = typer.Option(
-        cloud_config.get_flag("encrypt_e2ee"), help="If true, will not use end-to-end encryption for replication jobs"
-    ),
-    encrypt_socket_tls: bool = typer.Option(
-        cloud_config.get_flag("encrypt_socket_tls"), help="If true, will use TLS for socket encryption"
-    ),
     # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
@@ -289,20 +262,10 @@ def sync(
     :type debug: bool
     :param confirm: If true, will not prompt for confirmation of transfer.
     :type confirm: bool
-    :param num_connections: Number of connections to use between each gateway instance pair (default: 64)
-    :type num_connections: int
     :param max_instances: The maximum number of instances to use per region (default: 1)
     :type max_instances: int
     :param max_chunk_size_mb: If set, `cp` will subdivide objects into chunks at most this size.
     :type max_chunk_size_mb: int
-    :param use_bbr: If set, will use BBR for transfers by default.
-    :type use_bbr: bool
-    :param use_compression: If set, will use compression for transfers.
-    :type use_compression: bool
-    :param encrypt_e2ee: If set, will use E2EE for transfers
-    :type encrypt_e2ee: bool
-    :param encrypt_socket_tls: If set, will use TLS for socket encryption
-    :type encrypt_socket_tls: bool
     :param solve: If true, will use solver to optimize transfer, else direct path is chosen
     :type solve: bool
     :param solver_required_throughput_gbits: The required throughput in Gbps when using the solver (default: 4)
@@ -346,12 +309,12 @@ def sync(
         use_compression = False
         encrypt_e2ee = False
         encrypt_socket_tls = False
-    
+
     topo = generate_topology(
         src_region,
         dst_region,
         solve,
-        num_connections=num_connections,
+        num_connections=cloud_config.get_flag("num_connections"),
         max_instances=max_instances,
         solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
         solver_required_throughput_gbits=solver_required_throughput_gbits,
@@ -378,10 +341,15 @@ def sync(
         job=job,
         debug=debug,
         reuse_gateways=reuse_gateways,
-        use_bbr=use_bbr,
-        use_compression=use_compression,
-        use_e2ee=encrypt_e2ee,
-        use_socket_tls=encrypt_socket_tls,
+        use_bbr=cloud_config.get_flag("bbr"),
+        use_compression=cloud_config.get_flag("compress"),
+        use_e2ee=cloud_config.get_flag("encrypt_e2ee"),
+        use_socket_tls=cloud_config.get_flag("encrypt_socket_tls"),
+        verify_checksums=cloud_config.get_flag("verify_checksums"),
+        aws_instance_class=cloud_config.get_flag("aws_instance_class"),
+        azure_instance_class=cloud_config.get_flag("azure_instance_class"),
+        gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
+        gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
     )
     return 0 if stats["success"] else 1
 
