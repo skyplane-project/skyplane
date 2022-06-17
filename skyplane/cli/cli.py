@@ -191,8 +191,7 @@ def cp(
         )
         confirm_transfer(
             topo=topo,
-            n_objs=len(transfer_pairs),
-            est_size_bytes=job.transfer_size,
+            job=job,
             ask_to_confirm_transfer=not confirm,
         )
         stats = launch_replication_job(
@@ -325,8 +324,7 @@ def sync(
     )
     confirm_transfer(
         topo=topo,
-        n_objs=len(transfer_pairs),
-        est_size_bytes=job.transfer_size,
+        job=job,
         ask_to_confirm_transfer=not confirm,
     )
     stats = launch_replication_job(

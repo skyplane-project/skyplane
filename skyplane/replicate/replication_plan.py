@@ -2,6 +2,7 @@ import json
 import shutil
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Tuple
+from skyplane import MB
 
 from skyplane.chunk import ChunkRequest
 from skyplane.obj_store.object_store_interface import ObjectStoreObject
@@ -226,4 +227,7 @@ class ReplicationJob:
 
     @property
     def transfer_size(self):
-        return sum(source_object.size for source_object, _ in self.transfer_pairs)
+        if not self.random_chunk_size_mb:
+            return sum(source_object.size for source_object, _ in self.transfer_pairs)
+        else:
+            return self.random_chunk_size_mb * len(self.transfer_pairs) * MB

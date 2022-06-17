@@ -63,8 +63,7 @@ def replicate_random(
     )
     confirm_transfer(
         topo=topo,
-        n_objs=n_chunks,
-        est_size_bytes=job.random_chunk_size_mb * n_chunks * MB,
+        job=job,
         ask_to_confirm_transfer=False,
     )
     stats = launch_replication_job(
@@ -150,8 +149,7 @@ def replicate_random_solve(
     )
     confirm_transfer(
         topo=topo,
-        n_objs=n_chunks,
-        est_size_bytes=job.random_chunk_size_mb * n_chunks * MB,
+        job=job,
         ask_to_confirm_transfer=False,
     )
     stats = launch_replication_job(

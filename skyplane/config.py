@@ -31,7 +31,7 @@ _DEFAULT_FLAGS = {
     "encrypt_e2e": True,
     "encrypt_socket_tls": False,
     "verify_checksums": True,
-    "multipart_enabled": True,
+    "multipart_enabled": False,
     "multipart_max_chunk_size_mb": 8,
     # "multipart_min_threshold_mb": 128,
     # "multipart_min_size_mb": 8,
