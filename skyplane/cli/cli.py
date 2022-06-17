@@ -190,6 +190,13 @@ def cp(
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
             console.print(e.pretty_print_str())
             raise typer.Exit(1)
+        
+        # always disable encryption and compression for same region transfers
+        if src_region == dst_region:
+            use_compression = False
+            encrypt_e2ee = False
+            encrypt_socket_tls = False
+
         topo = generate_topology(
             src_region,
             dst_region,
@@ -334,6 +341,12 @@ def sync(
         typer.secho("No objects need updating. Exiting...")
         raise typer.Exit(0)
 
+    # always disable encryption and compression for same region transfers
+    if src_region == dst_region:
+        use_compression = False
+        encrypt_e2ee = False
+        encrypt_socket_tls = False
+    
     topo = generate_topology(
         src_region,
         dst_region,
