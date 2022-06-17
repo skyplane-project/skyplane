@@ -277,7 +277,12 @@ class ReplicatorClient:
         self.temp_nodes = []
         logger.fs.info("Deprovisioned instances")
 
-    def run_replication_plan(self, job: ReplicationJob) -> ReplicationJob:
+    def run_replication_plan(
+        self,
+        job: ReplicationJob,
+        multipart_enabled: bool = False,
+        multipart_max_chunk_size_mb: int = 8,
+    ) -> ReplicationJob:
         assert job.source_region.split(":")[0] in [
             "aws",
             "azure",
@@ -318,8 +323,8 @@ class ReplicatorClient:
             idx = 0
             for (src_object, dest_object) in job.transfer_pairs:
                 if not job.random_chunk_size_mb:
-                    if job.max_chunk_size_mb:  # split objects into sub-chunks
-                        chunk_size_bytes = int(job.max_chunk_size_mb * 1e6)
+                    if multipart_enabled:
+                        chunk_size_bytes = int(multipart_max_chunk_size_mb * MB)
                         num_chunks = int(src_object.size / chunk_size_bytes) + 1
 
                         # TODO: figure out what to do on # part limits per object

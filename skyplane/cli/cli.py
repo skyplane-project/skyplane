@@ -85,10 +85,10 @@ def cp(
     dst: str,
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
+    multipart: bool = typer.Option(cloud_config.get_flag("multipart_enabled"), help="If true, will use multipart uploads."),
     # transfer flags
     confirm: bool = typer.Option(cloud_config.get_flag("autoconfirm"), "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
     max_instances: int = typer.Option(cloud_config.get_flag("max_instances"), "--max-instances", "-n", help="Number of gateways"),
-    max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
     # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
@@ -114,12 +114,12 @@ def cp(
     :type reuse_gateways: bool
     :param debug: If true, will write debug information to debug directory.
     :type debug: bool
+    :param multipart: If true, will use multipart uploads.
+    :type multipart: bool
     :param confirm: If true, will not prompt for confirmation of transfer.
     :type confirm: bool
     :param max_instances: The maximum number of instances to use per region (default: 1)
     :type max_instances: int
-    :param max_chunk_size_mb: If set, `cp` will subdivide objects into chunks at most this size.
-    :type max_chunk_size_mb: int
     :param solve: If true, will use solver to optimize transfer, else direct path is chosen
     :type solve: bool
     :param solver_required_throughput_gbits: The required throughput in Gbps when using the solver (default: 4)
@@ -135,9 +135,6 @@ def cp(
     provider_dst, bucket_dst, path_dst = parse_path(dst)
 
     clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
-
-    if (provider_src == "azure" or provider_dst == "azure") and max_chunk_size_mb:
-        raise ValueError(f"Multipart uploads not supported for Azure")
 
     # raise file limits for local transfers
     if provider_src == "local" or provider_dst == "local":
@@ -170,11 +167,9 @@ def cp(
             console.print(e.pretty_print_str())
             raise typer.Exit(1)
 
-        # always disable encryption and compression for same region transfers
-        if src_region == dst_region:
-            use_compression = False
-            encrypt_e2ee = False
-            encrypt_socket_tls = False
+        if multipart and (provider_src == "azure" or provider_dst == "azure"):
+            typer.secho("Warning: Azure is not yet supported for multipart transfers, you may observe slow performance", fg="yellow")
+            multipart = False
 
         topo = generate_topology(
             src_region,
@@ -193,7 +188,6 @@ def cp(
             dest_region=topo.sink_region(),
             dest_bucket=bucket_dst,
             transfer_pairs=transfer_pairs,
-            max_chunk_size_mb=max_chunk_size_mb,
         )
         confirm_transfer(
             topo=topo,
@@ -207,14 +201,16 @@ def cp(
             debug=debug,
             reuse_gateways=reuse_gateways,
             use_bbr=cloud_config.get_flag("bbr"),
-            use_compression=cloud_config.get_flag("compress"),
-            use_e2ee=cloud_config.get_flag("encrypt_e2ee"),
-            use_socket_tls=cloud_config.get_flag("encrypt_socket_tls"),
+            use_compression=cloud_config.get_flag("compress") if src_region != dst_region else False,
+            use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
+            use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
             verify_checksums=cloud_config.get_flag("verify_checksums"),
             aws_instance_class=cloud_config.get_flag("aws_instance_class"),
             azure_instance_class=cloud_config.get_flag("azure_instance_class"),
             gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
             gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
+            multipart_enabled=multipart,
+            multipart_max_chunk_size_mb=cloud_config.get_flag("multipart_max_chunk_size_mb"),
         )
         return 0 if stats["success"] else 1
     else:
@@ -230,7 +226,7 @@ def sync(
     # transfer flags
     confirm: bool = typer.Option(cloud_config.get_flag("autoconfirm"), "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
     max_instances: int = typer.Option(cloud_config.get_flag("max_instances"), "--max-instances", "-n", help="Number of gateways"),
-    max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
+    multipart: bool = typer.Option(cloud_config.get_flag("multipart_enabled"), help="If true, will use multipart uploads."),
     # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
@@ -260,12 +256,12 @@ def sync(
     :type reuse_gateways: bool
     :param debug: If true, will write debug information to debug directory.
     :type debug: bool
+    :param multipart: If true, will use multipart uploads.
+    :type multipart: bool
     :param confirm: If true, will not prompt for confirmation of transfer.
     :type confirm: bool
     :param max_instances: The maximum number of instances to use per region (default: 1)
     :type max_instances: int
-    :param max_chunk_size_mb: If set, `cp` will subdivide objects into chunks at most this size.
-    :type max_chunk_size_mb: int
     :param solve: If true, will use solver to optimize transfer, else direct path is chosen
     :type solve: bool
     :param solver_required_throughput_gbits: The required throughput in Gbps when using the solver (default: 4)
@@ -304,11 +300,9 @@ def sync(
         typer.secho("No objects need updating. Exiting...")
         raise typer.Exit(0)
 
-    # always disable encryption and compression for same region transfers
-    if src_region == dst_region:
-        use_compression = False
-        encrypt_e2ee = False
-        encrypt_socket_tls = False
+    if multipart and (provider_src == "azure" or provider_dst == "azure"):
+        typer.secho("Warning: Azure is not yet supported for multipart transfers, you may observe slow performance", fg="yellow")
+        multipart = False
 
     topo = generate_topology(
         src_region,
@@ -328,7 +322,6 @@ def sync(
         dest_region=topo.sink_region(),
         dest_bucket=bucket_dst,
         transfer_pairs=transfer_pairs,
-        max_chunk_size_mb=max_chunk_size_mb,
     )
     confirm_transfer(
         topo=topo,
@@ -342,14 +335,16 @@ def sync(
         debug=debug,
         reuse_gateways=reuse_gateways,
         use_bbr=cloud_config.get_flag("bbr"),
-        use_compression=cloud_config.get_flag("compress"),
-        use_e2ee=cloud_config.get_flag("encrypt_e2ee"),
-        use_socket_tls=cloud_config.get_flag("encrypt_socket_tls"),
+        use_compression=cloud_config.get_flag("compress") if src_region != dst_region else False,
+        use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
+        use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
         verify_checksums=cloud_config.get_flag("verify_checksums"),
         aws_instance_class=cloud_config.get_flag("aws_instance_class"),
         azure_instance_class=cloud_config.get_flag("azure_instance_class"),
         gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
         gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
+        multipart_enabled=multipart,
+        multipart_max_chunk_size_mb=cloud_config.get_flag("multipart_max_chunk_size_mb"),
     )
     return 0 if stats["success"] else 1
 

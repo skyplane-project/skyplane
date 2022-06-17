@@ -224,10 +224,6 @@ class ReplicationJob:
     # Generates random chunks for testing on the gateways
     random_chunk_size_mb: Optional[int] = None
 
-    # Maximum chunk size used to break-up larger objects
-    # TODO: eventually set default value to prevent OOM on gateways
-    max_chunk_size_mb: Optional[int] = None
-
     @property
     def transfer_size(self):
         return sum(source_object.size for source_object, _ in self.transfer_pairs)

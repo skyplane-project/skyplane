@@ -182,6 +182,9 @@ def launch_replication_job(
     use_e2ee: bool = True,
     use_socket_tls: bool = False,
     verify_checksums: bool = True,
+    # multipart
+    multipart_enabled: bool = False,
+    multipart_max_chunk_size_mb: int = 8,
     # cloud provider specific options
     aws_instance_class: str = "m5.8xlarge",
     azure_instance_class: str = "Standard_D32_v4",
@@ -221,7 +224,11 @@ def launch_replication_job(
             logger.fs.info(f"Log URLs for {gw.uuid()} ({node.region}:{node.instance})")
             logger.fs.info(f"\tLog viewer: {gw.gateway_log_viewer_url}")
             logger.fs.info(f"\tAPI: {gw.gateway_api_url}")
-        job = rc.run_replication_plan(job)
+        job = rc.run_replication_plan(
+            job,
+            multipart_enabled=multipart_enabled,
+            multipart_max_chunk_size_mb=multipart_max_chunk_size_mb,
+        )
         total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
         console.print(f":rocket: [bold blue]{total_bytes / GB:.2f}GB transfer job launched[/bold blue]")
         if topo.source_region().split(":")[0] == "azure" or topo.sink_region().split(":")[0] == "azure":
@@ -231,7 +238,7 @@ def launch_replication_job(
             show_spinner=True,
             log_interval_s=log_interval_s,
             time_limit_seconds=time_limit_seconds,
-            multipart=job.max_chunk_size_mb is not None,
+            multipart=multipart_enabled,
             write_profile=debug,
             write_socket_profile=debug,
             copy_gateway_logs=debug,
