@@ -2,7 +2,7 @@ import os
 import time
 import uuid
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import googleapiclient
 import paramiko
@@ -154,12 +154,12 @@ class GCPCloudProvider(CloudProvider):
     def configure_default_network(self):
         compute = self.auth.get_gcp_client()
         try:
-            compute.networks().get(project=self.auth.project_id, network="default").execute()
+            compute.networks().get(project=self.auth.project_id, network="skyplane").execute()
         except googleapiclient.errors.HttpError as e:
             if e.resp.status == 404:  # create network
                 op = (
                     compute.networks()
-                    .insert(project=self.auth.project_id, body={"name": "default", "subnetMode": "auto", "autoCreateSubnetworks": True})
+                    .insert(project=self.auth.project_id, body={"name": "skyplane", "subnetMode": "auto", "autoCreateSubnetworks": True})
                     .execute()
                 )
                 self.wait_for_operation_to_complete("global", op["name"])
@@ -172,13 +172,13 @@ class GCPCloudProvider(CloudProvider):
 
         def create_firewall(body, update_firewall=False):
             if update_firewall:
-                op = compute.firewalls().update(project=self.auth.project_id, firewall="default", body=fw_body).execute()
+                op = compute.firewalls().update(project=self.auth.project_id, firewall="skyplane", body=fw_body).execute()
             else:
                 op = compute.firewalls().insert(project=self.auth.project_id, body=fw_body).execute()
             self.wait_for_operation_to_complete("global", op["name"])
 
         try:
-            current_firewall = compute.firewalls().get(project=self.auth.project_id, firewall="default").execute()
+            current_firewall = compute.firewalls().get(project=self.auth.project_id, firewall="skyplane").execute()
         except googleapiclient.errors.HttpError as e:
             if e.resp.status == 404:
                 current_firewall = None
@@ -186,7 +186,8 @@ class GCPCloudProvider(CloudProvider):
                 raise e
 
         fw_body = {
-            "name": "default",
+            "name": "skyplane",
+            "network": "skyplane",
             "allowed": [{"IPProtocol": "tcp", "ports": ["1-65535"]}, {"IPProtocol": "udp", "ports": ["1-65535"]}, {"IPProtocol": "icmp"}],
             "description": "Allow all traffic from all IPs",
             "sourceRanges": [ip],
