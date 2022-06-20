@@ -1,16 +1,19 @@
 import json
 import pickle
-from re import S
 import time
 import uuid
 from datetime import datetime
 from functools import partial
 from typing import Dict, List, Optional, Tuple, Iterable
+import nacl.secret
+import nacl.utils
 
 import pandas as pd
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, DownloadColumn, BarColumn, TransferSpeedColumn
+import urllib3
 
 from skyplane import GB, MB, tmp_log_dir
+from skyplane import exceptions
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
@@ -18,12 +21,11 @@ from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.compute.server import Server, ServerState
-from skyplane.obj_store.object_store_interface import ObjectStoreInterface
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface, NoSuchObjectException
 from skyplane.replicate.profiler import status_df_to_traceevent
 from skyplane.replicate.replication_plan import ReplicationJob, ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
 from skyplane.utils.fn import PathLike, do_parallel
-from skyplane.utils.net import retry_requests
 from skyplane.utils.timer import Timer
 
 
@@ -37,6 +39,7 @@ class ReplicatorClient:
         gcp_instance_class: Optional[str] = "n2-standard-16",  # set to None to disable GCP
         gcp_use_premium_network: bool = True,
     ):
+        self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         self.topology = topology
         self.gateway_docker_image = gateway_docker_image
         self.aws_instance_class = aws_instance_class
@@ -66,6 +69,7 @@ class ReplicatorClient:
         authorize_ssh_pub_key: Optional[PathLike] = None,
         use_bbr=False,
         use_compression=False,
+        use_e2ee=True,
     ):
         regions_to_provision = [node.region for node in self.topology.gateway_nodes]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
@@ -213,25 +217,37 @@ class ReplicatorClient:
         aws_jobs = [partial(self.aws.add_ips_to_security_group, r.split(":")[1], public_ips) for r in set(aws_regions_to_provision)]
         do_parallel(lambda fn: fn(), aws_jobs, spinner=True, desc="Applying firewall rules")
 
+        # generate E2EE key
+        if use_e2ee:
+            e2ee_key_bytes = nacl.utils.random(nacl.secret.SecretBox.KEY_SIZE)
+        else:
+            e2ee_key_bytes = None
+
         # setup instances
-        def setup(args: Tuple[Server, Dict[str, int]]):
-            server, outgoing_ports = args
+        def setup(args: Tuple[Server, Dict[str, int], bool, bool]):
+            server, outgoing_ports, am_source, am_sink = args
             if log_dir:
                 server.init_log_files(log_dir)
             if authorize_ssh_pub_key:
                 server.copy_public_key(authorize_ssh_pub_key)
             server.start_gateway(
-                outgoing_ports, gateway_docker_image=self.gateway_docker_image, use_bbr=use_bbr, use_compression=use_compression
+                outgoing_ports,
+                gateway_docker_image=self.gateway_docker_image,
+                use_bbr=use_bbr,
+                use_compression=use_compression,
+                e2ee_key_bytes=e2ee_key_bytes if (am_source or am_sink) else None,
             )
 
         args = []
+        sources = self.topology.source_instances()
+        sinks = self.topology.sink_instances()
         for node, server in self.bound_nodes.items():
             setup_args = {
                 self.bound_nodes[n].public_ip(): v
                 for n, v in self.topology.get_outgoing_paths(node).items()
                 if isinstance(n, ReplicationTopologyGateway)
             }
-            args.append((server, setup_args))
+            args.append((server, setup_args, node in sources, node in sinks))
         do_parallel(setup, args, n=-1, spinner=True, spinner_persist=True, desc="Installing gateway package")
 
     def deprovision_gateways(self):
@@ -297,40 +313,31 @@ class ReplicatorClient:
             # make list of chunks
             progress.update(prepare_task, description=": Querying source object store for matching keys")
             chunks = []
-
-            # calculate object sizes
-            if job.obj_sizes:
-                obj_file_size_bytes = job.obj_sizes
-            elif job.obj_sizes is None and job.random_chunk_size_mb:
-                obj_file_size_bytes = {obj: job.random_chunk_size_mb * MB for obj in job.src_objs}
-            else:
-                raise ValueError("Either obj_sizes or random_chunk_size_mb must be specified")
-
             idx = 0
-            for (src_obj, dest_obj) in zip(job.src_objs, job.dest_objs):
-                if obj_file_size_bytes:
+            for (src_object, dest_object) in job.transfer_pairs:
+                if not job.random_chunk_size_mb:
                     if job.max_chunk_size_mb:  # split objects into sub-chunks
                         chunk_size_bytes = int(job.max_chunk_size_mb * 1e6)
-                        num_chunks = int(obj_file_size_bytes[src_obj] / chunk_size_bytes) + 1
+                        num_chunks = int(src_object.size / chunk_size_bytes) + 1
 
                         # TODO: figure out what to do on # part limits per object
                         # TODO: only do if num_chunks > 1
                         # TODO: potentially do this in a seperate thread, and/or after chunks sent
                         obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
-                        logger.fs.info(f"Initiate multipart upload {dest_obj}")
-                        upload_id = obj_store_interface.initiate_multipart_upload(dest_obj)
+                        logger.fs.info(f"Initiate multipart upload on {dest_object}")
+                        upload_id = obj_store_interface.initiate_multipart_upload(dest_object.key)
 
                         offset = 0
                         part_num = 1
                         parts = []
                         for chunk in range(num_chunks):
                             # size is min(chunk_size, remaining data)
-                            file_size_bytes = min(chunk_size_bytes, obj_file_size_bytes[src_obj] - offset)
+                            file_size_bytes = min(chunk_size_bytes, src_object.size - offset)
                             assert file_size_bytes > 0, f"File size <= 0 {file_size_bytes}"
                             chunks.append(
                                 Chunk(
-                                    src_key=src_obj,
-                                    dest_key=dest_obj,
+                                    src_key=src_object.key,
+                                    dest_key=dest_object.key,
                                     chunk_id=idx,
                                     file_offset_bytes=offset,
                                     chunk_length_bytes=file_size_bytes,
@@ -343,22 +350,38 @@ class ReplicatorClient:
                             idx += 1
                             part_num += 1
                             offset += chunk_size_bytes
-
                         # add multipart upload request
                         self.multipart_upload_requests.append(
-                            {"region": job.dest_region, "bucket": job.dest_bucket, "upload_id": upload_id, "key": dest_obj, "parts": parts}
+                            {
+                                "region": job.dest_region,
+                                "bucket": job.dest_bucket,
+                                "upload_id": upload_id,
+                                "key": dest_object.key,
+                                "parts": parts,
+                            }
                         )
-
-                    else:  # transfer entire object
-                        file_size_bytes = obj_file_size_bytes[src_obj]
+                    # transfer entire object
+                    else:
                         chunks.append(
-                            Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
+                            Chunk(
+                                src_key=src_object.key,
+                                dest_key=dest_object.key,
+                                chunk_id=idx,
+                                file_offset_bytes=0,
+                                chunk_length_bytes=src_object.size,
+                            )
                         )
                         idx += 1
-                else:  # random data replication
-                    file_size_bytes = job.random_chunk_size_mb * MB
+                # random data replication
+                else:
                     chunks.append(
-                        Chunk(src_key=src_obj, dest_key=dest_obj, chunk_id=idx, file_offset_bytes=0, chunk_length_bytes=file_size_bytes)
+                        Chunk(
+                            src_key=src_object.key,
+                            dest_key=dest_object.key,
+                            chunk_id=idx,
+                            file_offset_bytes=0,
+                            chunk_length_bytes=job.random_chunk_size_mb * MB,
+                        )
                     )
                     idx += 1
 
@@ -409,12 +432,21 @@ class ReplicatorClient:
 
                 def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
                     hop_instance, chunk_requests = args
-                    ip = gateway_ips[hop_instance]
-                    reply = retry_requests().post(
-                        f"{hop_instance.gateway_api_url}/api/v1/chunk_requests", json=[cr.as_dict() for cr in chunk_requests]
-                    )
-                    if reply.status_code != 200:
-                        raise Exception(f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.text}")
+                    while chunk_requests:
+                        batch, chunk_requests = chunk_requests[: 1024 * 16], chunk_requests[1024 * 16 :]
+                        reply = self.http_pool.request(
+                            "POST",
+                            f"{hop_instance.gateway_api_url}/api/v1/chunk_requests",
+                            body=json.dumps([c.as_dict() for c in batch]).encode("utf-8"),
+                            headers={"Content-Type": "application/json"},
+                        )
+                        if reply.status != 200:
+                            raise Exception(
+                                f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.data.decode('utf-8')}"
+                            )
+                        logger.fs.debug(
+                            f"Sent {len(batch)} chunk requests to {hop_instance.instance_name()}, {len(chunk_requests)} remaining"
+                        )
 
                 start_instances = list(zip(src_instances, chunk_requests_sharded.values()))
                 do_parallel(send_chunk_requests, start_instances, n=-1)
@@ -425,11 +457,13 @@ class ReplicatorClient:
     def get_chunk_status_log_df(self) -> pd.DataFrame:
         def get_chunk_status(args):
             node, instance = args
-            reply = retry_requests().get(f"{instance.gateway_api_url}/api/v1/chunk_status_log")
-            if reply.status_code != 200:
-                raise Exception(f"Failed to get chunk status from gateway instance {instance.instance_name()}: {reply.text}")
+            reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/chunk_status_log")
+            if reply.status != 200:
+                raise Exception(
+                    f"Failed to get chunk status from gateway instance {instance.instance_name()}: {reply.data.decode('utf-8')}"
+                )
             logs = []
-            for log_entry in reply.json()["chunk_status_log"]:
+            for log_entry in json.loads(reply.data.decode("utf-8"))["chunk_status_log"]:
                 log_entry["region"] = node.region
                 log_entry["instance"] = node.instance
                 log_entry["time"] = datetime.fromisoformat(log_entry["time"])
@@ -445,10 +479,10 @@ class ReplicatorClient:
     def check_error_logs(self) -> Dict[str, List[str]]:
         def get_error_logs(args):
             _, instance = args
-            reply = retry_requests().get(f"{instance.gateway_api_url}/api/v1/errors")
-            if reply.status_code != 200:
-                raise Exception(f"Failed to get error logs from gateway instance {instance.instance_name()}: {reply.text}")
-            return reply.json()["errors"]
+            reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/errors")
+            if reply.status != 200:
+                raise Exception(f"Failed to get error logs from gateway instance {instance.instance_name()}: {reply.data.decode('utf-8')}")
+            return json.loads(reply.data.decode("utf-8"))["errors"]
 
         errors: Dict[str, List[str]] = {}
         for (_, instance), result in do_parallel(get_error_logs, self.bound_nodes.items(), n=-1):
@@ -589,9 +623,9 @@ class ReplicatorClient:
                 progress.update(cleanup_task, description=": Getting compression ratio information")
                 total_sent_compressed, total_sent_uncompressed = 0, 0
                 for gateway in {v for v in self.bound_nodes.values() if v.region_tag in source_regions}:
-                    stats = retry_requests().get(f"{gateway.gateway_api_url}/api/v1/profile/compression")
-                    if stats.status_code == 200:
-                        stats = stats.json()
+                    stats = self.http_pool.request("GET", f"{gateway.gateway_api_url}/api/v1/profile/compression")
+                    if stats.status == 200:
+                        stats = json.loads(stats.data.decode("utf-8"))
                         total_sent_compressed += stats.get("compressed_bytes_sent", 0)
                         total_sent_uncompressed += stats.get("uncompressed_bytes_sent", 0)
                 compression_ratio = total_sent_compressed / total_sent_uncompressed if total_sent_uncompressed > 0 else 0
@@ -621,12 +655,13 @@ class ReplicatorClient:
                 if write_socket_profile:
 
                     def write_socket_profile(instance):
-                        receiver_reply = retry_requests().get(f"{instance.gateway_api_url}/api/v1/profile/socket/receiver")
-                        if receiver_reply.status_code != 200:
+                        receiver_reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/profile/socket/receiver")
+                        text = receiver_reply.data.decode("utf-8")
+                        if receiver_reply.status != 200:
                             logger.fs.error(
-                                f"Failed to get receiver socket profile from {instance.gateway_api_url}: {receiver_reply.status_code} {receiver_reply.text}"
+                                f"Failed to get receiver socket profile from {instance.gateway_api_url}: {receiver_reply.status} {text}"
                             )
-                        (self.transfer_dir / f"receiver_socket_profile_{instance.uuid()}.json").write_text(receiver_reply.text)
+                        (self.transfer_dir / f"receiver_socket_profile_{instance.uuid()}.json").write_text(text)
 
                     progress.update(cleanup_task, description=": Writing socket profiles")
                     do_parallel(write_socket_profile, self.bound_nodes.values(), n=-1)
@@ -634,12 +669,39 @@ class ReplicatorClient:
 
                     def fn(s: Server):
                         try:
-                            retry_requests().post(f"{s.gateway_api_url}/api/v1/shutdown")
+                            self.http_pool.request("POST", f"{s.gateway_api_url}/api/v1/shutdown")
                         except:
                             return  # ignore connection errors since server may be shutting down
 
                     do_parallel(fn, self.bound_nodes.values(), n=-1)
                     progress.update(cleanup_task, description=": Shutting down gateways")
+
+    def verify_transfer(self, job: ReplicationJob):
+        """Check that all objects to copy are present in the destination"""
+        src_interface = ObjectStoreInterface.create(job.source_region, job.source_bucket)
+        dst_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
+
+        # only check metadata (src.size == dst.size) && (src.modified <= dst.modified)
+        def verify(tup):
+            src_key, dst_key = tup[0].key, tup[1].key
+            try:
+                if src_interface.get_obj_size(src_key) != dst_interface.get_obj_size(dst_key):
+                    return False
+                elif src_interface.get_obj_last_modified(src_key) > dst_interface.get_obj_last_modified(dst_key):
+                    return False
+                else:
+                    return True
+            except NoSuchObjectException:
+                return False
+
+        # verify that all objects in src_interface are present in dst_interface
+        matches = do_parallel(verify, job.transfer_pairs, n=512, spinner=True, spinner_persist=True, desc="Verifying transfer")
+        failed_src_objs = [src_key for (src_key, dst_key), match in matches if not match]
+        if len(failed_src_objs) > 0:
+            raise exceptions.TransferFailedException(
+                f"{len(failed_src_objs)} objects failed verification",
+                failed_src_objs,
+            )
 
 
 def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1) -> Dict[str, List[Server]]:

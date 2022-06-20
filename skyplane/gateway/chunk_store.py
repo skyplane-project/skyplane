@@ -125,5 +125,11 @@ class ChunkStore:
         self.set_chunk_state(chunk_request.chunk.chunk_id, state)
         self.chunk_requests[chunk_request.chunk.chunk_id] = chunk_request
 
+    def update_chunk_checksum(self, chunk_id: int, checksum: Optional[bytes]):
+        cr = self.chunk_requests[chunk_id]
+        cr.chunk.checksum = checksum
+        self.chunk_requests[chunk_id] = cr
+
+    # Memory space calculation
     def remaining_bytes(self):
         return int(subprocess.check_output(["df", "-k", "--output=avail", self.chunk_dir]).decode().strip().split()[-1]) * 1024

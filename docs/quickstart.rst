@@ -72,9 +72,3 @@ To transfer only new objects, you can instead use `skyplane sync`:
 
    ---> Copy only diff
    $ skyplane sync s3://... gs://...
-
-
-
-*********
-Overview
-*********

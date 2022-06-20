@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Tuple
 
 from skyplane.chunk import ChunkRequest
+from skyplane.obj_store.object_store_interface import ObjectStoreObject
 from skyplane.utils import logger
 
 
@@ -213,14 +214,20 @@ class ReplicationJob:
     source_bucket: Optional[str]
     dest_region: str
     dest_bucket: Optional[str]
-    src_objs: List[str]
-    dest_objs: List[str]
-    # object sizes (computed using source objects)
-    obj_sizes: Optional[Dict[str, int]] = None
+
+    # object transfer pairs (src, dest)
+    transfer_pairs: List[Tuple[ObjectStoreObject, ObjectStoreObject]]
+
     # progress tracking via a list of chunk_requests
     chunk_requests: Optional[List[ChunkRequest]] = None
+
     # Generates random chunks for testing on the gateways
     random_chunk_size_mb: Optional[int] = None
+
     # Maximum chunk size used to break-up larger objects
     # TODO: eventually set default value to prevent OOM on gateways
     max_chunk_size_mb: Optional[int] = None
+
+    @property
+    def transfer_size(self):
+        return sum(source_object.size for source_object, _ in self.transfer_pairs)
