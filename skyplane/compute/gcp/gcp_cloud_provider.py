@@ -187,17 +187,15 @@ class GCPCloudProvider(CloudProvider):
 
         fw_body = {
             "name": "skyplane",
-            "network": "skyplane",
+            "network": "global/networks/skyplane",
             "allowed": [{"IPProtocol": "tcp", "ports": ["1-65535"]}, {"IPProtocol": "udp", "ports": ["1-65535"]}, {"IPProtocol": "icmp"}],
             "description": "Allow all traffic from all IPs",
             "sourceRanges": [ip],
         }
         if current_firewall is None:
-            logger.warning(f"[GCP] Creating new firewall")
             create_firewall(fw_body, update_firewall=False)
             logger.debug(f"[GCP] Created new firewall")
         elif current_firewall["allowed"] != fw_body["allowed"]:
-            logger.warning(f"[GCP] Updating firewall, current rules do not match")
             create_firewall(fw_body, update_firewall=True)
             logger.debug(f"[GCP] Updated firewall")
 
@@ -236,6 +234,9 @@ class GCPCloudProvider(CloudProvider):
         fw_response = fw_request.execute()
 
     def delete_vpc(self, vpc_name="skyplane"):
+        """
+        This might error our in somce cases, in such scenarios try: `gcloud networks delete {vpc_name}` from console
+        """
         compute = self.auth.get_gcp_client()
         request = compute.networks().delete(project=self.auth.project_id, network=vpc_name)
         delete_vpc_response = request.execute()
@@ -332,7 +333,7 @@ class GCPCloudProvider(CloudProvider):
             ],
             "networkInterfaces": [
                 {
-                    "network": "global/networks/default",
+                    "network": "global/networks/skyplane",
                     "accessConfigs": [
                         {"name": "External NAT", "type": "ONE_TO_ONE_NAT", "networkTier": "PREMIUM" if premium_network else "STANDARD"}
                     ],
