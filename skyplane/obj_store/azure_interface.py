@@ -220,7 +220,7 @@ class AzureInterface(ObjectStoreInterface):
         size_bytes=None,
         write_at_offset=False,
         generate_md5=False,
-        write_block_size=2 ** 16,
+        write_block_size=2**16,
     ) -> Optional[bytes]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         downloader = self._run_azure_op_with_retry(
