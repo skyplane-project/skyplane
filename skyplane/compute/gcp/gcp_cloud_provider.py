@@ -195,11 +195,10 @@ class GCPCloudProvider(CloudProvider):
         if current_firewall is None:
             create_firewall(fw_body, update_firewall=False)
             logger.debug(f"[GCP] Created new firewall")
-            
+
         elif current_firewall["allowed"] != fw_body["allowed"]:
             create_firewall(fw_body, update_firewall=True)
             logger.debug(f"[GCP] Updated firewall")
-            
 
     def get_vpc(self, vpc_name="skyplane"):
         compute = self.auth.get_gcp_client()

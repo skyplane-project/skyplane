@@ -266,7 +266,6 @@ class ReplicatorClient:
         do_parallel(lambda fn: fn(), aws_jobs)
         gcp_jobs = self.gcp.remove_ips_from_firewall(public_ips)
 
-
         # Terminate instances
         instances = list(self.bound_nodes.values()) + self.temp_nodes
         logger.fs.warning(f"Deprovisioning {len(instances)} instances")
