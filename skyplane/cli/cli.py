@@ -83,15 +83,13 @@ def ls(directory: str):
 def cp(
     src: str,
     dst: str,
-    num_connections: int = typer.Option(32, "--num-connections", "-c", help="Number of connections between gateways"),
-    max_instances: int = typer.Option(1, "--max-instances", "-n", help="Number of gateways"),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
-    max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
-    confirm: bool = typer.Option(False, "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
     debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
-    use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
-    use_compression: bool = typer.Option(False, help="If true, will use compression for uploads/downloads"),
-    disable_e2ee: bool = typer.Option(False, help="If true, will not use end-to-end encryption for replication jobs"),
+    multipart: bool = typer.Option(cloud_config.get_flag("multipart_enabled"), help="If true, will use multipart uploads."),
+    # transfer flags
+    confirm: bool = typer.Option(cloud_config.get_flag("autoconfirm"), "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
+    max_instances: int = typer.Option(cloud_config.get_flag("max_instances"), "--max-instances", "-n", help="Number of gateways"),
+    # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
     solver_throughput_grid: Path = typer.Option(
@@ -112,24 +110,16 @@ def cp(
     :type src: str
     :param dst: The destination of the transfer
     :type dst: str
-    :param num_connections: Number of connections to use between each gateway instance pair (default: 64)
-    :type num_connections: int
-    :param max_instances: The maximum number of instances to use per region (default: 1)
-    :type max_instances: int
     :param reuse_gateways: If true, will leave provisioned instances running to be reused. You must run `skyplane deprovision` to clean up.
     :type reuse_gateways: bool
-    :param max_chunk_size_mb: If set, `cp` will subdivide objects into chunks at most this size.
-    :type max_chunk_size_mb: int
-    :param confirm: If true, will not prompt for confirmation of transfer.
-    :type confirm: bool
     :param debug: If true, will write debug information to debug directory.
     :type debug: bool
-    :param use_bbr: If set, will use BBR for transfers by default.
-    :type use_bbr: bool
-    :param use_compression: If set, will use compression for transfers.
-    :type use_compression: bool
-    :param use_e2ee: If set, will use E2EE for transfers
-    :type use_e2ee: bool
+    :param multipart: If true, will use multipart uploads.
+    :type multipart: bool
+    :param confirm: If true, will not prompt for confirmation of transfer.
+    :type confirm: bool
+    :param max_instances: The maximum number of instances to use per region (default: 1)
+    :type max_instances: int
     :param solve: If true, will use solver to optimize transfer, else direct path is chosen
     :type solve: bool
     :param solver_required_throughput_gbits: The required throughput in Gbps when using the solver (default: 4)
@@ -145,9 +135,6 @@ def cp(
     provider_dst, bucket_dst, path_dst = parse_path(dst)
 
     clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
-
-    if (provider_src == "azure" or provider_dst == "azure") and max_chunk_size_mb:
-        raise ValueError(f"Multipart uploads not supported for Azure")
 
     # raise file limits for local transfers
     if provider_src == "local" or provider_dst == "local":
@@ -179,11 +166,16 @@ def cp(
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
             console.print(e.pretty_print_str())
             raise typer.Exit(1)
+
+        if multipart and (provider_src == "azure" or provider_dst == "azure"):
+            typer.secho("Warning: Azure is not yet supported for multipart transfers, you may observe slow performance", fg="yellow")
+            multipart = False
+
         topo = generate_topology(
             src_region,
             dst_region,
             solve,
-            num_connections=num_connections,
+            num_connections=cloud_config.get_flag("num_connections"),
             max_instances=max_instances,
             solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
             solver_required_throughput_gbits=solver_required_throughput_gbits,
@@ -196,22 +188,28 @@ def cp(
             dest_region=topo.sink_region(),
             dest_bucket=bucket_dst,
             transfer_pairs=transfer_pairs,
-            max_chunk_size_mb=max_chunk_size_mb,
         )
         confirm_transfer(
             topo=topo,
-            n_objs=len(transfer_pairs),
-            est_size_bytes=job.transfer_size,
-            ask_to_confirm_transfer=not cloud_config.get_flag("autoconfirm") and not confirm,
+            job=job,
+            ask_to_confirm_transfer=not confirm,
         )
         stats = launch_replication_job(
             topo=topo,
             job=job,
             debug=debug,
             reuse_gateways=reuse_gateways,
-            use_bbr=use_bbr,
-            use_compression=use_compression,
-            use_e2ee=(not disable_e2ee),
+            use_bbr=cloud_config.get_flag("bbr"),
+            use_compression=cloud_config.get_flag("compress") if src_region != dst_region else False,
+            use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
+            use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
+            verify_checksums=cloud_config.get_flag("verify_checksums"),
+            aws_instance_class=cloud_config.get_flag("aws_instance_class"),
+            azure_instance_class=cloud_config.get_flag("azure_instance_class"),
+            gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
+            gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
+            multipart_enabled=multipart,
+            multipart_max_chunk_size_mb=cloud_config.get_flag("multipart_max_chunk_size_mb"),
         )
         return 0 if stats["success"] else 1
     else:
@@ -222,14 +220,13 @@ def cp(
 def sync(
     src: str,
     dst: str,
-    num_connections: int = typer.Option(32, "--num-connections", "-c", help="Number of connections between gateways"),
-    max_instances: int = typer.Option(1, "--max-instances", "-n", help="Number of gateways"),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
-    max_chunk_size_mb: int = typer.Option(None, help="Maximum size (MB) of chunks for multipart uploads/downloads"),
-    confirm: bool = typer.Option(False, "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
-    debug: bool = typer.Option(False, help="If true, will write debug info to debug directory"),
-    use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
-    use_compression: bool = typer.Option(False, help="If true, will use compression for uploads/downloads"),
+    debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
+    # transfer flags
+    confirm: bool = typer.Option(cloud_config.get_flag("autoconfirm"), "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
+    max_instances: int = typer.Option(cloud_config.get_flag("max_instances"), "--max-instances", "-n", help="Number of gateways"),
+    multipart: bool = typer.Option(cloud_config.get_flag("multipart_enabled"), help="If true, will use multipart uploads."),
+    # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
     solver_throughput_grid: Path = typer.Option(
@@ -254,22 +251,16 @@ def sync(
     :type src: str
     :param dst: The destination of the transfer
     :type dst: str
-    :param num_connections: Number of connections to use between each gateway instance pair (default: 64)
-    :type num_connections: int
-    :param max_instances: The maximum number of instances to use per region (default: 1)
-    :type max_instances: int
     :param reuse_gateways: If true, will leave provisioned instances running to be reused. You must run `skyplane deprovision` to clean up.
     :type reuse_gateways: bool
-    :param max_chunk_size_mb: If set, `cp` will subdivide objects into chunks at most this size.
-    :type max_chunk_size_mb: int
+    :param debug: If true, will write debug information to debug directory.
+    :type debug: bool
+    :param multipart: If true, will use multipart uploads.
+    :type multipart: bool
     :param confirm: If true, will not prompt for confirmation of transfer.
     :type confirm: bool
-    :param debug: If true, will write debug info to debug directory
-    :type debug: bool
-    :param use_bbr: If set, will use BBR for transfers by default.
-    :type use_bbr: bool
-    :param use_compression: If set, will use compression for transfers by default.
-    :type use_compression: bool
+    :param max_instances: The maximum number of instances to use per region (default: 1)
+    :type max_instances: int
     :param solve: If true, will use solver to optimize transfer, else direct path is chosen
     :type solve: bool
     :param solver_required_throughput_gbits: The required throughput in Gbps when using the solver (default: 4)
@@ -308,11 +299,15 @@ def sync(
         typer.secho("No objects need updating. Exiting...")
         raise typer.Exit(0)
 
+    if multipart and (provider_src == "azure" or provider_dst == "azure"):
+        typer.secho("Warning: Azure is not yet supported for multipart transfers, you may observe slow performance", fg="yellow")
+        multipart = False
+
     topo = generate_topology(
         src_region,
         dst_region,
         solve,
-        num_connections=num_connections,
+        num_connections=cloud_config.get_flag("num_connections"),
         max_instances=max_instances,
         solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
         solver_required_throughput_gbits=solver_required_throughput_gbits,
@@ -326,21 +321,28 @@ def sync(
         dest_region=topo.sink_region(),
         dest_bucket=bucket_dst,
         transfer_pairs=transfer_pairs,
-        max_chunk_size_mb=max_chunk_size_mb,
     )
     confirm_transfer(
         topo=topo,
-        n_objs=len(transfer_pairs),
-        est_size_bytes=job.transfer_size,
-        ask_to_confirm_transfer=not cloud_config.get_flag("autoconfirm") and not confirm,
+        job=job,
+        ask_to_confirm_transfer=not confirm,
     )
     stats = launch_replication_job(
         topo=topo,
         job=job,
         debug=debug,
         reuse_gateways=reuse_gateways,
-        use_bbr=use_bbr,
-        use_compression=use_compression,
+        use_bbr=cloud_config.get_flag("bbr"),
+        use_compression=cloud_config.get_flag("compress") if src_region != dst_region else False,
+        use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
+        use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
+        verify_checksums=cloud_config.get_flag("verify_checksums"),
+        aws_instance_class=cloud_config.get_flag("aws_instance_class"),
+        azure_instance_class=cloud_config.get_flag("azure_instance_class"),
+        gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
+        gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
+        multipart_enabled=multipart,
+        multipart_max_chunk_size_mb=cloud_config.get_flag("multipart_max_chunk_size_mb"),
     )
     return 0 if stats["success"] else 1
 

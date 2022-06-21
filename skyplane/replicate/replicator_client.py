@@ -67,9 +67,10 @@ class ReplicatorClient:
         reuse_instances=False,
         log_dir: Optional[PathLike] = None,
         authorize_ssh_pub_key: Optional[PathLike] = None,
-        use_bbr=False,
-        use_compression=False,
+        use_bbr=True,
+        use_compression=True,
         use_e2ee=True,
+        use_socket_tls=False,
     ):
         regions_to_provision = [node.region for node in self.topology.gateway_nodes]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
@@ -237,6 +238,7 @@ class ReplicatorClient:
                 use_bbr=use_bbr,
                 use_compression=use_compression,
                 e2ee_key_bytes=e2ee_key_bytes if (am_source or am_sink) else None,
+                use_socket_tls=use_socket_tls,
             )
 
         args = []
@@ -277,7 +279,12 @@ class ReplicatorClient:
         self.temp_nodes = []
         logger.fs.info("Deprovisioned instances")
 
-    def run_replication_plan(self, job: ReplicationJob) -> ReplicationJob:
+    def run_replication_plan(
+        self,
+        job: ReplicationJob,
+        multipart_enabled: bool = False,
+        multipart_max_chunk_size_mb: int = 8,
+    ) -> ReplicationJob:
         assert job.source_region.split(":")[0] in [
             "aws",
             "azure",
@@ -318,8 +325,8 @@ class ReplicatorClient:
             idx = 0
             for (src_object, dest_object) in job.transfer_pairs:
                 if not job.random_chunk_size_mb:
-                    if job.max_chunk_size_mb:  # split objects into sub-chunks
-                        chunk_size_bytes = int(job.max_chunk_size_mb * 1e6)
+                    if multipart_enabled:
+                        chunk_size_bytes = int(multipart_max_chunk_size_mb * MB)
                         num_chunks = int(src_object.size / chunk_size_bytes) + 1
 
                         # TODO: figure out what to do on # part limits per object
