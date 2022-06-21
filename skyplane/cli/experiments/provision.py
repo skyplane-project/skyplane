@@ -112,6 +112,7 @@ def provision(
         gcp.create_ssh_key()
         gcp.configure_default_network()
         gcp.configure_default_firewall()
+        do_parallel(gcp.add_ips_to_firewall, spinner=True, desc="Add IP to aws security groups")
         gcp_instances = refresh_instance_list(gcp, gcp_regions_to_provision, gcp_instance_filter, n=4)
         missing_gcp_regions = set(gcp_regions_to_provision) - set(gcp_instances.keys())
 

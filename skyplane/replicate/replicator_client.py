@@ -212,10 +212,11 @@ class ReplicatorClient:
             self.temp_nodes.remove(instance)
 
         # Firewall rules
-        # todo add firewall rules for Azure and GCP
+        # todo add firewall rules for Azure
         public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.gateway_nodes]
         aws_jobs = [partial(self.aws.add_ips_to_security_group, r.split(":")[1], public_ips) for r in set(aws_regions_to_provision)]
         do_parallel(lambda fn: fn(), aws_jobs, spinner=True, desc="Applying firewall rules")
+        gcp_jobs = self.gcp.add_ips_to_firewall(public_ips)
 
         # generate E2EE key
         if use_e2ee:
@@ -258,11 +259,13 @@ class ReplicatorClient:
                 logger.fs.warning(f"Deprovisioned {server.uuid()}")
 
         # Clear IPs from security groups
-        # todo remove firewall rules for Azure and GCP
+        # todo remove firewall rules for Azure
         public_ips = [i.public_ip() for i in self.bound_nodes.values()] + [i.public_ip() for i in self.temp_nodes]
         aws_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("aws:")]
         aws_jobs = [partial(self.aws.remove_ips_from_security_group, r.split(":")[1], public_ips) for r in set(aws_regions)]
         do_parallel(lambda fn: fn(), aws_jobs)
+        gcp_jobs = self.gcp.remove_ips_from_firewall(public_ips)
+
 
         # Terminate instances
         instances = list(self.bound_nodes.values()) + self.temp_nodes

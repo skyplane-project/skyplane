@@ -167,18 +167,18 @@ class GCPCloudProvider(CloudProvider):
                 raise e
 
     def configure_default_firewall(self, ip="0.0.0.0/0"):
-        """Configure default firewall to allow access from all ports from all IPs (if not exists)."""
+        """Configure default firewall to allow SSH from all ports from all IPs (if not exists)."""
         compute = self.auth.get_gcp_client()
 
         def create_firewall(body, update_firewall=False):
             if update_firewall:
-                op = compute.firewalls().update(project=self.auth.project_id, firewall="skyplane", body=fw_body).execute()
+                op = compute.firewalls().update(project=self.auth.project_id, firewall="ssh", body=fw_body).execute()
             else:
                 op = compute.firewalls().insert(project=self.auth.project_id, body=fw_body).execute()
             self.wait_for_operation_to_complete("global", op["name"])
 
         try:
-            current_firewall = compute.firewalls().get(project=self.auth.project_id, firewall="skyplane").execute()
+            current_firewall = compute.firewalls().get(project=self.auth.project_id, firewall="ssh").execute()
         except googleapiclient.errors.HttpError as e:
             if e.resp.status == 404:
                 current_firewall = None
@@ -186,18 +186,20 @@ class GCPCloudProvider(CloudProvider):
                 raise e
 
         fw_body = {
-            "name": "skyplane",
+            "name": "ssh",
             "network": "global/networks/skyplane",
-            "allowed": [{"IPProtocol": "tcp", "ports": ["1-65535"]}, {"IPProtocol": "udp", "ports": ["1-65535"]}, {"IPProtocol": "icmp"}],
+            "allowed": [{"IPProtocol": "tcp", "ports": ["22"]}, {"IPProtocol": "udp", "ports": ["1-65535"]}, {"IPProtocol": "icmp"}],
             "description": "Allow all traffic from all IPs",
             "sourceRanges": [ip],
         }
         if current_firewall is None:
             create_firewall(fw_body, update_firewall=False)
             logger.debug(f"[GCP] Created new firewall")
+            
         elif current_firewall["allowed"] != fw_body["allowed"]:
             create_firewall(fw_body, update_firewall=True)
             logger.debug(f"[GCP] Updated firewall")
+            
 
     def get_vpc(self, vpc_name="skyplane"):
         compute = self.auth.get_gcp_client()
@@ -210,32 +212,9 @@ class GCPCloudProvider(CloudProvider):
             else:
                 raise e
 
-    def make_vpc(self, vpc_name="skyplane"):
-        """
-        Create a glocal VPC called "skyplane". sub-nets are auto created for every region.
-        """
-        compute = self.auth.get_gcp_client()
-        # VPC's are global. Sub-nets are region specific and define the instances ip-addresses
-        request = compute.networks().insert(
-            project=self.auth.project_id, body={"name": vpc_name, "subnetMode": "auto", "autoCreateSubnetworks": True}
-        )
-        make_vpc_response = request.execute()
-        self.wait_for_operation_to_complete("global", make_vpc_response)
-
-        # Allow ssh connection
-        fw_body = {
-            "name": "ssh",
-            "network": "skyplane",
-            "allowed": [{"IPProtocol": "tcp", "ports": ["22"]}],
-            "description": "Allow ssh traffic from all IPs on port 22",
-            "sourceRanges": ["0.0.0.0/0"],
-        }
-        fw_request = compute.firewalls().insert(project=self.auth.project_id, body=fw_body)
-        fw_response = fw_request.execute()
-
     def delete_vpc(self, vpc_name="skyplane"):
         """
-        This might error our in somce cases, in such scenarios try: `gcloud networks delete {vpc_name}` from console
+        This might error our in somce cases, in such scenarios try: `gcloud compute networks delete {vpc_name}` from console
         """
         compute = self.auth.get_gcp_client()
         request = compute.networks().delete(project=self.auth.project_id, network=vpc_name)
@@ -249,38 +228,53 @@ class GCPCloudProvider(CloudProvider):
          - Block all ingress
         If you do not specify a priority when creating a rule, it is assigned a priority of 1000
         """
+
+        def create_firewall(body, update_firewall=False):
+            if update_firewall:
+                op = compute.firewalls().update(project=self.auth.project_id, firewall="skyplane", body=fw_body).execute()
+            else:
+                op = compute.firewalls().insert(project=self.auth.project_id, body=fw_body).execute()
+            self.wait_for_operation_to_complete("global", op["name"])
+
         if len(ips) == 0:
             return  # No ip to be added to the VPC
         compute = self.auth.get_gcp_client()
         # Let's call each firewall rule by the ip name, so it's easier to delete
         #  individual ips during concurrent transfers
         for ip in ips:
+            firewall_name = "skyplane" + ip.replace(".", "")
+            fw_body = {
+                "name": firewall_name,  # Name should be [a-z]([-a-z0-9]*[a-z0-9]
+                "network": "global/networks/skyplane",
+                "allowed": [{"IPProtocol": "tcp", "ports": ["1-65535"]}],
+                "description": f"Allow all traffic from ip {ip}",
+                "sourceRanges": [f"{ip}/32"],
+            }
             try:
-                firewall_name = "skyplane" + ip.replace(".", "")
-                fw_body = {
-                    "name": firewall_name,  # Name should be [a-z]([-a-z0-9]*[a-z0-9]
-                    "network": "skyplane",
-                    "allowed": [{"IPProtocol": "tcp", "ports": ["1-65535"]}],
-                    "description": f"Allow all traffic from ip {ip}",
-                    "sourceRanges": [f"{ip}/32"],
-                }
-                # TODO: Check if ip exists and if so compute.firewalls().update()
-                fw_insert_request = compute.firewalls().insert(project=self.auth.project_id, body=fw_body)
-                fw_insert_response = fw_insert_request.execute()
+                current_firewall = compute.firewalls().get(project=self.auth.project_id, firewall=firewall_name).execute()
             except googleapiclient.errors.HttpError as e:
-                raise e
-        # TODO: If needed insert a wait_for_operation_to_complete() here if it takes too long to propogate.
+                if e.resp.status == 404:
+                    current_firewall = None
+                else:
+                    raise e
+            if current_firewall is None:
+                create_firewall(fw_body, update_firewall=False)
+                logger.debug(f"[GCP] Created new firewall {firewall_name}")
+            elif current_firewall["allowed"] != fw_body["allowed"]:
+                create_firewall(fw_body, update_firewall=True)
+                logger.debug(f"[GCP] Updated firewall {firewall_name}")
 
     def remove_ips_from_firewall(self, ips: List[str] = None):
         if len(ips) == 0:
-            return  # No ip to be added to the VPC
+            logger.warn("No ips listed to be deleted from the VPC")
+            return
         compute = self.auth.get_gcp_client()
         # Each firewall rule is called by the ip name, so it's easier to delete
         for ip in ips:
+            firewall_name = "skyplane" + ip.replace(".", "")
+            logger.debug(f"[GCP] Deleting firewall rule {firewall_name}")
             try:
-                firewall_name = "skyplane" + ip.replace(".", "")
-                fw_delete_request = compute.firewalls().delete(project=self.auth.project_id, firewall=firewall_name)
-                fw_delete_response = fw_delete_request.execute()
+                compute.firewalls().delete(project=self.auth.project_id, firewall=firewall_name).execute()
             except googleapiclient.errors.HttpError as e:
                 if e.resp.status == 404:  # Firewall doesnt exist. Continue
                     logger.warning(f"[GCP] Unable to delete {firewall_name} - does not exist.")
