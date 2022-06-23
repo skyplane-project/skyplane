@@ -111,6 +111,7 @@ def generate_full_transferobjlist(
     dest_region: str,
     dest_bucket: str,
     dest_prefix: str,
+    recursive: bool = False,
 ) -> List[Tuple[ObjectStoreObject, ObjectStoreObject]]:
     """Query source region and destination region buckets and return list of objects to transfer."""
     source_iface = ObjectStoreInterface.create(source_region, source_bucket)
@@ -129,7 +130,7 @@ def generate_full_transferobjlist(
 
     # map objects to destination object paths
     for source_obj in source_objs:
-        dest_key = map_object_key_prefix(source_prefix, source_obj.key, dest_prefix)
+        dest_key = map_object_key_prefix(source_prefix, source_obj.key, dest_prefix, recursive=recursive)
         dest_obj = ObjectStoreObject(dest_region.split(":")[0], dest_bucket, dest_key)
         dest_objs.append(dest_obj)
 
