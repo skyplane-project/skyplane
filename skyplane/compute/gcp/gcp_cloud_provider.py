@@ -221,10 +221,10 @@ class GCPCloudProvider(CloudProvider):
             delete_vpc_response = request.execute()
             self.wait_for_operation_to_complete("global", delete_vpc_response)
         except googleapiclient.errors.HttpError as e:
-            logger.warn(f"Unable to Delete. Ensure no active firewall rules acting upon the {vpc_name} VPC. Ensure no instances provisioned in the VPC ")
+            logger.warn(
+                f"Unable to Delete. Ensure no active firewall rules acting upon the {vpc_name} VPC. Ensure no instances provisioned in the VPC "
+            )
             logger.error(e)
-
-        
 
     def add_ips_to_firewall(self, ips: Optional[List[str]] = None):
         """
