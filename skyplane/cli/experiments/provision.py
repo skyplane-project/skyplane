@@ -45,8 +45,8 @@ def provision(
         jobs.append(azure.set_up_resource_group)
     if gcp_regions_to_provision:
         jobs.append(gcp.create_ssh_key)
-        jobs.append(gcp.configure_default_network)
-        jobs.append(gcp.configure_default_firewall)
+        jobs.append(gcp.configure_skyplane_network)
+        jobs.append(gcp.configure_skyplane_firewall)
     with Timer("Cloud SSH key initialization"):
         do_parallel(lambda fn: fn(), jobs)
 
@@ -110,8 +110,9 @@ def provision(
             "network_tier": "PREMIUM" if gcp_use_premium_network else "STANDARD",
         }
         gcp.create_ssh_key()
-        gcp.configure_default_network()
-        gcp.configure_default_firewall()
+        gcp.configure_skyplane_network()
+        gcp.configure_skyplane_firewall()
+        do_parallel(gcp.add_ips_to_firewall, spinner=True, desc="Add IP to aws security groups")
         gcp_instances = refresh_instance_list(gcp, gcp_regions_to_provision, gcp_instance_filter, n=4)
         missing_gcp_regions = set(gcp_regions_to_provision) - set(gcp_instances.keys())
 

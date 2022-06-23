@@ -153,16 +153,27 @@ def generate_full_transferobjlist(
     return list(zip(source_objs, dest_objs))
 
 
-def confirm_transfer(topo: ReplicationTopology, n_objs: int, est_size_bytes: int, ask_to_confirm_transfer=True):
-    console.print(f"\n[bold yellow]Will transfer {n_objs} objects totaling {format_bytes(est_size_bytes)}[/bold yellow]")
+def confirm_transfer(topo: ReplicationTopology, job: ReplicationJob, ask_to_confirm_transfer=True):
+    console.print(
+        f"\n[bold yellow]Will transfer {len(job.transfer_pairs)} objects totaling {format_bytes(job.transfer_size)} from {job.source_region} to {job.dest_region}[/bold yellow]"
+    )
     sorted_counts = sorted(topo.per_region_count().items(), key=lambda x: x[0])
     console.print(
         f"    [bold][blue]VMs to provision:[/blue][/bold] [bright_black]{', '.join(f'{c}x {r}' for r, c in sorted_counts)}[/bright_black]"
     )
     if topo.cost_per_gb:
         console.print(
-            f"    [bold][blue]Estimated egress cost:[/blue][/bold] [bright_black]${est_size_bytes / GB * topo.cost_per_gb:,.2f} at ${topo.cost_per_gb:,.2f}/GB[/bright_black]"
+            f"    [bold][blue]Estimated egress cost:[/blue][/bold] [bright_black]${job.transfer_size / GB * topo.cost_per_gb:,.2f} at ${topo.cost_per_gb:,.2f}/GB[/bright_black]"
         )
+
+    # print list of objects to transfer if not a random transfer
+    if not job.random_chunk_size_mb:
+        for src, dst in job.transfer_pairs[:4]:
+            console.print(f"    [bright_black][bold]{src.key}[/bold] -> [bold]{dst.key}[/bold][/bright_black]")
+        if len(job.transfer_pairs) > 4:
+            console.print(f"    [bright_black][bold]...[/bold][/bright_black]")
+            for src, dst in job.transfer_pairs[4:][-4:]:
+                console.print(f"    [bright_black][bold]{src.key}[/bold] -> [bold]{dst.key}[/bold][/bright_black]")
 
     if ask_to_confirm_transfer:
         if typer.confirm("Continue?", default=True):
@@ -186,7 +197,12 @@ def launch_replication_job(
     reuse_gateways: bool = False,
     use_bbr: bool = False,
     use_compression: bool = False,
+    use_e2ee: bool = True,
+    use_socket_tls: bool = False,
     verify_checksums: bool = True,
+    # multipart
+    multipart_enabled: bool = False,
+    multipart_max_chunk_size_mb: int = 8,
     # cloud provider specific options
     aws_instance_class: str = "m5.8xlarge",
     azure_instance_class: str = "Standard_D32_v4",
@@ -219,12 +235,18 @@ def launch_replication_job(
 
     stats = {}
     try:
-        rc.provision_gateways(reuse_gateways, use_bbr=use_bbr, use_compression=use_compression)
+        rc.provision_gateways(
+            reuse_gateways, use_bbr=use_bbr, use_compression=use_compression, use_e2ee=use_e2ee, use_socket_tls=use_socket_tls
+        )
         for node, gw in rc.bound_nodes.items():
             logger.fs.info(f"Log URLs for {gw.uuid()} ({node.region}:{node.instance})")
             logger.fs.info(f"\tLog viewer: {gw.gateway_log_viewer_url}")
             logger.fs.info(f"\tAPI: {gw.gateway_api_url}")
-        job = rc.run_replication_plan(job)
+        job = rc.run_replication_plan(
+            job,
+            multipart_enabled=multipart_enabled,
+            multipart_max_chunk_size_mb=multipart_max_chunk_size_mb,
+        )
         total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
         console.print(f":rocket: [bold blue]{total_bytes / GB:.2f}GB transfer job launched[/bold blue]")
         if topo.source_region().split(":")[0] == "azure" or topo.sink_region().split(":")[0] == "azure":
@@ -234,7 +256,7 @@ def launch_replication_job(
             show_spinner=True,
             log_interval_s=log_interval_s,
             time_limit_seconds=time_limit_seconds,
-            multipart=job.max_chunk_size_mb is not None,
+            multipart=multipart_enabled,
             write_profile=debug,
             write_socket_profile=debug,
             copy_gateway_logs=debug,

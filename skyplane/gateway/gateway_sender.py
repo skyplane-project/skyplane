@@ -4,6 +4,7 @@ import socket
 import ssl
 import time
 import traceback
+import nacl.secret
 from functools import partial
 from multiprocessing import Event, Process, Queue
 from typing import Dict, List, Optional
@@ -29,6 +30,7 @@ class GatewaySender:
         outgoing_ports: Dict[str, int],
         use_tls: bool = True,
         use_compression: bool = True,
+        e2ee_key_bytes: Optional[bytes] = None,
     ):
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         self.region = region
@@ -37,6 +39,10 @@ class GatewaySender:
         self.error_queue = error_queue
         self.outgoing_ports = outgoing_ports
         self.use_compression = use_compression
+        if e2ee_key_bytes is None:
+            self.e2ee_secretbox = None
+        else:
+            self.e2ee_secretbox = nacl.secret.SecretBox(e2ee_key_bytes)
         self.n_processes = sum(outgoing_ports.values())
         self.processes = []
 
@@ -187,17 +193,24 @@ class GatewaySender:
             with open(chunk_file_path, "rb") as f:
                 data = f.read()
             assert len(data) == chunk.chunk_length_bytes, f"chunk {chunk_id} has size {len(data)} but should be {chunk.chunk_length_bytes}"
+
+            wire_length = len(data)
+            compressed_length = None
             if self.use_compression and self.region == chunk_req.src_region:
                 data = lz4.frame.compress(data)
-                compressed_len = len(data)
+                wire_length = len(data)
+                compressed_length = wire_length
                 logger.debug(
-                    f"[sender:{self.worker_id}]:{chunk_ids} compressed {chunk_id} from {chunk.chunk_length_bytes} to {compressed_len} ({100 * compressed_len / chunk.chunk_length_bytes:.2f}%)"
+                    f"[sender:{self.worker_id}]:{chunk_ids} compressed {chunk_id} from {chunk.chunk_length_bytes} to {wire_length} ({100 * wire_length / chunk.chunk_length_bytes:.2f}%)"
                 )
-            else:
-                compressed_len = None
+            if self.e2ee_secretbox is not None and self.region == chunk_req.src_region:
+                data = self.e2ee_secretbox.encrypt(data)
+                wire_length = len(data)
 
             # send chunk header
-            header = chunk.to_wire_header(n_chunks_left_on_socket=len(chunk_ids) - idx - 1, compressed_len_bytes=compressed_len)
+            header = chunk.to_wire_header(
+                n_chunks_left_on_socket=len(chunk_ids) - idx - 1, wire_length=wire_length, is_compressed=(compressed_length is not None)
+            )
             logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sending chunk header")
             header.to_socket(sock)
             logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent chunk header")
@@ -208,5 +221,5 @@ class GatewaySender:
                 sock.sendall(data)
 
             logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent at {chunk.chunk_length_bytes * 8 / t.elapsed / MB:.2f}Mbps")
-            self.chunk_store.state_finish_upload(chunk_id, f"sender:{self.worker_id}", compressed_size_bytes=compressed_len)
+            self.chunk_store.state_finish_upload(chunk_id, f"sender:{self.worker_id}", compressed_size_bytes=compressed_length)
             chunk_file_path.unlink()

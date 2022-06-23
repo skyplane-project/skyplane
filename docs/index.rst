@@ -38,6 +38,7 @@ Contents
    :maxdepth: 4
    :caption: Developer documentation
 
+   roadmap
    contributing
    development_guide
    debugging
