@@ -67,9 +67,10 @@ class ReplicatorClient:
         reuse_instances=False,
         log_dir: Optional[PathLike] = None,
         authorize_ssh_pub_key: Optional[PathLike] = None,
-        use_bbr=False,
-        use_compression=False,
+        use_bbr=True,
+        use_compression=True,
         use_e2ee=True,
+        use_socket_tls=False,
     ):
         regions_to_provision = [node.region for node in self.topology.gateway_nodes]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
@@ -153,8 +154,8 @@ class ReplicatorClient:
             jobs.append(self.azure.set_up_resource_group)
         if gcp_regions_to_provision:
             jobs.append(self.gcp.create_ssh_key)
-            jobs.append(self.gcp.configure_default_network)
-            jobs.append(self.gcp.configure_default_firewall)
+            jobs.append(self.gcp.configure_skyplane_network)
+            jobs.append(self.gcp.configure_skyplane_firewall)
         do_parallel(lambda fn: fn(), jobs, spinner=True, spinner_persist=True, desc="Initializing cloud keys")
 
         # provision instances
@@ -212,10 +213,11 @@ class ReplicatorClient:
             self.temp_nodes.remove(instance)
 
         # Firewall rules
-        # todo add firewall rules for Azure and GCP
+        # todo add firewall rules for Azure
         public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.gateway_nodes]
         aws_jobs = [partial(self.aws.add_ips_to_security_group, r.split(":")[1], public_ips) for r in set(aws_regions_to_provision)]
         do_parallel(lambda fn: fn(), aws_jobs, spinner=True, desc="Applying firewall rules")
+        gcp_jobs = self.gcp.add_ips_to_firewall(public_ips)
 
         # generate E2EE key
         if use_e2ee:
@@ -236,6 +238,7 @@ class ReplicatorClient:
                 use_bbr=use_bbr,
                 use_compression=use_compression,
                 e2ee_key_bytes=e2ee_key_bytes if (am_source or am_sink) else None,
+                use_socket_tls=use_socket_tls,
             )
 
         args = []
@@ -258,11 +261,12 @@ class ReplicatorClient:
                 logger.fs.warning(f"Deprovisioned {server.uuid()}")
 
         # Clear IPs from security groups
-        # todo remove firewall rules for Azure and GCP
+        # todo remove firewall rules for Azure
         public_ips = [i.public_ip() for i in self.bound_nodes.values()] + [i.public_ip() for i in self.temp_nodes]
         aws_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("aws:")]
         aws_jobs = [partial(self.aws.remove_ips_from_security_group, r.split(":")[1], public_ips) for r in set(aws_regions)]
         do_parallel(lambda fn: fn(), aws_jobs)
+        gcp_jobs = self.gcp.remove_ips_from_firewall(public_ips)
 
         # Terminate instances
         instances = list(self.bound_nodes.values()) + self.temp_nodes
@@ -275,7 +279,12 @@ class ReplicatorClient:
         self.temp_nodes = []
         logger.fs.info("Deprovisioned instances")
 
-    def run_replication_plan(self, job: ReplicationJob) -> ReplicationJob:
+    def run_replication_plan(
+        self,
+        job: ReplicationJob,
+        multipart_enabled: bool = False,
+        multipart_max_chunk_size_mb: int = 8,
+    ) -> ReplicationJob:
         assert job.source_region.split(":")[0] in [
             "aws",
             "azure",
@@ -316,8 +325,8 @@ class ReplicatorClient:
             idx = 0
             for (src_object, dest_object) in job.transfer_pairs:
                 if not job.random_chunk_size_mb:
-                    if job.max_chunk_size_mb:  # split objects into sub-chunks
-                        chunk_size_bytes = int(job.max_chunk_size_mb * 1e6)
+                    if multipart_enabled:
+                        chunk_size_bytes = int(multipart_max_chunk_size_mb * MB)
                         num_chunks = int(src_object.size / chunk_size_bytes) + 1
 
                         # TODO: figure out what to do on # part limits per object
