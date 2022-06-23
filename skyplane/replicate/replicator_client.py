@@ -154,8 +154,8 @@ class ReplicatorClient:
             jobs.append(self.azure.set_up_resource_group)
         if gcp_regions_to_provision:
             jobs.append(self.gcp.create_ssh_key)
-            jobs.append(self.gcp.configure_default_network)
-            jobs.append(self.gcp.configure_default_firewall)
+            jobs.append(self.gcp.configure_skyplane_network)
+            jobs.append(self.gcp.configure_skyplane_firewall)
         do_parallel(lambda fn: fn(), jobs, spinner=True, spinner_persist=True, desc="Initializing cloud keys")
 
         # provision instances

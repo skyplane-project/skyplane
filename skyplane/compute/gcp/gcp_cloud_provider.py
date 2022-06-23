@@ -151,7 +151,7 @@ class GCPCloudProvider(CloudProvider):
             with open(self.public_key_path, "w") as f:
                 f.write(f"{key.get_name()} {key.get_base64()}\n")
 
-    def configure_default_network(self):
+    def configure_skyplane_network(self):
         compute = self.auth.get_gcp_client()
         try:
             compute.networks().get(project=self.auth.project_id, network="skyplane").execute()
@@ -166,8 +166,8 @@ class GCPCloudProvider(CloudProvider):
             else:
                 raise e
 
-    def configure_default_firewall(self, ip="0.0.0.0/0"):
-        """Configure default firewall to allow SSH from all ports from all IPs (if not exists)."""
+    def configure_skyplane_firewall(self, ip="0.0.0.0/0"):
+        """Configure skyplane firewall to allow SSH from all ports from all IPs (if not exists)."""
         compute = self.auth.get_gcp_client()
 
         def create_firewall(body, update_firewall=False):
@@ -213,16 +213,22 @@ class GCPCloudProvider(CloudProvider):
 
     def delete_vpc(self, vpc_name="skyplane"):
         """
-        This might error our in somce cases, in such scenarios try: `gcloud compute networks delete {vpc_name}` from console
+        Delete VPC. This might error our in some cases.
         """
         compute = self.auth.get_gcp_client()
         request = compute.networks().delete(project=self.auth.project_id, network=vpc_name)
-        delete_vpc_response = request.execute()
-        self.wait_for_operation_to_complete("global", delete_vpc_response)
+        try:
+            delete_vpc_response = request.execute()
+            self.wait_for_operation_to_complete("global", delete_vpc_response)
+        except googleapiclient.errors.HttpError as e:
+            logger.warn(f"Unable to Delete. Ensure no active firewall rules acting upon the {vpc_name} VPC. Ensure no instances provisioned in the VPC ")
+            logger.error(e)
+
+        
 
     def add_ips_to_firewall(self, ips: Optional[List[str]] = None):
         """
-        Otherthan "default" VPCs start with 2 rules at 65535 priority:
+        Other than "default" VPCs start with 2 rules at 65535 priority:
          - Allow all egress
          - Block all ingress
         If you do not specify a priority when creating a rule, it is assigned a priority of 1000
@@ -245,8 +251,8 @@ class GCPCloudProvider(CloudProvider):
             fw_body = {
                 "name": firewall_name,  # Name should be [a-z]([-a-z0-9]*[a-z0-9]
                 "network": "global/networks/skyplane",
-                "allowed": [{"IPProtocol": "tcp", "ports": ["1-65535"]}],
-                "description": f"Allow all traffic from ip {ip}",
+                "allowed": [{"IPProtocol": "tcp", "ports": ["1-65535"]}, {"IPProtocol": "icmp", "ports": ["1-65535"]}],
+                "description": f"Allow all TCP/ICMP traffic from ip {ip}",
                 "sourceRanges": [f"{ip}/32"],
             }
             try:
