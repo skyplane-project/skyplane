@@ -16,15 +16,6 @@ import skyplane.cli.cli_solver
 import skyplane.cli.experiments
 from skyplane import config_path, exceptions, skyplane_root, cloud_config
 from skyplane.cli.common import print_header, console
-from skyplane.cli.cli_impl.cp_local import (
-    copy_azure_local,
-    copy_gcs_local,
-    copy_local_azure,
-    copy_local_gcs,
-    copy_local_local,
-    copy_local_s3,
-    copy_s3_local,
-)
 from skyplane.cli.cli_impl.cp_replicate import (
     generate_full_transferobjlist,
     generate_topology,
@@ -50,33 +41,6 @@ app.add_typer(skyplane.cli.cli_aws.app, name="aws")
 app.add_typer(skyplane.cli.cli_azure.app, name="azure")
 app.add_typer(skyplane.cli.cli_config.app, name="config")
 app.add_typer(skyplane.cli.cli_solver.app, name="solver")
-
-
-@app.command()
-def ls(directory: str):
-    """
-    It takes a directory path, parses it, and then calls the appropriate function to list the contents
-    of that directory. If the path is on an object store, it will list the contents of the object store
-    at that prefix.
-
-    :param directory: str
-    :type directory: str
-    """
-    provider, bucket, key = parse_path(directory)
-    if provider == "local":
-        for path in ls_local(Path(directory)):
-            typer.echo(path)
-    elif provider == "s3":
-        for path in ls_objstore("aws:infer", bucket, key):
-            typer.echo(path)
-    elif provider == "gs":
-        for path in ls_objstore("gcp:infer", bucket, key):
-            typer.echo(path)
-    elif provider == "azure":
-        for path in ls_objstore("azure:infer", bucket, key):
-            typer.echo(path)
-    else:
-        raise NotImplementedError(f"Unrecognized object store provider")
 
 
 @app.command()
@@ -136,26 +100,19 @@ def cp(
 
     clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
 
+    # error for local transfers
+    def error_local():
+        typer.secho("Local transfers are not yet supported (but will be soon!)", fg="red")
+        typer.secho("Skyplane is currently most optimized for cloud to cloud transfers.", fg="yellow")
+        typer.secho(
+            "Please provide feedback for on prem transfers at: https://github.com/skyplane-project/skyplane/discussions/424", fg="yellow"
+        )
+        raise typer.Exit(code=1)
+
     # raise file limits for local transfers
     if provider_src == "local" or provider_dst == "local":
-        check_ulimit()
-    if provider_src == "local" and provider_dst == "local":
-        copy_local_local(Path(path_src), Path(path_dst))
-    elif provider_src == "local" and provider_dst == "s3":
-        copy_local_s3(Path(path_src), bucket_dst, path_dst)
-    elif provider_src == "s3" and provider_dst == "local":
-        copy_s3_local(bucket_src, path_src, Path(path_dst))
-    elif provider_src == "local" and provider_dst == "gs":
-        copy_local_gcs(Path(path_src), bucket_dst, path_dst)
-    elif provider_src == "gs" and provider_dst == "local":
-        copy_gcs_local(bucket_src, path_src, Path(path_dst))
-    elif provider_src == "local" and provider_dst == "azure":
-        account_name, container_name = bucket_dst
-        copy_local_azure(Path(path_src), account_name, container_name, path_dst)
-    elif provider_src == "azure" and provider_dst == "local":
-        account_name, container_name = bucket_dst
-        copy_azure_local(account_name, container_name, path_src, Path(path_dst))
-    elif provider_src in clouds and provider_dst in clouds:
+        error_local()
+    if provider_src in clouds and provider_dst in clouds:
         try:
             src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)
             src_region = src_client.region_tag()
