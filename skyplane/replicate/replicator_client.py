@@ -215,9 +215,13 @@ class ReplicatorClient:
         # Firewall rules
         # todo add firewall rules for Azure
         public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.gateway_nodes]
-        aws_jobs = [partial(self.aws.add_ips_to_security_group, r.split(":")[1], public_ips) for r in set(aws_regions_to_provision)]
-        do_parallel(lambda fn: fn(), aws_jobs, spinner=True, desc="Applying firewall rules")
-        gcp_jobs = self.gcp.add_ips_to_firewall(public_ips)
+        authorize_ip_jobs = []
+        authorize_ip_jobs.extend(
+            [partial(self.aws.add_ips_to_security_group, r.split(":")[1], public_ips) for r in set(aws_regions_to_provision)]
+        )
+        if gcp_regions_to_provision:
+            authorize_ip_jobs.append(partial(self.gcp.add_ips_to_firewall, public_ips))
+        do_parallel(lambda fn: fn(), authorize_ip_jobs, spinner=True, desc="Applying firewall rules")
 
         # generate E2EE key
         if use_e2ee:
