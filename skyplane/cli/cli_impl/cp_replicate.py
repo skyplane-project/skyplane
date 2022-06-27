@@ -276,10 +276,6 @@ def launch_replication_job(
         rc.deprovision_gateways()
         signal.signal(signal.SIGINT, s)
 
-    # verify transfer
-    if verify_checksums:
-        rc.verify_transfer(job)
-
     stats = stats if stats else {}
     stats["success"] = stats["monitor_status"] == "completed"
 
@@ -289,6 +285,10 @@ def launch_replication_job(
                 typer.secho(f"\n❌ {instance} encountered error:", fg="red", bold=True)
                 typer.secho(error, fg="red")
         raise typer.Exit(1)
+
+    # verify transfer
+    if verify_checksums:
+        rc.verify_transfer(job)
 
     # print stats
     if stats["success"]:
