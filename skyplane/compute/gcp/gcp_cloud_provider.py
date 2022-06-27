@@ -172,13 +172,13 @@ class GCPCloudProvider(CloudProvider):
 
         def create_firewall(body, update_firewall=False):
             if update_firewall:
-                op = compute.firewalls().update(project=self.auth.project_id, firewall="ssh", body=fw_body).execute()
+                op = compute.firewalls().update(project=self.auth.project_id, firewall="skyplanessh", body=fw_body).execute()
             else:
                 op = compute.firewalls().insert(project=self.auth.project_id, body=fw_body).execute()
             self.wait_for_operation_to_complete("global", op["name"])
 
         try:
-            current_firewall = compute.firewalls().get(project=self.auth.project_id, firewall="ssh").execute()
+            current_firewall = compute.firewalls().get(project=self.auth.project_id, firewall="skyplanessh").execute()
         except googleapiclient.errors.HttpError as e:
             if e.resp.status == 404:
                 current_firewall = None
@@ -186,7 +186,7 @@ class GCPCloudProvider(CloudProvider):
                 raise e
 
         fw_body = {
-            "name": "ssh",
+            "name": "skyplanessh",
             "network": "global/networks/skyplane",
             "allowed": [{"IPProtocol": "tcp", "ports": ["22"]}, {"IPProtocol": "udp", "ports": ["1-65535"]}, {"IPProtocol": "icmp"}],
             "description": "Allow all traffic from all IPs",
@@ -251,8 +251,8 @@ class GCPCloudProvider(CloudProvider):
             fw_body = {
                 "name": firewall_name,  # Name should be [a-z]([-a-z0-9]*[a-z0-9]
                 "network": "global/networks/skyplane",
-                "allowed": [{"IPProtocol": "tcp", "ports": ["1-65535"]}, {"IPProtocol": "icmp", "ports": ["1-65535"]}],
-                "description": f"Allow all TCP/ICMP traffic from ip {ip}",
+                "allowed": [{"IPProtocol": "tcp", "ports": ["1-65535"]}],
+                "description": f"Allow all TCP traffic from ip {ip}",
                 "sourceRanges": [f"{ip}/32"],
             }
             try:
