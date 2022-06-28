@@ -336,13 +336,13 @@ def ssh():
 
     instance_map = {f"{i.region_tag}, {i.public_ip()} ({i.instance_state()})": i for i in instances}
     choices = list(sorted(instance_map.keys()))
-    
+
     # ask for selection
     typer.secho("Select an instance:", fg="yellow", bold=True)
     for i, choice in enumerate(choices):
         typer.secho(f"{i+1}) {choice}", fg="yellow")
     choice = typer.prompt(f"Enter a number: ", validators=[typer.Range(1, len(choices))])
-    instance = instance_map[choices[choice-1]]
+    instance = instance_map[choices[choice - 1]]
 
     # ssh
     cmd = instance.get_ssh_cmd()
