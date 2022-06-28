@@ -37,6 +37,7 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
 from skyplane.utils.timer import Timer
+from skyplane._private import usage_stats
 
 app = typer.Typer(name="skyplane")
 app.command()(cli_internal.replicate_random)
@@ -434,8 +435,27 @@ def init(
 
     cloud_config.to_config_file(config_path)
     typer.secho(f"\nConfig file saved to {config_path}", fg="green")
+    
+    # Set metrics collection by default
+    usage_stats.show_usage_stats_prompt()
     return 0
 
+@app.command()
+def metrics(
+    env_value: str = typer.Option("0", "--disable", help="set temporarily whether to enable/disable user metrics collection."),
+    conf_value: str = typer.Option("0", "--disable-global", help="set globally whether to enable/disable user metrics collection.")
+):
+    # set env var, which means it is temporarily disabled
+    if env_value == "0" or env_value == "1":
+        usage_stats.set_usage_stats_via_env_var(env_value)
+    else:
+        raise Exception("Unknown value to set metric colletion.")
+    if conf_value == "0" or conf_value == "1":
+        usage_stats.set_usage_stats_via_config(conf_value)
+    else:
+        raise Exception("Unknown value to set metric colletion.")
+    usage_stats.show_usage_stats_prompt()
+    return 0
 
 if __name__ == "__main__":
     app()
