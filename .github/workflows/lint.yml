@@ -29,5 +29,4 @@ jobs:
       - name: black
         run: poetry run black . --check --line-length=140
       - name: pytype
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         run: poetry run pytype --config .pytype.cfg -j 2
