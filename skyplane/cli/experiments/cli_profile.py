@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 import pandas as pd
-import questionary
 import typer
 
 from rich.progress import Progress
@@ -253,7 +252,7 @@ def throughput_grid(
     logger.debug(f"Log directory: {log_dir}")
     sys.stdout.flush()
     sys.stderr.flush()
-    if not questionary.confirm(f"Launch experiment {experiment_tag}?", default=False).ask():
+    if not typer.confirm(f"\nRun experiment? (tag: {experiment_tag})", default=True):
         logger.error("Exiting")
         sys.exit(1)
 
@@ -427,9 +426,9 @@ def latency_grid(
     logger.debug(f"Log directory: {log_dir}")
     sys.stdout.flush()
     sys.stderr.flush()
-    # if not questionary.confirm(f"Launch experiment {experiment_tag}?", default=False).ask():
-    #     logger.error("Exiting")
-    #     sys.exit(1)
+    if not typer.confirm(f"\nRun experiment? (tag: {experiment_tag})", default=True):
+        logger.error("Exiting")
+        sys.exit(1)
 
     # define ping command
     def client_fn(instance_pair):
