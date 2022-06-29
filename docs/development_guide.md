@@ -1,13 +1,5 @@
 # Development Guide 
 
-<<<<<<< HEAD
-## Components
-* CLI 
-* Gateway 
-* Replicator Client 
-* Object Store Connectors
-* Cloud Provider Connectors
-=======
 ## Setting up a developer environment
 
 Skyplane is composed of the client (runs locally on a user's laptop) and gateway VMs (runs in respective clouds). Normally, the gateways use a pre-built nightly Docker image containing the latest build of the Skyplane gateway code (`ghcr.io/skyplane-project/skyplane:main`). However, if you modify the gateway source (under `skyplane/gateway`), you will need to rebuild the gateway Docker image and push it to a container registry.
@@ -68,4 +60,3 @@ $ skyplane cp s3://... s3://...
 If testing transfers repeatedly, we recommend using the `--reuse-gateways` to reduce setup time. 
 
 Skyplane has debugging tools to `ssh` into gateway instances, view detailed transfer logs, and query chunk states during transfers. See [Debugging Tools](debugging.md) for more. 
->>>>>>> 0fcbbbf469ae92e3c87a2d09189a04c3e0b3123c

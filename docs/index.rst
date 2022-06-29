@@ -8,13 +8,9 @@ Welcome to Skyplane!
    This project is under active development.
 
 
-<<<<<<< HEAD
-
 
 What can you do with Skyplane?
 ------------------------------
-=======
->>>>>>> 0fcbbbf469ae92e3c87a2d09189a04c3e0b3123c
 
 **skyplane cp copies files from one cloud provider to another**
 
@@ -41,41 +37,12 @@ Contents
    faq
 
 
-
 .. toctree::
-<<<<<<< HEAD
-   :maxdepth: 2
-   :caption: Overview
-
-   quickstart
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Tutorials
-   
-   vm_to_vm
-
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Advanced Configuration
-
-   configure
-
-
-
-.. toctree::
-=======
->>>>>>> 0fcbbbf469ae92e3c87a2d09189a04c3e0b3123c
    :maxdepth: 4
    :caption: Developer documentation
 
    roadmap
    contributing
-<<<<<<< HEAD
-   build_guide
-=======
->>>>>>> 0fcbbbf469ae92e3c87a2d09189a04c3e0b3123c
    development_guide
    debugging
 
