@@ -9,9 +9,6 @@ Welcome to Skyplane!
 
 
 
-What can you do with Skyplane?
-------------------------------
-
 **skyplane cp copies files from one cloud provider to another**
 
 Skyplane's cp command supports copying large datasets between cloud regions within a single provider:
