@@ -49,7 +49,7 @@ gateway = ["flask", "lz4", "pyopenssl", "werkzeug"]
 solver = ["cvxpy", "graphviz", "matplotlib", "numpy"]
 
 [tool.poetry.dev-dependencies]
-black = ">21.1.0"
+black = ">21.3.0"
 pytest = ">=6.0.0"
 pytest-cov = ">=2.10.0"
 pytest-xdist = ">=2.0.0"
