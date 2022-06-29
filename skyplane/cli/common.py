@@ -68,32 +68,33 @@ def parse_path(path: str):
     raise ValueError(f"Parse error {path}")
 
 
-def check_ulimit(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
-    current_limit_soft, current_limit_hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+def check_limits(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
+    check_ulimit(hard_limit=1024 * 1024)
+
+
+def check_ulimit(hard_limit=1024 * 1024):
+    # Get the current fs.file-max limit
+    check_hard_limit = ["sysctl", "--values", "fs.file-max"]
+    fs_hard_limit = subprocess.check_output(check_hard_limit)
+    current_limit_hard = int(fs_hard_limit.decode("UTF-8"))
+
+    # check/update fs.file-max limit
     if current_limit_hard < hard_limit:
         typer.secho(
-            f"Warning: hard file limit is set to {current_limit_hard}, which is less than the recommended minimum of {hard_limit}", fg="red"
+            f"Warning: file limit is set to {current_limit_hard}, which is less than the recommended minimum of {hard_limit}",
+            fg="red",
         )
-        increase_hard_limit = ["sudo", "sysctl", "-w", f"fs.file-max={hard_limit}"]
-        typer.secho(f"Will run the following commands:")
-        typer.secho(f"    {' '.join(increase_hard_limit)}", fg="yellow")
-        if typer.confirm("sudo required; Do you want to increase the limit?", default=True):
-            subprocess.check_output(increase_hard_limit)
-            new_limit = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
-            if new_limit < soft_limit:
-                typer.secho(
-                    f"Failed to increase ulimit to {soft_limit}, please set manually with 'ulimit -n {soft_limit}'. Current limit is {new_limit}",
-                    fg="red",
-                )
-                raise typer.Abort()
-            else:
-                typer.secho(f"Successfully increased ulimit to {new_limit}", fg="green")
-    if current_limit_soft < soft_limit and (platform == "linux" or platform == "linux2"):
-        increase_soft_limit = ["sudo", "prlimit", "--pid", str(os.getpid()), f"--nofile={soft_limit}:{hard_limit}"]
-        logger.warning(
-            f"Warning: soft file limit is set to {current_limit_soft}, increasing for process with `{' '.join(increase_soft_limit)}`"
+        increase_ulimit = ["sudo", "sysctl", "-w", f"fs.file-max={hard_limit}"]
+        typer.secho(
+            f"Run the following command to increase the hard file limit to the recommended number ({hard_limit}):",
+            fg="yellow",
         )
-        subprocess.check_output(increase_soft_limit)
+        typer.secho(f"    {' '.join(increase_ulimit)}", fg="yellow")
+    else:
+        typer.secho(
+            f"File limit greater than recommended minimum of {hard_limit}.",
+            fg="blue",
+        )
 
 
 def query_instances():
@@ -120,7 +121,12 @@ def query_instances():
         query_jobs.append(catch_error(lambda: GCPCloudProvider().get_matching_instances()))
     # query in parallel
     for instance_list in do_parallel(
-        lambda f: f(), query_jobs, n=-1, return_args=False, spinner=True, desc="Querying clouds for instances"
+        lambda f: f(),
+        query_jobs,
+        n=-1,
+        return_args=False,
+        spinner=True,
+        desc="Querying clouds for instances",
     ):
         instances.extend(instance_list)
     return instances

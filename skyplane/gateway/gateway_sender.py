@@ -1,21 +1,22 @@
+import json
 import queue
 import socket
 import ssl
 import time
 import traceback
+import nacl.secret
 from functools import partial
 from multiprocessing import Event, Process, Queue
 from typing import Dict, List, Optional
+import urllib3
 
 import lz4.frame
-import requests
 
 from skyplane import MB
 from skyplane.chunk import ChunkRequest
 from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.utils import logger
 from skyplane.utils.retry import retry_backoff
-from skyplane.utils.net import retry_requests
 from skyplane.utils.timer import Timer
 
 
@@ -29,13 +30,19 @@ class GatewaySender:
         outgoing_ports: Dict[str, int],
         use_tls: bool = True,
         use_compression: bool = True,
+        e2ee_key_bytes: Optional[bytes] = None,
     ):
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         self.region = region
         self.chunk_store = chunk_store
         self.error_event = error_event
         self.error_queue = error_queue
         self.outgoing_ports = outgoing_ports
         self.use_compression = use_compression
+        if e2ee_key_bytes is None:
+            self.e2ee_secretbox = None
+        else:
+            self.e2ee_secretbox = nacl.secret.SecretBox(e2ee_key_bytes)
         self.n_processes = sum(outgoing_ports.values())
         self.processes = []
 
@@ -58,6 +65,7 @@ class GatewaySender:
         self.destination_ports: Dict[str, int] = {}  # ip_address -> int
         self.destination_sockets: Dict[str, socket.socket] = {}  # ip_address -> socket
         self.sent_chunk_ids: Dict[str, List[int]] = {}  # ip_address -> list of chunk_ids
+        self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3), cert_reqs="CERT_NONE")
 
     def start_workers(self):
         for ip, num_connections in self.outgoing_ports.items():
@@ -103,9 +111,9 @@ class GatewaySender:
         def wait_for_chunks():
             cr_status = {}
             for ip, ip_chunk_ids in self.sent_chunk_ids.items():
-                response = retry_requests().get(f"https://{ip}:8080/api/v1/incomplete_chunk_requests", verify=False)
-                assert response.status_code == 200, f"{response.status_code} {response.text}"
-                host_state = response.json()["chunk_requests"]
+                response = self.http_pool.request("GET", f"https://{ip}:8080/api/v1/incomplete_chunk_requests")
+                assert response.status == 200, f"{response.status_code} {response.data}"
+                host_state = json.loads(response.data.decode("utf-8"))["chunk_requests"]
                 for chunk_id in ip_chunk_ids:
                     if chunk_id in host_state:
                         cr_status[chunk_id] = host_state[chunk_id]["state"]
@@ -125,17 +133,17 @@ class GatewaySender:
         # close servers
         logger.info(f"[sender:{worker_id}] exiting, closing servers")
         for dst_host, dst_port in self.destination_ports.items():
-            response = retry_requests().delete(f"https://{dst_host}:8080/api/v1/servers/{dst_port}", verify=False)
-            assert response.status_code == 200 and response.json() == {"status": "ok"}, response.json()
+            response = self.http_pool.request("DELETE", f"https://{dst_host}:8080/api/v1/servers/{dst_port}")
+            assert response.status == 200 and json.loads(response.data.decode("utf-8")) == {"status": "ok"}
             logger.info(f"[sender:{worker_id}] closed destination socket {dst_host}:{dst_port}")
 
     def queue_request(self, chunk_request: ChunkRequest):
         self.worker_queue.put(chunk_request.chunk.chunk_id)
 
     def make_socket(self, dst_host):
-        response = retry_requests().post(f"https://{dst_host}:8080/api/v1/servers", verify=False)
-        assert response.status_code == 200, f"{response.status_code} {response.text}"
-        self.destination_ports[dst_host] = int(response.json()["server_port"])
+        response = self.http_pool.request("POST", f"https://{dst_host}:8080/api/v1/servers")
+        assert response.status == 200, f"{response.status} {response.data.decode('utf-8')}"
+        self.destination_ports[dst_host] = int(json.loads(response.data.decode("utf-8"))["server_port"])
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect((dst_host, self.destination_ports[dst_host]))
         original_timeout = sock.gettimeout()
@@ -152,14 +160,19 @@ class GatewaySender:
     def send_chunks(self, chunk_ids: List[int], dst_host: str):
         """Send list of chunks to gateway server, pipelining small chunks together into a single socket stream."""
         # notify server of upcoming ChunkRequests
-        logger.debug(f"[sender:{self.worker_id}]:{chunk_ids} pre-registering chunks")
-        chunk_reqs = [self.chunk_store.get_chunk_request(chunk_id) for chunk_id in chunk_ids]
-        post_req = lambda: retry_requests().post(
-            f"https://{dst_host}:8080/api/v1/chunk_requests", json=[c.as_dict() for c in chunk_reqs], verify=False
-        )
-        response = retry_backoff(post_req, exception_class=requests.exceptions.ConnectionError)
-        assert response.status_code == 200 and response.json()["status"] == "ok"
-        logger.debug(f"[sender:{self.worker_id}]:{chunk_ids} registered chunks")
+        with Timer(f"prepare to pre-register chunks {chunk_ids} to {dst_host}"):
+            logger.debug(f"[sender:{self.worker_id}]:{chunk_ids} pre-registering chunks")
+            chunk_reqs = [self.chunk_store.get_chunk_request(chunk_id) for chunk_id in chunk_ids]
+            register_body = json.dumps([c.as_dict() for c in chunk_reqs]).encode("utf-8")
+        with Timer(f"pre-register chunks {chunk_ids} to {dst_host}"):
+            response = self.http_pool.request(
+                "POST",
+                f"https://{dst_host}:8080/api/v1/chunk_requests",
+                body=register_body,
+                headers={"Content-Type": "application/json"},
+            )
+            assert response.status == 200 and json.loads(response.data.decode("utf-8")).get("status") == "ok"
+            logger.debug(f"[sender:{self.worker_id}]:{chunk_ids} registered chunks")
 
         # contact server to set up socket connection
         if self.destination_ports.get(dst_host) is None:
@@ -180,17 +193,24 @@ class GatewaySender:
             with open(chunk_file_path, "rb") as f:
                 data = f.read()
             assert len(data) == chunk.chunk_length_bytes, f"chunk {chunk_id} has size {len(data)} but should be {chunk.chunk_length_bytes}"
+
+            wire_length = len(data)
+            compressed_length = None
             if self.use_compression and self.region == chunk_req.src_region:
                 data = lz4.frame.compress(data)
-                compressed_len = len(data)
+                wire_length = len(data)
+                compressed_length = wire_length
                 logger.debug(
-                    f"[sender:{self.worker_id}]:{chunk_ids} compressed {chunk_id} from {chunk.chunk_length_bytes} to {compressed_len} ({100 * compressed_len / chunk.chunk_length_bytes:.2f}%)"
+                    f"[sender:{self.worker_id}]:{chunk_ids} compressed {chunk_id} from {chunk.chunk_length_bytes} to {wire_length} ({100 * wire_length / chunk.chunk_length_bytes:.2f}%)"
                 )
-            else:
-                compressed_len = None
+            if self.e2ee_secretbox is not None and self.region == chunk_req.src_region:
+                data = self.e2ee_secretbox.encrypt(data)
+                wire_length = len(data)
 
             # send chunk header
-            header = chunk.to_wire_header(n_chunks_left_on_socket=len(chunk_ids) - idx - 1, compressed_len_bytes=compressed_len)
+            header = chunk.to_wire_header(
+                n_chunks_left_on_socket=len(chunk_ids) - idx - 1, wire_length=wire_length, is_compressed=(compressed_length is not None)
+            )
             logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sending chunk header")
             header.to_socket(sock)
             logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent chunk header")
@@ -201,5 +221,5 @@ class GatewaySender:
                 sock.sendall(data)
 
             logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent at {chunk.chunk_length_bytes * 8 / t.elapsed / MB:.2f}Mbps")
-            self.chunk_store.state_finish_upload(chunk_id, f"sender:{self.worker_id}", compressed_size_bytes=compressed_len)
+            self.chunk_store.state_finish_upload(chunk_id, f"sender:{self.worker_id}", compressed_size_bytes=compressed_length)
             chunk_file_path.unlink()

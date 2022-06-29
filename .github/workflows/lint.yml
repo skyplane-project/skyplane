@@ -1,9 +1,5 @@
 name: lint
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+on: [push]
 jobs:
   black-pytype:
     runs-on: ubuntu-latest
@@ -33,5 +29,4 @@ jobs:
       - name: black
         run: poetry run black . --check --line-length=140
       - name: pytype
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         run: poetry run pytype --config .pytype.cfg -j 2

@@ -2,12 +2,12 @@ import os
 import time
 import uuid
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import googleapiclient
 import paramiko
 
-from skyplane import key_root
+from skyplane import exceptions, key_root
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
@@ -151,34 +151,34 @@ class GCPCloudProvider(CloudProvider):
             with open(self.public_key_path, "w") as f:
                 f.write(f"{key.get_name()} {key.get_base64()}\n")
 
-    def configure_default_network(self):
+    def configure_skyplane_network(self):
         compute = self.auth.get_gcp_client()
         try:
-            compute.networks().get(project=self.auth.project_id, network="default").execute()
+            compute.networks().get(project=self.auth.project_id, network="skyplane").execute()
         except googleapiclient.errors.HttpError as e:
             if e.resp.status == 404:  # create network
                 op = (
                     compute.networks()
-                    .insert(project=self.auth.project_id, body={"name": "default", "subnetMode": "auto", "autoCreateSubnetworks": True})
+                    .insert(project=self.auth.project_id, body={"name": "skyplane", "subnetMode": "auto", "autoCreateSubnetworks": True})
                     .execute()
                 )
                 self.wait_for_operation_to_complete("global", op["name"])
             else:
                 raise e
 
-    def configure_default_firewall(self, ip="0.0.0.0/0"):
-        """Configure default firewall to allow access from all ports from all IPs (if not exists)."""
+    def configure_skyplane_firewall(self, ip="0.0.0.0/0"):
+        """Configure skyplane firewall to allow SSH from all ports from all IPs (if not exists)."""
         compute = self.auth.get_gcp_client()
 
         def create_firewall(body, update_firewall=False):
             if update_firewall:
-                op = compute.firewalls().update(project=self.auth.project_id, firewall="default", body=fw_body).execute()
+                op = compute.firewalls().update(project=self.auth.project_id, firewall="skyplanessh", body=fw_body).execute()
             else:
                 op = compute.firewalls().insert(project=self.auth.project_id, body=fw_body).execute()
             self.wait_for_operation_to_complete("global", op["name"])
 
         try:
-            current_firewall = compute.firewalls().get(project=self.auth.project_id, firewall="default").execute()
+            current_firewall = compute.firewalls().get(project=self.auth.project_id, firewall="skyplanessh").execute()
         except googleapiclient.errors.HttpError as e:
             if e.resp.status == 404:
                 current_firewall = None
@@ -186,19 +186,88 @@ class GCPCloudProvider(CloudProvider):
                 raise e
 
         fw_body = {
-            "name": "default",
-            "allowed": [{"IPProtocol": "tcp", "ports": ["1-65535"]}, {"IPProtocol": "udp", "ports": ["1-65535"]}, {"IPProtocol": "icmp"}],
+            "name": "skyplanessh",
+            "network": "global/networks/skyplane",
+            "allowed": [{"IPProtocol": "tcp", "ports": ["22"]}, {"IPProtocol": "udp", "ports": ["1-65535"]}, {"IPProtocol": "icmp"}],
             "description": "Allow all traffic from all IPs",
             "sourceRanges": [ip],
         }
         if current_firewall is None:
-            logger.warning(f"[GCP] Creating new firewall")
             create_firewall(fw_body, update_firewall=False)
-            logger.debug(f"[GCP] Created new firewall")
+            logger.fs.debug(f"[GCP] Created new firewall")
+
         elif current_firewall["allowed"] != fw_body["allowed"]:
-            logger.warning(f"[GCP] Updating firewall, current rules do not match")
             create_firewall(fw_body, update_firewall=True)
-            logger.debug(f"[GCP] Updated firewall")
+            logger.fs.debug(f"[GCP] Updated firewall")
+
+    def delete_vpc(self, vpc_name="skyplane"):
+        """
+        Delete VPC. This might error our in some cases.
+        """
+        compute = self.auth.get_gcp_client()
+        request = compute.networks().delete(project=self.auth.project_id, network=vpc_name)
+        try:
+            delete_vpc_response = request.execute()
+            self.wait_for_operation_to_complete("global", delete_vpc_response)
+        except googleapiclient.errors.HttpError as e:
+            logger.fs.warn(
+                f"Unable to Delete. Ensure no active firewall rules acting upon the {vpc_name} VPC. Ensure no instances provisioned in the VPC "
+            )
+            logger.fs.error(e)
+
+    def add_ips_to_firewall(self, ips: List[str]):
+        """
+        Other than "default" VPCs start with 2 rules at 65535 priority:
+         - Allow all egress
+         - Block all ingress
+        If you do not specify a priority when creating a rule, it is assigned a priority of 1000
+        """
+
+        def create_firewall(body, update_firewall=False):
+            if update_firewall:
+                op = compute.firewalls().update(project=self.auth.project_id, firewall="skyplane", body=fw_body).execute()
+            else:
+                op = compute.firewalls().insert(project=self.auth.project_id, body=fw_body).execute()
+            self.wait_for_operation_to_complete("global", op["name"])
+
+        compute = self.auth.get_gcp_client()
+        # Let's call each firewall rule by the ip name, so it's easier to delete
+        #  individual ips during concurrent transfers
+        for ip in ips:
+            firewall_name = "skyplane" + ip.replace(".", "")
+            fw_body = {
+                "name": firewall_name,  # Name should be [a-z]([-a-z0-9]*[a-z0-9]
+                "network": "global/networks/skyplane",
+                "allowed": [{"IPProtocol": "tcp", "ports": ["1-65535"]}],
+                "description": f"Allow all TCP traffic from ip {ip}",
+                "sourceRanges": [f"{ip}/32"],
+            }
+            try:
+                current_firewall = compute.firewalls().get(project=self.auth.project_id, firewall=firewall_name).execute()
+            except googleapiclient.errors.HttpError as e:
+                if e.resp.status == 404:
+                    current_firewall = None
+                else:
+                    raise e
+            if current_firewall is None:
+                create_firewall(fw_body, update_firewall=False)
+                logger.fs.debug(f"[GCP] Created new firewall {firewall_name}")
+            elif current_firewall["allowed"] != fw_body["allowed"]:
+                create_firewall(fw_body, update_firewall=True)
+                logger.fs.debug(f"[GCP] Updated firewall {firewall_name}")
+
+    def remove_ips_from_firewall(self, ips: List[str]):
+        compute = self.auth.get_gcp_client()
+        for ip in ips:
+            firewall_name = "skyplane" + ip.replace(".", "")  # Each firewall rule is called by the ip name, so it's easier to delete
+            logger.fs.debug(f"[GCP] Deleting firewall rule {firewall_name}")
+            try:
+                compute.firewalls().delete(project=self.auth.project_id, firewall=firewall_name).execute()
+            except googleapiclient.errors.HttpError as e:
+                if e.resp.status == 404:  # Firewall doesnt exist. Continue
+                    logger.fs.warning(f"[GCP] Unable to delete {firewall_name}, does not exist.")
+                else:
+                    raise e
 
     def get_operation_state(self, zone, operation_name):
         compute = self.auth.get_gcp_client()
@@ -246,7 +315,7 @@ class GCPCloudProvider(CloudProvider):
             ],
             "networkInterfaces": [
                 {
-                    "network": "global/networks/default",
+                    "network": "global/networks/skyplane",
                     "accessConfigs": [
                         {"name": "External NAT", "type": "ONE_TO_ONE_NAT", "networkTier": "PREMIUM" if premium_network else "STANDARD"}
                     ],
@@ -257,8 +326,21 @@ class GCPCloudProvider(CloudProvider):
             "scheduling": {"onHostMaintenance": "TERMINATE", "automaticRestart": False},
             "deletionProtection": False,
         }
-        result = compute.instances().insert(project=self.auth.project_id, zone=region, body=req_body).execute()
-        self.wait_for_operation_to_complete(region, result["name"])
+        try:
+            result = compute.instances().insert(project=self.auth.project_id, zone=region, body=req_body).execute()
+            self.wait_for_operation_to_complete(region, result["name"])
+        except googleapiclient.errors.HttpError as e:
+            if e.resp.status == 409:
+                if "ZONE_RESOURCE_POOL_EXHAUSTED" in e.content:
+                    raise exceptions.InsufficientVCPUException(f"Got ZONE_RESOURCE_POOL_EXHAUSTED in region {region}") from e
+                elif "RESOURCE_EXHAUSTED" in e.content:
+                    raise exceptions.InsufficientVCPUException(f"Got RESOURCE_EXHAUSTED in region {region}") from e
+                elif "QUOTA_EXCEEDED" in e.content:
+                    raise exceptions.InsufficientVCPUException(f"Got QUOTA_EXCEEDED in region {region}") from e
+                elif "QUOTA_LIMIT" in e.content:
+                    raise exceptions.InsufficientVCPUException(f"Got QUOTA_LIMIT in region {region}") from e
+                else:
+                    raise e
 
         # wait for server to reach RUNNING state
         server = GCPServer(f"gcp:{region}", name)
@@ -269,8 +351,9 @@ class GCPCloudProvider(CloudProvider):
                 interval=0.1,
                 desc=f"Wait for RUNNING status on {server.uuid()}",
             )
+            server.wait_for_ssh_ready()
         except:
-            logger.error(f"Instance {server.uuid()} did not reach RUNNING status")
+            logger.fs.error(f"Instance {server.uuid()} did not reach RUNNING status")
             server.terminate_instance()
             raise
         server.run_command("sudo /sbin/iptables -A INPUT -j ACCEPT")
