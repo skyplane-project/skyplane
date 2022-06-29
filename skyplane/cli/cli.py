@@ -387,7 +387,7 @@ def init(
     cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
 
     # check file limit
-    #check_ulimit()
+    check_ulimit()
 
     cloud_config.to_config_file(config_path)
     typer.secho(f"\nConfig file saved to {config_path}", fg="green")
