@@ -5,7 +5,6 @@ from pathlib import Path
 from shlex import split
 import traceback
 
-import questionary
 import typer
 
 import skyplane.cli.cli_aws
@@ -337,16 +336,20 @@ def ssh():
 
     instance_map = {f"{i.region_tag}, {i.public_ip()} ({i.instance_state()})": i for i in instances}
     choices = list(sorted(instance_map.keys()))
-    instance_name = questionary.select("Select an instance", choices=choices).ask()
-    if instance_name is not None and instance_name in instance_map:
-        instance = instance_map[instance_name]
-        cmd = instance.get_ssh_cmd()
-        logger.info(f"Running SSH command: {cmd}")
-        logger.info("It may ask for a private key password, try `skyplane`.")
-        proc = subprocess.Popen(split(cmd))
-        proc.wait()
-    else:
-        typer.secho(f"No instance selected", fg="red")
+
+    # ask for selection
+    typer.secho("Select an instance:", fg="yellow", bold=True)
+    for i, choice in enumerate(choices):
+        typer.secho(f"{i+1}) {choice}", fg="yellow")
+    choice = typer.prompt(f"Enter a number: ", validators=[typer.Range(1, len(choices))])
+    instance = instance_map[choices[choice - 1]]
+
+    # ssh
+    cmd = instance.get_ssh_cmd()
+    logger.info(f"Running SSH command: {cmd}")
+    logger.info("It may ask for a private key password, try `skyplane`.")
+    proc = subprocess.Popen(split(cmd))
+    proc.wait()
 
 
 @app.command()
