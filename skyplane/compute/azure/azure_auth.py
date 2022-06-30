@@ -83,9 +83,9 @@ class AzureAuthentication:
                     valid_skus.append(sku.name)
             return set(valid_skus)
 
-        print("    Querying for SKU availbility in regions")
-        result = do_parallel(get_skus, region_list, spinner=True, spinner_persist=False, desc="Query SKUs")
-
+        result = do_parallel(
+            get_skus, region_list, spinner=True, spinner_persist=False, desc="Query available VM SKUs from each enabled Azure region", n=8
+        )
         region_sku = dict()
         for region, skus in result:
             region_sku[region] = list()
