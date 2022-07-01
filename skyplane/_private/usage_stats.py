@@ -4,6 +4,7 @@ import json
 import sys
 import time
 from skyplane.utils import logger
+from skyplane import cloud_config, config_path
 from . import usage_constants
 
 class UsageStatsEnabledness(Enum):
@@ -11,10 +12,10 @@ class UsageStatsEnabledness(Enum):
     DISABLED_EXPLICITLY = auto()
     ENABLED_BY_DEFAULT = auto()
 
-def usage_stats_config_path():
-    return os.getenv(
-        "SKYPLANE_USAGE_STATS_CONFIG_PATH", os.path.expanduser("~/.skyplane/usage_stats_config.json")
-    )
+# def usage_stats_config_path():
+#     return os.getenv(
+#         "SKYPLANE_USAGE_STATS_CONFIG_PATH", os.path.expanduser("~/.skyplane/usage_stats_config.json")
+#     )
 
 def usage_stats_enabledness():
     # environment vairable has higher priority
@@ -31,9 +32,7 @@ def usage_stats_enabledness():
     # then check in the config file
     usage_stats_enabled_config_var = None
     try:
-        with open(usage_stats_config_path()) as f:
-            config = json.load(f)
-            usage_stats_enabled_config_var = config.get("usage_stats")
+        usage_stats_enabled_config_var = cloud_config.get_flag("usage_stats")
     except FileNotFoundError:
         pass
     except Exception as e:
@@ -45,7 +44,7 @@ def usage_stats_enabledness():
         return UsageStatsEnabledness.ENABLED_EXPLICITLY
     elif usage_stats_enabled_config_var is not None:
         raise ValueError(
-            f"Valid value for 'usage_stats' in {usage_stats_config_path()}"
+            f"Valid value for 'usage_stats' in {config_path}"
             f" is 0 or 1, but got {usage_stats_enabled_config_var}"
         )
 
@@ -55,21 +54,6 @@ def usage_stats_enabled():
     return usage_stats_enabledness() is not UsageStatsEnabledness.DISABLED_EXPLICITLY
 
 def set_usage_stats_via_config(value):
-    config = {}
-    try:
-        with open(usage_stats_config_path()) as f:
-            config = json.load(f)
-        if not isinstance(config, dict):
-            logger.debug(
-                f"Invalid config file, should be a json dict but got {type(config)}"
-            )
-            config = {}
-    except FileNotFoundError:
-        pass
-    except Exception as e:
-        logger.debug(f"Failed to load usage stats config {e}")
-
-    config["usage_stats"] = value
     if value == "0":
         answer = usage_stats_disabled_reconfirmation()
         if not answer:
@@ -77,12 +61,10 @@ def set_usage_stats_via_config(value):
             return
 
     try:
-        os.makedirs(os.path.dirname(usage_stats_config_path()), exist_ok=True)
-        with open(usage_stats_config_path(), "w") as f:
-            json.dump(config, f)
+        cloud_config.set_flag("usage_stats", value)
     except Exception as e:
         raise Exception("Failed to enable/disable by writing to" 
-        f"{usage_stats_config_path()}") from e
+        f"{config_path}") from e
 
 def set_usage_stats_via_env_var(value) -> None:
     os.environ[usage_constants.USAGE_STATS_ENABLED_ENV_VAR] = "1" if value else "0"

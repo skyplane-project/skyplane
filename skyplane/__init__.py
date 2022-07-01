@@ -1,7 +1,11 @@
 import os
+import uuid
 from pathlib import Path
 
 from skyplane.config import SkyplaneConfig
+
+# generate a global client id
+clientid = uuid.uuid1()
 
 # paths
 skyplane_root = Path(__file__).parent.parent
@@ -17,6 +21,7 @@ aws_config_path = config_root / "aws_config"
 azure_config_path = config_root / "azure_config"
 azure_sku_path = config_root / "azure_sku_mapping"
 gcp_config_path = config_root / "gcp_config"
+clientid_config_path = config_root / "clientid_config"
 
 key_root = config_root / "keys"
 tmp_log_dir = Path("/tmp/skyplane")
@@ -42,5 +47,5 @@ def format_bytes(bytes: int):
 if config_path.exists():
     cloud_config = SkyplaneConfig.load_config(config_path)
 else:
-    cloud_config = SkyplaneConfig(False, False, False)
+    cloud_config = SkyplaneConfig(False, False, False, clientid)
 is_gateway_env = os.environ.get("SKYPLANE_IS_GATEWAY", None) == "1"
