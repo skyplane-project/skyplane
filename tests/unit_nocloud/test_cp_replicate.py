@@ -32,6 +32,7 @@ def test_map_object_recursive():
     )
     assert map_object_key_prefix("bar/foo/", "bar/foo/b.txt", "bar", recursive=True) == "bar/b.txt"
 
+
 def test_map_objects_no_dir():
     assert map_object_key_prefix("foo/a.txt", "foo/a.txt", "bar") == "bar"
     check_exception_raised(lambda: map_object_key_prefix("foo/a.txt", "foo/b.txt", "bar"), exceptions.MissingObjectException)

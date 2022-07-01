@@ -93,7 +93,9 @@ def map_object_key_prefix(
                 return f"{dest_prefix}{src_name}"
             elif source_prefix == source_key:
                 return dest_prefix
-        raise exceptions.MissingObjectException(f"Source key {source_key} does not start with source prefix {source_prefix}. To copy a directory, please use the '--recursive' flag")
+        raise exceptions.MissingObjectException(
+            f"Source key {source_key} does not start with source prefix {source_prefix}. To copy a directory, please use the '--recursive' flag"
+        )
     else:
         dest_prefix = dest_prefix if dest_prefix.endswith("/") else f"{dest_prefix}/"
         source_prefix = source_prefix if source_prefix.endswith("/") else f"{source_prefix}/"
