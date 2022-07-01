@@ -46,6 +46,7 @@ app.add_typer(skyplane.cli.cli_solver.app, name="solver")
 def cp(
     src: str,
     dst: str,
+    recursive: bool = typer.Option(False, "--recursive", "-r", help="If true, will copy objects at folder prefix recursively"),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
     multipart: bool = typer.Option(cloud_config.get_flag("multipart_enabled"), help="If true, will use multipart uploads."),
@@ -73,6 +74,8 @@ def cp(
     :type src: str
     :param dst: The destination of the transfer
     :type dst: str
+    :param recursive: If true, will copy objects at folder prefix recursively
+    :type recursive: bool
     :param reuse_gateways: If true, will leave provisioned instances running to be reused. You must run `skyplane deprovision` to clean up.
     :type reuse_gateways: bool
     :param debug: If true, will write debug information to debug directory.
@@ -117,7 +120,9 @@ def cp(
             src_region = src_client.region_tag()
             dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
             dst_region = dst_client.region_tag()
-            transfer_pairs = generate_full_transferobjlist(src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst)
+            transfer_pairs = generate_full_transferobjlist(
+                src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst, recursive=recursive
+            )
         except exceptions.SkyplaneException as e:
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
             console.print(e.pretty_print_str())
@@ -176,6 +181,7 @@ def cp(
 def sync(
     src: str,
     dst: str,
+    recursive: bool = typer.Option(False, "--recursive", "-r", help="If true, will copy objects at folder prefix recursively"),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
     # transfer flags
@@ -207,6 +213,8 @@ def sync(
     :type src: str
     :param dst: The destination of the transfer
     :type dst: str
+    :param recursive: If true, will copy objects at folder prefix recursively
+    :type recursive: bool
     :param reuse_gateways: If true, will leave provisioned instances running to be reused. You must run `skyplane deprovision` to clean up.
     :type reuse_gateways: bool
     :param debug: If true, will write debug information to debug directory.
@@ -239,7 +247,9 @@ def sync(
         src_region = src_client.region_tag()
         dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
         dst_region = dst_client.region_tag()
-        full_transfer_pairs = generate_full_transferobjlist(src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst)
+        full_transfer_pairs = generate_full_transferobjlist(
+            src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst, recursive=recursive
+        )
     except exceptions.SkyplaneException as e:
         console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
         console.print(e.pretty_print_str())
