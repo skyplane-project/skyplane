@@ -2,7 +2,7 @@ Internal package documentation
 =======================================
 
 skyplane.replicate.replicator_client module
-----------------------------
+---------------------------------------------
 
 .. automodule:: skyplane.replicate.replicator_client
    :members:
