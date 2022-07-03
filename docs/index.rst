@@ -30,7 +30,7 @@ Contents
 
    quickstart
    configure
-   overview
+   architecture
    faq
 
 
