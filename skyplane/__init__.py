@@ -3,9 +3,7 @@ import uuid
 from pathlib import Path
 
 from skyplane.config import SkyplaneConfig
-
-# generate a global client id
-clientid = uuid.uuid1()
+from skyplane.config import clientid
 
 # paths
 skyplane_root = Path(__file__).parent.parent
