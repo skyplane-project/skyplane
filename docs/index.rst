@@ -30,7 +30,7 @@ Contents
 
    quickstart
    configure
-   overview
+   architecture
    faq
 
 
@@ -38,9 +38,9 @@ Contents
    :maxdepth: 4
    :caption: Developer documentation
 
-   roadmap
    contributing
    development_guide
+   roadmap
    debugging
 
 .. toctree::

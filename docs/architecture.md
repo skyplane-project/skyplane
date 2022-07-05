@@ -11,8 +11,8 @@ Terminology:
 * Overlay Path: A path consisting of gateways and gateway links to optimize for a transfer. 
 
 
-## Transfer Integrity
-TODO @ Paras
+## Transfer Integrity and Checksumming
+Skyplane takes several steps to ensure the correctness of transfers. To ensure that data is transferred without corruption (e.g. bit flips or missing byte ranges), Skyplane will compute checksums for data at the source region and verify data matches the checksum before writing back to the destination region. To ensure that no files are dropped during the transfer, Skyplane will query the destination object store after a transfer and check all files were copied with the correct file size. To verify checksums for whole-file transfers, Skyplane computes MD5 hashes at the source region. Upon writing data at the destination, hashes are validated directly in the destintation object store. For multipart transfers, hashses are validated at the destination VM before writing to the object store.
 
 ## Security 
 TODO @ Sam

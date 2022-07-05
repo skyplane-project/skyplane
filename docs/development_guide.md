@@ -1,4 +1,4 @@
-# Development Guide 
+# Building from source
 
 ## Setting up a developer environment
 
