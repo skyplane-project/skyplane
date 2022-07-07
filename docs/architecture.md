@@ -14,8 +14,16 @@ Terminology:
 ## Transfer Integrity and Checksumming
 Skyplane takes several steps to ensure the correctness of transfers. To ensure that data is transferred without corruption (e.g. bit flips or missing byte ranges), Skyplane will compute checksums for data at the source region and verify data matches the checksum before writing back to the destination region. To ensure that no files are dropped during the transfer, Skyplane will query the destination object store after a transfer and check all files were copied with the correct file size. To verify checksums for whole-file transfers, Skyplane computes MD5 hashes at the source region. Upon writing data at the destination, hashes are validated directly in the destintation object store. For multipart transfers, hashses are validated at the destination VM before writing to the object store.
 
-## Security 
-TODO @ Sam
+## Security
+Data transfers in Skyplane are encrypted end-to-end. This means that all of the data chunks in each transfer are encrypted in the source region, transferred over the network (including through any relay regions) in encrypted form, and decrypted only when they reach destination region. Within the source and destination regions data may be handled in plaintext. For example, chunks are decrypted at the destination gateways and are inserted into the destination object store. For stronger security, the application using Skyplane may choose to store data in the source object store in encrypted form, so that it remains encrypted even in the source and destination regions. To afford higher efficiency for these use cases, Skyplane allows its own encryption to be disabled, to avoid encrypting data twice. The keys used for Skyplane's end-to-end encryption are generated at the client and then communicated to the gateways over SSH.
+
+HTTP/REST calls made between gateways are enrypted separately, using TLS.
+
+Owing to the above encryption mechanisms, Skyplane guarantees confidentiality against a passive adversary who can view data transferred over the wide-area network and in relay regions. Such an adversary cannot see the contents of the data, but it can potentially see the following:
+* The quantity of data transferred.
+* The network path and overlay path taken by each chunk during the transfer.
+* The size of each chunk (which may be related to the size of the files/objects being transferred).
+* The timing of each chunk's transfer between gateways and oer the network.
 
 ## Encryption 
 
