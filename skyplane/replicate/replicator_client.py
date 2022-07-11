@@ -304,13 +304,9 @@ class ReplicatorClient:
         # assign source and destination gateways permission to buckets
         assign_jobs = []
         if job.source_region.split(":")[0] == "azure":
-            for location, gateway in self.bound_nodes.items():
-                if isinstance(gateway, AzureServer) and location.region == job.source_region:
-                    assign_jobs.append(partial(gateway.authorize_storage_account, job.source_bucket.split("/", 1)[0]))
-        if job.dest_region.split(":")[0] == "azure":
-            for location, gateway in self.bound_nodes.items():
-                if isinstance(gateway, AzureServer) and location.region == job.dest_region:
-                    assign_jobs.append(partial(gateway.authorize_storage_account, job.dest_bucket.split("/", 1)[0]))
+            for gateway in self.bound_nodes.values():
+                if isinstance(gateway, AzureServer):
+                    assign_jobs.append(gateway.authorize_subscription)
         do_parallel(lambda fn: fn(), assign_jobs, spinner=True, spinner_persist=True, desc="Assigning gateways permissions to buckets")
 
         with Progress(
