@@ -18,24 +18,10 @@ class S3Object(ObjectStoreObject):
 
 
 class S3Interface(ObjectStoreInterface):
-    def __init__(self, bucket_name, aws_region="infer", create_bucket=False):
+    def __init__(self, bucket_name: str, aws_region: str = "infer"):
         self.auth = AWSAuthentication()
         self.bucket_name = bucket_name
-        try:
-            if bucket_name is not None:
-                self.aws_region = self.infer_s3_region(bucket_name) if aws_region is None or aws_region == "infer" else aws_region
-                if not self.bucket_exists():
-                    raise exceptions.MissingBucketException(f"Bucket {bucket_name} does not exist")
-            else:
-                self.aws_region = None
-        except exceptions.MissingBucketException:
-            if create_bucket:
-                assert aws_region is not None and aws_region != "infer", "Must specify AWS region when creating bucket"
-                self.aws_region = aws_region
-                self.create_bucket()
-                logger.info(f"Created S3 bucket {self.bucket_name} in region {self.aws_region}")
-            else:
-                raise
+        self.aws_region = self.infer_s3_region(bucket_name) if aws_region == "infer" else aws_region
 
     def region_tag(self):
         return "aws:" + self.aws_region

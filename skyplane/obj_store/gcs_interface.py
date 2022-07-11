@@ -11,7 +11,6 @@ import requests
 from skyplane import exceptions
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
-from skyplane.utils import logger
 
 
 class GCSObject(ObjectStoreObject):
@@ -20,24 +19,12 @@ class GCSObject(ObjectStoreObject):
 
 
 class GCSInterface(ObjectStoreInterface):
-    def __init__(self, bucket_name, gcp_region="infer", create_bucket=False):
+    def __init__(self, bucket_name: str, gcp_region: str = "infer"):
         self.bucket_name = bucket_name
         self.auth = GCPAuthentication()
-        # self.auth.set_service_account_credentials("skyplane1") # use service account credentials
         self._gcs_client = self.auth.get_storage_client()
         self._requests_session = requests.Session()
-        try:
-            self.gcp_region = self.infer_gcp_region(bucket_name) if gcp_region is None or gcp_region == "infer" else gcp_region
-            if not self.bucket_exists():
-                raise exceptions.MissingBucketException()
-        except exceptions.MissingBucketException:
-            if create_bucket:
-                assert gcp_region is not None and gcp_region != "infer", "Must specify AWS region when creating bucket"
-                self.gcp_region = gcp_region
-                self.create_bucket()
-                logger.info(f"Created GCS bucket {self.bucket_name} in region {self.gcp_region}")
-            else:
-                raise
+        self.gcp_region = self.infer_gcp_region(bucket_name) if gcp_region == "infer" else gcp_region
 
     def region_tag(self):
         return "gcp:" + self.gcp_region
@@ -67,6 +54,13 @@ class GCSInterface(ObjectStoreInterface):
             self._gcs_client.get_bucket(self.bucket_name)
             return True
         except Exception:
+            return False
+
+    def exists(self, obj_name):
+        try:
+            self.get_obj_metadata(obj_name)
+            return True
+        except NoSuchObjectException:
             return False
 
     def create_bucket(self, premium_tier=True):
@@ -104,13 +98,6 @@ class GCSInterface(ObjectStoreInterface):
 
     def get_obj_last_modified(self, obj_name):
         return self.get_obj_metadata(obj_name).updated
-
-    def exists(self, obj_name):
-        try:
-            self.get_obj_metadata(obj_name)
-            return True
-        except NoSuchObjectException:
-            return False
 
     def send_xml_request(
         self,
@@ -246,7 +233,7 @@ class GCSInterface(ObjectStoreInterface):
             response = self.send_xml_request(
                 dst_object_name, {"uploadId": upload_id}, "POST", data=xml_data, content_type="application/xml"
             )
-        except Exception as e:
+        except Exception:
             # cancel upload
             response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "DELETE")
             return False
