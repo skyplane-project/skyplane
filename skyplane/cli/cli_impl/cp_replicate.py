@@ -179,11 +179,11 @@ def confirm_transfer(topo: ReplicationTopology, job: ReplicationJob, ask_to_conf
     # print list of objects to transfer if not a random transfer
     if not job.random_chunk_size_mb:
         for src, dst in job.transfer_pairs[:4]:
-            console.print(f"    [bright_black][bold]{src.key}[/bold] -> [bold]{dst.key}[/bold][/bright_black]")
+            console.print(f"    [bright_black][bold]{src.key}[/bold] => [bold]{dst.key}[/bold][/bright_black]")
         if len(job.transfer_pairs) > 4:
             console.print(f"    [bright_black][bold]...[/bold][/bright_black]")
             for src, dst in job.transfer_pairs[4:][-4:]:
-                console.print(f"    [bright_black][bold]{src.key}[/bold] -> [bold]{dst.key}[/bold][/bright_black]")
+                console.print(f"    [bright_black][bold]{src.key}[/bold] => [bold]{dst.key}[/bold][/bright_black]")
 
     if ask_to_confirm_transfer:
         if typer.confirm("Continue?", default=True):
@@ -303,9 +303,11 @@ def launch_replication_job(
                 typer.secho(error, fg="red")
         raise typer.Exit(1)
 
-    # verify transfer
     if verify_checksums:
-        rc.verify_transfer(job)
+        if any(node.region.startswith("azure") for node in rc.bound_nodes.keys()):
+            typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
+        else:
+            rc.verify_transfer(job)
 
     # print stats
     if stats["success"]:
