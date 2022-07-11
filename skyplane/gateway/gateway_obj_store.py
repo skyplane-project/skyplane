@@ -49,15 +49,18 @@ class GatewayObjStoreConn:
             except Exception as e:
                 raise ValueError(f"Failed to create obj store interface {str(e)}")
 
-            def exists():
-                try:
-                    return self.obj_store_interfaces[key].bucket_exists()
-                except Exception as e:
-                    logger.error(f"[gateway_daemon] Failed to check bucket exists {str(e)}")
-                    return False
+            # wait for role propagation on Azure
+            if region.startswith("azure:"):
 
-            propogation_time = wait_for(exists, timeout=120, desc=f"Wait for obj store interface {key}")
-            logger.info(f"[gateway_daemon] Created obj store interface {key}, waited {propogation_time:.2f}s for bucket to exist")
+                def exists():
+                    try:
+                        return self.obj_store_interfaces[key].bucket_exists()
+                    except Exception as e:
+                        logger.error(f"[gateway_daemon] Failed to check bucket exists {str(e)}")
+                        return False
+
+                propogation_time = wait_for(exists, timeout=180, desc=f"Wait for obj store interface {key}")
+                logger.info(f"[gateway_daemon] Created obj store interface {key}, waited {propogation_time:.2f}s for bucket to exist")
         return self.obj_store_interfaces[key]
 
     def start_workers(self):
