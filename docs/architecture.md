@@ -23,7 +23,7 @@ Owing to the above encryption mechanisms, Skyplane guarantees confidentiality ag
 * The quantity of data transferred.
 * The network path and overlay path taken by each chunk during the transfer.
 * The size of each chunk (which may be related to the size of the files/objects being transferred).
-* The timing of each chunk's transfer between gateways and oer the network.
+* The timing of each chunk's transfer between gateways and over the network.
 
 ## Encryption 
 
