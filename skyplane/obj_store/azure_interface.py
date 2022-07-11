@@ -26,39 +26,13 @@ class AzureObject(ObjectStoreObject):
 
 
 class AzureInterface(ObjectStoreInterface):
-    def __init__(self, account_name, container_name, region="infer", create_bucket=False, max_concurrency=1):
+    def __init__(self, account_name: str, container_name: str, region: str = "infer", max_concurrency=1):
         self.auth = AzureAuthentication()
         self.account_name = account_name
         self.container_name = container_name
         self.account_url = f"https://{self.account_name}.blob.core.windows.net"
         self.max_concurrency = max_concurrency  # parallel upload/downloads, seems to cause issues if too high
-
-        # check container exists
-        if not self.storage_account_exists():
-            if create_bucket:
-                self.create_storage_account()
-                logger.info(f"Created Azure storage account {self.account_name}")
-            else:
-                # print available storage accounts from azure API
-                avail_storage_accounts = [account.name for account in self.storage_management_client.storage_accounts.list()]
-                raise exceptions.MissingBucketException(
-                    f"Azure storage account {self.account_name} not found, "
-                    + f"found the following storage accounts: {avail_storage_accounts}"
-                    + f"with credential {self.auth.get_azure_credential()}"
-                )
-        if not self.container_exists():
-            if create_bucket:
-                self.create_container()
-                logger.info(f"Created Azure container {self.container_name}")
-            else:
-                raise exceptions.MissingBucketException(f"Azure container {self.container_name} not found")
-
-        # infer region
-        if region == "infer":
-            self.storage_account = self.query_storage_account(self.account_name)
-            self.azure_region = self.storage_account.location
-        else:
-            self.azure_region = region
+        self.azure_region = self.query_storage_account(self.account_name).location if region == "infer" else region
 
     @property
     def blob_service_client(self):
@@ -95,6 +69,9 @@ class AzureInterface(ObjectStoreInterface):
             return True
         except ResourceNotFoundError:
             return False
+
+    def bucket_exists(self):
+        return self.storage_account_exists() and self.container_exists()
 
     def exists(self, obj_name):
         return self.blob_service_client.get_blob_client(container=self.container_name, blob=obj_name).exists()

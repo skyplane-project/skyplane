@@ -2,7 +2,7 @@ import os
 import time
 import uuid
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import googleapiclient
 import paramiko

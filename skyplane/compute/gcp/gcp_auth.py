@@ -1,8 +1,6 @@
-from re import I
 from pathlib import Path
 from typing import Optional
 import base64
-import json
 import os
 
 import google.auth
@@ -12,7 +10,6 @@ from googleapiclient import discovery
 from skyplane import cloud_config, config_path, gcp_config_path, key_root
 from skyplane.config import SkyplaneConfig
 from skyplane.utils import logger
-from google.oauth2 import service_account
 
 
 class GCPAuthentication:

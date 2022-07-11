@@ -353,7 +353,7 @@ class AzureCloudProvider(CloudProvider):
                             "identity": {"type": ResourceIdentityType.system_assigned},
                         },
                     )
-                    vm_result = poller.result()
+                    poller.result()
                 except HttpResponseError as e:
                     if "ResourceQuotaExceeded" in str(e):
                         raise exceptions.InsufficientVCPUException(f"Got ResourceQuotaExceeded error in Azure region {location}") from e
