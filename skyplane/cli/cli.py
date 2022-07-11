@@ -403,9 +403,10 @@ def init(
 
     cloud_config.to_config_file(config_path)
     typer.secho(f"\nConfig file saved to {config_path}", fg="green")
-
     return 0
 
+
+typer_click_object = typer.main.get_command(app)
 
 if __name__ == "__main__":
     app()
