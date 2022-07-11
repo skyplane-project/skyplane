@@ -41,11 +41,12 @@ numpy = { version = ">=1.19.0", optional = true }
 # gateway dependencies
 lz4 = { version = "^4.0.0", optional = true }
 flask = { version = "^2.1.2", optional = true }
+pynacl = { version = "^1.5.0", optional = true }
 pyopenssl = { version = "^22.0.0", optional = true }
 werkzeug = { version = "^2.1.2", optional = true }
 
 [tool.poetry.extras]
-gateway = ["flask", "lz4", "pyopenssl", "werkzeug"]
+gateway = ["flask", "lz4", "pynacl", "pyopenssl", "werkzeug"]
 solver = ["cvxpy", "graphviz", "matplotlib", "numpy"]
 
 [tool.poetry.dev-dependencies]
