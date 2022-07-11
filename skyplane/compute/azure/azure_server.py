@@ -153,6 +153,16 @@ class AzureServer(Server):
         compute_client = self.auth.get_compute_client()
         network_client = self.auth.get_network_client()
 
+        # remove any role assignments to the VM's system assigned identity
+        auth_client = self.auth.get_authorization_client()
+        vm = self.get_virtual_machine()
+        for assignment in auth_client.role_assignments.list(filter="principalId eq '{}'".format(vm.identity.principal_id)):
+            logger.fs.debug(f"Deleting role assignment {assignment.name}")
+            auth_client.role_assignments.delete(
+                scope=assignment.scope,
+                role_assignment_name=assignment.name,
+            )
+
         vm_poller = compute_client.virtual_machines.begin_delete(AzureServer.resource_group_name, self.vm_name(self.name))
         _ = vm_poller.result()
         nic_poller = network_client.network_interfaces.begin_delete(AzureServer.resource_group_name, self.nic_name(self.name))
@@ -168,11 +178,14 @@ class AzureServer(Server):
         vnet_poller = network_client.virtual_networks.begin_delete(AzureServer.resource_group_name, self.vnet_name(self.name))
         _ = vnet_poller.result()
 
-    def authorize_storage_account(self, storage_account_name: str):
-        # Assign roles to system MSI, see https://docs.microsoft.com/en-us/samples/azure-samples/compute-python-msi-vm/compute-python-msi-vm/#role-assignment
+    def authorize_subscription(self):
+        # Authorize system MSI to access subscription
         auth_client = self.auth.get_authorization_client()
+        subscription_scope = "/subscriptions/{}".format(self.auth.subscription_id)
+        principal_id = self.get_virtual_machine().identity.principal_id
 
         def grant_vm_role(principal_id, scope, role_name):
+            prefix = f"grant_vm_role({principal_id}, {scope.split('/')[-1]}, {role_name})"
             try:
                 roles = list(auth_client.role_definitions.list(scope, filter="roleName eq '{}'".format(role_name)))
                 assert len(roles) == 1, f"Got roles {roles}"
@@ -181,35 +194,28 @@ class AzureServer(Server):
                 )
                 auth_client.role_assignments.create(scope, uuid.uuid4(), params)
                 return roles[0]
-            except azure.core.exceptions.ResourceExistsError:
-                logger.fs.warning(f"Role {role_name} already exists")
+            except azure.core.exceptions.ResourceExistsError as e:
+                logger.fs.warning(f"{prefix}: Role '{role_name}' already exists: {e}")
                 return None
 
-        # get scope for storage account
-        def get_scope_for_storage_account(storage_account_name):
-            for sa in self.auth.get_storage_management_client().storage_accounts.list():
-                if sa.name == storage_account_name:
-                    return sa.id
-            raise MissingBucketException("Storage account not found")
+        r1 = grant_vm_role(principal_id, subscription_scope, "Storage Blob Data Contributor")
+        r2 = grant_vm_role(principal_id, subscription_scope, "Storage Blob Data Reader")
+        r3 = grant_vm_role(principal_id, subscription_scope, "Storage Blob Delegator")
+        r4 = grant_vm_role(principal_id, subscription_scope, "Storage Account Contributor")
 
-        # grant "Storage Blob Data Contributor" role to the VM (self.get_virtual_machine().identity.principal_id)
-        scope = get_scope_for_storage_account(storage_account_name)
-        principal_id = self.get_virtual_machine().identity.principal_id
-        r1 = grant_vm_role(principal_id, scope, "Storage Blob Data Contributor")
-        r2 = grant_vm_role(principal_id, scope, "Storage Blob Data Reader")
-        r3 = grant_vm_role(principal_id, scope, "Storage Blob Delegator")
-        logger.fs.debug(f"grant_vm_role({principal_id}, {scope}, 'Storage Blob Data Contributor')")
-
-        # wait till the storage account is accessible by checking for roles
+        # wait till the subscription is accessible by checking for roles
         def check_role(role):
             if role is None:
                 return True
-            for assignment in auth_client.role_assignments.list_for_scope(scope, filter="principalId eq '{}'".format(principal_id)):
+            for assignment in auth_client.role_assignments.list_for_scope(
+                subscription_scope, filter="principalId eq '{}'".format(principal_id)
+            ):
                 if assignment.role_definition_id == role.id:
                     return True
             return False
 
-        wait_for(lambda: check_role(r1) and check_role(r2) and check_role(r3), timeout=60, desc="authorize_storage_account")
+        wait_for(lambda: all(check_role(role) for role in [r1, r2, r3, r4]), timeout=60, desc="authorize_subscription")
+        logger.fs.debug(f"Authorized subscription for VM {self.name}")
 
     def get_ssh_client_impl(self, uname="skyplane", ssh_key_password="skyplane"):
         """Return paramiko client that connects to this instance."""
