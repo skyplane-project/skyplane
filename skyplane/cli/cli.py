@@ -405,6 +405,7 @@ def init(
     typer.secho(f"\nConfig file saved to {config_path}", fg="green")
     return 0
 
+
 typer_click_object = typer.main.get_command(app)
 
 if __name__ == "__main__":
