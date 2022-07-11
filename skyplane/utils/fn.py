@@ -14,7 +14,7 @@ T = TypeVar("T")
 R = TypeVar("R")
 
 
-def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, desc="Waiting") -> Optional[float]:
+def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, desc="Waiting", debug=False) -> Optional[float]:
     """Wait for fn to return True. Returns number of seconds waited."""
     start = time.time()
     while time.time() - start < timeout:
