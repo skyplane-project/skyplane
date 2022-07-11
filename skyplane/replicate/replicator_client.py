@@ -269,8 +269,9 @@ class ReplicatorClient:
         public_ips = [i.public_ip() for i in self.bound_nodes.values()] + [i.public_ip() for i in self.temp_nodes]
         aws_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("aws:")]
         aws_jobs = [partial(self.aws.remove_ips_from_security_group, r.split(":")[1], public_ips) for r in set(aws_regions)]
-        do_parallel(lambda fn: fn(), aws_jobs)
-        gcp_jobs = self.gcp.remove_ips_from_firewall(public_ips)
+        gcp_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("gcp:")]
+        gcp_jobs = [self.gcp.remove_ips_from_firewall(public_ips)] if gcp_regions else []
+        do_parallel(lambda fn: fn(), aws_jobs + gcp_jobs, desc="Removing firewall rules")
 
         # Terminate instances
         instances = list(self.bound_nodes.values()) + self.temp_nodes
@@ -303,13 +304,9 @@ class ReplicatorClient:
         # assign source and destination gateways permission to buckets
         assign_jobs = []
         if job.source_region.split(":")[0] == "azure":
-            for location, gateway in self.bound_nodes.items():
-                if isinstance(gateway, AzureServer) and location.region == job.source_region:
-                    assign_jobs.append(partial(gateway.authorize_storage_account, job.source_bucket.split("/", 1)[0]))
-        if job.dest_region.split(":")[0] == "azure":
-            for location, gateway in self.bound_nodes.items():
-                if isinstance(gateway, AzureServer) and location.region == job.dest_region:
-                    assign_jobs.append(partial(gateway.authorize_storage_account, job.dest_bucket.split("/", 1)[0]))
+            for gateway in self.bound_nodes.values():
+                if isinstance(gateway, AzureServer):
+                    assign_jobs.append(gateway.authorize_subscription)
         do_parallel(lambda fn: fn(), assign_jobs, spinner=True, spinner_persist=True, desc="Assigning gateways permissions to buckets")
 
         with Progress(

@@ -1,10 +1,7 @@
-import os
 import re
-import resource
 import subprocess
 from functools import partial
 from pathlib import Path
-from sys import platform
 
 import typer
 from rich.console import Console

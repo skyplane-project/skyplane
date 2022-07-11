@@ -23,7 +23,6 @@ from skyplane.cli.cli_impl.cp_replicate import (
 )
 from skyplane.replicate.replication_plan import ReplicationJob
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
-from skyplane.cli.cli_impl.ls import ls_local, ls_objstore
 from skyplane.cli.common import check_ulimit, parse_path, query_instances
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
@@ -117,8 +116,8 @@ def cp(
     if provider_src in clouds and provider_dst in clouds:
         try:
             src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)
-            src_region = src_client.region_tag()
             dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
+            src_region = src_client.region_tag()
             dst_region = dst_client.region_tag()
             transfer_pairs = generate_full_transferobjlist(
                 src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst, recursive=recursive

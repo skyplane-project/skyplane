@@ -5,7 +5,7 @@ from typing import Optional
 import typer
 
 from skyplane.cli.common import print_header
-from skyplane import skyplane_root, MB
+from skyplane import skyplane_root
 from skyplane.cli.cli_impl.cp_replicate import confirm_transfer, launch_replication_job
 from skyplane.obj_store.object_store_interface import ObjectStoreObject
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob

@@ -354,6 +354,7 @@ class AzureCloudProvider(CloudProvider):
                         },
                     )
                     vm_result = poller.result()
+                    logger.fs.debug(f"Created Azure VM {vm_result.name} w/ system MSI principal_id = {vm_result.identity.principal_id}")
                 except HttpResponseError as e:
                     if "ResourceQuotaExceeded" in str(e):
                         raise exceptions.InsufficientVCPUException(f"Got ResourceQuotaExceeded error in Azure region {location}") from e

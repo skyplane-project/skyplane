@@ -118,6 +118,13 @@ def generate_full_transferobjlist(
     """Query source region and destination region buckets and return list of objects to transfer."""
     source_iface = ObjectStoreInterface.create(source_region, source_bucket)
     dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
+
+    # ensure buckets exist
+    if not source_iface.bucket_exists():
+        raise exceptions.MissingBucketException(f"Source bucket {source_bucket} does not exist")
+    if not dest_iface.bucket_exists():
+        raise exceptions.MissingBucketException(f"Destination bucket {dest_bucket} does not exist")
+
     source_objs, dest_objs = [], []
 
     # query all source region objects
@@ -172,11 +179,11 @@ def confirm_transfer(topo: ReplicationTopology, job: ReplicationJob, ask_to_conf
     # print list of objects to transfer if not a random transfer
     if not job.random_chunk_size_mb:
         for src, dst in job.transfer_pairs[:4]:
-            console.print(f"    [bright_black][bold]{src.key}[/bold] -> [bold]{dst.key}[/bold][/bright_black]")
+            console.print(f"    [bright_black][bold]{src.key}[/bold] => [bold]{dst.key}[/bold][/bright_black]")
         if len(job.transfer_pairs) > 4:
             console.print(f"    [bright_black][bold]...[/bold][/bright_black]")
             for src, dst in job.transfer_pairs[4:][-4:]:
-                console.print(f"    [bright_black][bold]{src.key}[/bold] -> [bold]{dst.key}[/bold][/bright_black]")
+                console.print(f"    [bright_black][bold]{src.key}[/bold] => [bold]{dst.key}[/bold][/bright_black]")
 
     if ask_to_confirm_transfer:
         if typer.confirm("Continue?", default=True):
@@ -253,7 +260,10 @@ def launch_replication_job(
         total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
         console.print(f":rocket: [bold blue]{total_bytes / GB:.2f}GB transfer job launched[/bold blue]")
         if topo.source_region().split(":")[0] == "azure" or topo.sink_region().split(":")[0] == "azure":
-            typer.secho(f"Warning: It can take up to 60s for role assignments to propagate on Azure. See issue #355", fg="yellow")
+            typer.secho(
+                f"Warning: For Azure transfers, your transfer may block for up to 120s waiting for role assignments to propagate. See issue #355.",
+                fg="yellow",
+            )
         stats = rc.monitor_transfer(
             job,
             show_spinner=True,
@@ -296,9 +306,11 @@ def launch_replication_job(
                 typer.secho(error, fg="red")
         raise typer.Exit(1)
 
-    # verify transfer
     if verify_checksums:
-        rc.verify_transfer(job)
+        if any(node.region.startswith("azure") for node in rc.bound_nodes.keys()):
+            typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
+        else:
+            rc.verify_transfer(job)
 
     # print stats
     if stats["success"]:
