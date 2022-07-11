@@ -269,8 +269,10 @@ class ReplicatorClient:
         public_ips = [i.public_ip() for i in self.bound_nodes.values()] + [i.public_ip() for i in self.temp_nodes]
         aws_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("aws:")]
         aws_jobs = [partial(self.aws.remove_ips_from_security_group, r.split(":")[1], public_ips) for r in set(aws_regions)]
-        do_parallel(lambda fn: fn(), aws_jobs)
-        gcp_jobs = self.gcp.remove_ips_from_firewall(public_ips)
+        gcp_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("gcp:")]
+        gcp_jobs = [self.gcp.remove_ips_from_firewall(public_ips)] if gcp_regions else []
+        do_parallel(lambda fn: fn(), aws_jobs + gcp_jobs, desc="Removing firewall rules")
+        
 
         # Terminate instances
         instances = list(self.bound_nodes.values()) + self.temp_nodes
