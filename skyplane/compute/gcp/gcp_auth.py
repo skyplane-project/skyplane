@@ -74,6 +74,7 @@ class GCPAuthentication:
 
     @property
     def project_id(self):
+        assert self.config.gcp_project_id, "No project ID detected. Run 'skyplane init --reinit-gcp' or file an issue to remedy this."
         return self.config.gcp_project_id
 
     @staticmethod
