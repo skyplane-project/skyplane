@@ -103,6 +103,7 @@ jobs:
       - name: Run cloud tests
         run: |
           poetry run skyplane init -y --disable-config-azure
+          poetry run skyplane config set skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
           poetry run pytest -s tests/unit_gcs
       - name: Cleanup GCP service account
         if: always()
