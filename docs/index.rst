@@ -21,8 +21,6 @@ Skyplane's cp command supports copying large datasets between cloud regions with
 
    $ skyplane [sync/cp] [local/s3/gcp/azure]://mybucket/big_dataset [local/s3/gcp/azure]://mybucket2/
 
-TODO: Insert performance table here
-
 
 Contents
 --------
