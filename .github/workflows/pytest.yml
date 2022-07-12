@@ -59,7 +59,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          poetry run skyplane init -y
+          poetry run skyplane init -y --disable-config-azure
           poetry run pytest -s tests/unit_aws
   test-gcp:
     runs-on: ubuntu-latest
@@ -100,5 +100,5 @@ jobs:
         run: (gcloud iam service-accounts keys list --project skyplane-ci --iam-account skyplane-manual@skyplane-ci.iam.gserviceaccount.com --format="value(KEY_ID)" | xargs -I {} gcloud iam service-accounts keys delete --project skyplane-ci --iam-account skyplane-manual@skyplane-ci.iam.gserviceaccount.com -q {}) || true
       - name: Run cloud tests
         run: |
-          poetry run skyplane init -y
+          poetry run skyplane init -y --disable-config-azure
           poetry run pytest -s tests/unit_gcs
