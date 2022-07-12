@@ -55,6 +55,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: poetry run python tests/integration/cp.py ${{ matrix.pairs }}
   deprovision:
+    runs-on: ubuntu-latest
     if: ${{ always() }}
     needs: [integration]
     steps:
