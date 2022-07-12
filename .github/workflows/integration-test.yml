@@ -1,4 +1,7 @@
 name: integration-test
+# on:
+#   push:
+#     branches: [ main ]
 on: push
 concurrency: integration-test
 env:
