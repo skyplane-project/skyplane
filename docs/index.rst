@@ -1,6 +1,10 @@
 Welcome to Skyplane!
 ====================================
 
+.. raw:: html
+
+   <iframe src="https://ghbtns.com/github-btn.html?user=skyplane-project&repo=skyplane&type=star&count=true&size=large" frameborder="0" scrolling="0" width="170" height="30" title="GitHub"></iframe>
+
 **Skyplane** is an secure, open-source tool for blazingly fast data transfers cloud object stores.
 
 .. note::
