@@ -34,11 +34,11 @@ def setup_buckets(src_region, dest_region, n_files=1, file_size_mb=1):
 
 def run(src_region, dest_region, n_files=1, file_size_mb=1, multipart=True):
     logger.info(
-        f"Running skyplane cp integration test with config"
-        + f"src_region={src_region},"
-        + f"dest_region={dest_region},"
-        + f"n_files={n_files},"
-        + f"file_size_mb={file_size_mb},"
+        f"Running skyplane cp integration test with config "
+        + f"src_region={src_region}, "
+        + f"dest_region={dest_region}, "
+        + f"n_files={n_files}, "
+        + f"file_size_mb={file_size_mb}, "
         + f"multipart={multipart}"
     )
     src_bucket_name, dest_bucket_name, src_prefix, dest_prefix = setup_buckets(
