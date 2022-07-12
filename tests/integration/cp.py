@@ -83,12 +83,12 @@ def run(src_region, dest_region, n_files=1, file_size_mb=1, multipart=True):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("src-region", help="source region")
-    parser.add_argument("dest-region", help="destination region")
+    parser.add_argument("src", help="source region")
+    parser.add_argument("dest", help="destination region")
     parser.add_argument("--n-files", type=int, default=1)
     parser.add_argument("--file-size-mb", type=int, default=1)
     parser.add_argument("--multipart", action="store_true")
     args = parser.parse_args()
 
-    return_code = run(args.src_region, args.dest_region, n_files=args.n_files, file_size_mb=args.file_size_mb, multipart=args.multipart)
+    return_code = run(args.src, args.dest, n_files=args.n_files, file_size_mb=args.file_size_mb, multipart=args.multipart)
     exit(return_code)
