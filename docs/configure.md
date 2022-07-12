@@ -5,6 +5,7 @@ Skyplane comes with a variety of knobs to tune to adjust performance or change h
 ```{admonition} Full list of transfer options
 * CLI configuration
     * `autoconfirm`: If set, it will not ask for you to confirm the transfers from the CLI. (default False)
+    * `autoshutdown_minutes`: If set, VMs will automatically shut down after this time in minutes. (default 15)
 * Transfer parallelism
     * `max_instances`: Maximum number of instances to use for parallel transfers. (default 10)
 * Network configuration
@@ -52,7 +53,9 @@ $ skyplane cp --reuse-gateways <source> <destination>
 $ skyplane sync --reuse-gateways <source> <destination>
 ```
 
-We will attempt to automatically deprovision these gateways after 30 minutes. To ensure that all gateways are stopped and no longer incur charges, run:
+We will attempt to automatically deprovision these gateways after 15 minutes by default. Change this interval via `skyplane config set autoshutdown_minutes <minutes>`. With `--reuse-gateways`, Skyplane will start a background job on each gateway VM that triggers a VM shutdown after the specified delay. Note you will still pay for associated VM costs such as storage and network IPs even if VMs are shut down.
+
+To ensure that all gateways are stopped and no longer incur charges, run:
 ```bash
 $ skyplane deprovision
 ```
