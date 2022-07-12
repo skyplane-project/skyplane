@@ -36,14 +36,28 @@ jobs:
           credentials_json: '${{ secrets.GCP_CREDENTIALS_JSON }}'
       - name: Delete existing service account keys
         run: (gcloud iam service-accounts keys list --project skyplane-ci --iam-account skyplane-manual@skyplane-ci.iam.gserviceaccount.com --format="value(KEY_ID)" | xargs -I {} gcloud iam service-accounts keys delete --project skyplane-ci --iam-account skyplane-manual@skyplane-ci.iam.gserviceaccount.com -q {}) || true
-      - name: Run unit tests
+      - name: Skyplane init
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           poetry run skyplane init -y
-          poetry run python tests/integration/cp.py aws:us-east-1 aws:us-east-1
-          poetry run python tests/integration/cp.py aws:us-east-1 aws:us-east-2
-          poetry run python tests/integration/cp.py gcp:us-central1-a gcp:us-central1-b
-          poetry run python tests/integration/cp.py gcp:us-central1-a gcp:us-west1-a
-          poetry run python tests/integration/cp.py aws:us-east-1 gcp:us-central1-a
+      - name: AWS same region
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: poetry run python tests/integration/cp.py aws:us-east-1 aws:us-east-2
+      - name: AWS to AWS
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: poetry run python tests/integration/cp.py gcp:us-central1-a gcp:us-central1-b
+      - name: GCP same region
+        run: poetry run python tests/integration/cp.py gcp:us-central1-a gcp:us-central1-a
+      - name: GCP to GCP
+        run: poetry run python tests/integration/cp.py gcp:us-central1-a gcp:us-west1-a
+      - name: AWS to GCP
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: poetry run python tests/integration/cp.py aws:us-east-1 gcp:us-central1-a
