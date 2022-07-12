@@ -1,5 +1,5 @@
 name: sphinx
-on: [push]
+on: push
 jobs:
   build-docs:
     runs-on: ubuntu-latest
@@ -11,6 +11,7 @@ jobs:
       uses: ammaraskar/sphinx-action@0.4
       with:
         docs-folder: docs/
+        pre-build-command: python -m pip install -e .
         build-command: sphinx-build -b html -d build/doctrees . build/html
     # - name: Upload artifacts
     #   uses: actions/upload-artifact@v1
