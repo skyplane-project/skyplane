@@ -18,6 +18,7 @@ _FLAG_TYPES = {
     # "multipart_max_chunks": int,
     "num_connections": int,
     "max_instances": int,
+    "autoshutdown_minutes": int,
     "aws_instance_class": str,
     "azure_instance_class": str,
     "gcp_instance_class": str,
@@ -39,6 +40,7 @@ _DEFAULT_FLAGS = {
     # "multipart_max_chunks": 9990,  # AWS limit is 10k chunks
     "num_connections": 32,
     "max_instances": 1,
+    "autoshutdown_minutes": 15,
     "aws_instance_class": "m5.8xlarge",
     "azure_instance_class": "Standard_D32_v4",
     "gcp_instance_class": "n2-standard-32",
