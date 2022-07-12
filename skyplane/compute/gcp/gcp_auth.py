@@ -7,20 +7,20 @@ import google.auth
 from google.cloud import storage  # type: ignore
 from googleapiclient import discovery
 
-from skyplane import cloud_config, config_path, gcp_config_path, key_root
+from skyplane import config_path, gcp_config_path, key_root
 from skyplane.config import SkyplaneConfig
 from skyplane.utils import logger
 
 
 class GCPAuthentication:
-    def __init__(self, config: Optional[SkyplaneConfig] = None, project_id: Optional[str] = cloud_config.gcp_project_id):
+    def __init__(self, config: Optional[SkyplaneConfig] = None):
         if not config == None:
             self.config = config
         else:
             self.config = SkyplaneConfig.load_config(config_path)
         self._credentials = None
         self._service_credentials_file = None
-        self.service_account_name = "skyplane-manual"
+        self.service_account_name = self.config.get_flag("gcp_service_account_name")
 
     def save_region_config(self):
         if self.project_id is None:
