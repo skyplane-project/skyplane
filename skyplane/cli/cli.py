@@ -366,6 +366,9 @@ def init(
     non_interactive: bool = typer.Option(False, "--non-interactive", "-y", help="Run non-interactively"),
     reinit_azure: bool = False,
     reinit_gcp: bool = False,
+    disable_config_aws: bool = False,
+    disable_config_azure: bool = False,
+    disable_config_gcp: bool = False,
 ):
     """
     It loads the configuration file, and if it doesn't exist, it creates a default one. Then it creates
@@ -375,6 +378,12 @@ def init(
     :type reinit_azure: bool
     :param reinit_gcp: If true, will reinitialize the GCP region list and credentials
     :type reinit_gcp: bool
+    :param disable_config_aws: If true, will disable AWS configuration (may still be enabled if environment variables are set)
+    :type disable_config_aws: bool
+    :param disable_config_azure: If true, will disable Azure configuration (may still be enabled if environment variables are set)
+    :type disable_config_azure: bool
+    :param disable_config_gcp: If true, will disable GCP configuration (may still be enabled if environment variables are set)
+    :type disable_config_gcp: bool
     """
     print_header()
 
@@ -388,15 +397,18 @@ def init(
 
     # load AWS config
     typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)
-    cloud_config = load_aws_config(cloud_config, non_interactive=non_interactive)
+    if not disable_config_aws:
+        cloud_config = load_aws_config(cloud_config, non_interactive=non_interactive)
 
     # load Azure config
     typer.secho("\n(2) Configuring Azure:", fg="yellow", bold=True)
-    cloud_config = load_azure_config(cloud_config, force_init=reinit_azure, non_interactive=non_interactive)
+    if not disable_config_azure:
+        cloud_config = load_azure_config(cloud_config, force_init=reinit_azure, non_interactive=non_interactive)
 
     # load GCP config
     typer.secho("\n(3) Configuring GCP:", fg="yellow", bold=True)
-    cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
+    if not disable_config_gcp:
+        cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
 
     # check file limit
     check_ulimit()
