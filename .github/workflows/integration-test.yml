@@ -7,6 +7,14 @@ concurrency: integration-test
 jobs:
   integration:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        pairs:
+          - aws:us-east-1 aws:us-east-1
+          - aws:us-east-2 aws:us-west-2
+          - gcp:us-central1-a gcp:us-central1-a
+          - gcp:us-west1-a gcp:us-east1-a
+          - aws:us-west-1 gcp:us-west2-a
     steps:
       - uses: actions/checkout@v1
       - name: Set up Python 3.8
@@ -40,24 +48,47 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: poetry run skyplane init -y
+      - name: test
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: poetry run python tests/integration/cp.py ${{ matrix.pairs }}
+  deprovision:
+    if: ${{ always() }}
+    needs: [integration]
+      - uses: actions/checkout@v1
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.8
+      - name: Install Poetry
+        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.0b1
+      - name: Cache Poetry virtualenv
+        uses: actions/cache@v1
+        id: cache
+        with:
+          path: ~/.virtualenvs
+          key: poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+      - name: Set Poetry config
         run: |
-          poetry run skyplane init -y
-      - name: AWS same region
+          poetry config virtualenvs.in-project false
+          poetry config virtualenvs.path ~/.virtualenvs
+      - name: Install Dependencies
+        run: poetry install -E gateway -E solver
+        if: steps.cache.outputs.cache-hit != 'true'
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v0'
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS_JSON }}'
+      - name: Delete existing service account keys
+        run: (gcloud iam service-accounts keys list --project skyplane-ci --iam-account skyplane-manual@skyplane-ci.iam.gserviceaccount.com --format="value(KEY_ID)" | xargs -I {} gcloud iam service-accounts keys delete --project skyplane-ci --iam-account skyplane-manual@skyplane-ci.iam.gserviceaccount.com -q {}) || true
+      - name: Skyplane init
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: poetry run python tests/integration/cp.py aws:us-east-1 aws:us-east-2
-      - name: AWS to AWS
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: poetry run python tests/integration/cp.py gcp:us-central1-a gcp:us-central1-b
-      - name: GCP same region
-        run: poetry run python tests/integration/cp.py gcp:us-central1-a gcp:us-central1-a
-      - name: GCP to GCP
-        run: poetry run python tests/integration/cp.py gcp:us-central1-a gcp:us-west1-a
-      - name: AWS to GCP
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: poetry run python tests/integration/cp.py aws:us-east-1 gcp:us-central1-a
+        run: poetry run skyplane init -y
+      - name: Deprovision
+        run: poetry run skyplane deprovision
