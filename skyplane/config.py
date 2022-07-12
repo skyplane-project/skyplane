@@ -22,6 +22,7 @@ _FLAG_TYPES = {
     "azure_instance_class": str,
     "gcp_instance_class": str,
     "gcp_use_premium_network": bool,
+    "gcp_service_account_name": str,
 }
 
 _DEFAULT_FLAGS = {
@@ -42,6 +43,7 @@ _DEFAULT_FLAGS = {
     "azure_instance_class": "Standard_D32_v4",
     "gcp_instance_class": "n2-standard-32",
     "gcp_use_premium_network": True,
+    "gcp_service_account_name": "skyplane-manual",
 }
 
 
