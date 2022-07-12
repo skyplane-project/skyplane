@@ -1,9 +1,11 @@
 name: integration-test
-
-on: push
-
+on:
+  push:
+    branches: [ main ]
 concurrency: integration-test
-
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 jobs:
   integration:
     runs-on: ubuntu-latest
@@ -46,14 +48,8 @@ jobs:
       - name: Delete existing service account keys
         run: (gcloud iam service-accounts keys list --project skyplane-ci --iam-account skyplane-manual@skyplane-ci.iam.gserviceaccount.com --format="value(KEY_ID)" | xargs -I {} gcloud iam service-accounts keys delete --project skyplane-ci --iam-account skyplane-manual@skyplane-ci.iam.gserviceaccount.com -q {}) || true
       - name: Skyplane init
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: poetry run skyplane init -y --disable-config-azure
       - name: test
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: poetry run python tests/integration/cp.py ${{ matrix.pairs }}
   deprovision:
     runs-on: ubuntu-latest
@@ -89,12 +85,6 @@ jobs:
       - name: Delete existing service account keys
         run: (gcloud iam service-accounts keys list --project skyplane-ci --iam-account skyplane-manual@skyplane-ci.iam.gserviceaccount.com --format="value(KEY_ID)" | xargs -I {} gcloud iam service-accounts keys delete --project skyplane-ci --iam-account skyplane-manual@skyplane-ci.iam.gserviceaccount.com -q {}) || true
       - name: Skyplane init
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: poetry run skyplane init -y --disable-config-azure
       - name: Deprovision
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: poetry run skyplane deprovision
