@@ -30,8 +30,18 @@ jobs:
       - name: Install Dependencies
         run: poetry install -E gateway -E solver
         if: steps.cache.outputs.cache-hit != 'true'
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v0'
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS_JSON }}'
+      - name: Delete existing service account keys
+        run: (gcloud iam service-accounts keys list --project skyplane-ci --iam-account skyplane-manual@skyplane-ci.iam.gserviceaccount.com --format="value(KEY_ID)" | xargs -I {} gcloud iam service-accounts keys delete --project skyplane-ci --iam-account skyplane-manual@skyplane-ci.iam.gserviceaccount.com -q {}) || true
       - name: Run unit tests
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
+          poetry run skyplane init -y
           poetry run python tests/integration/cp.py aws:us-east-1 aws:us-east-1
           poetry run python tests/integration/cp.py aws:us-east-1 aws:us-east-2
           poetry run python tests/integration/cp.py gcp:us-central1-a gcp:us-central1-b
