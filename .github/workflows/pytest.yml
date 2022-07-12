@@ -65,7 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: test-unit
     env:
-      STRATEGY_UUID: skyplane-integrationtest-${{ github.run_id }}-${{ github.run_attempt }}
+      STRATEGY_UUID: skyplane-testgcp-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v1
       - name: Set up Python 3.8
@@ -103,7 +103,7 @@ jobs:
       - name: Run cloud tests
         run: |
           poetry run skyplane init -y --disable-config-azure
-          poetry run skyplane config set skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
+          poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
           poetry run pytest -s tests/unit_gcs
       - name: Cleanup GCP service account
         if: always()
