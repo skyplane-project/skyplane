@@ -1,7 +1,8 @@
 name: integration-test
-on:
-  push:
-    branches: [ main ]
+on: push
+# on:
+#   push:
+#     branches: [ main ]
 concurrency: integration-test
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
