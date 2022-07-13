@@ -71,7 +71,7 @@ jobs:
 
       # Build and push Docker image with Buildx (don't push on PR)
       # https://github.com/docker/build-push-action
-      - name: Build and push Docker image ${{ steps.login-ecr-public.outputs.registry }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tags }}
+      - name: Build and push Docker image ${{ steps.meta.outputs.tags }}
         id: build-and-push
         uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
         with:
