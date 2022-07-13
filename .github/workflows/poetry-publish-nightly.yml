@@ -51,43 +51,45 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
       - name: Build package
         run: |
+          export RELEASEDATE=$(date +%Y-%m-%d)
+          echo nightly-$RELEASEDATE > ./GATEWAY_VERSION
           sed -i 's/name = "skyplane"/name = "skyplane-nightly"/g' pyproject.toml
-          sed -i "s/version = \"\([0-9]\+\.[0-9]\+\.[0-9]\+\)\(.*\)\"/version = \"\1.dev`date +%Y%m%d`\"/" pyproject.toml
+          sed -i "s/version = \"\([0-9]\+\.[0-9]\+\.[0-9]\+\)\(.*\)\"/version = \"\1.dev$RELEASEDATE\"/" pyproject.toml
           poetry build
       - name: Publish package
         run: poetry publish -r test-pypi
 
-  nightly-publish-pypi:
-    runs-on: ubuntu-latest
-    needs: [ check-date, nightly-publish-test-pypi ]
-    steps:
-      - uses: actions/checkout@v1
-      - name: Set up Python 3.8
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.8
-      - name: Install Poetry
-        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.0b1
-      - name: Cache Poetry virtualenv
-        uses: actions/cache@v1
-        id: cache
-        with:
-          path: ~/.virtualenvs
-          key: poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
-          restore-keys: |
-            poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
-      - name: Set Poetry config
-        run: |
-          poetry config virtualenvs.in-project false
-          poetry config virtualenvs.path ~/.virtualenvs
-          poetry config pypi-token.pypi ${{ secrets.PYPI_API_TOKEN }}
-      - name: Install Dependencies
-        run: poetry install -E gateway -E solver
-        if: steps.cache.outputs.cache-hit != 'true'
-      - name: Build package under skyplane-dev name
-        run: |
-          sed -i 's/name = "skyplane"/name = "skyplane-nightly"/g' pyproject.toml
-          sed -i "s/version = \"\([0-9]\+\.[0-9]\+\.[0-9]\+\)\(.*\)\"/version = \"\1.dev`date +%Y%m%d`\"/" pyproject.toml
-          poetry build
-      - name: Publish package
-        run: poetry publish
+  # nightly-publish-pypi:
+  #   runs-on: ubuntu-latest
+  #   needs: [ check-date, nightly-publish-test-pypi ]
+  #   steps:
+  #     - uses: actions/checkout@v1
+  #     - name: Set up Python 3.8
+  #       uses: actions/setup-python@v1
+  #       with:
+  #         python-version: 3.8
+  #     - name: Install Poetry
+  #       run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.0b1
+  #     - name: Cache Poetry virtualenv
+  #       uses: actions/cache@v1
+  #       id: cache
+  #       with:
+  #         path: ~/.virtualenvs
+  #         key: poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+  #         restore-keys: |
+  #           poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+  #     - name: Set Poetry config
+  #       run: |
+  #         poetry config virtualenvs.in-project false
+  #         poetry config virtualenvs.path ~/.virtualenvs
+  #         poetry config pypi-token.pypi ${{ secrets.PYPI_API_TOKEN }}
+  #     - name: Install Dependencies
+  #       run: poetry install -E gateway -E solver
+  #       if: steps.cache.outputs.cache-hit != 'true'
+  #     - name: Build package under skyplane-dev name
+  #       run: |
+  #         sed -i 's/name = "skyplane"/name = "skyplane-nightly"/g' pyproject.toml
+  #         sed -i "s/version = \"\([0-9]\+\.[0-9]\+\.[0-9]\+\)\(.*\)\"/version = \"\1.dev`date +%Y%m%d`\"/" pyproject.toml
+  #         poetry build
+  #     - name: Publish package
+  #       run: poetry publish

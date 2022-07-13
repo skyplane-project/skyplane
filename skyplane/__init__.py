@@ -44,3 +44,8 @@ if config_path.exists():
 else:
     cloud_config = SkyplaneConfig(False, False, False)
 is_gateway_env = os.environ.get("SKYPLANE_IS_GATEWAY", None) == "1"
+
+# load gateway docker image version
+def gateway_docker_image():
+    with skyplane_root / "GATEWAY_VERSION" as f:
+        return "public.ecr.aws/s6m1p0n8/skyplane:" + f.read().strip()
