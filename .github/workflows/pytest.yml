@@ -98,8 +98,6 @@ jobs:
         with:
           project_id: '${{ secrets.GCP_PROJECT_ID }}'
           export_default_credentials: true
-      - name: Delete existing service account keys
-        run: (gcloud iam service-accounts keys list --project skyplane-ci --iam-account ${{ env.STRATEGY_UUID }}@skyplane-ci.iam.gserviceaccount.com --format="value(KEY_ID)" | xargs -I {} gcloud iam service-accounts keys delete --project skyplane-ci --iam-account ${{ env.STRATEGY_UUID }}@skyplane-ci.iam.gserviceaccount.com -q {}) || true
       - name: Run cloud tests
         run: |
           poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
@@ -107,4 +105,4 @@ jobs:
           poetry run pytest -s tests/unit_gcs
       - name: Cleanup GCP service account
         if: always()
-        run: (gcloud iam service-accounts keys list --project skyplane-ci --iam-account ${{ env.STRATEGY_UUID }}@skyplane-ci.iam.gserviceaccount.com --format="value(KEY_ID)" | xargs -I {} gcloud iam service-accounts keys delete --project skyplane-ci --iam-account ${{ env.STRATEGY_UUID }}@skyplane-ci.iam.gserviceaccount.com -q {}) || true
+        run: gcloud iam service-accounts delete ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
