@@ -10,17 +10,21 @@ jobs:
   integration:
     runs-on: ubuntu-latest
     strategy:
+      max-parallel: 1
       matrix:
         pairs:
-          - aws:us-east-1 aws:us-east-1
-          - aws:us-east-2 aws:us-west-2
+          # AWS to AWS
+          # - aws:us-east-1 aws:us-east-1
+          # - aws:us-east-2 aws:us-west-2
+          # GCP to GCP
           - gcp:us-central1-a gcp:us-central1-a
           - gcp:us-west1-a gcp:us-east1-a
+          # cross cloud tests
           - aws:us-west-1 gcp:us-west2-a
           - gcp:us-west2-a aws:us-west-1
     timeout-minutes: 10
     env:
-      STRATEGY_UUID: skyplane-integrationtest-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
+      STRATEGY_UUID: itest-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
     steps:
       - uses: actions/checkout@v1
       - name: Set up Python 3.8
@@ -48,17 +52,16 @@ jobs:
         uses: 'google-github-actions/auth@v0'
         with:
           credentials_json: '${{ secrets.GCP_CREDENTIALS_JSON }}'
-      - name: Delete existing service account keys
-        run: (gcloud iam service-accounts keys list --project skyplane-ci --iam-account ${{ env.STRATEGY_UUID }}@skyplane-ci.iam.gserviceaccount.com --format="value(KEY_ID)" | xargs -I {} gcloud iam service-accounts keys delete --project skyplane-ci --iam-account ${{ env.STRATEGY_UUID }}@skyplane-ci.iam.gserviceaccount.com -q {}) || true
       - name: Skyplane init
         run: |
           poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
+          cat ~/.skyplane/config
           poetry run skyplane init -y --disable-config-azure
       - name: Test
         run: poetry run python tests/integration/cp.py ${{ matrix.pairs }}
       - name: Cleanup GCP service account
         if: always()
-        run: (gcloud iam service-accounts keys list --project skyplane-ci --iam-account ${{ env.STRATEGY_UUID }}@skyplane-ci.iam.gserviceaccount.com --format="value(KEY_ID)" | xargs -I {} gcloud iam service-accounts keys delete --project skyplane-ci --iam-account ${{ env.STRATEGY_UUID }}@skyplane-ci.iam.gserviceaccount.com -q {}) || true
+        run: gcloud iam service-accounts delete ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
   deprovision:
     runs-on: ubuntu-latest
     if: ${{ always() }}
@@ -99,7 +102,7 @@ jobs:
           poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
           poetry run skyplane init -y --disable-config-azure
       - name: Deprovision
-        run: poetry run skyplane deprovisio
+        run: poetry run skyplane deprovision
       - name: Cleanup GCP service account
         if: always()
-        run: (gcloud iam service-accounts keys list --project skyplane-ci --iam-account ${{ env.STRATEGY_UUID }}@skyplane-ci.iam.gserviceaccount.com --format="value(KEY_ID)" | xargs -I {} gcloud iam service-accounts keys delete --project skyplane-ci --iam-account ${{ env.STRATEGY_UUID }}@skyplane-ci.iam.gserviceaccount.com -q {}) || true
+        run: gcloud iam service-accounts delete ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com

@@ -391,6 +391,7 @@ def init(
         logger.warning("Non-interactive mode enabled. Automatically confirming interactive questions.")
 
     if config_path.exists():
+        logger.debug(f"Found existing configuration file at {config_path}, loading")
         cloud_config = SkyplaneConfig.load_config(config_path)
     else:
         cloud_config = SkyplaneConfig.default_config()
