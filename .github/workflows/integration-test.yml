@@ -3,22 +3,22 @@ on: push
 # on:
 #   push:
 #     branches: [ main ]
-concurrency: integration-test
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 jobs:
   integration:
     runs-on: ubuntu-latest
+    concurrency: integration-test
     strategy:
       matrix:
         pairs:
-          - aws:us-east-1 aws:us-east-1
-          - aws:us-east-2 aws:us-west-2
+          # - aws:us-east-1 aws:us-east-1
+          # - aws:us-east-2 aws:us-west-2
           - gcp:us-central1-a gcp:us-central1-a
           - gcp:us-west1-a gcp:us-east1-a
           - aws:us-west-1 gcp:us-west2-a
-          - gcp:us-west2-a aws:us-west-1
+          # - gcp:us-west2-a aws:us-west-1
     timeout-minutes: 10
     env:
       STRATEGY_UUID: itest-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
@@ -63,6 +63,7 @@ jobs:
         run: (gcloud iam service-accounts keys list --project skyplane-ci --iam-account ${{ env.STRATEGY_UUID }}@skyplane-ci.iam.gserviceaccount.com --format="value(KEY_ID)" | xargs -I {} gcloud iam service-accounts keys delete --project skyplane-ci --iam-account ${{ env.STRATEGY_UUID }}@skyplane-ci.iam.gserviceaccount.com -q {}) || true
   # deprovision:
   #   runs-on: ubuntu-latest
+  #   concurrency: integration-test
   #   if: ${{ always() }}
   #   needs: [integration]
   #   env:
