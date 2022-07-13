@@ -11,7 +11,8 @@ on:
     branches: [ main ]
 
 env:
-  IMAGE_NAME: s6m1p0n8/skyplane
+  # IMAGE_NAME: s6m1p0n8/skyplane
+  IMAGE_NAME: s6m1p0n8/skyplane-test
 
 jobs:
   build:
@@ -63,7 +64,7 @@ jobs:
       # https://github.com/docker/metadata-action
       - name: Extract Docker metadata
         id: meta
-        uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
+        uses: docker/metadata-action@v4
         with:
           images: ${{ steps.login-ecr-public.outputs.registry }}/${{ env.IMAGE_NAME }}
           tags: |
