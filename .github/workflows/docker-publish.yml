@@ -11,8 +11,8 @@ on:
     branches: [ main ]
 
 env:
-  # IMAGE_NAME: s6m1p0n8/skyplane
-  IMAGE_NAME: s6m1p0n8/skyplane-test
+  IMAGE_NAME: s6m1p0n8/skyplane
+  # IMAGE_NAME: s6m1p0n8/skyplane-test
 
 jobs:
   build:
