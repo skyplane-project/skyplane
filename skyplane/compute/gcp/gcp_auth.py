@@ -10,6 +10,7 @@ from googleapiclient import discovery
 from skyplane import config_path, gcp_config_path, key_root
 from skyplane.config import SkyplaneConfig
 from skyplane.utils import logger
+from skyplane.utils.retry import retry_backoff
 
 
 class GCPAuthentication:
@@ -67,9 +68,7 @@ class GCPAuthentication:
     @property
     def service_account_credentials(self):
         if self._service_credentials_file is None:
-            logger.debug(f"Using service account {self.service_account_name}")
             self._service_account_email = self.create_service_account(self.service_account_name)
-            logger.debug(f"Created service account {self.service_account_name} email={self._service_account_email} for GCP")
             self._service_credentials_file = self.get_service_account_key(self._service_account_email)
         return self._service_credentials_file
 
@@ -137,14 +136,15 @@ class GCPAuthentication:
         service = self.get_gcp_client(service_name="iam")
         service_accounts = service.projects().serviceAccounts().list(name="projects/" + self.project_id).execute()["accounts"]
 
+        # search for pre-existing service account
         account = None
         for service_account in service_accounts:
             if service_account["email"].split("@")[0] == service_name:
                 account = service_account
                 break
 
+        # create service account
         if account is None:
-            # create service account
             account = (
                 service.projects()
                 .serviceAccounts()
@@ -153,28 +153,32 @@ class GCPAuthentication:
                 )
                 .execute()
             )
-        policy = service.projects().serviceAccounts().getIamPolicy(resource=account["name"]).execute()
-        service = discovery.build("cloudresourcemanager", "v1", credentials=self.credentials)
-        policy = service.projects().getIamPolicy(resource=self.project_id).execute()
-        account_handle = f"serviceAccount:{account['email']}"
 
-        # modify policy
-        modified = False
-        roles = [role["role"] for role in policy["bindings"]]
-        target_role = "roles/storage.admin"
-        if target_role not in roles:
-            # role does not exist
-            policy["bindings"].append({"role": target_role, "members": [account_handle]})
-            modified = True
-        else:
-            for role in policy["bindings"]:
-                if role["role"] == target_role:
-                    if account_handle not in role["members"]:
-                        role["members"].append(account_handle)  # do NOT override
-                        modified = True
-        if modified:  # execute policy change
-            service.projects().setIamPolicy(resource=self.project_id, body={"policy": policy}).execute()
-        return account["email"]
+        def read_modify_write():
+            # modify service account with storage.admin role
+            service = self.get_gcp_client("cloudresourcemanager", "v1")
+            policy = service.projects().getIamPolicy(resource=self.project_id).execute()
+            account_handle = f"serviceAccount:{account['email']}"
+
+            # modify policy
+            modified = False
+            roles = [role["role"] for role in policy["bindings"]]
+            target_role = "roles/storage.admin"
+            if target_role not in roles:
+                # role does not exist
+                policy["bindings"].append({"role": target_role, "members": [account_handle]})
+                modified = True
+            else:
+                for role in policy["bindings"]:
+                    if role["role"] == target_role:
+                        if account_handle not in role["members"]:
+                            role["members"].append(account_handle)  # do NOT override
+                            modified = True
+            if modified:  # execute policy change
+                service.projects().setIamPolicy(resource=self.project_id, body={"policy": policy}).execute()
+            return account["email"]
+
+        return retry_backoff(read_modify_write)  # retry loop needed for concurrent policy modifications
 
     def enabled(self):
         return self.config.gcp_enabled and self.credentials is not None and self.project_id is not None

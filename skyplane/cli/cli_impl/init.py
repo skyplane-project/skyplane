@@ -118,7 +118,6 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
         config.gcp_enabled = True
         return config
 
-
     # check if GCP is enabled
     inferred_cred, inferred_project = GCPAuthentication.get_adc_credential()
     if inferred_cred is None or inferred_project is None:
