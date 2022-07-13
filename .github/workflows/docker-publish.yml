@@ -1,15 +1,14 @@
 name: docker
 
-# on:
-#   schedule:
-#     - cron: '39 23 * * *'
-#   push:
-#     branches: [ main ]
-#     # Publish semver tags as releases.
-#     tags: [ 'v*.*.*' ]
-#   pull_request:
-#     branches: [ main ]
-on: push
+on:
+  schedule:
+    - cron: '39 23 * * *'
+  push:
+    branches: [ main ]
+    # Publish semver tags as releases.
+    tags: [ 'v*.*.*' ]
+  pull_request:
+    branches: [ main ]
 
 env:
   REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
