@@ -11,7 +11,7 @@ on:
     branches: [ main ]
 
 env:
-  IMAGE_NAME: s6m1p0n8/skyplane-test
+  IMAGE_NAME: s6m1p0n8/skyplane
 
 jobs:
   build:
@@ -69,7 +69,7 @@ jobs:
 
       # Build and push Docker image with Buildx (don't push on PR)
       # https://github.com/docker/build-push-action
-      - name: Build and push Docker image ${{ steps.meta.outputs.tags }}
+      - name: Build and push Docker image
         id: build-and-push
         uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
         with:
