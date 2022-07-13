@@ -20,7 +20,6 @@ class GCPAuthentication:
             self.config = SkyplaneConfig.load_config(config_path)
         self._credentials = None
         self._service_credentials_file = None
-        self.service_account_name = self.config.get_flag("gcp_service_account_name")
 
     def save_region_config(self):
         if self.project_id is None:
@@ -68,13 +67,17 @@ class GCPAuthentication:
     @property
     def service_account_credentials(self):
         if self._service_credentials_file is None:
+            logger.debug(f"Using service account {self.service_account_name}")
             self._service_account_email = self.create_service_account(self.service_account_name)
+            logger.debug(f"Created service account {self.service_account_name} email={self._service_account_email} for GCP")
             self._service_credentials_file = self.get_service_account_key(self._service_account_email)
         return self._service_credentials_file
 
     @property
     def project_id(self):
-        assert self.config.gcp_project_id, "No project ID detected. Run 'skyplane init --reinit-gcp' or file an issue to remedy this."
+        assert (
+            self.config.gcp_project_id is not None
+        ), "No project ID detected. Run 'skyplane init --reinit-gcp' or file an issue to remedy this."
         return self.config.gcp_project_id
 
     @staticmethod
@@ -90,6 +93,10 @@ class GCPAuthentication:
             )
             inferred_project = project_id
         return inferred_cred, inferred_project
+
+    @property
+    def service_account_name(self):
+        return self.config.get_flag("gcp_service_account_name")
 
     def get_service_account_key(self, service_account_email):
         service = self.get_gcp_client(service_name="iam")

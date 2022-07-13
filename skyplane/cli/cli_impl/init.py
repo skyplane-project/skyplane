@@ -118,6 +118,7 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
         config.gcp_enabled = True
         return config
 
+
     # check if GCP is enabled
     inferred_cred, inferred_project = GCPAuthentication.get_adc_credential()
     if inferred_cred is None or inferred_project is None:
@@ -137,6 +138,7 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
             assert config.gcp_project_id is not None, "GCP project ID must not be None"
             config.gcp_enabled = True
             auth = GCPAuthentication(config=config)
+            typer.secho(f"    Using GCP service account {auth.service_account_name}", fg="blue")
             if not check_gcp_service(auth, non_interactive):
                 return disable_gcp_support()
             try:
