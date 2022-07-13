@@ -139,6 +139,7 @@ class GCPAuthentication:
         # search for pre-existing service account
         account = None
         for service_account in service_accounts:
+            logger.debug(f"Checking service account: {service_account['email']}")
             if service_account["email"].split("@")[0] == service_name:
                 account = service_account
                 break
