@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 from skyplane.config import SkyplaneConfig
+from skyplane.gateway_version import gateway_version
 
 # paths
 skyplane_root = Path(__file__).parent.parent
@@ -47,5 +48,4 @@ is_gateway_env = os.environ.get("SKYPLANE_IS_GATEWAY", None) == "1"
 
 # load gateway docker image version
 def gateway_docker_image():
-    with skyplane_root / "GATEWAY_VERSION" as f:
-        return "public.ecr.aws/s6m1p0n8/skyplane:" + f.read().strip()
+    return "public.ecr.aws/s6m1p0n8/skyplane:" + gateway_version
