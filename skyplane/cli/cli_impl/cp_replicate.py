@@ -201,7 +201,7 @@ def confirm_transfer(topo: ReplicationTopology, job: ReplicationJob, ask_to_conf
 def launch_replication_job(
     topo: ReplicationTopology,
     job: ReplicationJob,
-    gateway_docker_image: str = os.environ.get("SKYPLANE_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
+    gateway_docker_image: str = os.environ.get("SKYPLANE_DOCKER_IMAGE", "public.ecr.aws/s6m1p0n8/skyplane:main"),
     # transfer flags
     debug: bool = False,
     reuse_gateways: bool = False,
