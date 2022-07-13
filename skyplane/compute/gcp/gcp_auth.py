@@ -141,6 +141,7 @@ class GCPAuthentication:
         for service_account in service_accounts:
             logger.debug(f"Checking service account: {service_account['email']}")
             if service_account["email"].split("@")[0] == service_name:
+                logger.debug(f"Found service account: {service_account['email']}")
                 account = service_account
                 break
 
