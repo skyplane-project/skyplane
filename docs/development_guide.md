@@ -2,7 +2,7 @@
 
 ## Setting up a developer environment
 
-Skyplane is composed of the client (runs locally on a user's laptop) and gateway VMs (runs in respective clouds). Normally, the gateways use a pre-built nightly Docker image containing the latest build of the Skyplane gateway code (`ghcr.io/skyplane-project/skyplane:main`). However, if you modify the gateway source (under `skyplane/gateway`), you will need to rebuild the gateway Docker image and push it to a container registry.
+Skyplane is composed of the client (runs locally on a user's laptop) and gateway VMs (runs in respective clouds). Normally, the gateways use a pre-built nightly Docker image containing the latest build of the Skyplane gateway code (`public.ecr.aws/s6m1p0n8/skyplane:edge`). However, if you modify the gateway source (under `skyplane/gateway`), you will need to rebuild the gateway Docker image and push it to a container registry.
 
 **Ensure you have [authenticated your Github account with Docker](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-to-the-container-registry)**:
 

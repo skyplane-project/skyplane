@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "skyplane"
 packages = [{ include = "skyplane" }]
-version = "0.0.1-a0.dev0"
+version = "0.0.1a0.dev0"
 description = "Skyplane efficiently transports data between cloud regions and providers."
 authors = ["Skyplane authors <skyplaneproject@gmail.com>"]
 license = "Apache-2.0"
