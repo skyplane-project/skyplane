@@ -51,7 +51,7 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
       - name: Build package
         run: |
-          export RELEASEDATE=$(date +%Y-%m-%d)
+          export RELEASEDATE=$(date +%Y%m%d)
           echo nightly-$RELEASEDATE > ./GATEWAY_VERSION
           sed -i 's/name = "skyplane"/name = "skyplane-nightly"/g' pyproject.toml
           sed -i "s/version = \"\([0-9]\+\.[0-9]\+\.[0-9]\+\)\(.*\)\"/version = \"\1.dev$RELEASEDATE\"/" pyproject.toml
