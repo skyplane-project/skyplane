@@ -65,7 +65,7 @@ jobs:
     if: ${{ always() }}
     needs: [integration]
     env:
-      STRATEGY_UUID: skyplane-integrationtest-deprovision-${{ github.run_id }}-${{ github.run_attempt }}
+      STRATEGY_UUID: itest-d-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v1
       - name: Set up Python 3.8
@@ -93,8 +93,6 @@ jobs:
         uses: 'google-github-actions/auth@v0'
         with:
           credentials_json: '${{ secrets.GCP_CREDENTIALS_JSON }}'
-      - name: Delete existing service account keys
-        run: (gcloud iam service-accounts keys list --project skyplane-ci --iam-account ${{ env.STRATEGY_UUID }}@skyplane-ci.iam.gserviceaccount.com --format="value(KEY_ID)" | xargs -I {} gcloud iam service-accounts keys delete --project skyplane-ci --iam-account ${{ env.STRATEGY_UUID }}@skyplane-ci.iam.gserviceaccount.com -q {}) || true
       - name: Skyplane init
         run: |
           poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
@@ -103,4 +101,4 @@ jobs:
         run: poetry run skyplane deprovision
       - name: Cleanup GCP service account
         if: always()
-        run: gcloud iam service-accounts delete ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+        run: gcloud iam service-accounts delete --quiet ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
