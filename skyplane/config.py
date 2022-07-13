@@ -107,13 +107,20 @@ class SkyplaneConfig:
             if "project_id" in config["gcp"]:
                 gcp_project_id = config.get("gcp", "project_id")
 
-        return SkyplaneConfig(
+        skyplane_config = SkyplaneConfig(
             aws_enabled=aws_enabled,
             azure_enabled=azure_enabled,
             gcp_enabled=gcp_enabled,
             azure_subscription_id=azure_subscription_id,
             gcp_project_id=gcp_project_id,
         )
+
+        if "flags" in config:
+            for flag_name in _FLAG_TYPES:
+                if flag_name in config["flags"]:
+                    skyplane_config.set_flag(flag_name, config["flags"][flag_name])
+
+        return skyplane_config
 
     def to_config_file(self, path):
         path = Path(path)
