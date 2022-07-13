@@ -65,7 +65,7 @@ jobs:
     if: ${{ always() }}
     needs: [integration]
     env:
-      STRATEGY_UUID: skyplane-integrationtest-deprovision-${{ github.run_id }}-${{ github.run_attempt }}
+      STRATEGY_UUID: itest-d-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v1
       - name: Set up Python 3.8
@@ -103,4 +103,4 @@ jobs:
         run: poetry run skyplane deprovision
       - name: Cleanup GCP service account
         if: always()
-        run: gcloud iam service-accounts delete ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+        run: gcloud iam service-accounts delete --quiet ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
