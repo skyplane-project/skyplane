@@ -63,6 +63,10 @@ class AzureAuthentication:
             exclude_visual_studio_code_credential=True,
         )
 
+    def refresh_token(self):
+        if self._credential:
+            self._credential.get_token()
+
     def save_region_config(self, config: SkyplaneConfig):
         if config.azure_enabled == False:
             self.clear_region_config()
