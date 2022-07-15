@@ -51,9 +51,16 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
       - name: Build package
         run: |
+          export RELEASEDATE=$(date +%Y%m%d)
+          echo "gateway_version = 'nightly-$RELEASEDATE'" > skyplane/gateway_version.py
           sed -i 's/name = "skyplane"/name = "skyplane-nightly"/g' pyproject.toml
-          sed -i "s/version = \"\([0-9]\+\.[0-9]\+\.[0-9]\+\)\(.*\)\"/version = \"\1.dev`date +%Y%m%d`\"/" pyproject.toml
+          sed -i "s/version = \"\([0-9]\+\.[0-9]\+\.[0-9]\+\)\(.*\)\"/version = \"\1.dev$RELEASEDATE\"/" pyproject.toml
           poetry build
+      - name: Archive poetry package (sdist and wheel)
+        uses: actions/upload-artifact@v3
+        with:
+          name: skyplane-nightly
+          path: dist/
       - name: Publish package
         run: poetry publish -r test-pypi
 
@@ -86,8 +93,15 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
       - name: Build package under skyplane-dev name
         run: |
+          export RELEASEDATE=$(date +%Y%m%d)
+          echo "gateway_version = 'nightly-$RELEASEDATE'" > skyplane/gateway_version.py
           sed -i 's/name = "skyplane"/name = "skyplane-nightly"/g' pyproject.toml
-          sed -i "s/version = \"\([0-9]\+\.[0-9]\+\.[0-9]\+\)\(.*\)\"/version = \"\1.dev`date +%Y%m%d`\"/" pyproject.toml
+          sed -i "s/version = \"\([0-9]\+\.[0-9]\+\.[0-9]\+\)\(.*\)\"/version = \"\1.dev$RELEASEDATE\"/" pyproject.toml
           poetry build
+      - name: Archive poetry package (sdist and wheel)
+        uses: actions/upload-artifact@v3
+        with:
+          name: skyplane
+          path: dist/
       - name: Publish package
         run: poetry publish

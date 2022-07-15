@@ -12,7 +12,7 @@ import pandas as pd
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, DownloadColumn, BarColumn, TransferSpeedColumn
 import urllib3
 
-from skyplane import GB, MB, tmp_log_dir
+from skyplane import GB, MB, gateway_docker_image, tmp_log_dir
 from skyplane import exceptions
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
@@ -33,7 +33,7 @@ class ReplicatorClient:
     def __init__(
         self,
         topology: ReplicationTopology,
-        gateway_docker_image: str = "public.ecr.aws/s6m1p0n8/skyplane:edge",
+        gateway_docker_image: str = gateway_docker_image(),
         aws_instance_class: Optional[str] = "m5.4xlarge",  # set to None to disable AWS
         azure_instance_class: Optional[str] = "Standard_D2_v5",  # set to None to disable Azure
         gcp_instance_class: Optional[str] = "n2-standard-16",  # set to None to disable GCP
