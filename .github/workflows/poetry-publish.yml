@@ -39,8 +39,8 @@ jobs:
           poetry build
       - name: Publish package (dry run)
         run: poetry publish -r test-pypi --dry-run
-      # - name: Publish package
-      #   run: poetry publish -r test-pypi
+      - name: Publish package
+        run: poetry publish -r test-pypi
 
   publish-pypi-dev:
     runs-on: ubuntu-latest
@@ -76,6 +76,6 @@ jobs:
           echo "gateway_version = '$SKYPLANEVERSION'" > skyplane/gateway_version.py
           poetry build
       - name: Publish package (dry run)
-        run: poetry publish -r pypi --dry-run
-      # - name: Publish package
-      #   run: poetry publish
+        run: poetry publish --dry-run
+      - name: Publish package
+        run: poetry publish
