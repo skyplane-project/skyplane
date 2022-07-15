@@ -42,7 +42,7 @@ jobs:
       # - name: Publish package
       #   run: poetry publish -r test-pypi
 
-  publish-pypi:
+  publish-pypi-dev:
     runs-on: ubuntu-latest
     needs: publish-test-pypi
     steps:
