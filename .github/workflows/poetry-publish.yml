@@ -2,7 +2,8 @@ name: poetry-publish
 on:
   release:
     types: [created]
-  
+  workflow_dispatch:
+
 jobs:
   publish-test-pypi:
     runs-on: ubuntu-latest
@@ -32,9 +33,14 @@ jobs:
         run: poetry install -E gateway -E solver
         if: steps.cache.outputs.cache-hit != 'true'
       - name: Build package
-        run: poetry build
-      - name: Publish package
-        run: poetry publish -r test-pypi
+        run: |
+          export SKYPLANEVERSION=`poetry version | awk 'END {print $NF}'`
+          echo "gateway_version = '$SKYPLANEVERSION'" > skyplane/gateway_version.py
+          poetry build
+      - name: Publish package (dry run)
+        run: poetry publish -r test-pypi --dry-run
+      # - name: Publish package
+      #   run: poetry publish -r test-pypi
 
   publish-pypi-dev:
     runs-on: ubuntu-latest
@@ -66,6 +72,10 @@ jobs:
       - name: Build package under skyplane-dev name
         run: |
           sed -i 's/name = "skyplane"/name = "skyplane-dev"/g' pyproject.toml
+          export SKYPLANEVERSION=`poetry version | awk 'END {print $NF}'`
+          echo "gateway_version = '$SKYPLANEVERSION'" > skyplane/gateway_version.py
           poetry build
-      - name: Publish package
-        run: poetry publish
+      - name: Publish package (dry run)
+        run: poetry publish -r pypi --dry-run
+      # - name: Publish package
+      #   run: poetry publish
