@@ -102,7 +102,6 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: skyplane
-          version: $RELEASEDATE
           path: dist/
       - name: Publish package
         run: poetry publish
