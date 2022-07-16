@@ -9,6 +9,7 @@ homepage = "https://github.com/skyplane-project/skyplane"
 repository = "https://github.com/skyplane-project/skyplane"
 documentation = "https://skyplane-project.github.io/docs/"
 readme = "README.md"
+include = ["profiles/*"]
 
 [tool.poetry.dependencies]
 python = ">=3.7.1,<3.11"
