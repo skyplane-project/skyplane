@@ -107,7 +107,7 @@ jobs:
       - name: Install Dependencies
         run: poetry install -E gateway -E solver
         if: steps.cache.outputs.cache-hit != 'true'
-      - name: Build package under skyplane-dev name
+      - name: Build package under skyplane name
         run: |
           export SKYPLANEVERSION=`poetry version | awk 'END {print $NF}'`
           echo "gateway_version = '$SKYPLANEVERSION'" > skyplane/gateway_version.py
