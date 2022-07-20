@@ -1,16 +1,18 @@
-from functools import lru_cache
-import os
 import base64
 import datetime
 import hashlib
 import os
+import requests
+from functools import lru_cache
 from typing import Iterator, List, Optional
 from xml.etree import ElementTree
 
-import requests
 from skyplane import exceptions
+from skyplane.utils import logger
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
-from skyplane.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
+from skyplane.obj_store.object_store_interface import (NoSuchObjectException,
+                                                       ObjectStoreInterface,
+                                                       ObjectStoreObject)
 
 
 class GCSObject(ObjectStoreObject):
@@ -44,7 +46,14 @@ class GCSInterface(ObjectStoreInterface):
         raise ValueError(f"No GCP zone found for region {region}")
 
     def infer_gcp_region(self, bucket_name: str):
-        bucket = self._gcs_client.lookup_bucket(bucket_name)
+        try:
+            bucket = self._gcs_client.lookup_bucket(bucket_name)
+        except Exception as e:
+            # does not have storage.buckets.get access to the Google Cloud Storage bucket
+            if "access to the Google Cloud Storage bucket" in str(e):
+                logger.warning(f"No access to the Google Cloud Storage bucket '{bucket_name}': {e}")
+                logger.warning(f"Assuming '{bucket_name}' is in the 'us-central1-a' zone")
+                return "us-central1-a"
         if bucket is None:
             raise exceptions.MissingBucketException(f"GCS bucket {bucket_name} does not exist")
         return self.map_region_to_zone(bucket.location.lower())

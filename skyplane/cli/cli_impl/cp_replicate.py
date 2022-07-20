@@ -120,10 +120,10 @@ def generate_full_transferobjlist(
     dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
 
     # ensure buckets exist
-    if not source_iface.bucket_exists():
-        raise exceptions.MissingBucketException(f"Source bucket {source_bucket} does not exist")
-    if not dest_iface.bucket_exists():
-        raise exceptions.MissingBucketException(f"Destination bucket {dest_bucket} does not exist")
+    # if not source_iface.bucket_exists():
+    #     raise exceptions.MissingBucketException(f"Source bucket {source_bucket} does not exist")
+    # if not dest_iface.bucket_exists():
+    #     raise exceptions.MissingBucketException(f"Destination bucket {dest_bucket} does not exist")
 
     source_objs, dest_objs = [], []
 
