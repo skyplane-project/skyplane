@@ -200,9 +200,6 @@ class GatewaySender:
                 data = lz4.frame.compress(data)
                 wire_length = len(data)
                 compressed_length = wire_length
-                logger.debug(
-                    f"[sender:{self.worker_id}]:{chunk_ids} compressed {chunk_id} from {chunk.chunk_length_bytes} to {wire_length} ({100 * wire_length / chunk.chunk_length_bytes:.2f}%)"
-                )
             if self.e2ee_secretbox is not None and self.region == chunk_req.src_region:
                 data = self.e2ee_secretbox.encrypt(data)
                 wire_length = len(data)
