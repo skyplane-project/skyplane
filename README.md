@@ -1,9 +1,7 @@
 # Skyplane
 
+[![Join Slack](https://img.shields.io/badge/Skyplane-Join%20Slack-yellow)](https://join.slack.com/t/skyplaneworkspace/shared_invite/zt-1cxmedcuc-GwIXLGyHTyOYELq7KoOl6Q)
 [![integration-test](https://github.com/skyplane-project/skyplane/actions/workflows/integration-test.yml/badge.svg)](https://github.com/skyplane-project/skyplane/actions/workflows/integration-test.yml)
-[![poetry-publish-nightly](https://github.com/skyplane-project/skyplane/actions/workflows/poetry-publish-nightly.yml/badge.svg)](https://github.com/skyplane-project/skyplane/actions/workflows/poetry-publish-nightly.yml)
-[![docker](https://github.com/skyplane-project/skyplane/actions/workflows/docker-publish.yml/badge.svg?branch=main)](https://github.com/skyplane-project/skyplane/actions/workflows/docker-publish.yml)
-[![sphinx](https://github.com/skyplane-project/skyplane/actions/workflows/sphinx.yml/badge.svg)](https://github.com/skyplane-project/skyplane/actions/workflows/sphinx.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 **🔥 Blazing fast bulk data transfers between any cloud 🔥**
