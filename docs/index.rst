@@ -52,3 +52,8 @@ Contents
    skyplane_cli
    skyplane_cli_internal
    skyplane_internal
+
+.. toctree::
+   :caption: Community 
+
+    Slack <https://skyplaneworkspace.slack.com>
