@@ -205,13 +205,12 @@ class AzureCloudProvider(CloudProvider):
                         name = AzureServer.base_name_from_vnet_name(vnet.name)
                         s = AzureServer(name, assume_exists=False)
                         if not s.is_valid():
-                            logger.warning(f"Cleaning up orphaned Azure resources for {name}...")
                             instances_to_terminate.append(s)
 
                 if len(instances_to_terminate) > 0:
-                    logger.info(f"Cleaning up {len(instances_to_terminate)} orphaned Azure resources...")
-                    do_parallel(lambda i: i.terminate_instance_impl(), instances_to_terminate)
-                    logger.info("Done cleaning up orphaned Azure resources")
+                    logger.warning(
+                        f"Note: there are {len(instances_to_terminate)} orphaned resources in the Azure resource group {AzureServer.resource_group_name}. Manually delete them from the Azure console: {[i.name for i in instances_to_terminate]}"
+                    )
             return
         rg_result = resource_client.resource_groups.create_or_update(
             AzureServer.resource_group_name, {"location": AzureServer.resource_group_location, "tags": {"skyplane": "true"}}
