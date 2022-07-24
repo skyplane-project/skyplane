@@ -19,14 +19,7 @@ You can use Skyplane to transfer data:
 
 ## Installation
 
-We recommend installation from PyPi: `pip install skyplane-nightly`
-
-To install Skyplane from source:
-```bash
-$ git clone https://github.com/skyplane-project/skyplane
-$ cd skyplane
-$ pip install -e .
-```
+We recommend installation from PyPi: `pip install skyplane`
 
 **Installation on M1 Mac** If you are using an M1 Mac with the arm64 architecture, you will need to install Skyplane as follows:
 ```

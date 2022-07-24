@@ -4,7 +4,7 @@ Skyplane is an actively developed project. It will have 🔪 SHARP EDGES 🔪. P
 
 If you are interested in contributing, please see our [contributor guide](contributing).
 
-## Skyplane 0.1 release (current)
+## Skyplane 0.1.0 release (current)
 * `skyplane cp` and `skyplane sync` CLI commands to move bulk (>10GB) of data point-to-point.
 * Support for intra-cloud (two regions in same cloud) and inter-cloud copies for AWS, GCP and Azure clouds.
 * Large object transfer support for AWS and GCP.
@@ -12,7 +12,7 @@ If you are interested in contributing, please see our [contributor guide](contri
 * End-to-end encryption and optional socket TLS encryption.
 * Firewalled VM-to-VM VPCs for AWS and GCP.
 
-## Skyplane 0.2 release
+## Skyplane 0.2.0 release
 * Firewalled VM-to-VM VPCs for Azure.
 * Large object transfer support for Azure.
 * Integration testing suite in CI.

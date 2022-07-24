@@ -1,14 +1,14 @@
-from functools import lru_cache
-import os
 import base64
 import datetime
 import hashlib
 import os
-from typing import Iterator, List, Optional
+import requests
+from functools import lru_cache
+from typing import Iterator, List, Optional, Tuple
 from xml.etree import ElementTree
 
-import requests
 from skyplane import exceptions
+from skyplane.utils import logger
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.obj_store.object_store_interface import NoSuchObjectException, ObjectStoreInterface, ObjectStoreObject
 
@@ -24,7 +24,7 @@ class GCSInterface(ObjectStoreInterface):
         self.auth = GCPAuthentication()
         self._gcs_client = self.auth.get_storage_client()
         self._requests_session = requests.Session()
-        self.gcp_region = self.infer_gcp_region(bucket_name) if gcp_region == "infer" else gcp_region
+        self.owned_bucket, self.gcp_region = self.infer_gcp_region(bucket_name) if gcp_region == "infer" else (None, gcp_region)
 
     def region_tag(self):
         return "gcp:" + self.gcp_region
@@ -43,17 +43,32 @@ class GCSInterface(ObjectStoreInterface):
                     return zone["name"]
         raise ValueError(f"No GCP zone found for region {region}")
 
-    def infer_gcp_region(self, bucket_name: str):
-        bucket = self._gcs_client.lookup_bucket(bucket_name)
+    def infer_gcp_region(self, bucket_name: str) -> Tuple[bool, str]:
+        """Returns if the bucket is owned by the current user as well as the region of the bucket."""
+        try:
+            bucket = self._gcs_client.lookup_bucket(bucket_name)
+        except Exception as e:
+            # does not have storage.buckets.get access to the Google Cloud Storage bucket
+            if "access to the Google Cloud Storage bucket" in str(e):
+                logger.warning(
+                    f"No access to the Google Cloud Storage bucket '{bucket_name}', assuming bucket is in the 'us-central1-a' zone"
+                )
+                return False, "us-central1-a"
         if bucket is None:
             raise exceptions.MissingBucketException(f"GCS bucket {bucket_name} does not exist")
-        return self.map_region_to_zone(bucket.location.lower())
+        return True, self.map_region_to_zone(bucket.location.lower())
 
     def bucket_exists(self):
+        if self.owned_bucket is not None and not self.owned_bucket:
+            logger.warning(f"Bucket {self.bucket_name} is not owned by the current user, so we cannot check if it exists.")
+            return True
         try:
             self._gcs_client.get_bucket(self.bucket_name)
             return True
-        except Exception:
+        except Exception as e:
+            if "does not have storage.buckets.get access to the Google Cloud Storage bucket" in str(e):
+                logger.warning(f"Bucket {self.bucket_name} is not owned by the current user, so we cannot check if it exists.")
+                return True
             return False
 
     def exists(self, obj_name):

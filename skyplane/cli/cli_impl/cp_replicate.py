@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple
 import typer
 from rich import print as rprint
 
-from skyplane import exceptions, GB, format_bytes, skyplane_root
+from skyplane import exceptions, GB, format_bytes, gateway_docker_image, skyplane_root
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
@@ -201,7 +201,7 @@ def confirm_transfer(topo: ReplicationTopology, job: ReplicationJob, ask_to_conf
 def launch_replication_job(
     topo: ReplicationTopology,
     job: ReplicationJob,
-    gateway_docker_image: str = os.environ.get("SKYPLANE_DOCKER_IMAGE", "public.ecr.aws/s6m1p0n8/skyplane:edge"),
+    gateway_docker_image: str = os.environ.get("SKYPLANE_DOCKER_IMAGE", gateway_docker_image()),
     # transfer flags
     debug: bool = False,
     reuse_gateways: bool = False,
