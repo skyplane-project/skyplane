@@ -42,7 +42,7 @@ _DEFAULT_FLAGS = {
     "max_instances": 1,
     "autoshutdown_minutes": 15,
     "aws_instance_class": "m5.8xlarge",
-    "azure_instance_class": "Standard_D32_v4",
+    "azure_instance_class": "Standard_D32_v5",
     "gcp_instance_class": "n2-standard-32",
     "gcp_use_premium_network": True,
     "gcp_service_account_name": "skyplane-manual",

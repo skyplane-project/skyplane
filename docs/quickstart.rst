@@ -27,7 +27,7 @@ Skyplane needs access to cloud credentials to perform transfers. To get started 
 .. code-block:: bash
 
    ---> For AWS:
-   $ pip install aws-cli
+   $ pip install awscli
 
    ---> For Google Cloud:
    $ pip install gcloud
