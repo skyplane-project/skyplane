@@ -1,5 +1,12 @@
 #!/bin/bash
 
+die () {
+    echo >&2 "$@"
+    exit 1
+}
+
+[ "$#" -eq 1 ] || die "1 argument required (your Github username), $# provided"
+
 # color output
 BGreen='\033[1;32m'
 NC='\033[0m' # No Color
@@ -9,7 +16,7 @@ set -e
 sudo DOCKER_BUILDKIT=1 docker build -t skyplane .
 set +e
 
-DOCKER_URL="ghcr.io/skyplane-project/skyplane:local-$(openssl rand -hex 16)"
+DOCKER_URL="ghcr.io/$1/skyplane:local-$(openssl rand -hex 16)"
 echo -e "${BGreen}Uploading docker image to $DOCKER_URL${NC}"
 set -e
 sudo docker tag skyplane $DOCKER_URL
