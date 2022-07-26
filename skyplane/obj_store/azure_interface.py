@@ -143,8 +143,12 @@ class AzureInterface(ObjectStoreInterface):
 
     def list_objects(self, prefix="") -> Iterator[AzureObject]:
         blobs = self.container_client.list_blobs(name_starts_with=prefix)
-        for blob in blobs:
-            yield AzureObject("azure", f"{self.account_name}/{blob.container}", blob.name, blob.size, blob.last_modified)
+        try:            
+            for blob in blobs:
+                yield AzureObject("azure", f"{self.account_name}/{blob.container}", blob.name, blob.size, blob.last_modified)
+        except HttpResponseError as e:
+            if "AuthorizationPermissionMismatch" in str(e):
+                logger.error(f"Unable to list objects in container {self.container_name} as you don't have permission to access it. You need the 'Storage Blob Data Contributor' and 'Storage Account Contributor' roles.")
 
     def delete_objects(self, keys: List[str]):
         for key in keys:
