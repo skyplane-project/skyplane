@@ -8,4 +8,4 @@ sphinx-copybutton
 jupyter-sphinx
 myst-nb
 docutils
-# .[all]
+.[solver,gateway]
