@@ -64,8 +64,7 @@ class AzureAuthentication:
         )
 
     def refresh_token(self):
-        if self._credential:
-            self._credential.get_token()
+        self._credential = None
 
     def save_region_config(self, config: SkyplaneConfig):
         if config.azure_enabled == False:
