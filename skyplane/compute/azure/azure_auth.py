@@ -64,7 +64,11 @@ class AzureAuthentication:
         )
 
     def refresh_token(self):
-        self._credential = None
+        if self._credential is not None:
+            self._credential.close()
+            if isinstance(self._credential, ManagedIdentityCredential):
+                from msal import TokenCache
+                self._credential._credential._client._cache = TokenCache()
 
     def save_region_config(self, config: SkyplaneConfig):
         if config.azure_enabled == False:
