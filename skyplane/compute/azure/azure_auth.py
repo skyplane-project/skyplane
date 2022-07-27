@@ -15,6 +15,7 @@ from skyplane import is_gateway_env
 from skyplane.compute.const_cmds import query_which_cloud
 from skyplane.config import SkyplaneConfig
 from skyplane.utils.fn import do_parallel
+from skyplane.utils import logger
 
 # optional imports due to large package size
 try:
@@ -66,9 +67,16 @@ class AzureAuthentication:
     def refresh_token(self):
         if self._credential is not None:
             self._credential.close()
+            logger.debug(f"Refreshing token for {self._credential}")
             if isinstance(self._credential, ManagedIdentityCredential):
-                from msal import TokenCache
-                self._credential._credential._client._cache = TokenCache()
+                c = self._credential
+                logger.debug(f"Token credential is of type: {type(c)}")
+                from azure.identity._credentials.imds import ImdsCredential
+                if isinstance(c._credential, ImdsCredential):
+                    from msal import TokenCache
+                    imds_client = c._credential._client
+                    logger.debug(f"IMDS client is of type: {type(imds_client)}")
+                    imds_client._cache = TokenCache()
 
     def save_region_config(self, config: SkyplaneConfig):
         if config.azure_enabled == False:
