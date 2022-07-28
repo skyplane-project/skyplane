@@ -713,6 +713,42 @@ class ReplicatorClient:
                 failed_src_objs,
             )
 
+    def verify_transfer_prefix(self, dst_prefix, job: ReplicationJob):
+        """Check that all objects to copy are present in the destination"""
+        src_interface = ObjectStoreInterface.create(job.source_region, job.source_bucket)
+        dst_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
+
+        dst_objs = dst_interface.list_objects(dst_prefix)
+
+        src_dst_dict = {dst: src for src, dst in dict(job.transfer_pairs).items()}
+                
+        # only check metadata (src.size == dst.size) && (src.modified <= dst.modified)
+        def verify(dst_obj):
+            if dst_obj in src_dst_dict:
+                dst_obj_size = dst_interface.get_obj_size(dst_obj.key)
+                dst_obj_last_modified = dst_interface.get_obj_last_modified(dst_obj.key)
+                src_obj = src_dst_dict[dst_obj]
+                try:
+                    if src_interface.get_obj_size(src_obj.key) != dst_obj_size:
+                        failed_src_objs.append(src_obj)
+                    elif src_interface.get_obj_last_modified(src_obj.key) > dst_obj_last_modified:
+                        failed_src_objs.append(src_obj)
+                    else:
+                        return True
+                except NoSuchObjectException:
+                    return False
+            else:
+                return False
+
+        # verify that all objects in src_interface are present in dst_interface
+        matches = do_parallel(verify, dst_objs, n=512, spinner=True, spinner_persist=True, desc="Verifying transfer")
+        failed_src_objs = [src_key for (src_key, dst_key), match in matches if not match]
+        if len(failed_src_objs) > 0:
+            raise exceptions.TransferFailedException(
+                f"{len(failed_src_objs)} objects failed verification",
+                failed_src_objs,
+            )
+
 
 def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1) -> Dict[str, List[Server]]:
     if instance_filter is None:

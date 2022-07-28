@@ -4,6 +4,7 @@ from functools import partial
 from pathlib import Path
 from shlex import split
 import traceback
+from skyplane.replicate.replicator_client import ReplicatorClient
 
 import typer
 
@@ -51,6 +52,7 @@ def cp(
     multipart: bool = typer.Option(cloud_config.get_flag("multipart_enabled"), help="If true, will use multipart uploads."),
     # transfer flags
     confirm: bool = typer.Option(cloud_config.get_flag("autoconfirm"), "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
+    verify_checksums: bool = True,
     max_instances: int = typer.Option(cloud_config.get_flag("max_instances"), "--max-instances", "-n", help="Number of gateways"),
     # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
@@ -154,6 +156,12 @@ def cp(
             job=job,
             ask_to_confirm_transfer=not confirm,
         )
+        if verify_checksums:
+            if provider_dst == "azure":
+                typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
+            else:
+                ReplicatorClient.verify_transfer_prefix(dst_prefix=path_dst,job=job)
+        
         stats = launch_replication_job(
             topo=topo,
             job=job,

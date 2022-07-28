@@ -306,12 +306,6 @@ def launch_replication_job(
                 typer.secho(error, fg="red")
         raise typer.Exit(1)
 
-    if verify_checksums:
-        if any(node.region.startswith("azure") for node in rc.bound_nodes.keys()):
-            typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
-        else:
-            rc.verify_transfer(job)
-
     # print stats
     if stats["success"]:
         rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
