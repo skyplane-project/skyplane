@@ -1,4 +1,4 @@
-sphinx
+sphinx>=4.4,!=5.1
 sphinx-click
 sphinx_rtd_theme
 furo
@@ -8,4 +8,4 @@ sphinx-copybutton
 jupyter-sphinx
 myst-nb
 docutils
-# .[all]
+.[solver,gateway]
