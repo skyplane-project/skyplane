@@ -1,10 +1,7 @@
-import os
 import re
-import resource
 import subprocess
 from functools import partial
 from pathlib import Path
-from sys import platform
 
 import typer
 from rich.console import Console
@@ -68,14 +65,14 @@ def parse_path(path: str):
     raise ValueError(f"Parse error {path}")
 
 
-def check_limits(hard_limit=1024 * 1024, soft_limit=1024 * 1024):
-    check_ulimit(hard_limit=1024 * 1024)
-
-
 def check_ulimit(hard_limit=1024 * 1024):
     # Get the current fs.file-max limit
     check_hard_limit = ["sysctl", "--values", "fs.file-max"]
-    fs_hard_limit = subprocess.check_output(check_hard_limit)
+    try:
+        fs_hard_limit = subprocess.check_output(check_hard_limit)
+    except subprocess.CalledProcessError:
+        typer.secho(f"Failed to get fs.file-max limit", fg="yellow")
+        return
     current_limit_hard = int(fs_hard_limit.decode("UTF-8"))
 
     # check/update fs.file-max limit

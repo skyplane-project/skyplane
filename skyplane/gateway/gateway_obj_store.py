@@ -10,6 +10,7 @@ from skyplane.chunk import ChunkRequest
 from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils import logger
+from skyplane.utils.fn import wait_for
 from skyplane.utils.retry import retry_backoff
 
 
@@ -47,6 +48,19 @@ class GatewayObjStoreConn:
                 self.obj_store_interfaces[key] = ObjectStoreInterface.create(region, bucket)
             except Exception as e:
                 raise ValueError(f"Failed to create obj store interface {str(e)}")
+
+            # wait for role propagation on Azure
+            if region.startswith("azure:"):
+
+                def exists():
+                    try:
+                        return self.obj_store_interfaces[key].bucket_exists()
+                    except Exception as e:
+                        logger.error(f"[gateway_daemon] Failed to check bucket exists {str(e)}")
+                        return False
+
+                propogation_time = wait_for(exists, timeout=180, desc=f"Wait for obj store interface {key}")
+                logger.info(f"[gateway_daemon] Created obj store interface {key}, waited {propogation_time:.2f}s for bucket to exist")
         return self.obj_store_interfaces[key]
 
     def start_workers(self):

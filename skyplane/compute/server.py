@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 import urllib3
-from skyplane import config_path, key_root
+from skyplane import config_path, key_root, cloud_config
 from skyplane.compute.const_cmds import make_autoshutdown_script, make_dozzle_command, make_sysctl_tcp_tuning_command
 from skyplane.utils import logger
 from skyplane.utils.fn import PathLike, wait_for
@@ -164,7 +164,9 @@ class Server:
         self.close_server()
         self.terminate_instance_impl()
 
-    def enable_auto_shutdown(self, timeout_minutes=35):  # default to 35 minutes since SSH login is disabled for the last 5 minutes
+    def enable_auto_shutdown(self, timeout_minutes=None):
+        if timeout_minutes is None:
+            timeout_minutes = cloud_config.get_flag("autoshutdown_minutes")
         self.auto_shutdown_timeout_minutes = timeout_minutes
         self.run_command(f"(echo '{make_autoshutdown_script()}' > /tmp/autoshutdown.sh) && chmod +x /tmp/autoshutdown.sh")
         self.run_command("echo 1")  # run noop to update auto_shutdown
@@ -347,7 +349,7 @@ class Server:
                 status_val = json.loads(http_pool.request("GET", api_url).data.decode("utf-8"))
                 is_up = status_val.get("status") == "ok"
                 return is_up
-            except Exception as e:
+            except Exception:
                 return False
 
         try:

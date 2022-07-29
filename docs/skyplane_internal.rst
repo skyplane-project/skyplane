@@ -1,6 +1,14 @@
 Internal package documentation
 =======================================
 
+skyplane.replicate.replicator_client module
+---------------------------------------------
+
+.. automodule:: skyplane.replicate.replicator_client
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 skyplane.chunk module
 -----------------------
 

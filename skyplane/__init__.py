@@ -4,6 +4,7 @@ from pathlib import Path
 
 from skyplane.config import SkyplaneConfig
 from skyplane.config import clientid
+from skyplane.gateway_version import gateway_version
 
 # paths
 skyplane_root = Path(__file__).parent.parent
@@ -47,3 +48,7 @@ if config_path.exists():
 else:
     cloud_config = SkyplaneConfig(False, False, False, clientid)
 is_gateway_env = os.environ.get("SKYPLANE_IS_GATEWAY", None) == "1"
+
+# load gateway docker image version
+def gateway_docker_image():
+    return "public.ecr.aws/s6m1p0n8/skyplane:" + gateway_version

@@ -5,7 +5,6 @@ from pathlib import Path
 from shlex import split
 import traceback
 
-import questionary
 import typer
 
 import skyplane.cli.cli_aws
@@ -24,7 +23,6 @@ from skyplane.cli.cli_impl.cp_replicate import (
 )
 from skyplane.replicate.replication_plan import ReplicationJob
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
-from skyplane.cli.cli_impl.ls import ls_local, ls_objstore
 from skyplane.cli.common import check_ulimit, parse_path, query_instances
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
@@ -49,6 +47,7 @@ app.add_typer(skyplane.cli.cli_solver.app, name="solver")
 def cp(
     src: str,
     dst: str,
+    recursive: bool = typer.Option(False, "--recursive", "-r", help="If true, will copy objects at folder prefix recursively"),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
     multipart: bool = typer.Option(cloud_config.get_flag("multipart_enabled"), help="If true, will use multipart uploads."),
@@ -76,6 +75,8 @@ def cp(
     :type src: str
     :param dst: The destination of the transfer
     :type dst: str
+    :param recursive: If true, will copy objects at folder prefix recursively
+    :type recursive: bool
     :param reuse_gateways: If true, will leave provisioned instances running to be reused. You must run `skyplane deprovision` to clean up.
     :type reuse_gateways: bool
     :param debug: If true, will write debug information to debug directory.
@@ -117,10 +118,12 @@ def cp(
     if provider_src in clouds and provider_dst in clouds:
         try:
             src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)
-            src_region = src_client.region_tag()
             dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
+            src_region = src_client.region_tag()
             dst_region = dst_client.region_tag()
-            transfer_pairs = generate_full_transferobjlist(src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst)
+            transfer_pairs = generate_full_transferobjlist(
+                src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst, recursive=recursive
+            )
         except exceptions.SkyplaneException as e:
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
             console.print(e.pretty_print_str())
@@ -179,6 +182,7 @@ def cp(
 def sync(
     src: str,
     dst: str,
+    recursive: bool = typer.Option(False, "--recursive", "-r", help="If true, will copy objects at folder prefix recursively"),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
     # transfer flags
@@ -210,6 +214,8 @@ def sync(
     :type src: str
     :param dst: The destination of the transfer
     :type dst: str
+    :param recursive: If true, will copy objects at folder prefix recursively
+    :type recursive: bool
     :param reuse_gateways: If true, will leave provisioned instances running to be reused. You must run `skyplane deprovision` to clean up.
     :type reuse_gateways: bool
     :param debug: If true, will write debug information to debug directory.
@@ -242,7 +248,9 @@ def sync(
         src_region = src_client.region_tag()
         dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
         dst_region = dst_client.region_tag()
-        full_transfer_pairs = generate_full_transferobjlist(src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst)
+        full_transfer_pairs = generate_full_transferobjlist(
+            src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst, recursive=recursive
+        )
     except exceptions.SkyplaneException as e:
         console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
         console.print(e.pretty_print_str())
@@ -339,16 +347,20 @@ def ssh():
 
     instance_map = {f"{i.region_tag}, {i.public_ip()} ({i.instance_state()})": i for i in instances}
     choices = list(sorted(instance_map.keys()))
-    instance_name = questionary.select("Select an instance", choices=choices).ask()
-    if instance_name is not None and instance_name in instance_map:
-        instance = instance_map[instance_name]
-        cmd = instance.get_ssh_cmd()
-        logger.info(f"Running SSH command: {cmd}")
-        logger.info("It may ask for a private key password, try `skyplane`.")
-        proc = subprocess.Popen(split(cmd))
-        proc.wait()
-    else:
-        typer.secho(f"No instance selected", fg="red")
+
+    # ask for selection
+    typer.secho("Select an instance:", fg="yellow", bold=True)
+    for i, choice in enumerate(choices):
+        typer.secho(f"{i+1}) {choice}", fg="yellow")
+    choice = typer.prompt(f"Enter a number: ", validators=[typer.Range(1, len(choices))])
+    instance = instance_map[choices[choice - 1]]
+
+    # ssh
+    cmd = instance.get_ssh_cmd()
+    logger.info(f"Running SSH command: {cmd}")
+    logger.info("It may ask for a private key password, try `skyplane`.")
+    proc = subprocess.Popen(split(cmd))
+    proc.wait()
 
 
 @app.command()
@@ -356,6 +368,9 @@ def init(
     non_interactive: bool = typer.Option(False, "--non-interactive", "-y", help="Run non-interactively"),
     reinit_azure: bool = False,
     reinit_gcp: bool = False,
+    disable_config_aws: bool = False,
+    disable_config_azure: bool = False,
+    disable_config_gcp: bool = False,
 ):
     """
     It loads the configuration file, and if it doesn't exist, it creates a default one. Then it creates
@@ -365,6 +380,12 @@ def init(
     :type reinit_azure: bool
     :param reinit_gcp: If true, will reinitialize the GCP region list and credentials
     :type reinit_gcp: bool
+    :param disable_config_aws: If true, will disable AWS configuration (may still be enabled if environment variables are set)
+    :type disable_config_aws: bool
+    :param disable_config_azure: If true, will disable Azure configuration (may still be enabled if environment variables are set)
+    :type disable_config_azure: bool
+    :param disable_config_gcp: If true, will disable GCP configuration (may still be enabled if environment variables are set)
+    :type disable_config_gcp: bool
     """
     print_header()
 
@@ -372,24 +393,25 @@ def init(
         logger.warning("Non-interactive mode enabled. Automatically confirming interactive questions.")
 
     if config_path.exists():
+        logger.debug(f"Found existing configuration file at {config_path}, loading")
         cloud_config = SkyplaneConfig.load_config(config_path)
     else:
         cloud_config = SkyplaneConfig.default_config()
 
     # load AWS config
     typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)
-    cloud_config = load_aws_config(cloud_config, non_interactive=non_interactive)
+    if not disable_config_aws:
+        cloud_config = load_aws_config(cloud_config, non_interactive=non_interactive)
 
     # load Azure config
     typer.secho("\n(2) Configuring Azure:", fg="yellow", bold=True)
-    cloud_config = load_azure_config(cloud_config, force_init=reinit_azure, non_interactive=non_interactive)
+    if not disable_config_azure:
+        cloud_config = load_azure_config(cloud_config, force_init=reinit_azure, non_interactive=non_interactive)
 
     # load GCP config
     typer.secho("\n(3) Configuring GCP:", fg="yellow", bold=True)
-    cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
-
-    # check file limit
-    check_ulimit()
+    if not disable_config_gcp:
+        cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
 
     cloud_config.to_config_file(config_path)
     typer.secho(f"\nConfig file saved to {config_path}", fg="green")
@@ -414,6 +436,8 @@ def metrics(
         raise Exception("Unknown value to set metric colletion.")
     usage_stats.show_usage_stats_prompt()
     return 0
+
+typer_click_object = typer.main.get_command(app)
 
 if __name__ == "__main__":
     app()

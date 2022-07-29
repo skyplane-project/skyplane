@@ -22,11 +22,13 @@ _FLAG_TYPES = {
     # "multipart_max_chunks": int,
     "num_connections": int,
     "max_instances": int,
+    "autoshutdown_minutes": int,
     "aws_instance_class": str,
     "azure_instance_class": str,
     "gcp_instance_class": str,
     "gcp_use_premium_network": bool,
     "usage_stats": str,
+    "gcp_service_account_name": str,
 }
 
 _DEFAULT_FLAGS = {
@@ -43,11 +45,13 @@ _DEFAULT_FLAGS = {
     # "multipart_max_chunks": 9990,  # AWS limit is 10k chunks
     "num_connections": 32,
     "max_instances": 1,
+    "autoshutdown_minutes": 15,
     "aws_instance_class": "m5.8xlarge",
-    "azure_instance_class": "Standard_D32_v4",
+    "azure_instance_class": "Standard_D32_v5",
     "gcp_instance_class": "n2-standard-32",
     "gcp_use_premium_network": True,
     "usage_stats": "1",
+    "gcp_service_account_name": "skyplane-manual",
 }
 
 
@@ -111,7 +115,7 @@ class SkyplaneConfig:
             if "project_id" in config["gcp"]:
                 gcp_project_id = config.get("gcp", "project_id")
 
-        return SkyplaneConfig(
+        skyplane_config = SkyplaneConfig(
             aws_enabled=aws_enabled,
             azure_enabled=azure_enabled,
             gcp_enabled=gcp_enabled,
@@ -119,6 +123,13 @@ class SkyplaneConfig:
             azure_subscription_id=azure_subscription_id,
             gcp_project_id=gcp_project_id,
         )
+
+        if "flags" in config:
+            for flag_name in _FLAG_TYPES:
+                if flag_name in config["flags"]:
+                    skyplane_config.set_flag(flag_name, config["flags"][flag_name])
+
+        return skyplane_config
 
     def to_config_file(self, path):
         path = Path(path)

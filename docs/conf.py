@@ -15,11 +15,11 @@ sys.path.insert(0, os.path.abspath(".."))
 # -- Project information
 
 project = "Skyplane"
-copyright = "2021, The Skyplane authors"
+copyright = "2022, The Skyplane authors"
 author = "The Skyplane authors"
 
 release = "0.1"
-version = "0.1.0"
+version = "0.1.1"
 
 # -- General configuration
 
@@ -42,6 +42,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",
     "sphinx_autodoc_typehints",
+    "sphinx_click",
     "myst_parser",
     # 'matplotlib.sphinxext.plot_directive',
 ]

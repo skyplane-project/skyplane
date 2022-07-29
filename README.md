@@ -1,8 +1,8 @@
 # Skyplane
 
-[![poetry-publish-nightly](https://github.com/skyplane-project/skyplane/actions/workflows/poetry-publish-nightly.yml/badge.svg)](https://github.com/skyplane-project/skyplane/actions/workflows/poetry-publish-nightly.yml)
-[![docker](https://github.com/skyplane-project/skyplane/actions/workflows/docker-publish.yml/badge.svg?branch=main)](https://github.com/skyplane-project/skyplane/actions/workflows/docker-publish.yml)
-[![sphinx](https://github.com/skyplane-project/skyplane/actions/workflows/sphinx.yml/badge.svg)](https://github.com/skyplane-project/skyplane/actions/workflows/sphinx.yml)
+[![Join Slack](https://img.shields.io/badge/-Join%20Skyplane%20Slack-blue?logo=slack)](https://join.slack.com/t/skyplaneworkspace/shared_invite/zt-1cxmedcuc-GwIXLGyHTyOYELq7KoOl6Q)
+[![integration-test](https://github.com/skyplane-project/skyplane/actions/workflows/integration-test.yml/badge.svg)](https://github.com/skyplane-project/skyplane/actions/workflows/integration-test.yml)
+[![docs](https://readthedocs.org/projects/skyplane/badge/?version=latest)](https://skyplane.readthedocs.io/en/latest/?badge=latest)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 **🔥 Blazing fast bulk data transfers between any cloud 🔥**
@@ -18,19 +18,10 @@ You can use Skyplane to transfer data:
 
 ## Installation
 
-We recommend installation from PyPi: `pip install skyplane-nightly`
+We recommend installation from PyPi: `pip install skyplane`
 
-To install Skyplane from source:
-```bash
-$ git clone https://github.com/skyplane-project/skyplane
-$ cd skyplane
-$ pip install -e .
-```
-
-**Installation on M1 Mac** If you are using an M1 Mac with the arm64 architecture, you will need to install Skyplane as follows:
-```
-$ GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 GRPC_PYTHON_BUILD_SYSTEM_ZLIB=1 pip install skyplane-nightly
-```
+*Installation on M1 Mac*: If you are using an M1 Mac with the arm64 architecture, you will need to install Skyplane as follows
+`GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 GRPC_PYTHON_BUILD_SYSTEM_ZLIB=1 pip install skyplane`
 
 ## Authenticating with cloud providers
 

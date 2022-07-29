@@ -1,10 +1,11 @@
-# sphinx >=3 required by sphinx-autodoc-typehints v1.11.1 (Oct 2020)
-sphinx
+sphinx>=4.4,!=5.1
+sphinx-click
 sphinx_rtd_theme
 furo
+sphinx-autobuild
 sphinx-autodoc-typehints
 sphinx-copybutton
 jupyter-sphinx
 myst-nb
 docutils
-# .[all]
+.[solver,gateway]

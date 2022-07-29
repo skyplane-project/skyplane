@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple
 import typer
 from rich import print as rprint
 
-from skyplane import exceptions, GB, format_bytes, skyplane_root
+from skyplane import exceptions, GB, format_bytes, gateway_docker_image, skyplane_root
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
@@ -76,25 +76,34 @@ def generate_topology(
 
 def map_object_key_prefix(
     source_prefix: str,
-    dest_prefix: str,
     source_key: str,
+    dest_prefix: str,
+    recursive: bool = False,
 ):
-    # if path is a single object, copy it directly
-    if source_key == source_prefix:
-        fname = source_key.split("/")[-1]
-        return os.path.join(dest_prefix, fname)
-
-    # else, object must be in a subdirectory of the source prefix
-    # source prefix must end with a slash
-    if not source_prefix.endswith("/"):
-        raise exceptions.MissingObjectException(f"To copy a directory, the source prefix must end with a slash: {source_prefix}")
-
-    # source key must start with the source prefix
-    if not source_key.startswith(source_prefix):
-        raise exceptions.MissingObjectException(f"Source key must start with source prefix {source_prefix} but key was {source_key}")
-
-    # remove source prefix from key and append to destination prefix
-    return os.path.join(dest_prefix, source_key[len(source_prefix) :])
+    """
+    map_object_key_prefix computes the mapping of a source key in a bucket prefix to the destination.
+    Users invoke a transfer via the CLI; aws s3 cp s3://bucket/source_prefix s3://bucket/dest_prefix.
+    The CLI will query the object store for all objects in the source prefix and map them to the
+    destination prefix using this function.
+    """
+    if not recursive:
+        if source_key.startswith(source_prefix):
+            if dest_prefix.endswith("/"):
+                src_name = source_key.split("/")[-1]
+                return f"{dest_prefix}{src_name}"
+            elif source_prefix == source_key:
+                return dest_prefix
+        raise exceptions.MissingObjectException(
+            f"Source key {source_key} does not start with source prefix {source_prefix}. To copy a directory, please use the '--recursive' flag"
+        )
+    else:
+        dest_prefix = dest_prefix if dest_prefix.endswith("/") else f"{dest_prefix}/"
+        source_prefix = source_prefix if source_prefix.endswith("/") else f"{source_prefix}/"
+        if source_key.startswith(source_prefix):
+            file_path = source_key[len(source_prefix) :]
+            return f"{dest_prefix}{file_path}"
+        else:
+            raise exceptions.MissingObjectException(f"Source key {source_key} does not start with source prefix {source_prefix}")
 
 
 def generate_full_transferobjlist(
@@ -104,10 +113,18 @@ def generate_full_transferobjlist(
     dest_region: str,
     dest_bucket: str,
     dest_prefix: str,
+    recursive: bool = False,
 ) -> List[Tuple[ObjectStoreObject, ObjectStoreObject]]:
     """Query source region and destination region buckets and return list of objects to transfer."""
     source_iface = ObjectStoreInterface.create(source_region, source_bucket)
     dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
+
+    # ensure buckets exist
+    if not source_iface.bucket_exists():
+        raise exceptions.MissingBucketException(f"Source bucket {source_bucket} does not exist")
+    if not dest_iface.bucket_exists():
+        raise exceptions.MissingBucketException(f"Destination bucket {dest_bucket} does not exist")
+
     source_objs, dest_objs = [], []
 
     # query all source region objects
@@ -122,7 +139,7 @@ def generate_full_transferobjlist(
 
     # map objects to destination object paths
     for source_obj in source_objs:
-        dest_key = map_object_key_prefix(source_prefix, dest_prefix, source_obj.key)
+        dest_key = map_object_key_prefix(source_prefix, source_obj.key, dest_prefix, recursive=recursive)
         dest_obj = ObjectStoreObject(dest_region.split(":")[0], dest_bucket, dest_key)
         dest_objs.append(dest_obj)
 
@@ -162,11 +179,11 @@ def confirm_transfer(topo: ReplicationTopology, job: ReplicationJob, ask_to_conf
     # print list of objects to transfer if not a random transfer
     if not job.random_chunk_size_mb:
         for src, dst in job.transfer_pairs[:4]:
-            console.print(f"    [bright_black][bold]{src.key}[/bold] -> [bold]{dst.key}[/bold][/bright_black]")
+            console.print(f"    [bright_black][bold]{src.key}[/bold] => [bold]{dst.key}[/bold][/bright_black]")
         if len(job.transfer_pairs) > 4:
             console.print(f"    [bright_black][bold]...[/bold][/bright_black]")
             for src, dst in job.transfer_pairs[4:][-4:]:
-                console.print(f"    [bright_black][bold]{src.key}[/bold] -> [bold]{dst.key}[/bold][/bright_black]")
+                console.print(f"    [bright_black][bold]{src.key}[/bold] => [bold]{dst.key}[/bold][/bright_black]")
 
     if ask_to_confirm_transfer:
         if typer.confirm("Continue?", default=True):
@@ -184,7 +201,7 @@ def confirm_transfer(topo: ReplicationTopology, job: ReplicationJob, ask_to_conf
 def launch_replication_job(
     topo: ReplicationTopology,
     job: ReplicationJob,
-    gateway_docker_image: str = os.environ.get("SKYPLANE_DOCKER_IMAGE", "ghcr.io/skyplane-project/skyplane:main"),
+    gateway_docker_image: str = os.environ.get("SKYPLANE_DOCKER_IMAGE", gateway_docker_image()),
     # transfer flags
     debug: bool = False,
     reuse_gateways: bool = False,
@@ -243,7 +260,10 @@ def launch_replication_job(
         total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
         console.print(f":rocket: [bold blue]{total_bytes / GB:.2f}GB transfer job launched[/bold blue]")
         if topo.source_region().split(":")[0] == "azure" or topo.sink_region().split(":")[0] == "azure":
-            typer.secho(f"Warning: It can take up to 60s for role assignments to propagate on Azure. See issue #355", fg="yellow")
+            typer.secho(
+                f"Warning: For Azure transfers, your transfer may block for up to 120s waiting for role assignments to propagate. See issue #355.",
+                fg="yellow",
+            )
         stats = rc.monitor_transfer(
             job,
             show_spinner=True,
@@ -286,9 +306,11 @@ def launch_replication_job(
                 typer.secho(error, fg="red")
         raise typer.Exit(1)
 
-    # verify transfer
     if verify_checksums:
-        rc.verify_transfer(job)
+        if any(node.region.startswith("azure") for node in rc.bound_nodes.keys()):
+            typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
+        else:
+            rc.verify_transfer(job)
 
     # print stats
     if stats["success"]:
