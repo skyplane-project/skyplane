@@ -220,7 +220,6 @@ def launch_replication_job(
     use_compression: bool = False,
     use_e2ee: bool = True,
     use_socket_tls: bool = False,
-    verify_checksums: bool = True,
     # multipart
     multipart_enabled: bool = False,
     multipart_max_chunk_size_mb: int = 8,

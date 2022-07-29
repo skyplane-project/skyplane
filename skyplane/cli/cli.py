@@ -52,7 +52,6 @@ def cp(
     multipart: bool = typer.Option(cloud_config.get_flag("multipart_enabled"), help="If true, will use multipart uploads."),
     # transfer flags
     confirm: bool = typer.Option(cloud_config.get_flag("autoconfirm"), "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
-    verify_checksums: bool = True,
     max_instances: int = typer.Option(cloud_config.get_flag("max_instances"), "--max-instances", "-n", help="Number of gateways"),
     # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
@@ -156,11 +155,6 @@ def cp(
             job=job,
             ask_to_confirm_transfer=not confirm,
         )
-        if verify_checksums:
-            if provider_dst == "azure":
-                typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
-            else:
-                ReplicatorClient.verify_transfer_prefix(dst_prefix=path_dst, job=job)
 
         stats = launch_replication_job(
             topo=topo,
@@ -171,7 +165,6 @@ def cp(
             use_compression=cloud_config.get_flag("compress") if src_region != dst_region else False,
             use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
             use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
-            verify_checksums=cloud_config.get_flag("verify_checksums"),
             aws_instance_class=cloud_config.get_flag("aws_instance_class"),
             azure_instance_class=cloud_config.get_flag("azure_instance_class"),
             gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
@@ -179,7 +172,15 @@ def cp(
             multipart_enabled=multipart,
             multipart_max_chunk_size_mb=cloud_config.get_flag("multipart_max_chunk_size_mb"),
         )
-        return 0 if stats["success"] else 1
+
+        if cloud_config.get_flag("verify_checksums"):
+            provider_dst = topo.sink_region().split(":")[0]
+            if provider_dst == "azure":
+                typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
+            else:
+                ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+
+            return 0 if stats["success"] else 1
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
 
@@ -309,7 +310,6 @@ def sync(
         use_compression=cloud_config.get_flag("compress") if src_region != dst_region else False,
         use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
         use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
-        verify_checksums=cloud_config.get_flag("verify_checksums"),
         aws_instance_class=cloud_config.get_flag("aws_instance_class"),
         azure_instance_class=cloud_config.get_flag("azure_instance_class"),
         gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
@@ -317,6 +317,14 @@ def sync(
         multipart_enabled=multipart,
         multipart_max_chunk_size_mb=cloud_config.get_flag("multipart_max_chunk_size_mb"),
     )
+
+    if cloud_config.get_flag("verify_checksums"):
+        provider_dst = topo.sink_region().split(":")[0]
+        if provider_dst == "azure":
+            typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
+        else:
+            ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+
     return 0 if stats["success"] else 1
 
 
