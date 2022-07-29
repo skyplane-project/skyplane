@@ -720,11 +720,11 @@ class ReplicatorClient:
 
         dst_objs = dst_interface.list_objects(dst_prefix)
 
-        job_pair_dst_objs = [dst  for _, dst in job.transfer_pairs]
-        job_pair_src_objs = [src  for src, _ in job.transfer_pairs]
+        job_pair_dst_objs = [dst for _, dst in job.transfer_pairs]
+        job_pair_src_objs = [src for src, _ in job.transfer_pairs]
 
         failed_src_objs = []
-                
+
         # only check metadata (src.size == dst.size) && (src.modified <= dst.modified)
         def verify(dst_obj):
             try:

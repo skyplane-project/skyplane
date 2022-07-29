@@ -160,8 +160,8 @@ def cp(
             if provider_dst == "azure":
                 typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
             else:
-                ReplicatorClient.verify_transfer_prefix(dst_prefix=path_dst,job=job)
-        
+                ReplicatorClient.verify_transfer_prefix(dst_prefix=path_dst, job=job)
+
         stats = launch_replication_job(
             topo=topo,
             job=job,
