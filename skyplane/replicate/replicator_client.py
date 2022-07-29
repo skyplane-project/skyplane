@@ -7,6 +7,7 @@ from functools import partial
 from typing import Dict, List, Optional, Tuple, Iterable
 import nacl.secret
 import nacl.utils
+from rich import print as rprint
 
 import pandas as pd
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, DownloadColumn, BarColumn, TransferSpeedColumn
@@ -702,20 +703,23 @@ class ReplicatorClient:
     @staticmethod
     def verify_transfer_prefix(job: ReplicationJob, dest_prefix: str):
         """Check that all objects to copy are present in the destination"""
-        dst_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
+        with Timer() as t:
+            dst_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
 
-        # algorithm: check all expected keys are present in the destination
-        #     by iteratively removing found keys from list_objects from a
-        #     precomputed dictionary of keys to check.
-        dst_keys = {dst_o.key: src_o for src_o, dst_o in job.transfer_pairs}
-        for obj in dst_interface.list_objects(dest_prefix):
-            # check metadata (src.size == dst.size) && (src.modified <= dst.modified)
-            src_obj = dst_keys.get(obj.key)
-            if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:
-                del dst_keys[obj.key]
+            # algorithm: check all expected keys are present in the destination
+            #     by iteratively removing found keys from list_objects from a
+            #     precomputed dictionary of keys to check.
+            dst_keys = {dst_o.key: src_o for src_o, dst_o in job.transfer_pairs}
+            for obj in dst_interface.list_objects(dest_prefix):
+                # check metadata (src.size == dst.size) && (src.modified <= dst.modified)
+                src_obj = dst_keys.get(obj.key)
+                if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:
+                    del dst_keys[obj.key]
 
-        if dst_keys:
-            raise exceptions.TransferFailedException(
-                f"{len(dst_keys)} objects failed verification",
-                [obj.key for obj in dst_keys.values()],
-            )
+            if dst_keys:
+                raise exceptions.TransferFailedException(
+                    f"{len(dst_keys)} objects failed verification",
+                    [obj.key for obj in dst_keys.values()],
+                )
+        rprint("Total verification time: " + t.elapsed)
+        
