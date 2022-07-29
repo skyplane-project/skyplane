@@ -713,7 +713,7 @@ class ReplicatorClient:
                 failed_src_objs,
             )
 
-    def verify_transfer_prefix(self, dst_prefix, job: ReplicationJob):
+    def verify_transfer_prefix(dst_prefix, job: ReplicationJob):
         """Check that all objects to copy are present in the destination"""
         src_interface = ObjectStoreInterface.create(job.source_region, job.source_bucket)
         dst_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
@@ -746,7 +746,7 @@ class ReplicatorClient:
 
         # verify that all objects in src_interface are present in dst_interface
         matches = do_parallel(verify, dst_objs, n=512, spinner=True, spinner_persist=True, desc="Verifying transfer")
-        failed_src_objs = [result[0] for (dst_obj, result), match in matches if not match]
+        failed_src_objs = [result[0] for (dst_obj, result) in matches if not result[1]]
         if len(failed_src_objs) > 0:
             raise exceptions.TransferFailedException(
                 f"{len(failed_src_objs)} objects failed verification",
