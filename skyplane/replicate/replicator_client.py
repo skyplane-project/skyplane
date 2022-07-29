@@ -704,6 +704,9 @@ class ReplicatorClient:
         """Check that all objects to copy are present in the destination"""
         dst_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
 
+        # algorithm: check all expected keys are present in the destination
+        #     by iteratively removing found keys from list_objects from a
+        #     precomputed dictionary of keys to check.
         dst_keys = {dst_o.key: src_o for src_o, dst_o in job.transfer_pairs}
         for obj in dst_interface.list_objects(dest_prefix):
             # check metadata (src.size == dst.size) && (src.modified <= dst.modified)
