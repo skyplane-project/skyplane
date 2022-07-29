@@ -711,7 +711,7 @@ class ReplicatorClient:
         for obj in dst_interface.list_objects(dest_prefix):
             # check metadata (src.size == dst.size) && (src.modified <= dst.modified)
             src_obj = dst_keys.get(obj.key)
-            if src_obj and src_obj.size == obj.size and src_obj.modified <= obj.modified:
+            if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:
                 del dst_keys[obj.key]
 
         if dst_keys:
