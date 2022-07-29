@@ -702,40 +702,17 @@ class ReplicatorClient:
     @staticmethod
     def verify_transfer_prefix(job: ReplicationJob, dest_prefix: str):
         """Check that all objects to copy are present in the destination"""
-        src_interface = ObjectStoreInterface.create(job.source_region, job.source_bucket)
         dst_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
 
-        dst_objs = dst_interface.list_objects(dest_prefix)
+        dst_keys = {dst_o.key: src_o for src_o, dst_o in job.transfer_pairs}
+        for obj in dst_interface.list_objects(dest_prefix):
+            # check metadata (src.size == dst.size) && (src.modified <= dst.modified)
+            src_obj = dst_keys.get(obj.key)
+            if src_obj and src_obj.size == obj.size and src_obj.modified <= obj.modified:
+                del dst_keys[obj.key]
 
-        job_pair_dst_objs = [dst for _, dst in job.transfer_pairs]
-        job_pair_src_objs = [src for src, _ in job.transfer_pairs]
-
-        failed_src_objs = []
-
-        # only check metadata (src.size == dst.size) && (src.modified <= dst.modified)
-        def verify(dst_obj):
-            try:
-                index = job_pair_dst_objs.index(dst_obj)
-                dst_obj_size = dst_interface.get_obj_size(dst_obj.key)
-                dst_obj_last_modified = dst_interface.get_obj_last_modified(dst_obj.key)
-                src_obj = job_pair_src_objs[index]
-                try:
-                    if src_interface.get_obj_size(src_obj.key) != dst_obj_size:
-                        return src_obj, False
-                    elif src_interface.get_obj_last_modified(src_obj.key) > dst_obj_last_modified:
-                        return src_obj, False
-                    else:
-                        return src_obj, True
-                except NoSuchObjectException:
-                    return None, False
-            except ValueError:
-                return None, False
-
-        # verify that all objects in src_interface are present in dst_interface
-        matches = do_parallel(verify, dst_objs, n=512, spinner=True, spinner_persist=True, desc="Verifying transfer")
-        failed_src_objs = [result[0] for (dst_obj, result) in matches if not result[1]]
-        if len(failed_src_objs) > 0:
+        if dst_keys:
             raise exceptions.TransferFailedException(
-                f"{len(failed_src_objs)} objects failed verification",
-                failed_src_objs,
+                f"{len(dst_keys)} objects failed verification",
+                [obj.key for obj in dst_keys.values()],
             )
