@@ -158,7 +158,7 @@ class SkyplaneConfig:
         if "client" not in config:
             config.add_section("client")
         config.set("client", "clientid", clientid)
-        
+
         if "flags" not in config:
             config.add_section("flags")
 
