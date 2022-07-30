@@ -7,6 +7,7 @@ import traceback
 from skyplane.replicate.replicator_client import ReplicatorClient
 
 import typer
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, DownloadColumn, BarColumn, TransferSpeedColumn
 
 import skyplane.cli.cli_aws
 import skyplane.cli.cli_azure
@@ -178,7 +179,12 @@ def cp(
             if provider_dst == "azure":
                 typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
             else:
-                ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("Verifying all files were copied{task.description}"),
+                ) as progress:
+                    progress.add_task("", total=None)
+                    ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
 
             return 0 if stats["success"] else 1
     else:
@@ -323,7 +329,13 @@ def sync(
         if provider_dst == "azure":
             typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
         else:
-            ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("Verifying all files were copied{task.description}"),
+                transient=True,
+            ) as progress:
+                progress.add_task("", total=None)
+                ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
 
     return 0 if stats["success"] else 1
 
