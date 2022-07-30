@@ -7,7 +7,7 @@ import traceback
 from skyplane.replicate.replicator_client import ReplicatorClient
 
 import typer
-from rich.progress import Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, DownloadColumn, BarColumn, TransferSpeedColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
 import skyplane.cli.cli_aws
 import skyplane.cli.cli_azure
