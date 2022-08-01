@@ -72,12 +72,12 @@ def set_usage_stats_via_env_var(value) -> None:
 
 
 def show_usage_stats_prompt():
-    usage_stats_enabledness = usage_stats_enabledness()
-    if usage_stats_enabledness is UsageStatsEnabledness.DISABLED_EXPLICITLY:
+    usage_stats_var = usage_stats_enabledness()
+    if usage_stats_var is UsageStatsEnabledness.DISABLED_EXPLICITLY:
         print(usage_constants.USAGE_STATS_DISABLED_MESSAGE)
-    elif usage_stats_enabledness is UsageStatsEnabledness.ENABLED_BY_DEFAULT:
+    elif usage_stats_var is UsageStatsEnabledness.ENABLED_BY_DEFAULT:
         print(usage_constants.USAGE_STATS_ENABLED_BY_DEFAULT_MESSAGE)
-    elif usage_stats_enabledness is UsageStatsEnabledness.ENABLED_EXPLICITLY:
+    elif usage_stats_var is UsageStatsEnabledness.ENABLED_EXPLICITLY:
         print(usage_constants.USAGE_STATS_ENABLED_MESSAGE)
     else:
         raise Exception("Prompt message unknown.")

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 # generate a global client id
-clientid = uuid.uuid1()
+clientid = str(uuid.uuid1())
 
 _FLAG_TYPES = {
     "autoconfirm": bool,
