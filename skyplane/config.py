@@ -1,8 +1,12 @@
 import configparser
 import os
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
+
+# generate a global client id
+clientid = uuid.uuid1()
 
 _FLAG_TYPES = {
     "autoconfirm": bool,
@@ -23,6 +27,7 @@ _FLAG_TYPES = {
     "azure_instance_class": str,
     "gcp_instance_class": str,
     "gcp_use_premium_network": bool,
+    "usage_stats": str,
     "gcp_service_account_name": str,
 }
 
@@ -45,6 +50,7 @@ _DEFAULT_FLAGS = {
     "azure_instance_class": "Standard_D32_v5",
     "gcp_instance_class": "n2-standard-32",
     "gcp_use_premium_network": True,
+    "usage_stats": "1",
     "gcp_service_account_name": "skyplane-manual",
 }
 
@@ -66,6 +72,7 @@ class SkyplaneConfig:
     aws_enabled: bool
     azure_enabled: bool
     gcp_enabled: bool
+    clientid: uuid.UUID
     azure_subscription_id: Optional[str] = None
     gcp_project_id: Optional[str] = None
 
@@ -75,6 +82,7 @@ class SkyplaneConfig:
             aws_enabled=False,
             azure_enabled=False,
             gcp_enabled=False,
+            clientid=clientid,  # import from __init__.py?
         )
 
     @staticmethod
@@ -111,6 +119,7 @@ class SkyplaneConfig:
             aws_enabled=aws_enabled,
             azure_enabled=azure_enabled,
             gcp_enabled=gcp_enabled,
+            clientid=clientid,
             azure_subscription_id=azure_subscription_id,
             gcp_project_id=gcp_project_id,
         )
@@ -145,6 +154,10 @@ class SkyplaneConfig:
 
         if self.gcp_project_id:
             config.set("gcp", "project_id", self.gcp_project_id)
+
+        if "client" not in config:
+            config.add_section("client")
+        config.set("client", "clientid", clientid)
 
         if "flags" not in config:
             config.add_section("flags")
