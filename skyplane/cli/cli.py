@@ -451,8 +451,12 @@ def init(
 
 @app.command()
 def metrics(
-    env_value: str = typer.Option("no_input", "--env", "-e", help="set (0 or 1) temporarily whether to enable/disable user metrics collection."),
-    conf_value: str = typer.Option("no_input", "--config", "-g", help="set (0 or 1) globally whether to enable/disable user metrics collection."),
+    env_value: str = typer.Option(
+        "no_input", "--env", "-e", help="set (0 or 1) temporarily whether to enable/disable user metrics collection."
+    ),
+    conf_value: str = typer.Option(
+        "no_input", "--config", "-g", help="set (0 or 1) globally whether to enable/disable user metrics collection."
+    ),
 ):
     current_status = usage_stats.usage_stats_enabledness()
     if current_status is usage_stats.UsageStatsEnabledness.DISABLED_EXPLICITLY:
