@@ -451,16 +451,30 @@ def init(
 
 @app.command()
 def metrics(
-    env_value: str = typer.Option("0", "--disable", help="set temporarily whether to enable/disable user metrics collection."),
-    conf_value: str = typer.Option("0", "--disable-global", help="set globally whether to enable/disable user metrics collection."),
+    env_value: str = typer.Option("no_input", "--env", "-e", help="set (0 or 1) temporarily whether to enable/disable user metrics collection."),
+    conf_value: str = typer.Option("no_input", "--config", "-g", help="set (0 or 1) globally whether to enable/disable user metrics collection."),
 ):
+    current_status = usage_stats.usage_stats_enabledness()
+    if current_status is usage_stats.UsageStatsEnabledness.DISABLED_EXPLICITLY:
+        if env_value == "0":
+            print("Usage stats collection is already disabled.")
+            return 0
+    elif current_status is usage_stats.UsageStatsEnabledness.ENABLED_EXPLICITLY:
+        if env_value == "1":
+            print("Usage stats collection is already enabled.")
+            return 0
     # set env var, which means it is temporarily disabled
     if env_value == "0" or env_value == "1":
         usage_stats.set_usage_stats_via_env_var(env_value)
+    elif env_value == "no_input":
+        pass
     else:
         raise Exception("Unknown value to set metric colletion.")
+
     if conf_value == "0" or conf_value == "1":
         usage_stats.set_usage_stats_via_config(conf_value)
+    elif conf_value == "no_input":
+        pass
     else:
         raise Exception("Unknown value to set metric colletion.")
     usage_stats.show_usage_stats_prompt()

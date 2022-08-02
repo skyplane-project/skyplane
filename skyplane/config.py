@@ -72,7 +72,7 @@ class SkyplaneConfig:
     aws_enabled: bool
     azure_enabled: bool
     gcp_enabled: bool
-    clientid: uuid.UUID
+    clientid: str
     azure_subscription_id: Optional[str] = None
     gcp_project_id: Optional[str] = None
 
@@ -82,7 +82,7 @@ class SkyplaneConfig:
             aws_enabled=False,
             azure_enabled=False,
             gcp_enabled=False,
-            clientid=clientid,  # import from __init__.py?
+            clientid=clientid,
         )
 
     @staticmethod
