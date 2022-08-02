@@ -61,7 +61,7 @@ class S3Interface(ObjectStoreInterface):
         page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix)
         for page in page_iterator:
             for obj in page.get("Contents", []):
-                yield S3Object("s3", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"])
+                yield S3Object("aws", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"])
 
     def delete_objects(self, keys: List[str]):
         s3_client = self.auth.get_boto3_client("s3", self.aws_region)
