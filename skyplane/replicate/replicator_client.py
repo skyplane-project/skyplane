@@ -343,7 +343,6 @@ class ReplicatorClient:
                 if not job.random_chunk_size_mb:
                     if multipart_enabled:
                         chunk_size_bytes = int(multipart_max_chunk_size_mb * MB)
-                        # num_chunks = int(src_object.size / chunk_size_bytes) + 1
                         num_chunks = math.ceil(src_object.size / chunk_size_bytes)
 
                         # TODO: figure out what to do on # part limits per object
