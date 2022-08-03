@@ -13,7 +13,7 @@ from skyplane.utils import logger
 def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket: bool = False):
     logger.info("creating interfaces...")
     interface = ObjectStoreInterface.create(region, bucket)
-    interface.create_bucket()
+    interface.create_bucket(region.split(":")[1])
     assert interface.bucket_exists()
     debug_time = lambda n, s, e: logger.info(f"{n} {s}MB in {round(e, 2)}s ({round(s / e, 2)}MB/s)")
 

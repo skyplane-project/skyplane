@@ -13,7 +13,7 @@ from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.obj_store.s3_interface import S3Object
 from skyplane.obj_store.gcs_interface import GCSObject
-from skyplane.obj_store.azure_interface import AzureObject
+from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
 from skyplane.replicate.replicator_client import ReplicatorClient
 from skyplane.utils import logger
@@ -148,7 +148,7 @@ def generate_full_transferobjlist(
         elif dest_region.startswith("gcp"):
             dest_obj = GCSObject(dest_region.split(":")[0], dest_bucket, dest_key)
         elif dest_region.startswith("azure"):
-            dest_obj = AzureObject(dest_region.split(":")[0], dest_bucket, dest_key)
+            dest_obj = AzureBlobObject(dest_region.split(":")[0], dest_bucket, dest_key)
         else:
             raise ValueError(f"Invalid dest_region {dest_region} - could not create corresponding object")
         # dest_obj = ObjectStoreObject(dest_region.split(":")[0], dest_bucket, dest_key)

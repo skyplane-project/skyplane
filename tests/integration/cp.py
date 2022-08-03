@@ -16,8 +16,8 @@ def setup_buckets(src_region, dest_region, n_files=1, file_size_mb=1):
     logger.debug(f"creating buckets {src_bucket_name} and {dest_bucket_name}")
     src_interface = ObjectStoreInterface.create(src_region, src_bucket_name)
     dest_interface = ObjectStoreInterface.create(dest_region, dest_bucket_name)
-    src_interface.create_bucket()
-    dest_interface.create_bucket()
+    src_interface.create_bucket(src_zone)
+    dest_interface.create_bucket(dest_zone)
 
     src_prefix = f"src_{uuid.uuid4()}"
     dest_prefix = f"dest_{uuid.uuid4()}"

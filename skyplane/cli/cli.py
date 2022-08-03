@@ -103,18 +103,13 @@ def cp(
 
     clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
 
-    # error for local transfers
-    def error_local():
+    if provider_src == "local" or provider_dst == "local":
         typer.secho("Local transfers are not yet supported (but will be soon!)", fg="red")
         typer.secho("Skyplane is currently most optimized for cloud to cloud transfers.", fg="yellow")
         typer.secho(
             "Please provide feedback for on prem transfers at: https://github.com/skyplane-project/skyplane/discussions/424", fg="yellow"
         )
         raise typer.Exit(code=1)
-
-    # raise file limits for local transfers
-    if provider_src == "local" or provider_dst == "local":
-        error_local()
     if provider_src in clouds and provider_dst in clouds:
         try:
             src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)
