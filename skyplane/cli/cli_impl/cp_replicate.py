@@ -222,7 +222,9 @@ def launch_replication_job(
     use_socket_tls: bool = False,
     # multipart
     multipart_enabled: bool = False,
-    multipart_max_chunk_size_mb: int = 8,
+    multipart_min_threshold_mb: int = 128,
+    multipart_min_size_mb: int = 8,
+    multipart_max_chunks: int = 9990,
     # cloud provider specific options
     aws_instance_class: str = "m5.8xlarge",
     azure_instance_class: str = "Standard_D32_v4",
@@ -265,7 +267,9 @@ def launch_replication_job(
         job = rc.run_replication_plan(
             job,
             multipart_enabled=multipart_enabled,
-            multipart_max_chunk_size_mb=multipart_max_chunk_size_mb,
+            multipart_min_threshold_mb=multipart_min_threshold_mb,
+            multipart_min_size_mb=multipart_min_size_mb,
+            multipart_max_chunks=multipart_max_chunks,
         )
         total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
         console.print(f":rocket: [bold blue]{total_bytes / GB:.2f}GB transfer job launched[/bold blue]")
