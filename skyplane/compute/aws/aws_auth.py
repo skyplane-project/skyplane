@@ -40,7 +40,6 @@ class AWSAuthentication:
                     region_name = region_text[region_text.find(".") + 1 : region_text.find(".amazon")]
                     region_list.append(region_name)
             f.write("\n".join(region_list))
-            print(f"    AWS region config file saved to {aws_config_path}")
 
     def clear_region_config(self):
         with aws_config_path.open("w") as f:

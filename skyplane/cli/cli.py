@@ -116,6 +116,14 @@ def cp(
             dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
             src_region = src_client.region_tag()
             dst_region = dst_client.region_tag()
+
+            if src_region.split(":")[0] == "azure":
+                src_client.grant_storage_account_access("Storage Blob Data Contributor", src_client.auth.config.azure_client_id)
+                src_client.grant_storage_account_access("Storage Account Contributor", src_client.auth.config.azure_client_id)
+            if dst_region.split(":")[0] == "azure":
+                dst_client.grant_storage_account_access("Storage Blob Data Contributor", dst_client.auth.config.azure_client_id)
+                dst_client.grant_storage_account_access("Storage Account Contributor", dst_client.auth.config.azure_client_id)
+
             transfer_pairs = generate_full_transferobjlist(
                 src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst, recursive=recursive
             )

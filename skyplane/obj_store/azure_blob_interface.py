@@ -87,7 +87,7 @@ class AzureBlobInterface(ObjectStoreInterface):
         except HttpResponseError as e:
             if "AuthorizationPermissionMismatch" in str(e):
                 logger.error(
-                    f"Unable to list objects in container {self.container_name} as you don't have permission to access it. You need the 'Storage Blob Data Contributor' and 'Storage Account Contributor' roles."
+                    f"Unable to list objects in container {self.container_name} as you don't have permission to access it. You need the 'Storage Blob Data Contributor' and 'Storage Account Contributor' roles: {e}"
                 )
 
     def delete_objects(self, keys: List[str]):
@@ -117,20 +117,6 @@ class AzureBlobInterface(ObjectStoreInterface):
             # catch permissions errors if in a gateway environment and auto-retry after 5 seconds as it takes time for Azure to propogate role assignments
             if "This request is not authorized to perform this operation using this permission." in str(e) and is_gateway_env:
                 logger.fs.warning("Unable to download object as you do not have permission to access it")
-                # permission hasn't propagated yet, retry up to 180s
-                with Timer("Wait for role assignment to propagate") as timer:
-                    while timer.elapsed < timeout:
-                        time.sleep(interval)
-                        try:
-                            logger.fs.error(f"Retrying object operation after {timer.elapsed:.2}s")
-                            return fn()
-                        except HttpResponseError as e:
-                            if (
-                                "This request is not authorized to perform this operation using this permission." in str(e)
-                                and is_gateway_env
-                            ):
-                                logger.fs.error(f"Azure waiting for roles to propogate, retry failed after {timer.elapsed:.2}s")
-                                continue
             raise
 
     def download_object(

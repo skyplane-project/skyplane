@@ -1,9 +1,10 @@
 import json
+import logging
 import os
 import subprocess
 from typing import Dict, List, Optional
 
-from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
+from azure.identity import ClientSecretCredential
 from azure.mgmt.authorization import AuthorizationManagementClient
 from azure.mgmt.storage import StorageManagementClient
 from azure.storage.blob import BlobServiceClient, ContainerClient
@@ -11,10 +12,8 @@ from azure.storage.blob import BlobServiceClient, ContainerClient
 from skyplane import azure_config_path
 from skyplane import azure_sku_path
 from skyplane import config_path
-from skyplane import is_gateway_env
-from skyplane.compute.const_cmds import query_which_cloud
 from skyplane.config import SkyplaneConfig
-from skyplane.utils.fn import do_parallel
+from skyplane.utils.fn import do_parallel, wait_for
 
 # optional imports due to large package size
 try:
@@ -44,27 +43,36 @@ class AzureAuthentication:
         self._credential = None
 
     @property
-    def credential(self) -> DefaultAzureCredential:
+    def credential(self) -> ClientSecretCredential:
         if self._credential is None:
-            self._credential = self.get_azure_credential()
+            self._credential = ClientSecretCredential(
+                tenant_id=self.config.azure_tenant_id,
+                client_id=self.config.azure_client_id,
+                client_secret=self.config.azure_client_secret,
+            )
         return self._credential
 
     @property
     def subscription_id(self) -> Optional[str]:
         return self.config.azure_subscription_id
 
-    @staticmethod
-    def get_azure_credential() -> DefaultAzureCredential:
-        if is_gateway_env:
-            return ManagedIdentityCredential()
-        return DefaultAzureCredential(
-            exclude_managed_identity_credential=(query_which_cloud() != "azure"),
-            exclude_powershell_credential=True,
-            exclude_visual_studio_code_credential=True,
-        )
+    def wait_for_valid_token(self):
+        """It takes several seconds for the client secret to register. This method waits for the client secret to appear."""
 
-    def save_region_config(self, config: SkyplaneConfig):
-        if config.azure_enabled == False:
+        def try_login():
+            self._credential = None
+            try:
+                logging.disable(logging.WARNING)  # disable Azure logging, we have our own
+                list(self.get_subscription_client().subscriptions.list_locations(subscription_id=self.subscription_id))
+                logging.disable(logging.NOTSET)
+                return True
+            except:
+                return False
+
+        wait_for(try_login, desc="Wait for Azure client secret to register", timeout=15)
+
+    def save_region_config(self):
+        if self.config.azure_enabled == False:
             self.clear_region_config()
             return
         region_list = []
