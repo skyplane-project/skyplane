@@ -7,6 +7,7 @@ from functools import partial
 from typing import Dict, List, Optional, Tuple, Iterable
 import nacl.secret
 import nacl.utils
+from rich import print as rprint
 
 import pandas as pd
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, DownloadColumn, BarColumn, TransferSpeedColumn
@@ -27,6 +28,19 @@ from skyplane.replicate.replication_plan import ReplicationJob, ReplicationTopol
 from skyplane.utils import logger
 from skyplane.utils.fn import PathLike, do_parallel
 from skyplane.utils.timer import Timer
+
+
+def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1) -> Dict[str, List[Server]]:
+    if instance_filter is None:
+        instance_filter = {"tags": {"skyplane": "true"}}
+    results = do_parallel(
+        lambda region: provider.get_matching_instances(region=region, **instance_filter),
+        region_list,
+        spinner=True,
+        n=n,
+        desc="Querying clouds for active instances",
+    )
+    return {r: ilist for r, ilist in results if ilist}
 
 
 class ReplicatorClient:
@@ -686,42 +700,23 @@ class ReplicatorClient:
                     do_parallel(fn, self.bound_nodes.values(), n=-1)
                     progress.update(cleanup_task, description=": Shutting down gateways")
 
-    def verify_transfer(self, job: ReplicationJob):
+    @staticmethod
+    def verify_transfer_prefix(job: ReplicationJob, dest_prefix: str):
         """Check that all objects to copy are present in the destination"""
-        src_interface = ObjectStoreInterface.create(job.source_region, job.source_bucket)
         dst_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
 
-        # only check metadata (src.size == dst.size) && (src.modified <= dst.modified)
-        def verify(tup):
-            src_key, dst_key = tup[0].key, tup[1].key
-            try:
-                if src_interface.get_obj_size(src_key) != dst_interface.get_obj_size(dst_key):
-                    return False
-                elif src_interface.get_obj_last_modified(src_key) > dst_interface.get_obj_last_modified(dst_key):
-                    return False
-                else:
-                    return True
-            except NoSuchObjectException:
-                return False
+        # algorithm: check all expected keys are present in the destination
+        #     by iteratively removing found keys from list_objects from a
+        #     precomputed dictionary of keys to check.
+        dst_keys = {dst_o.key: src_o for src_o, dst_o in job.transfer_pairs}
+        for obj in dst_interface.list_objects(dest_prefix):
+            # check metadata (src.size == dst.size) && (src.modified <= dst.modified)
+            src_obj = dst_keys.get(obj.key)
+            if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:
+                del dst_keys[obj.key]
 
-        # verify that all objects in src_interface are present in dst_interface
-        matches = do_parallel(verify, job.transfer_pairs, n=512, spinner=True, spinner_persist=True, desc="Verifying transfer")
-        failed_src_objs = [src_key for (src_key, dst_key), match in matches if not match]
-        if len(failed_src_objs) > 0:
+        if dst_keys:
             raise exceptions.TransferFailedException(
-                f"{len(failed_src_objs)} objects failed verification",
-                failed_src_objs,
+                f"{len(dst_keys)} objects failed verification",
+                [obj.key for obj in dst_keys.values()],
             )
-
-
-def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1) -> Dict[str, List[Server]]:
-    if instance_filter is None:
-        instance_filter = {"tags": {"skyplane": "true"}}
-    results = do_parallel(
-        lambda region: provider.get_matching_instances(region=region, **instance_filter),
-        region_list,
-        spinner=True,
-        n=n,
-        desc="Querying clouds for active instances",
-    )
-    return {r: ilist for r, ilist in results if ilist}

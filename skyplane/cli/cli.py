@@ -4,8 +4,10 @@ from functools import partial
 from pathlib import Path
 from shlex import split
 import traceback
+from skyplane.replicate.replicator_client import ReplicatorClient
 
 import typer
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
 import skyplane.cli.cli_aws
 import skyplane.cli.cli_azure
@@ -154,6 +156,7 @@ def cp(
             job=job,
             ask_to_confirm_transfer=not confirm,
         )
+
         stats = launch_replication_job(
             topo=topo,
             job=job,
@@ -163,7 +166,6 @@ def cp(
             use_compression=cloud_config.get_flag("compress") if src_region != dst_region else False,
             use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
             use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
-            verify_checksums=cloud_config.get_flag("verify_checksums"),
             aws_instance_class=cloud_config.get_flag("aws_instance_class"),
             azure_instance_class=cloud_config.get_flag("azure_instance_class"),
             gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
@@ -171,7 +173,20 @@ def cp(
             multipart_enabled=multipart,
             multipart_max_chunk_size_mb=cloud_config.get_flag("multipart_max_chunk_size_mb"),
         )
-        return 0 if stats["success"] else 1
+
+        if cloud_config.get_flag("verify_checksums"):
+            provider_dst = topo.sink_region().split(":")[0]
+            if provider_dst == "azure":
+                typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
+            else:
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("Verifying all files were copied{task.description}"),
+                ) as progress:
+                    progress.add_task("", total=None)
+                    ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+
+            return 0 if stats["success"] else 1
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
 
@@ -301,7 +316,6 @@ def sync(
         use_compression=cloud_config.get_flag("compress") if src_region != dst_region else False,
         use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
         use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
-        verify_checksums=cloud_config.get_flag("verify_checksums"),
         aws_instance_class=cloud_config.get_flag("aws_instance_class"),
         azure_instance_class=cloud_config.get_flag("azure_instance_class"),
         gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
@@ -309,6 +323,20 @@ def sync(
         multipart_enabled=multipart,
         multipart_max_chunk_size_mb=cloud_config.get_flag("multipart_max_chunk_size_mb"),
     )
+
+    if cloud_config.get_flag("verify_checksums"):
+        provider_dst = topo.sink_region().split(":")[0]
+        if provider_dst == "azure":
+            typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
+        else:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("Verifying all files were copied{task.description}"),
+                transient=True,
+            ) as progress:
+                progress.add_task("", total=None)
+                ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+
     return 0 if stats["success"] else 1
 
 

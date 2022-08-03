@@ -73,7 +73,6 @@ def replicate_random(
         reuse_gateways=reuse_gateways,
         use_bbr=use_bbr,
         use_compression=False,
-        verify_checksums=False,
         use_e2ee=True,
     )
     return 0 if stats["success"] else 1
@@ -159,6 +158,5 @@ def replicate_random_solve(
         reuse_gateways=reuse_gateways,
         use_bbr=use_bbr,
         use_compression=False,
-        verify_checksums=False,
     )
     return 0 if stats["success"] else 1
