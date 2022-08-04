@@ -6,6 +6,7 @@ import traceback
 
 import boto3
 import typer
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from skyplane import SkyplaneConfig, gcp_config_path, aws_config_path
 from skyplane.compute.aws.aws_auth import AWSAuthentication
@@ -50,8 +51,9 @@ def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> Sk
 
 
 def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_interactive: bool = False) -> SkyplaneConfig:
-    def clear_azure_config(config):
-        typer.secho("    Disabling Azure support", fg="blue")
+    def clear_azure_config(config, verbose=True):
+        if verbose:
+            typer.secho("    Disabling Azure support", fg="blue")
         config.azure_subscription_id = None
         config.azure_tenant_id = None
         config.azure_client_id = None
@@ -62,7 +64,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
     if non_interactive or typer.confirm("    Do you want to configure Azure support in Skyplane?", default=True):
         if force_init:
             typer.secho("    Azure credentials will be re-initialized", fg="red")
-            clear_azure_config(config)
+            clear_azure_config(config, verbose=False)
         if (
             config.azure_enabled
             and config.azure_subscription_id
@@ -80,9 +82,14 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             "client_secret": os.environ.get("AZURE_CLIENT_SECRET"),
             "subscription_id": os.environ.get("AZURE_SUBSCRIPTION_ID") or AzureAuthentication.infer_subscription_id(),
         }
-        if non_interactive or typer.confirm(
-            "    Do you already have an Azure service principal for Skyplane? (if not, I'll help you create them).", default=False
+        if non_interactive or not typer.confirm(
+            "    I'll automatically create a Skyplane service principal for you. Do you want me to do this? (most common)", default=True
         ):
+            typer.secho(
+                "    To manually create a service principal, follow the guide at: https://docs.microsoft.com/en-us/cli/azure/create-an-azure-service-principal-azure-cli",
+                fg="bright_black",
+            )
+
             config.azure_tenant_id = (
                 typer.prompt("    Azure tenant ID", default=defaults["tenant_id"]) if not non_interactive else defaults["tenant_id"]
             )
@@ -109,11 +116,6 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                 return clear_azure_config(config)
         # walk user through setting up an Azure service principal
         else:
-            typer.secho("    I'll help you create an Azure service principal for Skyplane.", fg="blue")
-            typer.secho(
-                "    If you'd like to manually do this, follow the guide at: https://docs.microsoft.com/en-us/cli/azure/create-an-azure-service-principal-azure-cli",
-                fg="bright_black",
-            )
             config.azure_subscription_id = typer.prompt(
                 "    Which Azure subscription ID do you want to use?", default=defaults["subscription_id"]
             )
@@ -124,24 +126,31 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             typer.secho(f"        $ {change_subscription_cmd}", fg="yellow")
             typer.secho(f"        $ {create_sp_cmd}", fg="yellow")
 
-            out, err = subprocess.Popen(change_subscription_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-            if out or err:
-                typer.secho(f"    Error running command: {change_subscription_cmd}", fg="red")
-                typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red")
-                typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red")
-                return clear_azure_config(config)
+            with Progress(
+                TextColumn("    "),
+                SpinnerColumn(),
+                TextColumn("Creating Skyplane service principal{task.description}"),
+                transient=True,
+            ) as progress:
+                progress.add_task("", total=None)
+                out, err = subprocess.Popen(change_subscription_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+                if out or err:
+                    typer.secho(f"    Error running command: {change_subscription_cmd}", fg="red")
+                    typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red")
+                    typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red")
+                    return clear_azure_config(config)
 
-            out, err = subprocess.Popen(create_sp_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-            try:
-                sp_json = json.loads(out.decode("utf-8"))
-            except:
-                typer.secho(f"    Error running command: {create_sp_cmd}", fg="red")
-                typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red")
-                typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red")
-                return clear_azure_config(config)
-            config.azure_tenant_id = sp_json["tenant"]
-            config.azure_client_id = sp_json["appId"]
-            config.azure_client_secret = sp_json["password"]
+                out, err = subprocess.Popen(create_sp_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+                try:
+                    sp_json = json.loads(out.decode("utf-8"))
+                except:
+                    typer.secho(f"    Error running command: {create_sp_cmd}", fg="red")
+                    typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red")
+                    typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red")
+                    return clear_azure_config(config)
+                config.azure_tenant_id = sp_json["tenant"]
+                config.azure_client_id = sp_json["appId"]
+                config.azure_client_secret = sp_json["password"]
 
             if (
                 not config.azure_tenant_id
@@ -167,14 +176,20 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             for role_cmd in role_cmds:
                 typer.secho(f"        $ {' '.join(role_cmd)}", fg="yellow")
 
-            for role_cmd in role_cmds:
-                out, err = subprocess.Popen(role_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-                if err:
-                    typer.secho(f"    Error running command: {role_cmd}", fg="red")
-                    typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red")
-                    typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red")
-                    return clear_azure_config(config)
-
+            with Progress(
+                TextColumn("    "),
+                SpinnerColumn(),
+                TextColumn("Authorizing service principal to access storage accounts{task.description}"),
+                transient=True,
+            ) as progress:
+                progress.add_task("", total=None)
+                for role_cmd in role_cmds:
+                    out, err = subprocess.Popen(role_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+                    if err:
+                        typer.secho(f"    Error running command: {role_cmd}", fg="red")
+                        typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red")
+                        typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red")
+                        return clear_azure_config(config)
             typer.secho(
                 f"    Azure service principal created successfully! To delete it, run `az ad sp delete --id {config.azure_client_id}`.",
                 fg="green",
@@ -182,9 +197,22 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
 
         config.azure_enabled = True
         auth = AzureAuthentication(config=config)
-        typer.secho("    Waiting for Azure client secret to propagate...", fg="blue")
-        auth.wait_for_valid_token()
-        auth.save_region_config()
+        with Progress(
+            TextColumn("    "),
+            SpinnerColumn(),
+            TextColumn("Waiting for Azure client secret to propagate{task.description}"),
+            transient=True,
+        ) as progress:
+            progress.add_task("", total=None)
+            auth.wait_for_valid_token()
+        with Progress(
+            TextColumn("    "),
+            SpinnerColumn(),
+            TextColumn("Querying Azure for available regions and VM SKUs{task.description}"),
+            transient=True,
+        ) as progress:
+            progress.add_task("", total=None)
+            auth.save_region_config()
         return config
     else:
         return clear_azure_config(config)

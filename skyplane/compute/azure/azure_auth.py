@@ -80,8 +80,6 @@ class AzureAuthentication:
             region_list.append(location.name)
         with azure_config_path.open("w") as f:
             f.write("\n".join(region_list))
-        print(f"    Azure region config file saved to {azure_config_path}")
-
         client = self.get_compute_client()
 
         def get_skus(region):
@@ -92,17 +90,14 @@ class AzureAuthentication:
             return set(valid_skus)
 
         result = do_parallel(
-            get_skus, region_list, spinner=True, spinner_persist=False, desc="Query available VM SKUs from each enabled Azure region", n=8
+            get_skus, region_list, spinner=False, spinner_persist=False, desc="Query available VM SKUs from each enabled Azure region", n=8
         )
         region_sku = dict()
         for region, skus in result:
             region_sku[region] = list()
             region_sku[region].extend(skus)
-
         with azure_sku_path.open("w") as f:
             json.dump(region_sku, f)
-
-        print(f"    Azure SKU availability cached in {azure_sku_path}")
 
     @staticmethod
     def get_region_config() -> List[str]:
