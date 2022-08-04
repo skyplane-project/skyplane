@@ -120,8 +120,6 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
 
             change_subscription_cmd = f"az account set --subscription {config.azure_subscription_id}"
             create_sp_cmd = "az ad sp create-for-rbac --name skyplane"
-            # add Storage Blob Data Contributor and Storage Account Contributor roles to the service principal
-            add_role = 'az role assignment create --role "Storage Blob Data Contributor" --assignee <service principal id> --scope /subscriptions/<subscription id>'
             typer.secho(f"    I will run the following commands to create an Azure service principal:", fg="blue")
             typer.secho(f"        $ {change_subscription_cmd}", fg="yellow")
             typer.secho(f"        $ {create_sp_cmd}", fg="yellow")
@@ -153,6 +151,30 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             ):
                 typer.secho("    Azure credentials not configured correctly, disabling Azure support.", fg="red")
                 return clear_azure_config(config)
+
+            # authorize new service principal with Storage Blob Data Contributor and Storage Account Contributor roles to the subscription
+            roles = ["Storage Blob Data Contributor", "Storage Account Contributor"]
+            role_cmds = [
+                "az role assignment create --role".split(" ")
+                + [role]
+                + f"--assignee {config.azure_client_id} --scope /subscriptions/{config.azure_subscription_id}".split(" ")
+                for role in roles
+            ]
+            typer.secho(
+                f"    I will run the following commands to authorize the newly created Skyplane service principal to access your storage accounts:",
+                fg="blue",
+            )
+            for role_cmd in role_cmds:
+                typer.secho(f"        $ {' '.join(role_cmd)}", fg="yellow")
+
+            for role_cmd in role_cmds:
+                out, err = subprocess.Popen(role_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+                if err:
+                    typer.secho(f"    Error running command: {role_cmd}", fg="red")
+                    typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red")
+                    typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red")
+                    return clear_azure_config(config)
+
             typer.secho(
                 f"    Azure service principal created successfully! To delete it, run `az ad sp delete --id {config.azure_client_id}`.",
                 fg="green",

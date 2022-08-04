@@ -31,10 +31,6 @@ class AzureStorageAccountInterface:
         return self.storage_account_obj().location
 
     @property
-    def azure_resource_group(self):
-        return self.storage_account_obj().resource_group_name
-
-    @property
     def storage_management_client(self):
         return self.auth.get_storage_management_client()
 
@@ -67,7 +63,7 @@ class AzureStorageAccountInterface:
     def grant_storage_account_access(self, role_name: str, principal_id: str):
         # lookup role
         auth_client = self.auth.get_authorization_client()
-        scope = f"/subscriptions/{self.auth.subscription_id}/resourceGroups/{self.azure_resource_group}/providers/Microsoft.Storage/storageAccounts/{self.account_name}"
+        scope = self.storage_account_obj().id
         roles = list(auth_client.role_definitions.list(scope, filter="roleName eq '{}'".format(role_name)))
         assert len(roles) == 1
 
@@ -77,7 +73,9 @@ class AzureStorageAccountInterface:
             if assignment.role_definition_id == roles[0].id:
                 matches.append(assignment)
         if len(matches) == 0:
-            logger.debug(f"Granting access to {principal_id} for role {role_name} on storage account {self.account_name}")
+            logger.debug(
+                f"Granting access for {principal_id} for role '{role_name}' on storage account {self.account_name} over scope {scope}"
+            )
             params = RoleAssignmentCreateParameters(
                 properties=RoleAssignmentProperties(role_definition_id=roles[0].id, principal_id=principal_id)
             )
