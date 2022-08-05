@@ -18,29 +18,26 @@ $ echo <PERSONAL_ACCESS_TOKEN> | sudo docker login ghcr.io -u <GITHUB_USERNAME> 
 
 ## Building and testing Skyplane
 
-### Building Docker image for gateway
-**TLDR:** We've packaged the code to build and push the gateway Docker image into a single script:
-```
-source scripts/pack_docker.sh
-```
-
-`source` will run the script and capture the exported `SKYPLANE_DOCKER_IMAGE` environment variable.
-
-#### Manual steps to build and push the Skyplane gateway Docker image
-
-After making a change to the Skyplane source, we need to rebuild the gateway Docker image:
+### Building and pushing a Skyplane Docker image
+To package the code into a Docker image and push it to a container registry on your account, run the following command (substitute YOUR_GITHUB_USERNAME_HERE for your Github username):
 
 ```bash
-$ DOCKER_BUILDKIT=1 docker build -t skyplane .
+$ export SKYPLANE_DOCKER_IMAGE=$(bash scripts/pack_docker.sh <YOUR_GITHUB_USERNAME_HERE>)
 ```
 
-We now need to push the Docker image to a container registry. Replace `ghcr.io/skyplane-project/skyplane` with your container registry if you are developing against a fork. We autogenerate a short random hash for the image tag.
+This will build the Skyplane Docker image for the gateway and push it ghcr.io under your user account. When running a Skyplane transfer, any provisioned gateways will pull this image from the `SKYPLANE_DOCKER_IMAGE` environment variable to ensure a reproducible environment.
 
-```bash
-$ export SKYPLANE_DOCKER_IMAGE="ghcr.io/skyplane-project/skyplane:local-$(openssl rand -hex 16)"
-$ sudo docker tag skyplane $SKYPLANE_DOCKER_IMAGE
-$ sudo docker push $SKYPLANE_DOCKER_IMAGE
-```
+#### First time setup: make sure ghcr image is "public"
+
+By default, new packages on ghcr are private. To make the package public so gateways can download the image, [convert the package to public](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility#configuring-visibility-of-container-images-for-your-personal-account) (you only need to do this once):
+* Navigate to your newly created package on Github at [https://github.com/users/<YOUR_GITHUB_USERNAME_HERE>/packages/container/package/skyplane](https://github.com/users/<YOUR_GITHUB_USERNAME_HERE>/packages/container/package/skyplane). Make sure to substitute your GitHub username for <YOUR_GITHUB_USERNAME_HERE>.
+* Click on the "Package Settings button at the top right of the Skyplane package page with the gear icon.
+
+![Package settings](https://user-images.githubusercontent.com/453850/182975365-61d5e6f8-9d95-4445-8bdf-171f53f55c68.png)
+
+* Click the "Make public" button.
+
+![Make public](https://user-images.githubusercontent.com/453850/182975358-e2b66f9b-963b-432d-9b3c-d03b22e5ea1a.png)
 
 ### Building the Skyplane client
 We use [Poetry](https://python-poetry.org/) to manage package dependencies during development. For convenience, we provide a Poetry wrapper via `setup.py`. To build the client, install the Skyplane package in development mode. The package points to your current checked-out version of the code, and any edits to the Skyplane client will immediately apply to the `skyplane` CLI command.
