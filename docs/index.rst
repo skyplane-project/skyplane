@@ -42,8 +42,8 @@ Contents
    :maxdepth: 4
    :caption: Developer documentation
 
+   build_from_source
    contributing
-   development_guide
    roadmap
    debugging
 

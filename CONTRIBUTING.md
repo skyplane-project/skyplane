@@ -1,19 +1,34 @@
-# Welcome to Skyplane's contributing guide
+# Contributing to Skyplane
+Welcome to Skyplane! Everyone is welcome to contribute to Skyplane. We are always looking for new features and improvements and we value everyone's input. 
 
-Thank you for investing your time in contributing to our project! Your contributions will have an impact forever on our project.
+## Ways to Contribute
+There are many ways to contribute to Skyplane:
+* Answering questions on Skyplane's [discussions page](https://github.com/skyplane-project/skyplane/discussions)
+* Improving Skyplane's documentation
+* Filing bug reports or reporting sharp edges via [Github issues](https://github.com/skyplane-project/skyplane/issues)
+* Contributing to our [codebase](https://github.com/skyplane-project/skyplane). 
 
-In this guide you will get an overview of the contribution workflow from opening an issue, creating a PR, reviewing, and merging the PR.
+## Code Contributions
+We welcome pull requests, in particular for those issues marked with [good first issue](https://github.com/skyplane-project/skyplane/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22). 
 
-## TLDR
-1. Use PRs to merge code into the Skyplane repository. Add another project collaborator as a reviewer (or a maintainer will assign one).
-2. Make sure to format your code using [Black](https://github.com/psf/black). Run `black -l 140 .` before merging your PR.
-3. Check for major syntax errors or type signature bugs using [PyType](https://github.com/google/pytype). Run `pytype --config .pytype.cfg skyplane` before merging your PR.
+For other proposals or larger features, we ask that you open a new GitHub [Issue](https://github.com/skyplane-project/skyplane/issues/new) or [Discussion](https://github.com/skyplane-project/skyplane/discussions/new). We especially encourage external contributions to support additional cloud providers and object store endpoints. 
 
-## New contributor guide
+To see more on how to setup a development environment, see the [Development Guide](development_guide.md).
 
-To get an overview of the project, read the [README](README.md). Here are some resources to help you get started with open source contributions:
-
-- [Finding ways to contribute to open source on GitHub](https://docs.github.com/en/get-started/exploring-projects-on-github/finding-ways-to-contribute-to-open-source-on-github)
-- [Set up Git](https://docs.github.com/en/get-started/quickstart/set-up-git)
-- [GitHub flow](https://docs.github.com/en/get-started/quickstart/github-flow)
-- [Collaborating with pull requests](https://docs.github.com/en/github/collaborating-with-pull-requests)
+### Submitting pull requests
+Before you submit a pull request, make sure to complete the following steps: 
+1. Fork the Skyplane repository to create a copy of the project in your own account.
+2. Set up a developer environment as described in the [Development Guide](development_guide.md).
+3. Create a development branch (`git checkout -b feature_name`)
+4. Test your changes manually using `skyplane cp` and with the unit test suite:
+```bash
+$ pytest tests/unit_nocloud/
+```
+5. Ensure your code is autoformatted and passes type checks:
+```bash
+$ pip install black pytype
+$ black -l 140 .
+$ pytype --config .pytype.cfg skyplane
+```
+5. Commit your changes using a [descriptive commit message](https://cbea.ms/git-commit/).
+6. Create a pull request on the main Skyplane repo from your fork. Consult [Github Help](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests) for more details.
