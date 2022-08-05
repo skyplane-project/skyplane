@@ -1,4 +1,1 @@
-Contributing to Skyplane
-========================
-
-.. include:: ../CONTRIBUTING
+.. include:: ../CONTRIBUTING.rst
