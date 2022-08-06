@@ -171,7 +171,9 @@ def cp(
             gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
             gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
             multipart_enabled=multipart,
-            multipart_max_chunk_size_mb=cloud_config.get_flag("multipart_max_chunk_size_mb"),
+            multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
+            multipart_min_size_mb=cloud_config.get_flag("multipart_min_size_mb"),
+            multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
         )
 
         if cloud_config.get_flag("verify_checksums"):
@@ -321,7 +323,9 @@ def sync(
         gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
         gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
         multipart_enabled=multipart,
-        multipart_max_chunk_size_mb=cloud_config.get_flag("multipart_max_chunk_size_mb"),
+        multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
+        multipart_min_size_mb=cloud_config.get_flag("multipart_min_size_mb"),
+        multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
     )
 
     if cloud_config.get_flag("verify_checksums"):

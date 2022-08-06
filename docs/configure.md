@@ -16,7 +16,9 @@ Skyplane comes with a variety of knobs to tune to adjust performance or change h
     * `num_connections`: Number of connections to use between each gateway. (default 32)
 * Multipart transfer configuration
     * `multipart_enabled`: If set, multipart transfers will be enabled. (default False)
-    * `multipart_max_chunk_size_mb`: Maximum chunk size in MB for multipart transfers. (default 8).
+    * `multipart_min_threshold_mb`: Minimum threshold in MB for multipart transfers. Below this, the object will be transferred in one chunk. (default 64).
+    * `multipart_min_size_mb`: Minimum size per chunk in MB for multipart transfers. (default 8).
+    * `multipart_max_chunks`: Maximum number of chunks for multipart transfers. (default 9990).
 * Instance provisioning configuration
     * `aws_instance_class`: AWS instance class to use for provisioning. (default m5.8xlarge)
     * `azure_instance_class`: Azure instance class to use for provisioning. (default Standard_D32_v4)
