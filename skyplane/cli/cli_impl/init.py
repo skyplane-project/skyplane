@@ -129,7 +129,12 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             typer.secho("    Azure credentials configured successfully!", fg="blue")
             typer.secho("    Ensure the newly can access your Azure storage accounts by running the following:", fg="blue")
             for cmd in make_role_cmds(config.azure_client_id, config.azure_subscription_id):
-                typer.secho("    " + " ".join(cmd), fg="blue")
+                typer.secho("        " + " ".join(cmd), fg="blue")
+
+            # block until the user confirms they have authorized the service principal
+            if not non_interactive and not typer.confirm("    Have you authorized the service principal by running the above commands?", default=True):
+                typer.secho("    Please authorize the service principal before continuing.", fg="red")
+                return clear_azure_config(config)
         # walk user through setting up an Azure service principal
         else:
             config.azure_subscription_id = typer.prompt(
@@ -223,14 +228,18 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
 
         config.azure_enabled = True
         auth = AzureAuthentication(config=config)
-        with Progress(
-            TextColumn("    "),
-            SpinnerColumn(),
-            TextColumn("Waiting for Azure client secret to propagate{task.description}"),
-            transient=True,
-        ) as progress:
-            progress.add_task("", total=None)
-            auth.wait_for_valid_token()
+        try:
+            with Progress(
+                TextColumn("    "),
+                SpinnerColumn(),
+                TextColumn("Waiting for Azure client secret to propagate{task.description}"),
+                transient=True,
+            ) as progress:
+                progress.add_task("", total=None)
+                auth.wait_for_valid_token()
+        except TimeoutError:
+            typer.secho("    The Azure service principal doesn't have access to your storage accounts. Please ensure you have granted the service principal the Storage Blob Data Contributor and Storage Account Contributor roles.", fg="red")
+            return clear_azure_config(config)
         with Progress(
             TextColumn("    "),
             SpinnerColumn(),
