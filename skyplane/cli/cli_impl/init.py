@@ -167,6 +167,10 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                     typer.secho(f"    Error running command: {create_sp_cmd}", fg="red")
                     typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red")
                     typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red")
+                    typer.secho(
+                        "    You will need to manually create a service principal and provide the Azure tenant ID, client ID, client secret and subscription ID. Follow the guide at: https://docs.microsoft.com/en-us/cli/azure/create-an-azure-service-principal-azure-cli",
+                        fg="red",
+                    )
                     return clear_azure_config(config)
                 config.azure_tenant_id = sp_json["tenant"]
                 config.azure_client_id = sp_json["appId"]
