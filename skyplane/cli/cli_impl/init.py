@@ -94,7 +94,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             or AzureAuthentication.infer_subscription_id(),
         }
         if non_interactive or not typer.confirm(
-            "    I'll automatically create a Skyplane service principal for you. Do you want me to do this? (most common)", default=True
+            "    Do you want me to create an Azure service principal for you? (most common)", default=True
         ):
             typer.secho(
                 "    To manually create a service principal, follow the guide at: https://docs.microsoft.com/en-us/cli/azure/create-an-azure-service-principal-azure-cli",
@@ -158,6 +158,10 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                         "    You will need to manually create a service principal and provide the Azure tenant ID, client ID, client secret and subscription ID. Follow the guide at: https://docs.microsoft.com/en-us/cli/azure/create-an-azure-service-principal-azure-cli",
                         fg="red",
                     )
+                    typer.secho(
+                        '    After you create the service principal, run `skyplane init --reinit-azure` to configure it and select "N" when asked "Do you want me to create an Azure service principal for you?"',
+                        fg="red",
+                    )
                     return clear_azure_config(config)
 
                 out, err = subprocess.Popen(create_sp_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
@@ -169,6 +173,10 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                     typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red")
                     typer.secho(
                         "    You will need to manually create a service principal and provide the Azure tenant ID, client ID, client secret and subscription ID. Follow the guide at: https://docs.microsoft.com/en-us/cli/azure/create-an-azure-service-principal-azure-cli",
+                        fg="red",
+                    )
+                    typer.secho(
+                        '    After you create the service principal, run `skyplane init --reinit-azure` to configure it and select "N" when asked "Do you want me to create an Azure service principal for you?"',
                         fg="red",
                     )
                     return clear_azure_config(config)
