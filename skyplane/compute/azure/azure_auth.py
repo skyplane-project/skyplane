@@ -85,7 +85,10 @@ class AzureAuthentication:
         def get_skus(region):
             valid_skus = []
             for sku in client.resource_skus.list(filter="location eq '{}'".format(region)):
-                if len(sku.restrictions) == 0 and sku.name.startswith("Standard_D32"):
+                if region == "australiacentral":
+                    restrictions = [f"[type={r.type}, values={r.values}, reason_code={r.reason_code}]" for r in sku.restrictions]
+                    print(f"Found SKU {sku.name} in {region} w/ restrictions: {restrictions}")
+                if len(sku.restrictions) == 0 and sku.name.startswith("Standard_D"):
                     valid_skus.append(sku.name)
             return set(valid_skus)
 
