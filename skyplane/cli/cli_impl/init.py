@@ -132,7 +132,9 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                 typer.secho("        " + " ".join(cmd), fg="blue")
 
             # block until the user confirms they have authorized the service principal
-            if not non_interactive and not typer.confirm("    Have you authorized the service principal by running the above commands?", default=True):
+            if not non_interactive and not typer.confirm(
+                "    Have you authorized the service principal by running the above commands?", default=True
+            ):
                 typer.secho("    Please authorize the service principal before continuing.", fg="red")
                 return clear_azure_config(config)
         # walk user through setting up an Azure service principal
@@ -238,7 +240,10 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                 progress.add_task("", total=None)
                 auth.wait_for_valid_token()
         except TimeoutError:
-            typer.secho("    The Azure service principal doesn't have access to your storage accounts. Please ensure you have granted the service principal the Storage Blob Data Contributor and Storage Account Contributor roles.", fg="red")
+            typer.secho(
+                "    The Azure service principal doesn't have access to your storage accounts. Please ensure you have granted the service principal the Storage Blob Data Contributor and Storage Account Contributor roles.",
+                fg="red",
+            )
             return clear_azure_config(config)
         with Progress(
             TextColumn("    "),
