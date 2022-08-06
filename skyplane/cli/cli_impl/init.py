@@ -61,6 +61,15 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         config.azure_enabled = False
         return config
 
+    def make_role_cmds(service_principal, subscription_id):
+        roles = ["Storage Blob Data Contributor", "Storage Account Contributor"]
+        return [
+            "az role assignment create --role".split(" ")
+            + [role]
+            + f"--assignee {service_principal} --scope /subscriptions/{subscription_id}".split(" ")
+            for role in roles
+        ]
+
     if non_interactive or typer.confirm("    Do you want to configure Azure support in Skyplane?", default=True):
         if force_init:
             typer.secho("    Azure credentials will be re-initialized", fg="red")
@@ -77,10 +86,12 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
 
         # load credentials from environment variables or input
         defaults = {
-            "tenant_id": os.environ.get("AZURE_TENANT_ID"),
-            "client_id": os.environ.get("AZURE_CLIENT_ID"),
-            "client_secret": os.environ.get("AZURE_CLIENT_SECRET"),
-            "subscription_id": os.environ.get("AZURE_SUBSCRIPTION_ID") or AzureAuthentication.infer_subscription_id(),
+            "tenant_id": os.environ.get("AZURE_TENANT_ID") or config.azure_tenant_id,
+            "client_id": os.environ.get("AZURE_CLIENT_ID") or config.azure_client_id,
+            "client_secret": os.environ.get("AZURE_CLIENT_SECRET") or config.azure_client_secret,
+            "subscription_id": os.environ.get("AZURE_SUBSCRIPTION_ID")
+            or config.azure_subscription_id
+            or AzureAuthentication.infer_subscription_id(),
         }
         if non_interactive or not typer.confirm(
             "    I'll automatically create a Skyplane service principal for you. Do you want me to do this? (most common)", default=True
@@ -114,6 +125,11 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             ):
                 typer.secho("    Azure credentials not configured correctly, disabling Azure support.", fg="red")
                 return clear_azure_config(config)
+
+            typer.secho("    Azure credentials configured successfully!", fg="blue")
+            typer.secho("    Ensure the newly can access your Azure storage accounts by running the following:", fg="blue")
+            for cmd in make_role_cmds(config.azure_client_id, config.azure_subscription_id):
+                typer.secho("    " + " ".join(cmd), fg="blue")
         # walk user through setting up an Azure service principal
         else:
             config.azure_subscription_id = typer.prompt(
@@ -138,6 +154,10 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                     typer.secho(f"    Error running command: {change_subscription_cmd}", fg="red")
                     typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red")
                     typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red")
+                    typer.secho(
+                        "    You will need to manually create a service principal and provide the Azure tenant ID, client ID, client secret and subscription ID. Follow the guide at: https://docs.microsoft.com/en-us/cli/azure/create-an-azure-service-principal-azure-cli",
+                        fg="red",
+                    )
                     return clear_azure_config(config)
 
                 out, err = subprocess.Popen(create_sp_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
@@ -162,13 +182,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                 return clear_azure_config(config)
 
             # authorize new service principal with Storage Blob Data Contributor and Storage Account Contributor roles to the subscription
-            roles = ["Storage Blob Data Contributor", "Storage Account Contributor"]
-            role_cmds = [
-                "az role assignment create --role".split(" ")
-                + [role]
-                + f"--assignee {config.azure_client_id} --scope /subscriptions/{config.azure_subscription_id}".split(" ")
-                for role in roles
-            ]
+            role_cmds = make_role_cmds(config.azure_client_id, config.azure_subscription_id)
             typer.secho(
                 f"    I will run the following commands to authorize the newly created Skyplane service principal to access your storage accounts:",
                 fg="blue",
