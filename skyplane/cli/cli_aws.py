@@ -41,8 +41,8 @@ def vcpu_limits(quota_code="L-1216C47A"):
 @app.command()
 def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
     aws_auth = AWSAuthentication()
-    src_region = S3Interface(src_bucket, aws_region="infer").aws_region
-    dst_region = S3Interface(dst_bucket, aws_region="infer").aws_region
+    src_region = S3Interface(src_bucket).aws_region
+    dst_region = S3Interface(dst_bucket).aws_region
 
     iam_client = aws_auth.get_boto3_client("iam", "us-east-1")
     try:

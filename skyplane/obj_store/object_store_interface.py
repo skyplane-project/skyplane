@@ -24,10 +24,7 @@ class ObjectStoreInterface:
     def region_tag(self):
         raise NotImplementedError()
 
-    def bucket_exists(self):
-        raise NotImplementedError()
-
-    def create_bucket(self):
+    def create_bucket(self, region_tag: str):
         raise NotImplementedError()
 
     def delete_bucket(self):
@@ -39,7 +36,7 @@ class ObjectStoreInterface:
     def bucket_exists(self):
         raise NotImplementedError()
 
-    def exists(self):
+    def exists(self, obj_name: str):
         raise NotImplementedError()
 
     def get_obj_size(self, obj_name):
@@ -92,22 +89,15 @@ class ObjectStoreInterface:
         if region_tag.startswith("aws"):
             from skyplane.obj_store.s3_interface import S3Interface
 
-            _, region = region_tag.split(":", 1)
-            return S3Interface(bucket, aws_region=region)
+            return S3Interface(bucket)
         elif region_tag.startswith("gcp"):
             from skyplane.obj_store.gcs_interface import GCSInterface
 
-            _, region = region_tag.split(":", 1)
-            return GCSInterface(bucket, gcp_region=region)
+            return GCSInterface(bucket)
         elif region_tag.startswith("azure"):
-            from skyplane.obj_store.azure_interface import AzureInterface
+            from skyplane.obj_store.azure_blob_interface import AzureBlobInterface
 
             storage_account, container = bucket.split("/", 1)  # <storage_account>/<container>
-            _, region = region_tag.split(":", 1)
-            return AzureInterface(storage_account, container, region=region)
+            return AzureBlobInterface(storage_account, container)
         else:
             raise ValueError(f"Invalid region_tag {region_tag} - could not create interface")
-
-
-class NoSuchObjectException(Exception):
-    pass
