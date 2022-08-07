@@ -59,24 +59,3 @@ class AzureStorageAccountInterface:
         except ResourceExistsError as e:
             logger.warning(f"Unable to create storage account as it already exists: {e}")
         self.storage_account_obj.cache_clear()
-
-    def grant_storage_account_access(self, role_name: str, principal_id: str):
-        # lookup role
-        auth_client = self.auth.get_authorization_client()
-        scope = self.storage_account_obj().id
-        roles = list(auth_client.role_definitions.list(scope, filter="roleName eq '{}'".format(role_name)))
-        assert len(roles) == 1
-
-        # query for existing role assignment
-        matches = []
-        for assignment in auth_client.role_assignments.list_for_scope(scope, filter="principalId eq '{}'".format(principal_id)):
-            if assignment.role_definition_id == roles[0].id:
-                matches.append(assignment)
-        if len(matches) == 0:
-            logger.debug(
-                f"Granting access for {principal_id} for role '{role_name}' on storage account {self.account_name} over scope {scope}"
-            )
-            params = RoleAssignmentCreateParameters(
-                properties=RoleAssignmentProperties(role_definition_id=roles[0].id, principal_id=principal_id)
-            )
-            auth_client.role_assignments.create(scope, uuid.uuid4(), params)

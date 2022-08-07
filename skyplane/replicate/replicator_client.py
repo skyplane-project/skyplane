@@ -317,14 +317,6 @@ class ReplicatorClient:
             "gcp",
         ], f"Only AWS, Azure, and GCP are supported, but got {job.dest_region}"
 
-        # assign source and destination gateways permission to buckets
-        assign_jobs = []
-        if job.source_region.split(":")[0] == "azure":
-            for gateway in self.bound_nodes.values():
-                if isinstance(gateway, AzureServer):
-                    assign_jobs.append(gateway.authorize_subscription)
-        do_parallel(lambda fn: fn(), assign_jobs, spinner=True, spinner_persist=True, desc="Assigning gateways permissions to buckets")
-
         with Progress(
             SpinnerColumn(),
             TextColumn("Preparing replication plan{task.description}"),
