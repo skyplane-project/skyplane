@@ -1,12 +1,9 @@
-import uuid
 from functools import lru_cache
 
 from azure.core.exceptions import ResourceExistsError
-from azure.mgmt.authorization.v2015_07_01.models import RoleAssignmentCreateParameters, RoleAssignmentProperties
 
 from skyplane import exceptions
 from skyplane.compute.azure.azure_auth import AzureAuthentication
-from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.utils import logger
 
 

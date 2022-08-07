@@ -1,7 +1,6 @@
 import base64
 import hashlib
 import os
-import time
 from functools import lru_cache, partial
 from typing import Iterator, List, Optional
 
@@ -14,7 +13,6 @@ from skyplane.obj_store.azure_storage_account_interface import AzureStorageAccou
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.utils import logger
-from skyplane.utils.timer import Timer
 
 
 class AzureBlobObject(ObjectStoreObject):

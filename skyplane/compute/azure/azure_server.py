@@ -1,17 +1,14 @@
-import uuid
 from pathlib import Path
 
 import azure.core.exceptions
 import paramiko
-from azure.mgmt.authorization.models import RoleAssignmentCreateParameters
-from azure.mgmt.authorization.models import RoleAssignmentProperties
 
 from skyplane import key_root
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils import logger
 from skyplane.utils.cache import ignore_lru_cache
-from skyplane.utils.fn import PathLike, wait_for
+from skyplane.utils.fn import PathLike
 
 
 class AzureServer(Server):
