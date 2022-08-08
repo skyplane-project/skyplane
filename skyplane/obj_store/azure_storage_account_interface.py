@@ -1,12 +1,9 @@
-import uuid
 from functools import lru_cache
 
 from azure.core.exceptions import ResourceExistsError
-from azure.mgmt.authorization.v2015_07_01.models import RoleAssignmentCreateParameters, RoleAssignmentProperties
 
 from skyplane import exceptions
 from skyplane.compute.azure.azure_auth import AzureAuthentication
-from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.utils import logger
 
 
@@ -29,10 +26,6 @@ class AzureStorageAccountInterface:
     @property
     def azure_region(self):
         return self.storage_account_obj().location
-
-    @property
-    def azure_resource_group(self):
-        return self.storage_account_obj().resource_group_name
 
     @property
     def storage_management_client(self):
@@ -63,22 +56,3 @@ class AzureStorageAccountInterface:
         except ResourceExistsError as e:
             logger.warning(f"Unable to create storage account as it already exists: {e}")
         self.storage_account_obj.cache_clear()
-
-    def grant_storage_account_access(self, role_name: str, principal_id: str):
-        # lookup role
-        auth_client = self.auth.get_authorization_client()
-        scope = f"/subscriptions/{self.auth.subscription_id}/resourceGroups/{self.azure_resource_group}/providers/Microsoft.Storage/storageAccounts/{self.account_name}"
-        roles = list(auth_client.role_definitions.list(scope, filter="roleName eq '{}'".format(role_name)))
-        assert len(roles) == 1
-
-        # query for existing role assignment
-        matches = []
-        for assignment in auth_client.role_assignments.list_for_scope(scope, filter="principalId eq '{}'".format(principal_id)):
-            if assignment.role_definition_id == roles[0].id:
-                matches.append(assignment)
-        if len(matches) == 0:
-            logger.debug(f"Granting access to {principal_id} for role {role_name} on storage account {self.account_name}")
-            params = RoleAssignmentCreateParameters(
-                properties=RoleAssignmentProperties(role_definition_id=roles[0].id, principal_id=principal_id)
-            )
-            auth_client.role_assignments.create(scope, uuid.uuid4(), params)

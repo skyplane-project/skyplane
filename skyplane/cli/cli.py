@@ -25,7 +25,7 @@ from skyplane.cli.cli_impl.cp_replicate import (
 )
 from skyplane.replicate.replication_plan import ReplicationJob
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
-from skyplane.cli.common import check_ulimit, parse_path, query_instances
+from skyplane.cli.common import parse_path, query_instances
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.config import SkyplaneConfig
@@ -116,6 +116,7 @@ def cp(
             dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
             src_region = src_client.region_tag()
             dst_region = dst_client.region_tag()
+
             transfer_pairs = generate_full_transferobjlist(
                 src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst, recursive=recursive
             )

@@ -4,7 +4,7 @@ import hashlib
 import os
 import requests
 from functools import lru_cache
-from typing import Iterator, List, Optional, Tuple
+from typing import Iterator, List, Optional
 from xml.etree import ElementTree
 
 from skyplane import exceptions
