@@ -27,7 +27,7 @@ class GCSInterface(ObjectStoreInterface):
         self._requests_session = requests.Session()
 
     @property
-    @lru_cache
+    @lru_cache(maxsize=1)
     def gcp_region(self):
         def map_region_to_zone(region) -> str:
             """Resolves bucket locations to a valid zone."""

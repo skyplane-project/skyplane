@@ -14,7 +14,7 @@ class AzureStorageAccountInterface:
         self.auth = AzureAuthentication()
         self.account_name = account_name
 
-    @lru_cache
+    @lru_cache(maxsize=1)
     def storage_account_obj(self):
         sm_client = self.auth.get_storage_management_client()
         storage_accounts = sm_client.storage_accounts.list()

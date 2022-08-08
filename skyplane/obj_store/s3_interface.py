@@ -24,7 +24,7 @@ class S3Interface(ObjectStoreInterface):
         self.bucket_name = bucket_name
 
     @property
-    @lru_cache
+    @lru_cache(maxsize=1)
     def aws_region(self):
         s3_client = self.auth.get_boto3_client("s3")
         try:
