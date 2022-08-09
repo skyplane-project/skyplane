@@ -2,6 +2,7 @@ import json
 import os
 import pathlib
 import signal
+import sys
 import traceback
 from typing import List, Optional, Tuple
 
@@ -34,7 +35,7 @@ def generate_topology(
 ) -> ReplicationTopology:
     if solve:
         if src_region == dst_region:
-            typer.secho("Solver is not supported for intra-region transfers, run without the --solve flag", fg="red")
+            typer.secho("Solver is not supported for intra-region transfers, run without the --solve flag", fg="red", err=True)
             raise typer.Exit(1)
 
         # build problem and solve
@@ -89,16 +90,18 @@ def map_object_key_prefix(
     The CLI will query the object store for all objects in the source prefix and map them to the
     destination prefix using this function.
     """
+    print(f"map_object_key_prefix('{source_prefix}', '{source_key}', '{dest_prefix}', {recursive})")
     if not recursive:
         if source_key.startswith(source_prefix):
             if dest_prefix.endswith("/"):
-                src_name = source_key.split("/")[-1]
+                src_name = source_key.split("/")[-1] if "/" in source_key else source_key
                 return f"{dest_prefix}{src_name}"
             elif source_prefix == source_key:
                 return dest_prefix
-        raise exceptions.MissingObjectException(
-            f"Source key {source_key} does not start with source prefix {source_prefix}. To copy a directory, please use the '--recursive' flag"
-        )
+        rprint(f"\n:x: [bold red]In order to transfer objects using a prefix, you must use the --recursive or -r flag.[/bold red]")
+        rprint(f"[yellow]If you meant to transfer a single object, pass the full source object key.[/yellow]")
+        rprint(f"[bright_black]Try running: [bold]skyplane {' '.join(sys.argv[1:])} --recursive[/bold][/bright_black]")
+        raise exceptions.MissingObjectException("Encountered a recursive transfer without the --recursive flag.")
     else:
         dest_prefix = dest_prefix if dest_prefix.endswith("/") else f"{dest_prefix}/"
         source_prefix = source_prefix if source_prefix.endswith("/") else f"{source_prefix}/"
@@ -106,6 +109,7 @@ def map_object_key_prefix(
             file_path = source_key[len(source_prefix) :]
             return f"{dest_prefix}{file_path}"
         else:
+            rprint(f"\n:x: [bold red]The source key {source_key} does not start with the source prefix {source_prefix}[/bold red]")
             raise exceptions.MissingObjectException(f"Source key {source_key} does not start with source prefix {source_prefix}")
 
 
@@ -141,8 +145,14 @@ def generate_full_transferobjlist(
         raise exceptions.MissingObjectException(f"No objects were found in the specified prefix {source_prefix} in {source_bucket}")
 
     # map objects to destination object paths
+    logger.debug(f"Mapping from '{source_prefix}' to '{dest_prefix}'")
     for source_obj in source_objs:
-        dest_key = map_object_key_prefix(source_prefix, source_obj.key, dest_prefix, recursive=recursive)
+        logger.debug(f"\t'{source_obj.key}' mapping to ")
+        try:
+            dest_key = map_object_key_prefix(source_prefix, source_obj.key, dest_prefix, recursive=recursive)
+        except exceptions.MissingObjectException:
+            raise typer.Exit(1)
+        logger.debug(f"\t\t'{dest_key}'")
         if dest_region.startswith("aws"):
             dest_obj = S3Object(dest_region.split(":")[0], dest_bucket, dest_key)
         elif dest_region.startswith("gcp"):
@@ -239,7 +249,7 @@ def launch_replication_job(
     if reuse_gateways:
         typer.secho(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skyplane deprovision` to deprovision gateways.",
-            fg="red",
+            fg="red", err=True,
             bold=True,
         )
 
@@ -252,7 +262,7 @@ def launch_replication_job(
         gcp_instance_class=gcp_instance_class,
         gcp_use_premium_network=gcp_use_premium_network,
     )
-    typer.secho(f"Storing debug information for transfer in {rc.transfer_dir / 'client.log'}", fg="yellow")
+    typer.secho(f"Storing debug information for transfer in {rc.transfer_dir / 'client.log'}", fg="yellow", err=True)
     (rc.transfer_dir / "topology.json").write_text(topo.to_json())
 
     stats = {}
@@ -316,8 +326,8 @@ def launch_replication_job(
     if stats["monitor_status"] == "error":
         for instance, errors in stats["errors"].items():
             for error in errors:
-                typer.secho(f"\n❌ {instance} encountered error:", fg="red", bold=True)
-                typer.secho(error, fg="red")
+                typer.secho(f"\n❌ {instance} encountered error:", fg="red", err=True, bold=True)
+                typer.secho(error, fg="red", err=True)
         raise typer.Exit(1)
 
     # print stats

@@ -104,10 +104,10 @@ def cp(
     clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
 
     if provider_src == "local" or provider_dst == "local":
-        typer.secho("Local transfers are not yet supported (but will be soon!)", fg="red")
-        typer.secho("Skyplane is currently most optimized for cloud to cloud transfers.", fg="yellow")
+        typer.secho("Local transfers are not yet supported (but will be soon!)", fg="red", err=True)
+        typer.secho("Skyplane is currently most optimized for cloud to cloud transfers.", fg="yellow", err=True)
         typer.secho(
-            "Please provide feedback for on prem transfers at: https://github.com/skyplane-project/skyplane/discussions/424", fg="yellow"
+            "Please provide feedback for on prem transfers at: https://github.com/skyplane-project/skyplane/discussions/424", fg="yellow", err=True
         )
         raise typer.Exit(code=1)
     if provider_src in clouds and provider_dst in clouds:
@@ -126,7 +126,7 @@ def cp(
             raise typer.Exit(1)
 
         if multipart and (provider_src == "azure" or provider_dst == "azure"):
-            typer.secho("Warning: Azure is not yet supported for multipart transfers, you may observe slow performance", fg="yellow")
+            typer.secho("Warning: Azure is not yet supported for multipart transfers, you may observe slow performance", fg="yellow", err=True)
             multipart = False
 
         topo = generate_topology(
@@ -175,7 +175,7 @@ def cp(
         if cloud_config.get_flag("verify_checksums"):
             provider_dst = topo.sink_region().split(":")[0]
             if provider_dst == "azure":
-                typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
+                typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True, err=True)
             else:
                 with Progress(
                     SpinnerColumn(),
@@ -278,7 +278,7 @@ def sync(
         raise typer.Exit(0)
 
     if multipart and (provider_src == "azure" or provider_dst == "azure"):
-        typer.secho("Warning: Azure is not yet supported for multipart transfers, you may observe slow performance", fg="yellow")
+        typer.secho("Warning: Azure is not yet supported for multipart transfers, you may observe slow performance", fg="yellow", err=True)
         multipart = False
 
     topo = generate_topology(
@@ -327,7 +327,7 @@ def sync(
     if cloud_config.get_flag("verify_checksums"):
         provider_dst = topo.sink_region().split(":")[0]
         if provider_dst == "azure":
-            typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
+            typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True, err=True)
         else:
             with Progress(
                 SpinnerColumn(),
@@ -368,7 +368,7 @@ def ssh():
     """SSH into a running gateway."""
     instances = query_instances()
     if len(instances) == 0:
-        typer.secho(f"No instances found", fg="red")
+        typer.secho(f"No instances found", fg="red", err=True)
         raise typer.Abort()
 
     instance_map = {f"{i.region_tag}, {i.public_ip()} ({i.instance_state()})": i for i in instances}
