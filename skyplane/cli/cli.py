@@ -4,8 +4,10 @@ from functools import partial
 from pathlib import Path
 from shlex import split
 import traceback
+from skyplane.replicate.replicator_client import ReplicatorClient
 
 import typer
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
 import skyplane.cli.cli_aws
 import skyplane.cli.cli_azure
@@ -23,7 +25,7 @@ from skyplane.cli.cli_impl.cp_replicate import (
 )
 from skyplane.replicate.replication_plan import ReplicationJob
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
-from skyplane.cli.common import check_ulimit, parse_path, query_instances
+from skyplane.cli.common import parse_path, query_instances
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.config import SkyplaneConfig
@@ -103,24 +105,20 @@ def cp(
 
     clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
 
-    # error for local transfers
-    def error_local():
+    if provider_src == "local" or provider_dst == "local":
         typer.secho("Local transfers are not yet supported (but will be soon!)", fg="red")
         typer.secho("Skyplane is currently most optimized for cloud to cloud transfers.", fg="yellow")
         typer.secho(
             "Please provide feedback for on prem transfers at: https://github.com/skyplane-project/skyplane/discussions/424", fg="yellow"
         )
         raise typer.Exit(code=1)
-
-    # raise file limits for local transfers
-    if provider_src == "local" or provider_dst == "local":
-        error_local()
     if provider_src in clouds and provider_dst in clouds:
         try:
             src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)
             dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
             src_region = src_client.region_tag()
             dst_region = dst_client.region_tag()
+
             transfer_pairs = generate_full_transferobjlist(
                 src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst, recursive=recursive
             )
@@ -156,6 +154,7 @@ def cp(
             job=job,
             ask_to_confirm_transfer=not confirm,
         )
+
         stats = launch_replication_job(
             topo=topo,
             job=job,
@@ -165,15 +164,29 @@ def cp(
             use_compression=cloud_config.get_flag("compress") if src_region != dst_region else False,
             use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
             use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
-            verify_checksums=cloud_config.get_flag("verify_checksums"),
             aws_instance_class=cloud_config.get_flag("aws_instance_class"),
             azure_instance_class=cloud_config.get_flag("azure_instance_class"),
             gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
             gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
             multipart_enabled=multipart,
-            multipart_max_chunk_size_mb=cloud_config.get_flag("multipart_max_chunk_size_mb"),
+            multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
+            multipart_min_size_mb=cloud_config.get_flag("multipart_min_size_mb"),
+            multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
         )
-        return 0 if stats["success"] else 1
+
+        if cloud_config.get_flag("verify_checksums"):
+            provider_dst = topo.sink_region().split(":")[0]
+            if provider_dst == "azure":
+                typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
+            else:
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("Verifying all files were copied{task.description}"),
+                ) as progress:
+                    progress.add_task("", total=None)
+                    ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+
+            return 0 if stats["success"] else 1
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
 
@@ -303,14 +316,29 @@ def sync(
         use_compression=cloud_config.get_flag("compress") if src_region != dst_region else False,
         use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
         use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
-        verify_checksums=cloud_config.get_flag("verify_checksums"),
         aws_instance_class=cloud_config.get_flag("aws_instance_class"),
         azure_instance_class=cloud_config.get_flag("azure_instance_class"),
         gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
         gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
         multipart_enabled=multipart,
-        multipart_max_chunk_size_mb=cloud_config.get_flag("multipart_max_chunk_size_mb"),
+        multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
+        multipart_min_size_mb=cloud_config.get_flag("multipart_min_size_mb"),
+        multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
     )
+
+    if cloud_config.get_flag("verify_checksums"):
+        provider_dst = topo.sink_region().split(":")[0]
+        if provider_dst == "azure":
+            typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
+        else:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("Verifying all files were copied{task.description}"),
+                transient=True,
+            ) as progress:
+                progress.add_task("", total=None)
+                ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+
     return 0 if stats["success"] else 1
 
 

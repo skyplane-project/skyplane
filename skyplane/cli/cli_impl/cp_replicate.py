@@ -11,6 +11,9 @@ from rich import print as rprint
 from skyplane import exceptions, GB, format_bytes, gateway_docker_image, skyplane_root
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
+from skyplane.obj_store.s3_interface import S3Object
+from skyplane.obj_store.gcs_interface import GCSObject
+from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
 from skyplane.replicate.replicator_client import ReplicatorClient
 from skyplane.utils import logger
@@ -140,7 +143,15 @@ def generate_full_transferobjlist(
     # map objects to destination object paths
     for source_obj in source_objs:
         dest_key = map_object_key_prefix(source_prefix, source_obj.key, dest_prefix, recursive=recursive)
-        dest_obj = ObjectStoreObject(dest_region.split(":")[0], dest_bucket, dest_key)
+        if dest_region.startswith("aws"):
+            dest_obj = S3Object(dest_region.split(":")[0], dest_bucket, dest_key)
+        elif dest_region.startswith("gcp"):
+            dest_obj = GCSObject(dest_region.split(":")[0], dest_bucket, dest_key)
+        elif dest_region.startswith("azure"):
+            dest_obj = AzureBlobObject(dest_region.split(":")[0], dest_bucket, dest_key)
+        else:
+            raise ValueError(f"Invalid dest_region {dest_region} - could not create corresponding object")
+        # dest_obj = ObjectStoreObject(dest_region.split(":")[0], dest_bucket, dest_key)
         dest_objs.append(dest_obj)
 
     # query destination at dest_key
@@ -209,10 +220,11 @@ def launch_replication_job(
     use_compression: bool = False,
     use_e2ee: bool = True,
     use_socket_tls: bool = False,
-    verify_checksums: bool = True,
     # multipart
     multipart_enabled: bool = False,
-    multipart_max_chunk_size_mb: int = 8,
+    multipart_min_threshold_mb: int = 128,
+    multipart_min_size_mb: int = 8,
+    multipart_max_chunks: int = 9990,
     # cloud provider specific options
     aws_instance_class: str = "m5.8xlarge",
     azure_instance_class: str = "Standard_D32_v4",
@@ -255,7 +267,9 @@ def launch_replication_job(
         job = rc.run_replication_plan(
             job,
             multipart_enabled=multipart_enabled,
-            multipart_max_chunk_size_mb=multipart_max_chunk_size_mb,
+            multipart_min_threshold_mb=multipart_min_threshold_mb,
+            multipart_min_size_mb=multipart_min_size_mb,
+            multipart_max_chunks=multipart_max_chunks,
         )
         total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
         console.print(f":rocket: [bold blue]{total_bytes / GB:.2f}GB transfer job launched[/bold blue]")
@@ -305,12 +319,6 @@ def launch_replication_job(
                 typer.secho(f"\n❌ {instance} encountered error:", fg="red", bold=True)
                 typer.secho(error, fg="red")
         raise typer.Exit(1)
-
-    if verify_checksums:
-        if any(node.region.startswith("azure") for node in rc.bound_nodes.keys()):
-            typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
-        else:
-            rc.verify_transfer(job)
 
     # print stats
     if stats["success"]:

@@ -10,7 +10,6 @@ from multiprocessing import Process, Manager, Value, Queue
 from queue import Empty
 import time
 import os
-import random
 import argparse
 
 N_MSG_PER_PROCESS = 512

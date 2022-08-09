@@ -1,17 +1,14 @@
-import uuid
 from pathlib import Path
 
 import azure.core.exceptions
 import paramiko
-from azure.mgmt.authorization.models import RoleAssignmentCreateParameters
-from azure.mgmt.authorization.models import RoleAssignmentProperties
 
 from skyplane import key_root
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils import logger
 from skyplane.utils.cache import ignore_lru_cache
-from skyplane.utils.fn import PathLike, wait_for
+from skyplane.utils.fn import PathLike
 
 
 class AzureServer(Server):
@@ -176,45 +173,6 @@ class AzureServer(Server):
         _ = nsg_poller.result()
         vnet_poller = network_client.virtual_networks.begin_delete(AzureServer.resource_group_name, self.vnet_name(self.name))
         _ = vnet_poller.result()
-
-    def authorize_subscription(self):
-        # Authorize system MSI to access subscription
-        auth_client = self.auth.get_authorization_client()
-        subscription_scope = "/subscriptions/{}".format(self.auth.subscription_id)
-        principal_id = self.get_virtual_machine().identity.principal_id
-
-        def grant_vm_role(principal_id, scope, role_name):
-            prefix = f"grant_vm_role({principal_id}, {scope.split('/')[-1]}, {role_name})"
-            try:
-                roles = list(auth_client.role_definitions.list(scope, filter="roleName eq '{}'".format(role_name)))
-                assert len(roles) == 1, f"Got roles {roles}"
-                params = RoleAssignmentCreateParameters(
-                    properties=RoleAssignmentProperties(role_definition_id=roles[0].id, principal_id=principal_id)
-                )
-                auth_client.role_assignments.create(scope, uuid.uuid4(), params)
-                return roles[0]
-            except azure.core.exceptions.ResourceExistsError as e:
-                logger.fs.warning(f"{prefix}: Role '{role_name}' already exists: {e}")
-                return None
-
-        r1 = grant_vm_role(principal_id, subscription_scope, "Storage Blob Data Contributor")
-        r2 = grant_vm_role(principal_id, subscription_scope, "Storage Blob Data Reader")
-        r3 = grant_vm_role(principal_id, subscription_scope, "Storage Blob Delegator")
-        r4 = grant_vm_role(principal_id, subscription_scope, "Storage Account Contributor")
-
-        # wait till the subscription is accessible by checking for roles
-        def check_role(role):
-            if role is None:
-                return True
-            for assignment in auth_client.role_assignments.list_for_scope(
-                subscription_scope, filter="principalId eq '{}'".format(principal_id)
-            ):
-                if assignment.role_definition_id == role.id:
-                    return True
-            return False
-
-        wait_for(lambda: all(check_role(role) for role in [r1, r2, r3, r4]), timeout=60, desc="authorize_subscription")
-        logger.fs.debug(f"Authorized subscription for VM {self.name}")
 
     def get_ssh_client_impl(self, uname="skyplane", ssh_key_password="skyplane"):
         """Return paramiko client that connects to this instance."""

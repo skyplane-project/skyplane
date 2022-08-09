@@ -2,6 +2,7 @@ import json
 import pickle
 import time
 import uuid
+import math
 from datetime import datetime
 from functools import partial
 from typing import Dict, List, Optional, Tuple, Iterable
@@ -17,16 +18,28 @@ from skyplane import exceptions
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
-from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.compute.server import Server, ServerState
-from skyplane.obj_store.object_store_interface import ObjectStoreInterface, NoSuchObjectException
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.replicate.profiler import status_df_to_traceevent
 from skyplane.replicate.replication_plan import ReplicationJob, ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
 from skyplane.utils.fn import PathLike, do_parallel
 from skyplane.utils.timer import Timer
+
+
+def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1) -> Dict[str, List[Server]]:
+    if instance_filter is None:
+        instance_filter = {"tags": {"skyplane": "true"}}
+    results = do_parallel(
+        lambda region: provider.get_matching_instances(region=region, **instance_filter),
+        region_list,
+        spinner=True,
+        n=n,
+        desc="Querying clouds for active instances",
+    )
+    return {r: ilist for r, ilist in results if ilist}
 
 
 class ReplicatorClient:
@@ -287,8 +300,10 @@ class ReplicatorClient:
     def run_replication_plan(
         self,
         job: ReplicationJob,
-        multipart_enabled: bool = False,
-        multipart_max_chunk_size_mb: int = 8,
+        multipart_enabled: bool,
+        multipart_min_threshold_mb: int,
+        multipart_min_size_mb: int,
+        multipart_max_chunks: int,
     ) -> ReplicationJob:
         assert job.source_region.split(":")[0] in [
             "aws",
@@ -300,14 +315,6 @@ class ReplicatorClient:
             "azure",
             "gcp",
         ], f"Only AWS, Azure, and GCP are supported, but got {job.dest_region}"
-
-        # assign source and destination gateways permission to buckets
-        assign_jobs = []
-        if job.source_region.split(":")[0] == "azure":
-            for gateway in self.bound_nodes.values():
-                if isinstance(gateway, AzureServer):
-                    assign_jobs.append(gateway.authorize_subscription)
-        do_parallel(lambda fn: fn(), assign_jobs, spinner=True, spinner_persist=True, desc="Assigning gateways permissions to buckets")
 
         with Progress(
             SpinnerColumn(),
@@ -321,69 +328,11 @@ class ReplicatorClient:
             gateway_ips: Dict[Server, str] = {s: s.public_ip() for s in self.bound_nodes.values()}
 
             # make list of chunks
-            progress.update(prepare_task, description=": Querying source object store for matching keys")
+            progress.update(prepare_task, description=": Creating list of chunks for transfer")
             chunks = []
             idx = 0
             for (src_object, dest_object) in job.transfer_pairs:
-                if not job.random_chunk_size_mb:
-                    if multipart_enabled:
-                        chunk_size_bytes = int(multipart_max_chunk_size_mb * MB)
-                        num_chunks = int(src_object.size / chunk_size_bytes) + 1
-
-                        # TODO: figure out what to do on # part limits per object
-                        # TODO: only do if num_chunks > 1
-                        # TODO: potentially do this in a seperate thread, and/or after chunks sent
-                        obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
-                        logger.fs.info(f"Initiate multipart upload on {dest_object}")
-                        upload_id = obj_store_interface.initiate_multipart_upload(dest_object.key)
-
-                        offset = 0
-                        part_num = 1
-                        parts = []
-                        for chunk in range(num_chunks):
-                            # size is min(chunk_size, remaining data)
-                            file_size_bytes = min(chunk_size_bytes, src_object.size - offset)
-                            assert file_size_bytes > 0, f"File size <= 0 {file_size_bytes}"
-                            chunks.append(
-                                Chunk(
-                                    src_key=src_object.key,
-                                    dest_key=dest_object.key,
-                                    chunk_id=idx,
-                                    file_offset_bytes=offset,
-                                    chunk_length_bytes=file_size_bytes,
-                                    part_number=part_num,
-                                    upload_id=upload_id,
-                                )
-                            )
-                            parts.append(part_num)
-
-                            idx += 1
-                            part_num += 1
-                            offset += chunk_size_bytes
-                        # add multipart upload request
-                        self.multipart_upload_requests.append(
-                            {
-                                "region": job.dest_region,
-                                "bucket": job.dest_bucket,
-                                "upload_id": upload_id,
-                                "key": dest_object.key,
-                                "parts": parts,
-                            }
-                        )
-                    # transfer entire object
-                    else:
-                        chunks.append(
-                            Chunk(
-                                src_key=src_object.key,
-                                dest_key=dest_object.key,
-                                chunk_id=idx,
-                                file_offset_bytes=0,
-                                chunk_length_bytes=src_object.size,
-                            )
-                        )
-                        idx += 1
-                # random data replication
-                else:
+                if job.random_chunk_size_mb:
                     chunks.append(
                         Chunk(
                             src_key=src_object.key,
@@ -393,6 +342,64 @@ class ReplicatorClient:
                             chunk_length_bytes=job.random_chunk_size_mb * MB,
                         )
                     )
+                    idx += 1
+                elif multipart_enabled and src_object.size > multipart_min_threshold_mb * MB:
+                    # determine number of chunks via the following algorithm:
+                    chunk_size_bytes = int(multipart_min_size_mb * MB)
+                    num_chunks = math.ceil(src_object.size / chunk_size_bytes)
+                    if num_chunks > multipart_max_chunks:
+                        chunk_size_bytes = int(src_object.size / multipart_max_chunks)
+                        chunk_size_bytes = math.ceil(chunk_size_bytes / MB) * MB  # round to next largest MB
+                        num_chunks = math.ceil(src_object.size / chunk_size_bytes)
+
+                    # TODO: potentially do this in a seperate thread, and/or after chunks sent
+                    obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
+                    logger.fs.info(f"Initiate multipart upload on {dest_object}")
+                    upload_id = obj_store_interface.initiate_multipart_upload(dest_object.key)
+
+                    offset = 0
+                    part_num = 1
+                    parts = []
+                    for chunk in range(num_chunks):
+                        # size is min(chunk_size, remaining data)
+                        file_size_bytes = min(chunk_size_bytes, src_object.size - offset)
+                        assert file_size_bytes > 0, f"File size <= 0 {file_size_bytes}"
+                        chunks.append(
+                            Chunk(
+                                src_key=src_object.key,
+                                dest_key=dest_object.key,
+                                chunk_id=idx,
+                                file_offset_bytes=offset,
+                                chunk_length_bytes=file_size_bytes,
+                                part_number=part_num,
+                                upload_id=upload_id,
+                            )
+                        )
+                        parts.append(part_num)
+
+                        idx += 1
+                        part_num += 1
+                        offset += chunk_size_bytes
+                    # add multipart upload request
+                    self.multipart_upload_requests.append(
+                        {
+                            "region": job.dest_region,
+                            "bucket": job.dest_bucket,
+                            "upload_id": upload_id,
+                            "key": dest_object.key,
+                            "parts": parts,
+                        }
+                    )
+                # transfer entire object
+                else:
+                    chunk = Chunk(
+                        src_key=src_object.key,
+                        dest_key=dest_object.key,
+                        chunk_id=idx,
+                        file_offset_bytes=0,
+                        chunk_length_bytes=src_object.size,
+                    )
+                    chunks.append(chunk)
                     idx += 1
 
             # partition chunks into roughly equal-sized batches (by bytes)
@@ -686,42 +693,23 @@ class ReplicatorClient:
                     do_parallel(fn, self.bound_nodes.values(), n=-1)
                     progress.update(cleanup_task, description=": Shutting down gateways")
 
-    def verify_transfer(self, job: ReplicationJob):
+    @staticmethod
+    def verify_transfer_prefix(job: ReplicationJob, dest_prefix: str):
         """Check that all objects to copy are present in the destination"""
-        src_interface = ObjectStoreInterface.create(job.source_region, job.source_bucket)
         dst_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
 
-        # only check metadata (src.size == dst.size) && (src.modified <= dst.modified)
-        def verify(tup):
-            src_key, dst_key = tup[0].key, tup[1].key
-            try:
-                if src_interface.get_obj_size(src_key) != dst_interface.get_obj_size(dst_key):
-                    return False
-                elif src_interface.get_obj_last_modified(src_key) > dst_interface.get_obj_last_modified(dst_key):
-                    return False
-                else:
-                    return True
-            except NoSuchObjectException:
-                return False
+        # algorithm: check all expected keys are present in the destination
+        #     by iteratively removing found keys from list_objects from a
+        #     precomputed dictionary of keys to check.
+        dst_keys = {dst_o.key: src_o for src_o, dst_o in job.transfer_pairs}
+        for obj in dst_interface.list_objects(dest_prefix):
+            # check metadata (src.size == dst.size) && (src.modified <= dst.modified)
+            src_obj = dst_keys.get(obj.key)
+            if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:
+                del dst_keys[obj.key]
 
-        # verify that all objects in src_interface are present in dst_interface
-        matches = do_parallel(verify, job.transfer_pairs, n=512, spinner=True, spinner_persist=True, desc="Verifying transfer")
-        failed_src_objs = [src_key for (src_key, dst_key), match in matches if not match]
-        if len(failed_src_objs) > 0:
+        if dst_keys:
             raise exceptions.TransferFailedException(
-                f"{len(failed_src_objs)} objects failed verification",
-                failed_src_objs,
+                f"{len(dst_keys)} objects failed verification",
+                [obj.key for obj in dst_keys.values()],
             )
-
-
-def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1) -> Dict[str, List[Server]]:
-    if instance_filter is None:
-        instance_filter = {"tags": {"skyplane": "true"}}
-    results = do_parallel(
-        lambda region: provider.get_matching_instances(region=region, **instance_filter),
-        region_list,
-        spinner=True,
-        n=n,
-        desc="Querying clouds for active instances",
-    )
-    return {r: ilist for r, ilist in results if ilist}

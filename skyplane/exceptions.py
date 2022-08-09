@@ -43,3 +43,7 @@ class TransferFailedException(SkyplaneException):
         if self.failed_objects and len(self.failed_objects) > 0:
             err += "\n[bold][red]Failed objects:[/red][/bold] " + str(self.failed_objects)
         return err
+
+
+class NoSuchObjectException(Exception):
+    pass
