@@ -1,6 +1,6 @@
 <picture>
     <source srcset="docs/_static/logo-dark-mode.png" media="(prefers-color-scheme: dark)">
-    <img src="docs/_static/logo-light-mode.png" width="500" />
+    <img src="docs/_static/logo-light-mode.png" width="300" />
 </picture>
 
 [![Join Slack](https://img.shields.io/badge/-Join%20Skyplane%20Slack-blue?logo=slack)](https://join.slack.com/t/skyplaneworkspace/shared_invite/zt-1cxmedcuc-GwIXLGyHTyOYELq7KoOl6Q)
