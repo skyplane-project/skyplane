@@ -79,7 +79,8 @@ def check_ulimit(hard_limit=1024 * 1024):
     if current_limit_hard < hard_limit:
         typer.secho(
             f"Warning: file limit is set to {current_limit_hard}, which is less than the recommended minimum of {hard_limit}",
-            fg="red", err=True,
+            fg="red",
+            err=True,
         )
         increase_ulimit = ["sudo", "sysctl", "-w", f"fs.file-max={hard_limit}"]
         typer.secho(f"Run the following command to increase the hard file limit to the recommended number ({hard_limit}):", fg="yellow")

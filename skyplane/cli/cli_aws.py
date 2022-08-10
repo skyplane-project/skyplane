@@ -111,7 +111,8 @@ def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
                 if (int(t.elapsed) > 300) and last_status == "LAUNCHING":
                     typer.secho(
                         "The process might have errored out. Try deleting the objects if they exist already and restart the transfer.",
-                        fg="red", err=True,
+                        fg="red",
+                        err=True,
                     )
         except KeyboardInterrupt:
             if last_status != "SUCCESS":

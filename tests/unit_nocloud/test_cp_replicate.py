@@ -40,6 +40,7 @@ def test_map_objects_no_dir():
     check_exception_raised(lambda: map_object_key_prefix("foo/", "bar", "foo/a.txt", "bar"), exceptions.MissingObjectException)
     check_exception_raised(lambda: map_object_key_prefix("foo", "foo/a.txt", "bar"), exceptions.MissingObjectException)
 
+
 def test_map_objects_no_prefix():
     assert map_object_key_prefix("a.txt", "a.txt", "") == "a.txt"
     # assert map_object_key_prefix("", "a.txt", "bar", recursive=False) == "bar/a.txt"

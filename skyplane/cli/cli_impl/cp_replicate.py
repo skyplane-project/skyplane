@@ -244,7 +244,8 @@ def launch_replication_job(
     if reuse_gateways:
         typer.secho(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skyplane deprovision` to deprovision gateways.",
-            fg="red", err=True,
+            fg="red",
+            err=True,
             bold=True,
         )
 

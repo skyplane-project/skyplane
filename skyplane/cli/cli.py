@@ -102,7 +102,9 @@ def cp(
         typer.secho("Local transfers are not yet supported (but will be soon!)", fg="red", err=True)
         typer.secho("Skyplane is currently most optimized for cloud to cloud transfers.", fg="yellow", err=True)
         typer.secho(
-            "Please provide feedback for on prem transfers at: https://github.com/skyplane-project/skyplane/discussions/424", fg="yellow", err=True
+            "Please provide feedback for on prem transfers at: https://github.com/skyplane-project/skyplane/discussions/424",
+            fg="yellow",
+            err=True,
         )
         raise typer.Exit(code=1)
     if provider_src in clouds and provider_dst in clouds:
@@ -121,7 +123,9 @@ def cp(
             raise typer.Exit(1)
 
         if multipart and (provider_src == "azure" or provider_dst == "azure"):
-            typer.secho("Warning: Azure is not yet supported for multipart transfers, you may observe slow performance", fg="yellow", err=True)
+            typer.secho(
+                "Warning: Azure is not yet supported for multipart transfers, you may observe slow performance", fg="yellow", err=True
+            )
             multipart = False
 
         topo = generate_topology(

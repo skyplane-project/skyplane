@@ -38,7 +38,9 @@ def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> Sk
             typer.secho(f"    AWS region config file saved to {aws_config_path}", fg="blue")
             return config
         else:
-            typer.secho("    AWS credentials not found in boto3 session, please use the AWS CLI to set them via `aws configure`", fg="red", err=True)
+            typer.secho(
+                "    AWS credentials not found in boto3 session, please use the AWS CLI to set them via `aws configure`", fg="red", err=True
+            )
             typer.secho("    https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html", fg="red", err=True)
             typer.secho("    Disabling AWS support", fg="blue")
             if auth is not None:
@@ -160,11 +162,13 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                     typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
                     typer.secho(
                         "    You will need to manually create a service principal and provide the Azure tenant ID, client ID, client secret and subscription ID. Follow the guide at: https://docs.microsoft.com/en-us/cli/azure/create-an-azure-service-principal-azure-cli",
-                        fg="red", err=True,
+                        fg="red",
+                        err=True,
                     )
                     typer.secho(
                         '    After you create the service principal, run `skyplane init --reinit-azure` to configure it and select "N" when asked "Do you want me to create an Azure service principal for you?"',
-                        fg="red", err=True,
+                        fg="red",
+                        err=True,
                     )
                     return clear_azure_config(config)
 
@@ -177,11 +181,13 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                     typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
                     typer.secho(
                         "    You will need to manually create a service principal and provide the Azure tenant ID, client ID, client secret and subscription ID. Follow the guide at: https://docs.microsoft.com/en-us/cli/azure/create-an-azure-service-principal-azure-cli",
-                        fg="red", err=True,
+                        fg="red",
+                        err=True,
                     )
                     typer.secho(
                         '    After you create the service principal, run `skyplane init --reinit-azure` to configure it and select "N" when asked "Do you want me to create an Azure service principal for you?"',
-                        fg="red", err=True,
+                        fg="red",
+                        err=True,
                     )
                     return clear_azure_config(config)
                 config.azure_tenant_id = sp_json["tenant"]
@@ -239,7 +245,8 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         except TimeoutError:
             typer.secho(
                 "    The Azure service principal doesn't have access to your storage accounts. Please ensure you have granted the service principal the Storage Blob Data Contributor and Storage Account Contributor roles.",
-                fg="red", err=True,
+                fg="red",
+                err=True,
             )
             return clear_azure_config(config)
         with Progress(
@@ -292,10 +299,7 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
         # check if GCP is enabled
         inferred_cred, inferred_project = GCPAuthentication.get_adc_credential()
         if inferred_cred is None or inferred_project is None:
-            typer.secho(
-                "    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.",
-                fg="red", err=True,
-            )
+            typer.secho("    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.", fg="red", err=True)
             typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red", err=True)
             return disable_gcp_support()
         else:
