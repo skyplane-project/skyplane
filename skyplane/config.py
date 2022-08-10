@@ -72,11 +72,7 @@ class SkyplaneConfig:
 
     @staticmethod
     def default_config() -> "SkyplaneConfig":
-        return SkyplaneConfig(
-            aws_enabled=False,
-            azure_enabled=False,
-            gcp_enabled=False,
-        )
+        return SkyplaneConfig(aws_enabled=False, azure_enabled=False, gcp_enabled=False)
 
     @staticmethod
     def load_config(path) -> "SkyplaneConfig":

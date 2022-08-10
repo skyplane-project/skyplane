@@ -17,12 +17,7 @@ import skyplane.cli.cli_solver
 import skyplane.cli.experiments
 from skyplane import config_path, exceptions, skyplane_root, cloud_config
 from skyplane.cli.common import print_header, console
-from skyplane.cli.cli_impl.cp_replicate import (
-    generate_full_transferobjlist,
-    generate_topology,
-    confirm_transfer,
-    launch_replication_job,
-)
+from skyplane.cli.cli_impl.cp_replicate import generate_full_transferobjlist, generate_topology, confirm_transfer, launch_replication_job
 from skyplane.replicate.replication_plan import ReplicationJob
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.common import parse_path, query_instances
@@ -147,11 +142,7 @@ def cp(
             dest_bucket=bucket_dst,
             transfer_pairs=transfer_pairs,
         )
-        confirm_transfer(
-            topo=topo,
-            job=job,
-            ask_to_confirm_transfer=not confirm,
-        )
+        confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
 
         stats = launch_replication_job(
             topo=topo,
@@ -177,10 +168,7 @@ def cp(
             if provider_dst == "azure":
                 typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True, err=True)
             else:
-                with Progress(
-                    SpinnerColumn(),
-                    TextColumn("Verifying all files were copied{task.description}"),
-                ) as progress:
+                with Progress(SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}")) as progress:
                     progress.add_task("", total=None)
                     ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
 
@@ -300,11 +288,7 @@ def sync(
         dest_bucket=bucket_dst,
         transfer_pairs=transfer_pairs,
     )
-    confirm_transfer(
-        topo=topo,
-        job=job,
-        ask_to_confirm_transfer=not confirm,
-    )
+    confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
     stats = launch_replication_job(
         topo=topo,
         job=job,
@@ -329,11 +313,7 @@ def sync(
         if provider_dst == "azure":
             typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True, err=True)
         else:
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("Verifying all files were copied{task.description}"),
-                transient=True,
-            ) as progress:
+            with Progress(SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}"), transient=True) as progress:
                 progress.add_task("", total=None)
                 ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
 

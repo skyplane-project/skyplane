@@ -26,14 +26,7 @@ def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, desc="Waiting", 
 
 
 def do_parallel(
-    func: Callable[[T], R],
-    args_list: Iterable[T],
-    n=-1,
-    desc=None,
-    arg_fmt=None,
-    return_args=True,
-    spinner=False,
-    spinner_persist=False,
+    func: Callable[[T], R], args_list: Iterable[T], n=-1, desc=None, arg_fmt=None, return_args=True, spinner=False, spinner_persist=False
 ) -> List[Union[Tuple[T, R], R]]:
     args_list = list(args_list)
     if len(args_list) == 0:

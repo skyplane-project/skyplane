@@ -61,19 +61,9 @@ def replicate_random(
         transfer_pairs=transfer_list,
         random_chunk_size_mb=total_transfer_size_mb // n_chunks,
     )
-    confirm_transfer(
-        topo=topo,
-        job=job,
-        ask_to_confirm_transfer=False,
-    )
+    confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=False)
     stats = launch_replication_job(
-        topo=topo,
-        job=job,
-        debug=debug,
-        reuse_gateways=reuse_gateways,
-        use_bbr=use_bbr,
-        use_compression=False,
-        use_e2ee=True,
+        topo=topo, job=job, debug=debug, reuse_gateways=reuse_gateways, use_bbr=use_bbr, use_compression=False, use_e2ee=True
     )
     return 0 if stats["success"] else 1
 
@@ -146,17 +136,6 @@ def replicate_random_solve(
         transfer_pairs=transfer_list,
         random_chunk_size_mb=total_transfer_size_mb // n_chunks,
     )
-    confirm_transfer(
-        topo=topo,
-        job=job,
-        ask_to_confirm_transfer=False,
-    )
-    stats = launch_replication_job(
-        topo=topo,
-        job=job,
-        debug=debug,
-        reuse_gateways=reuse_gateways,
-        use_bbr=use_bbr,
-        use_compression=False,
-    )
+    confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=False)
+    stats = launch_replication_job(topo=topo, job=job, debug=debug, reuse_gateways=reuse_gateways, use_bbr=use_bbr, use_compression=False)
     return 0 if stats["success"] else 1

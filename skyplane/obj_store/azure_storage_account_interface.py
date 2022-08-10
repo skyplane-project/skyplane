@@ -48,9 +48,7 @@ class AzureStorageAccountInterface:
     def create_storage_account(self, azure_region, resource_group, tier="Premium_LRS"):
         try:
             operation = self.storage_management_client.storage_accounts.begin_create(
-                resource_group,
-                self.account_name,
-                {"sku": {"name": tier}, "kind": "BlockBlobStorage", "location": azure_region},
+                resource_group, self.account_name, {"sku": {"name": tier}, "kind": "BlockBlobStorage", "location": azure_region}
             )
             operation.result()
         except ResourceExistsError as e:

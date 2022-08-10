@@ -299,18 +299,14 @@ class ThroughputSolverILP(ThroughputSolver):
                 # connect source instances to source gateway
                 if e.src_region == solution.problem.src and ("src", e.src_region, e.src_instance_idx) not in obj_store_edges:
                     replication_topology.add_objstore_instance_edge(
-                        src_region=e.src_region,
-                        dest_region=e.src_region,
-                        dest_instance=e.src_instance_idx,
+                        src_region=e.src_region, dest_region=e.src_region, dest_instance=e.src_instance_idx
                     )
                     obj_store_edges.add(("src", e.src_region, e.src_instance_idx))
 
                 # connect destination instances to destination gateway
                 if e.dst_region == solution.problem.dst and ("dst", e.dst_region, e.dst_instance_idx) not in obj_store_edges:
                     replication_topology.add_instance_objstore_edge(
-                        src_region=e.dst_region,
-                        src_instance=e.dst_instance_idx,
-                        dest_region=e.dst_region,
+                        src_region=e.dst_region, src_instance=e.dst_instance_idx, dest_region=e.dst_region
                     )
                     obj_store_edges.add(("dst", e.dst_region, e.dst_instance_idx))
 

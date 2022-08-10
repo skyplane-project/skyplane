@@ -151,9 +151,7 @@ class AWSCloudProvider(CloudProvider):
                 public_route_table.associate_with_subnet(SubnetId=subnet_id)
 
             # make security group named "skyplane"
-            tagSpecifications = [
-                {"Tags": [{"Key": "skyplane", "Value": "true"}], "ResourceType": "security-group"},
-            ]
+            tagSpecifications = [{"Tags": [{"Key": "skyplane", "Value": "true"}], "ResourceType": "security-group"}]
             sg = ec2.create_security_group(
                 GroupName="skyplane",
                 Description="Default security group for Skyplane VPC",
@@ -346,10 +344,7 @@ class AWSCloudProvider(CloudProvider):
         def instance_class_supported(az):
             # describe_instance_type_offerings
             offerings_list = ec2_client.describe_instance_type_offerings(
-                LocationType="availability-zone",
-                Filters=[
-                    {"Name": "location", "Values": [az]},
-                ],
+                LocationType="availability-zone", Filters=[{"Name": "location", "Values": [az]}]
             )
             offerings = [o for o in offerings_list["InstanceTypeOfferings"] if o["InstanceType"] == instance_class]
             return len(offerings) > 0
@@ -391,10 +386,7 @@ class AWSCloudProvider(CloudProvider):
                     }
                 ],
                 BlockDeviceMappings=[
-                    {
-                        "DeviceName": "/dev/sda1",
-                        "Ebs": {"DeleteOnTermination": True, "VolumeSize": ebs_volume_size, "VolumeType": "gp2"},
-                    }
+                    {"DeviceName": "/dev/sda1", "Ebs": {"DeleteOnTermination": True, "VolumeSize": ebs_volume_size, "VolumeType": "gp2"}}
                 ],
                 NetworkInterfaces=[
                     {

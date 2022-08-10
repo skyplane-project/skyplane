@@ -24,10 +24,7 @@ class Chunk:
 
     def to_wire_header(self, n_chunks_left_on_socket: int, wire_length: int, is_compressed: bool = False):
         return WireProtocolHeader(
-            chunk_id=self.chunk_id,
-            data_len=wire_length,
-            is_compressed=is_compressed,
-            n_chunks_left_on_socket=n_chunks_left_on_socket,
+            chunk_id=self.chunk_id, data_len=wire_length, is_compressed=is_compressed, n_chunks_left_on_socket=n_chunks_left_on_socket
         )
 
     def as_dict(self):

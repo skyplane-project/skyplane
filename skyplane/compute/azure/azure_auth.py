@@ -46,9 +46,7 @@ class AzureAuthentication:
     def credential(self) -> ClientSecretCredential:
         if self._credential is None:
             self._credential = ClientSecretCredential(
-                tenant_id=self.config.azure_tenant_id,
-                client_id=self.config.azure_client_id,
-                client_secret=self.config.azure_client_secret,
+                tenant_id=self.config.azure_tenant_id, client_id=self.config.azure_client_id, client_secret=self.config.azure_client_secret
             )
         return self._credential
 
