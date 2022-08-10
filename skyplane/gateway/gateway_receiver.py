@@ -11,7 +11,7 @@ from typing import Optional, Tuple
 
 import lz4.frame
 
-from skyplane import GB, MB
+from skyplane import MB
 from skyplane.chunk import WireProtocolHeader
 from skyplane.gateway.cert import generate_self_signed_certificate
 from skyplane.gateway.chunk_store import ChunkStore

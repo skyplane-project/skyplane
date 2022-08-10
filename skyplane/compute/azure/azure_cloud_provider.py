@@ -14,7 +14,6 @@ from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.utils import logger
-from skyplane.utils.fn import do_parallel
 from skyplane.utils.timer import Timer
 
 
@@ -103,11 +102,15 @@ class AzureCloudProvider(CloudProvider):
                 test_instance_name = f"{base_name}_v{version}" if version > 1 else base_name
                 if test_instance_name in sku_mapping[region]:
                     logger.fs.warning(
-                        f"[azure] Instance {instance_name} not found in region {region} but was able to find a similar instance {test_instance_name}"
+                        f"[azure] Instance {instance_name} not found in region {region} "
+                        "but was able to find a similar instance {test_instance_name}."
                     )
                     return test_instance_name
-        logger.fs.error(f"[azure] Instance {instance_name} not found in region {region} and could not infer a similar instance name.")
-        return None
+        logger.error(f"[azure] Instance {instance_name} not found in region {region} and could not infer a similar instance name.")
+        raise exceptions.InsufficientVCPUException(
+            f"Azure instance type {instance_name} is not available in region {region}. "
+            "Please contact Azure support to request capacity and then run `skyplane init --reinit-azure`."
+        )
 
     @staticmethod
     def get_transfer_cost(src_key, dst_key, premium_tier=True):
@@ -178,7 +181,9 @@ class AzureCloudProvider(CloudProvider):
                     server_list.append(s)
                 else:
                     logger.warning(
-                        f"Warning: malformed Azure instance {name} found and ignored. You should go to the Microsoft Azure portal, investigate this manually, and delete any orphaned resources that may be allocated."
+                        f"Warning: malformed Azure instance {name} found and ignored. "
+                        "You should go to the Microsoft Azure portal, investigate this manually, "
+                        "and delete any orphaned resources that may be allocated."
                     )
         return server_list
 
@@ -209,7 +214,9 @@ class AzureCloudProvider(CloudProvider):
 
                 if len(instances_to_terminate) > 0:
                     logger.warning(
-                        f"Note: there are {len(instances_to_terminate)} orphaned resources in the Azure resource group {AzureServer.resource_group_name}. Manually delete them from the Azure console: {[i.name for i in instances_to_terminate]}"
+                        f"Note: there are {len(instances_to_terminate)} orphaned resources "
+                        f"in the Azure resource group {AzureServer.resource_group_name}. "
+                        f"Manually delete them from the Azure console: {[i.name for i in instances_to_terminate]}"
                     )
             return
         rg_result = resource_client.resource_groups.create_or_update(
