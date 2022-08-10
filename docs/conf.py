@@ -88,9 +88,9 @@ html_theme_options = {
     "logo_only": True,
     "show_toc_level": 2,
 }
-html_logo = 'images/logo.png'
+html_logo = "images/logo.png"
 # html_favicon = '_static/favicon.png'
-html_static_path = ['images']
+html_static_path = ["images"]
 
 
 # -- Options for EPUB output
