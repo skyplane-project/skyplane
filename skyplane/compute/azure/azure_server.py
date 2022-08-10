@@ -15,14 +15,7 @@ class AzureServer(Server):
     resource_group_name = "skyplane"
     resource_group_location = "westus2"
 
-    def __init__(
-        self,
-        name: str,
-        key_root: PathLike = key_root / "azure",
-        log_dir=None,
-        ssh_private_key=None,
-        assume_exists=True,
-    ):
+    def __init__(self, name: str, key_root: PathLike = key_root / "azure", log_dir=None, ssh_private_key=None, assume_exists=True):
         self.auth = AzureAuthentication()
         self.name = name
         self.location = None
@@ -154,10 +147,7 @@ class AzureServer(Server):
         vm = self.get_virtual_machine()
         for assignment in auth_client.role_assignments.list(filter="principalId eq '{}'".format(vm.identity.principal_id)):
             logger.fs.debug(f"Deleting role assignment {assignment.name}")
-            auth_client.role_assignments.delete(
-                scope=assignment.scope,
-                role_assignment_name=assignment.name,
-            )
+            auth_client.role_assignments.delete(scope=assignment.scope, role_assignment_name=assignment.name)
 
         vm_poller = compute_client.virtual_machines.begin_delete(AzureServer.resource_group_name, self.vm_name(self.name))
         _ = vm_poller.result()

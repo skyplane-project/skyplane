@@ -150,11 +150,7 @@ class ReplicationTopology:
         edges = []
         for edge in in_dict["replication_topology_edges"]:
             edges.append(
-                (
-                    ReplicationTopologyNode.from_dict(edge["src"]),
-                    ReplicationTopologyNode.from_dict(edge["dest"]),
-                    edge["num_connections"],
-                )
+                (ReplicationTopologyNode.from_dict(edge["src"]), ReplicationTopologyNode.from_dict(edge["dest"]), edge["num_connections"])
             )
         return ReplicationTopology(edges)
 

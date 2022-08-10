@@ -59,10 +59,7 @@ def provision(
         }
         do_parallel(aws.add_ips_to_security_group, aws_regions_to_provision, spinner=True, desc="Add IP to aws security groups")
         do_parallel(
-            lambda x: aws.authorize_client(*x),
-            [(r, "0.0.0.0/0") for r in aws_regions_to_provision],
-            spinner=True,
-            desc="authorize client",
+            lambda x: aws.authorize_client(*x), [(r, "0.0.0.0/0") for r in aws_regions_to_provision], spinner=True, desc="authorize client"
         )
         aws_instances = refresh_instance_list(aws, aws_regions_to_provision, aws_instance_filter)
         missing_aws_regions = set(aws_regions_to_provision) - set(aws_instances.keys())

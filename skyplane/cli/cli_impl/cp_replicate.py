@@ -77,12 +77,7 @@ def generate_topology(
         return topo
 
 
-def map_object_key_prefix(
-    source_prefix: str,
-    source_key: str,
-    dest_prefix: str,
-    recursive: bool = False,
-):
+def map_object_key_prefix(source_prefix: str, source_key: str, dest_prefix: str, recursive: bool = False):
     """
     map_object_key_prefix computes the mapping of a source key in a bucket prefix to the destination.
     Users invoke a transfer via the CLI; aws s3 cp s3://bucket/source_prefix s3://bucket/dest_prefix.

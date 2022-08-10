@@ -31,13 +31,7 @@ class GatewayDaemonAPI(threading.Thread):
     """
 
     def __init__(
-        self,
-        chunk_store: ChunkStore,
-        gateway_receiver: GatewayReceiver,
-        error_event,
-        error_queue: Queue,
-        host="0.0.0.0",
-        port=8081,
+        self, chunk_store: ChunkStore, gateway_receiver: GatewayReceiver, error_event, error_queue: Queue, host="0.0.0.0", port=8081
     ):
         super().__init__()
         self.app = Flask("gateway_metadata_server")

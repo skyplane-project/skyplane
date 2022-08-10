@@ -55,10 +55,7 @@ def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
             "Statement": [{"Effect": "Allow", "Principal": {"Service": "datasync.amazonaws.com"}, "Action": "sts:AssumeRole"}],
         }
         response = iam_client.create_role(RoleName="datasync-role", AssumeRolePolicyDocument=json.dumps(policy))
-    iam_client.attach_role_policy(
-        RoleName="datasync-role",
-        PolicyArn="arn:aws:iam::aws:policy/AWSDataSyncFullAccess",
-    )
+    iam_client.attach_role_policy(RoleName="datasync-role", PolicyArn="arn:aws:iam::aws:policy/AWSDataSyncFullAccess")
     # attach s3:ListBucket to datasync-role
     iam_client.attach_role_policy(RoleName="datasync-role", PolicyArn="arn:aws:iam::aws:policy/AmazonS3FullAccess")
 
@@ -71,16 +68,12 @@ def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
 
     ds_client_src = aws_auth.get_boto3_client("datasync", src_region)
     src_response = ds_client_src.create_location_s3(
-        S3BucketArn=f"arn:aws:s3:::{src_bucket}",
-        Subdirectory=path,
-        S3Config={"BucketAccessRoleArn": iam_arn},
+        S3BucketArn=f"arn:aws:s3:::{src_bucket}", Subdirectory=path, S3Config={"BucketAccessRoleArn": iam_arn}
     )
     src_s3_arn = src_response["LocationArn"]
     ds_client_dst = aws_auth.get_boto3_client("datasync", dst_region)
     dst_response = ds_client_dst.create_location_s3(
-        S3BucketArn=f"arn:aws:s3:::{dst_bucket}",
-        Subdirectory=path,
-        S3Config={"BucketAccessRoleArn": iam_arn},
+        S3BucketArn=f"arn:aws:s3:::{dst_bucket}", Subdirectory=path, S3Config={"BucketAccessRoleArn": iam_arn}
     )
     dst_s3_arn = dst_response["LocationArn"]
 

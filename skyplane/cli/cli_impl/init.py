@@ -150,10 +150,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             typer.secho(f"        $ {create_sp_cmd}", fg="yellow")
 
             with Progress(
-                TextColumn("    "),
-                SpinnerColumn(),
-                TextColumn("Creating Skyplane service principal{task.description}"),
-                transient=True,
+                TextColumn("    "), SpinnerColumn(), TextColumn("Creating Skyplane service principal{task.description}"), transient=True
             ) as progress:
                 progress.add_task("", total=None)
                 out, err = subprocess.Popen(change_subscription_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
@@ -259,12 +256,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
 
 
 def check_gcp_service(gcp_auth: GCPAuthentication, non_interactive: bool = False):
-    services = {
-        "iam": "IAM",
-        "compute": "Compute Engine",
-        "storage": "Storage",
-        "cloudresourcemanager": "Cloud Resource Manager",
-    }
+    services = {"iam": "IAM", "compute": "Compute Engine", "storage": "Storage", "cloudresourcemanager": "Cloud Resource Manager"}
     for service, name in services.items():
         if not gcp_auth.check_api_enabled(service):
             typer.secho(f"    GCP {name} API not enabled", fg="red")
@@ -300,10 +292,7 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
         # check if GCP is enabled
         inferred_cred, inferred_project = GCPAuthentication.get_adc_credential()
         if inferred_cred is None or inferred_project is None:
-            typer.secho(
-                "    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.",
-                fg="red",
-            )
+            typer.secho("    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.", fg="red")
             typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red")
             return disable_gcp_support()
         else:
