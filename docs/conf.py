@@ -86,7 +86,7 @@ html_theme_options = {
     "sidebar_hide_name": True,
 }
 # html_logo = "_static/logo-light-mode.png"
-html_favicon = '_static/favicon.ico'
+html_favicon = "_static/favicon.ico"
 html_static_path = ["_static"]
 
 
