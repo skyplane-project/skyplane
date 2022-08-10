@@ -6,21 +6,25 @@ Welcome to Skyplane!
    <a href="https://join.slack.com/t/skyplaneworkspace/shared_invite/zt-1cxmedcuc-GwIXLGyHTyOYELq7KoOl6Q"><img src="https://img.shields.io/badge/-Join%20Skyplane%20Slack-blue?logo=slack" style="height: 30px;" /></a>
    <iframe src="https://ghbtns.com/github-btn.html?user=skyplane-project&repo=skyplane&type=star&count=true&size=large" frameborder="0" scrolling="0" width="170" height="30" title="GitHub"></iframe>
 
-
-**Skyplane** is an secure, open-source tool for blazingly fast data transfers cloud object stores.
-
 .. note::
 
    This project is under active development.
 
+**🔥 Blazing fast bulk data transfers between any cloud 🔥**
 
+Skyplane is a tool for blazingly fast bulk data transfers in the cloud. Skyplane manages parallelism, data partitioning, and network paths to optimize data transfers, and can also spin up VM instances to increase transfer throughput. 
 
-**skyplane cp copies files from one cloud provider to another**
+You can use Skyplane to transfer data: 
+* Between buckets within a cloud provider
+* Between object stores across multiple cloud providers
+* (experimental) Between local storage and cloud object stores
 
-Skyplane's cp command supports copying large datasets between cloud regions within a single provider:
+Copy a large dataset in the cloud in a minute, not hours:
 
 .. code-block:: bash
 
+   $ pip install skyplane
+   $ skyplane init
    $ skyplane [sync/cp] [local/s3/gcp/azure]://mybucket/big_dataset [local/s3/gcp/azure]://mybucket2/
 
 
