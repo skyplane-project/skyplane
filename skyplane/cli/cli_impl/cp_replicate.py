@@ -85,27 +85,39 @@ def map_object_key_prefix(source_prefix: str, source_key: str, dest_prefix: str,
     The CLI will query the object store for all objects in the source prefix and map them to the
     destination prefix using this function.
     """
+    join = lambda prefix, fname: prefix + fname if prefix.endswith("/") else prefix + "/" + fname
     print(f"map_object_key_prefix('{source_prefix}', '{source_key}', '{dest_prefix}', {recursive})")
+    src_fname = source_key.split("/")[-1] if "/" in source_key else source_key
     if not recursive:
-        if source_key.startswith(source_prefix):
-            if dest_prefix.endswith("/"):
-                src_name = source_key.split("/")[-1] if "/" in source_key else source_key
-                return f"{dest_prefix}{src_name}"
-            elif source_prefix == source_key:
+        if source_key == source_prefix:
+            if dest_prefix == "" or dest_prefix == "/":
+                return src_fname
+            elif dest_prefix[-1] == "/":
+                return dest_prefix + src_fname
+            else:
                 return dest_prefix
-        rprint(f"\n:x: [bold red]In order to transfer objects using a prefix, you must use the --recursive or -r flag.[/bold red]")
-        rprint(f"[yellow]If you meant to transfer a single object, pass the full source object key.[/yellow]")
-        rprint(f"[bright_black]Try running: [bold]skyplane {' '.join(sys.argv[1:])} --recursive[/bold][/bright_black]")
-        raise exceptions.MissingObjectException("Encountered a recursive transfer without the --recursive flag.")
-    else:
-        dest_prefix = dest_prefix if dest_prefix.endswith("/") else f"{dest_prefix}/"
-        source_prefix = source_prefix if source_prefix.endswith("/") else f"{source_prefix}/"
-        if source_key.startswith(source_prefix):
-            file_path = source_key[len(source_prefix) :]
-            return f"{dest_prefix}{file_path}"
         else:
-            rprint(f"\n:x: [bold red]The source key {source_key} does not start with the source prefix {source_prefix}[/bold red]")
-            raise exceptions.MissingObjectException(f"Source key {source_key} does not start with source prefix {source_prefix}")
+            rprint(f"\n:x: [bold red]In order to transfer objects using a prefix, you must use the --recursive or -r flag.[/bold red]")
+            rprint(f"[yellow]If you meant to transfer a single object, pass the full source object key.[/yellow]")
+            rprint(f"[bright_black]Try running: [bold]skyplane {' '.join(sys.argv[1:])} --recursive[/bold][/bright_black]")
+            raise exceptions.MissingObjectException("Encountered a recursive transfer without the --recursive flag.")
+    else:
+        if source_prefix == "" or source_prefix == "/":
+            if dest_prefix == "" or dest_prefix == "/":
+                return source_key
+            else:
+                return join(dest_prefix, source_key)
+        else:
+            # catch special case: map_object_key_prefix("foo", "foobar/baz.txt", "", recursive=True)
+            if not source_key.startswith(source_prefix + "/" if not source_prefix.endswith("/") else source_prefix):
+                rprint(f"\n:x: [bold red]The source key {source_key} does not start with the source prefix {source_prefix}[/bold red]")
+                raise exceptions.MissingObjectException(f"Source key {source_key} does not start with source prefix {source_prefix}")
+            if dest_prefix == "" or dest_prefix == "/":
+                return source_key[len(source_prefix) :]
+            else:
+                src_path_after_prefix = source_key[len(source_prefix) :]
+                src_path_after_prefix = src_path_after_prefix[1:] if src_path_after_prefix.startswith("/") else src_path_after_prefix
+                return join(dest_prefix, src_path_after_prefix)
 
 
 def generate_full_transferobjlist(

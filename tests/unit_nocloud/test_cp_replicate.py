@@ -41,10 +41,36 @@ def test_map_objects_no_dir():
     check_exception_raised(lambda: map_object_key_prefix("foo", "foo/a.txt", "bar"), exceptions.MissingObjectException)
 
 
-def test_map_objects_no_prefix():
+def test_map_objects_no_prefix_non_recursive():
+    # destination no prefix
     assert map_object_key_prefix("a.txt", "a.txt", "") == "a.txt"
-    # assert map_object_key_prefix("", "a.txt", "bar", recursive=False) == "bar/a.txt"
-    # assert map_object_key_prefix("foo/", "foo/a.txt", "", recursive=False) == "a.txt"
-    # assert map_object_key_prefix("", "a.txt", "", recursive=True) == "a.txt"
-    # assert map_object_key_prefix("", "a.txt", "bar", recursive=True) == "bar/a.txt"
-    # assert map_object_key_prefix("foo/", "foo/a.txt", "", recursive=True) == "a.txt"
+    assert map_object_key_prefix("a.txt", "a.txt", "/") == "a.txt"
+    assert map_object_key_prefix("foo/a.txt", "foo/a.txt", "") == "a.txt"
+    assert map_object_key_prefix("foo/a.txt", "foo/a.txt", "/") == "a.txt"
+    check_exception_raised(lambda: map_object_key_prefix("foo/a.txt", "foo/b.txt", ""), exceptions.MissingObjectException)
+
+    # source no prefix
+    check_exception_raised(lambda: map_object_key_prefix("", "foo/b.txt", ""), exceptions.MissingObjectException)
+    check_exception_raised(lambda: map_object_key_prefix("/", "foo/b.txt", ""), exceptions.MissingObjectException)
+    check_exception_raised(lambda: map_object_key_prefix("", "foo/b.txt", "bar"), exceptions.MissingObjectException)
+
+
+def test_map_objects_no_prefix_recursive():
+    assert map_object_key_prefix("", "foo/bar/baz.txt", "", recursive=True) == "foo/bar/baz.txt"
+    assert map_object_key_prefix("/", "foo/bar/baz.txt", "", recursive=True) == "foo/bar/baz.txt"
+    assert map_object_key_prefix("/", "foo/bar/baz.txt", "/", recursive=True) == "foo/bar/baz.txt"
+    assert map_object_key_prefix("", "foo/bar/baz.txt", "qux", recursive=True) == "qux/foo/bar/baz.txt"
+    assert map_object_key_prefix("/", "foo/bar/baz.txt", "qux", recursive=True) == "qux/foo/bar/baz.txt"
+    assert map_object_key_prefix("", "foo/bar/baz.txt", "qux/", recursive=True) == "qux/foo/bar/baz.txt"
+    assert map_object_key_prefix("/", "foo/bar/baz.txt", "qux/", recursive=True) == "qux/foo/bar/baz.txt"
+    assert map_object_key_prefix("/", "foo/bar/baz.txt", "qux", recursive=True) == "qux/foo/bar/baz.txt"
+    assert map_object_key_prefix("foo", "foo/bar/baz.txt", "qux", recursive=True) == "qux/bar/baz.txt"
+    assert map_object_key_prefix("foo/", "foo/bar/baz.txt", "qux", recursive=True) == "qux/bar/baz.txt"
+    check_exception_raised(lambda: map_object_key_prefix("foo", "foobar/baz.txt", "", recursive=True), exceptions.MissingObjectException)
+
+
+if __name__ == "__main__":
+    test_map_object_single_file()
+    test_map_object_recursive()
+    test_map_objects_no_dir()
+    test_map_objects_no_prefix_non_recursive()
