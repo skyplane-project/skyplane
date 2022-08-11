@@ -86,7 +86,6 @@ def map_object_key_prefix(source_prefix: str, source_key: str, dest_prefix: str,
     destination prefix using this function.
     """
     join = lambda prefix, fname: prefix + fname if prefix.endswith("/") else prefix + "/" + fname
-    print(f"map_object_key_prefix('{source_prefix}', '{source_key}', '{dest_prefix}', {recursive})")
     src_fname = source_key.split("/")[-1] if "/" in source_key else source_key
     if not recursive:
         if source_key == source_prefix:
@@ -152,14 +151,11 @@ def generate_full_transferobjlist(
         raise exceptions.MissingObjectException(f"No objects were found in the specified prefix {source_prefix} in {source_bucket}")
 
     # map objects to destination object paths
-    logger.debug(f"Mapping from '{source_prefix}' to '{dest_prefix}'")
     for source_obj in source_objs:
-        logger.debug(f"\t'{source_obj.key}' mapping to ")
         try:
             dest_key = map_object_key_prefix(source_prefix, source_obj.key, dest_prefix, recursive=recursive)
         except exceptions.MissingObjectException:
             raise typer.Exit(1)
-        logger.debug(f"\t\t'{dest_key}'")
         if dest_region.startswith("aws"):
             dest_obj = S3Object(dest_region.split(":")[0], dest_bucket, dest_key)
         elif dest_region.startswith("gcp"):
