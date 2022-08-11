@@ -69,6 +69,16 @@ def test_map_objects_no_prefix_recursive():
     check_exception_raised(lambda: map_object_key_prefix("foo", "foobar/baz.txt", "", recursive=True), exceptions.MissingObjectException)
 
 
+def test_map_objects_console_folder():
+    assert map_object_key_prefix("foo/", "foo/", "qux/") == "qux/"
+    assert map_object_key_prefix("foo/", "foo/", "") == "foo/"
+    assert map_object_key_prefix("foo/bar", "foo/bar", "qux/") == "qux/bar"
+
+    assert map_object_key_prefix("", "foo/", "", recursive=True) == "foo/"
+    assert map_object_key_prefix("/", "foo/", "", recursive=True) == "foo/"
+    assert map_object_key_prefix("/", "foo/", "qux/", recursive=True) == "qux/foo/"
+
+
 if __name__ == "__main__":
     test_map_object_single_file()
     test_map_object_recursive()
