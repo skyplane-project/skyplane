@@ -70,8 +70,11 @@ def test_map_objects_no_prefix_recursive():
 
 
 def test_map_objects_console_folder():
-    assert map_object_key_prefix("foo/", "foo/", "qux/") == "qux/"
+    assert map_object_key_prefix("foo", "foo", "qux") == "qux"
+    assert map_object_key_prefix("foo", "foo", "qux/") == "qux/foo"
+    assert map_object_key_prefix("foo/", "foo/", "qux/") == "qux/foo/"
     assert map_object_key_prefix("foo/", "foo/", "") == "foo/"
+    assert map_object_key_prefix("foo/", "foo/", "/") == "foo/"
     assert map_object_key_prefix("foo/bar", "foo/bar", "qux/") == "qux/bar"
 
     assert map_object_key_prefix("", "foo/", "", recursive=True) == "foo/"
