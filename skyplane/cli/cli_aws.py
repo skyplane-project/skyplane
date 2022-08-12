@@ -86,7 +86,7 @@ def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
         )
         task_arn = create_task_response["TaskArn"]
     except ds_client_dst.exceptions.InvalidRequestException:
-        typer.secho(f"Region not supported: {src_region} to {dst_region}", fg="red")
+        typer.secho(f"Region not supported: {src_region} to {dst_region}", fg="red", err=True)
         raise typer.Abort()
 
     with Timer() as t:
@@ -97,7 +97,7 @@ def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
             task_execution_response = ds_client_dst.describe_task_execution(TaskExecutionArn=task_execution_arn)
             if task_execution_response["Status"] != "SUCCESS":
                 ds_client_dst.cancel_task_execution(TaskExecutionArn=task_execution_arn)
-                typer.secho("Cancelling task", fg="red")
+                typer.secho("Cancelling task", fg="red", err=True)
 
         last_status = None
         try:
@@ -112,6 +112,7 @@ def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
                     typer.secho(
                         "The process might have errored out. Try deleting the objects if they exist already and restart the transfer.",
                         fg="red",
+                        err=True,
                     )
         except KeyboardInterrupt:
             if last_status != "SUCCESS":

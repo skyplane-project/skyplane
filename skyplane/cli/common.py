@@ -43,7 +43,7 @@ def parse_path(path: str):
     if path.startswith("s3://") or path.startswith("gs://"):
         provider, parsed = path[:2], path[5:]
         if len(parsed) == 0:
-            typer.secho(f"Invalid path: '{path}'", fg="red")
+            typer.secho(f"Invalid path: '{path}'", fg="red", err=True)
             raise typer.Exit(code=1)
         bucket, *keys = parsed.split("/", 1)
         key = keys[0] if len(keys) > 0 else ""
@@ -78,7 +78,9 @@ def check_ulimit(hard_limit=1024 * 1024):
     # check/update fs.file-max limit
     if current_limit_hard < hard_limit:
         typer.secho(
-            f"Warning: file limit is set to {current_limit_hard}, which is less than the recommended minimum of {hard_limit}", fg="red"
+            f"Warning: file limit is set to {current_limit_hard}, which is less than the recommended minimum of {hard_limit}",
+            fg="red",
+            err=True,
         )
         increase_ulimit = ["sudo", "sysctl", "-w", f"fs.file-max={hard_limit}"]
         typer.secho(f"Run the following command to increase the hard file limit to the recommended number ({hard_limit}):", fg="yellow")

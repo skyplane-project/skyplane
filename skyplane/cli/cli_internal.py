@@ -36,7 +36,9 @@ def replicate_random(
             topo.add_instance_instance_edge(src_region, i, inter_region, i, num_outgoing_connections)
             topo.add_instance_instance_edge(inter_region, i, dst_region, i, num_outgoing_connections)
     elif src_region == dst_region:
-        typer.secho("Replicate random doesn't support replicating to the same region as it tests inter-gateway networks.", fg="red")
+        typer.secho(
+            "Replicate random doesn't support replicating to the same region as it tests inter-gateway networks.", fg="red", err=True
+        )
         raise typer.Exit(code=1)
     else:
         topo = ReplicationTopology()

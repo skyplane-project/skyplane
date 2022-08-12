@@ -236,7 +236,7 @@ def throughput_grid(
     raw_iperf3_log_dir = log_dir / "raw_iperf3_logs"
 
     # ask for confirmation
-    typer.secho(f"\nExperiment configuration: (total pairs = {len(instance_pairs)})", fg="red", bold=True)
+    typer.secho(f"\nExperiment configuration: (total pairs = {len(instance_pairs)})", fg="red", err=True, bold=True)
     for group_idx, group in enumerate(groups):
         typer.secho(f"\tGroup {group_idx}: ({len(group)} items)", fg="green", bold=True)
         for instance_pair in group:
@@ -247,7 +247,7 @@ def throughput_grid(
     typer.secho(f"\niperf_runtime={iperf3_runtime}, iperf3_connections={iperf3_connections}", fg="blue")
     typer.secho(f"Approximate runtime: {len(groups) * (10 + iperf3_runtime)}s (assuming 10s startup time)", fg="blue")
     typer.secho(f"Approximate data to send: {gbyte_sent:.2f}GB (assuming 5Gbps)", fg="blue")
-    typer.secho(f"Approximate cost: ${gbyte_sent * 0.1:.2f} (assuming $0.10/GB)", fg="red")
+    typer.secho(f"Approximate cost: ${gbyte_sent * 0.1:.2f} (assuming $0.10/GB)", fg="red", err=True)
     logger.debug(f"Experiment tag: {experiment_tag}")
     logger.debug(f"Log directory: {log_dir}")
     sys.stdout.flush()
@@ -421,7 +421,7 @@ def latency_grid(
     log_dir = data_dir / "logs" / "latency_grid" / f"{experiment_tag}"
 
     # ask for confirmation
-    typer.secho(f"\nExperiment configuration: (total pairs = {len(instance_pairs)})", fg="red", bold=True)
+    typer.secho(f"\nExperiment configuration: (total pairs = {len(instance_pairs)})", fg="red", err=True, bold=True)
     logger.debug(f"Experiment tag: {experiment_tag}")
     logger.debug(f"Log directory: {log_dir}")
     sys.stdout.flush()
