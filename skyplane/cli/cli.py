@@ -33,7 +33,7 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
 from skyplane.utils.timer import Timer
-from skyplane._private import usage_stats
+from skyplane.cli.usage import usage_stats
 
 app = typer.Typer(name="skyplane")
 app.command()(cli_internal.replicate_random)
