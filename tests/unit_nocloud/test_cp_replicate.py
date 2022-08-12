@@ -88,10 +88,3 @@ def test_issue_490():  # from issue #490
     assert map_object_key_prefix("", "foo", "/", recursive=True) == "foo"
     assert map_object_key_prefix("/", "foo/", "", recursive=True) == "foo/"
     assert map_object_key_prefix("", "foo/", "", recursive=True) == "foo/"
-
-
-if __name__ == "__main__":
-    test_map_object_single_file()
-    test_map_object_recursive()
-    test_map_objects_no_dir()
-    test_map_objects_no_prefix_non_recursive()
