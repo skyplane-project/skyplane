@@ -5,9 +5,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-# generate a global client id
-clientid = uuid.uuid1()
-
 _FLAG_TYPES = {
     "autoconfirm": bool,
     "bbr": bool,
@@ -79,11 +76,13 @@ class SkyplaneConfig:
 
     @staticmethod
     def default_config() -> "SkyplaneConfig":
+        # generate a global client id
+        clientid = uuid.uuid4()
         return SkyplaneConfig(
             aws_enabled=False,
             azure_enabled=False,
             gcp_enabled=False,
-            clientid=clientid,  # import from __init__.py?
+            clientid=clientid,
         )
 
     @staticmethod
@@ -94,6 +93,11 @@ class SkyplaneConfig:
         if not path.exists():
             raise FileNotFoundError(f"Config file not found: {path}")
         config.read(path)
+
+        if "client" not in config:
+            raise ValueError("Clientid is not previously set in config.")
+        else:
+            clientid = config.get("client", "clientid")
 
         aws_enabled = False
         if "aws" in config:
@@ -176,7 +180,7 @@ class SkyplaneConfig:
 
         if "client" not in config:
             config.add_section("client")
-        config.set("client", "clientid", clientid)
+        config.set("client", "clientid", self.clientid)
 
         if "flags" not in config:
             config.add_section("flags")
