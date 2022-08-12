@@ -82,6 +82,14 @@ def test_map_objects_console_folder():
     assert map_object_key_prefix("/", "foo/", "qux/", recursive=True) == "qux/foo/"
 
 
+def test_issue_490():  # from issue #490
+    assert map_object_key_prefix("/", "foo/", "/", recursive=True) == "foo/"
+    assert map_object_key_prefix("/", "foo", "/", recursive=True) == "foo"
+    assert map_object_key_prefix("", "foo", "/", recursive=True) == "foo"
+    assert map_object_key_prefix("/", "foo/", "", recursive=True) == "foo/"
+    assert map_object_key_prefix("", "foo/", "", recursive=True) == "foo/"
+
+
 if __name__ == "__main__":
     test_map_object_single_file()
     test_map_object_recursive()
