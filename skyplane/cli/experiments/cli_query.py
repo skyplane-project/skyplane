@@ -37,7 +37,7 @@ def get_max_throughput(region_tag: str):
     elif provider == "azure":
         print(16)
     else:
-        typer.secho(f"Unknown provider: {provider}", fg="red")
+        typer.secho(f"Unknown provider: {provider}", fg="red", err=True)
         raise typer.Exit(1)
 
 

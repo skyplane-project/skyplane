@@ -118,13 +118,7 @@ class AzureBlobInterface(ObjectStoreInterface):
             raise
 
     def download_object(
-        self,
-        src_object_name,
-        dst_file_path,
-        offset_bytes=None,
-        size_bytes=None,
-        write_at_offset=False,
-        generate_md5=False,
+        self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5=False
     ) -> Optional[bytes]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         downloader = self._run_azure_op_with_retry(

@@ -2,6 +2,7 @@ import json
 import os
 import pathlib
 import signal
+import sys
 import traceback
 from typing import List, Optional, Tuple
 
@@ -34,7 +35,7 @@ def generate_topology(
 ) -> ReplicationTopology:
     if solve:
         if src_region == dst_region:
-            typer.secho("Solver is not supported for intra-region transfers, run without the --solve flag", fg="red")
+            typer.secho("Solver is not supported for intra-region transfers, run without the --solve flag", fg="red", err=True)
             raise typer.Exit(1)
 
         # build problem and solve
@@ -77,36 +78,45 @@ def generate_topology(
         return topo
 
 
-def map_object_key_prefix(
-    source_prefix: str,
-    source_key: str,
-    dest_prefix: str,
-    recursive: bool = False,
-):
+def map_object_key_prefix(source_prefix: str, source_key: str, dest_prefix: str, recursive: bool = False):
     """
     map_object_key_prefix computes the mapping of a source key in a bucket prefix to the destination.
     Users invoke a transfer via the CLI; aws s3 cp s3://bucket/source_prefix s3://bucket/dest_prefix.
     The CLI will query the object store for all objects in the source prefix and map them to the
     destination prefix using this function.
     """
+    join = lambda prefix, fname: prefix + fname if prefix.endswith("/") else prefix + "/" + fname
+    src_fname = source_key.split("/")[-1] if "/" in source_key and not source_key.endswith("/") else source_key
     if not recursive:
-        if source_key.startswith(source_prefix):
-            if dest_prefix.endswith("/"):
-                src_name = source_key.split("/")[-1]
-                return f"{dest_prefix}{src_name}"
-            elif source_prefix == source_key:
+        if source_key == source_prefix:
+            if dest_prefix == "" or dest_prefix == "/":
+                return src_fname
+            elif dest_prefix[-1] == "/":
+                return dest_prefix + src_fname
+            else:
                 return dest_prefix
-        raise exceptions.MissingObjectException(
-            f"Source key {source_key} does not start with source prefix {source_prefix}. To copy a directory, please use the '--recursive' flag"
-        )
-    else:
-        dest_prefix = dest_prefix if dest_prefix.endswith("/") else f"{dest_prefix}/"
-        source_prefix = source_prefix if source_prefix.endswith("/") else f"{source_prefix}/"
-        if source_key.startswith(source_prefix):
-            file_path = source_key[len(source_prefix) :]
-            return f"{dest_prefix}{file_path}"
         else:
-            raise exceptions.MissingObjectException(f"Source key {source_key} does not start with source prefix {source_prefix}")
+            rprint(f"\n:x: [bold red]In order to transfer objects using a prefix, you must use the --recursive or -r flag.[/bold red]")
+            rprint(f"[yellow]If you meant to transfer a single object, pass the full source object key.[/yellow]")
+            rprint(f"[bright_black]Try running: [bold]skyplane {' '.join(sys.argv[1:])} --recursive[/bold][/bright_black]")
+            raise exceptions.MissingObjectException("Encountered a recursive transfer without the --recursive flag.")
+    else:
+        if source_prefix == "" or source_prefix == "/":
+            if dest_prefix == "" or dest_prefix == "/":
+                return source_key
+            else:
+                return join(dest_prefix, source_key)
+        else:
+            # catch special case: map_object_key_prefix("foo", "foobar/baz.txt", "", recursive=True)
+            if not source_key.startswith(source_prefix + "/" if not source_prefix.endswith("/") else source_prefix):
+                rprint(f"\n:x: [bold red]The source key {source_key} does not start with the source prefix {source_prefix}[/bold red]")
+                raise exceptions.MissingObjectException(f"Source key {source_key} does not start with source prefix {source_prefix}")
+            if dest_prefix == "" or dest_prefix == "/":
+                return source_key[len(source_prefix) :]
+            else:
+                src_path_after_prefix = source_key[len(source_prefix) :]
+                src_path_after_prefix = src_path_after_prefix[1:] if src_path_after_prefix.startswith("/") else src_path_after_prefix
+                return join(dest_prefix, src_path_after_prefix)
 
 
 def generate_full_transferobjlist(
@@ -142,7 +152,10 @@ def generate_full_transferobjlist(
 
     # map objects to destination object paths
     for source_obj in source_objs:
-        dest_key = map_object_key_prefix(source_prefix, source_obj.key, dest_prefix, recursive=recursive)
+        try:
+            dest_key = map_object_key_prefix(source_prefix, source_obj.key, dest_prefix, recursive=recursive)
+        except exceptions.MissingObjectException:
+            raise typer.Exit(1)
         if dest_region.startswith("aws"):
             dest_obj = S3Object(dest_region.split(":")[0], dest_bucket, dest_key)
         elif dest_region.startswith("gcp"):
@@ -240,6 +253,7 @@ def launch_replication_job(
         typer.secho(
             f"Instances will remain up and may result in continued cloud billing. Remember to call `skyplane deprovision` to deprovision gateways.",
             fg="red",
+            err=True,
             bold=True,
         )
 
@@ -252,7 +266,7 @@ def launch_replication_job(
         gcp_instance_class=gcp_instance_class,
         gcp_use_premium_network=gcp_use_premium_network,
     )
-    typer.secho(f"Storing debug information for transfer in {rc.transfer_dir / 'client.log'}", fg="yellow")
+    typer.secho(f"Storing debug information for transfer in {rc.transfer_dir / 'client.log'}", fg="yellow", err=True)
     (rc.transfer_dir / "topology.json").write_text(topo.to_json())
 
     stats = {}
@@ -316,8 +330,8 @@ def launch_replication_job(
     if stats["monitor_status"] == "error":
         for instance, errors in stats["errors"].items():
             for error in errors:
-                typer.secho(f"\n❌ {instance} encountered error:", fg="red", bold=True)
-                typer.secho(error, fg="red")
+                typer.secho(f"\n❌ {instance} encountered error:", fg="red", err=True, bold=True)
+                typer.secho(error, fg="red", err=True)
         raise typer.Exit(1)
 
     # print stats

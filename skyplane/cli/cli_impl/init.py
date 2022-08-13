@@ -38,8 +38,10 @@ def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> Sk
             typer.secho(f"    AWS region config file saved to {aws_config_path}", fg="blue")
             return config
         else:
-            typer.secho("    AWS credentials not found in boto3 session, please use the AWS CLI to set them via `aws configure`", fg="red")
-            typer.secho("    https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html", fg="red")
+            typer.secho(
+                "    AWS credentials not found in boto3 session, please use the AWS CLI to set them via `aws configure`", fg="red", err=True
+            )
+            typer.secho("    https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html", fg="red", err=True)
             typer.secho("    Disabling AWS support", fg="blue")
             if auth is not None:
                 auth.clear_region_config()
@@ -72,7 +74,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
 
     if non_interactive or typer.confirm("    Do you want to configure Azure support in Skyplane?", default=True):
         if force_init:
-            typer.secho("    Azure credentials will be re-initialized", fg="red")
+            typer.secho("    Azure credentials will be re-initialized", fg="red", err=True)
             clear_azure_config(config, verbose=False)
         if (
             config.azure_enabled
@@ -123,7 +125,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                 or not config.azure_client_secret
                 or not config.azure_subscription_id
             ):
-                typer.secho("    Azure credentials not configured correctly, disabling Azure support.", fg="red")
+                typer.secho("    Azure credentials not configured correctly, disabling Azure support.", fg="red", err=True)
                 return clear_azure_config(config)
 
             typer.secho("    Azure credentials configured successfully!", fg="blue")
@@ -135,7 +137,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             if not non_interactive and not typer.confirm(
                 "    Have you authorized the service principal by running the above commands?", default=True
             ):
-                typer.secho("    Please authorize the service principal before continuing.", fg="red")
+                typer.secho("    Please authorize the service principal before continuing.", fg="red", err=True)
                 return clear_azure_config(config)
         # walk user through setting up an Azure service principal
         else:
@@ -150,24 +152,23 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             typer.secho(f"        $ {create_sp_cmd}", fg="yellow")
 
             with Progress(
-                TextColumn("    "),
-                SpinnerColumn(),
-                TextColumn("Creating Skyplane service principal{task.description}"),
-                transient=True,
+                TextColumn("    "), SpinnerColumn(), TextColumn("Creating Skyplane service principal{task.description}"), transient=True
             ) as progress:
                 progress.add_task("", total=None)
                 out, err = subprocess.Popen(change_subscription_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
                 if out or err:
-                    typer.secho(f"    Error running command: {change_subscription_cmd}", fg="red")
-                    typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red")
-                    typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red")
+                    typer.secho(f"    Error running command: {change_subscription_cmd}", fg="red", err=True)
+                    typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red", err=True)
+                    typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
                     typer.secho(
                         "    You will need to manually create a service principal and provide the Azure tenant ID, client ID, client secret and subscription ID. Follow the guide at: https://docs.microsoft.com/en-us/cli/azure/create-an-azure-service-principal-azure-cli",
                         fg="red",
+                        err=True,
                     )
                     typer.secho(
                         '    After you create the service principal, run `skyplane init --reinit-azure` to configure it and select "N" when asked "Do you want me to create an Azure service principal for you?"',
                         fg="red",
+                        err=True,
                     )
                     return clear_azure_config(config)
 
@@ -175,16 +176,18 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                 try:
                     sp_json = json.loads(out.decode("utf-8"))
                 except:
-                    typer.secho(f"    Error running command: {create_sp_cmd}", fg="red")
-                    typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red")
-                    typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red")
+                    typer.secho(f"    Error running command: {create_sp_cmd}", fg="red", err=True)
+                    typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red", err=True)
+                    typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
                     typer.secho(
                         "    You will need to manually create a service principal and provide the Azure tenant ID, client ID, client secret and subscription ID. Follow the guide at: https://docs.microsoft.com/en-us/cli/azure/create-an-azure-service-principal-azure-cli",
                         fg="red",
+                        err=True,
                     )
                     typer.secho(
                         '    After you create the service principal, run `skyplane init --reinit-azure` to configure it and select "N" when asked "Do you want me to create an Azure service principal for you?"',
                         fg="red",
+                        err=True,
                     )
                     return clear_azure_config(config)
                 config.azure_tenant_id = sp_json["tenant"]
@@ -197,7 +200,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                 or not config.azure_client_secret
                 or not config.azure_subscription_id
             ):
-                typer.secho("    Azure credentials not configured correctly, disabling Azure support.", fg="red")
+                typer.secho("    Azure credentials not configured correctly, disabling Azure support.", fg="red", err=True)
                 return clear_azure_config(config)
 
             # authorize new service principal with Storage Blob Data Contributor and Storage Account Contributor roles to the subscription
@@ -219,9 +222,9 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                 for role_cmd in role_cmds:
                     out, err = subprocess.Popen(role_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
                     if err:
-                        typer.secho(f"    Error running command: {role_cmd}", fg="red")
-                        typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red")
-                        typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red")
+                        typer.secho(f"    Error running command: {role_cmd}", fg="red", err=True)
+                        typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red", err=True)
+                        typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
                         return clear_azure_config(config)
             typer.secho(
                 f"    Azure service principal created successfully! To delete it, run `az ad sp delete --id {config.azure_client_id}`.",
@@ -243,6 +246,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             typer.secho(
                 "    The Azure service principal doesn't have access to your storage accounts. Please ensure you have granted the service principal the Storage Blob Data Contributor and Storage Account Contributor roles.",
                 fg="red",
+                err=True,
             )
             return clear_azure_config(config)
         with Progress(
@@ -259,15 +263,10 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
 
 
 def check_gcp_service(gcp_auth: GCPAuthentication, non_interactive: bool = False):
-    services = {
-        "iam": "IAM",
-        "compute": "Compute Engine",
-        "storage": "Storage",
-        "cloudresourcemanager": "Cloud Resource Manager",
-    }
+    services = {"iam": "IAM", "compute": "Compute Engine", "storage": "Storage", "cloudresourcemanager": "Cloud Resource Manager"}
     for service, name in services.items():
         if not gcp_auth.check_api_enabled(service):
-            typer.secho(f"    GCP {name} API not enabled", fg="red")
+            typer.secho(f"    GCP {name} API not enabled", fg="red", err=True)
             if non_interactive or typer.confirm(f"    Do you want to enable the {name} API?", default=True):
                 gcp_auth.enable_api(service)
                 typer.secho(f"    Enabled GCP {name} API", fg="blue")
@@ -286,10 +285,10 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
 
     if non_interactive or typer.confirm("    Do you want to configure GCP support in Skyplane?", default=True):
         if force_init:
-            typer.secho("    GCP credentials will be re-initialized", fg="red")
+            typer.secho("    GCP credentials will be re-initialized", fg="red", err=True)
             config.gcp_project_id = None
         elif not Path(gcp_config_path).is_file():
-            typer.secho("    GCP region config missing! GCP will be reconfigured.", fg="red")
+            typer.secho("    GCP region config missing! GCP will be reconfigured.", fg="red", err=True)
             config.gcp_project_id = None
 
         if config.gcp_project_id is not None:
@@ -300,11 +299,8 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
         # check if GCP is enabled
         inferred_cred, inferred_project = GCPAuthentication.get_adc_credential()
         if inferred_cred is None or inferred_project is None:
-            typer.secho(
-                "    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.",
-                fg="red",
-            )
-            typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red")
+            typer.secho("    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.", fg="red", err=True)
+            typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red", err=True)
             return disable_gcp_support()
         else:
             typer.secho("    GCP credentials found in GCP CLI", fg="blue")
@@ -322,8 +318,8 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
                 try:
                     auth.save_region_config()
                 except Exception as e:
-                    typer.secho(f"    Error saving GCP region config", fg="red")
-                    typer.secho(f"    {e}\n{traceback.format_exc()}", fg="red")
+                    typer.secho(f"    Error saving GCP region config", fg="red", err=True)
+                    typer.secho(f"    {e}\n{traceback.format_exc()}", fg="red", err=True)
                     return disable_gcp_support()
                 return config
             else:

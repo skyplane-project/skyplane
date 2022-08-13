@@ -85,11 +85,7 @@ class AWSAuthentication:
 
     def get_boto3_session(self, aws_region: Optional[str] = None):
         if self.config_mode == "manual":
-            return boto3.Session(
-                aws_access_key_id=self.access_key,
-                aws_secret_access_key=self.secret_key,
-                region_name=aws_region,
-            )
+            return boto3.Session(aws_access_key_id=self.access_key, aws_secret_access_key=self.secret_key, region_name=aws_region)
         else:
             return boto3.Session(region_name=aws_region)
 

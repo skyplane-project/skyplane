@@ -316,11 +316,7 @@ class ReplicatorClient:
             "gcp",
         ], f"Only AWS, Azure, and GCP are supported, but got {job.dest_region}"
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("Preparing replication plan{task.description}"),
-            transient=True,
-        ) as progress:
+        with Progress(SpinnerColumn(), TextColumn("Preparing replication plan{task.description}"), transient=True) as progress:
             prepare_task = progress.add_task("", total=None)
 
             # pre-fetch instance IPs for all gateways
@@ -555,10 +551,7 @@ class ReplicatorClient:
                             write_profile = True
                             write_socket_profile = True
 
-                            return {
-                                "errors": errors,
-                                "monitor_status": "error",
-                            }
+                            return {"errors": errors, "monitor_status": "error"}
 
                         log_df = self.get_chunk_status_log_df()
                         if log_df.empty:
@@ -629,11 +622,7 @@ class ReplicatorClient:
                             time.sleep(0.01 if show_spinner else 0.25)
         # always run cleanup, even if there's an exception
         finally:
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("Cleaning up after transfer{task.description}"),
-                transient=True,
-            ) as progress:
+            with Progress(SpinnerColumn(), TextColumn("Cleaning up after transfer{task.description}"), transient=True) as progress:
                 cleanup_task = progress.add_task("", total=None)
 
                 # get compression ratio information from destination gateways using "/api/v1/profile/compression"
@@ -709,7 +698,4 @@ class ReplicatorClient:
                 del dst_keys[obj.key]
 
         if dst_keys:
-            raise exceptions.TransferFailedException(
-                f"{len(dst_keys)} objects failed verification",
-                [obj.key for obj in dst_keys.values()],
-            )
+            raise exceptions.TransferFailedException(f"{len(dst_keys)} objects failed verification", [obj.key for obj in dst_keys.values()])

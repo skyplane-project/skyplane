@@ -43,7 +43,7 @@ def parse_path(path: str):
     if path.startswith("s3://") or path.startswith("gs://"):
         provider, parsed = path[:2], path[5:]
         if len(parsed) == 0:
-            typer.secho(f"Invalid path: '{path}'", fg="red")
+            typer.secho(f"Invalid path: '{path}'", fg="red", err=True)
             raise typer.Exit(code=1)
         bucket, *keys = parsed.split("/", 1)
         key = keys[0] if len(keys) > 0 else ""
@@ -80,18 +80,13 @@ def check_ulimit(hard_limit=1024 * 1024):
         typer.secho(
             f"Warning: file limit is set to {current_limit_hard}, which is less than the recommended minimum of {hard_limit}",
             fg="red",
+            err=True,
         )
         increase_ulimit = ["sudo", "sysctl", "-w", f"fs.file-max={hard_limit}"]
-        typer.secho(
-            f"Run the following command to increase the hard file limit to the recommended number ({hard_limit}):",
-            fg="yellow",
-        )
+        typer.secho(f"Run the following command to increase the hard file limit to the recommended number ({hard_limit}):", fg="yellow")
         typer.secho(f"    {' '.join(increase_ulimit)}", fg="yellow")
     else:
-        typer.secho(
-            f"File limit greater than recommended minimum of {hard_limit}.",
-            fg="blue",
-        )
+        typer.secho(f"File limit greater than recommended minimum of {hard_limit}.", fg="blue")
 
 
 def query_instances():
@@ -118,12 +113,7 @@ def query_instances():
         query_jobs.append(catch_error(lambda: GCPCloudProvider().get_matching_instances()))
     # query in parallel
     for instance_list in do_parallel(
-        lambda f: f(),
-        query_jobs,
-        n=-1,
-        return_args=False,
-        spinner=True,
-        desc="Querying clouds for instances",
+        lambda f: f(), query_jobs, n=-1, return_args=False, spinner=True, desc="Querying clouds for instances"
     ):
         instances.extend(instance_list)
     return instances

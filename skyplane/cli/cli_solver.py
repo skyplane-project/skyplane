@@ -76,7 +76,7 @@ def solve_throughput(
                 except FileNotFoundError as e:
                     logger.error(f"Could not render graph: {e}")
     else:
-        typer.secho("Solution is infeasible", fg="red")
+        typer.secho("Solution is infeasible", fg="red", err=True)
         raise typer.Exit(1)
 
     # print json summarizing solution

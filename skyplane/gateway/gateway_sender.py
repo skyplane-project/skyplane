@@ -166,10 +166,7 @@ class GatewaySender:
             register_body = json.dumps([c.as_dict() for c in chunk_reqs]).encode("utf-8")
         with Timer(f"pre-register chunks {chunk_ids} to {dst_host}"):
             response = self.http_pool.request(
-                "POST",
-                f"https://{dst_host}:8080/api/v1/chunk_requests",
-                body=register_body,
-                headers={"Content-Type": "application/json"},
+                "POST", f"https://{dst_host}:8080/api/v1/chunk_requests", body=register_body, headers={"Content-Type": "application/json"}
             )
             assert response.status == 200 and json.loads(response.data.decode("utf-8")).get("status") == "ok"
             logger.debug(f"[sender:{self.worker_id}]:{chunk_ids} registered chunks")

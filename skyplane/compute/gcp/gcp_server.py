@@ -10,14 +10,7 @@ from skyplane.utils.fn import PathLike
 
 
 class GCPServer(Server):
-    def __init__(
-        self,
-        region_tag: str,
-        instance_name: str,
-        key_root: PathLike = key_root / "gcp",
-        log_dir=None,
-        ssh_private_key=None,
-    ):
+    def __init__(self, region_tag: str, instance_name: str, key_root: PathLike = key_root / "gcp", log_dir=None, ssh_private_key=None):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "gcp", f"Region name doesn't match pattern gcp:<region> {self.region_tag}"
         self.gcp_region = self.region_tag.split(":")[1]

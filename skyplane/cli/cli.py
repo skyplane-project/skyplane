@@ -17,12 +17,7 @@ import skyplane.cli.cli_solver
 import skyplane.cli.experiments
 from skyplane import config_path, exceptions, skyplane_root, cloud_config
 from skyplane.cli.common import print_header, console
-from skyplane.cli.cli_impl.cp_replicate import (
-    generate_full_transferobjlist,
-    generate_topology,
-    confirm_transfer,
-    launch_replication_job,
-)
+from skyplane.cli.cli_impl.cp_replicate import generate_full_transferobjlist, generate_topology, confirm_transfer, launch_replication_job
 from skyplane.replicate.replication_plan import ReplicationJob
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.common import parse_path, query_instances
@@ -106,10 +101,12 @@ def cp(
     clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
 
     if provider_src == "local" or provider_dst == "local":
-        typer.secho("Local transfers are not yet supported (but will be soon!)", fg="red")
-        typer.secho("Skyplane is currently most optimized for cloud to cloud transfers.", fg="yellow")
+        typer.secho("Local transfers are not yet supported (but will be soon!)", fg="red", err=True)
+        typer.secho("Skyplane is currently most optimized for cloud to cloud transfers.", fg="yellow", err=True)
         typer.secho(
-            "Please provide feedback for on prem transfers at: https://github.com/skyplane-project/skyplane/discussions/424", fg="yellow"
+            "Please provide feedback for on prem transfers at: https://github.com/skyplane-project/skyplane/discussions/424",
+            fg="yellow",
+            err=True,
         )
         raise typer.Exit(code=1)
     if provider_src in clouds and provider_dst in clouds:
@@ -128,7 +125,9 @@ def cp(
             raise typer.Exit(1)
 
         if multipart and (provider_src == "azure" or provider_dst == "azure"):
-            typer.secho("Warning: Azure is not yet supported for multipart transfers, you may observe slow performance", fg="yellow")
+            typer.secho(
+                "Warning: Azure is not yet supported for multipart transfers, you may observe slow performance", fg="yellow", err=True
+            )
             multipart = False
 
         topo = generate_topology(
@@ -149,11 +148,7 @@ def cp(
             dest_bucket=bucket_dst,
             transfer_pairs=transfer_pairs,
         )
-        confirm_transfer(
-            topo=topo,
-            job=job,
-            ask_to_confirm_transfer=not confirm,
-        )
+        confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
 
         stats = launch_replication_job(
             topo=topo,
@@ -177,12 +172,9 @@ def cp(
         if cloud_config.get_flag("verify_checksums"):
             provider_dst = topo.sink_region().split(":")[0]
             if provider_dst == "azure":
-                typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
+                typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True, err=True)
             else:
-                with Progress(
-                    SpinnerColumn(),
-                    TextColumn("Verifying all files were copied{task.description}"),
-                ) as progress:
+                with Progress(SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}")) as progress:
                     progress.add_task("", total=None)
                     ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
 
@@ -280,7 +272,7 @@ def sync(
         raise typer.Exit(0)
 
     if multipart and (provider_src == "azure" or provider_dst == "azure"):
-        typer.secho("Warning: Azure is not yet supported for multipart transfers, you may observe slow performance", fg="yellow")
+        typer.secho("Warning: Azure is not yet supported for multipart transfers, you may observe slow performance", fg="yellow", err=True)
         multipart = False
 
     topo = generate_topology(
@@ -302,11 +294,7 @@ def sync(
         dest_bucket=bucket_dst,
         transfer_pairs=transfer_pairs,
     )
-    confirm_transfer(
-        topo=topo,
-        job=job,
-        ask_to_confirm_transfer=not confirm,
-    )
+    confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
     stats = launch_replication_job(
         topo=topo,
         job=job,
@@ -329,13 +317,9 @@ def sync(
     if cloud_config.get_flag("verify_checksums"):
         provider_dst = topo.sink_region().split(":")[0]
         if provider_dst == "azure":
-            typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True)
+            typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True, err=True)
         else:
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("Verifying all files were copied{task.description}"),
-                transient=True,
-            ) as progress:
+            with Progress(SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}"), transient=True) as progress:
                 progress.add_task("", total=None)
                 ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
 
@@ -370,7 +354,7 @@ def ssh():
     """SSH into a running gateway."""
     instances = query_instances()
     if len(instances) == 0:
-        typer.secho(f"No instances found", fg="red")
+        typer.secho(f"No instances found", fg="red", err=True)
         raise typer.Abort()
 
     instance_map = {f"{i.region_tag}, {i.public_ip()} ({i.instance_state()})": i for i in instances}

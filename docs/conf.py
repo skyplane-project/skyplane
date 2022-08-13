@@ -19,7 +19,7 @@ copyright = "2022, The Skyplane authors"
 author = "The Skyplane authors"
 
 release = "0.1"
-version = "0.1.1"
+version = "0.1.2"
 
 # -- General configuration
 
@@ -47,10 +47,7 @@ extensions = [
     # 'matplotlib.sphinxext.plot_directive',
 ]
 
-intersphinx_mapping = {
-    "python": ("https://docs.python.org/3/", None),
-    "sphinx": ("https://www.sphinx-doc.org/en/master/", None),
-}
+intersphinx_mapping = {"python": ("https://docs.python.org/3/", None), "sphinx": ("https://www.sphinx-doc.org/en/master/", None)}
 intersphinx_disabled_domains = ["std"]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -80,17 +77,10 @@ exclude_patterns = ["build", "_build", "Thumbs.db", ".DS_Store", "README.md"]
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 html_theme = "furo"
-
-# Theme options are theme-specific and customize the look and feel of a theme
-# further.  For a list of options available for each theme, see the
-# documentation.
-# html_theme_options = {
-#     "logo_only": True,
-#     "show_toc_level": 2,
-# }
-# html_logo = '_static/jax_logo_250px.png'
-# html_favicon = '_static/favicon.png'
-# html_static_path = ['_static']
+html_theme_options = {"light_logo": "logo-light-mode.png", "dark_logo": "logo-dark-mode.png", "sidebar_hide_name": True}
+# html_logo = "_static/logo-light-mode.png"
+html_favicon = "_static/favicon.ico"
+html_static_path = ["_static"]
 
 
 # -- Options for EPUB output

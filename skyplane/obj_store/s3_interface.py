@@ -112,10 +112,7 @@ class S3Interface(ObjectStoreInterface):
             byte_range = f"bytes={offset_bytes}-{offset_bytes + size_bytes - 1}"
             response = s3_client.get_object(Bucket=self.bucket_name, Key=src_object_name, Range=byte_range)
         else:
-            response = s3_client.get_object(
-                Bucket=self.bucket_name,
-                Key=src_object_name,
-            )
+            response = s3_client.get_object(Bucket=self.bucket_name, Key=src_object_name)
 
         # write response data
         if not os.path.exists(dst_file_path):
@@ -152,12 +149,7 @@ class S3Interface(ObjectStoreInterface):
                         **checksum_args,
                     )
                 else:
-                    s3_client.put_object(
-                        Body=f,
-                        Key=dst_object_name,
-                        Bucket=self.bucket_name,
-                        **checksum_args,
-                    )
+                    s3_client.put_object(Body=f, Key=dst_object_name, Bucket=self.bucket_name, **checksum_args)
         except botocore.exceptions.ClientError as e:
             # catch MD5 mismatch error and raise appropriate exception
             if "Error" in e.response and "Code" in e.response["Error"] and e.response["Error"]["Code"] == "InvalidDigest":

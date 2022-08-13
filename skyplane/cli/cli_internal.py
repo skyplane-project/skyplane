@@ -36,7 +36,9 @@ def replicate_random(
             topo.add_instance_instance_edge(src_region, i, inter_region, i, num_outgoing_connections)
             topo.add_instance_instance_edge(inter_region, i, dst_region, i, num_outgoing_connections)
     elif src_region == dst_region:
-        typer.secho("Replicate random doesn't support replicating to the same region as it tests inter-gateway networks.", fg="red")
+        typer.secho(
+            "Replicate random doesn't support replicating to the same region as it tests inter-gateway networks.", fg="red", err=True
+        )
         raise typer.Exit(code=1)
     else:
         topo = ReplicationTopology()
@@ -61,19 +63,9 @@ def replicate_random(
         transfer_pairs=transfer_list,
         random_chunk_size_mb=total_transfer_size_mb // n_chunks,
     )
-    confirm_transfer(
-        topo=topo,
-        job=job,
-        ask_to_confirm_transfer=False,
-    )
+    confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=False)
     stats = launch_replication_job(
-        topo=topo,
-        job=job,
-        debug=debug,
-        reuse_gateways=reuse_gateways,
-        use_bbr=use_bbr,
-        use_compression=False,
-        use_e2ee=True,
+        topo=topo, job=job, debug=debug, reuse_gateways=reuse_gateways, use_bbr=use_bbr, use_compression=False, use_e2ee=True
     )
     return 0 if stats["success"] else 1
 
@@ -146,17 +138,6 @@ def replicate_random_solve(
         transfer_pairs=transfer_list,
         random_chunk_size_mb=total_transfer_size_mb // n_chunks,
     )
-    confirm_transfer(
-        topo=topo,
-        job=job,
-        ask_to_confirm_transfer=False,
-    )
-    stats = launch_replication_job(
-        topo=topo,
-        job=job,
-        debug=debug,
-        reuse_gateways=reuse_gateways,
-        use_bbr=use_bbr,
-        use_compression=False,
-    )
+    confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=False)
+    stats = launch_replication_job(topo=topo, job=job, debug=debug, reuse_gateways=reuse_gateways, use_bbr=use_bbr, use_compression=False)
     return 0 if stats["success"] else 1
