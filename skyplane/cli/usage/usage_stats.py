@@ -38,6 +38,7 @@ def usage_stats_enabledness():
         )
     # then check in the config file
     usage_stats_enabled_config_var = None
+    # TODO: Check the correct error
     try:
         usage_stats_enabled_config_var = cloud_config.get_flag("usage_stats")
     except FileNotFoundError:
@@ -73,8 +74,10 @@ def set_usage_stats_via_config(value):
 
 
 # Redacted: Should set environment variable directly from command line
-# def set_usage_stats_via_env_var(value) -> None:
-#     os.environ[usage_constants.USAGE_STATS_ENABLED_ENV_VAR] = "1" if value else "0"
+# def set_usage_stats_via_env_var(value):
+#     if value != "0" and value != "1":
+#         raise ValueError("Valid value for usage_stats_env_var is 0 or 1, but got " + str(value))
+#     os.environ[usage_constants.USAGE_STATS_ENABLED_ENV_VAR] = value
 
 
 def show_usage_stats_prompt():
