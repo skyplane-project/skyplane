@@ -61,6 +61,16 @@ def usage_stats_enabled():
 
 
 def set_usage_stats_via_config(value):
+    current_status = usage_stats_enabledness()
+    if current_status is UsageStatsEnabledness.DISABLED_EXPLICITLY:
+        if (isinstance(value, bool) and not value) or (isinstance(value, str) and _map_type(value, False)):
+            print("Usage stats collection is already disabled.")
+            return
+    elif current_status is UsageStatsEnabledness.ENABLED_EXPLICITLY:
+        if (isinstance(value, bool) and value) or (isinstance(value, str) and _map_type(value, True)):
+            print("Usage stats collection is already enabled.")
+            return
+    
     if (isinstance(value, bool) and not value) or (isinstance(value, str) and _map_type(value, False)):
         answer = usage_stats_disabled_reconfirmation()
         if not answer:
