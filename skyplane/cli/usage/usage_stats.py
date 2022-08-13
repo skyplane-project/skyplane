@@ -25,6 +25,7 @@ def _map_type(value, boolean):
             return True
     return False
 
+
 def usage_stats_enabledness():
     # environment vairable has higher priority
     usage_stats_enabled_env_var = os.getenv(usage_constants.USAGE_STATS_ENABLED_ENV_VAR)
@@ -34,7 +35,8 @@ def usage_stats_enabledness():
         return UsageStatsEnabledness.ENABLED_EXPLICITLY
     elif usage_stats_enabled_env_var is not None:
         raise ValueError(
-            f"Valid value for {usage_constants.USAGE_STATS_ENABLED_ENV_VAR} " f"env var is (false/no/0) or (true/yes/1), but got {usage_stats_enabled_env_var}"
+            f"Valid value for {usage_constants.USAGE_STATS_ENABLED_ENV_VAR} "
+            f"env var is (false/no/0) or (true/yes/1), but got {usage_stats_enabled_env_var}"
         )
     # then check in the config file
     usage_stats_enabled_config_var = None
@@ -51,7 +53,9 @@ def usage_stats_enabledness():
     elif usage_stats_enabled_config_var:
         return UsageStatsEnabledness.ENABLED_EXPLICITLY
     elif usage_stats_enabled_config_var is not None:
-        raise ValueError(f"Valid value for 'usage_stats' in {config_path}" f" is (false/no/0) or (true/yes/1), but got {usage_stats_enabled_config_var}")
+        raise ValueError(
+            f"Valid value for 'usage_stats' in {config_path}" f" is (false/no/0) or (true/yes/1), but got {usage_stats_enabled_config_var}"
+        )
 
     return UsageStatsEnabledness.ENABLED_BY_DEFAULT
 
@@ -70,7 +74,7 @@ def set_usage_stats_via_config(value):
         if (isinstance(value, bool) and value) or (isinstance(value, str) and _map_type(value, True)):
             print("Usage stats collection is already enabled.")
             return
-    
+
     if (isinstance(value, bool) and not value) or (isinstance(value, str) and _map_type(value, False)):
         answer = usage_stats_disabled_reconfirmation()
         if not answer:

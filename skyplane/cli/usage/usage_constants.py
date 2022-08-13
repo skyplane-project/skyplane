@@ -3,9 +3,7 @@ USAGE_STATS_ENABLED_ENV_VAR = "SKYPLANE_USAGE_STATS_ENABLED"
 USAGE_STATS_FILE = "usage_stats.json"
 
 USAGE_STATS_ENABLED_MESSAGE = (
-    "Usage stats collection is enabled. "
-    "To disable this, run `skyplane config set usage_stats false`. "
-    "See xxx for more details. "
+    "Usage stats collection is enabled. " "To disable this, run `skyplane config set usage_stats false`. " "See xxx for more details. "
 )
 
 USAGE_STATS_ENABLED_BY_DEFAULT_MESSAGE = (
