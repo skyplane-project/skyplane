@@ -42,6 +42,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",
     "sphinx_autodoc_typehints",
+    "sphinxext.opengraph",
     "sphinx_click",
     "myst_parser",
     # 'matplotlib.sphinxext.plot_directive',
@@ -78,10 +79,11 @@ exclude_patterns = ["build", "_build", "Thumbs.db", ".DS_Store", "README.md"]
 # a list of builtin themes.
 html_theme = "furo"
 html_theme_options = {"light_logo": "logo-light-mode.png", "dark_logo": "logo-dark-mode.png", "sidebar_hide_name": True}
-# html_logo = "_static/logo-light-mode.png"
 html_favicon = "_static/favicon.ico"
 html_static_path = ["_static"]
 
+ogp_site_url = "https://skyplane.org/"
+ogp_image = "_static/social-media-banner.png"
 
 # -- Options for EPUB output
 epub_show_urls = "footnote"
