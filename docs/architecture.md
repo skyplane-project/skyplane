@@ -1,6 +1,9 @@
 # Architecture
 Skyplane performs high-performance, cost-efficient, bulk data transfers by parallelizing transfers, provisioning resources for transfers, and identifying optimal transfer paths. Skyplane profiles cloud network cost and throughput across regions, and borrows ideas from [RON](http://nms.csail.mit.edu/ron/) to identify optimal transfer paths across regions and cloud providers. 
 
+To learn about how Skyplane works, please see our talk here:
+<iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/hOCrpcIBkAU" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
 ## Transfer Integrity and Checksumming
 Skyplane takes several steps to ensure the correctness of transfers. To ensure that data is transferred without corruption (e.g. bit flips or missing byte ranges), Skyplane will compute checksums for data at the source region and verify data matches the checksum before writing back to the destination region. To ensure that no files are dropped during the transfer, Skyplane will query the destination object store after a transfer and check all files were copied with the correct file size. To verify checksums for whole-file transfers, Skyplane computes MD5 hashes at the source region. Upon writing data at the destination, hashes are validated directly in the destintation object store. For multipart transfers, hashses are validated at the destination VM before writing to the object store.
 
