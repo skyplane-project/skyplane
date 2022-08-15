@@ -18,8 +18,6 @@ Owing to the above encryption mechanisms, Skyplane guarantees confidentiality ag
 * The size of each chunk (which may be related to the size of the files/objects being transferred).
 * The timing of each chunk's transfer between gateways and over the network.
 
-## Encryption 
-
 ## Firewalls
 
 Skyplane adopts best practices to ensure data and gateway nodes are secure during transfers. In this section, we describe the design in-brief. Firewalls are enabled by default, and we advise you not to turn them off. This ensures not only is the data secure in flight, but also prevents gateways from being compromised.  Our approach of having unique `skyplane` VPC and firewalls  guarantees that your default networks remain untouched, and we have also architected it to allow for multiple simultaneous transfers! If you have any questions regarding the design and/or implementation we encourage you to open an issue with `[Firewall]` in the title. 

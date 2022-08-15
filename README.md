@@ -55,6 +55,7 @@ After installing the gcloud CLI, configure your GCP CLI credentials with `gcloud
 $ gcloud auth login
 $ gcloud auth application-default login
 ```
+Ensure the GCP Compute Engine, Storage Engine, Cloud Resource Manager, and IAM APIs are enabled for the project.
 
 ### Setting up Azure credentials
 
