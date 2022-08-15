@@ -4,6 +4,7 @@ from functools import partial
 from pathlib import Path
 from shlex import split
 import traceback
+import uuid
 from skyplane.replicate.replicator_client import ReplicatorClient
 
 import typer
@@ -410,6 +411,10 @@ def init(
     else:
         cloud_config = SkyplaneConfig.default_config()
 
+    # create client_id
+    if cloud_config.anon_clientid is None:
+        cloud_config.anon_clientid = str(uuid.uuid4())
+
     # load AWS config
     typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)
     if not disable_config_aws:
@@ -429,6 +434,7 @@ def init(
     typer.secho(f"\nConfig file saved to {config_path}", fg="green")
 
     # Set metrics collection by default
+    print("\n")
     usage_stats.show_usage_stats_prompt()
     return 0
 

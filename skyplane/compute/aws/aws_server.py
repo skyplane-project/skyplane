@@ -2,7 +2,12 @@ import logging
 from typing import Dict, Optional
 
 import boto3
-import paramiko
+import warnings
+from cryptography.utils import CryptographyDeprecationWarning
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
+    import paramiko
 
 from skyplane import key_root
 from skyplane.compute.aws.aws_auth import AWSAuthentication

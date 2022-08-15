@@ -5,7 +5,12 @@ from pathlib import Path
 from typing import List
 
 import googleapiclient
-import paramiko
+import warnings
+from cryptography.utils import CryptographyDeprecationWarning
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
+    import paramiko
 
 from skyplane import exceptions, key_root
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider

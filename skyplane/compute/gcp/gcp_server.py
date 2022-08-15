@@ -1,7 +1,12 @@
 from functools import lru_cache
 from pathlib import Path
 
-import paramiko
+import warnings
+from cryptography.utils import CryptographyDeprecationWarning
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
+    import paramiko
 
 from skyplane import key_root
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication

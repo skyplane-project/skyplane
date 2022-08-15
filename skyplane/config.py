@@ -1,12 +1,8 @@
 import configparser
 import os
-import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
-
-# generate a global client id
-clientid = str(uuid.uuid4())
 
 _FLAG_TYPES = {
     "autoconfirm": bool,
@@ -70,7 +66,7 @@ class SkyplaneConfig:
     aws_enabled: bool
     azure_enabled: bool
     gcp_enabled: bool
-    clientid: str
+    anon_clientid: Optional[str] = None
     azure_subscription_id: Optional[str] = None
     azure_tenant_id: Optional[str] = None
     azure_client_id: Optional[str] = None
@@ -83,7 +79,7 @@ class SkyplaneConfig:
             aws_enabled=False,
             azure_enabled=False,
             gcp_enabled=False,
-            clientid=clientid,
+            anon_clientid=None,
         )
 
     @staticmethod
@@ -95,10 +91,9 @@ class SkyplaneConfig:
             raise FileNotFoundError(f"Config file not found: {path}")
         config.read(path)
 
-        if "client" not in config:
-            clientid_conf = clientid
-        else:
-            clientid_conf = config.get("client", "clientid")
+        anon_clientid = None
+        if "client" in config and "anon_clientid" in config["client"]:
+            anon_clientid = config.get("client", "anon_clientid")
 
         aws_enabled = False
         if "aws" in config:
@@ -134,7 +129,7 @@ class SkyplaneConfig:
             aws_enabled=aws_enabled,
             azure_enabled=azure_enabled,
             gcp_enabled=gcp_enabled,
-            clientid=clientid_conf,
+            anon_clientid=anon_clientid,
             azure_subscription_id=azure_subscription_id,
             azure_tenant_id=azure_tenant_id,
             azure_client_id=azure_client_id,
@@ -181,7 +176,8 @@ class SkyplaneConfig:
 
         if "client" not in config:
             config.add_section("client")
-        config.set("client", "clientid", self.clientid)
+        if self.anon_clientid:
+            config.set("client", "anon_clientid", self.anon_clientid)
 
         if "flags" not in config:
             config.add_section("flags")
