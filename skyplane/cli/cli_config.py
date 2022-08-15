@@ -12,6 +12,7 @@ import typer
 
 from skyplane import cloud_config, config_path
 from skyplane.cli.common import console
+from skyplane.cli.usage import usage_stats
 
 app = typer.Typer(name="skyplane-config")
 
@@ -41,11 +42,14 @@ def set(key: str, value: str):
         old = cloud_config.get_flag(key)
     except KeyError:
         old = None
-    try:
-        cloud_config.set_flag(key, value)
-    except KeyError:
-        console.print(f"[red][bold]{key}[/bold] is not a valid config key[/red]")
-        raise typer.Exit(code=1)
+    if key == "usage_stats":
+        usage_stats.set_usage_stats_via_config(value)
+    else:
+        try:
+            cloud_config.set_flag(key, value)
+        except KeyError:
+            console.print(f"[red][bold]{key}[/bold] is not a valid config key[/red]")
+            raise typer.Exit(code=1)
     new = cloud_config.get_flag(key)
     cloud_config.to_config_file(config_path)
     console.print(f"[bold][blue]{key}[/blue] = [italic][green]{new}[/italic][/green][/bold] [bright_black](was {old})[/bright_black]")

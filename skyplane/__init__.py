@@ -1,8 +1,12 @@
 import os
 from pathlib import Path
+import uuid
 
 from skyplane.config import SkyplaneConfig
 from skyplane.gateway_version import gateway_version
+
+# version
+__version__ = "0.1.2.dev0"
 
 # paths
 skyplane_root = Path(__file__).parent.parent
@@ -43,7 +47,7 @@ def format_bytes(bytes: int):
 if config_path.exists():
     cloud_config = SkyplaneConfig.load_config(config_path)
 else:
-    cloud_config = SkyplaneConfig(False, False, False)
+    cloud_config = SkyplaneConfig.default_config()
 is_gateway_env = os.environ.get("SKYPLANE_IS_GATEWAY", None) == "1"
 
 # load gateway docker image version

@@ -4,6 +4,7 @@ from functools import partial
 from pathlib import Path
 from shlex import split
 import traceback
+import uuid
 from skyplane.replicate.replicator_client import ReplicatorClient
 
 import typer
@@ -27,6 +28,8 @@ from skyplane.config import SkyplaneConfig
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
+from skyplane.utils.timer import Timer
+from skyplane.cli.usage import usage_stats
 
 app = typer.Typer(name="skyplane")
 app.command()(cli_internal.replicate_random)
@@ -408,6 +411,10 @@ def init(
     else:
         cloud_config = SkyplaneConfig.default_config()
 
+    # create client_id
+    if cloud_config.anon_clientid is None:
+        cloud_config.anon_clientid = str(uuid.uuid4())
+
     # load AWS config
     typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)
     if not disable_config_aws:
@@ -425,6 +432,10 @@ def init(
 
     cloud_config.to_config_file(config_path)
     typer.secho(f"\nConfig file saved to {config_path}", fg="green")
+
+    # Set metrics collection by default
+    print("\n")
+    usage_stats.show_usage_stats_prompt()
     return 0
 
 

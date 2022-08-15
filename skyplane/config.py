@@ -22,6 +22,7 @@ _FLAG_TYPES = {
     "azure_instance_class": str,
     "gcp_instance_class": str,
     "gcp_use_premium_network": bool,
+    "usage_stats": bool,
     "gcp_service_account_name": str,
 }
 
@@ -43,6 +44,7 @@ _DEFAULT_FLAGS = {
     "azure_instance_class": "Standard_D32_v5",
     "gcp_instance_class": "n2-standard-32",
     "gcp_use_premium_network": True,
+    "usage_stats": True,
     "gcp_service_account_name": "skyplane-manual",
 }
 
@@ -64,6 +66,7 @@ class SkyplaneConfig:
     aws_enabled: bool
     azure_enabled: bool
     gcp_enabled: bool
+    anon_clientid: Optional[str] = None
     azure_subscription_id: Optional[str] = None
     azure_tenant_id: Optional[str] = None
     azure_client_id: Optional[str] = None
@@ -72,7 +75,12 @@ class SkyplaneConfig:
 
     @staticmethod
     def default_config() -> "SkyplaneConfig":
-        return SkyplaneConfig(aws_enabled=False, azure_enabled=False, gcp_enabled=False)
+        return SkyplaneConfig(
+            aws_enabled=False,
+            azure_enabled=False,
+            gcp_enabled=False,
+            anon_clientid=None,
+        )
 
     @staticmethod
     def load_config(path) -> "SkyplaneConfig":
@@ -82,6 +90,10 @@ class SkyplaneConfig:
         if not path.exists():
             raise FileNotFoundError(f"Config file not found: {path}")
         config.read(path)
+
+        anon_clientid = None
+        if "client" in config and "anon_clientid" in config["client"]:
+            anon_clientid = config.get("client", "anon_clientid")
 
         aws_enabled = False
         if "aws" in config:
@@ -117,6 +129,7 @@ class SkyplaneConfig:
             aws_enabled=aws_enabled,
             azure_enabled=azure_enabled,
             gcp_enabled=gcp_enabled,
+            anon_clientid=anon_clientid,
             azure_subscription_id=azure_subscription_id,
             azure_tenant_id=azure_tenant_id,
             azure_client_id=azure_client_id,
@@ -160,6 +173,11 @@ class SkyplaneConfig:
 
         if self.gcp_project_id:
             config.set("gcp", "project_id", self.gcp_project_id)
+
+        if "client" not in config:
+            config.add_section("client")
+        if self.anon_clientid:
+            config.set("client", "anon_clientid", self.anon_clientid)
 
         if "flags" not in config:
             config.add_section("flags")

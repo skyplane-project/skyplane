@@ -1,7 +1,12 @@
 from pathlib import Path
 
 import azure.core.exceptions
-import paramiko
+import warnings
+from cryptography.utils import CryptographyDeprecationWarning
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
+    import paramiko
 
 from skyplane import key_root
 from skyplane.compute.azure.azure_auth import AzureAuthentication

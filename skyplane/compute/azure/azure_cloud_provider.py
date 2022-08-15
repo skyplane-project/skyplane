@@ -5,7 +5,12 @@ from multiprocessing import BoundedSemaphore
 from pathlib import Path
 from typing import List, Optional
 
-import paramiko
+import warnings
+from cryptography.utils import CryptographyDeprecationWarning
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
+    import paramiko
 from azure.mgmt.compute.models import ResourceIdentityType
 from azure.core.exceptions import HttpResponseError
 
