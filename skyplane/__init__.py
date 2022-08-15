@@ -5,6 +5,9 @@ from skyplane.config import SkyplaneConfig
 from skyplane.config import clientid
 from skyplane.gateway_version import gateway_version
 
+# version
+__version__ = "0.1.2.dev0"
+
 # paths
 skyplane_root = Path(__file__).parent.parent
 config_root = Path("~/.skyplane").expanduser()

@@ -96,9 +96,9 @@ class SkyplaneConfig:
         config.read(path)
 
         if "client" not in config:
-            raise ValueError("Clientid is not previously set in config.")
+            clientid_conf = clientid
         else:
-            clientid = config.get("client", "clientid")
+            clientid_conf = config.get("client", "clientid")
 
         aws_enabled = False
         if "aws" in config:
@@ -134,7 +134,7 @@ class SkyplaneConfig:
             aws_enabled=aws_enabled,
             azure_enabled=azure_enabled,
             gcp_enabled=gcp_enabled,
-            clientid=clientid,
+            clientid=clientid_conf,
             azure_subscription_id=azure_subscription_id,
             azure_tenant_id=azure_tenant_id,
             azure_client_id=azure_client_id,
