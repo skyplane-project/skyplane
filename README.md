@@ -19,7 +19,6 @@ You can use Skyplane to transfer data:
 # Getting started
 
 ## Installation
-
 We recommend installation from PyPi: `pip install skyplane`
 
 *Installation on M1 Mac*: If you are using an M1 Mac with the arm64 architecture, you will need to install Skyplane as follows
