@@ -21,6 +21,9 @@ class ObjectStoreObject:
 
 
 class ObjectStoreInterface:
+    def path(self) -> str:
+        raise NotImplementedError()
+
     def region_tag(self) -> str:
         raise NotImplementedError()
 
