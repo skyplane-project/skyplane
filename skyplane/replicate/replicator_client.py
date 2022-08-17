@@ -346,10 +346,12 @@ class ReplicatorClient:
             gateway_ips: Dict[Server, str] = {s: s.public_ip() for s in self.bound_nodes.values()}
 
             # make list of chunks
-            progress.update(prepare_task, description=": Creating list of chunks for transfer")
+            n_objs = 0
             chunks = []
             idx = 0
             for (src_object, dest_object) in job.transfer_pairs:
+                progress.update(prepare_task, description=f": Creating list of chunks for transfer ({n_objs}/{len(job.transfer_pairs)})")
+                n_objs += 1
                 if job.random_chunk_size_mb:
                     chunks.append(
                         Chunk(
@@ -529,6 +531,7 @@ class ReplicatorClient:
         job: ReplicationJob,
         show_spinner=False,
         log_interval_s: Optional[float] = None,
+        log_to_file: bool = True,
         time_limit_seconds: Optional[float] = None,
         cleanup_gateway: bool = True,
         save_log: bool = True,
@@ -606,7 +609,7 @@ class ReplicatorClient:
                             description=f" ({len(completed_chunk_ids)} of {len(job.chunk_requests)} chunks)",
                             completed=completed_bytes,
                         )
-                        if len(completed_chunk_ids) == len(job.chunk_requests):
+                        if len(completed_chunk_ids) >= len(job.chunk_requests) - 2:
                             if multipart:
                                 # Complete multi-part uploads
                                 def complete_upload(req):
@@ -640,6 +643,12 @@ class ReplicatorClient:
                             current_time = datetime.now()
                             if log_interval_s and (not last_log or (current_time - last_log).seconds > float(log_interval_s)):
                                 last_log = current_time
+                                log_str = f"{total_runtime_s}s: {len(completed_chunk_ids)}/{len(job.chunk_requests)} chunks, {completed_bytes}/{total_bytes} bytes, "
+                                log_str += f"{throughput_gbits:.2f} Gbit/s"
+                                if log_to_file:
+                                    logger.fs.debug(log_str)
+                                else:
+                                    logger.debug(log_str)
                             time.sleep(0.01 if show_spinner else 0.25)
                             continue
         # always run cleanup, even if there's an exception

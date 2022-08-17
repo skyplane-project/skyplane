@@ -51,7 +51,6 @@ class AzureBlobInterface(ObjectStoreInterface):
             return True
         except ResourceNotFoundError:
             return False
-
     def exists(self, obj_name):
         return self.blob_service_client.get_blob_client(container=self.container_name, blob=obj_name).exists()
 

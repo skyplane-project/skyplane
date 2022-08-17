@@ -3,6 +3,7 @@ import json
 import os
 import time
 import uuid
+from multiprocessing import BoundedSemaphore
 from pathlib import Path
 from typing import List, Optional
 
@@ -28,6 +29,7 @@ class AWSCloudProvider(CloudProvider):
     def __init__(self):
         super().__init__()
         self.auth = AWSAuthentication()
+        self.provisioning_semaphore = BoundedSemaphore(16)
 
     @property
     def name(self):
@@ -329,49 +331,49 @@ class AWSCloudProvider(CloudProvider):
         iam_name: str = "skyplane_gateway",
         use_spot_instances: bool = False,
     ) -> AWSServer:
-
         assert not region.startswith("aws:"), "Region should be AWS region"
         if name is None:
             name = f"skyplane-aws-{str(uuid.uuid4()).replace('-', '')}"
         iam_instance_profile_name = f"{name}_profile"
-        iam = self.auth.get_boto3_client("iam", region)
-        ec2 = self.auth.get_boto3_resource("ec2", region)
-        ec2_client = self.auth.get_boto3_client("ec2", region)
-        vpcs = self.get_vpcs(region)
-        assert vpcs, "No VPC found"
-        vpc = vpcs[0]
+        with self.provisioning_semaphore:
+            iam = self.auth.get_boto3_client("iam", region)
+            ec2 = self.auth.get_boto3_resource("ec2", region)
+            ec2_client = self.auth.get_boto3_client("ec2", region)
+            vpcs = self.get_vpcs(region)
+            assert vpcs, "No VPC found"
+            vpc = vpcs[0]
 
-        # get subnet list
-        def instance_class_supported(az):
-            # describe_instance_type_offerings
-            offerings_list = ec2_client.describe_instance_type_offerings(
-                LocationType="availability-zone", Filters=[{"Name": "location", "Values": [az]}]
-            )
-            offerings = [o for o in offerings_list["InstanceTypeOfferings"] if o["InstanceType"] == instance_class]
-            return len(offerings) > 0
+            # get subnet list
+            def instance_class_supported(az):
+                # describe_instance_type_offerings
+                offerings_list = ec2_client.describe_instance_type_offerings(
+                    LocationType="availability-zone", Filters=[{"Name": "location", "Values": [az]}]
+                )
+                offerings = [o for o in offerings_list["InstanceTypeOfferings"] if o["InstanceType"] == instance_class]
+                return len(offerings) > 0
 
-        subnets = [subnet for subnet in vpc.subnets.all() if instance_class_supported(subnet.availability_zone)]
-        assert len(subnets) > 0, "No subnets found that support specified instance class"
+            subnets = [subnet for subnet in vpc.subnets.all() if instance_class_supported(subnet.availability_zone)]
+            assert len(subnets) > 0, "No subnets found that support specified instance class"
 
-        def check_iam_role():
-            try:
-                iam.get_role(RoleName=iam_name)
-                return True
-            except iam.exceptions.NoSuchEntityException:
-                return False
+            def check_iam_role():
+                try:
+                    iam.get_role(RoleName=iam_name)
+                    return True
+                except iam.exceptions.NoSuchEntityException:
+                    return False
 
-        def check_instance_profile():
-            try:
-                iam.get_instance_profile(InstanceProfileName=iam_instance_profile_name)
-                return True
-            except iam.exceptions.NoSuchEntityException:
-                return False
+            def check_instance_profile():
+                try:
+                    iam.get_instance_profile(InstanceProfileName=iam_instance_profile_name)
+                    return True
+                except iam.exceptions.NoSuchEntityException:
+                    return False
 
-        # wait for iam_role to be created and create instance profile
-        wait_for(check_iam_role, timeout=60, interval=0.5)
-        iam.create_instance_profile(InstanceProfileName=iam_instance_profile_name, Tags=[{"Key": "skyplane", "Value": "true"}])
-        iam.add_role_to_instance_profile(InstanceProfileName=iam_instance_profile_name, RoleName=iam_name)
-        wait_for(check_instance_profile, timeout=60, interval=0.5)
+            # wait for iam_role to be created and create instance profile
+            wait_for(check_iam_role, timeout=60, interval=0.5)
+            iam.create_instance_profile(InstanceProfileName=iam_instance_profile_name, Tags=[{"Key": "skyplane", "Value": "true"}])
+            iam.add_role_to_instance_profile(InstanceProfileName=iam_instance_profile_name, RoleName=iam_name)
+            wait_for(check_instance_profile, timeout=60, interval=0.5)
 
         def start_instance(subnet_id: str):
             if use_spot_instances:
@@ -407,29 +409,29 @@ class AWSCloudProvider(CloudProvider):
                 InstanceMarketOptions=market_options,
             )
 
-        backoff = 1
-        max_retries = 8
-        max_backoff = 8
-        current_subnet_id = 0
-        for i in range(max_retries):
-            try:
-                instance = start_instance(subnets[current_subnet_id].id)
-                break
-            except botocore.exceptions.ClientError as e:
-                if i == max_retries - 1:
-                    raise e
-                elif "VcpuLimitExceeded" in str(e):
-                    raise exceptions.InsufficientVCPUException() from e
-                elif "Invalid IAM Instance Profile name" not in str(e):
-                    logger.warning(str(e))
-                elif "InsufficientInstanceCapacity" in str(e):
-                    # try another subnet
-                    current_subnet_id = (current_subnet_id + 1) % len(subnets)
-                time.sleep(backoff)
-                backoff = min(backoff * 2, max_backoff)
+            backoff = 1
+            max_retries = 8
+            max_backoff = 8
+            current_subnet_id = 0
+            for i in range(max_retries):
+                try:
+                    instance = start_instance(subnets[current_subnet_id].id)
+                    break
+                except botocore.exceptions.ClientError as e:
+                    if i == max_retries - 1:
+                        raise e
+                    elif "VcpuLimitExceeded" in str(e):
+                        raise exceptions.InsufficientVCPUException() from e
+                    elif "Invalid IAM Instance Profile name" not in str(e):
+                        logger.warning(str(e))
+                    elif "InsufficientInstanceCapacity" in str(e):
+                        # try another subnet
+                        current_subnet_id = (current_subnet_id + 1) % len(subnets)
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, max_backoff)
 
-        assert len(instance) == 1, f"Expected 1 instance, got {len(instance)}"
-        instance[0].wait_until_running()
-        server = AWSServer(f"aws:{region}", instance[0].id)
-        server.wait_for_ssh_ready()
-        return server
+            assert len(instance) == 1, f"Expected 1 instance, got {len(instance)}"
+            instance[0].wait_until_running()
+            server = AWSServer(f"aws:{region}", instance[0].id)
+            server.wait_for_ssh_ready()
+            return server

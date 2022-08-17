@@ -209,7 +209,7 @@ def cp(
             multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
             src_region=src_region,
             dst_region=dst_region,
-            args=args,
+            error_reporting_args=args,
         )
 
         if cloud_config.get_flag("verify_checksums"):
@@ -402,7 +402,7 @@ def sync(
         multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
         src_region=src_region,
         dst_region=dst_region,
-        args=args,
+        error_reporting_args=args,
     )
 
     if cloud_config.get_flag("verify_checksums"):
