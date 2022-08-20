@@ -5,6 +5,8 @@ from pathlib import Path
 from shlex import split
 import traceback
 import uuid
+import sys
+import time
 from skyplane.replicate.replicator_client import ReplicatorClient
 
 import typer
@@ -16,7 +18,7 @@ import skyplane.cli.cli_config
 import skyplane.cli.cli_internal as cli_internal
 import skyplane.cli.cli_solver
 import skyplane.cli.experiments
-from skyplane import config_path, exceptions, skyplane_root, cloud_config
+from skyplane import config_path, exceptions, skyplane_root, cloud_config, tmp_log_dir
 from skyplane.cli.common import print_header, console
 from skyplane.cli.cli_impl.cp_replicate import generate_full_transferobjlist, generate_topology, confirm_transfer, launch_replication_job
 from skyplane.replicate.replication_plan import ReplicationJob
@@ -29,7 +31,7 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
 from skyplane.utils.timer import Timer
-from skyplane.cli.usage import usage_stats
+from skyplane.cli.usage import usage_stats, usage_utils
 
 app = typer.Typer(name="skyplane")
 app.command()(cli_internal.replicate_random)
@@ -130,6 +132,38 @@ def cp(
                 "Warning: Azure is not yet supported for multipart transfers, you may observe slow performance", fg="yellow", err=True
             )
             multipart = False
+
+        if usage_stats.usage_stats_enabled():
+            skyplane_version, python_version = usage_utils.compute_version_info()
+            schema_version = usage_utils.get_schema_version()
+
+            usageStats_toReport = usage_stats.UsageStatsToReport(
+                skyplane_version=skyplane_version,
+                python_version=python_version,
+                schema_version=schema_version,
+                client_id=cloud_config.anon_clientid,
+                session_id=str(uuid.uuid4()),
+                source_region=":".join(src_region.split(":")[1:]),
+                destination_region=":".join(dst_region.split(":")[1:]),
+                source_cloud_provider=src_region.split(":")[0],
+                destination_cloud_provider=dst_region.split(":")[0],
+                os=sys.platform,
+                session_start_timestamp_ms=int(time.time() * 1000),
+                arguments_dict={
+                    "recursive": recursive,
+                    "reuse_gateways": reuse_gateways,
+                    "debug": debug,
+                    "multipart": multipart,
+                    "confirm": confirm,
+                    "max_instances": max_instances,
+                    "solve": solve,
+                },
+            )
+
+            usage_report_client = usage_stats.UsageReportClient()
+            usage_local_path = tmp_log_dir / "usage" / usageStats_toReport.client_id / usageStats_toReport.session_id
+            usage_local_path.mkdir(exist_ok=True, parents=True)
+            usage_report_client.write_usage_data(usageStats_toReport, usage_local_path)
 
         topo = generate_topology(
             src_region,

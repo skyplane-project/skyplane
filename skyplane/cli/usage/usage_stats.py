@@ -3,11 +3,15 @@ from enum import Enum, auto
 import sys
 
 import typer
+import json
+from typing import Any, Optional
+from dataclasses import dataclass, asdict
 from rich import print as rprint
+from pathlib import Path
 from skyplane import cloud_config, config_path
 from skyplane.utils import logger
-
 from . import usage_constants
+from . import usage_utils
 
 
 class UsageStatsEnabledness(Enum):
@@ -117,9 +121,78 @@ def usage_stats_disabled_reconfirmation():
     """
     Ask for confirmation when the user decides to disable metrics collection.
     default: the presumed answer if the user just hits <Enter>.
-        It must be "yes" (the default) or "no".
+        It must be "no" (the default) or "yes".
     timeout: the number of seconds to wait for user to respond.
     """
     prompt = "Would you still like to opt out of sharing anonymous usage metrics?"
     rprint(usage_constants.USAGE_STATS_DISABLED_RECONFIRMATION_MESSAGE + "\n")
     return typer.confirm(prompt, default=False)
+
+
+@dataclass
+class UsageStatsToReport:
+    """Usage stats to report"""
+
+    #: The Skyplane version in use.
+    skyplane_version: str
+    #: The Python version in use.
+    python_version: str
+    #: The schema version of the report.
+    schema_version: str
+    #: The client id from SkyplaneConfig.
+    client_id: str
+    #: A random id of the transfer session.
+    session_id: str
+    #: The source region of the transfer session.
+    source_region: str
+    #: The destination region of the transfer session.
+    destination_region: str
+    #: The source cloud provider of the transfer session.
+    source_cloud_provider: str
+    #: The destination cloud provider of the transfer session.
+    destination_cloud_provider: str
+    #: The operating system in use.
+    os: str
+    #: When the transfer is started.
+    session_start_timestamp_ms: int
+    #: The collection of command arguments used in the transfer session.
+    arguments_dict: dict
+
+
+class UsageReportClient:
+    """The client implementation for usage report.
+    It is in charge of writing usage stats to the /tmp directory
+    and report usage stats.
+    """
+
+    def write_usage_data(self, data: UsageStatsToReport, dir_path: str) -> None:
+        """Write the usage data to the directory.
+        Params:
+            data: Data to report
+            dir_path: The path to the directory to write usage data.
+        """
+        dir_path = Path(dir_path)
+        destination = dir_path / usage_constants.USAGE_STATS_FILE
+
+        typer.secho(f"Storing usage information for transfer in {destination}", fg="yellow", err=True)
+        with open(destination, "w+") as json_file:
+            json_file.write(json.dumps(asdict(data)))
+
+    # TODO: API not yet available
+    # def report_usage_data(self, url: str, data: UsageStatsToReport) -> None:
+    #     """Report the usage data to the usage server.
+    #     Params:
+    #         url: The URL to update resource usage.
+    #         data: Data to report.
+    #     Raises:
+    #         requests.HTTPError if requests fails.
+    #     """
+    #     r = requests.request(
+    #         "POST",
+    #         url,
+    #         headers={"Content-Type": "application/json"},
+    #         json=asdict(data),
+    #         timeout=10,
+    #     )
+    #     r.raise_for_status()
+    #     return r
