@@ -165,7 +165,7 @@ class UsageReportClient:
     and report usage stats.
     """
 
-    def write_usage_data(self, data: UsageStatsToReport, dir_path: str) -> None:
+    def write_usage_data(self, data: UsageStatsToReport, dir_path: Path) -> None:
         """Write the usage data to the directory.
         Params:
             data: Data to report
