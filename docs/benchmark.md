@@ -19,13 +19,44 @@ Benchmark setup:
 
 ## Benchmark: Cost comparison w/ compression
 
+In this benchmark, we measure the impact of Skyplane's decompression algorithm which saves a great deal of data egress fee. In addition, Skyplane does not charge any service fee. Overall, Skyplane is 6.2x cheaper than AWS DataSync when transfering uncompressed 220GB dump of English Wikipedia.
+
 ![Cost comparison w/ compression](_static/benchmark/header_cost_plot.png)
 
+Benchmark setup:
+
+* Source: AWS us-east-1 (North Virginia)
+* Destination: AWS us-west-2 (Oregon)
+* Number of files: ~14,000x (sharded to 16 MB chunks)
+* File size: 223.67 GB
+* Number of Skyplane VMs: 8
+
 ## Benchmark: ImageNet transfer on AWS
+In this benchmark, we measure the transfer speed and universal support of Skyplane API. For transfering a 70 GB fake imagenet, Skyplane supports transfers across AWS, GCP, and Azure. It completes the transfer in around 25 seconds for selected transfer region pair below. However, AWS DataSync only supports transfers into and out of AWS services, and it is slow.
+
 ![DataSync_data_transfer](_static/benchmark/DataSync_data_transfer.png)
 
+Benchmark setup:
+
+* Source: labeled on axis
+* Destination: labeled on axis 
+* Number of files: 1,152x (training and validation batches)
+* File size: 70 GB
+* Number of Skyplane VMs: 8
+
 ## Benchmark: ImageNet transfer on GCP
+
+In this benchmark, we measure the transfer speed and universal support of Skyplane API. For transfering a 70 GB fake imagenet, Skyplane supports transfers across AWS, GCP, and Azure. It completes the transfer in around 60 seconds for selected transfer region pair below. However, GCP Data Transfer only supports transfers into GCP services, and it is slow.
+
 ![gcp_data_transfer](_static/benchmark/gcp_data_transfer.png)
+
+Benchmark setup:
+
+* Source: labeled on axis
+* Destination: labeled on axis 
+* Number of files: 1,152x (training and validation batches)
+* File size: 70 GB
+* Number of Skyplane VMs: 8
 
 ## Instructions to replicate benchmarks
 To replicate select benchmarks, see the following guide:
