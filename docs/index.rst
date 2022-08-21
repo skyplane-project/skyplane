@@ -38,6 +38,7 @@ Contents
 
    quickstart
    configure
+   benchmark
    architecture
    faq
 
