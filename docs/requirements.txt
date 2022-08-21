@@ -1,8 +1,7 @@
-docutils
+docutils>=0.18
 furo
 jupyter-sphinx
 myst-nb
-sphinx_rtd_theme
 sphinx-autobuild
 sphinx-autodoc-typehints
 sphinx-click
