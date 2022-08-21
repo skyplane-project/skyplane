@@ -37,8 +37,8 @@ Contents
    :caption: Overview
 
    quickstart
-   configure
    benchmark
+   configure
    architecture
    faq
 
