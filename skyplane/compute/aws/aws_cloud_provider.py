@@ -276,9 +276,12 @@ class AWSCloudProvider(CloudProvider):
                 ]
             )
         except botocore.exceptions.ClientError as e:
-            logger.fs.error(f"[AWS] Error adding IPs {ips} to security group {sg.group_name}: {e}")
-            if not str(e).endswith("already exists"):
-                logger.warn("[AWS] Error adding IPs to security group, since it already exits")
+            if str(e).endswith("already exists") or str(e).endswith("already exist"):
+                logger.warn(f"[AWS] Error adding IPs to security group, since it already exits: {e}")
+            else:
+                logger.error(f"[AWS] Error adding IPs {ips} to security group {sg.group_name}")
+                logger.fs.exception(e)
+                raise e
 
     def remove_ips_from_security_group(self, aws_region: str, ips: List[str]):
         """Remove IP from security group. If security group ID is None, return."""
