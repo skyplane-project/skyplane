@@ -74,7 +74,9 @@ class UsageClient:
     def usage_stats_status(cls) -> UsageStatsStatus:
         # environment vairable has higher priority
         usage_stats_enabled_env_var = os.getenv(skyplane.cli.usage.definitions.USAGE_STATS_ENABLED_ENV_VAR)
-        if not _map_type(usage_stats_enabled_env_var, bool):
+        if usage_stats_enabled_env_var is None:
+            pass
+        elif not _map_type(usage_stats_enabled_env_var, bool):
             return UsageStatsStatus.DISABLED_EXPLICITLY
         elif _map_type(usage_stats_enabled_env_var, bool):
             return UsageStatsStatus.ENABLED_EXPLICITLY
@@ -93,7 +95,9 @@ class UsageClient:
         except Exception as e:
             logger.debug(f"Failed to load usage stats config {e}")
 
-        if not usage_stats_enabled_config_var:
+        if usage_stats_enabled_config_var is None:
+            pass
+        elif not usage_stats_enabled_config_var:
             return UsageStatsStatus.DISABLED_EXPLICITLY
         elif usage_stats_enabled_config_var:
             return UsageStatsStatus.ENABLED_EXPLICITLY
