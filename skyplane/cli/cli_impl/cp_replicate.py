@@ -16,7 +16,7 @@ from skyplane.obj_store.s3_interface import S3Object
 from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
-from skyplane.replicate.replicator_client import ReplicatorClient
+from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
 from skyplane.cli.common import console
@@ -269,7 +269,7 @@ def launch_replication_job(
     typer.secho(f"Storing debug information for transfer in {rc.transfer_dir / 'client.log'}", fg="yellow", err=True)
     (rc.transfer_dir / "topology.json").write_text(topo.to_json())
 
-    stats = {}
+    stats = TransferStats.empty()
     try:
         rc.provision_gateways(
             reuse_gateways, use_bbr=use_bbr, use_compression=use_compression, use_e2ee=use_e2ee, use_socket_tls=use_socket_tls
@@ -314,31 +314,22 @@ def launch_replication_job(
             s = signal.signal(signal.SIGINT, signal.SIG_IGN)
             rc.deprovision_gateways()
             signal.signal(signal.SIGINT, s)
-
-        stats["success"] = False
-        out_json = {k: v for k, v in stats.items() if k not in ["log", "completed_chunk_ids"]}
-        typer.echo(f"\n{json.dumps(out_json)}")
         os._exit(1)  # exit now
+
     if not reuse_gateways:
         s = signal.signal(signal.SIGINT, signal.SIG_IGN)
         rc.deprovision_gateways()
         signal.signal(signal.SIGINT, s)
-
-    stats = stats if stats else {}
-    stats["success"] = stats["monitor_status"] == "completed"
-
-    if stats["monitor_status"] == "error":
-        for instance, errors in stats["errors"].items():
+    if stats.monitor_status == "error":
+        for instance, errors in stats.errors.items():
             for error in errors:
                 typer.secho(f"\n❌ {instance} encountered error:", fg="red", err=True, bold=True)
                 typer.secho(error, fg="red", err=True)
         raise typer.Exit(1)
-
-    # print stats
-    if stats["success"]:
+    elif stats.monitor_status == "completed":
         rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
-        runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{stats.get('total_runtime_s'):.2f}s[/bright_black]"
-        throughput_line = f"[white]Throughput:[/white] [bright_black]{stats.get('throughput_gbits'):.2f}Gbps[/bright_black]"
+        runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{stats.total_runtime_s:.2f}s[/bright_black]"
+        throughput_line = f"[white]Throughput:[/white] [bright_black]{stats.throughput_gbits:.2f}Gbps[/bright_black]"
         rprint(f"{runtime_line}, {throughput_line}")
     else:
         rprint(f"\n:x: [bold red]Transfer failed[/bold red]")

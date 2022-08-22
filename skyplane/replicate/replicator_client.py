@@ -1,17 +1,19 @@
 import json
+import json
+import math
 import pickle
 import time
 import uuid
-import math
+from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
 from typing import Dict, List, Optional, Tuple, Iterable
+
 import nacl.secret
 import nacl.utils
-
 import pandas as pd
-from rich.progress import Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, DownloadColumn, BarColumn, TransferSpeedColumn
 import urllib3
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, DownloadColumn, BarColumn, TransferSpeedColumn
 
 from skyplane import GB, MB, gateway_docker_image, tmp_log_dir
 from skyplane import exceptions
@@ -40,6 +42,18 @@ def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = 
         desc="Querying clouds for active instances",
     )
     return {r: ilist for r, ilist in results if ilist}
+
+
+@dataclass
+class TransferStats:
+    monitor_status: str
+    total_runtime_s: Optional[float] = None
+    throughput_gbits: Optional[float] = None
+    errors: Optional[Dict[str, List[str]]] = None
+
+    @classmethod
+    def empty(cls):
+        return TransferStats(monitor_status="empty")
 
 
 class ReplicatorClient:
@@ -112,7 +126,7 @@ class ReplicatorClient:
                     self.aws, set([r.split(":")[1] for r in aws_regions_to_provision]), aws_instance_filter
                 )
                 for r, ilist in current_aws_instances.items():
-                    for i in ilist:
+                    for _ in ilist:
                         if f"aws:{r}" in aws_regions_to_provision:
                             aws_regions_to_provision.remove(f"aws:{r}")
             else:
@@ -128,7 +142,7 @@ class ReplicatorClient:
                     self.azure, set([r.split(":")[1] for r in azure_regions_to_provision]), azure_instance_filter
                 )
                 for r, ilist in current_azure_instances.items():
-                    for i in ilist:
+                    for _ in ilist:
                         if f"azure:{r}" in azure_regions_to_provision:
                             azure_regions_to_provision.remove(f"azure:{r}")
             else:
@@ -144,7 +158,7 @@ class ReplicatorClient:
                     self.gcp, set([r.split(":")[1] for r in gcp_regions_to_provision]), gcp_instance_filter
                 )
                 for r, ilist in current_gcp_instances.items():
-                    for i in ilist:
+                    for _ in ilist:
                         if f"gcp:{r}" in gcp_regions_to_provision:
                             gcp_regions_to_provision.remove(f"gcp:{r}")
             else:
@@ -514,7 +528,7 @@ class ReplicatorClient:
         write_socket_profile: bool = False,  # slow but useful for debugging
         copy_gateway_logs: bool = False,
         multipart: bool = False,  # multipart object uploads/downloads
-    ) -> Optional[Dict]:
+    ) -> TransferStats:
         assert job.chunk_requests is not None
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in job.chunk_requests])
         last_log = None
@@ -523,8 +537,6 @@ class ReplicatorClient:
         source_regions = set(s.region for s in sources)
         sinks = self.topology.sink_instances()
         sink_regions = set(s.region for s in sinks)
-
-        completed_chunk_ids = []
 
         if save_log:
             (self.transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
@@ -550,13 +562,16 @@ class ReplicatorClient:
                             copy_gateway_logs = True
                             write_profile = True
                             write_socket_profile = True
-
-                            return {"errors": errors, "monitor_status": "error"}
+                            return TransferStats(
+                                monitor_status="error",
+                                total_runtime_s=t.elapsed,
+                                errors=errors,
+                            )
 
                         log_df = self.get_chunk_status_log_df()
                         if log_df.empty:
                             logger.warning("No chunk status log entries yet")
-                            time.sleep(0.5)
+                            time.sleep(0.01 if show_spinner else 0.25)
                             continue
 
                         is_complete_rec = (
@@ -599,27 +614,26 @@ class ReplicatorClient:
                                     desc="Completing multipart uploads",
                                     spinner=False,
                                 )
-                            return dict(
-                                completed_chunk_ids=completed_chunk_ids,
+                            return TransferStats(
+                                monitor_status="completed",
                                 total_runtime_s=total_runtime_s,
                                 throughput_gbits=throughput_gbits,
-                                monitor_status="completed",
                             )
                         elif time_limit_seconds is not None and t.elapsed > time_limit_seconds or t.elapsed > 600 and completed_bytes == 0:
                             logger.error("Transfer timed out without progress, please check the debug log!")
                             logger.fs.error("Transfer timed out! Please retry.")
                             logger.error(f"Please share debug logs from: {self.transfer_dir}")
-                            return dict(
-                                completed_chunk_ids=completed_chunk_ids,
+                            return TransferStats(
+                                monitor_status="timed_out",
                                 total_runtime_s=total_runtime_s,
                                 throughput_gbits=throughput_gbits,
-                                monitor_status="timed_out",
                             )
                         else:
                             current_time = datetime.now()
                             if log_interval_s and (not last_log or (current_time - last_log).seconds > float(log_interval_s)):
                                 last_log = current_time
                             time.sleep(0.01 if show_spinner else 0.25)
+                            continue
         # always run cleanup, even if there's an exception
         finally:
             with Progress(SpinnerColumn(), TextColumn("Cleaning up after transfer{task.description}"), transient=True) as progress:
@@ -681,6 +695,7 @@ class ReplicatorClient:
 
                     do_parallel(fn, self.bound_nodes.values(), n=-1)
                     progress.update(cleanup_task, description=": Shutting down gateways")
+        return TransferStats.empty()
 
     @staticmethod
     def verify_transfer_prefix(job: ReplicationJob, dest_prefix: str):

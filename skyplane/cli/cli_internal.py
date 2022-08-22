@@ -67,7 +67,7 @@ def replicate_random(
     stats = launch_replication_job(
         topo=topo, job=job, debug=debug, reuse_gateways=reuse_gateways, use_bbr=use_bbr, use_compression=False, use_e2ee=True
     )
-    return 0 if stats["success"] else 1
+    return 0 if stats.monitor_status == "completed" else 1
 
 
 def replicate_random_solve(
@@ -140,4 +140,4 @@ def replicate_random_solve(
     )
     confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=False)
     stats = launch_replication_job(topo=topo, job=job, debug=debug, reuse_gateways=reuse_gateways, use_bbr=use_bbr, use_compression=False)
-    return 0 if stats["success"] else 1
+    return 0 if stats.monitor_status == "completed" else 1
