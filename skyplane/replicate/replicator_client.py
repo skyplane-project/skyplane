@@ -528,7 +528,7 @@ class ReplicatorClient:
         write_socket_profile: bool = False,  # slow but useful for debugging
         copy_gateway_logs: bool = False,
         multipart: bool = False,  # multipart object uploads/downloads
-    ) -> TransferStats:
+    ) -> TransferStats:  # pytype: disable=bad-return-type
         assert job.chunk_requests is not None
         total_bytes = sum([cr.chunk.chunk_length_bytes for cr in job.chunk_requests])
         last_log = None
@@ -695,7 +695,6 @@ class ReplicatorClient:
 
                     do_parallel(fn, self.bound_nodes.values(), n=-1)
                     progress.update(cleanup_task, description=": Shutting down gateways")
-        return TransferStats.empty()
 
     @staticmethod
     def verify_transfer_prefix(job: ReplicationJob, dest_prefix: str):
