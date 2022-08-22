@@ -6,7 +6,7 @@ from skyplane.config import SkyplaneConfig
 from skyplane.gateway_version import gateway_version
 
 # version
-__version__ = "0.1.2.dev0"
+__version__ = "0.1.2"
 
 # paths
 skyplane_root = Path(__file__).parent.parent

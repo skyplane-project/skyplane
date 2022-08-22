@@ -5,6 +5,13 @@ from pathlib import Path
 from shlex import split
 import traceback
 import uuid
+
+from rich import print as rprint
+
+import skyplane.cli
+import skyplane.cli.usage.definitions
+import skyplane.cli.usage.client
+from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
 from skyplane.replicate.replicator_client import ReplicatorClient
 
 import typer
@@ -16,7 +23,7 @@ import skyplane.cli.cli_config
 import skyplane.cli.cli_internal as cli_internal
 import skyplane.cli.cli_solver
 import skyplane.cli.experiments
-from skyplane import config_path, exceptions, skyplane_root, cloud_config
+from skyplane import config_path, exceptions, skyplane_root, cloud_config, tmp_log_dir
 from skyplane.cli.common import print_header, console
 from skyplane.cli.cli_impl.cp_replicate import generate_full_transferobjlist, generate_topology, confirm_transfer, launch_replication_job
 from skyplane.replicate.replication_plan import ReplicationJob
@@ -28,8 +35,7 @@ from skyplane.config import SkyplaneConfig
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
-from skyplane.utils.timer import Timer
-from skyplane.cli.usage import usage_stats
+from skyplane.cli.usage import client
 
 app = typer.Typer(name="skyplane")
 app.command()(cli_internal.replicate_random)
@@ -151,7 +157,7 @@ def cp(
         )
         confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
 
-        stats = launch_replication_job(
+        transfer_stats = launch_replication_job(
             topo=topo,
             job=job,
             debug=debug,
@@ -179,7 +185,21 @@ def cp(
                     progress.add_task("", total=None)
                     ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
 
-            return 0 if stats["success"] else 1
+        client = UsageClient()
+        if client.enabled():
+            args = {
+                "cmd": "cp",
+                "recursive": recursive,
+                "reuse_gateways": reuse_gateways,
+                "debug": debug,
+                "multipart": multipart,
+                "confirm": confirm,
+                "max_instances": max_instances,
+                "solve": solve,
+            }
+            stats = client.make_stat(src_region, dst_region, arguments_dict=args, transfer_stats=transfer_stats)
+            client.write_usage_data(stats)
+        return 0 if transfer_stats.monitor_status == "completed" else 1
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
 
@@ -296,7 +316,7 @@ def sync(
         transfer_pairs=transfer_pairs,
     )
     confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
-    stats = launch_replication_job(
+    transfer_stats = launch_replication_job(
         topo=topo,
         job=job,
         debug=debug,
@@ -323,8 +343,21 @@ def sync(
             with Progress(SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}"), transient=True) as progress:
                 progress.add_task("", total=None)
                 ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
-
-    return 0 if stats["success"] else 1
+        client = UsageClient()
+        if client.enabled():
+            args = {
+                "cmd": "sync",
+                "recursive": recursive,
+                "reuse_gateways": reuse_gateways,
+                "debug": debug,
+                "multipart": multipart,
+                "confirm": confirm,
+                "max_instances": max_instances,
+                "solve": solve,
+            }
+            stats = client.make_stat(src_region, dst_region, arguments_dict=args, transfer_stats=transfer_stats)
+            client.write_usage_data(stats)
+    return 0 if transfer_stats.monitor_status == "completed" else 1
 
 
 @app.command()
@@ -435,7 +468,13 @@ def init(
 
     # Set metrics collection by default
     print("\n")
-    usage_stats.show_usage_stats_prompt()
+    usage_stats_var = UsageClient.usage_stats_status()
+    if usage_stats_var is UsageStatsStatus.DISABLED_EXPLICITLY:
+        rprint(skyplane.cli.usage.definitions.USAGE_STATS_DISABLED_MESSAGE)
+    elif usage_stats_var in [UsageStatsStatus.ENABLED_BY_DEFAULT, UsageStatsStatus.ENABLED_EXPLICITLY]:
+        rprint(skyplane.cli.usage.definitions.USAGE_STATS_ENABLED_MESSAGE)
+    else:
+        raise Exception("Prompt message unknown.")
     return 0
 
 

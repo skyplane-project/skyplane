@@ -12,7 +12,7 @@ import typer
 
 from skyplane import cloud_config, config_path
 from skyplane.cli.common import console
-from skyplane.cli.usage import usage_stats
+from skyplane.cli.usage.client import UsageClient
 
 app = typer.Typer(name="skyplane-config")
 
@@ -43,7 +43,7 @@ def set(key: str, value: str):
     except KeyError:
         old = None
     if key == "usage_stats":
-        usage_stats.set_usage_stats_via_config(value)
+        UsageClient.set_usage_stats_via_config(value, cloud_config)
     else:
         try:
             cloud_config.set_flag(key, value)

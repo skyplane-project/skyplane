@@ -1,0 +1,200 @@
+import os
+import sys
+import time
+from enum import Enum, auto
+from typing import Optional, Dict
+import uuid
+from skyplane.replicate.replicator_client import TransferStats
+
+import typer
+import json
+from dataclasses import asdict, dataclass
+from rich import print as rprint
+from pathlib import Path
+
+import skyplane.cli.usage.definitions
+from skyplane import cloud_config, config_path, tmp_log_dir
+from skyplane.config import _map_type
+from skyplane.utils import logger
+
+
+class UsageStatsStatus(Enum):
+    ENABLED_EXPLICITLY = auto()
+    DISABLED_EXPLICITLY = auto()
+    ENABLED_BY_DEFAULT = auto()
+
+
+@dataclass
+class UsageStatsToReport:
+    """Usage stats to report"""
+
+    #: The Skyplane version in use.
+    skyplane_version: str
+    #: The Python version in use.
+    python_version: str
+    #: The schema version of the report.
+    schema_version: str
+    #: The client id from SkyplaneConfig.
+    client_id: str
+    #: A random id of the transfer session.
+    session_id: str
+    #: The source region of the transfer session.
+    source_region: str
+    #: The destination region of the transfer session.
+    destination_region: str
+    #: The source cloud provider of the transfer session.
+    source_cloud_provider: str
+    #: The destination cloud provider of the transfer session.
+    destination_cloud_provider: str
+    #: The operating system in use.
+    os: str
+    #: When the transfer is started.
+    session_start_timestamp_ms: int
+    #: The collection of command arguments used in the transfer session.
+    arguments_dict: Optional[Dict]
+    #: The collection of transfer stats upon completion of the transfer session.
+    transfer_stats: Optional[TransferStats]
+
+
+class UsageClient:
+    """The client implementation for usage report.
+    It is in charge of writing usage stats to the /tmp directory
+    and report usage stats.
+    """
+
+    def __init__(self, client_id: str = cloud_config.anon_clientid):
+        self.client_id = client_id
+        self.session_id = str(uuid.uuid4())
+
+    @classmethod
+    def enabled(cls):
+        return cls.usage_stats_status() is not UsageStatsStatus.DISABLED_EXPLICITLY
+
+    @classmethod
+    def usage_stats_status(cls) -> UsageStatsStatus:
+        # environment vairable has higher priority
+        usage_stats_enabled_env_var = os.getenv(skyplane.cli.usage.definitions.USAGE_STATS_ENABLED_ENV_VAR)
+        if usage_stats_enabled_env_var is None:
+            pass
+        elif not _map_type(usage_stats_enabled_env_var, bool):
+            return UsageStatsStatus.DISABLED_EXPLICITLY
+        elif _map_type(usage_stats_enabled_env_var, bool):
+            return UsageStatsStatus.ENABLED_EXPLICITLY
+        elif usage_stats_enabled_env_var is not None:
+            raise ValueError(
+                f"Valid value for {skyplane.cli.usage.definitions.USAGE_STATS_ENABLED_ENV_VAR} "
+                f"env var is (false/no/0) or (true/yes/1), but got {usage_stats_enabled_env_var}"
+            )
+        # then check in the config file
+        usage_stats_enabled_config_var = None
+        # TODO: Check the correct error
+        try:
+            usage_stats_enabled_config_var = cloud_config.get_flag("usage_stats")
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            logger.debug(f"Failed to load usage stats config {e}")
+
+        if usage_stats_enabled_config_var is None:
+            pass
+        elif not usage_stats_enabled_config_var:
+            return UsageStatsStatus.DISABLED_EXPLICITLY
+        elif usage_stats_enabled_config_var:
+            return UsageStatsStatus.ENABLED_EXPLICITLY
+        elif usage_stats_enabled_config_var is not None:
+            raise ValueError(
+                f"Valid value for 'usage_stats' in {config_path}"
+                f" is (false/no/0) or (true/yes/1), but got {usage_stats_enabled_config_var}"
+            )
+
+        return UsageStatsStatus.ENABLED_BY_DEFAULT
+
+    @classmethod
+    def set_usage_stats_via_config(cls, value, config):
+        current_status = cls.usage_stats_status()
+        if current_status is UsageStatsStatus.DISABLED_EXPLICITLY:
+            if (isinstance(value, bool) and not value) or (isinstance(value, str) and not _map_type(value, bool)):
+                rprint("Usage stats collection is already disabled.")
+                rprint(skyplane.cli.usage.definitions.USAGE_STATS_REENABLE_MESSAGE)
+                return
+        elif current_status is UsageStatsStatus.ENABLED_EXPLICITLY:
+            if (isinstance(value, bool) and value) or (isinstance(value, str) and _map_type(value, bool)):
+                rprint("Usage stats collection is already enabled.")
+                rprint(skyplane.cli.usage.definitions.USAGE_STATS_REENABLED_MESSAGE)
+                return
+
+        if (isinstance(value, bool) and not value) or (isinstance(value, str) and not _map_type(value, bool)):
+            prompt = "Would you still like to opt out of sharing anonymous usage metrics?"
+            rprint(skyplane.cli.usage.definitions.USAGE_STATS_DISABLED_RECONFIRMATION_MESSAGE + "\n")
+            answer = typer.confirm(prompt, default=False)
+            if not answer:
+                # Do nothing if the user confirms not to disable
+                return
+            else:
+                rprint(skyplane.cli.usage.definitions.USAGE_STATS_REENABLE_MESSAGE)
+
+        try:
+            config.set_flag("usage_stats", value)
+        except Exception as e:
+            raise Exception("Failed to enable/disable by writing to" f"{config_path}") from e
+
+        if config.get_flag("usage_stats"):
+            rprint(skyplane.cli.usage.definitions.USAGE_STATS_REENABLED_MESSAGE)
+
+    def make_stat(
+        self,
+        src_region_tag: str,
+        dest_region_tag: str,
+        arguments_dict: Optional[Dict] = None,
+        transfer_stats: Optional[TransferStats] = None,
+    ):
+        return UsageStatsToReport(
+            skyplane_version=skyplane.__version__,
+            python_version=".".join(map(str, sys.version_info[:3])),
+            schema_version=skyplane.cli.usage.definitions.SCHEMA_VERSION,
+            client_id=self.client_id,
+            session_id=self.session_id,
+            source_region=":".join(src_region_tag.split(":")[1:]),
+            destination_region=":".join(dest_region_tag.split(":")[1:]),
+            source_cloud_provider=src_region_tag.split(":")[0],
+            destination_cloud_provider=dest_region_tag.split(":")[0],
+            os=sys.platform,
+            session_start_timestamp_ms=int(time.time() * 1000),
+            arguments_dict=arguments_dict,
+            transfer_stats=transfer_stats,
+        )
+
+    def write_usage_data(self, data: UsageStatsToReport, dir_path: Optional[Path] = None):
+        """Write the usage data to the directory.
+        Params:
+            data: Data to report
+            dir_path: The path to the directory to write usage data.
+        """
+        if dir_path is None:
+            dir_path = tmp_log_dir / "usage" / self.client_id / self.session_id
+        dir_path = Path(dir_path)
+        dir_path.mkdir(exist_ok=True, parents=True)
+        destination = dir_path / skyplane.cli.usage.definitions.USAGE_STATS_FILE
+
+        typer.secho(f"Storing usage information for transfer in {destination}", fg="yellow", err=True)
+        with open(destination, "w+") as json_file:
+            json_file.write(json.dumps(asdict(data)))
+
+    # TODO: API not yet available
+    # def report_usage_data(self, url: str, data: UsageStatsToReport) -> None:
+    #     """Report the usage data to the usage server.
+    #     Params:
+    #         url: The URL to update resource usage.
+    #         data: Data to report.
+    #     Raises:
+    #         requests.HTTPError if requests fails.
+    #     """
+    #     r = requests.request(
+    #         "POST",
+    #         url,
+    #         headers={"Content-Type": "application/json"},
+    #         json=asdict(data),
+    #         timeout=10,
+    #     )
+    #     r.raise_for_status()
+    #     return r
