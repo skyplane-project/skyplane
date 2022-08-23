@@ -34,7 +34,7 @@ _DEFAULT_FLAGS = {
     "encrypt_socket_tls": False,
     "verify_checksums": True,
     "multipart_enabled": True,
-    "multipart_min_threshold_mb": 64,
+    "multipart_min_threshold_mb": 128,
     "multipart_min_size_mb": 8,
     "multipart_max_chunks": 9990,  # AWS limit is 10k chunks
     "num_connections": 32,
