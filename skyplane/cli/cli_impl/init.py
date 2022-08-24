@@ -169,7 +169,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                     typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
                     return clear_azure_config(config)
         typer.secho(
-            f"    Azure managed identity created successfully! To delete it, run `az identity delete -n skyplane -g {config.azure_resource_group}`.",
+            f"    Azure managed identity created successfully! To delete it, run `az identity delete -n skyplane -g skyplane`.",
             fg="green",
         )
 
