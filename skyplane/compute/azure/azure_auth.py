@@ -4,7 +4,7 @@ import os
 import subprocess
 from typing import Dict, List, Optional
 
-from azure.identity import ClientSecretCredential
+from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
 from azure.mgmt.authorization import AuthorizationManagementClient
 from azure.mgmt.storage import StorageManagementClient
 from azure.storage.blob import BlobServiceClient, ContainerClient
@@ -43,11 +43,13 @@ class AzureAuthentication:
         self._credential = None
 
     @property
-    def credential(self) -> ClientSecretCredential:
+    def credential(self) -> DefaultAzureCredential:
         if self._credential is None:
-            self._credential = ClientSecretCredential(
-                tenant_id=self.config.azure_tenant_id, client_id=self.config.azure_client_id, client_secret=self.config.azure_client_secret
-            )
+            if is_gateway_env:
+                return ManagedIdentityCredential(self.config.azure_client_id)
+            else:
+                return DefaultAzureCredential(managed_identity_client_id=self.config.azure_client_id, exclude_powershell_credential=True,
+            exclude_visual_studio_code_credential=True)
         return self._credential
 
     @property

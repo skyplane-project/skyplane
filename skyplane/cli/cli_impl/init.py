@@ -13,6 +13,8 @@ from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 
+from skylark.skyplane.compute.azure.azure_server import AzureServer
+
 
 def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> SkyplaneConfig:
     if non_interactive or typer.confirm("    Do you want to configure AWS support in Skyplane?", default=True):
@@ -63,12 +65,12 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         config.azure_enabled = False
         return config
 
-    def make_role_cmds(service_principal, subscription_id):
+    def make_role_cmds(principal_id, subscription_id):
         roles = ["Contributor", "Storage Blob Data Contributor", "Storage Account Contributor"]
         return [
             "az role assignment create --role".split(" ")
             + [role]
-            + f"--assignee {service_principal} --scope /subscriptions/{subscription_id}".split(" ")
+            + f"--assignee-object-id {principal_id} --scope /subscriptions/{subscription_id}".split(" ")
             for role in roles
         ]
 
@@ -94,142 +96,83 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             "subscription_id": os.environ.get("AZURE_SUBSCRIPTION_ID")
             or config.azure_subscription_id
             or AzureAuthentication.infer_subscription_id(),
+            "resource_group": os.environ.get("AZURE_RESOURCE_GROUP") or config.azure_resource_group or AzureServer.resource_group_name
         }
-        if non_interactive or not typer.confirm(
-            "    Do you want me to create an Azure service principal for you? (most common)", default=True
+        create_rg_cmd = "az group create -l westus2 -n skyplane"
+        out, err = subprocess.Popen(create_rg_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+        if err:
+            typer.secho(f"    Error running command: {create_rg_cmd}", fg="red", err=True)
+            typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red", err=True)
+            typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
+            return clear_azure_config(config)
+        
+        config.azure_subscription_id = typer.prompt(
+            "    Which Azure subscription ID do you want to use?", default=defaults["subscription_id"]
+        )
+
+        change_subscription_cmd = f"az account set --subscription {config.azure_subscription_id}"
+        create_umi_cmd = f"az identity create -g skyplane -n skyplane_umi"
+        typer.secho(f"    I will run the following commands to create an Azure managed identity:", fg="blue")
+        typer.secho(f"        $ {change_subscription_cmd}", fg="yellow")
+        typer.secho(f"        $ {create_umi_cmd}", fg="yellow")
+
+        with Progress(
+            TextColumn("    "), SpinnerColumn(), TextColumn("Creating Skyplane managed identity{task.description}"), transient=True
+        ) as progress:
+            progress.add_task("", total=None)
+            out, err = subprocess.Popen(change_subscription_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+            if out or err:
+                typer.secho(f"    Error running command: {change_subscription_cmd}", fg="red", err=True)
+                typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red", err=True)
+                typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
+                return clear_azure_config(config)
+
+            out, err = subprocess.Popen(create_umi_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+            try:
+                identity_json = json.loads(out.decode("utf-8"))
+            except:
+                typer.secho(f"    Error running command: {create_umi_cmd}", fg="red", err=True)
+                typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red", err=True)
+                typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
+                return clear_azure_config(config)
+            config.azure_client_id = identity_json["clientId"]
+            config.azure_principal_id = identity_json["principalId"]
+
+        if (
+            not config.azure_client_id
+            or not config.azure_principal_id
+            or not config.azure_subscription_id
         ):
-            typer.secho(
-                "    To manually create a service principal, follow the guide at: https://docs.microsoft.com/en-us/cli/azure/create-an-azure-service-principal-azure-cli",
-                fg="bright_black",
-            )
+            typer.secho("    Azure credentials not configured correctly, disabling Azure support.", fg="red", err=True)
+            return clear_azure_config(config)
 
-            config.azure_tenant_id = (
-                typer.prompt("    Azure tenant ID", default=defaults["tenant_id"]) if not non_interactive else defaults["tenant_id"]
-            )
-            config.azure_client_id = (
-                typer.prompt("    Azure client ID", default=defaults["client_id"]) if not non_interactive else defaults["client_id"]
-            )
-            config.azure_client_secret = (
-                typer.prompt("    Azure client secret", default=defaults["client_secret"], hide_input=True)
-                if not non_interactive
-                else defaults["client_secret"]
-            )
-            config.azure_subscription_id = (
-                typer.prompt("    Azure subscription ID", default=defaults["subscription_id"])
-                if not non_interactive
-                else defaults["subscription_id"]
-            )
-            if (
-                not config.azure_tenant_id
-                or not config.azure_client_id
-                or not config.azure_client_secret
-                or not config.azure_subscription_id
-            ):
-                typer.secho("    Azure credentials not configured correctly, disabling Azure support.", fg="red", err=True)
-                return clear_azure_config(config)
+        # authorize new managed identity with Storage Blob Data Contributor and Storage Account Contributor roles to the subscription
+        role_cmds = make_role_cmds(config.azure_principal_id, config.azure_subscription_id)
+        typer.secho(
+            f"    I will run the following commands to authorize the newly created Skyplane managed identity to access your storage accounts:",
+            fg="blue",
+        )
+        for role_cmd in role_cmds:
+            typer.secho(f"        $ {' '.join(role_cmd)}", fg="yellow")
 
-            typer.secho("    Azure credentials configured successfully!", fg="blue")
-            typer.secho("    Ensure the newly can access your Azure storage accounts by running the following:", fg="blue")
-            for cmd in make_role_cmds(config.azure_client_id, config.azure_subscription_id):
-                typer.secho("        " + " ".join(cmd), fg="blue")
-
-            # block until the user confirms they have authorized the service principal
-            if not non_interactive and not typer.confirm(
-                "    Have you authorized the service principal by running the above commands?", default=True
-            ):
-                typer.secho("    Please authorize the service principal before continuing.", fg="red", err=True)
-                return clear_azure_config(config)
-        # walk user through setting up an Azure service principal
-        else:
-            config.azure_subscription_id = typer.prompt(
-                "    Which Azure subscription ID do you want to use?", default=defaults["subscription_id"]
-            )
-
-            change_subscription_cmd = f"az account set --subscription {config.azure_subscription_id}"
-            create_sp_cmd = "az ad sp create-for-rbac --name skyplane"
-            typer.secho(f"    I will run the following commands to create an Azure service principal:", fg="blue")
-            typer.secho(f"        $ {change_subscription_cmd}", fg="yellow")
-            typer.secho(f"        $ {create_sp_cmd}", fg="yellow")
-
-            with Progress(
-                TextColumn("    "), SpinnerColumn(), TextColumn("Creating Skyplane service principal{task.description}"), transient=True
-            ) as progress:
-                progress.add_task("", total=None)
-                out, err = subprocess.Popen(change_subscription_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-                if out or err:
-                    typer.secho(f"    Error running command: {change_subscription_cmd}", fg="red", err=True)
-                    typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red", err=True)
-                    typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
-                    typer.secho(
-                        "    You will need to manually create a service principal and provide the Azure tenant ID, client ID, client secret and subscription ID. Follow the guide at: https://docs.microsoft.com/en-us/cli/azure/create-an-azure-service-principal-azure-cli",
-                        fg="red",
-                        err=True,
-                    )
-                    typer.secho(
-                        '    After you create the service principal, run `skyplane init --reinit-azure` to configure it and select "N" when asked "Do you want me to create an Azure service principal for you?"',
-                        fg="red",
-                        err=True,
-                    )
-                    return clear_azure_config(config)
-
-                out, err = subprocess.Popen(create_sp_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-                try:
-                    sp_json = json.loads(out.decode("utf-8"))
-                except:
-                    typer.secho(f"    Error running command: {create_sp_cmd}", fg="red", err=True)
-                    typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red", err=True)
-                    typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
-                    typer.secho(
-                        "    You will need to manually create a service principal and provide the Azure tenant ID, client ID, client secret and subscription ID. Follow the guide at: https://docs.microsoft.com/en-us/cli/azure/create-an-azure-service-principal-azure-cli",
-                        fg="red",
-                        err=True,
-                    )
-                    typer.secho(
-                        '    After you create the service principal, run `skyplane init --reinit-azure` to configure it and select "N" when asked "Do you want me to create an Azure service principal for you?"',
-                        fg="red",
-                        err=True,
-                    )
-                    return clear_azure_config(config)
-                config.azure_tenant_id = sp_json["tenant"]
-                config.azure_client_id = sp_json["appId"]
-                config.azure_client_secret = sp_json["password"]
-
-            if (
-                not config.azure_tenant_id
-                or not config.azure_client_id
-                or not config.azure_client_secret
-                or not config.azure_subscription_id
-            ):
-                typer.secho("    Azure credentials not configured correctly, disabling Azure support.", fg="red", err=True)
-                return clear_azure_config(config)
-
-            # authorize new service principal with Storage Blob Data Contributor and Storage Account Contributor roles to the subscription
-            role_cmds = make_role_cmds(config.azure_client_id, config.azure_subscription_id)
-            typer.secho(
-                f"    I will run the following commands to authorize the newly created Skyplane service principal to access your storage accounts:",
-                fg="blue",
-            )
+        with Progress(
+            TextColumn("    "),
+            SpinnerColumn(),
+            TextColumn("Authorizing managed identity to access storage accounts{task.description}"),
+            transient=True,
+        ) as progress:
+            progress.add_task("", total=None)
             for role_cmd in role_cmds:
-                typer.secho(f"        $ {' '.join(role_cmd)}", fg="yellow")
-
-            with Progress(
-                TextColumn("    "),
-                SpinnerColumn(),
-                TextColumn("Authorizing service principal to access storage accounts{task.description}"),
-                transient=True,
-            ) as progress:
-                progress.add_task("", total=None)
-                for role_cmd in role_cmds:
-                    out, err = subprocess.Popen(role_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-                    if err:
-                        typer.secho(f"    Error running command: {role_cmd}", fg="red", err=True)
-                        typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red", err=True)
-                        typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
-                        return clear_azure_config(config)
-            typer.secho(
-                f"    Azure service principal created successfully! To delete it, run `az ad sp delete --id {config.azure_client_id}`.",
-                fg="green",
-            )
+                out, err = subprocess.Popen(role_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+                if err:
+                    typer.secho(f"    Error running command: {role_cmd}", fg="red", err=True)
+                    typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red", err=True)
+                    typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
+                    return clear_azure_config(config)
+        typer.secho(
+            f"    Azure managed identity created successfully! To delete it, run `az identity delete -n skyplane -g {config.azure_resource_group}`.",
+            fg="green",
+        )
 
         config.azure_enabled = True
         auth = AzureAuthentication(config=config)
