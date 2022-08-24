@@ -13,8 +13,7 @@ from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 
-from skylark.skyplane.compute.azure.azure_server import AzureServer
-
+from skyplane.compute.azure.azure_server import AzureServer
 
 def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> SkyplaneConfig:
     if non_interactive or typer.confirm("    Do you want to configure AWS support in Skyplane?", default=True):
@@ -96,7 +95,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             "subscription_id": os.environ.get("AZURE_SUBSCRIPTION_ID")
             or config.azure_subscription_id
             or AzureAuthentication.infer_subscription_id(),
-            "resource_group": os.environ.get("AZURE_RESOURCE_GROUP") or config.azure_resource_group or AzureServer.resource_group_name
+            "resource_group": os.environ.get("AZURE_RESOURCE_GROUP") or AzureServer.resource_group_name
         }
         create_rg_cmd = "az group create -l westus2 -n skyplane"
         out, err = subprocess.Popen(create_rg_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
