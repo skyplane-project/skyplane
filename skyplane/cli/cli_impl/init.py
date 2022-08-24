@@ -69,7 +69,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         return [
             "az role assignment create --role".split(" ")
             + [role]
-            + f"--assignee-object-id {principal_id} --scope /subscriptions/{subscription_id}".split(" ")
+            + f"--assignee-object-id {principal_id} --assignee-principal-type ServicePrincipal --scope /subscriptions/{subscription_id}".split(" ")
             for role in roles
         ]
 
