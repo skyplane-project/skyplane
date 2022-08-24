@@ -69,7 +69,7 @@ class AzureAuthentication:
             except:
                 return False
 
-        wait_for(try_login, desc="Wait for Azure client secret to register", timeout=15)
+        wait_for(try_login, desc="Wait for Azure roles to propagate", timeout=200)
 
     def save_region_config(self):
         if self.config.azure_enabled == False:

@@ -179,7 +179,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             with Progress(
                 TextColumn("    "),
                 SpinnerColumn(),
-                TextColumn("Waiting for Azure client secret to propagate{task.description}"),
+                TextColumn("Waiting for Azure roles to propagate{task.description}"),
                 transient=True,
             ) as progress:
                 progress.add_task("", total=None)
