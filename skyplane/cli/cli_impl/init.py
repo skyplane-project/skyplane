@@ -169,7 +169,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                     typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
                     return clear_azure_config(config)
         typer.secho(
-            f"    Azure managed identity created successfully! To delete it, run `az identity delete -n skyplane -g skyplane`.",
+            f"    Azure managed identity created successfully! To delete it, run `az identity delete -n skyplane_umi -g skyplane`.",
             fg="green",
         )
 
@@ -186,7 +186,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                 auth.wait_for_valid_token()
         except TimeoutError:
             typer.secho(
-                "    The Azure service principal doesn't have access to your storage accounts. Please ensure you have granted the service principal the Storage Blob Data Contributor and Storage Account Contributor roles.",
+                "    The Azure managed identity doesn't have access to your storage accounts. Please ensure you have granted the managed identity the Storage Blob Data Contributor and Storage Account Contributor roles.",
                 fg="red",
                 err=True,
             )
