@@ -13,8 +13,7 @@ from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 
-from skylark.skyplane.compute.azure.azure_server import AzureServer
-
+from skyplane.compute.azure.azure_server import AzureServer
 
 def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> SkyplaneConfig:
     if non_interactive or typer.confirm("    Do you want to configure AWS support in Skyplane?", default=True):
