@@ -12,6 +12,7 @@ from azure.storage.blob import BlobServiceClient, ContainerClient
 from skyplane import azure_config_path
 from skyplane import azure_sku_path
 from skyplane import config_path
+from skyplane import is_gateway_env
 from skyplane.config import SkyplaneConfig
 from skyplane.utils.fn import do_parallel, wait_for
 
