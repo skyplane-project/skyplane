@@ -47,8 +47,10 @@ class AzureAuthentication:
     def credential(self) -> DefaultAzureCredential:
         if self._credential is None:
             if is_gateway_env:
+                print("Configured managed identity credential.")
                 return ManagedIdentityCredential(self.config.azure_client_id)
             else:
+                print("Configured DefaultAzureCredential with UMI client id: ", self.config.azure_client_id)
                 return DefaultAzureCredential(managed_identity_client_id=self.config.azure_client_id, exclude_powershell_credential=True,
             exclude_visual_studio_code_credential=True)
         return self._credential
@@ -73,9 +75,6 @@ class AzureAuthentication:
         wait_for(try_login, desc="Wait for Azure roles to propagate", timeout=200)
 
     def save_region_config(self):
-        os.environ["AZURE_CLIENT_ID"] = self.config.azure_client_id
-        os.environ["AZURE_SUBSCRIPTION_ID"] = self.config.azure_subscription_id
-
         if self.config.azure_enabled == False:
             self.clear_region_config()
             return
