@@ -175,22 +175,22 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
 
         config.azure_enabled = True
         auth = AzureAuthentication(config=config)
-        try:
-            with Progress(
-                TextColumn("    "),
-                SpinnerColumn(),
-                TextColumn("Waiting for Azure roles to propagate{task.description}"),
-                transient=True,
-            ) as progress:
-                progress.add_task("", total=None)
-                auth.wait_for_valid_token()
-        except TimeoutError:
-            typer.secho(
-                "    The Azure managed identity doesn't have access to your storage accounts. Please ensure you have granted the managed identity the Storage Blob Data Contributor and Storage Account Contributor roles.",
-                fg="red",
-                err=True,
-            )
-            return clear_azure_config(config)
+        # try:
+        #     with Progress(
+        #         TextColumn("    "),
+        #         SpinnerColumn(),
+        #         TextColumn("Waiting for Azure roles to propagate{task.description}"),
+        #         transient=True,
+        #     ) as progress:
+        #         progress.add_task("", total=None)
+        #         auth.wait_for_valid_token()
+        # except TimeoutError:
+        #     typer.secho(
+        #         "    The Azure managed identity doesn't have access to your storage accounts. Please ensure you have granted the managed identity the Storage Blob Data Contributor and Storage Account Contributor roles.",
+        #         fg="red",
+        #         err=True,
+        #     )
+        #     return clear_azure_config(config)
         with Progress(
             TextColumn("    "),
             SpinnerColumn(),
