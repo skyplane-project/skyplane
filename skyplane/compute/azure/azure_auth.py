@@ -73,6 +73,9 @@ class AzureAuthentication:
         wait_for(try_login, desc="Wait for Azure roles to propagate", timeout=200)
 
     def save_region_config(self):
+        os.environ["AZURE_CLIENT_ID"] = self.config.azure_client_id
+        os.environ["AZURE_SUBSCRIPTION_ID"] = self.config.azure_subscription_id
+
         if self.config.azure_enabled == False:
             self.clear_region_config()
             return
