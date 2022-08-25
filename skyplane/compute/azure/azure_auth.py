@@ -16,6 +16,8 @@ from skyplane import is_gateway_env
 from skyplane.config import SkyplaneConfig
 from skyplane.utils.fn import do_parallel, wait_for
 
+from skylark.skyplane.compute.const_cmds import query_which_cloud
+
 # optional imports due to large package size
 try:
     from azure.mgmt.network import NetworkManagementClient
@@ -51,8 +53,10 @@ class AzureAuthentication:
                 return ManagedIdentityCredential(self.config.azure_client_id)
             else:
                 print("Configured DefaultAzureCredential with UMI client id: ", self.config.azure_client_id)
-                return DefaultAzureCredential(managed_identity_client_id=self.config.azure_client_id, exclude_powershell_credential=True,
-            exclude_visual_studio_code_credential=True)
+                if (query_which_cloud() is not "azure"):
+                    return DefaultAzureCredential(exclude_managed_identity_credential=True, exclude_powershell_credential=True, exclude_visual_studio_code_credential=True)
+                else:
+                    return DefaultAzureCredential(managed_identity_client_id=self.config.azure_client_id, exclude_powershell_credential=True, exclude_visual_studio_code_credential=True)
         return self._credential
 
     @property
