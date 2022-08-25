@@ -16,7 +16,7 @@ from skyplane import is_gateway_env
 from skyplane.config import SkyplaneConfig
 from skyplane.utils.fn import do_parallel, wait_for
 
-from skylark.skyplane.compute.const_cmds import query_which_cloud
+from skyplane.compute.const_cmds import query_which_cloud
 
 # optional imports due to large package size
 try:
