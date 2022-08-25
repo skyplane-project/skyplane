@@ -52,7 +52,6 @@ class AzureAuthentication:
                 print("Configured managed identity credential.")
                 return ManagedIdentityCredential(self.config.azure_client_id)
             else:
-                print("Configured DefaultAzureCredential with UMI client id: ", self.config.azure_client_id)
                 if query_which_cloud() != "azure":
                     return DefaultAzureCredential(exclude_managed_identity_credential=True, exclude_powershell_credential=True, exclude_visual_studio_code_credential=True)
                 else:
@@ -97,7 +96,7 @@ class AzureAuthentication:
             return set(valid_skus)
 
         result = do_parallel(
-            get_skus, region_list, spinner=False, spinner_persist=False, desc="Query available VM SKUs from each enabled Azure region", n=8
+            get_skus, region_list, spinner=False, spinner_persist=False, desc="Query available VM SKUs from each enabled Azure region (est. time: ~1 minute", n=8
         )
         region_sku = dict()
         for region, skus in result:
