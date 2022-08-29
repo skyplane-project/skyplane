@@ -199,6 +199,7 @@ def cp(
             }
             stats = client.make_stat(src_region, dst_region, arguments_dict=args, transfer_stats=transfer_stats)
             client.write_usage_data(stats)
+            client.report_usage_data('dev', stats)
         return 0 if transfer_stats.monitor_status == "completed" else 1
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")

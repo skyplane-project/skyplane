@@ -1,6 +1,8 @@
 import os
 import sys
 import time
+import datetime
+import requests
 from enum import Enum, auto
 from typing import Optional, Dict
 import uuid
@@ -17,6 +19,8 @@ from skyplane import cloud_config, config_path, tmp_log_dir
 from skyplane.config import _map_type
 from skyplane.utils import logger
 
+def _get_current_timestamp_ns():
+    return int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1e9)
 
 class UsageStatsStatus(Enum):
     ENABLED_EXPLICITLY = auto()
@@ -180,21 +184,29 @@ class UsageClient:
         with open(destination, "w+") as json_file:
             json_file.write(json.dumps(asdict(data)))
 
-    # TODO: API not yet available
-    # def report_usage_data(self, url: str, data: UsageStatsToReport) -> None:
-    #     """Report the usage data to the usage server.
-    #     Params:
-    #         url: The URL to update resource usage.
-    #         data: Data to report.
-    #     Raises:
-    #         requests.HTTPError if requests fails.
-    #     """
-    #     r = requests.request(
-    #         "POST",
-    #         url,
-    #         headers={"Content-Type": "application/json"},
-    #         json=asdict(data),
-    #         timeout=10,
-    #     )
-    #     r.raise_for_status()
-    #     return r
+    def report_usage_data(self, env: str, data: UsageStatsToReport) -> None:
+        """Report the usage data to the usage server.
+        Params:
+            data: Data to report.
+        Raises:
+            requests.HTTPError if requests fails.
+        """
+
+        prom_labels = {'environment': env}
+        headers = {'Content-type': 'application/json'}
+        payload = {
+            'streams': [{
+                'stream': prom_labels,
+                'values': [[str(_get_current_timestamp_ns()), json.dumps(asdict(data))]]
+            }]
+        }
+        r = requests.post(
+            skyplane.cli.usage.definitions.LOKI_URL,
+            headers=headers,
+            data=payload,
+            timeout=0.5,
+        )
+
+        if r.status_code != 204:
+            logger.debug(f'Grafana Loki failed with response: {r.text}\n')
+        
