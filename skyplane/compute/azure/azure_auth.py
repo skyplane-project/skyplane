@@ -53,9 +53,18 @@ class AzureAuthentication:
                 return ManagedIdentityCredential(client_id=self.config.azure_client_id)
             else:
                 if query_which_cloud() != "azure":
-                    return DefaultAzureCredential(exclude_environment_credential=True, exclude_managed_identity_credential=True, exclude_powershell_credential=True, exclude_visual_studio_code_credential=True)
+                    return DefaultAzureCredential(
+                        exclude_environment_credential=True,
+                        exclude_managed_identity_credential=True,
+                        exclude_powershell_credential=True,
+                        exclude_visual_studio_code_credential=True,
+                    )
                 else:
-                    return DefaultAzureCredential(managed_identity_client_id=self.config.azure_client_id, exclude_powershell_credential=True, exclude_visual_studio_code_credential=True)
+                    return DefaultAzureCredential(
+                        managed_identity_client_id=self.config.azure_client_id,
+                        exclude_powershell_credential=True,
+                        exclude_visual_studio_code_credential=True,
+                    )
         return self._credential
 
     @property
@@ -96,7 +105,12 @@ class AzureAuthentication:
             return set(valid_skus)
 
         result = do_parallel(
-            get_skus, region_list, spinner=False, spinner_persist=False, desc="Query available VM SKUs from each enabled Azure region (est. time: ~1 minute", n=8
+            get_skus,
+            region_list,
+            spinner=False,
+            spinner_persist=False,
+            desc="Query available VM SKUs from each enabled Azure region (est. time: ~1 minute",
+            n=8,
         )
         region_sku = dict()
         for region, skus in result:

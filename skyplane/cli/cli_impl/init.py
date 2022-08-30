@@ -15,6 +15,7 @@ from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 
 from skyplane.compute.azure.azure_server import AzureServer
 
+
 def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> SkyplaneConfig:
     if non_interactive or typer.confirm("    Do you want to configure AWS support in Skyplane?", default=True):
         # get AWS credentials from boto3
@@ -69,7 +70,9 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         return [
             "az role assignment create --role".split(" ")
             + [role]
-            + f"--assignee-object-id {principal_id} --assignee-principal-type ServicePrincipal --scope /subscriptions/{subscription_id}".split(" ")
+            + f"--assignee-object-id {principal_id} --assignee-principal-type ServicePrincipal --scope /subscriptions/{subscription_id}".split(
+                " "
+            )
             for role in roles
         ]
 
@@ -95,7 +98,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             "subscription_id": os.environ.get("AZURE_SUBSCRIPTION_ID")
             or config.azure_subscription_id
             or AzureAuthentication.infer_subscription_id(),
-            "resource_group": os.environ.get("AZURE_RESOURCE_GROUP") or AzureServer.resource_group_name
+            "resource_group": os.environ.get("AZURE_RESOURCE_GROUP") or AzureServer.resource_group_name,
         }
         create_rg_cmd = "az group create -l westus2 -n skyplane"
         out, err = subprocess.Popen(create_rg_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
@@ -104,7 +107,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red", err=True)
             typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
             return clear_azure_config(config)
-        
+
         config.azure_subscription_id = typer.prompt(
             "    Which Azure subscription ID do you want to use?", default=defaults["subscription_id"]
         )
@@ -137,11 +140,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             config.azure_client_id = identity_json["clientId"]
             config.azure_principal_id = identity_json["principalId"]
 
-        if (
-            not config.azure_client_id
-            or not config.azure_principal_id
-            or not config.azure_subscription_id
-        ):
+        if not config.azure_client_id or not config.azure_principal_id or not config.azure_subscription_id:
             typer.secho("    Azure credentials not configured correctly, disabling Azure support.", fg="red", err=True)
             return clear_azure_config(config)
 

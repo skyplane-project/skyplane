@@ -290,7 +290,7 @@ def launch_replication_job(
         )
         total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
         console.print(f":rocket: [bold blue]{total_bytes / GB:.2f}GB transfer job launched[/bold blue]")
-        
+
         stats = rc.monitor_transfer(
             job,
             show_spinner=True,

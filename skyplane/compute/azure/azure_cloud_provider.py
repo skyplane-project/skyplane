@@ -363,15 +363,17 @@ class AzureCloudProvider(CloudProvider):
                             "network_profile": {"network_interfaces": [{"id": nic_result.id}]},
                             # give VM managed identity w/ user assigned identity
                             "identity": {
-                                "type": ResourceIdentityType.user_assigned, 
-                                "user_assigned_identities":  [{
-                                    # zero-documentation.. *sigh*
-                                    "key": f"/subscriptions/{cloud_config.azure_subscription_id}/resourceGroups/skyplane/providers/Microsoft.ManagedIdentity/userAssignedIdentities/skyplane_umi",
-                                    "value": {
-                                        "principal_id": cloud_config.azure_principal_id,
-                                        "client_id": cloud_config.azure_client_id
+                                "type": ResourceIdentityType.user_assigned,
+                                "user_assigned_identities": [
+                                    {
+                                        # zero-documentation.. *sigh*
+                                        "key": f"/subscriptions/{cloud_config.azure_subscription_id}/resourceGroups/skyplane/providers/Microsoft.ManagedIdentity/userAssignedIdentities/skyplane_umi",
+                                        "value": {
+                                            "principal_id": cloud_config.azure_principal_id,
+                                            "client_id": cloud_config.azure_client_id,
+                                        },
                                     }
-                                }]
+                                ],
                             },
                         },
                     )
@@ -384,7 +386,7 @@ class AzureCloudProvider(CloudProvider):
                         raise exceptions.InsufficientVCPUException(f"Got QuotaExceeded error in Azure region {location}") from e
                     else:
                         raise
-        
+
         server = AzureServer(name)
         server.wait_for_ssh_ready()
         return server
