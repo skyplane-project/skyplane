@@ -133,9 +133,6 @@ def generate_full_transferobjlist(
     source_iface = ObjectStoreInterface.create(source_region, source_bucket)
     dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
 
-    # acct_iface = AzureStorageAccountInterface("skyplaneasim").storage_account_obj()
-    # breakpoint()
-    # ensure buckets exist
     if not source_iface.bucket_exists():
         raise exceptions.MissingBucketException(f"Source bucket {source_bucket} does not exist")
     if not dest_iface.bucket_exists():
