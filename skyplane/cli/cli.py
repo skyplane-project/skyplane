@@ -178,12 +178,9 @@ def cp(
 
         if cloud_config.get_flag("verify_checksums"):
             provider_dst = topo.sink_region().split(":")[0]
-            if provider_dst == "azure":
-                typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True, err=True)
-            else:
-                with Progress(SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}")) as progress:
-                    progress.add_task("", total=None)
-                    ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+            with Progress(SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}")) as progress:
+                progress.add_task("", total=None)
+                ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
 
         client = UsageClient()
         if client.enabled():
