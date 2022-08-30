@@ -11,6 +11,7 @@ from rich import print as rprint
 
 from skyplane import exceptions, GB, format_bytes, gateway_docker_image, skyplane_root
 from skyplane.compute.cloud_providers import CloudProvider
+from skyplane.obj_store.azure_storage_account_interface import AzureStorageAccountInterface
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.obj_store.s3_interface import S3Object
 from skyplane.obj_store.gcs_interface import GCSObject
@@ -132,6 +133,8 @@ def generate_full_transferobjlist(
     source_iface = ObjectStoreInterface.create(source_region, source_bucket)
     dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
 
+    # acct_iface = AzureStorageAccountInterface("skyplaneasim").storage_account_obj()
+    # breakpoint()
     # ensure buckets exist
     if not source_iface.bucket_exists():
         raise exceptions.MissingBucketException(f"Source bucket {source_bucket} does not exist")
@@ -287,11 +290,7 @@ def launch_replication_job(
         )
         total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
         console.print(f":rocket: [bold blue]{total_bytes / GB:.2f}GB transfer job launched[/bold blue]")
-        if topo.source_region().split(":")[0] == "azure" or topo.sink_region().split(":")[0] == "azure":
-            typer.secho(
-                f"Warning: For Azure transfers, your transfer may block for up to 120s waiting for role assignments to propagate. See issue #355.",
-                fg="yellow",
-            )
+        
         stats = rc.monitor_transfer(
             job,
             show_spinner=True,
