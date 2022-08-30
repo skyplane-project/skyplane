@@ -147,14 +147,8 @@ class AzureServer(Server):
         compute_client = self.auth.get_compute_client()
         network_client = self.auth.get_network_client()
 
-        # remove any role assignments to the VM's system assigned identity
         auth_client = self.auth.get_authorization_client()
         vm = self.get_virtual_machine()
-        
-        for identity in vm.identity.user_assigned_identities.values():
-            for assignment in auth_client.role_assignments.list(filter="principalId eq '{}'".format(identity.principal_id)):
-                logger.fs.debug(f"Deleting role assignment {assignment.name}")
-                auth_client.role_assignments.delete(scope=assignment.scope, role_assignment_name=assignment.name)
 
         vm_poller = compute_client.virtual_machines.begin_delete(AzureServer.resource_group_name, self.vm_name(self.name))
         _ = vm_poller.result()
