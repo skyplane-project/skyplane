@@ -109,7 +109,7 @@ class AzureAuthentication:
             region_list,
             spinner=False,
             spinner_persist=False,
-            desc="Query available VM SKUs from each enabled Azure region (est. time: ~1 minute",
+            desc="Query available VM SKUs from each enabled Azure region (est. time: ~1 minute)",
             n=8,
         )
         region_sku = dict()

@@ -12,7 +12,6 @@ import skyplane.cli
 import skyplane.cli.usage.definitions
 import skyplane.cli.usage.client
 from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
-from skyplane.obj_store.azure_storage_account_interface import AzureStorageAccountInterface
 from skyplane.replicate.replicator_client import ReplicatorClient
 
 import typer

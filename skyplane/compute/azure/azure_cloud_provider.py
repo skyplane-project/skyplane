@@ -366,7 +366,7 @@ class AzureCloudProvider(CloudProvider):
                                 "type": ResourceIdentityType.user_assigned,
                                 "user_assigned_identities": [
                                     {
-                                        # zero-documentation.. *sigh*
+                                        # code from: https://github.com/ray-project/ray/pull/7080/files#diff-0f1bb1da82d112b850a85c1b7b1876e50efd5a7400c62a5c4de334f494d3bf46R222-R233
                                         "key": f"/subscriptions/{cloud_config.azure_subscription_id}/resourceGroups/skyplane/providers/Microsoft.ManagedIdentity/userAssignedIdentities/skyplane_umi",
                                         "value": {
                                             "principal_id": cloud_config.azure_principal_id,
