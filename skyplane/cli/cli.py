@@ -105,7 +105,7 @@ def cp(
     provider_dst, bucket_dst, path_dst = parse_path(dst)
 
     clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
-    
+
     args = {
         "cmd": "cp",
         "recursive": recursive,
@@ -116,7 +116,7 @@ def cp(
         "max_instances": max_instances,
         "solve": solve,
     }
-    
+
     if provider_src == "local" or provider_dst == "local":
         typer.secho("Local transfers are not yet supported (but will be soon!)", fg="red", err=True)
         typer.secho("Skyplane is currently most optimized for cloud to cloud transfers.", fg="yellow", err=True)
@@ -146,7 +146,7 @@ def cp(
             error_dict = {"loc": "create_pairs", "message": str(e)[:150]}
             stats = client.make_error(src_region_tag, dst_region_tag, error_dict, args)
             client.write_usage_data(stats)
-            client.report_usage_data('error', stats)
+            client.report_usage_data("error", stats)
 
             raise typer.Exit(1)
 
@@ -213,7 +213,7 @@ def cp(
             if transfer_stats.monitor_status == "completed":
                 stats = client.make_stat(src_region, dst_region, arguments_dict=args, transfer_stats=transfer_stats)
                 client.write_usage_data(stats)
-                client.report_usage_data('usage', stats)
+                client.report_usage_data("usage", stats)
         return 0 if transfer_stats.monitor_status == "completed" else 1
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
@@ -313,7 +313,7 @@ def sync(
         error_dict = {"loc": "create_pairs", "message": str(e)[:150]}
         stats = client.make_error(src_region_tag, dst_region_tag, error_dict, args)
         client.write_usage_data(stats)
-        client.report_usage_data('error', stats)
+        client.report_usage_data("error", stats)
 
         raise typer.Exit(1)
 
@@ -331,7 +331,7 @@ def sync(
         error_dict = {"loc": "create_pairs", "message": err}
         stats = client.make_error(src_region, dst_region, error_dict, args)
         client.write_usage_data(stats)
-        client.report_usage_data('error', stats)
+        client.report_usage_data("error", stats)
 
         raise typer.Exit(0)
 
@@ -390,13 +390,13 @@ def sync(
             with Progress(SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}"), transient=True) as progress:
                 progress.add_task("", total=None)
                 ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
-        
+
     client = UsageClient()
     if client.enabled():
         if transfer_stats.monitor_status == "completed":
             stats = client.make_stat(src_region, dst_region, arguments_dict=args, transfer_stats=transfer_stats)
             client.write_usage_data(stats)
-            client.report_usage_data('usage', stats)
+            client.report_usage_data("usage", stats)
     return 0 if transfer_stats.monitor_status == "completed" else 1
 
 

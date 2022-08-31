@@ -19,8 +19,10 @@ from skyplane import cloud_config, config_path, tmp_log_dir
 from skyplane.config import _map_type
 from skyplane.utils import logger
 
+
 def _get_current_timestamp_ns():
     return int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1e9)
+
 
 class UsageStatsStatus(Enum):
     ENABLED_EXPLICITLY = auto()
@@ -217,14 +219,9 @@ class UsageClient:
             requests.HTTPError if requests fails.
         """
 
-        prom_labels = {'type': type, 'environment': 'prod'}
-        headers = {'Content-type': 'application/json'}
-        payload = {
-            'streams': [{
-                'stream': prom_labels,
-                'values': [[str(_get_current_timestamp_ns()), json.dumps(asdict(data))]]
-            }]
-        }
+        prom_labels = {"type": type, "environment": "prod"}
+        headers = {"Content-type": "application/json"}
+        payload = {"streams": [{"stream": prom_labels, "values": [[str(_get_current_timestamp_ns()), json.dumps(asdict(data))]]}]}
         payload = json.dumps(payload)
         r = requests.post(
             skyplane.cli.usage.definitions.LOKI_URL,
@@ -234,5 +231,4 @@ class UsageClient:
         )
 
         if r.status_code != 204:
-            logger.debug(f'Grafana Loki failed with response: {r.text}\n')
-        
+            logger.debug(f"Grafana Loki failed with response: {r.text}\n")

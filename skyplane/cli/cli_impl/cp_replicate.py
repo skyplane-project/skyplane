@@ -43,13 +43,13 @@ def generate_topology(
         if src_region == dst_region:
             e = "Solver is not supported for intra-region transfers, run without the --solve flag"
             typer.secho(e, fg="red", err=True)
-            
+
             client = UsageClient()
             if client.enabled():
                 error_dict = {"loc": "generate_topology", "message": e}
                 stats = client.make_error(src_region, dst_region, error_dict, args)
                 client.write_usage_data(stats)
-                client.report_usage_data('error', stats)
+                client.report_usage_data("error", stats)
 
             raise typer.Exit(1)
 
@@ -332,13 +332,13 @@ def launch_replication_job(
             s = signal.signal(signal.SIGINT, signal.SIG_IGN)
             rc.deprovision_gateways()
             signal.signal(signal.SIGINT, s)
-        
+
         client = UsageClient()
         if client.enabled():
             error_dict = {"loc": "launch_replication_job", "message": str(e)[:150]}
             err_stats = client.make_error(src_region, dst_region, error_dict, args)
             client.write_usage_data(err_stats)
-            client.report_usage_data('error', err_stats)
+            client.report_usage_data("error", err_stats)
         os._exit(1)  # exit now
 
     if not reuse_gateways:
@@ -357,7 +357,7 @@ def launch_replication_job(
             error_dict = {"loc": "replication_monitor", "message": err[:150]}
             err_stats = client.make_error(src_region, dst_region, error_dict, args)
             client.write_usage_data(err_stats)
-            client.report_usage_data('error', err_stats)
+            client.report_usage_data("error", err_stats)
         raise typer.Exit(1)
     elif stats.monitor_status == "completed":
         rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
@@ -372,5 +372,5 @@ def launch_replication_job(
             error_dict = {"loc": "replication_monitor", "message": stats.monitor_status}
             err_stats = client.make_error(src_region, dst_region, error_dict, args)
             client.write_usage_data(err_stats)
-            client.report_usage_data('error', err_stats)
+            client.report_usage_data("error", err_stats)
     return stats
