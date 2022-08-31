@@ -55,9 +55,11 @@ class UsageStatsToReport:
     #: When the transfer is started.
     session_start_timestamp_ms: int
     #: The collection of command arguments used in the transfer session.
-    arguments_dict: Optional[Dict]
+    arguments_dict: Optional[Dict] = None
     #: The collection of transfer stats upon completion of the transfer session.
-    transfer_stats: Optional[TransferStats]
+    transfer_stats: Optional[TransferStats] = None
+    #: The collection of error message and the function responsible if the transfer fails.
+    error_dict: Optional[Dict] = None
 
 
 class UsageClient:
@@ -168,6 +170,29 @@ class UsageClient:
             transfer_stats=transfer_stats,
         )
 
+    def make_error(
+        self,
+        src_region_tag: str,
+        dest_region_tag: str,
+        error_dict: Dict,
+        arguments_dict: Optional[Dict] = None,
+    ):
+        return UsageStatsToReport(
+            skyplane_version=skyplane.__version__,
+            python_version=".".join(map(str, sys.version_info[:3])),
+            schema_version=skyplane.cli.usage.definitions.SCHEMA_VERSION,
+            client_id=self.client_id,
+            session_id=self.session_id,
+            source_region=":".join(src_region_tag.split(":")[1:]),
+            destination_region=":".join(dest_region_tag.split(":")[1:]),
+            source_cloud_provider=src_region_tag.split(":")[0],
+            destination_cloud_provider=dest_region_tag.split(":")[0],
+            os=sys.platform,
+            session_start_timestamp_ms=int(time.time() * 1000),
+            arguments_dict=arguments_dict,
+            error_dict=error_dict,
+        )
+
     def write_usage_data(self, data: UsageStatsToReport, dir_path: Optional[Path] = None):
         """Write the usage data to the directory.
         Params:
@@ -184,7 +209,7 @@ class UsageClient:
         with open(destination, "w+") as json_file:
             json_file.write(json.dumps(asdict(data)))
 
-    def report_usage_data(self, env: str, data: UsageStatsToReport) -> None:
+    def report_usage_data(self, type: str, data: UsageStatsToReport) -> None:
         """Report the usage data to the usage server.
         Params:
             data: Data to report.
@@ -192,7 +217,7 @@ class UsageClient:
             requests.HTTPError if requests fails.
         """
 
-        prom_labels = {'environment': env}
+        prom_labels = {'type': type, 'environment': 'prod'}
         headers = {'Content-type': 'application/json'}
         payload = {
             'streams': [{
@@ -200,6 +225,7 @@ class UsageClient:
                 'values': [[str(_get_current_timestamp_ns()), json.dumps(asdict(data))]]
             }]
         }
+        payload = json.dumps(payload)
         r = requests.post(
             skyplane.cli.usage.definitions.LOKI_URL,
             headers=headers,
