@@ -226,6 +226,7 @@ class UsageClient:
 
         prom_labels = {"type": type, "environment": "prod"}
         headers = {"Content-type": "application/json"}
+        data.sent_time = int(time.time() * 1000)
         payload = {"streams": [{"stream": prom_labels, "values": [[str(_get_current_timestamp_ns()), json.dumps(asdict(data))]]}]}
         payload = json.dumps(payload)
         r = requests.post(
@@ -239,7 +240,6 @@ class UsageClient:
             logger.debug(f"Grafana Loki failed with response: {r.text}\n")
             logger.debug(f"The log file is located at {path} and will be synced to remote later\n")
         else:
-            data.sent_time = int(time.time() * 1000)
-            with open(path, "r") as json_file:
+            with open(path, "w") as json_file:
                 json_file.write(json.dumps(asdict(data)))
             typer.secho("Successfully sent the log file to remote\n", fg="yellow", err=True)
