@@ -145,8 +145,8 @@ def cp(
             dst_region_tag = provider_dst + ":" + bucket_dst
             error_dict = {"loc": "create_pairs", "message": str(e)[:150]}
             stats = client.make_error(src_region_tag, dst_region_tag, error_dict, args)
-            client.write_usage_data(stats)
-            client.report_usage_data("error", stats)
+            destination = client.write_usage_data(stats)
+            client.report_usage_data("error", stats, destination)
 
             raise typer.Exit(1)
 
@@ -212,8 +212,8 @@ def cp(
         if client.enabled():
             if transfer_stats.monitor_status == "completed":
                 stats = client.make_stat(src_region, dst_region, arguments_dict=args, transfer_stats=transfer_stats)
-                client.write_usage_data(stats)
-                client.report_usage_data("usage", stats)
+                destination = client.write_usage_data(stats)
+                client.report_usage_data("usage", stats, destination)
         return 0 if transfer_stats.monitor_status == "completed" else 1
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
@@ -312,8 +312,8 @@ def sync(
         dst_region_tag = provider_dst + ":" + bucket_dst
         error_dict = {"loc": "create_pairs", "message": str(e)[:150]}
         stats = client.make_error(src_region_tag, dst_region_tag, error_dict, args)
-        client.write_usage_data(stats)
-        client.report_usage_data("error", stats)
+        destination = client.write_usage_data(stats)
+        client.report_usage_data("error", stats, destination)
 
         raise typer.Exit(1)
 
@@ -330,8 +330,8 @@ def sync(
         client = UsageClient()
         error_dict = {"loc": "create_pairs", "message": err}
         stats = client.make_error(src_region, dst_region, error_dict, args)
-        client.write_usage_data(stats)
-        client.report_usage_data("error", stats)
+        destination = client.write_usage_data(stats)
+        client.report_usage_data("error", stats, destination)
 
         raise typer.Exit(0)
 
@@ -395,8 +395,8 @@ def sync(
     if client.enabled():
         if transfer_stats.monitor_status == "completed":
             stats = client.make_stat(src_region, dst_region, arguments_dict=args, transfer_stats=transfer_stats)
-            client.write_usage_data(stats)
-            client.report_usage_data("usage", stats)
+            destination = client.write_usage_data(stats)
+            client.report_usage_data("usage", stats, destination)
     return 0 if transfer_stats.monitor_status == "completed" else 1
 
 

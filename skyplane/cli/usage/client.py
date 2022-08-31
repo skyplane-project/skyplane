@@ -62,6 +62,8 @@ class UsageStatsToReport:
     transfer_stats: Optional[TransferStats] = None
     #: The collection of error message and the function responsible if the transfer fails.
     error_dict: Optional[Dict] = None
+    #: The time of the log sent to Loki. It is None if not sent and stored locally in /tmp.
+    sent_time: Optional[int] = None
 
 
 class UsageClient:
@@ -200,6 +202,8 @@ class UsageClient:
         Params:
             data: Data to report
             dir_path: The path to the directory to write usage data.
+        Return:
+            destination: The absolute path of the usage data json file.
         """
         if dir_path is None:
             dir_path = tmp_log_dir / "usage" / self.client_id / self.session_id
@@ -210,8 +214,9 @@ class UsageClient:
         typer.secho(f"Storing usage information for transfer in {destination}", fg="yellow", err=True)
         with open(destination, "w+") as json_file:
             json_file.write(json.dumps(asdict(data)))
+        return destination
 
-    def report_usage_data(self, type: str, data: UsageStatsToReport) -> None:
+    def report_usage_data(self, type: str, data: UsageStatsToReport, path: Path) -> None:
         """Report the usage data to the usage server.
         Params:
             data: Data to report.
@@ -232,3 +237,9 @@ class UsageClient:
 
         if r.status_code != 204:
             logger.debug(f"Grafana Loki failed with response: {r.text}\n")
+            logger.debug(f"The log file is located at {path} and will be synced to remote later\n")
+        else:
+            data.sent_time = int(time.time() * 1000)
+            with open(path, "r") as json_file:
+                json_file.write(json.dumps(asdict(data)))
+            typer.secho("Successfully sent the log file to remote\n", fg="yellow", err=True)
