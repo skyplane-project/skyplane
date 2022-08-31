@@ -4,7 +4,7 @@ import pathlib
 import signal
 import sys
 import traceback
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 
 import typer
 from rich import print as rprint
@@ -21,6 +21,11 @@ from skyplane.utils import logger
 from skyplane.utils.timer import Timer
 from skyplane.cli.common import console
 
+import skyplane.cli
+import skyplane.cli.usage.definitions
+import skyplane.cli.usage.client
+from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
+
 
 def generate_topology(
     src_region: str,
@@ -32,10 +37,20 @@ def generate_topology(
     solver_required_throughput_gbits: float = 4,
     solver_throughput_grid: Optional[pathlib.Path] = skyplane_root / "profiles" / "throughput.csv",
     solver_verbose: Optional[bool] = False,
+    args: Optional[Dict] = None,
 ) -> ReplicationTopology:
     if solve:
         if src_region == dst_region:
-            typer.secho("Solver is not supported for intra-region transfers, run without the --solve flag", fg="red", err=True)
+            e = "Solver is not supported for intra-region transfers, run without the --solve flag"
+            typer.secho(e, fg="red", err=True)
+
+            client = UsageClient()
+            if client.enabled():
+                error_dict = {"loc": "generate_topology", "message": e}
+                stats = client.make_error(src_region, dst_region, error_dict, args)
+                destination = client.write_usage_data(stats)
+                client.report_usage_data("error", stats, destination)
+
             raise typer.Exit(1)
 
         # build problem and solve
@@ -245,6 +260,9 @@ def launch_replication_job(
     # logging options
     time_limit_seconds: Optional[int] = None,
     log_interval_s: float = 1.0,
+    src_region: Optional[str] = None,
+    dst_region: Optional[str] = None,
+    args: Optional[Dict] = None,
 ):
     if "SKYPLANE_DOCKER_IMAGE" in os.environ:
         rprint(f"[bright_black]Using overridden docker image: {gateway_docker_image}[/bright_black]")
@@ -309,6 +327,13 @@ def launch_replication_job(
             s = signal.signal(signal.SIGINT, signal.SIG_IGN)
             rc.deprovision_gateways()
             signal.signal(signal.SIGINT, s)
+
+        client = UsageClient()
+        if client.enabled():
+            error_dict = {"loc": "launch_replication_job", "message": str(e)[:150]}
+            err_stats = client.make_error(src_region, dst_region, error_dict, args)
+            destination = client.write_usage_data(err_stats)
+            client.report_usage_data("error", err_stats, destination)
         os._exit(1)  # exit now
 
     if not reuse_gateways:
@@ -316,10 +341,18 @@ def launch_replication_job(
         rc.deprovision_gateways()
         signal.signal(signal.SIGINT, s)
     if stats.monitor_status == "error":
+        err = ""
         for instance, errors in stats.errors.items():
             for error in errors:
                 typer.secho(f"\n❌ {instance} encountered error:", fg="red", err=True, bold=True)
                 typer.secho(error, fg="red", err=True)
+                err += error + "\n"
+        client = UsageClient()
+        if client.enabled():
+            error_dict = {"loc": "replication_monitor", "message": err[:150]}
+            err_stats = client.make_error(src_region, dst_region, error_dict, args)
+            destination = client.write_usage_data(err_stats)
+            client.report_usage_data("error", err_stats, destination)
         raise typer.Exit(1)
     elif stats.monitor_status == "completed":
         rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
@@ -329,4 +362,10 @@ def launch_replication_job(
     else:
         rprint(f"\n:x: [bold red]Transfer failed[/bold red]")
         rprint(stats)
+        client = UsageClient()
+        if client.enabled():
+            error_dict = {"loc": "replication_monitor", "message": stats.monitor_status}
+            err_stats = client.make_error(src_region, dst_region, error_dict, args)
+            destination = client.write_usage_data(err_stats)
+            client.report_usage_data("error", err_stats, destination)
     return stats
