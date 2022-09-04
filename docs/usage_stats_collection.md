@@ -35,7 +35,7 @@ Note: usage stats collection is first-time enabled by default when running `skyp
 
 ## Requesting removal of collected data
 
-To request removal of collected data, please email us at `usage_stats@skyplane.org` with the `client_id` that you can find in `/tmp/skyplane/usage/{client_id}/{session_id}/usage_stats.json`.
+To request removal of collected data, please email us at `admin@skyplane.org` with the `client_id` that you can find in `/tmp/skyplane/usage/{client_id}/{session_id}/usage_stats.json`.
 
 ## Frequently Asked Questions (FAQ)
 
@@ -47,8 +47,8 @@ The `client_id` and `session_id` are logged so that deletion requests can be hon
 
 **Could an enterprise easily configure an additional endpoint or substitute a different endpoint?**
 
-We definitely see this use case and would love to chat with you to make this work – email `usage_stats@skyplane.org`.
+We definitely see this use case and would love to chat with you to make this work – email `admin@skyplane.org`.
 
 ## Contact us
 
-If you have any feedback regarding usage stats collection, please email us at `usage_stats@skyplane.org`.
+If you have any feedback regarding usage stats collection, please email us at `admin@skyplane.org`.
