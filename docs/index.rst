@@ -41,6 +41,7 @@ Contents
    configure
    architecture
    faq
+   usage_stats_collection
 
 
 .. toctree::
