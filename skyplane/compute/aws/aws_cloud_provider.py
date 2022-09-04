@@ -327,6 +327,7 @@ class AWSCloudProvider(CloudProvider):
         tags={"skyplane": "true"},
         ebs_volume_size: int = 128,
         iam_name: str = "skyplane_gateway",
+        use_spot_instances: bool = False,
     ) -> AWSServer:
 
         assert not region.startswith("aws:"), "Region should be AWS region"
@@ -399,6 +400,7 @@ class AWSCloudProvider(CloudProvider):
                 ],
                 IamInstanceProfile={"Name": iam_instance_profile_name},
                 InstanceInitiatedShutdownBehavior="terminate",
+                InstanceMarketOptions={"MarketType": "spot" if use_spot_instances else "on-demand"},
             )
 
         backoff = 1
