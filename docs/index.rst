@@ -40,8 +40,8 @@ Contents
    benchmark
    configure
    architecture
-   faq
    usage_stats_collection
+   faq
 
 
 .. toctree::
