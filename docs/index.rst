@@ -40,7 +40,7 @@ Contents
    benchmark
    configure
    architecture
-   usage_stats_collection
+   performance_stats_collection
    faq
 
 
