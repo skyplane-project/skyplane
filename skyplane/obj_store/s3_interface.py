@@ -157,13 +157,11 @@ class S3Interface(ObjectStoreInterface):
             raise
 
     def initiate_multipart_upload(self, dst_object_name):
-        # cannot infer content type here
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
         s3_client = self._s3_client()
         response = s3_client.create_multipart_upload(
             Bucket=self.bucket_name,
             Key=dst_object_name,
-            # ContentType=content_type
         )
         return response["UploadId"]
 
