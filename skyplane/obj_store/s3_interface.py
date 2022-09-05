@@ -11,6 +11,7 @@ from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.utils import logger
+from skyplane.utils.timer import Timer
 
 
 class S3Object(ObjectStoreObject):
@@ -159,10 +160,11 @@ class S3Interface(ObjectStoreInterface):
     def initiate_multipart_upload(self, dst_object_name):
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
         s3_client = self._s3_client()
-        response = s3_client.create_multipart_upload(
-            Bucket=self.bucket_name,
-            Key=dst_object_name,
-        )
+        with Timer(f"Initiate multipart upload for {dst_object_name}"):
+            response = s3_client.create_multipart_upload(
+                Bucket=self.bucket_name,
+                Key=dst_object_name,
+            )
         return response["UploadId"]
 
     def complete_multipart_upload(self, dst_object_name, upload_id):
