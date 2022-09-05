@@ -1,5 +1,4 @@
 import json
-import json
 import math
 import pickle
 import time
@@ -355,7 +354,7 @@ class ReplicatorClient:
                     )
                     idx += 1
                 elif multipart_enabled and src_object.size > multipart_min_threshold_mb * MB:
-                # transfer entire object
+                    # transfer entire object
                     multipart_pairs.append((src_object, dest_object))
                 else:
                     chunk = Chunk(
