@@ -370,12 +370,7 @@ class ReplicatorClient:
             # initiate multipart transfers in parallel
             progress.update(prepare_task, description=f": Queuing {len(multipart_pairs)} files for multipart transfers")
             obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
-
-            def initiate_multipart_transfer(x):
-                with Timer(f"multipart transfer {x[1].key}"):
-                    return obj_store_interface.initiate_multipart_upload(x[1].key)
-
-            upload_ids = do_parallel(initiate_multipart_transfer, multipart_pairs, n=256)
+            upload_ids = do_parallel(lambda x: obj_store_interface.initiate_multipart_upload(x[1].key), multipart_pairs, n=16)
             for (src_object, dest_object), upload_id in upload_ids:
                 # determine number of chunks via the following algorithm:
                 chunk_size_bytes = int(multipart_min_size_mb * MB)
