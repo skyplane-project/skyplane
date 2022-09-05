@@ -337,6 +337,10 @@ class ReplicatorClient:
             progress.update(prepare_task, description=": Fetching instance IPs")
             gateway_ips: Dict[Server, str] = {s: s.public_ip() for s in self.bound_nodes.values()}
 
+            import time
+
+            time1 = time.time()
+
             # make list of chunks
             progress.update(prepare_task, description=": Creating list of chunks for transfer")
             chunks = []
@@ -414,6 +418,10 @@ class ReplicatorClient:
                         "parts": parts,
                     }
                 )
+            print("time to create list of chunks: " + str(time.time() - time1))
+
+
+            time2 = time.time()
 
             # partition chunks into roughly equal-sized batches (by bytes)
             def partition(items: List[Chunk], n_batches: int) -> List[List[Chunk]]:
@@ -434,6 +442,10 @@ class ReplicatorClient:
             ), f"{len(chunk_batches)} batches, expected {len(src_instances)}"
             for batch_idx, batch in enumerate(chunk_batches):
                 logger.fs.info(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")
+
+            print("time to partition " + str(time.time() - time2))
+
+            time3 = time.time()
 
             # make list of ChunkRequests
             with Timer("Building chunk requests"):
@@ -482,6 +494,9 @@ class ReplicatorClient:
                 do_parallel(send_chunk_requests, start_instances, n=-1)
 
         job.chunk_requests = [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
+        
+        print("time to create list of requests " + str(time.time() - time3))
+
         return job
 
     def get_chunk_status_log_df(self) -> pd.DataFrame:
