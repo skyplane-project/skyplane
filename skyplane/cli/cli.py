@@ -207,8 +207,6 @@ def cp(
             multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
             multipart_min_size_mb=cloud_config.get_flag("multipart_min_size_mb"),
             multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
-            src_region=src_region,
-            dst_region=dst_region,
             error_reporting_args=args,
         )
 
@@ -400,8 +398,6 @@ def sync(
         multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
         multipart_min_size_mb=cloud_config.get_flag("multipart_min_size_mb"),
         multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
-        src_region=src_region,
-        dst_region=dst_region,
         error_reporting_args=args,
     )
 
