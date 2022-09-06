@@ -67,6 +67,7 @@ class SkyplaneConfig:
     azure_enabled: bool
     gcp_enabled: bool
     anon_clientid: Optional[str] = None
+    azure_principal_id: Optional[str] = None
     azure_subscription_id: Optional[str] = None
     azure_tenant_id: Optional[str] = None
     azure_client_id: Optional[str] = None
@@ -105,6 +106,7 @@ class SkyplaneConfig:
         azure_tenant_id = None
         azure_client_id = None
         azure_client_secret = None
+        azure_principal_id = None
         if "azure" in config:
             if "azure_enabled" in config["azure"]:
                 azure_enabled = config.getboolean("azure", "azure_enabled")
@@ -116,6 +118,8 @@ class SkyplaneConfig:
                 azure_client_id = config.get("azure", "client_id")
             if "client_secret" in config["azure"]:
                 azure_client_secret = config.get("azure", "client_secret")
+            if "principal_id" in config["azure"]:
+                azure_principal_id = config.get("azure", "principal_id")
 
         gcp_enabled = False
         gcp_project_id = None
@@ -130,6 +134,7 @@ class SkyplaneConfig:
             azure_enabled=azure_enabled,
             gcp_enabled=gcp_enabled,
             anon_clientid=anon_clientid,
+            azure_principal_id=azure_principal_id,
             azure_subscription_id=azure_subscription_id,
             azure_tenant_id=azure_tenant_id,
             azure_client_id=azure_client_id,
@@ -166,6 +171,8 @@ class SkyplaneConfig:
             config.set("azure", "client_id", self.azure_client_id)
         if self.azure_client_secret:
             config.set("azure", "client_secret", self.azure_client_secret)
+        if self.azure_principal_id:
+            config.set("azure", "principal_id", self.azure_principal_id)
 
         if "gcp" not in config:
             config.add_section("gcp")

@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import uuid
@@ -14,7 +15,7 @@ with warnings.catch_warnings():
 from azure.mgmt.compute.models import ResourceIdentityType
 from azure.core.exceptions import HttpResponseError
 
-from skyplane import exceptions, key_root
+from skyplane import cloud_config, exceptions, key_root
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.compute.cloud_providers import CloudProvider
@@ -360,8 +361,20 @@ class AzureCloudProvider(CloudProvider):
                                 },
                             },
                             "network_profile": {"network_interfaces": [{"id": nic_result.id}]},
-                            # give VM managed identity w/ system assigned identity
-                            "identity": {"type": ResourceIdentityType.system_assigned},
+                            # give VM managed identity w/ user assigned identity
+                            "identity": {
+                                "type": ResourceIdentityType.user_assigned,
+                                "user_assigned_identities": [
+                                    {
+                                        # code from: https://github.com/ray-project/ray/pull/7080/files#diff-0f1bb1da82d112b850a85c1b7b1876e50efd5a7400c62a5c4de334f494d3bf46R222-R233
+                                        "key": f"/subscriptions/{cloud_config.azure_subscription_id}/resourceGroups/skyplane/providers/Microsoft.ManagedIdentity/userAssignedIdentities/skyplane_umi",
+                                        "value": {
+                                            "principal_id": cloud_config.azure_principal_id,
+                                            "client_id": cloud_config.azure_client_id,
+                                        },
+                                    }
+                                ],
+                            },
                         },
                     )
                     vm_result = poller.result()
