@@ -222,7 +222,7 @@ class SkyplaneConfig:
         valid_config = True
         if self.anon_clientid is None:
             valid_config = False
-        if self.azure_enabled and (self.azure_client_id is None or self.azure_principal_id is None):
+        if self.azure_enabled and (self.azure_client_id is None or self.azure_principal_id is None or self.azure_subscription_id is None):
             valid_config = False
         if self.gcp_enabled and self.gcp_project_id is None:
             valid_config = False

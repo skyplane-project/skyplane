@@ -125,6 +125,7 @@ def cp(
             f"Skyplane configuration file is not valid. Please reset your config by running `rm {config_path}` and then rerunning `skyplane init` to fix.",
             fg="red",
         )
+        raise typer.Exit(1)
 
     if provider_src == "local" or provider_dst == "local":
         typer.secho("Local transfers are not yet supported (but will be soon!)", fg="red", err=True)
@@ -309,6 +310,7 @@ def sync(
             f"Skyplane configuration file is not valid. Please reset your config by running `rm {config_path}` and then rerunning `skyplane init` to fix.",
             fg="red",
         )
+        raise typer.Exit(1)
 
     try:
         src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)
