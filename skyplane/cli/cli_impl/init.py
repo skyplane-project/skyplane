@@ -79,12 +79,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         if force_init:
             typer.secho("    Azure credentials will be re-initialized", fg="red", err=True)
             clear_azure_config(config, verbose=False)
-        if (
-            config.azure_enabled
-            and config.azure_subscription_id
-            and config.azure_principal_id
-            and config.azure_client_id
-        ):
+        if config.azure_enabled and config.azure_subscription_id and config.azure_principal_id and config.azure_client_id:
             typer.secho("    Azure credentials already configured! To reconfigure Azure, run `skyplane init --reinit-azure`.", fg="blue")
             return config
 
