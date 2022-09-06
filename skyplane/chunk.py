@@ -47,6 +47,7 @@ class ChunkRequest:
     src_random_size_mb: Optional[int] = None
     src_object_store_bucket: Optional[str] = None
     dst_object_store_bucket: Optional[str] = None
+    src_requester_pays: str = ''
 
     def __post_init__(self):
         if self.src_type == "object_store":

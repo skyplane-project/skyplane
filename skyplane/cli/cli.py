@@ -65,6 +65,7 @@ def cp(
         skyplane_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
     ),
     solver_verbose: bool = False,
+    requester_pays: str = typer.Option(None, "--requester-pays", help = "Requester pays") 
 ):
     """
     `cp` copies a file or folder from one location to another. If the source is on an object store,
@@ -99,6 +100,8 @@ def cp(
     :type solver_throughput_grid: Path
     :param solver_verbose: If true, will print out the solver's output, defaults to False
     :type solver_verbose: bool (optional)
+    :param requester_pays: If requester, confirms that the requester knows that they will be charged for the request.
+    :type requester_pays: bool (optional)
     """
     print_header()
 
@@ -123,8 +126,11 @@ def cp(
             src_region = src_client.region_tag()
             dst_region = dst_client.region_tag()
 
+            if (requester_pays == 'requester'):
+                src_client.requester_pays = True
+
             transfer_pairs = generate_full_transferobjlist(
-                src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst, recursive=recursive
+                src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst, recursive=recursive, requester_pays=requester_pays
             )
         except exceptions.SkyplaneException as e:
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
@@ -162,6 +168,7 @@ def cp(
             job=job,
             debug=debug,
             reuse_gateways=reuse_gateways,
+            requester_pays=requester_pays if requester_pays != None else '',
             use_bbr=cloud_config.get_flag("bbr"),
             use_compression=cloud_config.get_flag("compress") if src_region != dst_region else False,
             use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,

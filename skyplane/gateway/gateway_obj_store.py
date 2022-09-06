@@ -9,6 +9,7 @@ from typing import Dict, Optional
 from skyplane.chunk import ChunkRequest
 from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
+from skyplane.obj_store.s3_interface import S3Interface
 from skyplane.utils import logger
 from skyplane.utils.retry import retry_backoff
 
@@ -117,6 +118,8 @@ class GatewayObjStoreConn:
                     logger.debug(f"[obj_store:{self.worker_id}] Start download {chunk_req.chunk.chunk_id} from {bucket}")
 
                     obj_store_interface = self.get_obj_store_interface(chunk_req.src_region, bucket)
+                    if chunk_req.src_requester_pays == 'requester' and isinstance(obj_store_interface, S3Interface):
+                        obj_store_interface.requester_pays = True
                     md5sum = retry_backoff(
                         partial(
                             obj_store_interface.download_object,
@@ -124,7 +127,7 @@ class GatewayObjStoreConn:
                             fpath,
                             chunk_req.chunk.file_offset_bytes,
                             chunk_req.chunk.chunk_length_bytes,
-                            generate_md5=True,
+                            generate_md5=True,                        
                         ),
                         max_retries=4,
                     )

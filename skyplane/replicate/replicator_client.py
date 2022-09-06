@@ -318,6 +318,7 @@ class ReplicatorClient:
         multipart_min_threshold_mb: int,
         multipart_min_size_mb: int,
         multipart_max_chunks: int,
+        requester_pays: str,
     ) -> ReplicationJob:
         assert job.source_region.split(":")[0] in [
             "aws",
@@ -450,6 +451,7 @@ class ReplicatorClient:
                                 src_random_size_mb=job.random_chunk_size_mb,
                                 src_object_store_bucket=job.source_bucket,
                                 dst_object_store_bucket=job.dest_bucket,
+                                src_requester_pays=requester_pays
                             )
                         )
                     logger.fs.debug(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")

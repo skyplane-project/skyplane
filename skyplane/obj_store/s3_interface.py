@@ -5,6 +5,7 @@ import os
 from typing import Iterator, List, Optional
 
 import botocore.exceptions
+import botocore.client
 
 from skyplane import exceptions
 from skyplane.compute.aws.aws_auth import AWSAuthentication
@@ -21,6 +22,7 @@ class S3Object(ObjectStoreObject):
 class S3Interface(ObjectStoreInterface):
     def __init__(self, bucket_name: str):
         self.auth = AWSAuthentication()
+        self.requester_pays = False
         self.bucket_name = bucket_name
 
     @property
@@ -46,7 +48,14 @@ class S3Interface(ObjectStoreInterface):
 
     def bucket_exists(self):
         s3_client = self._s3_client("us-east-1")
-        return self.bucket_name in [b["Name"] for b in s3_client.list_buckets()["Buckets"]]
+        if self.requester_pays:
+            try:
+                s3_client.list_objects(Bucket=self.bucket_name, RequestPayer='requester')
+                return True
+            except botocore.exceptions.ClientError:
+                raise NoSuchObjectException()
+        else:
+            return self.bucket_name in [b["Name"] for b in s3_client.list_buckets()["Buckets"]]
 
     def create_bucket(self, aws_region):
         s3_client = self._s3_client(aws_region)
@@ -63,8 +72,15 @@ class S3Interface(ObjectStoreInterface):
     def list_objects(self, prefix="") -> Iterator[S3Object]:
         paginator = self._s3_client().get_paginator("list_objects_v2")
         page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix)
-        for page in page_iterator:
-            for obj in page.get("Contents", []):
+        if not self.requester_pays:
+            for page in page_iterator:
+                for obj in page.get("Contents", []):
+                    yield S3Object("aws", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"])
+        else:
+            s3_client = self._s3_client()
+            buckets = s3_client.list_objects(Bucket=self.bucket_name, Prefix=prefix, RequestPayer='requester')['Contents']
+            for i in range(len(buckets)):
+                obj = buckets[i]
                 yield S3Object("aws", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"])
 
     def delete_objects(self, keys: List[str]):
@@ -105,14 +121,22 @@ class S3Interface(ObjectStoreInterface):
         write_block_size=2**16,
     ) -> Optional[bytes]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
+          
         s3_client = self._s3_client()
         assert len(src_object_name) > 0, f"Source object name must be non-empty: '{src_object_name}'"
 
+        args = {'Bucket': self.bucket_name, 
+                'Key': src_object_name}
+
         if size_bytes:
-            byte_range = f"bytes={offset_bytes}-{offset_bytes + size_bytes - 1}"
-            response = s3_client.get_object(Bucket=self.bucket_name, Key=src_object_name, Range=byte_range)
-        else:
-            response = s3_client.get_object(Bucket=self.bucket_name, Key=src_object_name)
+            args['Range'] = f"bytes={offset_bytes}-{offset_bytes + size_bytes - 1}"
+
+        if self.requester_pays:
+            args['RequestPayer'] = 'requester'
+        
+        logger.debug(f"RequestPayer: ${self.requester_pays}")
+        
+        response = s3_client.get_object(**args)
 
         # write response data
         if not os.path.exists(dst_file_path):
