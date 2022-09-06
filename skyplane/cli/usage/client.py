@@ -41,7 +41,7 @@ class UsageStatsToReport:
     #: The schema version of the report.
     schema_version: str
     #: The client id from SkyplaneConfig.
-    client_id: str
+    client_id: Optional[str]
     #: A random id of the transfer session.
     session_id: str
     #: The source region of the transfer session.
@@ -206,7 +206,8 @@ class UsageClient:
             destination: The absolute path of the usage data json file.
         """
         if dir_path is None:
-            dir_path = tmp_log_dir / "usage" / str(self.client_id) / str(self.session_id)
+            client_id_path = self.client_id if self.client_id else "unknown"
+            dir_path = tmp_log_dir / "usage" / client_id_path / str(self.session_id)
         dir_path = Path(dir_path)
         dir_path.mkdir(exist_ok=True, parents=True)
         destination = dir_path / skyplane.cli.usage.definitions.USAGE_STATS_FILE
