@@ -1,22 +1,12 @@
-import shutil
-from collections import namedtuple
-from typing import Tuple, List, Dict, Optional
-
-import cvxpy as cp
-import graphviz as gv
 import numpy as np
+from skyplane import GB
 
-from skyplane.replicate.replication_plan import ReplicationTopology
-from skyplane.replicate.solver import ThroughputSolver, ThroughputProblem, GBIT_PER_GBYTE, ThroughputSolution
-from skyplane.utils import logger
+from skyplane.replicate.solver import ThroughputSolver, ThroughputProblem, ThroughputSolution
 
 
 class ThroughputSolverRON(ThroughputSolver):
     def solve(self, p: ThroughputProblem) -> ThroughputSolution:
         regions = self.get_regions()
-        idx_src = regions.index(p.src)
-        idx_dest = regions.index(p.dst)
-
         best_throughput = self.get_path_throughput(p.src, p.dst)
         best_path = [p.src, p.dst]
         for inter in regions:
@@ -31,11 +21,19 @@ class ThroughputSolverRON(ThroughputSolver):
         var_conn = np.zeros((len(regions), len(regions)))
         var_instances_per_region = np.zeros(len(regions))
         cost_per_gb = 0.0
-        for i, j in zip(best_path[:-1], best_path[1:]):
-            var_edge_flow_gigabits[idx_src, idx_dest] = self.get_path_throughput(i, j) * p.instance_limit
-            var_conn[idx_src, idx_dest] = p.benchmarked_throughput_connections * p.instance_limit
-            var_instances_per_region[idx_src] = p.instance_limit
-            var_instances_per_region[idx_dest] = p.instance_limit
+        
+        if len(best_path) == 2:
+            segments = [(best_path[0], best_path[1])]
+        elif len(best_path) == 3:
+            segments = [(best_path[0], best_path[1]), (best_path[1], best_path[2])]
+
+        for i, j in segments:
+            idx_i = regions.index(i)
+            idx_j = regions.index(j)
+            var_edge_flow_gigabits[idx_i, idx_j] = self.get_path_throughput(i, j) * p.instance_limit
+            var_conn[idx_i, idx_j] = p.benchmarked_throughput_connections * p.instance_limit
+            var_instances_per_region[idx_i] = p.instance_limit
+            var_instances_per_region[idx_j] = p.instance_limit
             cost_per_gb += self.get_path_cost(i, j)
 
         return ThroughputSolution(

@@ -614,7 +614,7 @@ class ReplicatorClient:
                             description=f" ({len(completed_chunk_ids)} of {len(job.chunk_requests)} chunks)",
                             completed=completed_bytes,
                         )
-                        if len(completed_chunk_ids) >= int(len(job.chunk_requests) * 0.99):
+                        if len(completed_chunk_ids) == len(job.chunk_requests):
                             if multipart:
                                 # Complete multi-part uploads
                                 def complete_upload(req):
