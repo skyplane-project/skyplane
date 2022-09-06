@@ -12,6 +12,7 @@ import skyplane.cli
 import skyplane.cli.usage.definitions
 import skyplane.cli.usage.client
 from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
+from skyplane.obj_store.s3_interface import S3Interface
 from skyplane.replicate.replicator_client import ReplicatorClient
 
 import typer
@@ -65,7 +66,7 @@ def cp(
         skyplane_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
     ),
     solver_verbose: bool = False,
-    requester_pays: str = typer.Option(None, "--requester-pays", help = "Requester pays") 
+    requester_pays: str = typer.Option(None, "--requester-pays", help = "Bucket flag for Requester pays buckets") 
 ):
     """
     `cp` copies a file or folder from one location to another. If the source is on an object store,
@@ -126,7 +127,7 @@ def cp(
             src_region = src_client.region_tag()
             dst_region = dst_client.region_tag()
 
-            if (requester_pays == 'requester'):
+            if (requester_pays == 'requester' and isinstance(src_client, S3Interface)):
                 src_client.requester_pays = True
 
             transfer_pairs = generate_full_transferobjlist(

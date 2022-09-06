@@ -12,7 +12,7 @@ from rich import print as rprint
 from skyplane import exceptions, GB, format_bytes, gateway_docker_image, skyplane_root
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
-from skyplane.obj_store.s3_interface import S3Object
+from skyplane.obj_store.s3_interface import S3Interface, S3Object
 from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
@@ -133,7 +133,7 @@ def generate_full_transferobjlist(
     source_iface = ObjectStoreInterface.create(source_region, source_bucket)
     dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
 
-    if requester_pays == 'requester':
+    if requester_pays == 'requester' and isinstance(source_iface, S3Interface):
         source_iface.requester_pays = True
 
     # ensure buckets exist

@@ -134,8 +134,6 @@ class S3Interface(ObjectStoreInterface):
         if self.requester_pays:
             args['RequestPayer'] = 'requester'
         
-        logger.debug(f"RequestPayer: ${self.requester_pays}")
-        
         response = s3_client.get_object(**args)
 
         # write response data
