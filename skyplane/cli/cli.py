@@ -117,6 +117,15 @@ def cp(
         "solve": solve,
     }
 
+    # check config
+    try:
+        cloud_config.check_config()
+    except exceptions.BadConfigException:
+        typer.secho(
+            f"Skyplane configuration file is not valid. Please reset your config by running `rm {config_path}` and then rerunning `skyplane init` to fix.",
+            fg="red",
+        )
+
     if provider_src == "local" or provider_dst == "local":
         typer.secho("Local transfers are not yet supported (but will be soon!)", fg="red", err=True)
         typer.secho("Skyplane is currently most optimized for cloud to cloud transfers.", fg="yellow", err=True)
@@ -291,6 +300,15 @@ def sync(
         "max_instances": max_instances,
         "solve": solve,
     }
+
+    # check config
+    try:
+        cloud_config.check_config()
+    except exceptions.BadConfigException:
+        typer.secho(
+            f"Skyplane configuration file is not valid. Please reset your config by running `rm {config_path}` and then rerunning `skyplane init` to fix.",
+            fg="red",
+        )
 
     try:
         src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)

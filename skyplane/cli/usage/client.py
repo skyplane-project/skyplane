@@ -72,7 +72,7 @@ class UsageClient:
     and report usage stats.
     """
 
-    def __init__(self, client_id: str = cloud_config.anon_clientid):
+    def __init__(self, client_id: Optional[str] = cloud_config.anon_clientid):
         self.client_id = client_id
         self.session_id = str(uuid.uuid4())
 
@@ -206,7 +206,7 @@ class UsageClient:
             destination: The absolute path of the usage data json file.
         """
         if dir_path is None:
-            dir_path = tmp_log_dir / "usage" / self.client_id / self.session_id
+            dir_path = tmp_log_dir / "usage" / str(self.client_id) / str(self.session_id)
         dir_path = Path(dir_path)
         dir_path.mkdir(exist_ok=True, parents=True)
         destination = dir_path / skyplane.cli.usage.definitions.USAGE_STATS_FILE
