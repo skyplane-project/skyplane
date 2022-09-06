@@ -4,7 +4,7 @@ import os
 import subprocess
 from typing import Dict, List, Optional
 
-from azure.identity import ClientSecretCredential
+from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
 from azure.mgmt.authorization import AuthorizationManagementClient
 from azure.mgmt.storage import StorageManagementClient
 from azure.storage.blob import BlobServiceClient, ContainerClient
@@ -12,8 +12,11 @@ from azure.storage.blob import BlobServiceClient, ContainerClient
 from skyplane import azure_config_path
 from skyplane import azure_sku_path
 from skyplane import config_path
+from skyplane import is_gateway_env
 from skyplane.config import SkyplaneConfig
 from skyplane.utils.fn import do_parallel, wait_for
+
+from skyplane.compute.const_cmds import query_which_cloud
 
 # optional imports due to large package size
 try:
@@ -43,11 +46,25 @@ class AzureAuthentication:
         self._credential = None
 
     @property
-    def credential(self) -> ClientSecretCredential:
+    def credential(self) -> DefaultAzureCredential:
         if self._credential is None:
-            self._credential = ClientSecretCredential(
-                tenant_id=self.config.azure_tenant_id, client_id=self.config.azure_client_id, client_secret=self.config.azure_client_secret
-            )
+            if is_gateway_env:
+                print("Configured managed identity credential.")
+                return ManagedIdentityCredential(client_id=self.config.azure_client_id)
+            else:
+                if query_which_cloud() != "azure":
+                    return DefaultAzureCredential(
+                        exclude_environment_credential=True,
+                        exclude_managed_identity_credential=True,
+                        exclude_powershell_credential=True,
+                        exclude_visual_studio_code_credential=True,
+                    )
+                else:
+                    return DefaultAzureCredential(
+                        managed_identity_client_id=self.config.azure_client_id,
+                        exclude_powershell_credential=True,
+                        exclude_visual_studio_code_credential=True,
+                    )
         return self._credential
 
     @property
@@ -67,7 +84,7 @@ class AzureAuthentication:
             except:
                 return False
 
-        wait_for(try_login, desc="Wait for Azure client secret to register", timeout=15)
+        wait_for(try_login, desc="Wait for Azure roles to propagate", timeout=200)
 
     def save_region_config(self):
         if self.config.azure_enabled == False:
@@ -88,7 +105,12 @@ class AzureAuthentication:
             return set(valid_skus)
 
         result = do_parallel(
-            get_skus, region_list, spinner=False, spinner_persist=False, desc="Query available VM SKUs from each enabled Azure region", n=8
+            get_skus,
+            region_list,
+            spinner=False,
+            spinner_persist=False,
+            desc="Query available VM SKUs from each enabled Azure region (est. time: ~1 minute)",
+            n=8,
         )
         region_sku = dict()
         for region, skus in result:
