@@ -1,5 +1,4 @@
 import json
-import json
 import math
 import pickle
 import time
@@ -7,16 +6,14 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
-from typing import Dict, List, Optional, Tuple, Iterable
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import nacl.secret
 import nacl.utils
 import pandas as pd
 import urllib3
-from rich.progress import Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, DownloadColumn, BarColumn, TransferSpeedColumn
-
-from skyplane import GB, MB, gateway_docker_image, tmp_log_dir
-from skyplane import exceptions
+from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, TransferSpeedColumn
+from skyplane import GB, MB, exceptions, gateway_docker_image, tmp_log_dir
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
@@ -54,6 +51,14 @@ class TransferStats:
     @classmethod
     def empty(cls):
         return TransferStats(monitor_status="empty")
+
+    def to_dict(self) -> str:
+        return {
+            "monitor_status": self.monitor_status,
+            "total_runtime_s": self.total_runtime_s,
+            "throughput_gbits": self.throughput_gbits,
+            "errors": [str(e) for e in self.errors.values()] if self.errors else None,
+        }
 
 
 class ReplicatorClient:
@@ -609,7 +614,7 @@ class ReplicatorClient:
                             description=f" ({len(completed_chunk_ids)} of {len(job.chunk_requests)} chunks)",
                             completed=completed_bytes,
                         )
-                        if len(completed_chunk_ids) >= len(job.chunk_requests) - 2:
+                        if len(completed_chunk_ids) >= int(len(job.chunk_requests) * .99):
                             if multipart:
                                 # Complete multi-part uploads
                                 def complete_upload(req):
