@@ -21,7 +21,7 @@ class ThroughputSolverRON(ThroughputSolver):
         var_conn = np.zeros((len(regions), len(regions)))
         var_instances_per_region = np.zeros(len(regions))
         cost_per_gb = 0.0
-        
+
         if len(best_path) == 2:
             segments = [(best_path[0], best_path[1])]
         elif len(best_path) == 3:
