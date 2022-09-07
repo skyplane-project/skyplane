@@ -86,7 +86,6 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         # load credentials from environment variables or input
         defaults = {
             "client_id": os.environ.get("AZURE_CLIENT_ID") or config.azure_client_id,
-            "principal_id": os.environ.get("AZURE_PRINCIPAL_ID") or config.azure_principal_id,
             "subscription_id": os.environ.get("AZURE_SUBSCRIPTION_ID")
             or config.azure_subscription_id
             or AzureAuthentication.infer_subscription_id(),
