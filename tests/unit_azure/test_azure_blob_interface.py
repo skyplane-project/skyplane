@@ -1,3 +1,5 @@
+import uuid
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from tests.interface_util import interface_test_framework
 from skyplane.utils import logger
 
@@ -9,3 +11,17 @@ def test_azure_singlepart():
 def test_azure_multipart():
     logger.warning("Multipart tests disabled!")
     # assert test_interface("azure:eastus", "sky-us-east-1", True)
+
+
+def test_azure_bucket_exists():
+    # test a random bucket that doesn't exist
+    iface = ObjectStoreInterface.create("azure:infer", f"skyplane-does-not-exist-{uuid.uuid4()}/{uuid.uuid4()}")
+    assert not iface.bucket_exists()
+
+    # test a public bucket with objects
+    iface = ObjectStoreInterface.create("azure:infer", "azureopendatastorage/mnist")
+    assert iface.bucket_exists()
+
+    # test public but empty bucket
+    # iface = ObjectStoreInterface.create("aws:infer", "skyplane-test-empty-public-bucket")
+    # assert iface.bucket_exists()

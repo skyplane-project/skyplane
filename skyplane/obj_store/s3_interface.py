@@ -46,7 +46,13 @@ class S3Interface(ObjectStoreInterface):
 
     def bucket_exists(self):
         s3_client = self._s3_client("us-east-1")
-        return self.bucket_name in [b["Name"] for b in s3_client.list_buckets()["Buckets"]]
+        try:
+            s3_client.list_objects_v2(Bucket=self.bucket_name, MaxKeys=1)  # list one object to check if bucket exists
+            return True
+        except botocore.exceptions.ClientError as e:
+            if e.response["Error"]["Code"] == "NoSuchBucket":
+                return False
+            raise e
 
     def create_bucket(self, aws_region):
         s3_client = self._s3_client(aws_region)
