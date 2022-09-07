@@ -181,6 +181,12 @@ def generate_full_transferobjlist(
         # dest_obj = ObjectStoreObject(dest_region.split(":")[0], dest_bucket, dest_key)
         dest_objs.append(dest_obj)
 
+    return list(zip(source_objs, dest_objs))
+
+
+def enrich_dest_objs(dest_region: str, dest_prefix: str, dest_bucket: str, dest_objs: list):
+    dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
+
     # query destination at dest_key
     logger.fs.debug(f"Querying objects in {dest_bucket}")
     dest_objs_keys = {obj.key for obj in dest_objs}
@@ -197,8 +203,6 @@ def generate_full_transferobjlist(
         if dest_obj.key in found_dest_objs:
             dest_obj.size = found_dest_objs[dest_obj.key].size
             dest_obj.last_modified = found_dest_objs[dest_obj.key].last_modified
-
-    return list(zip(source_objs, dest_objs))
 
 
 def confirm_transfer(topo: ReplicationTopology, job: ReplicationJob, ask_to_confirm_transfer=True):
