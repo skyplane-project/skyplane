@@ -1,5 +1,8 @@
 name: integration-test
-on: workflow_dispatch
+on:
+  schedule:
+    - cron: '9 23 * * *'
+  workflow_dispatch:
 concurrency: integration-test
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
