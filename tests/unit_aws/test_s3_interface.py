@@ -1,4 +1,5 @@
 import uuid
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from tests.interface_util import interface_test_framework
 from skyplane.utils import logger
 
@@ -10,6 +11,25 @@ def test_aws_singlepart():
 def test_aws_multipart():
     logger.warning("Multipart tests disabled!")
     # assert test_interface("aws: us-east-1", "sky-us-east-1", True)
+
+
+def test_aws_bucket_exists():
+    # test a public bucket with objects
+    iface = ObjectStoreInterface.create("aws:infer", "skyplane")
+    assert iface.bucket_exists()
+
+    # test a random bucket that doesn't exist
+    iface = ObjectStoreInterface.create("aws:infer", f"skyplane-does-not-exist-{uuid.uuid4()}")
+    assert not iface.bucket_exists()
+
+    # test a requester pays bucket
+    iface = ObjectStoreInterface.create("aws:infer", "devrel-delta-datasets")
+    # assert iface.bucket_exists()
+    logger.warning("Requester pays bucket tests disabled!")
+
+    # test public but empty bucket
+    iface = ObjectStoreInterface.create("aws:infer", "skyplane-test-empty-public-bucket")
+    assert iface.bucket_exists()
 
 
 if __name__ == "__main__":
