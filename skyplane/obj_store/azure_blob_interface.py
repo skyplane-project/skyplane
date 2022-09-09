@@ -43,7 +43,11 @@ class AzureBlobInterface(ObjectStoreInterface):
         return self.auth.get_container_client(f"https://{self.account_name}.blob.core.windows.net", self.container_name)
 
     def bucket_exists(self):
-        return self.blob_service_client.get_container_client(container=self.container_name).exists()
+        try:
+            self.container_client.get_container_properties()
+            return True
+        except ResourceNotFoundError:
+            return False
 
     def exists(self, obj_name):
         return self.blob_service_client.get_blob_client(container=self.container_name, blob=obj_name).exists()
