@@ -2,7 +2,9 @@ import base64
 import hashlib
 import os
 from functools import lru_cache, partial
+from socket import timeout
 from typing import Iterator, List, Optional
+import uuid
 
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError, HttpResponseError
 
@@ -40,15 +42,12 @@ class AzureBlobInterface(ObjectStoreInterface):
     def container_client(self):
         return self.auth.get_container_client(f"https://{self.account_name}.blob.core.windows.net", self.container_name)
 
-    def container_exists(self):
+    def bucket_exists(self):
         try:
             self.container_client.get_container_properties()
             return True
         except ResourceNotFoundError:
             return False
-
-    def bucket_exists(self):
-        return self.storage_account_interface.storage_account_exists() and self.container_exists()
 
     def exists(self, obj_name):
         return self.blob_service_client.get_blob_client(container=self.container_name, blob=obj_name).exists()
@@ -61,10 +60,10 @@ class AzureBlobInterface(ObjectStoreInterface):
 
     def create_bucket(self, azure_region, resource_group=AzureServer.resource_group_name, premium_tier=True):
         tier = "Premium_LRS" if premium_tier else "Standard_LRS"
-        if not self.storage_account_interface.storage_account_exists():
+        if not self.storage_account_interface.storage_account_exists_in_account():
             logger.debug(f"Creating storage account {self.account_name}")
             self.storage_account_interface.create_storage_account(azure_region, resource_group, tier)
-        if not self.container_exists():
+        if not self.bucket_exists():
             logger.debug(f"Creating container {self.container_name}")
             self.create_container()
 
