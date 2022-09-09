@@ -61,7 +61,6 @@ class S3Interface(ObjectStoreInterface):
                 s3_client.create_bucket(Bucket=self.bucket_name)
             else:
                 s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": aws_region})
-        assert self.bucket_exists()
 
     def delete_bucket(self):
         self._s3_client().delete_bucket(Bucket=self.bucket_name)

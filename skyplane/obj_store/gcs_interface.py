@@ -86,7 +86,6 @@ class GCSInterface(ObjectStoreInterface):
             bucket.storage_class = "STANDARD"
             region_without_zone = "-".join(gcp_region.split("-")[:2])
             self._gcs_client.create_bucket(bucket, location=region_without_zone)
-        assert self.bucket_exists()
 
     def delete_bucket(self):
         self._gcs_client.get_bucket(self.bucket_name).delete()
