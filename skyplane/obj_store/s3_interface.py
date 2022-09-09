@@ -168,7 +168,6 @@ class S3Interface(ObjectStoreInterface):
         response = s3_client.create_multipart_upload(
             Bucket=self.bucket_name,
             Key=dst_object_name,
-            # ContentType=content_type
         )
         return response["UploadId"]
 
