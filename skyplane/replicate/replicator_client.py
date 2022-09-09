@@ -373,7 +373,7 @@ class ReplicatorClient:
                     for chunk in range(num_chunks):
                         # size is min(chunk_size, remaining data)
                         file_size_bytes = min(chunk_size_bytes, src_object.size - offset)
-                        assert file_size_bytes > 0, f"File size <= 0 {file_size_bytes}"
+                        assert file_size_bytes >= 0, f"File size < 0 {file_size_bytes}"
                         chunks.append(
                             Chunk(
                                 src_key=src_object.key,
