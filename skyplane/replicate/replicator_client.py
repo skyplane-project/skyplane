@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import nacl.secret
 import nacl.utils
@@ -52,7 +52,7 @@ class TransferStats:
     def empty(cls):
         return TransferStats(monitor_status="empty")
 
-    def to_dict(self) -> str:
+    def to_dict(self) -> Dict[str, Optional[Any]]:
         return {
             "monitor_status": self.monitor_status,
             "total_runtime_s": self.total_runtime_s,
