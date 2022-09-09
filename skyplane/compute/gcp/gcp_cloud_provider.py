@@ -294,7 +294,14 @@ class GCPCloudProvider(CloudProvider):
             time.sleep(time_intervals.pop(0))
 
     def provision_instance(
-        self, region, instance_class, name=None, premium_network=False, uname="skyplane", tags={"skyplane": "true"}
+        self,
+        region,
+        instance_class,
+        name=None,
+        premium_network=False,
+        uname="skyplane",
+        tags={"skyplane": "true"},
+        use_spot_instances: bool = False,
     ) -> GCPServer:
         assert not region.startswith("gcp:"), "Region should be GCP region"
         if name is None:
@@ -331,6 +338,9 @@ class GCPCloudProvider(CloudProvider):
             "scheduling": {"onHostMaintenance": "TERMINATE", "automaticRestart": False},
             "deletionProtection": False,
         }
+        # use preemtible instances if use_spot_instances is True
+        if use_spot_instances:
+            req_body["scheduling"]["preemptible"] = True
         try:
             result = compute.instances().insert(project=self.auth.project_id, zone=region, body=req_body).execute()
             self.wait_for_operation_to_complete(region, result["name"])

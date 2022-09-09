@@ -253,8 +253,11 @@ def launch_replication_job(
     multipart_min_size_mb: int = 8,
     multipart_max_chunks: int = 9990,
     # cloud provider specific options
+    aws_use_spot_instances: bool = False,
     aws_instance_class: str = "m5.8xlarge",
+    azure_use_spot_instances: bool = False,
     azure_instance_class: str = "Standard_D32_v4",
+    gcp_use_spot_instances: bool = False,
     gcp_instance_class: str = "n2-standard-32",
     gcp_use_premium_network: bool = True,
     # logging options
@@ -289,7 +292,14 @@ def launch_replication_job(
     stats = TransferStats.empty()
     try:
         rc.provision_gateways(
-            reuse_gateways, use_bbr=use_bbr, use_compression=use_compression, use_e2ee=use_e2ee, use_socket_tls=use_socket_tls
+            reuse_gateways,
+            use_bbr=use_bbr,
+            use_compression=use_compression,
+            use_e2ee=use_e2ee,
+            use_socket_tls=use_socket_tls,
+            aws_use_spot_instances=aws_use_spot_instances,
+            azure_use_spot_instances=azure_use_spot_instances,
+            gcp_use_spot_instances=gcp_use_spot_instances,
         )
         for node, gw in rc.bound_nodes.items():
             logger.fs.info(f"Log URLs for {gw.uuid()} ({node.region}:{node.instance})")
