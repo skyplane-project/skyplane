@@ -150,9 +150,6 @@ class AzureBlobInterface(ObjectStoreInterface):
             raise NotImplementedError("Multipart upload is not implemented for Azure")
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         with open(src_file_path, "rb") as f:
-            print(
-                f"upload_object({src_file_path}, {dst_object_name}) => azure://{self.account_name}/{self.container_name}/{dst_object_name}"
-            )
             blob_client = self._run_azure_op_with_retry(
                 partial(
                     self.container_client.upload_blob,
