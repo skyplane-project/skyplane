@@ -68,7 +68,6 @@ class GCSInterface(ObjectStoreInterface):
             next(iterator.pages, None)
             return True
         except Exception as e:
-            logger.error(f"Error checking bucket {self.bucket_name}: {e}")
             if "The specified bucket does not exist" in str(e):
                 return False
             raise e
