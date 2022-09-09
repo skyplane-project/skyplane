@@ -86,6 +86,7 @@ class AzureBlobInterface(ObjectStoreInterface):
                 logger.error(
                     f"Unable to list objects in container {self.container_name} as you don't have permission to access it. You need the 'Storage Blob Data Contributor' and 'Storage Account Contributor' roles: {e}"
                 )
+                raise e
 
     def delete_objects(self, keys: List[str]):
         for key in keys:
@@ -149,6 +150,9 @@ class AzureBlobInterface(ObjectStoreInterface):
             raise NotImplementedError("Multipart upload is not implemented for Azure")
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         with open(src_file_path, "rb") as f:
+            print(
+                f"upload_object({src_file_path}, {dst_object_name}) => azure://{self.account_name}/{self.container_name}/{dst_object_name}"
+            )
             blob_client = self._run_azure_op_with_retry(
                 partial(
                     self.container_client.upload_blob,
