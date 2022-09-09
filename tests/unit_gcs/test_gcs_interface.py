@@ -13,7 +13,6 @@ def test_gcs_singlepart_zero_bytes():
 
 def test_gcs_multipart():
     assert interface_test_framework("gcp:us-central1-a", f"test-skyplane-{uuid.uuid4()}", True, test_delete_bucket=True)
-t
 
 
 def test_gcs_bucket_exists():
