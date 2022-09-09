@@ -11,8 +11,6 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket: bool = False, file_size_mb: int = 1):
     interface = ObjectStoreInterface.create(region, bucket)
     interface.create_bucket(region.split(":")[1])
-    time.sleep(5)
-    assert list(interface.list_objects()) == [], f"Bucket {bucket} is not empty"
 
     # generate file and upload
     obj_name = f"test_{uuid.uuid4()}.txt"
@@ -24,17 +22,18 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
             file_md5 = hashlib.md5(f.read()).hexdigest()
 
         if multipart:
-            time.sleep(10)  # multipart requests require longer for the bucket to be created
             upload_id = interface.initiate_multipart_upload(obj_name)
             interface.upload_object(fpath, obj_name, 1, upload_id)
             interface.complete_multipart_upload(obj_name, upload_id)
         else:
-            interface.upload_object(fpath, obj_name)    
-        assert interface.exists(obj_name), f"{region.split(':')[0]}://{bucket}/{obj_name} does not exist"
+            interface.upload_object(fpath, obj_name)
         assert not interface.exists("random_nonexistent_file"), "Object should not exist"
-        iface_size = interface.get_obj_size(obj_name)
-        local_size = os.path.getsize(fpath)
-        assert iface_size == local_size, f"Object size mismatch: {iface_size} != {local_size}"
+
+    # check one object is in the bucket
+    objs = list(interface.list_objects())
+    assert len(objs) == 1, f"{len(objs)} objects in bucket, expected 1"
+    assert objs[0].key == obj_name, f"{objs[0].key} != {obj_name}"
+    assert objs[0].size == file_size_mb * MB, f"{objs[0].size} != {file_size_mb * MB}"
 
     # download object
     with tempfile.NamedTemporaryFile() as tmp:
