@@ -16,7 +16,9 @@ def test_azure_multipart():
 def test_azure_bucket_exists():
     # test a public bucket with objects
     iface = ObjectStoreInterface.create("azure:infer", "azureopendatastorage/mnist")
-    assert not iface.storage_account_interface.storage_account_exists_in_account()  # this is a public bucket so is not owned by the user's account
+    assert (
+        not iface.storage_account_interface.storage_account_exists_in_account()
+    )  # this is a public bucket so is not owned by the user's account
     assert iface.bucket_exists()
 
     # test a random bucket that doesn't exist
