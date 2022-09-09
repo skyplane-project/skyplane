@@ -86,6 +86,7 @@ class AzureBlobInterface(ObjectStoreInterface):
                 logger.error(
                     f"Unable to list objects in container {self.container_name} as you don't have permission to access it. You need the 'Storage Blob Data Contributor' and 'Storage Account Contributor' roles: {e}"
                 )
+                raise e
 
     def delete_objects(self, keys: List[str]):
         for key in keys:
