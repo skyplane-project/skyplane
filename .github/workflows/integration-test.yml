@@ -3,6 +3,9 @@ on:
   schedule:
     - cron: '9 23 * * *'
   workflow_dispatch:
+  # pull_request to main
+  pull_request:
+    branches: [ main ]
 concurrency: integration-test
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
