@@ -24,12 +24,12 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
             file_md5 = hashlib.md5(f.read()).hexdigest()
 
         if multipart:
+            time.sleep(10)  # multipart requests require longer for the bucket to be created
             upload_id = interface.initiate_multipart_upload(obj_name)
             interface.upload_object(fpath, obj_name, 1, upload_id)
             interface.complete_multipart_upload(obj_name, upload_id)
         else:
-            interface.upload_object(fpath, obj_name)
-        time.sleep(1)
+            interface.upload_object(fpath, obj_name)    
         assert interface.exists(obj_name), f"{region.split(':')[0]}://{bucket}/{obj_name} does not exist"
         assert not interface.exists("random_nonexistent_file"), "Object should not exist"
         iface_size = interface.get_obj_size(obj_name)
@@ -43,10 +43,9 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
             os.remove(fpath)
 
         if multipart:
-            interface.download_object(obj_name, fpath, 0, file_size_mb)
+            interface.download_object(obj_name, fpath, 0, file_size_mb * MB)
         else:
             interface.download_object(obj_name, fpath)
-        assert interface.get_obj_size(obj_name) == os.path.getsize(fpath)
         iface_size = interface.get_obj_size(obj_name)
         local_size = os.path.getsize(fpath)
         assert iface_size == local_size, f"Object size mismatch: {iface_size} != {local_size}"
