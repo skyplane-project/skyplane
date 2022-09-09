@@ -417,7 +417,6 @@ class ReplicatorClient:
                 )
             print("time to create list of chunks: " + str(time.time() - time1))
 
-
             time2 = time.time()
 
             # partition chunks into roughly equal-sized batches (by bytes)
@@ -491,7 +490,7 @@ class ReplicatorClient:
                 do_parallel(send_chunk_requests, start_instances, n=-1)
 
         job.chunk_requests = [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
-        
+
         print("time to create list of requests " + str(time.time() - time3))
 
         return job
