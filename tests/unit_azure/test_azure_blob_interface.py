@@ -4,19 +4,19 @@ from tests.interface_util import interface_test_framework
 from skyplane.utils import logger
 
 
-def test_azure_singlepart():
-    bucket_name = f"test{str(uuid.uuid4()).replace('-', '')[-20:]}/{str(uuid.uuid4()).replace('-', '')}"
-    assert interface_test_framework("azure:eastus", bucket_name, False, test_delete_bucket=True)
+# def test_azure_singlepart():
+#     bucket_name = f"test{str(uuid.uuid4()).replace('-', '')[-20:]}/{str(uuid.uuid4()).replace('-', '')}"
+#     assert interface_test_framework("azure:eastus", bucket_name, False, test_delete_bucket=True)
 
 
-def test_azure_singlepart_zero_bytes():
-    bucket_name = f"test{str(uuid.uuid4()).replace('-', '')[-20:]}/{str(uuid.uuid4()).replace('-', '')}"
-    assert interface_test_framework("azure:eastus", bucket_name, False, test_delete_bucket=True, file_size_mb=0)
+# def test_azure_singlepart_zero_bytes():
+#     bucket_name = f"test{str(uuid.uuid4()).replace('-', '')[-20:]}/{str(uuid.uuid4()).replace('-', '')}"
+#     assert interface_test_framework("azure:eastus", bucket_name, False, test_delete_bucket=True, file_size_mb=0)
 
 
-def test_azure_multipart():
-    logger.warning("Multipart tests disabled!")
-    # assert test_interface("azure:eastus", "sky-us-east-1", True)
+# def test_azure_multipart():
+#     logger.warning("Multipart tests disabled!")
+#     # assert test_interface("azure:eastus", "sky-us-east-1", True)
 
 
 def test_azure_bucket_exists():

@@ -16,20 +16,20 @@ def test_aws_multipart():
     assert interface_test_framework("aws:us-east-1", f"test-skyplane-{uuid.uuid4()}", True, test_delete_bucket=True)
 
 
-def test_aws_bucket_exists():
-    # test a public bucket with objects
-    iface = ObjectStoreInterface.create("aws:infer", "skyplane")
-    assert iface.bucket_exists()
+# def test_aws_bucket_exists():
+#     # test a public bucket with objects
+#     iface = ObjectStoreInterface.create("aws:infer", "skyplane")
+#     assert iface.bucket_exists()
 
-    # test a random bucket that doesn't exist
-    iface = ObjectStoreInterface.create("aws:infer", f"skyplane-does-not-exist-{uuid.uuid4()}")
-    assert not iface.bucket_exists()
+#     # test a random bucket that doesn't exist
+#     iface = ObjectStoreInterface.create("aws:infer", f"skyplane-does-not-exist-{uuid.uuid4()}")
+#     assert not iface.bucket_exists()
 
-    # test a requester pays bucket
-    iface = ObjectStoreInterface.create("aws:infer", "devrel-delta-datasets")
-    # assert iface.bucket_exists()
-    logger.warning("Requester pays bucket tests disabled!")
+#     # test a requester pays bucket
+#     iface = ObjectStoreInterface.create("aws:infer", "devrel-delta-datasets")
+#     # assert iface.bucket_exists()
+#     logger.warning("Requester pays bucket tests disabled!")
 
-    # test public but empty bucket
-    iface = ObjectStoreInterface.create("aws:infer", "skyplane-test-empty-public-bucket")
-    assert iface.bucket_exists()
+#     # test public but empty bucket
+#     iface = ObjectStoreInterface.create("aws:infer", "skyplane-test-empty-public-bucket")
+#     assert iface.bucket_exists()

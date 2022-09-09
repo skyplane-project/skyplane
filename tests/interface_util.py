@@ -12,8 +12,9 @@ from skyplane.utils.timer import Timer
 def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket: bool = False, file_size_mb: int = 1):
     interface = ObjectStoreInterface.create(region, bucket)
     interface.create_bucket(region.split(":")[1])
-    assert interface.bucket_exists(), "Bucket does not exist"
-    assert list(interface.list_objects()) == [], "Bucket is not empty"
+    time.sleep(2)
+    assert interface.bucket_exists(), f"Bucket {bucket} does not exist"
+    assert list(interface.list_objects()) == [], f"Bucket {bucket} is not empty"
 
     # generate file and upload
     obj_name = f"test_{uuid.uuid4()}.txt"
@@ -32,7 +33,8 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
             else:
                 interface.upload_object(fpath, obj_name)
 
-        assert interface.exists(obj_name), "Object does not exist"
+        time.sleep(1)
+        assert interface.exists(obj_name), f"{region.split(':')[0]}://{bucket}/{obj_name} does not exist"
         assert not interface.exists("random_nonexistent_file"), "Object should not exist"
         iface_size = interface.get_obj_size(obj_name)
         local_size = os.path.getsize(fpath)
@@ -57,12 +59,13 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
         with open(fpath, "rb") as f:
             dl_file_md5 = hashlib.md5(f.read()).hexdigest()
 
-        assert dl_file_md5 == file_md5, "MD5 does not match"
+    assert dl_file_md5 == file_md5, "MD5 does not match"
 
     interface.delete_objects([obj_name])
     if test_delete_bucket:
         interface.delete_bucket()
-        time.sleep(1)
+        time.sleep(2)
+        interface = ObjectStoreInterface.create(region, bucket)
         assert not interface.bucket_exists(), "Bucket should not exist"
 
     return True
