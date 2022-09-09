@@ -72,7 +72,7 @@ jobs:
         run: |
           poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
           cat ~/.skyplane/config
-          poetry run skyplane init -y --disable-config-azure
+          poetry run skyplane init -y
       - name: Test
         run: poetry run python tests/integration/cp.py ${{ matrix.pairs }}
       - name: Cleanup GCP service account

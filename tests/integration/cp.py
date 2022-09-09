@@ -1,6 +1,7 @@
 import argparse
 import os
 import tempfile
+import time
 import uuid
 from skyplane import MB
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
@@ -14,9 +15,9 @@ def setup_buckets(src_region, dest_region, n_files=1, file_size_mb=1):
     if src_provider == "azure":
         src_bucket_name = f"integration{src_zone}/{str(uuid.uuid4()).replace('-', '')}"
     else:
-        src_bucket_name = f"skyplaneintegration{src_zone}-{str(uuid.uuid4())[:8]}"
+        src_bucket_name = f"integration{src_zone}-{str(uuid.uuid4())[:8]}"
     if dest_provider == "azure":
-        dest_bucket_name = f"skyplaneintegration{dest_zone}/{str(uuid.uuid4()).replace('-', '')}"
+        dest_bucket_name = f"integration{dest_zone}/{str(uuid.uuid4()).replace('-', '')}"
     else:
         dest_bucket_name = f"skyplane-integration-{dest_zone}-{str(uuid.uuid4())[:8]}"
     logger.debug(f"creating buckets {src_bucket_name} and {dest_bucket_name}")
@@ -31,7 +32,6 @@ def setup_buckets(src_region, dest_region, n_files=1, file_size_mb=1):
         fpath = tmp.name
         with open(fpath, "wb+") as f:
             f.write(os.urandom(int(file_size_mb * MB)))
-
         for i in range(n_files):
             src_interface.upload_object(fpath, f"{src_prefix}/{i}")
 
