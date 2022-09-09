@@ -39,11 +39,13 @@ class AzureStorageAccountInterface:
             f"Storage account {storage_account_name} not found (found {[account.name for account in self.storage_management_client.storage_accounts.list()]})"
         )
 
-    def storage_account_exists(self):
-        for account in self.storage_management_client.storage_accounts.list():
-            if account.name == self.account_name:
-                return True
-        return False
+    def storage_account_exists_in_account(self):
+        """Note that we are not able to check if a storage account exists outside your account, so this is a best-effort check of your own account."""
+        try:
+            self.storage_account_obj()
+            return True
+        except exceptions.MissingBucketException:
+            return False
 
     def create_storage_account(self, azure_region, resource_group, tier="Premium_LRS"):
         try:
