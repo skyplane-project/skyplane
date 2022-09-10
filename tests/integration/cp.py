@@ -56,7 +56,8 @@ def run(src_region, dest_region, n_files=1, file_size_mb=1, multipart=True):
         if provider == "aws":
             return f"s3://{bucket}/{prefix}"
         elif provider == "azure":
-            raise NotImplementedError("Azure integration tests not implemented")
+            storage_account, container = bucket.split("/")
+            return f"azure://{storage_account}/{container}/{prefix}"
         elif provider == "gcp":
             return f"gs://{bucket}/{prefix}"
         else:
