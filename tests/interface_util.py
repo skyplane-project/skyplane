@@ -12,7 +12,7 @@ from skyplane.utils.fn import wait_for
 def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket: bool = False, file_size_mb: int = 1):
     interface = ObjectStoreInterface.create(region, bucket)
     interface.create_bucket(region.split(":")[1])
-    wait_for(lambda: interface.bucket_exists)
+    interface = ObjectStoreInterface.create(region.split(":")[0] + ":infer", bucket)
 
     # generate file and upload
     obj_name = f"test_{uuid.uuid4()}.txt"
