@@ -88,14 +88,14 @@ jobs:
         run: |
           poetry config virtualenvs.in-project false
           poetry config virtualenvs.path ~/.virtualenvs
-      - name: Install Dependencies
-        run: poetry install -E gateway -E solver
-        if: steps.cache.outputs.cache-hit != 'true'
       - name: Install Azure CLI
         run: |
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
           az login --service-principal -u ${{ secrets.AZURE_CLIENT_ID }} -p ${{ secrets.AZURE_CLIENT_SECRET }} --tenant ${{ secrets.AZURE_TENANT_ID }}
           az account set --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Install Dependencies
+        run: poetry install -E gateway -E solver
+        if: steps.cache.outputs.cache-hit != 'true'
       - name: Run cloud tests
         run: |
           poetry run skyplane init -y --disable-config-aws --disable-config-gcp
