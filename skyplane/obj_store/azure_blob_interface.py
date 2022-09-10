@@ -150,15 +150,23 @@ class AzureBlobInterface(ObjectStoreInterface):
             raise NotImplementedError("Multipart upload is not implemented for Azure")
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         with open(src_file_path, "rb") as f:
-            blob_client = self._run_azure_op_with_retry(
-                partial(
-                    self.container_client.upload_blob,
-                    name=dst_object_name,
-                    data=f,
-                    length=os.path.getsize(src_file_path),
-                    max_concurrency=self.max_concurrency,
-                    overwrite=True,
-                )
+            # blob_client = self._run_azure_op_with_retry(
+            #     partial(
+            #         self.container_client.upload_blob,
+            #         name=dst_object_name,
+            #         data=f,
+            #         length=os.path.getsize(src_file_path),
+            #         max_concurrency=self.max_concurrency,
+            #         overwrite=True,
+            #     )
+            # )
+            print(f"Uploading {src_file_path} to {dst_object_name}")
+            blob_client = self.container_client.upload_blob(
+                name=dst_object_name,
+                data=f,
+                length=os.path.getsize(src_file_path),
+                max_concurrency=self.max_concurrency,
+                overwrite=True,
             )
         if check_md5:
             b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
