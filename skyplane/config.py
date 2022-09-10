@@ -40,7 +40,7 @@ _DEFAULT_FLAGS = {
     "verify_checksums": True,
     "multipart_enabled": True,
     "multipart_min_threshold_mb": 128,
-    "multipart_min_size_mb": 8,
+    "multipart_min_size_mb": 5,  # 5 MiB minimum size for multipart uploads
     "multipart_max_chunks": 9990,  # AWS limit is 10k chunks
     "num_connections": 32,
     "max_instances": 1,

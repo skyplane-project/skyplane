@@ -1,5 +1,4 @@
 import json
-import json
 import math
 import pickle
 import time
@@ -345,9 +344,14 @@ class ReplicatorClient:
             progress.update(prepare_task, description=": Fetching instance IPs")
             gateway_ips: Dict[Server, str] = {s: s.public_ip() for s in self.bound_nodes.values()}
 
+            import time
+
+            time1 = time.time()
+
             # make list of chunks
             progress.update(prepare_task, description=": Creating list of chunks for transfer")
             chunks = []
+            multipart_pairs = []
             idx = 0
             for (src_object, dest_object) in job.transfer_pairs:
                 if job.random_chunk_size_mb:
@@ -362,53 +366,8 @@ class ReplicatorClient:
                     )
                     idx += 1
                 elif multipart_enabled and src_object.size > multipart_min_threshold_mb * MB:
-                    # determine number of chunks via the following algorithm:
-                    chunk_size_bytes = int(multipart_min_size_mb * MB)
-                    num_chunks = math.ceil(src_object.size / chunk_size_bytes)
-                    if num_chunks > multipart_max_chunks:
-                        chunk_size_bytes = int(src_object.size / multipart_max_chunks)
-                        chunk_size_bytes = math.ceil(chunk_size_bytes / MB) * MB  # round to next largest MB
-                        num_chunks = math.ceil(src_object.size / chunk_size_bytes)
-
-                    # TODO: potentially do this in a seperate thread, and/or after chunks sent
-                    obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
-                    logger.fs.info(f"Initiate multipart upload on {dest_object}")
-                    upload_id = obj_store_interface.initiate_multipart_upload(dest_object.key)
-
-                    offset = 0
-                    part_num = 1
-                    parts = []
-                    for chunk in range(num_chunks):
-                        # size is min(chunk_size, remaining data)
-                        file_size_bytes = min(chunk_size_bytes, src_object.size - offset)
-                        assert file_size_bytes >= 0, f"File size < 0 {file_size_bytes}"
-                        chunks.append(
-                            Chunk(
-                                src_key=src_object.key,
-                                dest_key=dest_object.key,
-                                chunk_id=idx,
-                                file_offset_bytes=offset,
-                                chunk_length_bytes=file_size_bytes,
-                                part_number=part_num,
-                                upload_id=upload_id,
-                            )
-                        )
-                        parts.append(part_num)
-
-                        idx += 1
-                        part_num += 1
-                        offset += chunk_size_bytes
-                    # add multipart upload request
-                    self.multipart_upload_requests.append(
-                        {
-                            "region": job.dest_region,
-                            "bucket": job.dest_bucket,
-                            "upload_id": upload_id,
-                            "key": dest_object.key,
-                            "parts": parts,
-                        }
-                    )
-                # transfer entire object
+                    # transfer entire object
+                    multipart_pairs.append((src_object, dest_object))
                 else:
                     chunk = Chunk(
                         src_key=src_object.key,
@@ -419,6 +378,54 @@ class ReplicatorClient:
                     )
                     chunks.append(chunk)
                     idx += 1
+
+            # initiate multipart transfers in parallel
+            progress.update(prepare_task, description=f": Queuing {len(multipart_pairs)} files for multipart transfers")
+            obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
+            upload_ids = do_parallel(lambda x: obj_store_interface.initiate_multipart_upload(x[1].key), multipart_pairs, n=16)
+            for (src_object, dest_object), upload_id in upload_ids:
+                # determine number of chunks via the following algorithm:
+                chunk_size_bytes = int(multipart_min_size_mb * MB)
+                num_chunks = math.ceil(src_object.size / chunk_size_bytes)
+                if num_chunks > multipart_max_chunks:
+                    chunk_size_bytes = int(src_object.size / multipart_max_chunks)
+                    chunk_size_bytes = math.ceil(chunk_size_bytes / MB) * MB  # round to next largest mb
+                    num_chunks = math.ceil(src_object.size / chunk_size_bytes)
+                offset = 0
+                part_num = 1
+                parts = []
+                for chunk in range(num_chunks):
+                    file_size_bytes = min(chunk_size_bytes, src_object.size - offset)  # size is min(chunk_size, remaining data)
+                    assert file_size_bytes > 0, f"file size <= 0 {file_size_bytes}"
+                    chunks.append(
+                        Chunk(
+                            src_key=src_object.key,
+                            dest_key=dest_object.key,
+                            chunk_id=idx,
+                            file_offset_bytes=offset,
+                            chunk_length_bytes=file_size_bytes,
+                            part_number=part_num,
+                            upload_id=upload_id,
+                        )
+                    )
+                    parts.append(part_num)
+
+                    idx += 1
+                    part_num += 1
+                    offset += chunk_size_bytes
+                # add multipart upload request
+                self.multipart_upload_requests.append(
+                    {
+                        "region": job.dest_region,
+                        "bucket": job.dest_bucket,
+                        "upload_id": upload_id,
+                        "key": dest_object.key,
+                        "parts": parts,
+                    }
+                )
+            print("time to create list of chunks: " + str(time.time() - time1))
+
+            time2 = time.time()
 
             # partition chunks into roughly equal-sized batches (by bytes)
             def partition(items: List[Chunk], n_batches: int) -> List[List[Chunk]]:
@@ -439,6 +446,10 @@ class ReplicatorClient:
             ), f"{len(chunk_batches)} batches, expected {len(src_instances)}"
             for batch_idx, batch in enumerate(chunk_batches):
                 logger.fs.info(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")
+
+            print("time to partition " + str(time.time() - time2))
+
+            time3 = time.time()
 
             # make list of ChunkRequests
             with Timer("Building chunk requests"):
@@ -487,6 +498,9 @@ class ReplicatorClient:
                 do_parallel(send_chunk_requests, start_instances, n=-1)
 
         job.chunk_requests = [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
+
+        print("time to create list of requests " + str(time.time() - time3))
+
         return job
 
     def get_chunk_status_log_df(self) -> pd.DataFrame:
