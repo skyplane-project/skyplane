@@ -63,43 +63,43 @@ jobs:
         run: |
           poetry run skyplane init -y --disable-config-azure --disable-config-gcp
           poetry run pytest -s tests/unit_aws
-  # test-azure:
-  #   runs-on: ubuntu-latest
-  #   needs: test-unit
-  #   steps:
-  #     - uses: actions/checkout@v1
-  #     - name: Set up Python 3.8
-  #       uses: actions/setup-python@v1
-  #       with:
-  #         python-version: 3.8
-  #     - name: Install Poetry
-  #       run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.0b1
-  #     - name: Cache Poetry virtualenv
-  #       uses: actions/cache@v1
-  #       id: cache
-  #       with:
-  #         path: |
-  #           ~/.virtualenvs
-  #           /var/cache/apt/archives
-  #         key: azure-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
-  #         restore-keys: |
-  #           azure-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
-  #     - name: Set Poetry config
-  #       run: |
-  #         poetry config virtualenvs.in-project false
-  #         poetry config virtualenvs.path ~/.virtualenvs
-  #     - name: Install Dependencies
-  #       run: poetry install -E gateway -E solver
-  #       if: steps.cache.outputs.cache-hit != 'true'
-  #     - name: Install Azure CLI
-  #       run: |
-  #         curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-  #         az login --service-principal -u ${{ secrets.AZURE_CLIENT_ID }} -p ${{ secrets.AZURE_CLIENT_SECRET }} --tenant ${{ secrets.AZURE_TENANT_ID }}
-  #         az account set --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-  #     - name: Run cloud tests
-  #       run: |
-  #         poetry run skyplane init -y --disable-config-aws --disable-config-gcp
-  #         poetry run pytest -s tests/unit_azure
+  test-azure:
+    runs-on: ubuntu-latest
+    needs: test-unit
+    steps:
+      - uses: actions/checkout@v1
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.8
+      - name: Install Poetry
+        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.0b1
+      - name: Cache Poetry virtualenv
+        uses: actions/cache@v1
+        id: cache
+        with:
+          path: |
+            ~/.virtualenvs
+            /var/cache/apt/archives
+          key: azure-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            azure-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+      - name: Set Poetry config
+        run: |
+          poetry config virtualenvs.in-project false
+          poetry config virtualenvs.path ~/.virtualenvs
+      - name: Install Dependencies
+        run: poetry install -E gateway -E solver
+        if: steps.cache.outputs.cache-hit != 'true'
+      - name: Install Azure CLI
+        run: |
+          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+          az login --service-principal -u ${{ secrets.AZURE_CLIENT_ID }} -p ${{ secrets.AZURE_CLIENT_SECRET }} --tenant ${{ secrets.AZURE_TENANT_ID }}
+          az account set --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Run cloud tests
+        run: |
+          poetry run skyplane init -y --disable-config-aws --disable-config-gcp
+          poetry run pytest -s tests/unit_azure
   test-gcp:
     runs-on: ubuntu-latest
     needs: test-unit
