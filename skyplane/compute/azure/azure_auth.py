@@ -61,7 +61,6 @@ class AzureAuthentication:
                     )
                 else:
                     return DefaultAzureCredential(
-                        managed_identity_client_id=self.config.azure_client_id,
                         exclude_powershell_credential=True,
                         exclude_visual_studio_code_credential=True,
                     )

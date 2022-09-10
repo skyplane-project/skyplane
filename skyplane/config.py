@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
+from skyplane.exceptions import BadConfigException
+
 _FLAG_TYPES = {
     "autoconfirm": bool,
     "bbr": bool,
@@ -18,6 +20,9 @@ _FLAG_TYPES = {
     "num_connections": int,
     "max_instances": int,
     "autoshutdown_minutes": int,
+    "aws_use_spot_instances": bool,
+    "azure_use_spot_instances": bool,
+    "gcp_use_spot_instances": bool,
     "aws_instance_class": str,
     "azure_instance_class": str,
     "gcp_instance_class": str,
@@ -40,6 +45,9 @@ _DEFAULT_FLAGS = {
     "num_connections": 32,
     "max_instances": 1,
     "autoshutdown_minutes": 15,
+    "aws_use_spot_instances": False,
+    "azure_use_spot_instances": False,
+    "gcp_use_spot_instances": False,
     "aws_instance_class": "m5.8xlarge",
     "azure_instance_class": "Standard_D32_v5",
     "gcp_instance_class": "n2-standard-32",
@@ -66,13 +74,13 @@ class SkyplaneConfig:
     aws_enabled: bool
     azure_enabled: bool
     gcp_enabled: bool
-    anon_clientid: Optional[str] = None
     azure_principal_id: Optional[str] = None
     azure_subscription_id: Optional[str] = None
     azure_tenant_id: Optional[str] = None
     azure_client_id: Optional[str] = None
     azure_client_secret: Optional[str] = None
     gcp_project_id: Optional[str] = None
+    anon_clientid: Optional[str] = None
 
     @staticmethod
     def default_config() -> "SkyplaneConfig":
@@ -215,3 +223,14 @@ class SkyplaneConfig:
             setattr(self, f"flag_{flag_name}", _map_type(value, _FLAG_TYPES.get(flag_name, str)))
         else:
             setattr(self, f"flag_{flag_name}", None)
+
+    def check_config(self):
+        valid_config = True
+        if self.anon_clientid is None:
+            valid_config = False
+        if self.azure_enabled and (self.azure_client_id is None or self.azure_principal_id is None or self.azure_subscription_id is None):
+            valid_config = False
+        if self.gcp_enabled and self.gcp_project_id is None:
+            valid_config = False
+        if not valid_config:
+            raise BadConfigException("Invalid configuration")

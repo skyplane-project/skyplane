@@ -47,3 +47,7 @@ class TransferFailedException(SkyplaneException):
 
 class NoSuchObjectException(Exception):
     pass
+
+
+class BadConfigException(Exception):
+    pass

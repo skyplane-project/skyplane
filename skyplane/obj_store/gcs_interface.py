@@ -63,14 +63,14 @@ class GCSInterface(ObjectStoreInterface):
         return "gcp:" + self.gcp_region
 
     def bucket_exists(self):
+        iterator = self._gcs_client.list_blobs(self.bucket_name, page_size=1)
         try:
-            self._gcs_client.get_bucket(self.bucket_name)
+            next(iterator.pages, None)
             return True
         except Exception as e:
-            if "does not have storage.buckets.get access to the Google Cloud Storage bucket" in str(e):
-                logger.warning(f"Bucket {self.bucket_name} is not owned by the current user, so we cannot check if it exists.")
-                return True
-            return False
+            if "The specified bucket does not exist" in str(e):
+                return False
+            raise e
 
     def exists(self, obj_name):
         try:
@@ -86,7 +86,6 @@ class GCSInterface(ObjectStoreInterface):
             bucket.storage_class = "STANDARD"
             region_without_zone = "-".join(gcp_region.split("-")[:2])
             self._gcs_client.create_bucket(bucket, location=region_without_zone)
-        assert self.bucket_exists()
 
     def delete_bucket(self):
         self._gcs_client.get_bucket(self.bucket_name).delete()
