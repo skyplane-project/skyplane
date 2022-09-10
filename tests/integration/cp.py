@@ -57,7 +57,7 @@ def run(src_region, dest_region, n_files=1, file_size_mb=1, multipart=True):
             return f"s3://{bucket}/{prefix}"
         elif provider == "azure":
             storage_account, container = bucket.split("/")
-            return f"azure://{storage_account}/{container}/{prefix}"
+            return f"https://{storage_account}.blob.core.windows.net/{container}/{prefix}"
         elif provider == "gcp":
             return f"gs://{bucket}/{prefix}"
         else:
