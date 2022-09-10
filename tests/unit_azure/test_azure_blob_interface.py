@@ -5,8 +5,7 @@ from skyplane.utils import logger
 
 
 def test_azure_singlepart():
-    # bucket_name = f"test{str(uuid.uuid4()).replace('-', '')[-20:]}/{str(uuid.uuid4()).replace('-', '')}"
-    bucket_name = f"testbucket/{str(uuid.uuid4()).replace('-', '')}"
+    bucket_name = f"test{str(uuid.uuid4()).replace('-', '')[-20:]}/{str(uuid.uuid4()).replace('-', '')}"
     assert interface_test_framework("azure:eastus", bucket_name, False, test_delete_bucket=True)
 
 
