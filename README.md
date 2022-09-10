@@ -22,7 +22,7 @@ Skyplane currently only supports MacOS and Linux. For Windows, first [install Li
 # Getting started
 
 ## Installation
-We recommend installation from PyPi: `pip install skyplane`
+We recommend installation from PyPi: `pip install skyplane-nightly`
 
 *Installation on M1 Mac*: If you are using an M1 Mac with the arm64 architecture, you will need to install Skyplane as follows
 `GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 GRPC_PYTHON_BUILD_SYSTEM_ZLIB=1 pip install skyplane`
