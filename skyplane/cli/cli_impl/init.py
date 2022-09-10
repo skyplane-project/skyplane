@@ -66,7 +66,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         return config
 
     def make_role_cmds(principal_id, subscription_id):
-        roles = ["Contributor", "Storage Blob Data Contributor", "Storage Account Contributor"]
+        roles = ["Storage Blob Data Contributor", "Storage Account Contributor"]  # "Contributor", 
         return [
             "az role assignment create --role".split(" ")
             + [role]
