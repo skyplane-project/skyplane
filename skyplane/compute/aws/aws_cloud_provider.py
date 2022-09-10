@@ -378,39 +378,42 @@ class AWSCloudProvider(CloudProvider):
             iam.add_role_to_instance_profile(InstanceProfileName=iam_instance_profile_name, RoleName=iam_name)
             wait_for(check_instance_profile, timeout=60, interval=0.5)
 
-        def start_instance(subnet_id: str):
-            if use_spot_instances:
-                market_options = {"MarketType": "spot"}
-            else:
-                market_options = {}
-            return ec2.create_instances(
-                ImageId="resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id",
-                InstanceType=instance_class,
-                MinCount=1,
-                MaxCount=1,
-                KeyName=f"skyplane-{region}",
-                TagSpecifications=[
-                    {
-                        "ResourceType": "instance",
-                        "Tags": [{"Key": "Name", "Value": name}] + [{"Key": k, "Value": v} for k, v in tags.items()],
-                    }
-                ],
-                BlockDeviceMappings=[
-                    {"DeviceName": "/dev/sda1", "Ebs": {"DeleteOnTermination": True, "VolumeSize": ebs_volume_size, "VolumeType": "gp2"}}
-                ],
-                NetworkInterfaces=[
-                    {
-                        "DeviceIndex": 0,
-                        "Groups": [self.get_security_group(region).group_id],
-                        "SubnetId": subnet_id,
-                        "AssociatePublicIpAddress": True,
-                        "DeleteOnTermination": True,
-                    }
-                ],
-                IamInstanceProfile={"Name": iam_instance_profile_name},
-                InstanceInitiatedShutdownBehavior="terminate",
-                InstanceMarketOptions=market_options,
-            )
+            def start_instance(subnet_id: str):
+                if use_spot_instances:
+                    market_options = {"MarketType": "spot"}
+                else:
+                    market_options = {}
+                return ec2.create_instances(
+                    ImageId="resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id",
+                    InstanceType=instance_class,
+                    MinCount=1,
+                    MaxCount=1,
+                    KeyName=f"skyplane-{region}",
+                    TagSpecifications=[
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [{"Key": "Name", "Value": name}] + [{"Key": k, "Value": v} for k, v in tags.items()],
+                        }
+                    ],
+                    BlockDeviceMappings=[
+                        {
+                            "DeviceName": "/dev/sda1",
+                            "Ebs": {"DeleteOnTermination": True, "VolumeSize": ebs_volume_size, "VolumeType": "gp2"},
+                        }
+                    ],
+                    NetworkInterfaces=[
+                        {
+                            "DeviceIndex": 0,
+                            "Groups": [self.get_security_group(region).group_id],
+                            "SubnetId": subnet_id,
+                            "AssociatePublicIpAddress": True,
+                            "DeleteOnTermination": True,
+                        }
+                    ],
+                    IamInstanceProfile={"Name": iam_instance_profile_name},
+                    InstanceInitiatedShutdownBehavior="terminate",
+                    InstanceMarketOptions=market_options,
+                )
 
             backoff = 1
             max_retries = 8
