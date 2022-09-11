@@ -98,6 +98,9 @@ class ReplicatorClient:
         use_compression=True,
         use_e2ee=True,
         use_socket_tls=False,
+        aws_use_spot_instances: bool = False,
+        azure_use_spot_instances: bool = False,
+        gcp_use_spot_instances: bool = False,
     ):
         regions_to_provision = [node.region for node in self.topology.gateway_nodes]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
@@ -190,14 +193,19 @@ class ReplicatorClient:
             provider, subregion = region.split(":")
             if provider == "aws":
                 assert self.aws.auth.enabled()
-                server = self.aws.provision_instance(subregion, self.aws_instance_class)
+                server = self.aws.provision_instance(subregion, self.aws_instance_class, use_spot_instances=aws_use_spot_instances)
             elif provider == "azure":
                 assert self.azure.auth.enabled()
-                server = self.azure.provision_instance(subregion, self.azure_instance_class)
+                server = self.azure.provision_instance(subregion, self.azure_instance_class, use_spot_instances=azure_use_spot_instances)
             elif provider == "gcp":
                 assert self.gcp.auth.enabled()
                 # todo specify network tier in ReplicationTopology
-                server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
+                server = self.gcp.provision_instance(
+                    subregion,
+                    self.gcp_instance_class,
+                    premium_network=self.gcp_use_premium_network,
+                    use_spot_instances=gcp_use_spot_instances,
+                )
             else:
                 raise NotImplementedError(f"Unknown provider {provider}")
             server.enable_auto_shutdown()
@@ -373,7 +381,7 @@ class ReplicatorClient:
                     for chunk in range(num_chunks):
                         # size is min(chunk_size, remaining data)
                         file_size_bytes = min(chunk_size_bytes, src_object.size - offset)
-                        assert file_size_bytes > 0, f"File size <= 0 {file_size_bytes}"
+                        assert file_size_bytes >= 0, f"File size < 0 {file_size_bytes}"
                         chunks.append(
                             Chunk(
                                 src_key=src_object.key,

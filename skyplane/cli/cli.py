@@ -123,6 +123,16 @@ def cp(
         "solve": solve,
     }
 
+    # check config
+    try:
+        cloud_config.check_config()
+    except exceptions.BadConfigException:
+        typer.secho(
+            f"Skyplane configuration file is not valid. Please reset your config by running `rm {config_path}` and then rerunning `skyplane init` to fix.",
+            fg="red",
+        )
+        raise typer.Exit(1)
+
     if provider_src == "local" or provider_dst == "local":
         typer.secho("Local transfers are not yet supported (but will be soon!)", fg="red", err=True)
         typer.secho("Skyplane is currently most optimized for cloud to cloud transfers.", fg="yellow", err=True)
@@ -193,9 +203,12 @@ def cp(
             use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
             use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
             aws_instance_class=cloud_config.get_flag("aws_instance_class"),
+            aws_use_spot_instances=cloud_config.get_flag("aws_use_spot_instances"),
             azure_instance_class=cloud_config.get_flag("azure_instance_class"),
+            azure_use_spot_instances=cloud_config.get_flag("azure_use_spot_instances"),
             gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
             gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
+            gcp_use_spot_instances=cloud_config.get_flag("gcp_use_spot_instances"),
             multipart_enabled=multipart,
             multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
             multipart_min_size_mb=cloud_config.get_flag("multipart_min_size_mb"),
@@ -298,6 +311,16 @@ def sync(
         "solve": solve,
     }
 
+    # check config
+    try:
+        cloud_config.check_config()
+    except exceptions.BadConfigException:
+        typer.secho(
+            f"Skyplane configuration file is not valid. Please reset your config by running `rm {config_path}` and then rerunning `skyplane init` to fix.",
+            fg="red",
+        )
+        raise typer.Exit(1)
+
     try:
         src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)
         src_region = src_client.region_tag()
@@ -375,9 +398,12 @@ def sync(
         use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
         use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
         aws_instance_class=cloud_config.get_flag("aws_instance_class"),
+        aws_use_spot_instances=cloud_config.get_flag("aws_use_spot_instances"),
         azure_instance_class=cloud_config.get_flag("azure_instance_class"),
+        azure_use_spot_instances=cloud_config.get_flag("azure_use_spot_instances"),
         gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
         gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
+        gcp_use_spot_instances=cloud_config.get_flag("gcp_use_spot_instances"),
         multipart_enabled=multipart,
         multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
         multipart_min_size_mb=cloud_config.get_flag("multipart_min_size_mb"),

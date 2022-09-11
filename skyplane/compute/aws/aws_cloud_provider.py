@@ -327,6 +327,7 @@ class AWSCloudProvider(CloudProvider):
         tags={"skyplane": "true"},
         ebs_volume_size: int = 128,
         iam_name: str = "skyplane_gateway",
+        use_spot_instances: bool = False,
     ) -> AWSServer:
 
         assert not region.startswith("aws:"), "Region should be AWS region"
@@ -373,6 +374,10 @@ class AWSCloudProvider(CloudProvider):
         wait_for(check_instance_profile, timeout=60, interval=0.5)
 
         def start_instance(subnet_id: str):
+            if use_spot_instances:
+                market_options = {"MarketType": "spot"}
+            else:
+                market_options = {}
             return ec2.create_instances(
                 ImageId="resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id",
                 InstanceType=instance_class,
@@ -399,6 +404,7 @@ class AWSCloudProvider(CloudProvider):
                 ],
                 IamInstanceProfile={"Name": iam_instance_profile_name},
                 InstanceInitiatedShutdownBehavior="terminate",
+                InstanceMarketOptions=market_options,
             )
 
         backoff = 1

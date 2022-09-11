@@ -1,6 +1,7 @@
 import argparse
 import os
 import tempfile
+import time
 import uuid
 from skyplane import MB
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
@@ -9,10 +10,16 @@ from skyplane.utils import logger
 
 
 def setup_buckets(src_region, dest_region, n_files=1, file_size_mb=1):
-    _, src_zone = src_region.split(":")
-    _, dest_zone = dest_region.split(":")
-    src_bucket_name = f"skyplane-integration-{src_zone}-{str(uuid.uuid4())[:8]}"
-    dest_bucket_name = f"skyplane-integration-{dest_zone}-{str(uuid.uuid4())[:8]}"
+    src_provider, src_zone = src_region.split(":")
+    dest_provider, dest_zone = dest_region.split(":")
+    if src_provider == "azure":
+        src_bucket_name = f"integration{src_zone}/{str(uuid.uuid4()).replace('-', '')}"
+    else:
+        src_bucket_name = f"integration{src_zone}-{str(uuid.uuid4())[:8]}"
+    if dest_provider == "azure":
+        dest_bucket_name = f"integration{dest_zone}/{str(uuid.uuid4()).replace('-', '')}"
+    else:
+        dest_bucket_name = f"skyplane-integration-{dest_zone}-{str(uuid.uuid4())[:8]}"
     logger.debug(f"creating buckets {src_bucket_name} and {dest_bucket_name}")
     src_interface = ObjectStoreInterface.create(src_region, src_bucket_name)
     dest_interface = ObjectStoreInterface.create(dest_region, dest_bucket_name)
@@ -25,7 +32,6 @@ def setup_buckets(src_region, dest_region, n_files=1, file_size_mb=1):
         fpath = tmp.name
         with open(fpath, "wb+") as f:
             f.write(os.urandom(int(file_size_mb * MB)))
-
         for i in range(n_files):
             src_interface.upload_object(fpath, f"{src_prefix}/{i}")
 
@@ -50,7 +56,8 @@ def run(src_region, dest_region, n_files=1, file_size_mb=1, multipart=True):
         if provider == "aws":
             return f"s3://{bucket}/{prefix}"
         elif provider == "azure":
-            raise NotImplementedError("Azure integration tests not implemented")
+            storage_account, container = bucket.split("/")
+            return f"https://{storage_account}.blob.core.windows.net/{container}/{prefix}"
         elif provider == "gcp":
             return f"gs://{bucket}/{prefix}"
         else:
