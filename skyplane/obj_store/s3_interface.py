@@ -48,7 +48,7 @@ class S3Interface(ObjectStoreInterface):
         return self.auth.get_boto3_client("s3", region)
 
     def bucket_exists(self):
-        s3_client = self._s3_client()
+        s3_client = self._s3_client("us-east-1")
         try:
             s3_client.list_objects_v2(Bucket=self.bucket_name, MaxKeys=1)  # list one object to check if bucket exists
             return True
