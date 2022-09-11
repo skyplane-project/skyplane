@@ -311,7 +311,7 @@ class Server:
             self.upload_file(os.path.expanduser(f"{key_root}/gcp/{service_key_file}"), f"/tmp/{service_key_file}")
             docker_envs["GCP_SERVICE_ACCOUNT_FILE"] = f"/pkg/data/{service_key_file}"
             docker_run_flags += f" -v /tmp/{service_key_file}:/pkg/data/{service_key_file}"
-        
+
         # set default region for boto3 on AWS
         if self.provider == "aws":
             docker_envs["AWS_DEFAULT_REGION"] = self.region_tag.split(":")[1]
