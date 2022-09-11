@@ -24,6 +24,9 @@ class S3Interface(ObjectStoreInterface):
         self.auth = AWSAuthentication()
         self.bucket_name = bucket_name
 
+    def path(self):
+        return f"s3://{self.bucket_name}"
+
     @property
     @lru_cache(maxsize=1)
     def aws_region(self):

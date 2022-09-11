@@ -26,6 +26,9 @@ class GCSInterface(ObjectStoreInterface):
         self._gcs_client = self.auth.get_storage_client()
         self._requests_session = requests.Session()
 
+    def path(self):
+        return f"gs://{self.bucket_name}"
+
     @property
     @lru_cache(maxsize=1)
     def gcp_region(self):
