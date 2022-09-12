@@ -6,6 +6,7 @@ import uuid
 from skyplane import MB
 
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
+from skyplane.utils.fn import wait_for
 
 
 def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket: bool = False, file_size_mb: int = 1):
@@ -29,12 +30,6 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
             interface.upload_object(fpath, obj_name)
         assert not interface.exists("random_nonexistent_file"), "Object should not exist"
 
-    # check one object is in the bucket
-    objs = list(interface.list_objects())
-    assert len(objs) == 1, f"{len(objs)} objects in bucket, expected 1"
-    assert objs[0].key == obj_name, f"{objs[0].key} != {obj_name}"
-    assert objs[0].size == file_size_mb * MB, f"{objs[0].size} != {file_size_mb * MB}"
-
     # download object
     with tempfile.NamedTemporaryFile() as tmp:
         fpath = tmp.name
@@ -53,6 +48,13 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
         with open(fpath, "rb") as f:
             dl_file_md5 = hashlib.md5(f.read()).hexdigest()
     assert dl_file_md5 == file_md5, "MD5 does not match"
+
+    # check one object is in the bucket
+    objs = list(interface.list_objects())
+    assert len(objs) == 1, f"{len(objs)} objects in bucket, expected 1"
+    assert objs[0].key == obj_name, f"{objs[0].key} != {obj_name}"
+    assert objs[0].size == file_size_mb * MB, f"{objs[0].size} != {file_size_mb * MB}"
+
     interface.delete_objects([obj_name])
     if test_delete_bucket:
         interface.delete_bucket()
