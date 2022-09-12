@@ -40,9 +40,8 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
             interface.download_object(obj_name, fpath, 0, file_size_mb * MB)
         else:
             interface.download_object(obj_name, fpath)
-        iface_size = interface.get_obj_size(obj_name)
         local_size = os.path.getsize(fpath)
-        assert iface_size == local_size, f"Object size mismatch: {iface_size} != {local_size}"
+        assert file_size_mb * MB == local_size, f"Object size mismatch: {file_size_mb * MB} != {local_size}"
 
         # check md5
         with open(fpath, "rb") as f:
