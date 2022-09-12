@@ -9,7 +9,7 @@ from typing import List, Optional, Tuple
 import typer
 from rich import print as rprint
 
-from skyplane import exceptions, GB, format_bytes, gateway_docker_image, skyplane_root
+from skyplane import exceptions, GB, format_bytes, gateway_docker_image, skyplane_root, cloud_config
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.obj_store.s3_interface import S3Interface, S3Object
@@ -127,12 +127,12 @@ def generate_full_transferobjlist(
     dest_bucket: str,
     dest_prefix: str,
     recursive: bool = False,
-    requester_pays: bool = False,
 ) -> List[Tuple[ObjectStoreObject, ObjectStoreObject]]:
     """Query source region and destination region buckets and return list of objects to transfer."""
     source_iface = ObjectStoreInterface.create(source_region, source_bucket)
     dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
 
+    requester_pays = cloud_config.get_flag("requester_pays")
     if requester_pays:
         source_iface.activate_requester()
 
@@ -259,7 +259,7 @@ def launch_replication_job(
             err=True,
             bold=True,
         )
-    
+
     # make replicator client
     rc = ReplicatorClient(
         topo,

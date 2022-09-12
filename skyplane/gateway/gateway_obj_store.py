@@ -120,7 +120,7 @@ class GatewayObjStoreConn:
                     logger.debug(f"[obj_store:{self.worker_id}] Start download {chunk_req.chunk.chunk_id} from {bucket}")
 
                     obj_store_interface = self.get_obj_store_interface(chunk_req.src_region, bucket)
-                    
+
                     if self.src_requester_pays:
                         obj_store_interface.activate_requester()
                     md5sum = retry_backoff(
@@ -130,7 +130,7 @@ class GatewayObjStoreConn:
                             fpath,
                             chunk_req.chunk.file_offset_bytes,
                             chunk_req.chunk.chunk_length_bytes,
-                            generate_md5=True,                        
+                            generate_md5=True,
                         ),
                         max_retries=4,
                     )

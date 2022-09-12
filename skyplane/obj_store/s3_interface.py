@@ -41,7 +41,7 @@ class S3Interface(ObjectStoreInterface):
 
     def region_tag(self):
         return "aws:" + self.aws_region
-    
+
     def activate_requester(self):
         self.requester_pays = True
 
@@ -51,14 +51,11 @@ class S3Interface(ObjectStoreInterface):
 
     def bucket_exists(self):
         s3_client = self._s3_client("us-east-1")
-        if self.requester_pays:
-            try:
-                s3_client.list_objects(Bucket=self.bucket_name, RequestPayer='requester', MaxKeys=1)
-                return True
-            except botocore.exceptions.ClientError:
-                raise NoSuchObjectException()
-        else:
-            return self.bucket_name in [b["Name"] for b in s3_client.list_buckets()["Buckets"]]
+        try:
+            s3_client.list_objects(Bucket=self.bucket_name, RequestPayer="requester", MaxKeys=1)
+            return True
+        except botocore.exceptions.ClientError:
+            raise NoSuchObjectException()
 
     def create_bucket(self, aws_region):
         s3_client = self._s3_client(aws_region)
@@ -75,7 +72,7 @@ class S3Interface(ObjectStoreInterface):
     def list_objects(self, prefix="") -> Iterator[S3Object]:
         paginator = self._s3_client().get_paginator("list_objects_v2")
         if self.requester_pays:
-            page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix, RequestPayer='requester')
+            page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix, RequestPayer="requester")
         else:
             page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix)
         for page in page_iterator:
@@ -120,19 +117,18 @@ class S3Interface(ObjectStoreInterface):
         write_block_size=2**16,
     ) -> Optional[bytes]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
-          
+
         s3_client = self._s3_client()
         assert len(src_object_name) > 0, f"Source object name must be non-empty: '{src_object_name}'"
 
-        args = {'Bucket': self.bucket_name, 
-                'Key': src_object_name}
+        args = {"Bucket": self.bucket_name, "Key": src_object_name}
 
         if size_bytes:
-            args['Range'] = f"bytes={offset_bytes}-{offset_bytes + size_bytes - 1}"
+            args["Range"] = f"bytes={offset_bytes}-{offset_bytes + size_bytes - 1}"
 
         if self.requester_pays:
-            args['RequestPayer'] = 'requester'
-        
+            args["RequestPayer"] = "requester"
+
         response = s3_client.get_object(**args)
 
         # write response data

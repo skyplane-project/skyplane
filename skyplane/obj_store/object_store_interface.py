@@ -23,7 +23,7 @@ class ObjectStoreObject:
 class ObjectStoreInterface:
     def region_tag(self):
         raise NotImplementedError()
-    
+
     def activate_requester(self):
         return
 

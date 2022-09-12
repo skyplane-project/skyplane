@@ -107,7 +107,7 @@ def cp(
     provider_dst, bucket_dst, path_dst = parse_path(dst)
 
     clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
-    
+
     requester_pays: bool = cloud_config.get_flag("requester_pays")
 
     if provider_src == "local" or provider_dst == "local":
@@ -125,12 +125,12 @@ def cp(
             dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
             src_region = src_client.region_tag()
             dst_region = dst_client.region_tag()
-        
-            if (requester_pays):
+
+            if requester_pays:
                 src_client.activate_requester()
 
             transfer_pairs = generate_full_transferobjlist(
-                src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst, recursive=recursive, requester_pays=requester_pays
+                src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst, recursive=recursive
             )
         except exceptions.SkyplaneException as e:
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
@@ -161,7 +161,7 @@ def cp(
             dest_bucket=bucket_dst,
             transfer_pairs=transfer_pairs,
         )
-        confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)     
+        confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
 
         transfer_stats = launch_replication_job(
             topo=topo,
