@@ -214,7 +214,12 @@ def cp(
             provider_dst = topo.sink_region().split(":")[0]
             with Progress(SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}")) as progress:
                 progress.add_task("", total=None)
-                ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+                try:
+                    ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+                except exceptions.TransferFailedException as e:
+                    console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+                    console.print(e.pretty_print_str())
+                    raise typer.Exit(1)
 
         client = UsageClient()
         if client.enabled():
@@ -408,7 +413,12 @@ def sync(
         else:
             with Progress(SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}"), transient=True) as progress:
                 progress.add_task("", total=None)
-                ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+                try:
+                    ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+                except exceptions.TransferFailedException as e:
+                    console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+                    console.print(e.pretty_print_str())
+                    raise typer.Exit(1)
 
     client = UsageClient()
     if client.enabled():
