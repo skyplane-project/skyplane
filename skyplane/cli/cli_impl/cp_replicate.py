@@ -127,14 +127,14 @@ def generate_full_transferobjlist(
     dest_bucket: str,
     dest_prefix: str,
     recursive: bool = False,
-    requester_pays: str = None
+    requester_pays: bool = False,
 ) -> List[Tuple[ObjectStoreObject, ObjectStoreObject]]:
     """Query source region and destination region buckets and return list of objects to transfer."""
     source_iface = ObjectStoreInterface.create(source_region, source_bucket)
     dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
 
-    if requester_pays == 'requester' and isinstance(source_iface, S3Interface):
-        source_iface.requester_pays = True
+    if requester_pays:
+        source_iface.activate_requester()
 
     # ensure buckets exist
     if not source_iface.bucket_exists():
@@ -145,12 +145,12 @@ def generate_full_transferobjlist(
 
     # query all source region objects
     logger.fs.debug(f"Querying objects in {source_bucket}")
-    with console.status(f"Querying objects in {source_bucket}\n") as status:
+    with console.status(f"Querying objects in {source_bucket}") as status:
         for obj in source_iface.list_objects(source_prefix):
             source_objs.append(obj)
             status.update(f"Querying objects in {source_bucket} (found {len(source_objs)} objects so far)")
     if not source_objs:
-        logger.error("Specified object does not exist.")
+        logger.error("Specified object does not exist.\n")
         raise exceptions.MissingObjectException(f"No objects were found in the specified prefix {source_prefix} in {source_bucket}")
 
     # map objects to destination object paths
@@ -174,7 +174,7 @@ def generate_full_transferobjlist(
     logger.fs.debug(f"Querying objects in {dest_bucket}")
     dest_objs_keys = {obj.key for obj in dest_objs}
     found_dest_objs = {}
-    with console.status(f"Querying objects in {dest_bucket}\n") as status:
+    with console.status(f"Querying objects in {dest_bucket}") as status:
         dst_objs = []
         for obj in dest_iface.list_objects(dest_prefix):
             if obj.key in dest_objs_keys:
@@ -236,7 +236,6 @@ def launch_replication_job(
     use_compression: bool = False,
     use_e2ee: bool = True,
     use_socket_tls: bool = False,
-    requester_pays: str = '',
     # multipart
     multipart_enabled: bool = False,
     multipart_min_threshold_mb: int = 128,
@@ -260,7 +259,7 @@ def launch_replication_job(
             err=True,
             bold=True,
         )
-
+    
     # make replicator client
     rc = ReplicatorClient(
         topo,
@@ -288,7 +287,6 @@ def launch_replication_job(
             multipart_min_threshold_mb=multipart_min_threshold_mb,
             multipart_min_size_mb=multipart_min_size_mb,
             multipart_max_chunks=multipart_max_chunks,
-            requester_pays=requester_pays
         )
         total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
         console.print(f":rocket: [bold blue]{total_bytes / GB:.2f}GB transfer job launched[/bold blue]")

@@ -41,6 +41,9 @@ class S3Interface(ObjectStoreInterface):
 
     def region_tag(self):
         return "aws:" + self.aws_region
+    
+    def activate_requester(self):
+        self.requester_pays = True
 
     def _s3_client(self, region=None):
         region = region if region is not None else self.aws_region
@@ -50,7 +53,7 @@ class S3Interface(ObjectStoreInterface):
         s3_client = self._s3_client("us-east-1")
         if self.requester_pays:
             try:
-                s3_client.list_objects(Bucket=self.bucket_name, RequestPayer='requester')
+                s3_client.list_objects(Bucket=self.bucket_name, RequestPayer='requester', MaxKeys=1)
                 return True
             except botocore.exceptions.ClientError:
                 raise NoSuchObjectException()
@@ -71,16 +74,12 @@ class S3Interface(ObjectStoreInterface):
 
     def list_objects(self, prefix="") -> Iterator[S3Object]:
         paginator = self._s3_client().get_paginator("list_objects_v2")
-        page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix)
-        if not self.requester_pays:
-            for page in page_iterator:
-                for obj in page.get("Contents", []):
-                    yield S3Object("aws", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"])
+        if self.requester_pays:
+            page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix, RequestPayer='requester')
         else:
-            s3_client = self._s3_client()
-            buckets = s3_client.list_objects(Bucket=self.bucket_name, Prefix=prefix, RequestPayer='requester')['Contents']
-            for i in range(len(buckets)):
-                obj = buckets[i]
+            page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix)
+        for page in page_iterator:
+            for obj in page.get("Contents", []):
                 yield S3Object("aws", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"])
 
     def delete_objects(self, keys: List[str]):

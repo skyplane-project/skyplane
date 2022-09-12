@@ -23,6 +23,9 @@ class ObjectStoreObject:
 class ObjectStoreInterface:
     def region_tag(self):
         raise NotImplementedError()
+    
+    def activate_requester(self):
+        return
 
     def create_bucket(self, region_tag: str):
         raise NotImplementedError()
