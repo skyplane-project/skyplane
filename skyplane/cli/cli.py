@@ -147,7 +147,7 @@ def cp(
             dst_region = dst_client.region_tag()
 
             if requester_pays:
-                src_client.activate_requester()
+                src_client.set_requester_bool(True)
 
             transfer_pairs = generate_full_transferobjlist(
                 src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst, recursive=recursive

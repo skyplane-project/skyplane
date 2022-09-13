@@ -161,7 +161,7 @@ def generate_full_transferobjlist(
 
     requester_pays = cloud_config.get_flag("requester_pays")
     if requester_pays:
-        source_iface.activate_requester()
+        source_iface.set_requester_bool(True)
 
     # ensure buckets exist
     if not source_iface.bucket_exists():

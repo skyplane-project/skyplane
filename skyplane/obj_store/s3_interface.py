@@ -45,8 +45,8 @@ class S3Interface(ObjectStoreInterface):
     def region_tag(self):
         return "aws:" + self.aws_region
 
-    def activate_requester(self):
-        self.requester_pays = True
+    def set_requester_bool(self, requester: bool):
+        self.requester_pays = requester
 
     def _s3_client(self, region=None):
         region = region if region is not None else self.aws_region
@@ -55,13 +55,11 @@ class S3Interface(ObjectStoreInterface):
     def bucket_exists(self):
         s3_client = self._s3_client("us-east-1")
         try:
-            if self.requester_pays:
-                s3_client.list_objects(Bucket=self.bucket_name, RequestPayer="requester", MaxKeys=1)
-            else:
-                s3_client.list_objects_v2(Bucket=self.bucket_name, MaxKeys=1)  # list one object to check if bucket exists
+            requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
+            s3_client.list_objects_v2(Bucket=self.bucket_name, MaxKeys=1, **requester_pays)
             return True
         except botocore.exceptions.ClientError as e:
-            if e.response["Error"]["Code"] == "NoSuchBucket":
+            if e.response["Error"]["Code"] == "NoSuchBucket" or e.response["Error"]["Code"] == "AccessDenied":
                 return False
             raise e
 
@@ -78,10 +76,8 @@ class S3Interface(ObjectStoreInterface):
 
     def list_objects(self, prefix="") -> Iterator[S3Object]:
         paginator = self._s3_client().get_paginator("list_objects_v2")
-        if self.requester_pays:
-            page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix, RequestPayer="requester")
-        else:
-            page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix)
+        requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
+        page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix, **requester_pays)
         for page in page_iterator:
             for obj in page.get("Contents", []):
                 yield S3Object("aws", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"])

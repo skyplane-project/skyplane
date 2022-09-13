@@ -7,7 +7,7 @@ class SkyplaneException(Exception):
 class MissingBucketException(SkyplaneException):
     def pretty_print_str(self):
         err = f"[red][bold]:x: MissingBucketException:[/bold] {str(self)}[/red]"
-        err += "\n[bold][red]Please ensure that the bucket exists and is accessible.[/red][/bold]"
+        err += "\n[bold][red]Please ensure that the bucket exists and is accessible.[/red][/bold] See https://skyplane.org/en/latest/faq.html#i-am-unable-to-copy-files-to-a-folder-in-my-destination-bucket-due-to-a-missing-object-error."
         return err
 
 

@@ -122,7 +122,7 @@ class GatewayObjStoreConn:
                     obj_store_interface = self.get_obj_store_interface(chunk_req.src_region, bucket)
 
                     if self.src_requester_pays:
-                        obj_store_interface.activate_requester()
+                        obj_store_interface.set_requester_bool(True)
                     md5sum = retry_backoff(
                         partial(
                             obj_store_interface.download_object,
