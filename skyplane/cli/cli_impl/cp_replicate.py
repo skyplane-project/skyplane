@@ -197,6 +197,9 @@ def generate_full_transferobjlist(
 
 
 def enrich_dest_objs(dest_region: str, dest_prefix: str, dest_bucket: str, dest_objs: list):
+    """
+    For skyplane sync, we enrich dest obj metadata with our existing dest obj metadata from the dest bucket following a query.
+    """
     dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
 
     # query destination at dest_key
