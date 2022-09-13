@@ -17,14 +17,27 @@ In the non-recursive case, Skyplane extracts the key from the full bucket path (
 
 In the recursive case, Skyplane appends a trailing slash to the source and dest paths if one does not already exist. After extracting the key from the source path, it is appended to the dest prefix to get object keys.
 
-## I am unable to copy files to a folder in my destination bucket due to a Missing Bucket Error
+## Troubleshooting MissingObjectException
+This exception is raised when:
+* no objects are found at the source prefix passed to the CLI
+* the source prefix is a directory and the `--recursive` flag is not set
+* there is a mismatch between the source prefix and the key for an object Skyplane is copying
 
-Check to make sure you have the adequate access permission to your bucket.
+To troubleshoot this exception, carefully check that the requested path is not empty and is accessible via the credential used by Skyplane. If this is the case, ensure that the `--recursive` flag is set if the source prefix is a directory.
 
-If the bucket is requester pays bucket, you can enable the requester pays option through the skyplane CLI by entering `skyplane config set requester_pays true`.
+As an example, to transfer the directory `s3://some-bucket/some-directory/` to `s3://some-bucket/destination/`, you would run `skyplane cp --recursive s3://some-bucket/some-directory/ s3://some-bucket/destination/`.
 
-## I am unable to copy files to a folder in my destination bucket due to a Missing Object Error
+## Troubleshooting MissingBucketException
+This exception is raised when:
+* the source bucket does not exist
+* the destination bucket does not exist
+* the source bucket is not accessible via the credential used by Skyplane
+* the destination bucket is not accessible via the credential used by Skyplane
 
-Check to make sure your recursive flag is enabled.
+Using the cloud provider's console, verify the bucket exists. If so, ensure that Skyplane has access to the bucket.
 
-<!-- ## Does Skyplane support VM-to-VM transfers? -->
+```{note}
+**Requester pays buckets**: If it is a public bucket, it may be a [requester pays bucket](https://docs.aws.amazon.com/AmazonS3/latest/userguide/RequesterPaysBuckets.html). Any egress fees from this bucket will be paid by the requester (i.e. Skyplane) instead of the bucket's owner. By default Skyplane disables support for requester pays to avoid unexpected egress charges.
+
+To enable support for requester pays buckets, run `skyplane config set requester_pays true`.
+``` 
