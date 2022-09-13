@@ -383,10 +383,8 @@ def launch_replication_job(
             client.report_usage_data("error", err_stats, destination)
         raise typer.Exit(1)
     elif stats.monitor_status == "completed":
-        rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
-        runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{stats.total_runtime_s:.2f}s[/bright_black]"
-        throughput_line = f"[white]Throughput:[/white] [bright_black]{stats.throughput_gbits:.2f}Gbps[/bright_black]"
-        rprint(f"{runtime_line}, {throughput_line}")
+        # success message will be handled by the caller
+        pass
     else:
         rprint(f"\n:x: [bold red]Transfer failed[/bold red]")
         rprint(stats)
