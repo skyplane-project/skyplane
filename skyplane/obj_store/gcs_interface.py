@@ -26,6 +26,9 @@ class GCSInterface(ObjectStoreInterface):
         self._gcs_client = self.auth.get_storage_client()
         self._requests_session = requests.Session()
 
+    def path(self):
+        return f"gs://{self.bucket_name}"
+
     @property
     @lru_cache(maxsize=1)
     def gcp_region(self):
@@ -68,7 +71,6 @@ class GCSInterface(ObjectStoreInterface):
             next(iterator.pages, None)
             return True
         except Exception as e:
-            logger.error(f"Error checking bucket {self.bucket_name}: {e}")
             if "The specified bucket does not exist" in str(e):
                 return False
             raise e
@@ -87,7 +89,6 @@ class GCSInterface(ObjectStoreInterface):
             bucket.storage_class = "STANDARD"
             region_without_zone = "-".join(gcp_region.split("-")[:2])
             self._gcs_client.create_bucket(bucket, location=region_without_zone)
-        assert self.bucket_exists()
 
     def delete_bucket(self):
         self._gcs_client.get_bucket(self.bucket_name).delete()

@@ -6,9 +6,11 @@ Skyplane comes with a variety of knobs to tune to adjust performance or change h
 * CLI configuration
     * `autoconfirm`: If set, it will not ask for you to confirm the transfers from the CLI. (default False)
     * `autoshutdown_minutes`: If set, VMs will automatically shut down after this time in minutes. (default 15)
+    * `usage_stats`: If set, Skyplane will send aggregate performance statistics for a collective throughput grid. (default True)
 * Transfer parallelism
     * `max_instances`: Maximum number of instances to use for parallel transfers. (default 10)
 * Network configuration
+    * `bbr`: If set, the VM will use BBR congestion control instead of CUBIC. (default False)
     * `compress`: If set, gateway VMs will compress data before egress to reduce costs. (default True)
     * `encrypt_e2e`: If set, gateway VMs will encrypt data end-to-end. (default True)
     * `encrypt_socket_tls`: If set, all sockets between gateways will be encrypted with TLS. (default False)
@@ -21,9 +23,13 @@ Skyplane comes with a variety of knobs to tune to adjust performance or change h
     * `multipart_max_chunks`: Maximum number of chunks for multipart transfers. (default 9990).
 * Instance provisioning configuration
     * `aws_instance_class`: AWS instance class to use for provisioning. (default m5.8xlarge)
+    * `aws_use_spot_instances`: If set, AWS will use spot instances instead of on-demand instances. (default False)
     * `azure_instance_class`: Azure instance class to use for provisioning. (default Standard_D32_v4)
+    * `azure_use_spot_instances`: If set, Azure will use spot instances instead of on-demand instances. (default False)
     * `gcp_instance_class`: GCP instance class to use for provisioning. (default n2-standard-32)
     * `gcp_use_premium_network`: If set, will provision VMs on GCP's premium network tier. (default True)
+    * `gcp_service_account_name`: GCP service account name to use for provisioning. (default skyplane-manual)
+    * `gcp_use_spot_instances`: If set, GCP will use spot instances instead of on-demand instances. (default False)
 ```
 
 ## Increasing performance of transfers via paralllelism
@@ -60,6 +66,16 @@ We will attempt to automatically deprovision these gateways after 15 minutes by 
 To ensure that all gateways are stopped and no longer incur charges, run:
 ```bash
 $ skyplane deprovision
+```
+
+## Spot Instances to reduce instance costs
+Spot instances reduce the cost of provisioning VMs. These instances are charged at a lower price than on-demand instances but can be preempted at any time. If this occurs, the transfer will fail.
+
+To use spot instances, run:
+```bash
+$ skyplane config set aws_use_spot_instances True
+$ skyplane config set azure_use_spot_instances True
+$ skyplane config set gcp_use_spot_instances True
 ```
 
 ## Configuring networking between gateways

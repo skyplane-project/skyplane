@@ -232,7 +232,9 @@ class AzureCloudProvider(CloudProvider):
 
     # This code, along with some code in azure_server.py, is based on
     # https://github.com/ucbrise/mage-scripts/blob/main/azure_cloud.py.
-    def provision_instance(self, location: str, vm_size: str, name: Optional[str] = None, uname: str = "skyplane") -> AzureServer:
+    def provision_instance(
+        self, location: str, vm_size: str, name: Optional[str] = None, uname: str = "skyplane", use_spot_instances: bool = False
+    ) -> AzureServer:
         assert ":" not in location, "invalid colon in Azure location"
 
         if name is None:
@@ -375,6 +377,8 @@ class AzureCloudProvider(CloudProvider):
                                     }
                                 ],
                             },
+                            # use spot instances if use_spot_instances is set
+                            "priority": "Spot" if use_spot_instances else "Regular",
                         },
                     )
                     vm_result = poller.result()

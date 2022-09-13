@@ -23,6 +23,9 @@ class S3Interface(ObjectStoreInterface):
         self.auth = AWSAuthentication()
         self.bucket_name = bucket_name
 
+    def path(self):
+        return f"s3://{self.bucket_name}"
+
     @property
     @lru_cache(maxsize=1)
     def aws_region(self):
@@ -61,7 +64,6 @@ class S3Interface(ObjectStoreInterface):
                 s3_client.create_bucket(Bucket=self.bucket_name)
             else:
                 s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": aws_region})
-        assert self.bucket_exists()
 
     def delete_bucket(self):
         self._s3_client().delete_bucket(Bucket=self.bucket_name)
@@ -169,7 +171,6 @@ class S3Interface(ObjectStoreInterface):
         response = s3_client.create_multipart_upload(
             Bucket=self.bucket_name,
             Key=dst_object_name,
-            # ContentType=content_type
         )
         return response["UploadId"]
 

@@ -69,9 +69,8 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         return [
             "az role assignment create --role".split(" ")
             + [role]
-            + f"--assignee-object-id {principal_id} --assignee-principal-type ServicePrincipal --scope /subscriptions/{subscription_id}".split(
-                " "
-            )
+            + f"--assignee-object-id {principal_id} --assignee-principal-type ServicePrincipal".split(" ")
+            + f"--subscription {subscription_id}".split(" ")
             for role in roles
         ]
 
@@ -84,11 +83,12 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             return config
 
         # load credentials from environment variables or input
+        inferred_subscription_id = (
+            os.environ.get("AZURE_SUBSCRIPTION_ID") or config.azure_subscription_id or AzureAuthentication.infer_subscription_id()
+        )
         defaults = {
             "client_id": os.environ.get("AZURE_CLIENT_ID") or config.azure_client_id,
-            "subscription_id": os.environ.get("AZURE_SUBSCRIPTION_ID")
-            or config.azure_subscription_id
-            or AzureAuthentication.infer_subscription_id(),
+            "subscription_id": inferred_subscription_id,
             "resource_group": os.environ.get("AZURE_RESOURCE_GROUP") or AzureServer.resource_group_name,
         }
         create_rg_cmd = "az group create -l westus2 -n skyplane"
@@ -99,9 +99,14 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
             return clear_azure_config(config)
 
-        config.azure_subscription_id = typer.prompt(
-            "    Which Azure subscription ID do you want to use?", default=defaults["subscription_id"]
+        config.azure_subscription_id = (
+            typer.prompt("    Which Azure subscription ID do you want to use?", default=defaults["subscription_id"])
+            if not non_interactive
+            else defaults["subscription_id"]
         )
+        if not config.azure_subscription_id:
+            typer.secho("    Invalid Azure subscription ID", fg="red", err=True)
+            return clear_azure_config(config)
 
         change_subscription_cmd = f"az account set --subscription {config.azure_subscription_id}"
         create_umi_cmd = f"az identity create -g skyplane -n skyplane_umi"

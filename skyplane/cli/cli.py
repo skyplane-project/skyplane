@@ -25,7 +25,13 @@ import skyplane.cli.cli_solver
 import skyplane.cli.experiments
 from skyplane import config_path, exceptions, skyplane_root, cloud_config, tmp_log_dir
 from skyplane.cli.common import print_header, console
-from skyplane.cli.cli_impl.cp_replicate import generate_full_transferobjlist, generate_topology, confirm_transfer, launch_replication_job
+from skyplane.cli.cli_impl.cp_replicate import (
+    enrich_dest_objs,
+    generate_full_transferobjlist,
+    generate_topology,
+    confirm_transfer,
+    launch_replication_job,
+)
 from skyplane.replicate.replication_plan import ReplicationJob
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.common import parse_path, query_instances
@@ -197,16 +203,17 @@ def cp(
             use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
             use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
             aws_instance_class=cloud_config.get_flag("aws_instance_class"),
+            aws_use_spot_instances=cloud_config.get_flag("aws_use_spot_instances"),
             azure_instance_class=cloud_config.get_flag("azure_instance_class"),
+            azure_use_spot_instances=cloud_config.get_flag("azure_use_spot_instances"),
             gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
             gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
+            gcp_use_spot_instances=cloud_config.get_flag("gcp_use_spot_instances"),
             multipart_enabled=multipart,
             multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
             multipart_min_size_mb=cloud_config.get_flag("multipart_min_size_mb"),
             multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
-            src_region=src_region,
-            dst_region=dst_region,
-            args=args,
+            error_reporting_args=args,
         )
 
         if cloud_config.get_flag("verify_checksums"):
@@ -334,6 +341,8 @@ def sync(
 
         raise typer.Exit(1)
 
+    enrich_dest_objs(dst_region, path_dst, bucket_dst, [i[1] for i in full_transfer_pairs])
+
     # filter out any transfer pairs that are already in the destination
     transfer_pairs = []
     for src_obj, dst_obj in full_transfer_pairs:
@@ -387,16 +396,17 @@ def sync(
         use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
         use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
         aws_instance_class=cloud_config.get_flag("aws_instance_class"),
+        aws_use_spot_instances=cloud_config.get_flag("aws_use_spot_instances"),
         azure_instance_class=cloud_config.get_flag("azure_instance_class"),
+        azure_use_spot_instances=cloud_config.get_flag("azure_use_spot_instances"),
         gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
         gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
+        gcp_use_spot_instances=cloud_config.get_flag("gcp_use_spot_instances"),
         multipart_enabled=multipart,
         multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
         multipart_min_size_mb=cloud_config.get_flag("multipart_min_size_mb"),
         multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
-        src_region=src_region,
-        dst_region=dst_region,
-        args=args,
+        error_reporting_args=args,
     )
 
     if cloud_config.get_flag("verify_checksums"):

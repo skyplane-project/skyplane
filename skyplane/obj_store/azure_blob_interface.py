@@ -31,6 +31,9 @@ class AzureBlobInterface(ObjectStoreInterface):
         self.container_name = container_name
         self.max_concurrency = max_concurrency  # parallel upload/downloads, seems to cause issues if too high
 
+    def path(self):
+        return f"https://{self.account_name}.blob.core.windows.net/{self.container_name}"
+
     def region_tag(self):
         return f"azure:{self.storage_account_interface.azure_region}"
 
@@ -86,6 +89,7 @@ class AzureBlobInterface(ObjectStoreInterface):
                 logger.error(
                     f"Unable to list objects in container {self.container_name} as you don't have permission to access it. You need the 'Storage Blob Data Contributor' and 'Storage Account Contributor' roles: {e}"
                 )
+                raise e
 
     def delete_objects(self, keys: List[str]):
         for key in keys:
@@ -149,15 +153,23 @@ class AzureBlobInterface(ObjectStoreInterface):
             raise NotImplementedError("Multipart upload is not implemented for Azure")
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         with open(src_file_path, "rb") as f:
-            blob_client = self._run_azure_op_with_retry(
-                partial(
-                    self.container_client.upload_blob,
-                    name=dst_object_name,
-                    data=f,
-                    length=os.path.getsize(src_file_path),
-                    max_concurrency=self.max_concurrency,
-                    overwrite=True,
-                )
+            # blob_client = self._run_azure_op_with_retry(
+            #     partial(
+            #         self.container_client.upload_blob,
+            #         name=dst_object_name,
+            #         data=f,
+            #         length=os.path.getsize(src_file_path),
+            #         max_concurrency=self.max_concurrency,
+            #         overwrite=True,
+            #     )
+            # )
+            print(f"Uploading {src_file_path} to {dst_object_name}")
+            blob_client = self.container_client.upload_blob(
+                name=dst_object_name,
+                data=f,
+                length=os.path.getsize(src_file_path),
+                max_concurrency=self.max_concurrency,
+                overwrite=True,
             )
         if check_md5:
             b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
