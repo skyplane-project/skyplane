@@ -8,12 +8,12 @@ Skyplane is composed of the client (runs locally on a user's laptop) and gateway
 
 * Install docker
 ```bash
-$ curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh
+curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh
 ```
 * [Create a Personal Access Token](https://github.com/settings/tokens/new) with "write:packages" permissions
 * Register the token with Docker:
 ```bash
-$ echo <PERSONAL_ACCESS_TOKEN> | sudo docker login ghcr.io -u <GITHUB_USERNAME> --password-stdin
+echo <PERSONAL_ACCESS_TOKEN> | sudo docker login ghcr.io -u <GITHUB_USERNAME> --password-stdin
 ```
 
 ## Building and testing Skyplane
@@ -22,7 +22,7 @@ $ echo <PERSONAL_ACCESS_TOKEN> | sudo docker login ghcr.io -u <GITHUB_USERNAME> 
 To package the code into a Docker image and push it to a container registry on your account, run the following command (substitute YOUR_GITHUB_USERNAME_HERE for your Github username):
 
 ```bash
-$ export SKYPLANE_DOCKER_IMAGE=$(bash scripts/pack_docker.sh <YOUR_GITHUB_USERNAME_HERE>)
+export SKYPLANE_DOCKER_IMAGE=$(bash scripts/pack_docker.sh <YOUR_GITHUB_USERNAME_HERE>)
 ```
 
 This will build the Skyplane Docker image for the gateway and push it ghcr.io under your user account. When running a Skyplane transfer, any provisioned gateways will pull this image from the `SKYPLANE_DOCKER_IMAGE` environment variable to ensure a reproducible environment.
@@ -42,15 +42,15 @@ By default, new packages on ghcr are private. To make the package public so gate
 ### Building the Skyplane client
 We use [Poetry](https://python-poetry.org/) to manage package dependencies during development. For convenience, we provide a Poetry wrapper via `setup.py`. To build the client, install the Skyplane package in development mode. The package points to your current checked-out version of the code, and any edits to the Skyplane client will immediately apply to the `skyplane` CLI command.
 ```bash
-$ pip install -e .
+pip install -e .
 ```
 
 ### Testing a transfer
 We can run the `skyplane` CLI to test a transfer. The CLI will read your `SKYPLANE_DOCKER_IMAGE` environment variable and use that Docker image when launching gateways.
 
 ```bash
-$ skyplane init
-$ skyplane cp s3://... s3://...
+skyplane init
+skyplane cp s3://... s3://...
 ```
 
 ## Development Tips 

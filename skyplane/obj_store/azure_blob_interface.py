@@ -2,7 +2,9 @@ import base64
 import hashlib
 import os
 from functools import lru_cache, partial
+from socket import timeout
 from typing import Iterator, List, Optional
+import uuid
 
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError, HttpResponseError
 
@@ -29,6 +31,9 @@ class AzureBlobInterface(ObjectStoreInterface):
         self.container_name = container_name
         self.max_concurrency = max_concurrency  # parallel upload/downloads, seems to cause issues if too high
 
+    def path(self):
+        return f"https://{self.account_name}.blob.core.windows.net/{self.container_name}"
+
     def region_tag(self):
         return f"azure:{self.storage_account_interface.azure_region}"
 
@@ -40,15 +45,12 @@ class AzureBlobInterface(ObjectStoreInterface):
     def container_client(self):
         return self.auth.get_container_client(f"https://{self.account_name}.blob.core.windows.net", self.container_name)
 
-    def container_exists(self):
+    def bucket_exists(self):
         try:
             self.container_client.get_container_properties()
             return True
         except ResourceNotFoundError:
             return False
-
-    def bucket_exists(self):
-        return self.storage_account_interface.storage_account_exists() and self.container_exists()
 
     def exists(self, obj_name):
         return self.blob_service_client.get_blob_client(container=self.container_name, blob=obj_name).exists()
@@ -61,10 +63,10 @@ class AzureBlobInterface(ObjectStoreInterface):
 
     def create_bucket(self, azure_region, resource_group=AzureServer.resource_group_name, premium_tier=True):
         tier = "Premium_LRS" if premium_tier else "Standard_LRS"
-        if not self.storage_account_interface.storage_account_exists():
+        if not self.storage_account_interface.storage_account_exists_in_account():
             logger.debug(f"Creating storage account {self.account_name}")
             self.storage_account_interface.create_storage_account(azure_region, resource_group, tier)
-        if not self.container_exists():
+        if not self.bucket_exists():
             logger.debug(f"Creating container {self.container_name}")
             self.create_container()
 
@@ -87,6 +89,7 @@ class AzureBlobInterface(ObjectStoreInterface):
                 logger.error(
                     f"Unable to list objects in container {self.container_name} as you don't have permission to access it. You need the 'Storage Blob Data Contributor' and 'Storage Account Contributor' roles: {e}"
                 )
+                raise e
 
     def delete_objects(self, keys: List[str]):
         for key in keys:
@@ -150,15 +153,23 @@ class AzureBlobInterface(ObjectStoreInterface):
             raise NotImplementedError("Multipart upload is not implemented for Azure")
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         with open(src_file_path, "rb") as f:
-            blob_client = self._run_azure_op_with_retry(
-                partial(
-                    self.container_client.upload_blob,
-                    name=dst_object_name,
-                    data=f,
-                    length=os.path.getsize(src_file_path),
-                    max_concurrency=self.max_concurrency,
-                    overwrite=True,
-                )
+            # blob_client = self._run_azure_op_with_retry(
+            #     partial(
+            #         self.container_client.upload_blob,
+            #         name=dst_object_name,
+            #         data=f,
+            #         length=os.path.getsize(src_file_path),
+            #         max_concurrency=self.max_concurrency,
+            #         overwrite=True,
+            #     )
+            # )
+            print(f"Uploading {src_file_path} to {dst_object_name}")
+            blob_client = self.container_client.upload_blob(
+                name=dst_object_name,
+                data=f,
+                length=os.path.getsize(src_file_path),
+                max_concurrency=self.max_concurrency,
+                overwrite=True,
             )
         if check_md5:
             b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None

@@ -4,7 +4,7 @@ import pathlib
 import signal
 import sys
 import traceback
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 
 import typer
 from rich import print as rprint
@@ -21,6 +21,11 @@ from skyplane.utils import logger
 from skyplane.utils.timer import Timer
 from skyplane.cli.common import console
 
+import skyplane.cli
+import skyplane.cli.usage.definitions
+import skyplane.cli.usage.client
+from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
+
 
 def generate_topology(
     src_region: str,
@@ -28,22 +33,36 @@ def generate_topology(
     solve: bool,
     num_connections: int = 32,
     max_instances: int = 1,
+    solver_class: str = "ILP",
     solver_total_gbyte_to_transfer: Optional[float] = None,
     solver_required_throughput_gbits: float = 4,
     solver_throughput_grid: Optional[pathlib.Path] = skyplane_root / "profiles" / "throughput.csv",
     solver_verbose: Optional[bool] = False,
+    args: Optional[Dict] = None,
 ) -> ReplicationTopology:
-    if solve:
-        if src_region == dst_region:
-            typer.secho("Solver is not supported for intra-region transfers, run without the --solve flag", fg="red", err=True)
-            raise typer.Exit(1)
-
-        # build problem and solve
+    if src_region == dst_region:  # intra-region transfer w/o solver
+        topo = ReplicationTopology()
+        for i in range(max_instances):
+            topo.add_objstore_instance_edge(src_region, src_region, i)
+            topo.add_instance_objstore_edge(src_region, i, src_region)
+        topo.cost_per_gb = 0
+        return topo
+    elif solve:
         from skyplane.replicate.solver import ThroughputProblem
-        from skyplane.replicate.solver_ilp import ThroughputSolverILP
 
+        if src_region == dst_region:
+            e = "Solver is not supported for intra-region transfers, run without the --solve flag"
+            typer.secho(e, fg="red", err=True)
+
+            client = UsageClient()
+            if client.enabled():
+                error_dict = {"loc": "generate_topology", "message": e}
+                stats = client.make_error(src_region, dst_region, error_dict, args)
+                destination = client.write_usage_data(stats)
+                client.report_usage_data("error", stats, destination)
+
+            raise typer.Exit(1)
         assert solver_throughput_grid is not None and solver_total_gbyte_to_transfer is not None
-        tput = ThroughputSolverILP(solver_throughput_grid)
         problem = ThroughputProblem(
             src=src_region,
             dst=dst_region,
@@ -51,30 +70,38 @@ def generate_topology(
             gbyte_to_transfer=solver_total_gbyte_to_transfer,
             instance_limit=max_instances,
         )
-        with Timer() as t:
-            with console.status("Solving for the optimal transfer plan"):
-                solution = tput.solve_min_cost(
-                    problem, solver=ThroughputSolverILP.choose_solver(), solver_verbose=solver_verbose, save_lp_path=None
-                )
-        typer.secho(f"Solving for the optimal transfer plan took {t.elapsed:.2f}s", fg="green")
-        topo, scale_factor = tput.to_replication_topology(solution)
-        logger.fs.debug(f"Scaled solution by {scale_factor:.2f}x")
-        topo.cost_per_gb = solution.cost_egress / solution.problem.gbyte_to_transfer
-        return topo
-    else:
-        if src_region == dst_region:
-            topo = ReplicationTopology()
-            for i in range(max_instances):
-                topo.add_objstore_instance_edge(src_region, src_region, i)
-                topo.add_instance_objstore_edge(src_region, i, src_region)
-            topo.cost_per_gb = 0
+
+        if solver_class == "ILP":
+            from skyplane.replicate.solver_ilp import ThroughputSolverILP
+
+            tput = ThroughputSolverILP(solver_throughput_grid)
+            with Timer() as t:
+                with console.status("Solving for the optimal transfer plan"):
+                    solution = tput.solve_min_cost(
+                        problem, solver=ThroughputSolverILP.choose_solver(), solver_verbose=solver_verbose, save_lp_path=None
+                    )
+            typer.secho(f"Solving for the optimal transfer plan took {t.elapsed:.2f}s", fg="green")
+            topo, scale_factor = tput.to_replication_topology(solution)
+            logger.fs.debug(f"Scaled solution by {scale_factor:.2f}x")
+            topo.cost_per_gb = solution.cost_egress / solution.problem.gbyte_to_transfer
+            return topo
+        elif solver_class == "RON":
+            from skyplane.replicate.solver_ron import ThroughputSolverRON
+
+            tput = ThroughputSolverRON(solver_throughput_grid)
+            solution = tput.solve(problem)
+            topo, scale_factor = tput.to_replication_topology(solution)
+            topo.cost_per_gb = solution.cost_egress / solution.problem.gbyte_to_transfer
+            return topo
         else:
-            topo = ReplicationTopology()
-            for i in range(max_instances):
-                topo.add_objstore_instance_edge(src_region, src_region, i)
-                topo.add_instance_instance_edge(src_region, i, dst_region, i, num_connections)
-                topo.add_instance_objstore_edge(dst_region, i, dst_region)
-            topo.cost_per_gb = CloudProvider.get_transfer_cost(src_region, dst_region)
+            raise NotImplementedError(f"Solver class {solver_class} not implemented")
+    else:  # inter-region transfer w/o solver
+        topo = ReplicationTopology()
+        for i in range(max_instances):
+            topo.add_objstore_instance_edge(src_region, src_region, i)
+            topo.add_instance_instance_edge(src_region, i, dst_region, i, num_connections)
+            topo.add_instance_objstore_edge(dst_region, i, dst_region)
+        topo.cost_per_gb = CloudProvider.get_transfer_cost(src_region, dst_region)
         return topo
 
 
@@ -242,13 +269,17 @@ def launch_replication_job(
     multipart_min_size_mb: int = 8,
     multipart_max_chunks: int = 9990,
     # cloud provider specific options
+    aws_use_spot_instances: bool = False,
     aws_instance_class: str = "m5.8xlarge",
+    azure_use_spot_instances: bool = False,
     azure_instance_class: str = "Standard_D32_v4",
+    gcp_use_spot_instances: bool = False,
     gcp_instance_class: str = "n2-standard-32",
     gcp_use_premium_network: bool = True,
     # logging options
     time_limit_seconds: Optional[int] = None,
     log_interval_s: float = 1.0,
+    error_reporting_args: Optional[Dict] = None,
 ):
     if "SKYPLANE_DOCKER_IMAGE" in os.environ:
         rprint(f"[bright_black]Using overridden docker image: {gateway_docker_image}[/bright_black]")
@@ -275,7 +306,14 @@ def launch_replication_job(
     stats = TransferStats.empty()
     try:
         rc.provision_gateways(
-            reuse_gateways, use_bbr=use_bbr, use_compression=use_compression, use_e2ee=use_e2ee, use_socket_tls=use_socket_tls
+            reuse_gateways,
+            use_bbr=use_bbr,
+            use_compression=use_compression,
+            use_e2ee=use_e2ee,
+            use_socket_tls=use_socket_tls,
+            aws_use_spot_instances=aws_use_spot_instances,
+            azure_use_spot_instances=azure_use_spot_instances,
+            gcp_use_spot_instances=gcp_use_spot_instances,
         )
         for node, gw in rc.bound_nodes.items():
             logger.fs.info(f"Log URLs for {gw.uuid()} ({node.region}:{node.instance})")
@@ -290,15 +328,12 @@ def launch_replication_job(
         )
         total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
         console.print(f":rocket: [bold blue]{total_bytes / GB:.2f}GB transfer job launched[/bold blue]")
-        if topo.source_region().split(":")[0] == "azure" or topo.sink_region().split(":")[0] == "azure":
-            typer.secho(
-                f"Warning: For Azure transfers, your transfer may block for up to 120s waiting for role assignments to propagate. See issue #355.",
-                fg="yellow",
-            )
+
         stats = rc.monitor_transfer(
             job,
             show_spinner=True,
             log_interval_s=log_interval_s,
+            log_to_file=True,
             time_limit_seconds=time_limit_seconds,
             multipart=multipart_enabled,
             write_profile=debug,
@@ -317,6 +352,13 @@ def launch_replication_job(
             s = signal.signal(signal.SIGINT, signal.SIG_IGN)
             rc.deprovision_gateways()
             signal.signal(signal.SIGINT, s)
+
+        client = UsageClient()
+        if client.enabled():
+            error_dict = {"loc": "launch_replication_job", "message": str(e)[:150]}
+            err_stats = client.make_error(job.source_region, job.dest_region, error_dict, error_reporting_args)
+            destination = client.write_usage_data(err_stats)
+            client.report_usage_data("error", err_stats, destination)
         os._exit(1)  # exit now
 
     if not reuse_gateways:
@@ -324,10 +366,18 @@ def launch_replication_job(
         rc.deprovision_gateways()
         signal.signal(signal.SIGINT, s)
     if stats.monitor_status == "error":
+        err = ""
         for instance, errors in stats.errors.items():
             for error in errors:
                 typer.secho(f"\n❌ {instance} encountered error:", fg="red", err=True, bold=True)
                 typer.secho(error, fg="red", err=True)
+                err += error + "\n"
+        client = UsageClient()
+        if client.enabled():
+            error_dict = {"loc": "replication_monitor", "message": err[:150]}
+            err_stats = client.make_error(job.source_region, job.dest_region, error_dict, error_reporting_args)
+            destination = client.write_usage_data(err_stats)
+            client.report_usage_data("error", err_stats, destination)
         raise typer.Exit(1)
     elif stats.monitor_status == "completed":
         rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
@@ -337,4 +387,10 @@ def launch_replication_job(
     else:
         rprint(f"\n:x: [bold red]Transfer failed[/bold red]")
         rprint(stats)
+        client = UsageClient()
+        if client.enabled():
+            error_dict = {"loc": "replication_monitor", "message": stats.monitor_status}
+            err_stats = client.make_error(job.source_region, job.dest_region, error_dict, error_reporting_args)
+            destination = client.write_usage_data(err_stats)
+            client.report_usage_data("error", err_stats, destination)
     return stats

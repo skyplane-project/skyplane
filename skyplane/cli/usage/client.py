@@ -1,6 +1,8 @@
 import os
 import sys
 import time
+import datetime
+import requests
 from enum import Enum, auto
 from typing import Optional, Dict
 import uuid
@@ -16,6 +18,10 @@ import skyplane.cli.usage.definitions
 from skyplane import cloud_config, config_path, tmp_log_dir
 from skyplane.config import _map_type
 from skyplane.utils import logger
+
+
+def _get_current_timestamp_ns():
+    return int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1e9)
 
 
 class UsageStatsStatus(Enum):
@@ -35,7 +41,7 @@ class UsageStatsToReport:
     #: The schema version of the report.
     schema_version: str
     #: The client id from SkyplaneConfig.
-    client_id: str
+    client_id: Optional[str]
     #: A random id of the transfer session.
     session_id: str
     #: The source region of the transfer session.
@@ -51,9 +57,13 @@ class UsageStatsToReport:
     #: When the transfer is started.
     session_start_timestamp_ms: int
     #: The collection of command arguments used in the transfer session.
-    arguments_dict: Optional[Dict]
+    arguments_dict: Optional[Dict] = None
     #: The collection of transfer stats upon completion of the transfer session.
-    transfer_stats: Optional[TransferStats]
+    transfer_stats: Optional[TransferStats] = None
+    #: The collection of error message and the function responsible if the transfer fails.
+    error_dict: Optional[Dict] = None
+    #: The time of the log sent to Loki. It is None if not sent and stored locally in /tmp.
+    sent_time: Optional[int] = None
 
 
 class UsageClient:
@@ -62,7 +72,7 @@ class UsageClient:
     and report usage stats.
     """
 
-    def __init__(self, client_id: str = cloud_config.anon_clientid):
+    def __init__(self, client_id: Optional[str] = cloud_config.anon_clientid):
         self.client_id = client_id
         self.session_id = str(uuid.uuid4())
 
@@ -164,14 +174,40 @@ class UsageClient:
             transfer_stats=transfer_stats,
         )
 
+    def make_error(
+        self,
+        src_region_tag: str,
+        dest_region_tag: str,
+        error_dict: Dict,
+        arguments_dict: Optional[Dict] = None,
+    ):
+        return UsageStatsToReport(
+            skyplane_version=skyplane.__version__,
+            python_version=".".join(map(str, sys.version_info[:3])),
+            schema_version=skyplane.cli.usage.definitions.SCHEMA_VERSION,
+            client_id=self.client_id,
+            session_id=self.session_id,
+            source_region=":".join(src_region_tag.split(":")[1:]),
+            destination_region=":".join(dest_region_tag.split(":")[1:]),
+            source_cloud_provider=src_region_tag.split(":")[0],
+            destination_cloud_provider=dest_region_tag.split(":")[0],
+            os=sys.platform,
+            session_start_timestamp_ms=int(time.time() * 1000),
+            arguments_dict=arguments_dict,
+            error_dict=error_dict,
+        )
+
     def write_usage_data(self, data: UsageStatsToReport, dir_path: Optional[Path] = None):
         """Write the usage data to the directory.
         Params:
             data: Data to report
             dir_path: The path to the directory to write usage data.
+        Return:
+            destination: The absolute path of the usage data json file.
         """
         if dir_path is None:
-            dir_path = tmp_log_dir / "usage" / self.client_id / self.session_id
+            client_id_path = self.client_id if self.client_id else "unknown"
+            dir_path = tmp_log_dir / "usage" / client_id_path / str(self.session_id)
         dir_path = Path(dir_path)
         dir_path.mkdir(exist_ok=True, parents=True)
         destination = dir_path / skyplane.cli.usage.definitions.USAGE_STATS_FILE
@@ -179,22 +215,32 @@ class UsageClient:
         typer.secho(f"Storing usage information for transfer in {destination}", fg="yellow", err=True)
         with open(destination, "w+") as json_file:
             json_file.write(json.dumps(asdict(data)))
+        return destination
 
-    # TODO: API not yet available
-    # def report_usage_data(self, url: str, data: UsageStatsToReport) -> None:
-    #     """Report the usage data to the usage server.
-    #     Params:
-    #         url: The URL to update resource usage.
-    #         data: Data to report.
-    #     Raises:
-    #         requests.HTTPError if requests fails.
-    #     """
-    #     r = requests.request(
-    #         "POST",
-    #         url,
-    #         headers={"Content-Type": "application/json"},
-    #         json=asdict(data),
-    #         timeout=10,
-    #     )
-    #     r.raise_for_status()
-    #     return r
+    def report_usage_data(self, type: str, data: UsageStatsToReport, path: Path) -> None:
+        """Report the usage data to the usage server.
+        Params:
+            data: Data to report.
+        Raises:
+            requests.HTTPError if requests fails.
+        """
+
+        prom_labels = {"type": type, "environment": "prod"}
+        headers = {"Content-type": "application/json"}
+        data.sent_time = int(time.time() * 1000)
+        payload = {"streams": [{"stream": prom_labels, "values": [[str(_get_current_timestamp_ns()), json.dumps(asdict(data))]]}]}
+        payload = json.dumps(payload)
+        r = requests.post(
+            skyplane.cli.usage.definitions.LOKI_URL,
+            headers=headers,
+            data=payload,
+            timeout=0.5,
+        )
+
+        if r.status_code != 204:
+            logger.debug(f"Grafana Loki failed with response: {r.text}\n")
+            logger.debug(f"The log file is located at {path} and will be synced to remote later\n")
+        else:
+            with open(path, "w") as json_file:
+                json_file.write(json.dumps(asdict(data)))
+            typer.secho("Successfully sent the log file to remote\n", fg="yellow", err=True)

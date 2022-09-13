@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import uuid
@@ -14,7 +15,7 @@ with warnings.catch_warnings():
 from azure.mgmt.compute.models import ResourceIdentityType
 from azure.core.exceptions import HttpResponseError
 
-from skyplane import exceptions, key_root
+from skyplane import cloud_config, exceptions, key_root
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.compute.cloud_providers import CloudProvider
@@ -231,7 +232,9 @@ class AzureCloudProvider(CloudProvider):
 
     # This code, along with some code in azure_server.py, is based on
     # https://github.com/ucbrise/mage-scripts/blob/main/azure_cloud.py.
-    def provision_instance(self, location: str, vm_size: str, name: Optional[str] = None, uname: str = "skyplane") -> AzureServer:
+    def provision_instance(
+        self, location: str, vm_size: str, name: Optional[str] = None, uname: str = "skyplane", use_spot_instances: bool = False
+    ) -> AzureServer:
         assert ":" not in location, "invalid colon in Azure location"
 
         if name is None:
@@ -360,8 +363,22 @@ class AzureCloudProvider(CloudProvider):
                                 },
                             },
                             "network_profile": {"network_interfaces": [{"id": nic_result.id}]},
-                            # give VM managed identity w/ system assigned identity
-                            "identity": {"type": ResourceIdentityType.system_assigned},
+                            # give VM managed identity w/ user assigned identity
+                            "identity": {
+                                "type": ResourceIdentityType.user_assigned,
+                                "user_assigned_identities": [
+                                    {
+                                        # code from: https://github.com/ray-project/ray/pull/7080/files#diff-0f1bb1da82d112b850a85c1b7b1876e50efd5a7400c62a5c4de334f494d3bf46R222-R233
+                                        "key": f"/subscriptions/{cloud_config.azure_subscription_id}/resourceGroups/skyplane/providers/Microsoft.ManagedIdentity/userAssignedIdentities/skyplane_umi",
+                                        "value": {
+                                            "principal_id": cloud_config.azure_principal_id,
+                                            "client_id": cloud_config.azure_client_id,
+                                        },
+                                    }
+                                ],
+                            },
+                            # use spot instances if use_spot_instances is set
+                            "priority": "Spot" if use_spot_instances else "Regular",
                         },
                     )
                     vm_result = poller.result()

@@ -25,6 +25,9 @@ class S3Interface(ObjectStoreInterface):
         self.requester_pays = False
         self.bucket_name = bucket_name
 
+    def path(self):
+        return f"s3://{self.bucket_name}"
+
     @property
     @lru_cache(maxsize=1)
     def aws_region(self):
@@ -52,10 +55,15 @@ class S3Interface(ObjectStoreInterface):
     def bucket_exists(self):
         s3_client = self._s3_client("us-east-1")
         try:
-            s3_client.list_objects(Bucket=self.bucket_name, RequestPayer="requester", MaxKeys=1)
+            if self.requester_pays:
+                s3_client.list_objects(Bucket=self.bucket_name, RequestPayer="requester", MaxKeys=1)
+            else:
+                s3_client.list_objects_v2(Bucket=self.bucket_name, MaxKeys=1)  # list one object to check if bucket exists
             return True
-        except botocore.exceptions.ClientError:
-            raise NoSuchObjectException()
+        except botocore.exceptions.ClientError as e:
+            if e.response["Error"]["Code"] == "NoSuchBucket":
+                return False
+            raise e
 
     def create_bucket(self, aws_region):
         s3_client = self._s3_client(aws_region)
@@ -64,7 +72,6 @@ class S3Interface(ObjectStoreInterface):
                 s3_client.create_bucket(Bucket=self.bucket_name)
             else:
                 s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": aws_region})
-        assert self.bucket_exists()
 
     def delete_bucket(self):
         self._s3_client().delete_bucket(Bucket=self.bucket_name)
@@ -180,7 +187,6 @@ class S3Interface(ObjectStoreInterface):
         response = s3_client.create_multipart_upload(
             Bucket=self.bucket_name,
             Key=dst_object_name,
-            # ContentType=content_type
         )
         return response["UploadId"]
 

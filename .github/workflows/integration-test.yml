@@ -1,5 +1,8 @@
 name: integration-test
-on: workflow_dispatch
+on:
+  schedule:
+    - cron: '9 23 * * *'
+  workflow_dispatch:
 concurrency: integration-test
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -17,10 +20,17 @@ jobs:
           # GCP to GCP
           - gcp:us-central1-a gcp:us-central1-a
           - gcp:us-west1-a gcp:us-east1-a
+          # Azure to Azure
+          - azure:westus azure:westus
+          - azure:eastus azure:centralus
           # cross cloud tests
           - aws:us-west-1 gcp:us-west2-a
           - gcp:us-west2-a aws:us-west-1
-    timeout-minutes: 10
+          - aws:us-west-1 azure:westus
+          - azure:westus aws:us-west-1
+          - gcp:us-west2-a azure:westus
+          - azure:westus gcp:us-west2-a
+    timeout-minutes: 20
     env:
       STRATEGY_UUID: itest-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
     steps:
@@ -50,11 +60,15 @@ jobs:
         uses: 'google-github-actions/auth@v0'
         with:
           credentials_json: '${{ secrets.GCP_CREDENTIALS_JSON }}'
+      - name: Log into Azure
+        uses: azure/login@v1
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
       - name: Skyplane init
         run: |
           poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
           cat ~/.skyplane/config
-          poetry run skyplane init -y --disable-config-azure
+          poetry run skyplane init -y
       - name: Test
         run: poetry run python tests/integration/cp.py ${{ matrix.pairs }}
       - name: Cleanup GCP service account

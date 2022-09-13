@@ -1,5 +1,4 @@
 import json
-import json
 import math
 import pickle
 import time
@@ -7,16 +6,14 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
-from typing import Dict, List, Optional, Tuple, Iterable
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import nacl.secret
 import nacl.utils
 import pandas as pd
 import urllib3
-from rich.progress import Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, DownloadColumn, BarColumn, TransferSpeedColumn
-
-from skyplane import GB, MB, gateway_docker_image, tmp_log_dir
-from skyplane import exceptions
+from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, TransferSpeedColumn
+from skyplane import GB, MB, exceptions, gateway_docker_image, tmp_log_dir
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
@@ -54,6 +51,14 @@ class TransferStats:
     @classmethod
     def empty(cls):
         return TransferStats(monitor_status="empty")
+
+    def to_dict(self) -> Dict[str, Optional[Any]]:
+        return {
+            "monitor_status": self.monitor_status,
+            "total_runtime_s": self.total_runtime_s,
+            "throughput_gbits": self.throughput_gbits,
+            "errors": [str(e) for e in self.errors.values()] if self.errors else None,
+        }
 
 
 class ReplicatorClient:
@@ -98,6 +103,9 @@ class ReplicatorClient:
         use_compression=True,
         use_e2ee=True,
         use_socket_tls=False,
+        aws_use_spot_instances: bool = False,
+        azure_use_spot_instances: bool = False,
+        gcp_use_spot_instances: bool = False,
     ):
         regions_to_provision = [node.region for node in self.topology.gateway_nodes]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
@@ -190,14 +198,19 @@ class ReplicatorClient:
             provider, subregion = region.split(":")
             if provider == "aws":
                 assert self.aws.auth.enabled()
-                server = self.aws.provision_instance(subregion, self.aws_instance_class)
+                server = self.aws.provision_instance(subregion, self.aws_instance_class, use_spot_instances=aws_use_spot_instances)
             elif provider == "azure":
                 assert self.azure.auth.enabled()
-                server = self.azure.provision_instance(subregion, self.azure_instance_class)
+                server = self.azure.provision_instance(subregion, self.azure_instance_class, use_spot_instances=azure_use_spot_instances)
             elif provider == "gcp":
                 assert self.gcp.auth.enabled()
                 # todo specify network tier in ReplicationTopology
-                server = self.gcp.provision_instance(subregion, self.gcp_instance_class, premium_network=self.gcp_use_premium_network)
+                server = self.gcp.provision_instance(
+                    subregion,
+                    self.gcp_instance_class,
+                    premium_network=self.gcp_use_premium_network,
+                    use_spot_instances=gcp_use_spot_instances,
+                )
             else:
                 raise NotImplementedError(f"Unknown provider {provider}")
             server.enable_auto_shutdown()
@@ -338,10 +351,12 @@ class ReplicatorClient:
             gateway_ips: Dict[Server, str] = {s: s.public_ip() for s in self.bound_nodes.values()}
 
             # make list of chunks
-            progress.update(prepare_task, description=": Creating list of chunks for transfer")
+            n_objs = 0
             chunks = []
             idx = 0
             for (src_object, dest_object) in job.transfer_pairs:
+                progress.update(prepare_task, description=f": Creating list of chunks for transfer ({n_objs}/{len(job.transfer_pairs)})")
+                n_objs += 1
                 if job.random_chunk_size_mb:
                     chunks.append(
                         Chunk(
@@ -373,7 +388,7 @@ class ReplicatorClient:
                     for chunk in range(num_chunks):
                         # size is min(chunk_size, remaining data)
                         file_size_bytes = min(chunk_size_bytes, src_object.size - offset)
-                        assert file_size_bytes > 0, f"File size <= 0 {file_size_bytes}"
+                        assert file_size_bytes >= 0, f"File size < 0 {file_size_bytes}"
                         chunks.append(
                             Chunk(
                                 src_key=src_object.key,
@@ -521,6 +536,7 @@ class ReplicatorClient:
         job: ReplicationJob,
         show_spinner=False,
         log_interval_s: Optional[float] = None,
+        log_to_file: bool = True,
         time_limit_seconds: Optional[float] = None,
         cleanup_gateway: bool = True,
         save_log: bool = True,
@@ -632,6 +648,12 @@ class ReplicatorClient:
                             current_time = datetime.now()
                             if log_interval_s and (not last_log or (current_time - last_log).seconds > float(log_interval_s)):
                                 last_log = current_time
+                                log_str = f"{total_runtime_s}s: {len(completed_chunk_ids)}/{len(job.chunk_requests)} chunks, {completed_bytes}/{total_bytes} bytes, "
+                                log_str += f"{throughput_gbits:.2f} Gbit/s"
+                                if log_to_file:
+                                    logger.fs.debug(log_str)
+                                else:
+                                    logger.debug(log_str)
                             time.sleep(0.01 if show_spinner else 0.25)
                             continue
         # always run cleanup, even if there's an exception

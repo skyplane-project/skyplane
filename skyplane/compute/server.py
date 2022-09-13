@@ -312,6 +312,10 @@ class Server:
             docker_envs["GCP_SERVICE_ACCOUNT_FILE"] = f"/pkg/data/{service_key_file}"
             docker_run_flags += f" -v /tmp/{service_key_file}:/pkg/data/{service_key_file}"
 
+        # set default region for boto3 on AWS
+        if self.provider == "aws":
+            docker_envs["AWS_DEFAULT_REGION"] = self.region_tag.split(":")[1]
+
         # copy E2EE keys
         if e2ee_key_bytes is not None:
             e2ee_key_file = "e2ee_key"
