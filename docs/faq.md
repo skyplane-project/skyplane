@@ -17,6 +17,12 @@ In the non-recursive case, Skyplane extracts the key from the full bucket path (
 
 In the recursive case, Skyplane appends a trailing slash to the source and dest paths if one does not already exist. After extracting the key from the source path, it is appended to the dest prefix to get object keys.
 
+## I am unable to copy files to a folder in my destination bucket due to a Missing Bucket Error
+
+Check to make sure you have the adequate access permission to your bucket.
+
+If the bucket is requester pays bucket, you can enable the requester pays option through the skyplane CLI by entering `skyplane config set requester_pays true`.
+
 ## I am unable to copy files to a folder in my destination bucket due to a Missing Object Error
 
 Check to make sure your recursive flag is enabled.
