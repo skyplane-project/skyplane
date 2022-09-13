@@ -26,7 +26,13 @@ import skyplane.cli.cli_solver
 import skyplane.cli.experiments
 from skyplane import config_path, exceptions, skyplane_root, cloud_config, tmp_log_dir
 from skyplane.cli.common import print_header, console
-from skyplane.cli.cli_impl.cp_replicate import generate_full_transferobjlist, generate_topology, confirm_transfer, launch_replication_job
+from skyplane.cli.cli_impl.cp_replicate import (
+    enrich_dest_objs,
+    generate_full_transferobjlist,
+    generate_topology,
+    confirm_transfer,
+    launch_replication_job,
+)
 from skyplane.replicate.replication_plan import ReplicationJob
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.common import parse_path, query_instances
@@ -340,6 +346,8 @@ def sync(
         client.report_usage_data("error", stats, destination)
 
         raise typer.Exit(1)
+
+    enrich_dest_objs(dst_region, path_dst, bucket_dst, [i[1] for i in full_transfer_pairs])
 
     # filter out any transfer pairs that are already in the destination
     transfer_pairs = []
