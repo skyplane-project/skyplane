@@ -127,7 +127,7 @@ def cp(
             fg="red",
         )
         raise typer.Exit(1)
-    
+
     requester_pays: bool = cloud_config.get_flag("requester_pays")
 
     if provider_src == "local" or provider_dst == "local":
