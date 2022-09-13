@@ -29,7 +29,3 @@ def test_aws_bucket_exists():
     iface = ObjectStoreInterface.create("aws:infer", "devrel-delta-datasets")
     # assert iface.bucket_exists()
     logger.warning("Requester pays bucket tests disabled!")
-
-    # test public but empty bucket
-    iface = ObjectStoreInterface.create("aws:infer", "skyplane-test-empty-public-bucket")
-    assert iface.bucket_exists()
