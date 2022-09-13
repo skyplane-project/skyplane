@@ -219,6 +219,13 @@ def cp(
                 except exceptions.TransferFailedException as e:
                     console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                     console.print(e.pretty_print_str())
+                    client = UsageClient()
+                    src_region_tag = provider_src + ":" + bucket_src
+                    dst_region_tag = provider_dst + ":" + bucket_dst
+                    error_dict = {"loc": "create_pairs", "message": str(e)[:150]}
+                    stats = client.make_error(src_region_tag, dst_region_tag, error_dict, args)
+                    destination = client.write_usage_data(stats)
+                    client.report_usage_data("error", stats, destination)
                     raise typer.Exit(1)
 
         client = UsageClient()
@@ -418,6 +425,13 @@ def sync(
                 except exceptions.TransferFailedException as e:
                     console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                     console.print(e.pretty_print_str())
+                    client = UsageClient()
+                    src_region_tag = provider_src + ":" + bucket_src
+                    dst_region_tag = provider_dst + ":" + bucket_dst
+                    error_dict = {"loc": "create_pairs", "message": str(e)[:150]}
+                    stats = client.make_error(src_region_tag, dst_region_tag, error_dict, args)
+                    destination = client.write_usage_data(stats)
+                    client.report_usage_data("error", stats, destination)
                     raise typer.Exit(1)
 
     client = UsageClient()
