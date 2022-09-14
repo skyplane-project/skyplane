@@ -273,7 +273,7 @@ def launch_replication_job(
     # multipart
     multipart_enabled: bool = False,
     multipart_min_threshold_mb: int = 128,
-    multipart_min_size_mb: int = 8,
+    multipart_chunk_size_mb: int = 64,
     multipart_max_chunks: int = 9990,
     # cloud provider specific options
     aws_use_spot_instances: bool = False,
@@ -330,7 +330,7 @@ def launch_replication_job(
             job,
             multipart_enabled=multipart_enabled,
             multipart_min_threshold_mb=multipart_min_threshold_mb,
-            multipart_min_size_mb=multipart_min_size_mb,
+            multipart_chunk_size_mb=multipart_chunk_size_mb,
             multipart_max_chunks=multipart_max_chunks,
         )
         total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])

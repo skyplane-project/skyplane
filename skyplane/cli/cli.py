@@ -217,7 +217,7 @@ def cp(
             gcp_use_spot_instances=cloud_config.get_flag("gcp_use_spot_instances"),
             multipart_enabled=multipart,
             multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
-            multipart_min_size_mb=cloud_config.get_flag("multipart_min_size_mb"),
+            multipart_chunk_size_mb=cloud_config.get_flag("multipart_chunk_size_mb"),
             multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
             error_reporting_args=args,
         )
@@ -429,7 +429,7 @@ def sync(
         gcp_use_spot_instances=cloud_config.get_flag("gcp_use_spot_instances"),
         multipart_enabled=multipart,
         multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
-        multipart_min_size_mb=cloud_config.get_flag("multipart_min_size_mb"),
+        multipart_chunk_size_mb=cloud_config.get_flag("multipart_chunk_size_mb"),
         multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
         error_reporting_args=args,
     )
