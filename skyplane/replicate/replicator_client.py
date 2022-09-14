@@ -329,7 +329,7 @@ class ReplicatorClient:
         job: ReplicationJob,
         multipart_enabled: bool,
         multipart_min_threshold_mb: int,
-        multipart_min_size_mb: int,
+        multipart_chunk_size_mb: int,
         multipart_max_chunks: int,
     ) -> ReplicationJob:
         assert job.source_region.split(":")[0] in [
@@ -389,7 +389,7 @@ class ReplicatorClient:
             upload_ids = do_parallel(lambda x: obj_store_interface.initiate_multipart_upload(x[1].key), multipart_pairs, n=16)
             for (src_object, dest_object), upload_id in upload_ids:
                 # determine number of chunks via the following algorithm:
-                chunk_size_bytes = int(multipart_min_size_mb * MB)
+                chunk_size_bytes = int(multipart_chunk_size_mb * MB)
                 num_chunks = math.ceil(src_object.size / chunk_size_bytes)
                 if num_chunks > multipart_max_chunks:
                     chunk_size_bytes = int(src_object.size / multipart_max_chunks)

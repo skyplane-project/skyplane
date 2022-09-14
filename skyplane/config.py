@@ -16,6 +16,7 @@ _FLAG_TYPES = {
     "multipart_enabled": bool,
     "multipart_min_threshold_mb": int,
     "multipart_min_size_mb": int,
+    "multipart_chunk_size_mb": int,
     "multipart_max_chunks": int,
     "num_connections": int,
     "max_instances": int,
@@ -41,6 +42,7 @@ _DEFAULT_FLAGS = {
     "multipart_enabled": True,
     "multipart_min_threshold_mb": 128,
     "multipart_min_size_mb": 5,  # 5 MiB minimum size for multipart uploads
+    "multipart_chunk_size_mb": 64,
     "multipart_max_chunks": 9990,  # AWS limit is 10k chunks
     "num_connections": 32,
     "max_instances": 1,
