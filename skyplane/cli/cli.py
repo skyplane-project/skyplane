@@ -5,6 +5,7 @@ from pathlib import Path
 from shlex import split
 import traceback
 import uuid
+import subprocess
 
 from rich import print as rprint
 
@@ -105,6 +106,7 @@ def cp(
     provider_dst, bucket_dst, path_dst = parse_path(dst)
 
     clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
+    cloud_provider_api = {"s3": ["aws", "s3", "cp"], "gs": ["gsutil", "cp", "-r"]}
 
     args = {
         "cmd": "cp",
@@ -127,16 +129,42 @@ def cp(
         )
         raise typer.Exit(1)
 
-    if provider_src == "local" or provider_dst == "local":
-        typer.secho("Local transfers are not yet supported (but will be soon!)", fg="red", err=True)
-        typer.secho("Skyplane is currently most optimized for cloud to cloud transfers.", fg="yellow", err=True)
-        typer.secho(
-            "Please provide feedback for on prem transfers at: https://github.com/skyplane-project/skyplane/discussions/424",
-            fg="yellow",
-            err=True,
+    if provider_src == "local" and provider_dst == "local":
+        typer.secho("Copying between local paths", fg="yellow")
+        process = subprocess.Popen(
+            ["cp","-r", path_src, path_dst], stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
-        raise typer.Exit(code=1)
-    if provider_src in clouds and provider_dst in clouds:
+        for line in iter(process.stdout.readline, b""):
+            typer.secho(f"{line}\n", fg="yellow")
+        for line in iter(process.stdout.readline, b""):
+            typer.secho(f"Error: {line}\n", fg="red")
+        raise typer.Exit(0)
+
+    elif provider_src == "local" or provider_dst in clouds:
+        typer.secho(f"On-prem to {provider_dst} transfer. Defaulting to native {provider_dst} offering", fg="yellow")
+        process = subprocess.Popen(
+            cloud_provider_api[provider_dst]+[path_src, f"s3://{bucket_dst}/{path_dst}"]+["--recursive"] if provider_dst=="s3" else [],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        for line in iter(process.stdout.readline, b""):
+            typer.secho(f"{line}\n", fg="yellow")
+        for line in iter(process.stdout.readline, b""):
+            typer.secho(f"Error: {line}\n", fg="red")
+        raise typer.Exit(0)
+
+    elif provider_src in clouds and provider_dst == "local":
+        typer.secho(f"{provider_src} to on-prem transfer. Defaulting to native {provider_src} offering", fg="yellow")
+        process = subprocess.Popen(
+            cloud_provider_api[provider_src]+[f"s3://{bucket_src}/{path_src}", path_dst]+["--recursive"] if provider_src=="s3" else [],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        for line in iter(process.stdout.readline, b""):
+            typer.secho(f"{line}\n", fg="yellow")
+        for line in iter(process.stdout.readline, b""):
+            typer.secho(f"Error: {line}\n", fg="red")
+        raise typer.Exit(0)
+
+    elif provider_src in clouds and provider_dst in clouds:
         try:
             src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)
             dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
