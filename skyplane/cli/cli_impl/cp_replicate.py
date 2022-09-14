@@ -9,10 +9,10 @@ from typing import List, Optional, Tuple, Dict
 import typer
 from rich import print as rprint
 
-from skyplane import exceptions, GB, format_bytes, gateway_docker_image, skyplane_root
+from skyplane import exceptions, GB, format_bytes, gateway_docker_image, skyplane_root, cloud_config
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
-from skyplane.obj_store.s3_interface import S3Object
+from skyplane.obj_store.s3_interface import S3Interface, S3Object
 from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
@@ -159,11 +159,15 @@ def generate_full_transferobjlist(
     source_iface = ObjectStoreInterface.create(source_region, source_bucket)
     dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
 
+    requester_pays = cloud_config.get_flag("requester_pays")
+    if requester_pays:
+        source_iface.set_requester_bool(True)
+
+    # ensure buckets exist
     if not source_iface.bucket_exists():
         raise exceptions.MissingBucketException(f"Source bucket {source_bucket} does not exist")
     if not dest_iface.bucket_exists():
         raise exceptions.MissingBucketException(f"Destination bucket {dest_bucket} does not exist")
-
     source_objs, dest_objs = [], []
 
     # query all source region objects
@@ -173,7 +177,7 @@ def generate_full_transferobjlist(
             source_objs.append(obj)
             status.update(f"Querying objects in {source_bucket} (found {len(source_objs)} objects so far)")
     if not source_objs:
-        logger.error("Specified object does not exist.")
+        logger.error("Specified object does not exist.\n")
         raise exceptions.MissingObjectException(f"No objects were found in the specified prefix {source_prefix} in {source_bucket}")
 
     # map objects to destination object paths

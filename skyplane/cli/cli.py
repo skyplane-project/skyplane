@@ -12,6 +12,7 @@ import skyplane.cli
 import skyplane.cli.usage.definitions
 import skyplane.cli.usage.client
 from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
+from skyplane.obj_store.s3_interface import S3Interface
 from skyplane.replicate.replicator_client import ReplicatorClient
 
 import typer
@@ -133,6 +134,8 @@ def cp(
         )
         raise typer.Exit(1)
 
+    requester_pays: bool = cloud_config.get_flag("requester_pays")
+
     if provider_src == "local" or provider_dst == "local":
         typer.secho("Local transfers are not yet supported (but will be soon!)", fg="red", err=True)
         typer.secho("Skyplane is currently most optimized for cloud to cloud transfers.", fg="yellow", err=True)
@@ -148,6 +151,9 @@ def cp(
             dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
             src_region = src_client.region_tag()
             dst_region = dst_client.region_tag()
+
+            if requester_pays:
+                src_client.set_requester_bool(True)
 
             transfer_pairs = generate_full_transferobjlist(
                 src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst, recursive=recursive
