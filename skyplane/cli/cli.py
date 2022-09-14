@@ -12,6 +12,7 @@ import skyplane.cli
 import skyplane.cli.usage.definitions
 import skyplane.cli.usage.client
 from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
+from skyplane.obj_store.s3_interface import S3Interface
 from skyplane.replicate.replicator_client import ReplicatorClient
 
 import typer
@@ -25,7 +26,13 @@ import skyplane.cli.cli_solver
 import skyplane.cli.experiments
 from skyplane import config_path, exceptions, skyplane_root, cloud_config, tmp_log_dir
 from skyplane.cli.common import print_header, console
-from skyplane.cli.cli_impl.cp_replicate import generate_full_transferobjlist, generate_topology, confirm_transfer, launch_replication_job
+from skyplane.cli.cli_impl.cp_replicate import (
+    enrich_dest_objs,
+    generate_full_transferobjlist,
+    generate_topology,
+    confirm_transfer,
+    launch_replication_job,
+)
 from skyplane.replicate.replication_plan import ReplicationJob
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.common import parse_path, query_instances
@@ -127,6 +134,8 @@ def cp(
         )
         raise typer.Exit(1)
 
+    requester_pays: bool = cloud_config.get_flag("requester_pays")
+
     if provider_src == "local" or provider_dst == "local":
         typer.secho("Local transfers are not yet supported (but will be soon!)", fg="red", err=True)
         typer.secho("Skyplane is currently most optimized for cloud to cloud transfers.", fg="yellow", err=True)
@@ -142,6 +151,9 @@ def cp(
             dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
             src_region = src_client.region_tag()
             dst_region = dst_client.region_tag()
+
+            if requester_pays:
+                src_client.set_requester_bool(True)
 
             transfer_pairs = generate_full_transferobjlist(
                 src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst, recursive=recursive
@@ -214,7 +226,26 @@ def cp(
             provider_dst = topo.sink_region().split(":")[0]
             with Progress(SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}")) as progress:
                 progress.add_task("", total=None)
-                ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+                try:
+                    ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+                except exceptions.TransferFailedException as e:
+                    console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+                    console.print(e.pretty_print_str())
+
+                    client = UsageClient()
+                    src_region_tag = provider_src + ":" + bucket_src
+                    dst_region_tag = provider_dst + ":" + bucket_dst
+                    error_dict = {"loc": "create_pairs", "message": str(e)[:150]}
+                    stats = client.make_error(src_region_tag, dst_region_tag, error_dict, args)
+                    destination = client.write_usage_data(stats)
+                    client.report_usage_data("error", stats, destination)
+                    raise typer.Exit(1)
+
+        if transfer_stats.monitor_status == "completed":
+            rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
+            runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{transfer_stats.total_runtime_s:.2f}s[/bright_black]"
+            throughput_line = f"[white]Throughput:[/white] [bright_black]{transfer_stats.throughput_gbits:.2f}Gbps[/bright_black]"
+            rprint(f"{runtime_line}, {throughput_line}")
 
         client = UsageClient()
         if client.enabled():
@@ -335,6 +366,8 @@ def sync(
 
         raise typer.Exit(1)
 
+    enrich_dest_objs(dst_region, path_dst, bucket_dst, [i[1] for i in full_transfer_pairs])
+
     # filter out any transfer pairs that are already in the destination
     transfer_pairs = []
     for src_obj, dst_obj in full_transfer_pairs:
@@ -408,7 +441,26 @@ def sync(
         else:
             with Progress(SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}"), transient=True) as progress:
                 progress.add_task("", total=None)
-                ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+                try:
+                    ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+                except exceptions.TransferFailedException as e:
+                    console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+                    console.print(e.pretty_print_str())
+
+                    client = UsageClient()
+                    src_region_tag = provider_src + ":" + bucket_src
+                    dst_region_tag = provider_dst + ":" + bucket_dst
+                    error_dict = {"loc": "create_pairs", "message": str(e)[:150]}
+                    stats = client.make_error(src_region_tag, dst_region_tag, error_dict, args)
+                    destination = client.write_usage_data(stats)
+                    client.report_usage_data("error", stats, destination)
+                    raise typer.Exit(1)
+
+    if transfer_stats.monitor_status == "completed":
+        rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
+        runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{transfer_stats.total_runtime_s:.2f}s[/bright_black]"
+        throughput_line = f"[white]Throughput:[/white] [bright_black]{transfer_stats.throughput_gbits:.2f}Gbps[/bright_black]"
+        rprint(f"{runtime_line}, {throughput_line}")
 
     client = UsageClient()
     if client.enabled():

@@ -30,6 +30,7 @@ _FLAG_TYPES = {
     "gcp_use_premium_network": bool,
     "usage_stats": bool,
     "gcp_service_account_name": str,
+    "requester_pays": bool,
 }
 
 _DEFAULT_FLAGS = {
@@ -56,6 +57,7 @@ _DEFAULT_FLAGS = {
     "gcp_use_premium_network": True,
     "usage_stats": True,
     "gcp_service_account_name": "skyplane-manual",
+    "requester_pays": False,
 }
 
 
