@@ -41,7 +41,9 @@ class TransferFailedException(SkyplaneException):
     def pretty_print_str(self):
         err = f"[red][bold]:x: TransferFailedException:[/bold] {str(self)}[/red]"
         if self.failed_objects and len(self.failed_objects) > 0:
-            err += "\n[bold][red]Failed objects:[/red][/bold] " + str(self.failed_objects)
+            err += "\n[bold][red]Transfer failed. The following objects were not found at the destination:[/red][/bold] " + str(
+                self.failed_objects
+            )
         return err
 
 
