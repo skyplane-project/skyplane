@@ -145,7 +145,6 @@ def cp(
             typer.secho(f"{line}\n", fg="yellow")
         for line in iter(process.stdout.readline, b""):
             typer.secho(f"Error: {line}\n", fg="red")
-        raise typer.Exit(0)
 
     elif provider_src == "local" or provider_dst in clouds:
         typer.secho(f"On-prem to {provider_dst} transfer. Defaulting to native {provider_dst} offering", fg="yellow")
@@ -160,7 +159,6 @@ def cp(
             typer.secho(f"{line}\n", fg="yellow")
         for line in iter(process.stdout.readline, b""):
             typer.secho(f"Error: {line}\n", fg="red")
-        raise typer.Exit(0)
 
     elif provider_src in clouds and provider_dst == "local":
         typer.secho(f"{provider_src} to on-prem transfer. Defaulting to native {provider_src} offering", fg="yellow")
@@ -175,7 +173,6 @@ def cp(
             typer.secho(f"{line}\n", fg="yellow")
         for line in iter(process.stdout.readline, b""):
             typer.secho(f"Error: {line}\n", fg="red")
-        raise typer.Exit(0)
 
     elif provider_src in clouds and provider_dst in clouds:
         try:
