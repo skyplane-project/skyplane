@@ -60,7 +60,7 @@ Benchmark setup:
 
 ## Benchmark: Impact of Chunk Sizes on Transfer time and Throughput
 
-In this benchmark, we measure the transfer speed and throughput of a transfer with 100 roughly 140 MB files. 
+In this benchmark, we measure the transfer speed and throughput of a transfer with 100 roughly 140 MB files. The transfer was done from an S3 bucket in us-west-1 to another S3 bucket in us-east-1.  
 |Chunk Size| Time | Throughput |
 | --- | --- | ---- |
 | 5 MiB | 81.91 s | 1.36 Gbps |
