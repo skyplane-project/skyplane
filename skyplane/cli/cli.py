@@ -113,7 +113,7 @@ def cp(
     provider_dst, bucket_dst, path_dst = parse_path(dst)
 
     clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
-    cloud_provider_api = {"s3": ["aws", "s3", "cp"], "gs": ["gsutil", "cp", "-r"]}
+    cloud_provider_api = {"s3": ["aws", "s3", "cp"], "gs": ["gsutil", "-m", "cp", "-r"]}
 
     args = {
         "cmd": "cp",
@@ -137,7 +137,7 @@ def cp(
         raise typer.Exit(1)
 
     requester_pays: bool = cloud_config.get_flag("requester_pays")
-    
+
     if provider_src == "local" and provider_dst == "local":
         typer.secho("Copying between local paths", fg="yellow")
         process = subprocess.Popen(["cp", "-r", path_src, path_dst], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
