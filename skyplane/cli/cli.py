@@ -12,6 +12,7 @@ from rich import print as rprint
 import skyplane.cli
 import skyplane.cli.usage.definitions
 import skyplane.cli.usage.client
+from skyplane import GB
 from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
 from skyplane.obj_store.s3_interface import S3Interface
 from skyplane.replicate.replicator_client import ReplicatorClient
@@ -147,7 +148,7 @@ def cp(
     elif provider_src == "local" and provider_dst in clouds:
         typer.secho(f"Copying from local to {provider_dst}", fg="yellow")
         cmd = (
-            cloud_provider_api[provider_dst] + " " + path_src + f" s3://{bucket_dst}/{path_dst}" + " --recursive"
+            cloud_provider_api[provider_dst] + " " + path_src + f" {provider_dst}://{bucket_dst}/{path_dst}" + " --recursive"
             if (provider_dst == "s3")
             else ""
         )
@@ -157,7 +158,7 @@ def cp(
     elif provider_src in clouds and provider_dst == "local":
         typer.secho(f"Copying from {provider_src} to local", fg="yellow")
         cmd = (
-            cloud_provider_api[provider_src] + f" s3://{bucket_src}/{path_src} " + path_dst + " --recursive"
+            cloud_provider_api[provider_src] + f" {provider_src}://{bucket_src}/{path_src} " + path_dst + " --recursive"
             if (provider_src == "s3")
             else ""
         )
@@ -218,47 +219,69 @@ def cp(
         )
         confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
 
-        transfer_stats = launch_replication_job(
-            topo=topo,
-            job=job,
-            debug=debug,
-            reuse_gateways=reuse_gateways,
-            use_bbr=cloud_config.get_flag("bbr"),
-            use_compression=cloud_config.get_flag("compress") if src_region != dst_region else False,
-            use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
-            use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
-            aws_instance_class=cloud_config.get_flag("aws_instance_class"),
-            aws_use_spot_instances=cloud_config.get_flag("aws_use_spot_instances"),
-            azure_instance_class=cloud_config.get_flag("azure_instance_class"),
-            azure_use_spot_instances=cloud_config.get_flag("azure_use_spot_instances"),
-            gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
-            gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
-            gcp_use_spot_instances=cloud_config.get_flag("gcp_use_spot_instances"),
-            multipart_enabled=multipart,
-            multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
-            multipart_chunk_size_mb=cloud_config.get_flag("multipart_chunk_size_mb"),
-            multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
-            error_reporting_args=args,
-        )
+        # If size of transfer smaller than `use_overlay_limit_gb`, default to native cloud solution
+        if (
+            (job.transfer_size / GB) < cloud_config.get_flag("use_overlay_limit_gb")
+            and provider_src == provider_dst
+            and provider_src == "azure"
+        ):
+            typer.secho(
+                f"Transfer size ({job.transfer_size / GB} GB) is smaller than the configured limit of {cloud_config.get_flag('use_overlay_limit_gb')} GB",
+                fg="yellow",
+            )
+            cmd = (
+                cloud_provider_api[provider_dst]
+                + f" {provider_src}://{bucket_src}/{path_src}"
+                + f" {provider_dst}://{bucket_dst}/{path_dst}"
+                + " --recursive"
+                if (provider_dst == "s3")
+                else ""
+            )
+            typer.secho(f"Falling back to: {cmd}")
+            os.system(cmd)
 
-        if cloud_config.get_flag("verify_checksums"):
-            provider_dst = topo.sink_region().split(":")[0]
-            with Progress(SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}")) as progress:
-                progress.add_task("", total=None)
-                try:
-                    ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
-                except exceptions.TransferFailedException as e:
-                    console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
-                    console.print(e.pretty_print_str())
+        else:
+            transfer_stats = launch_replication_job(
+                topo=topo,
+                job=job,
+                debug=debug,
+                reuse_gateways=reuse_gateways,
+                use_bbr=cloud_config.get_flag("bbr"),
+                use_compression=cloud_config.get_flag("compress") if src_region != dst_region else False,
+                use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
+                use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
+                aws_instance_class=cloud_config.get_flag("aws_instance_class"),
+                aws_use_spot_instances=cloud_config.get_flag("aws_use_spot_instances"),
+                azure_instance_class=cloud_config.get_flag("azure_instance_class"),
+                azure_use_spot_instances=cloud_config.get_flag("azure_use_spot_instances"),
+                gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
+                gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
+                gcp_use_spot_instances=cloud_config.get_flag("gcp_use_spot_instances"),
+                multipart_enabled=multipart,
+                multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
+                multipart_chunk_size_mb=cloud_config.get_flag("multipart_chunk_size_mb"),
+                multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
+                error_reporting_args=args,
+            )
 
-                    client = UsageClient()
-                    src_region_tag = provider_src + ":" + bucket_src
-                    dst_region_tag = provider_dst + ":" + bucket_dst
-                    error_dict = {"loc": "create_pairs", "message": str(e)[:150]}
-                    stats = client.make_error(src_region_tag, dst_region_tag, error_dict, args)
-                    destination = client.write_usage_data(stats)
-                    client.report_usage_data("error", stats, destination)
-                    raise typer.Exit(1)
+            if cloud_config.get_flag("verify_checksums"):
+                provider_dst = topo.sink_region().split(":")[0]
+                with Progress(SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}")) as progress:
+                    progress.add_task("", total=None)
+                    try:
+                        ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+                    except exceptions.TransferFailedException as e:
+                        console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+                        console.print(e.pretty_print_str())
+
+                        client = UsageClient()
+                        src_region_tag = provider_src + ":" + bucket_src
+                        dst_region_tag = provider_dst + ":" + bucket_dst
+                        error_dict = {"loc": "create_pairs", "message": str(e)[:150]}
+                        stats = client.make_error(src_region_tag, dst_region_tag, error_dict, args)
+                        destination = client.write_usage_data(stats)
+                        client.report_usage_data("error", stats, destination)
+                        raise typer.Exit(1)
 
         if transfer_stats.monitor_status == "completed":
             rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
