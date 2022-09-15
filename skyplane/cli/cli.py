@@ -5,6 +5,7 @@ from pathlib import Path
 from shlex import split
 import traceback
 import uuid
+import os
 
 from rich import print as rprint
 
@@ -112,6 +113,7 @@ def cp(
     provider_dst, bucket_dst, path_dst = parse_path(dst)
 
     clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
+    cloud_provider_api = {"s3": "aws s3 cp", "gs": "gsutil -m cp -r"}
 
     args = {
         "cmd": "cp",
@@ -136,16 +138,33 @@ def cp(
 
     requester_pays: bool = cloud_config.get_flag("requester_pays")
 
-    if provider_src == "local" or provider_dst == "local":
-        typer.secho("Local transfers are not yet supported (but will be soon!)", fg="red", err=True)
-        typer.secho("Skyplane is currently most optimized for cloud to cloud transfers.", fg="yellow", err=True)
-        typer.secho(
-            "Please provide feedback for on prem transfers at: https://github.com/skyplane-project/skyplane/discussions/424",
-            fg="yellow",
-            err=True,
+    if provider_src == "local" and provider_dst == "local":
+        typer.secho(f"Copying between local paths", fg="yellow")
+        cmd = "cp -r " + path_src + " " + path_dst
+        typer.secho(f"Falling back to: {cmd}")
+        os.system(cmd)
+
+    elif provider_src == "local" or provider_dst in clouds:
+        typer.secho(f"Copying from local to {provider_dst}", fg="yellow")
+        cmd = (
+            cloud_provider_api[provider_dst] + " " + path_src + f" s3://{bucket_dst}/{path_dst}" + " --recursive"
+            if (provider_dst == "s3")
+            else ""
         )
-        raise typer.Exit(code=1)
-    if provider_src in clouds and provider_dst in clouds:
+        typer.secho(f"Falling back to: {cmd}")
+        os.system(cmd)
+
+    elif provider_src in clouds and provider_dst == "local":
+        typer.secho(f"Copying from {provider_src} to local", fg="yellow")
+        cmd = (
+            cloud_provider_api[provider_src] + f" s3://{bucket_src}/{path_src} " + path_dst + " --recursive"
+            if (provider_src == "s3")
+            else ""
+        )
+        typer.secho(f"Falling back to: {cmd}")
+        os.system(cmd)
+
+    elif provider_src in clouds and provider_dst in clouds:
         try:
             src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)
             dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
