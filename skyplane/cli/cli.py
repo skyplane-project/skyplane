@@ -144,7 +144,7 @@ def cp(
         typer.secho(f"Falling back to: {cmd}")
         os.system(cmd)
 
-    elif provider_src == "local" or provider_dst in clouds:
+    elif provider_src == "local" and provider_dst in clouds:
         typer.secho(f"Copying from local to {provider_dst}", fg="yellow")
         cmd = (
             cloud_provider_api[provider_dst] + " " + path_src + f" s3://{bucket_dst}/{path_dst}" + " --recursive"
