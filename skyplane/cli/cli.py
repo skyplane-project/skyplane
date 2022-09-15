@@ -113,7 +113,7 @@ def cp(
     provider_dst, bucket_dst, path_dst = parse_path(dst)
 
     clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
-    cloud_provider_api = {"s3": ["aws", "s3", "cp"], "gs": ["gsutil", "-m", "cp", "-r"]}
+    cloud_provider_api = {"s3": "aws s3 cp", "gs": "gsutil -m cp -r"}
 
     args = {
         "cmd": "cp",
