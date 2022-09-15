@@ -9,10 +9,10 @@ from typing import List, Optional, Tuple, Dict
 import typer
 from rich import print as rprint
 
-from skyplane import exceptions, GB, format_bytes, gateway_docker_image, skyplane_root
+from skyplane import exceptions, GB, format_bytes, gateway_docker_image, skyplane_root, cloud_config
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
-from skyplane.obj_store.s3_interface import S3Object
+from skyplane.obj_store.s3_interface import S3Interface, S3Object
 from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
@@ -159,11 +159,15 @@ def generate_full_transferobjlist(
     source_iface = ObjectStoreInterface.create(source_region, source_bucket)
     dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
 
+    requester_pays = cloud_config.get_flag("requester_pays")
+    if requester_pays:
+        source_iface.set_requester_bool(True)
+
+    # ensure buckets exist
     if not source_iface.bucket_exists():
         raise exceptions.MissingBucketException(f"Source bucket {source_bucket} does not exist")
     if not dest_iface.bucket_exists():
         raise exceptions.MissingBucketException(f"Destination bucket {dest_bucket} does not exist")
-
     source_objs, dest_objs = [], []
 
     # query all source region objects
@@ -173,7 +177,7 @@ def generate_full_transferobjlist(
             source_objs.append(obj)
             status.update(f"Querying objects in {source_bucket} (found {len(source_objs)} objects so far)")
     if not source_objs:
-        logger.error("Specified object does not exist.")
+        logger.error("Specified object does not exist.\n")
         raise exceptions.MissingObjectException(f"No objects were found in the specified prefix {source_prefix} in {source_bucket}")
 
     # map objects to destination object paths
@@ -269,7 +273,7 @@ def launch_replication_job(
     # multipart
     multipart_enabled: bool = False,
     multipart_min_threshold_mb: int = 128,
-    multipart_min_size_mb: int = 8,
+    multipart_chunk_size_mb: int = 64,
     multipart_max_chunks: int = 9990,
     # cloud provider specific options
     aws_use_spot_instances: bool = False,
@@ -326,7 +330,7 @@ def launch_replication_job(
             job,
             multipart_enabled=multipart_enabled,
             multipart_min_threshold_mb=multipart_min_threshold_mb,
-            multipart_min_size_mb=multipart_min_size_mb,
+            multipart_chunk_size_mb=multipart_chunk_size_mb,
             multipart_max_chunks=multipart_max_chunks,
         )
         total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
@@ -383,10 +387,8 @@ def launch_replication_job(
             client.report_usage_data("error", err_stats, destination)
         raise typer.Exit(1)
     elif stats.monitor_status == "completed":
-        rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
-        runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{stats.total_runtime_s:.2f}s[/bright_black]"
-        throughput_line = f"[white]Throughput:[/white] [bright_black]{stats.throughput_gbits:.2f}Gbps[/bright_black]"
-        rprint(f"{runtime_line}, {throughput_line}")
+        # success message will be handled by the caller
+        pass
     else:
         rprint(f"\n:x: [bold red]Transfer failed[/bold red]")
         rprint(stats)
