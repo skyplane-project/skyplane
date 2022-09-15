@@ -5,7 +5,7 @@ from pathlib import Path
 from shlex import split
 import traceback
 import uuid
-import subprocess
+import os
 
 from rich import print as rprint
 
@@ -139,40 +139,30 @@ def cp(
     requester_pays: bool = cloud_config.get_flag("requester_pays")
 
     if provider_src == "local" and provider_dst == "local":
-        typer.secho("Copying between local paths", fg="yellow")
-        process = subprocess.Popen(["cp", "-r", path_src, path_dst], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        for line in iter(process.stdout.readline, b""):
-            typer.secho(f"{line}\n", fg="yellow")
-        for line in iter(process.stdout.readline, b""):
-            typer.secho(f"Error: {line}\n", fg="red")
+        typer.secho(f"Copying between local paths", fg="yellow")
+        cmd = "cp -r " + path_src + " " + path_dst
+        typer.secho(f"Falling back to: {cmd}")
+        os.system(cmd)
 
     elif provider_src == "local" or provider_dst in clouds:
-        typer.secho(f"On-prem to {provider_dst} transfer. Defaulting to native {provider_dst} offering", fg="yellow")
-        process = subprocess.Popen(
-            cloud_provider_api[provider_dst] + [path_src, f"s3://{bucket_dst}/{path_dst}"] + ["--recursive"]
-            if provider_dst == "s3"
-            else [],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+        typer.secho(f"Copying from local to {provider_dst}", fg="yellow")
+        cmd = (
+            cloud_provider_api[provider_dst] + " " + path_src + f" s3://{bucket_dst}/{path_dst}" + " --recursive"
+            if (provider_dst == "s3")
+            else ""
         )
-        for line in iter(process.stdout.readline, b""):
-            typer.secho(f"{line}\n", fg="yellow")
-        for line in iter(process.stdout.readline, b""):
-            typer.secho(f"Error: {line}\n", fg="red")
+        typer.secho(f"Falling back to: {cmd}")
+        os.system(cmd)
 
     elif provider_src in clouds and provider_dst == "local":
-        typer.secho(f"{provider_src} to on-prem transfer. Defaulting to native {provider_src} offering", fg="yellow")
-        process = subprocess.Popen(
-            cloud_provider_api[provider_src] + [f"s3://{bucket_src}/{path_src}", path_dst] + ["--recursive"]
-            if provider_src == "s3"
-            else [],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+        typer.secho(f"Copying from {provider_src} to local", fg="yellow")
+        cmd = (
+            cloud_provider_api[provider_src] + f" s3://{bucket_src}/{path_src} " + path_dst + " --recursive"
+            if (provider_src == "s3")
+            else ""
         )
-        for line in iter(process.stdout.readline, b""):
-            typer.secho(f"{line}\n", fg="yellow")
-        for line in iter(process.stdout.readline, b""):
-            typer.secho(f"Error: {line}\n", fg="red")
+        typer.secho(f"Falling back to: {cmd}")
+        os.system(cmd)
 
     elif provider_src in clouds and provider_dst in clouds:
         try:
