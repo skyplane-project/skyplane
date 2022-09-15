@@ -219,14 +219,14 @@ def cp(
         )
         confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
 
-        # If size of transfer smaller than `use_overlay_limit_gb`, default to native cloud solution
+        # If size of transfer smaller than `use_skyplane_limit_gb`, default to native cloud solution
         if (
-            (job.transfer_size / GB) < cloud_config.get_flag("use_overlay_limit_gb")
+            (job.transfer_size / GB) < cloud_config.get_flag("use_skyplane_limit_gb")
             and provider_src == provider_dst
-            and provider_src == "azure"
+            and provider_src != "azure"
         ):
             typer.secho(
-                f"Transfer size ({job.transfer_size / GB} GB) is smaller than the configured limit of {cloud_config.get_flag('use_overlay_limit_gb')} GB",
+                f"Transfer size ({job.transfer_size / GB} GB) is smaller than the configured limit of {cloud_config.get_flag('use_skyplane_limit_gb')} GB",
                 fg="yellow",
             )
             cmd = (

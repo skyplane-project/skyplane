@@ -59,7 +59,7 @@ _DEFAULT_FLAGS = {
     "usage_stats": True,
     "gcp_service_account_name": "skyplane-manual",
     "requester_pays": False,
-    "use_overlay_limit_gb": 2,
+    "use_skyplane_limit_gb": 2,
 }
 
 

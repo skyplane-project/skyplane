@@ -155,7 +155,7 @@ def generate_full_transferobjlist(
     dest_prefix: str,
     recursive: bool = False,
 ) -> List[Tuple[ObjectStoreObject, ObjectStoreObject]]:
-    """Query source region and destination region buckets and return list of objects to transfer."""
+    """Query source region and return list of objects to transfer."""
     source_iface = ObjectStoreInterface.create(source_region, source_bucket)
     dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
 

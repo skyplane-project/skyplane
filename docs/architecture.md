@@ -4,6 +4,9 @@ Skyplane performs high-performance, cost-efficient, bulk data transfers by paral
 To learn about how Skyplane works, please see our talk here:
 <iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/hOCrpcIBkAU" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
+## On prem support
+Skyplane now supports local to cloud object store transfers. For this, Skyplane defaults to awscli (for AWS), and gsutil (for GCP). [Let us know](https://github.com/skyplane-project/skyplane/issues/545) if you would like to see on-prem support for Azure.
+
 ## Transfer Integrity and Checksumming
 Skyplane takes several steps to ensure the correctness of transfers. To ensure that data is transferred without corruption (e.g. bit flips or missing byte ranges), Skyplane will compute checksums for data at the source region and verify data matches the checksum before writing back to the destination region. To ensure that no files are dropped during the transfer, Skyplane will query the destination object store after a transfer and check all files were copied with the correct file size. To verify checksums for whole-file transfers, Skyplane computes MD5 hashes at the source region. Upon writing data at the destination, hashes are validated directly in the destintation object store. For multipart transfers, hashses are validated at the destination VM before writing to the object store.
 
@@ -36,4 +39,4 @@ While GCP VPCs are Global, in AWS for every region that is involved in a transfe
 Firewall support for Azure is in the roadmap. 
 
 ## Large Objects
-Skyplane breaks large objects into smaller sub-parts (currently AWS and GCP only) to improve transfer parallelism (also known as [striping](https://ieeexplore.ieee.org/document/1560006)). 
+Skyplane breaks large objects into smaller sub-parts (currently AWS and GCP only) to improve transfer parallelism (also known as [striping](https://ieeexplore.ieee.org/document/1560006)).
