@@ -22,7 +22,7 @@ jobs:
           - gcp:us-west1-a gcp:us-east1-a
           # Azure to Azure
           - azure:westus azure:westus
-          - azure:eastus azure:centralus
+          - azure:eastus azure:westus
           # cross cloud tests
           - aws:us-west-1 gcp:us-west2-a
           - gcp:us-west2-a aws:us-west-1
