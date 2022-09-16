@@ -137,8 +137,6 @@ def cp(
         )
         raise typer.Exit(1)
 
-    requester_pays: bool = cloud_config.get_flag("requester_pays")
-
     if provider_src == "local" and provider_dst == "local":
         typer.secho(f"Copying between local paths", fg="yellow")
         cmd = "cp -r " + path_src + " " + path_dst
@@ -172,7 +170,7 @@ def cp(
             src_region = src_client.region_tag()
             dst_region = dst_client.region_tag()
 
-            if requester_pays:
+            if cloud_config.get_flag("requester_pays"):
                 src_client.set_requester_bool(True)
 
             transfer_pairs = generate_full_transferobjlist(
