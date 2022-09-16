@@ -22,6 +22,7 @@ Skyplane comes with a variety of knobs to tune to adjust performance or change h
     * `multipart_min_size_mb`: Minimum size per chunk in MB for multipart transfers. (default 8).
     * `multipart_max_chunks`: Maximum number of chunks for multipart transfers. (default 9990).
     * `requester_pays`: If set, Skyplane will support requester pays buckets. (default False).
+    * `use_skyplane_limit_gb`: Minimum size of transfer in GB, above which skyplane optimizations kick in. (default 2)
 * Instance provisioning configuration
     * `aws_instance_class`: AWS instance class to use for provisioning. (default m5.8xlarge)
     * `aws_use_spot_instances`: If set, AWS will use spot instances instead of on-demand instances. (default False)
