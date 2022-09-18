@@ -251,7 +251,6 @@ def cp(
 def sync(
     src: str,
     dst: str,
-    recursive: bool = typer.Option(False, "--recursive", "-r", help="If true, will copy objects at folder prefix recursively"),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
     # transfer flags
@@ -312,7 +311,6 @@ def sync(
     src_region_tag, dst_region_tag = f"{provider_src}:infer", f"{provider_dst}:infer"
     args = {
         "cmd": "sync",
-        "recursive": recursive,
         "reuse_gateways": reuse_gateways,
         "debug": debug,
         "multipart": multipart,
@@ -324,7 +322,7 @@ def sync(
     # check config
     try:
         cloud_config.check_config()
-    except exceptions.BadConfigException:
+    except exceptions.BadConfigException as e:
         typer.secho(
             f"Skyplane configuration file is not valid. Please reset your config by running `rm {config_path}` and then rerunning `skyplane init` to fix.",
             fg="red",
@@ -333,7 +331,7 @@ def sync(
         raise typer.Exit(1)
 
     if provider_src == "local" or provider_dst == "local":
-        cmd = replicate_onprem_sync_cmd(src, dst, recursive)
+        cmd = replicate_onprem_sync_cmd(src, dst)
         if cmd:
             typer.secho(f"Delegating to: {cmd}", fg="yellow")
             os.system(cmd)
@@ -348,7 +346,7 @@ def sync(
             dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
             dst_region_tag = dst_client.region_tag()
             full_transfer_pairs = generate_full_transferobjlist(
-                src_region_tag, bucket_src, path_src, dst_region_tag, bucket_dst, path_dst, recursive=recursive
+                src_region_tag, bucket_src, path_src, dst_region_tag, bucket_dst, path_dst, recursive=True
             )
             enrich_dest_objs(dst_region_tag, path_dst, bucket_dst, [i[1] for i in full_transfer_pairs])
         except exceptions.SkyplaneException as e:
@@ -394,7 +392,7 @@ def sync(
         )
         confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
 
-        small_transfer_cmd = replicate_small_cp_cmd(src, dst, recursive)
+        small_transfer_cmd = replicate_small_sync_cmd(src, dst)
         if (
             cloud_config.get_flag("native_cmd_enabled")
             and (job.transfer_size / GB) < cloud_config.get_flag("native_cmd_threshold_gb")
