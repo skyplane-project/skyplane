@@ -194,7 +194,11 @@ def cp(
         confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
 
         small_transfer_cmd = replicate_small_cp_cmd(src, dst, recursive)
-        if (job.transfer_size / GB) < cloud_config.get_flag("use_skyplane_limit_gb") and small_transfer_cmd:
+        if (
+            cloud_config.get_flag("native_cmd_enabled")
+            and (job.transfer_size / GB) < cloud_config.get_flag("native_cmd_threshold_gb")
+            and small_transfer_cmd
+        ):
             typer.secho(f"Transfer is small enough to delegate to native tools. Delegating to: {small_transfer_cmd}", fg="yellow")
             os.system(small_transfer_cmd)
             raise typer.Exit(0)
@@ -391,7 +395,11 @@ def sync(
         confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
 
         small_transfer_cmd = replicate_small_cp_cmd(src, dst, recursive)
-        if (job.transfer_size / GB) < cloud_config.get_flag("use_skyplane_limit_gb") and small_transfer_cmd:
+        if (
+            cloud_config.get_flag("native_cmd_enabled")
+            and (job.transfer_size / GB) < cloud_config.get_flag("native_cmd_threshold_gb")
+            and small_transfer_cmd
+        ):
             typer.secho(f"Transfer is small enough to delegate to native tools. Delegating to: {small_transfer_cmd}", fg="yellow")
             os.system(small_transfer_cmd)
             raise typer.Exit(0)
@@ -423,7 +431,9 @@ def sync(
                 if provider_dst == "azure":
                     typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True, err=True)
                 else:
-                    with Progress(SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}"), transient=True) as progress:
+                    with Progress(
+                        SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}"), transient=True
+                    ) as progress:
                         progress.add_task("", total=None)
                         try:
                             ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
