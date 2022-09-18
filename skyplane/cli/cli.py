@@ -138,7 +138,7 @@ def cp(
             f"Skyplane configuration file is not valid. Please reset your config by running `rm {config_path}` and then rerunning `skyplane init` to fix.",
             fg="red",
         )
-        UsageClient.log_exception(e, args, src_region_tag, dst_region_tag)
+        UsageClient.log_exception("cli_check_config", e, args, src_region_tag, dst_region_tag)
         raise typer.Exit(1)
 
     if provider_src == "local" or provider_dst == "local":
@@ -154,18 +154,18 @@ def cp(
         try:
             src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
             dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
-            src_region = src_client.region_tag()
-            dst_region = dst_client.region_tag()
+            src_region_tag = src_client.region_tag()
+            dst_region_tag = dst_client.region_tag()
             if cloud_config.get_flag("requester_pays"):
                 src_client.set_requester_bool(True)
                 dst_client.set_requester_bool(True)
             transfer_pairs = generate_full_transferobjlist(
-                src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst, recursive=recursive
+                src_region_tag, bucket_src, path_src, dst_region_tag, bucket_dst, path_dst, recursive=recursive
             )
         except exceptions.SkyplaneException as e:
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
             console.print(e.pretty_print_str())
-            UsageClient.log_exception(e, args, src_region_tag, dst_region_tag)
+            UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
             raise typer.Exit(1)
 
         if multipart and (provider_src == "azure" or provider_dst == "azure"):
@@ -173,8 +173,8 @@ def cp(
             multipart = False
 
         topo = generate_topology(
-            src_region,
-            dst_region,
+            src_region_tag,
+            dst_region_tag,
             solve,
             num_connections=cloud_config.get_flag("num_connections"),
             max_instances=max_instances,
@@ -209,9 +209,9 @@ def cp(
                 debug=debug,
                 reuse_gateways=reuse_gateways,
                 use_bbr=cloud_config.get_flag("bbr"),
-                use_compression=cloud_config.get_flag("compress") if src_region != dst_region else False,
-                use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
-                use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
+                use_compression=cloud_config.get_flag("compress") if src_region_tag != dst_region_tag else False,
+                use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region_tag != dst_region_tag else False,
+                use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region_tag != dst_region_tag else False,
                 aws_instance_class=cloud_config.get_flag("aws_instance_class"),
                 aws_use_spot_instances=cloud_config.get_flag("aws_use_spot_instances"),
                 azure_instance_class=cloud_config.get_flag("azure_instance_class"),
@@ -234,7 +234,7 @@ def cp(
                     except exceptions.TransferFailedException as e:
                         console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                         console.print(e.pretty_print_str())
-                        UsageClient.log_exception(e, args, src_region_tag, dst_region_tag)
+                        UsageClient.log_exception("cli_verify_checksums", e, args, src_region_tag, dst_region_tag)
                         raise typer.Exit(1)
             if transfer_stats.monitor_status == "completed":
                 rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
@@ -329,7 +329,7 @@ def sync(
             f"Skyplane configuration file is not valid. Please reset your config by running `rm {config_path}` and then rerunning `skyplane init` to fix.",
             fg="red",
         )
-        UsageClient.log_exception(e, args, src_region_tag, dst_region_tag)
+        UsageClient.log_exception("cli_check_config", e, args, src_region_tag, dst_region_tag)
         raise typer.Exit(1)
 
     if provider_src == "local" or provider_dst == "local":
@@ -344,17 +344,17 @@ def sync(
     elif provider_src in ["s3", "gcp", "azure"] and provider_dst in ["s3", "gcp", "azure"]:
         try:
             src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
-            src_region = src_client.region_tag()
+            src_region_tag = src_client.region_tag()
             dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
-            dst_region = dst_client.region_tag()
+            dst_region_tag = dst_client.region_tag()
             full_transfer_pairs = generate_full_transferobjlist(
-                src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst, recursive=recursive
+                src_region_tag, bucket_src, path_src, dst_region_tag, bucket_dst, path_dst, recursive=recursive
             )
-            enrich_dest_objs(dst_region, path_dst, bucket_dst, [i[1] for i in full_transfer_pairs])
+            enrich_dest_objs(dst_region_tag, path_dst, bucket_dst, [i[1] for i in full_transfer_pairs])
         except exceptions.SkyplaneException as e:
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
             console.print(e.pretty_print_str())
-            UsageClient.log_exception(e, args, src_region_tag, dst_region_tag)
+            UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
             raise typer.Exit(1)
 
         # filter out any transfer pairs that are already in the destination
@@ -373,8 +373,8 @@ def sync(
             multipart = False
 
         topo = generate_topology(
-            src_region,
-            dst_region,
+            src_region_tag,
+            dst_region_tag,
             solve,
             num_connections=cloud_config.get_flag("num_connections"),
             max_instances=max_instances,
@@ -410,9 +410,9 @@ def sync(
                 debug=debug,
                 reuse_gateways=reuse_gateways,
                 use_bbr=cloud_config.get_flag("bbr"),
-                use_compression=cloud_config.get_flag("compress") if src_region != dst_region else False,
-                use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
-                use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
+                use_compression=cloud_config.get_flag("compress") if src_region_tag != dst_region_tag else False,
+                use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region_tag != dst_region_tag else False,
+                use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region_tag != dst_region_tag else False,
                 aws_instance_class=cloud_config.get_flag("aws_instance_class"),
                 aws_use_spot_instances=cloud_config.get_flag("aws_use_spot_instances"),
                 azure_instance_class=cloud_config.get_flag("azure_instance_class"),
@@ -440,7 +440,7 @@ def sync(
                         except exceptions.TransferFailedException as e:
                             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                             console.print(e.pretty_print_str())
-                            UsageClient.log_exception(e, args, src_region_tag, dst_region_tag)
+                            UsageClient.log_exception("cli_verify_checksums", e, args, src_region_tag, dst_region_tag)
                             raise typer.Exit(1)
             if transfer_stats.monitor_status == "completed":
                 rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")

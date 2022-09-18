@@ -82,11 +82,16 @@ class UsageClient:
 
     @classmethod
     def log_exception(
-        cls, exception: Exception, args: Optional[Dict] = None, src_region_tag: Optional[str] = None, dest_region_tag: Optional[str] = None
+        cls,
+        location: str,
+        exception: Exception,
+        args: Optional[Dict] = None,
+        src_region_tag: Optional[str] = None,
+        dest_region_tag: Optional[str] = None,
     ):
         if cls.enabled():
             client = cls()
-            error_dict = {"loc": "create_pairs", "message": str(exception)[:150]}
+            error_dict = {"loc": location, "message": str(exception)[:150]}
             stats = client.make_error(
                 error_dict=error_dict, arguments_dict=args, src_region_tag=src_region_tag, dest_region_tag=dest_region_tag
             )
