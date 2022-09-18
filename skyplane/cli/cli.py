@@ -14,7 +14,6 @@ import skyplane.cli.usage.definitions
 import skyplane.cli.usage.client
 from skyplane import GB
 from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
-from skyplane.obj_store.s3_interface import S3Interface
 from skyplane.replicate.replicator_client import ReplicatorClient
 
 import typer
@@ -26,7 +25,7 @@ import skyplane.cli.cli_config
 import skyplane.cli.cli_internal as cli_internal
 import skyplane.cli.cli_solver
 import skyplane.cli.experiments
-from skyplane import config_path, exceptions, skyplane_root, cloud_config
+from skyplane import cloud_config, config_path, exceptions, skyplane_root
 from skyplane.cli.common import print_header, console
 from skyplane.cli.cli_impl.cp_replicate import (
     enrich_dest_objs,

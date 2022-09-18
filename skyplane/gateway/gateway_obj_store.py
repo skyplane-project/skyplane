@@ -10,7 +10,6 @@ from skyplane import cloud_config
 from skyplane.chunk import ChunkRequest
 from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
-from skyplane.obj_store.s3_interface import S3Interface
 from skyplane.utils import logger
 from skyplane.utils.retry import retry_backoff
 

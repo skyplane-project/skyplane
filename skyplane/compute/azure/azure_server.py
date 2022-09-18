@@ -11,7 +11,6 @@ with warnings.catch_warnings():
 from skyplane import key_root
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.server import Server, ServerState
-from skyplane.utils import logger
 from skyplane.utils.cache import ignore_lru_cache
 from skyplane.utils.fn import PathLike
 
@@ -147,8 +146,8 @@ class AzureServer(Server):
         compute_client = self.auth.get_compute_client()
         network_client = self.auth.get_network_client()
 
-        auth_client = self.auth.get_authorization_client()
-        vm = self.get_virtual_machine()
+        self.auth.get_authorization_client()
+        self.get_virtual_machine()
 
         vm_poller = compute_client.virtual_machines.begin_delete(AzureServer.resource_group_name, self.vm_name(self.name))
         _ = vm_poller.result()
