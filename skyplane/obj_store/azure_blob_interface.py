@@ -2,9 +2,7 @@ import base64
 import hashlib
 import os
 from functools import lru_cache, partial
-from socket import timeout
 from typing import Iterator, List, Optional
-import uuid
 
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError, HttpResponseError
 

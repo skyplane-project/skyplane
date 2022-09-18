@@ -1,5 +1,4 @@
 import numpy as np
-from skyplane import GB
 
 from skyplane.replicate.solver import ThroughputSolver, ThroughputProblem, ThroughputSolution
 

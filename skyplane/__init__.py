@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-import uuid
 
 from skyplane.config import SkyplaneConfig
 from skyplane.gateway_version import gateway_version
