@@ -19,7 +19,6 @@ from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
 from skyplane.cli.common import console
-
 from skyplane.cli.usage.client import UsageClient
 
 
@@ -49,14 +48,7 @@ def generate_topology(
         if src_region == dst_region:
             e = "Solver is not supported for intra-region transfers, run without the --solve flag"
             typer.secho(e, fg="red", err=True)
-
-            client = UsageClient()
-            if client.enabled():
-                error_dict = {"loc": "generate_topology", "message": e}
-                stats = client.make_error(src_region, dst_region, error_dict, args)
-                destination = client.write_usage_data(stats)
-                client.report_usage_data("error", stats, destination)
-
+            UsageClient.log_exception("generate_topology", exceptions.SkyplaneException(e), args, src_region, dst_region)
             raise typer.Exit(1)
         assert solver_throughput_grid is not None and solver_total_gbyte_to_transfer is not None
         problem = ThroughputProblem(
@@ -355,13 +347,7 @@ def launch_replication_job(
             s = signal.signal(signal.SIGINT, signal.SIG_IGN)
             rc.deprovision_gateways()
             signal.signal(signal.SIGINT, s)
-
-        client = UsageClient()
-        if client.enabled():
-            error_dict = {"loc": "launch_replication_job", "message": str(e)[:150]}
-            err_stats = client.make_error(job.source_region, job.dest_region, error_dict, error_reporting_args)
-            destination = client.write_usage_data(err_stats)
-            client.report_usage_data("error", err_stats, destination)
+        UsageClient.log_exception("launch_replication_job", e, error_reporting_args, job.source_region, job.dest_region)
         os._exit(1)  # exit now
 
     if not reuse_gateways:
@@ -375,12 +361,9 @@ def launch_replication_job(
                 typer.secho(f"\n❌ {instance} encountered error:", fg="red", err=True, bold=True)
                 typer.secho(error, fg="red", err=True)
                 err += error + "\n"
-        client = UsageClient()
-        if client.enabled():
-            error_dict = {"loc": "replication_monitor", "message": err[:150]}
-            err_stats = client.make_error(job.source_region, job.dest_region, error_dict, error_reporting_args)
-            destination = client.write_usage_data(err_stats)
-            client.report_usage_data("error", err_stats, destination)
+        UsageClient.log_exception(
+            "replicate_monitor", exceptions.SkyplaneException(err), error_reporting_args, job.source_region, job.dest_region
+        )
         raise typer.Exit(1)
     elif stats.monitor_status == "completed":
         # success message will be handled by the caller
@@ -388,10 +371,11 @@ def launch_replication_job(
     else:
         rprint(f"\n:x: [bold red]Transfer failed[/bold red]")
         rprint(stats)
-        client = UsageClient()
-        if client.enabled():
-            error_dict = {"loc": "replication_monitor", "message": stats.monitor_status}
-            err_stats = client.make_error(job.source_region, job.dest_region, error_dict, error_reporting_args)
-            destination = client.write_usage_data(err_stats)
-            client.report_usage_data("error", err_stats, destination)
+        UsageClient.log_exception(
+            "replicate_monitor",
+            exceptions.SkyplaneException(stats.monitor_status),
+            error_reporting_args,
+            job.source_region,
+            job.dest_region,
+        )
     return stats

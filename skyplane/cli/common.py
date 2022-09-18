@@ -47,6 +47,7 @@ def parse_path(path: str):
             raise typer.Exit(code=1)
         bucket, *keys = parsed.split("/", 1)
         key = keys[0] if len(keys) > 0 else ""
+        provider = "aws" if provider == "s3" else "gcp"
         return provider, bucket, key
     elif (path.startswith("https://") or path.startswith("http://")) and "blob.core.windows.net" in path:
         # Azure blob storage

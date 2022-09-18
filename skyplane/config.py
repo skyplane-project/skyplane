@@ -31,7 +31,8 @@ _FLAG_TYPES = {
     "usage_stats": bool,
     "gcp_service_account_name": str,
     "requester_pays": bool,
-    "use_skyplane_limit_gb": int,
+    "native_cmd_enabled": bool,
+    "native_cmd_threshold_gb": int,
 }
 
 _DEFAULT_FLAGS = {
@@ -59,7 +60,8 @@ _DEFAULT_FLAGS = {
     "usage_stats": True,
     "gcp_service_account_name": "skyplane-manual",
     "requester_pays": False,
-    "use_skyplane_limit_gb": 2,
+    "native_cmd_enabled": True,
+    "native_cmd_threshold_gb": 2,
 }
 
 
