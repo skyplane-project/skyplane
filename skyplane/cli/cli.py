@@ -139,17 +139,17 @@ def cp(
             fg="red",
         )
         UsageClient.log_exception("cli_check_config", e, args, src_region_tag, dst_region_tag)
-        raise typer.Exit(1)
+        return 1
 
     if provider_src == "local" or provider_dst == "local":
         cmd = replicate_onprem_cp_cmd(src, dst, recursive)
         if cmd:
             typer.secho(f"Delegating to: {cmd}", fg="yellow")
             os.system(cmd)
-            raise typer.Exit(0)
+            return 0
         else:
             typer.secho("Transfer not supported", fg="red")
-            raise typer.Exit(1)
+            return 1
     elif provider_src in ["aws", "gcp", "azure"] and provider_dst in ["aws", "gcp", "azure"]:
         try:
             src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
@@ -166,7 +166,7 @@ def cp(
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
             console.print(e.pretty_print_str())
             UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
-            raise typer.Exit(1)
+            return 1
 
         if multipart and (provider_src == "azure" or provider_dst == "azure"):
             typer.secho("Warning: Azure is not yet supported for multipart transfers. Disabling multipart.", fg="yellow", err=True)
@@ -201,7 +201,7 @@ def cp(
         ):
             typer.secho(f"Transfer is small enough to delegate to native tools. Delegating to: {small_transfer_cmd}", fg="yellow")
             os.system(small_transfer_cmd)
-            raise typer.Exit(0)
+            return 0
         else:
             transfer_stats = launch_replication_job(
                 topo=topo,
@@ -235,7 +235,7 @@ def cp(
                         console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                         console.print(e.pretty_print_str())
                         UsageClient.log_exception("cli_verify_checksums", e, args, src_region_tag, dst_region_tag)
-                        raise typer.Exit(1)
+                        return 1
             if transfer_stats.monitor_status == "completed":
                 rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
                 runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{transfer_stats.total_runtime_s:.2f}s[/bright_black]"
@@ -328,17 +328,17 @@ def sync(
             fg="red",
         )
         UsageClient.log_exception("cli_check_config", e, args, src_region_tag, dst_region_tag)
-        raise typer.Exit(1)
+        return 1
 
     if provider_src == "local" or provider_dst == "local":
         cmd = replicate_onprem_sync_cmd(src, dst)
         if cmd:
             typer.secho(f"Delegating to: {cmd}", fg="yellow")
             os.system(cmd)
-            raise typer.Exit(0)
+            return 0
         else:
             typer.secho("Transfer not supported", fg="red")
-            raise typer.Exit(1)
+            return 1
     elif provider_src in ["aws", "gcp", "azure"] and provider_dst in ["aws", "gcp", "azure"]:
         try:
             src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
@@ -353,7 +353,7 @@ def sync(
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
             console.print(e.pretty_print_str())
             UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
-            raise typer.Exit(1)
+            return 1
 
         # filter out any transfer pairs that are already in the destination
         transfer_pairs = []
@@ -364,7 +364,7 @@ def sync(
         if not transfer_pairs:
             err = "No objects need updating. Exiting..."
             typer.secho(err)
-            raise typer.Exit(0)
+            return 0
 
         if multipart and (provider_src == "azure" or provider_dst == "azure"):
             typer.secho("Warning: Azure is not yet supported for multipart transfers. Disabling multipart.", fg="yellow", err=True)
@@ -400,7 +400,7 @@ def sync(
         ):
             typer.secho(f"Transfer is small enough to delegate to native tools. Delegating to: {small_transfer_cmd}", fg="yellow")
             os.system(small_transfer_cmd)
-            raise typer.Exit(0)
+            return 0
         else:
             transfer_stats = launch_replication_job(
                 topo=topo,
@@ -439,7 +439,7 @@ def sync(
                             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                             console.print(e.pretty_print_str())
                             UsageClient.log_exception("cli_verify_checksums", e, args, src_region_tag, dst_region_tag)
-                            raise typer.Exit(1)
+                            return 1
             if transfer_stats.monitor_status == "completed":
                 rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
                 runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{transfer_stats.total_runtime_s:.2f}s[/bright_black]"
