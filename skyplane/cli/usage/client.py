@@ -81,6 +81,35 @@ class UsageClient:
         return cls.usage_stats_status() is not UsageStatsStatus.DISABLED_EXPLICITLY
 
     @classmethod
+    def log_exception(
+        cls, exception: Exception, args: Optional[Dict] = None, src_region_tag: Optional[str] = None, dest_region_tag: Optional[str] = None
+    ):
+        if cls.enabled():
+            client = cls()
+            error_dict = {"loc": "create_pairs", "message": str(exception)[:150]}
+            stats = client.make_error(
+                error_dict=error_dict, arguments_dict=args, src_region_tag=src_region_tag, dest_region_tag=dest_region_tag
+            )
+            destination = client.write_usage_data(stats)
+            client.report_usage_data("error", stats, destination)
+
+    @classmethod
+    def log_transfer(
+        cls,
+        transfer_stats: Optional[TransferStats],
+        args: Optional[Dict] = None,
+        src_region_tag: Optional[str] = None,
+        dest_region_tag: Optional[str] = None,
+    ):
+        if cls.enabled():
+            client = cls()
+            stats = client.make_stat(
+                arguments_dict=args, transfer_stats=transfer_stats, src_region_tag=src_region_tag, dest_region_tag=dest_region_tag
+            )
+            destination = client.write_usage_data(stats)
+            client.report_usage_data("usage", stats, destination)
+
+    @classmethod
     def usage_stats_status(cls) -> UsageStatsStatus:
         # environment vairable has higher priority
         usage_stats_enabled_env_var = os.getenv(skyplane.cli.usage.definitions.USAGE_STATS_ENABLED_ENV_VAR)
@@ -153,21 +182,30 @@ class UsageClient:
 
     def make_stat(
         self,
-        src_region_tag: str,
-        dest_region_tag: str,
         arguments_dict: Optional[Dict] = None,
         transfer_stats: Optional[TransferStats] = None,
+        src_region_tag: Optional[str] = None,
+        dest_region_tag: Optional[str] = None,
     ):
+        if src_region_tag is None:
+            src_provider, src_region = None, None
+        else:
+            src_provider, src_region = src_region_tag.split(":")
+        if dest_region_tag is None:
+            dest_provider, dest_region = None, None
+        else:
+            dest_provider, dest_region = dest_region_tag.split(":")
+
         return UsageStatsToReport(
             skyplane_version=skyplane.__version__,
             python_version=".".join(map(str, sys.version_info[:3])),
             schema_version=skyplane.cli.usage.definitions.SCHEMA_VERSION,
             client_id=self.client_id,
             session_id=self.session_id,
-            source_region=":".join(src_region_tag.split(":")[1:]),
-            destination_region=":".join(dest_region_tag.split(":")[1:]),
-            source_cloud_provider=src_region_tag.split(":")[0],
-            destination_cloud_provider=dest_region_tag.split(":")[0],
+            source_region=src_region,
+            destination_region=dest_region,
+            source_cloud_provider=src_provider,
+            destination_cloud_provider=dest_provider,
             os=sys.platform,
             session_start_timestamp_ms=int(time.time() * 1000),
             arguments_dict=arguments_dict,
@@ -176,21 +214,30 @@ class UsageClient:
 
     def make_error(
         self,
-        src_region_tag: str,
-        dest_region_tag: str,
         error_dict: Dict,
         arguments_dict: Optional[Dict] = None,
+        src_region_tag: Optional[str] = None,
+        dest_region_tag: Optional[str] = None,
     ):
+        if src_region_tag is None:
+            src_provider, src_region = None, None
+        else:
+            src_provider, src_region = src_region_tag.split(":")
+        if dest_region_tag is None:
+            dest_provider, dest_region = None, None
+        else:
+            dest_provider, dest_region = dest_region_tag.split(":")
+
         return UsageStatsToReport(
             skyplane_version=skyplane.__version__,
             python_version=".".join(map(str, sys.version_info[:3])),
             schema_version=skyplane.cli.usage.definitions.SCHEMA_VERSION,
             client_id=self.client_id,
             session_id=self.session_id,
-            source_region=":".join(src_region_tag.split(":")[1:]),
-            destination_region=":".join(dest_region_tag.split(":")[1:]),
-            source_cloud_provider=src_region_tag.split(":")[0],
-            destination_cloud_provider=dest_region_tag.split(":")[0],
+            source_region=src_region,
+            destination_region=dest_region,
+            source_cloud_provider=src_provider,
+            destination_cloud_provider=dest_provider,
             os=sys.platform,
             session_start_timestamp_ms=int(time.time() * 1000),
             arguments_dict=arguments_dict,
