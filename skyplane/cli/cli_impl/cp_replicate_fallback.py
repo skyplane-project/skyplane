@@ -42,7 +42,7 @@ def replicate_onprem_cp_cmd(src, dst, recursive=True) -> Optional[str]:
     if provider_src == "local" and provider_dst == "local":
         return fallback_cmd_local_cp(src, dst, recursive)
     # local -> s3 or s3 -> local
-    elif (provider_src == "local" and provider_dst == "s3") or (provider_src == "s3" and provider_dst == "local"):
+    elif (provider_src == "local" and provider_dst == "aws") or (provider_src == "aws" and provider_dst == "local"):
         return fallback_cmd_s3_cp(src, dst, recursive)
     # local -> gcp or gcp -> local
     elif (provider_src == "local" and provider_dst == "gcp") or (provider_src == "gcp" and provider_dst == "local"):
@@ -63,7 +63,7 @@ def replicate_onprem_sync_cmd(src, dst) -> Optional[str]:
     if provider_src == "local" and provider_dst == "local":
         return fallback_cmd_local_sync(src, dst)
     # local -> s3 or s3 -> local
-    elif (provider_src == "local" and provider_dst == "s3") or (provider_src == "s3" and provider_dst == "local"):
+    elif (provider_src == "local" and provider_dst == "aws") or (provider_src == "aws" and provider_dst == "local"):
         return fallback_cmd_s3_sync(src, dst)
     # local -> gcp or gcp -> local
     elif (provider_src == "local" and provider_dst == "gcp") or (provider_src == "gcp" and provider_dst == "local"):
@@ -81,7 +81,7 @@ def replicate_small_cp_cmd(src, dst, recursive=True) -> Optional[str]:
     provider_dst, _, _ = parse_path(dst)
 
     # s3 -> s3
-    if provider_src == "s3" and provider_dst == "s3":
+    if provider_src == "aws" and provider_dst == "aws":
         return fallback_cmd_s3_cp(src, dst, recursive)
     # gcp -> gcp
     elif provider_src == "gcp" and provider_dst == "gcp":
@@ -99,7 +99,7 @@ def replicate_small_sync_cmd(src, dst) -> Optional[str]:
     provider_dst, _, _ = parse_path(dst)
 
     # s3 -> s3
-    if provider_src == "s3" and provider_dst == "s3":
+    if provider_src == "aws" and provider_dst == "aws":
         return fallback_cmd_s3_sync(src, dst)
     # gcp -> gcp
     elif provider_src == "gcp" and provider_dst == "gcp":

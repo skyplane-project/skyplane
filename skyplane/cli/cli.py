@@ -150,7 +150,7 @@ def cp(
         else:
             typer.secho("Transfer not supported", fg="red")
             raise typer.Exit(1)
-    elif provider_src in ["s3", "gcp", "azure"] and provider_dst in ["s3", "gcp", "azure"]:
+    elif provider_src in ["aws", "gcp", "azure"] and provider_dst in ["aws", "gcp", "azure"]:
         try:
             src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
             dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
@@ -339,7 +339,7 @@ def sync(
         else:
             typer.secho("Transfer not supported", fg="red")
             raise typer.Exit(1)
-    elif provider_src in ["s3", "gcp", "azure"] and provider_dst in ["s3", "gcp", "azure"]:
+    elif provider_src in ["aws", "gcp", "azure"] and provider_dst in ["aws", "gcp", "azure"]:
         try:
             src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
             src_region_tag = src_client.region_tag()
