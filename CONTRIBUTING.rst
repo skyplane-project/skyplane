@@ -34,24 +34,24 @@ Before you submit a pull request, make sure to complete the following steps:
 3. Create a development branch (\ ``git checkout -b feature_name``\ )
 4. Test your changes manually using ``skyplane cp`` and with the unit test suite:
 
-.. code-block:: console
+   .. code-block:: console
 
-   $ pytest tests/unit_nocloud/
+      $ pytest tests/unit_nocloud/
 5. Ensure your code is autoformatted and passes type checks:
 
-.. code-block:: console
+   .. code-block:: console
 
-   $ pip install black pytype autoflake
-   $ black -l 140 .
-   $ pytype --config .pytype.cfg skyplane
-   $ autoflake --in-place --remove-all-unused-imports --remove-unused-variables --recursive skyplane
+      $ pip install black pytype autoflake
+      $ black -l 140 .
+      $ pytype --config .pytype.cfg skyplane
+      $ autoflake --in-place --remove-all-unused-imports --remove-unused-variables --recursive skyplane
 6. If you updated documentation, test the docs:
 
-.. code-block:: console
+   .. code-block:: console
 
-   $ pip install sphinx-autobuild
-   $ cd docs
-   $ pip install -r requirements.txt
-   $ sphinx-autobuild -b html . /tmp/docs_build
+      $ pip install sphinx-autobuild
+      $ cd docs
+      $ pip install -r requirements.txt
+      $ sphinx-autobuild -b html . /tmp/docs_build
 7. Commit your changes using a `descriptive commit message <https://cbea.ms/git-commit/>`_.
 8. Create a pull request on the main Skyplane repo from your fork. Consult `Github Help <https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests>`_ for more details.
