@@ -12,6 +12,7 @@ from skyplane.utils.fn import wait_for
 def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket: bool = False, file_size_mb: int = 1):
     interface = ObjectStoreInterface.create(region, bucket)
     interface.create_bucket(region.split(":")[1])
+    time.sleep(5)
 
     # generate file and upload
     obj_name = f"test_{uuid.uuid4()}.txt"
@@ -24,10 +25,14 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
 
         if multipart:
             upload_id = interface.initiate_multipart_upload(obj_name)
+            time.sleep(5)
             interface.upload_object(fpath, obj_name, 1, upload_id)
+            time.sleep(5)
             interface.complete_multipart_upload(obj_name, upload_id)
+            time.sleep(5)
         else:
             interface.upload_object(fpath, obj_name)
+            time.sleep(5)
         assert not interface.exists("random_nonexistent_file"), "Object should not exist"
 
     # download object
@@ -38,8 +43,10 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
 
         if multipart:
             interface.download_object(obj_name, fpath, 0, file_size_mb * MB)
+            time.sleep(5)
         else:
             interface.download_object(obj_name, fpath)
+            time.sleep(5)
         local_size = os.path.getsize(fpath)
         assert file_size_mb * MB == local_size, f"Object size mismatch: {file_size_mb * MB} != {local_size}"
 

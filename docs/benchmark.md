@@ -58,6 +58,19 @@ Benchmark setup:
 * File size: 70 GB
 * Number of Skyplane VMs: 8
 
+## Benchmark: Impact of Chunk Sizes on Transfer time and Throughput
+
+In this benchmark, we measure the transfer speed and throughput of a transfer with 100 roughly 140 MB files. The transfer was done from an S3 bucket in us-west-1 to another S3 bucket in us-east-1.  
+|Chunk Size| Time | Throughput |
+| --- | --- | ---- |
+| 5 MiB | 81.91 s | 1.36 Gbps |
+|8 MiB| 34.64 s | 3.23 Gbps |
+|16 MiB| 19.47 s | 5.74 Gbps |
+|32 MiB| 19.89 s | 5.62 Gbps |
+|64 MiB | 16.17 s | 6.91 Gbps |
+| 128 MiB | 18.20 s | 6.14 Gbps |
+
+
 ## Instructions to replicate benchmarks
 To replicate select benchmarks, see the following guide:
 ```{toctree}

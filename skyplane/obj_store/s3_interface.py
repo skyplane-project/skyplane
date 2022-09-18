@@ -5,12 +5,14 @@ import os
 from typing import Iterator, List, Optional
 
 import botocore.exceptions
+import botocore.client
 
 from skyplane import exceptions
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.utils import logger
+from skyplane.utils.timer import Timer
 
 
 class S3Object(ObjectStoreObject):
@@ -21,6 +23,7 @@ class S3Object(ObjectStoreObject):
 class S3Interface(ObjectStoreInterface):
     def __init__(self, bucket_name: str):
         self.auth = AWSAuthentication()
+        self.requester_pays = False
         self.bucket_name = bucket_name
 
     def path(self):
@@ -43,6 +46,9 @@ class S3Interface(ObjectStoreInterface):
     def region_tag(self):
         return "aws:" + self.aws_region
 
+    def set_requester_bool(self, requester: bool):
+        self.requester_pays = requester
+
     def _s3_client(self, region=None):
         region = region if region is not None else self.aws_region
         return self.auth.get_boto3_client("s3", region)
@@ -50,10 +56,11 @@ class S3Interface(ObjectStoreInterface):
     def bucket_exists(self):
         s3_client = self._s3_client("us-east-1")
         try:
-            s3_client.list_objects_v2(Bucket=self.bucket_name, MaxKeys=1)  # list one object to check if bucket exists
+            requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
+            s3_client.list_objects_v2(Bucket=self.bucket_name, MaxKeys=1, **requester_pays)
             return True
         except botocore.exceptions.ClientError as e:
-            if e.response["Error"]["Code"] == "NoSuchBucket":
+            if e.response["Error"]["Code"] == "NoSuchBucket" or e.response["Error"]["Code"] == "AccessDenied":
                 return False
             raise e
 
@@ -70,7 +77,8 @@ class S3Interface(ObjectStoreInterface):
 
     def list_objects(self, prefix="") -> Iterator[S3Object]:
         paginator = self._s3_client().get_paginator("list_objects_v2")
-        page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix)
+        requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
+        page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix, **requester_pays)
         for page in page_iterator:
             for obj in page.get("Contents", []):
                 yield S3Object("aws", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"])
@@ -113,14 +121,19 @@ class S3Interface(ObjectStoreInterface):
         write_block_size=2**16,
     ) -> Optional[bytes]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
+
         s3_client = self._s3_client()
         assert len(src_object_name) > 0, f"Source object name must be non-empty: '{src_object_name}'"
 
+        args = {"Bucket": self.bucket_name, "Key": src_object_name}
+
         if size_bytes:
-            byte_range = f"bytes={offset_bytes}-{offset_bytes + size_bytes - 1}"
-            response = s3_client.get_object(Bucket=self.bucket_name, Key=src_object_name, Range=byte_range)
-        else:
-            response = s3_client.get_object(Bucket=self.bucket_name, Key=src_object_name)
+            args["Range"] = f"bytes={offset_bytes}-{offset_bytes + size_bytes - 1}"
+
+        if self.requester_pays:
+            args["RequestPayer"] = "requester"
+
+        response = s3_client.get_object(**args)
 
         # write response data
         if not os.path.exists(dst_file_path):
@@ -165,13 +178,13 @@ class S3Interface(ObjectStoreInterface):
             raise
 
     def initiate_multipart_upload(self, dst_object_name):
-        # cannot infer content type here
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
         s3_client = self._s3_client()
-        response = s3_client.create_multipart_upload(
-            Bucket=self.bucket_name,
-            Key=dst_object_name,
-        )
+        with Timer(f"Initiate multipart upload for {dst_object_name}"):
+            response = s3_client.create_multipart_upload(
+                Bucket=self.bucket_name,
+                Key=dst_object_name,
+            )
         return response["UploadId"]
 
     def complete_multipart_upload(self, dst_object_name, upload_id):

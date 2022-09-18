@@ -16,11 +16,15 @@ Skyplane comes with a variety of knobs to tune to adjust performance or change h
     * `encrypt_socket_tls`: If set, all sockets between gateways will be encrypted with TLS. (default False)
     * `verify_checksums`: If set, gateway VMs will compute checksums at the source and verify checksums at the destination. (default True)
     * `num_connections`: Number of connections to use between each gateway. (default 32)
-* Multipart transfer configuration
+* Object store configuration
     * `multipart_enabled`: If set, multipart transfers will be enabled. (default False)
     * `multipart_min_threshold_mb`: Minimum threshold in MB for multipart transfers. Below this, the object will be transferred in one chunk. (default 64).
     * `multipart_min_size_mb`: Minimum size per chunk in MB for multipart transfers. (default 8).
     * `multipart_max_chunks`: Maximum number of chunks for multipart transfers. (default 9990).
+    * `requester_pays`: If set, Skyplane will support requester pays buckets. (default False).
+* Fallback to native commands
+    * `native_cmd_enabled`: If set, Skyplane will fallback to native commands if the transfer fails. (default True)
+    * `native_cmd_threshold_gb`: Transfers smaller than this threshold will be delegated to native commands. (default 2)
 * Instance provisioning configuration
     * `aws_instance_class`: AWS instance class to use for provisioning. (default m5.8xlarge)
     * `aws_use_spot_instances`: If set, AWS will use spot instances instead of on-demand instances. (default False)

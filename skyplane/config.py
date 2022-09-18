@@ -16,6 +16,7 @@ _FLAG_TYPES = {
     "multipart_enabled": bool,
     "multipart_min_threshold_mb": int,
     "multipart_min_size_mb": int,
+    "multipart_chunk_size_mb": int,
     "multipart_max_chunks": int,
     "num_connections": int,
     "max_instances": int,
@@ -29,6 +30,9 @@ _FLAG_TYPES = {
     "gcp_use_premium_network": bool,
     "usage_stats": bool,
     "gcp_service_account_name": str,
+    "requester_pays": bool,
+    "native_cmd_enabled": bool,
+    "native_cmd_threshold_gb": int,
 }
 
 _DEFAULT_FLAGS = {
@@ -40,7 +44,8 @@ _DEFAULT_FLAGS = {
     "verify_checksums": True,
     "multipart_enabled": True,
     "multipart_min_threshold_mb": 128,
-    "multipart_min_size_mb": 8,
+    "multipart_min_size_mb": 5,  # 5 MiB minimum size for multipart uploads
+    "multipart_chunk_size_mb": 64,
     "multipart_max_chunks": 9990,  # AWS limit is 10k chunks
     "num_connections": 32,
     "max_instances": 1,
@@ -54,6 +59,9 @@ _DEFAULT_FLAGS = {
     "gcp_use_premium_network": True,
     "usage_stats": True,
     "gcp_service_account_name": "skyplane-manual",
+    "requester_pays": False,
+    "native_cmd_enabled": True,
+    "native_cmd_threshold_gb": 2,
 }
 
 
@@ -76,9 +84,7 @@ class SkyplaneConfig:
     gcp_enabled: bool
     azure_principal_id: Optional[str] = None
     azure_subscription_id: Optional[str] = None
-    azure_tenant_id: Optional[str] = None
     azure_client_id: Optional[str] = None
-    azure_client_secret: Optional[str] = None
     gcp_project_id: Optional[str] = None
     anon_clientid: Optional[str] = None
 
@@ -111,21 +117,15 @@ class SkyplaneConfig:
 
         azure_enabled = False
         azure_subscription_id = None
-        azure_tenant_id = None
         azure_client_id = None
-        azure_client_secret = None
         azure_principal_id = None
         if "azure" in config:
             if "azure_enabled" in config["azure"]:
                 azure_enabled = config.getboolean("azure", "azure_enabled")
             if "subscription_id" in config["azure"]:
                 azure_subscription_id = config.get("azure", "subscription_id")
-            if "tenant_id" in config["azure"]:
-                azure_tenant_id = config.get("azure", "tenant_id")
             if "client_id" in config["azure"]:
                 azure_client_id = config.get("azure", "client_id")
-            if "client_secret" in config["azure"]:
-                azure_client_secret = config.get("azure", "client_secret")
             if "principal_id" in config["azure"]:
                 azure_principal_id = config.get("azure", "principal_id")
 
@@ -144,9 +144,7 @@ class SkyplaneConfig:
             anon_clientid=anon_clientid,
             azure_principal_id=azure_principal_id,
             azure_subscription_id=azure_subscription_id,
-            azure_tenant_id=azure_tenant_id,
             azure_client_id=azure_client_id,
-            azure_client_secret=azure_client_secret,
             gcp_project_id=gcp_project_id,
         )
 
@@ -173,12 +171,8 @@ class SkyplaneConfig:
 
         if self.azure_subscription_id:
             config.set("azure", "subscription_id", self.azure_subscription_id)
-        if self.azure_tenant_id:
-            config.set("azure", "tenant_id", self.azure_tenant_id)
         if self.azure_client_id:
             config.set("azure", "client_id", self.azure_client_id)
-        if self.azure_client_secret:
-            config.set("azure", "client_secret", self.azure_client_secret)
         if self.azure_principal_id:
             config.set("azure", "principal_id", self.azure_principal_id)
 

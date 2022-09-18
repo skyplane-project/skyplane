@@ -6,6 +6,7 @@ from functools import partial
 from multiprocessing import Event, Manager, Process, Value, Queue
 from typing import Dict, Optional
 
+from skyplane import cloud_config
 from skyplane.chunk import ChunkRequest
 from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
@@ -26,6 +27,7 @@ class GatewayObjStoreConn:
         self.error_queue = error_queue
         self.n_processes = max_conn
         self.processes = []
+        self.src_requester_pays = cloud_config.get_flag("requester_pays")
 
         # shared state
         self.manager = Manager()
@@ -117,6 +119,9 @@ class GatewayObjStoreConn:
                     logger.debug(f"[obj_store:{self.worker_id}] Start download {chunk_req.chunk.chunk_id} from {bucket}")
 
                     obj_store_interface = self.get_obj_store_interface(chunk_req.src_region, bucket)
+
+                    if self.src_requester_pays:
+                        obj_store_interface.set_requester_bool(True)
                     md5sum = retry_backoff(
                         partial(
                             obj_store_interface.download_object,

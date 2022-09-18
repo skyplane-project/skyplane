@@ -1,4 +1,3 @@
-import json
 import os
 import pathlib
 import signal
@@ -9,7 +8,7 @@ from typing import List, Optional, Tuple, Dict
 import typer
 from rich import print as rprint
 
-from skyplane import exceptions, GB, format_bytes, gateway_docker_image, skyplane_root
+from skyplane import exceptions, GB, format_bytes, gateway_docker_image, skyplane_root, cloud_config
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.obj_store.s3_interface import S3Object
@@ -20,11 +19,7 @@ from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
 from skyplane.cli.common import console
-
-import skyplane.cli
-import skyplane.cli.usage.definitions
-import skyplane.cli.usage.client
-from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
+from skyplane.cli.usage.client import UsageClient
 
 
 def generate_topology(
@@ -53,14 +48,7 @@ def generate_topology(
         if src_region == dst_region:
             e = "Solver is not supported for intra-region transfers, run without the --solve flag"
             typer.secho(e, fg="red", err=True)
-
-            client = UsageClient()
-            if client.enabled():
-                error_dict = {"loc": "generate_topology", "message": e}
-                stats = client.make_error(src_region, dst_region, error_dict, args)
-                destination = client.write_usage_data(stats)
-                client.report_usage_data("error", stats, destination)
-
+            UsageClient.log_exception("generate_topology", exceptions.SkyplaneException(e), args, src_region, dst_region)
             raise typer.Exit(1)
         assert solver_throughput_grid is not None and solver_total_gbyte_to_transfer is not None
         problem = ThroughputProblem(
@@ -155,15 +143,19 @@ def generate_full_transferobjlist(
     dest_prefix: str,
     recursive: bool = False,
 ) -> List[Tuple[ObjectStoreObject, ObjectStoreObject]]:
-    """Query source region and destination region buckets and return list of objects to transfer."""
+    """Query source region and return list of objects to transfer."""
     source_iface = ObjectStoreInterface.create(source_region, source_bucket)
     dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
 
+    requester_pays = cloud_config.get_flag("requester_pays")
+    if requester_pays:
+        source_iface.set_requester_bool(True)
+
+    # ensure buckets exist
     if not source_iface.bucket_exists():
         raise exceptions.MissingBucketException(f"Source bucket {source_bucket} does not exist")
     if not dest_iface.bucket_exists():
         raise exceptions.MissingBucketException(f"Destination bucket {dest_bucket} does not exist")
-
     source_objs, dest_objs = [], []
 
     # query all source region objects
@@ -173,7 +165,7 @@ def generate_full_transferobjlist(
             source_objs.append(obj)
             status.update(f"Querying objects in {source_bucket} (found {len(source_objs)} objects so far)")
     if not source_objs:
-        logger.error("Specified object does not exist.")
+        logger.error("Specified object does not exist.\n")
         raise exceptions.MissingObjectException(f"No objects were found in the specified prefix {source_prefix} in {source_bucket}")
 
     # map objects to destination object paths
@@ -193,6 +185,15 @@ def generate_full_transferobjlist(
         # dest_obj = ObjectStoreObject(dest_region.split(":")[0], dest_bucket, dest_key)
         dest_objs.append(dest_obj)
 
+    return list(zip(source_objs, dest_objs))
+
+
+def enrich_dest_objs(dest_region: str, dest_prefix: str, dest_bucket: str, dest_objs: list):
+    """
+    For skyplane sync, we enrich dest obj metadata with our existing dest obj metadata from the dest bucket following a query.
+    """
+    dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
+
     # query destination at dest_key
     logger.fs.debug(f"Querying objects in {dest_bucket}")
     dest_objs_keys = {obj.key for obj in dest_objs}
@@ -209,8 +210,6 @@ def generate_full_transferobjlist(
         if dest_obj.key in found_dest_objs:
             dest_obj.size = found_dest_objs[dest_obj.key].size
             dest_obj.last_modified = found_dest_objs[dest_obj.key].last_modified
-
-    return list(zip(source_objs, dest_objs))
 
 
 def confirm_transfer(topo: ReplicationTopology, job: ReplicationJob, ask_to_confirm_transfer=True):
@@ -262,7 +261,7 @@ def launch_replication_job(
     # multipart
     multipart_enabled: bool = False,
     multipart_min_threshold_mb: int = 128,
-    multipart_min_size_mb: int = 8,
+    multipart_chunk_size_mb: int = 64,
     multipart_max_chunks: int = 9990,
     # cloud provider specific options
     aws_use_spot_instances: bool = False,
@@ -319,7 +318,7 @@ def launch_replication_job(
             job,
             multipart_enabled=multipart_enabled,
             multipart_min_threshold_mb=multipart_min_threshold_mb,
-            multipart_min_size_mb=multipart_min_size_mb,
+            multipart_chunk_size_mb=multipart_chunk_size_mb,
             multipart_max_chunks=multipart_max_chunks,
         )
         total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
@@ -348,13 +347,7 @@ def launch_replication_job(
             s = signal.signal(signal.SIGINT, signal.SIG_IGN)
             rc.deprovision_gateways()
             signal.signal(signal.SIGINT, s)
-
-        client = UsageClient()
-        if client.enabled():
-            error_dict = {"loc": "launch_replication_job", "message": str(e)[:150]}
-            err_stats = client.make_error(job.source_region, job.dest_region, error_dict, error_reporting_args)
-            destination = client.write_usage_data(err_stats)
-            client.report_usage_data("error", err_stats, destination)
+        UsageClient.log_exception("launch_replication_job", e, error_reporting_args, job.source_region, job.dest_region)
         os._exit(1)  # exit now
 
     if not reuse_gateways:
@@ -368,25 +361,21 @@ def launch_replication_job(
                 typer.secho(f"\n❌ {instance} encountered error:", fg="red", err=True, bold=True)
                 typer.secho(error, fg="red", err=True)
                 err += error + "\n"
-        client = UsageClient()
-        if client.enabled():
-            error_dict = {"loc": "replication_monitor", "message": err[:150]}
-            err_stats = client.make_error(job.source_region, job.dest_region, error_dict, error_reporting_args)
-            destination = client.write_usage_data(err_stats)
-            client.report_usage_data("error", err_stats, destination)
+        UsageClient.log_exception(
+            "replicate_monitor", exceptions.SkyplaneException(err), error_reporting_args, job.source_region, job.dest_region
+        )
         raise typer.Exit(1)
     elif stats.monitor_status == "completed":
-        rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
-        runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{stats.total_runtime_s:.2f}s[/bright_black]"
-        throughput_line = f"[white]Throughput:[/white] [bright_black]{stats.throughput_gbits:.2f}Gbps[/bright_black]"
-        rprint(f"{runtime_line}, {throughput_line}")
+        # success message will be handled by the caller
+        pass
     else:
         rprint(f"\n:x: [bold red]Transfer failed[/bold red]")
         rprint(stats)
-        client = UsageClient()
-        if client.enabled():
-            error_dict = {"loc": "replication_monitor", "message": stats.monitor_status}
-            err_stats = client.make_error(job.source_region, job.dest_region, error_dict, error_reporting_args)
-            destination = client.write_usage_data(err_stats)
-            client.report_usage_data("error", err_stats, destination)
+        UsageClient.log_exception(
+            "replicate_monitor",
+            exceptions.SkyplaneException(stats.monitor_status),
+            error_reporting_args,
+            job.source_region,
+            job.dest_region,
+        )
     return stats

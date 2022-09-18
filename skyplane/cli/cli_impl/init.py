@@ -59,9 +59,8 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         if verbose:
             typer.secho("    Disabling Azure support", fg="blue")
         config.azure_subscription_id = None
-        config.azure_tenant_id = None
         config.azure_client_id = None
-        config.azure_client_secret = None
+        config.azure_principal_id = None
         config.azure_enabled = False
         return config
 
@@ -79,13 +78,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         if force_init:
             typer.secho("    Azure credentials will be re-initialized", fg="red", err=True)
             clear_azure_config(config, verbose=False)
-        if (
-            config.azure_enabled
-            and config.azure_subscription_id
-            and config.azure_tenant_id
-            and config.azure_client_id
-            and config.azure_client_secret
-        ):
+        if config.azure_enabled and config.azure_subscription_id and config.azure_principal_id and config.azure_client_id:
             typer.secho("    Azure credentials already configured! To reconfigure Azure, run `skyplane init --reinit-azure`.", fg="blue")
             return config
 
@@ -94,9 +87,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             os.environ.get("AZURE_SUBSCRIPTION_ID") or config.azure_subscription_id or AzureAuthentication.infer_subscription_id()
         )
         defaults = {
-            "tenant_id": os.environ.get("AZURE_TENANT_ID") or config.azure_tenant_id,
             "client_id": os.environ.get("AZURE_CLIENT_ID") or config.azure_client_id,
-            "client_secret": os.environ.get("AZURE_CLIENT_SECRET") or config.azure_client_secret,
             "subscription_id": inferred_subscription_id,
             "resource_group": os.environ.get("AZURE_RESOURCE_GROUP") or AzureServer.resource_group_name,
         }

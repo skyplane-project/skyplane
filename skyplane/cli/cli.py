@@ -5,12 +5,14 @@ from pathlib import Path
 from shlex import split
 import traceback
 import uuid
+import os
 
 from rich import print as rprint
 
 import skyplane.cli
 import skyplane.cli.usage.definitions
 import skyplane.cli.usage.client
+from skyplane import GB
 from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
 from skyplane.replicate.replicator_client import ReplicatorClient
 
@@ -23,9 +25,21 @@ import skyplane.cli.cli_config
 import skyplane.cli.cli_internal as cli_internal
 import skyplane.cli.cli_solver
 import skyplane.cli.experiments
-from skyplane import config_path, exceptions, skyplane_root, cloud_config, tmp_log_dir
+from skyplane import cloud_config, config_path, exceptions, skyplane_root
 from skyplane.cli.common import print_header, console
-from skyplane.cli.cli_impl.cp_replicate import generate_full_transferobjlist, generate_topology, confirm_transfer, launch_replication_job
+from skyplane.cli.cli_impl.cp_replicate import (
+    enrich_dest_objs,
+    generate_full_transferobjlist,
+    generate_topology,
+    confirm_transfer,
+    launch_replication_job,
+)
+from skyplane.cli.cli_impl.cp_replicate_fallback import (
+    replicate_onprem_cp_cmd,
+    replicate_onprem_sync_cmd,
+    replicate_small_cp_cmd,
+    replicate_small_sync_cmd,
+)
 from skyplane.replicate.replication_plan import ReplicationJob
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.common import parse_path, query_instances
@@ -103,9 +117,7 @@ def cp(
 
     provider_src, bucket_src, path_src = parse_path(src)
     provider_dst, bucket_dst, path_dst = parse_path(dst)
-
-    clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
-
+    src_region_tag, dst_region_tag = f"{provider_src}:infer", f"{provider_dst}:infer"
     args = {
         "cmd": "cp",
         "recursive": recursive,
@@ -120,55 +132,48 @@ def cp(
     # check config
     try:
         cloud_config.check_config()
-    except exceptions.BadConfigException:
+    except exceptions.BadConfigException as e:
         typer.secho(
             f"Skyplane configuration file is not valid. Please reset your config by running `rm {config_path}` and then rerunning `skyplane init` to fix.",
             fg="red",
         )
-        raise typer.Exit(1)
+        UsageClient.log_exception("cli_check_config", e, args, src_region_tag, dst_region_tag)
+        return 1
 
     if provider_src == "local" or provider_dst == "local":
-        typer.secho("Local transfers are not yet supported (but will be soon!)", fg="red", err=True)
-        typer.secho("Skyplane is currently most optimized for cloud to cloud transfers.", fg="yellow", err=True)
-        typer.secho(
-            "Please provide feedback for on prem transfers at: https://github.com/skyplane-project/skyplane/discussions/424",
-            fg="yellow",
-            err=True,
-        )
-        raise typer.Exit(code=1)
-    if provider_src in clouds and provider_dst in clouds:
+        cmd = replicate_onprem_cp_cmd(src, dst, recursive)
+        if cmd:
+            typer.secho(f"Delegating to: {cmd}", fg="yellow")
+            os.system(cmd)
+            return 0
+        else:
+            typer.secho("Transfer not supported", fg="red")
+            return 1
+    elif provider_src in ["aws", "gcp", "azure"] and provider_dst in ["aws", "gcp", "azure"]:
         try:
-            src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)
-            dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
-            src_region = src_client.region_tag()
-            dst_region = dst_client.region_tag()
-
+            src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
+            dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
+            src_region_tag = src_client.region_tag()
+            dst_region_tag = dst_client.region_tag()
+            if cloud_config.get_flag("requester_pays"):
+                src_client.set_requester_bool(True)
+                dst_client.set_requester_bool(True)
             transfer_pairs = generate_full_transferobjlist(
-                src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst, recursive=recursive
+                src_region_tag, bucket_src, path_src, dst_region_tag, bucket_dst, path_dst, recursive=recursive
             )
         except exceptions.SkyplaneException as e:
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
             console.print(e.pretty_print_str())
-
-            client = UsageClient()
-            src_region_tag = provider_src + ":" + bucket_src
-            dst_region_tag = provider_dst + ":" + bucket_dst
-            error_dict = {"loc": "create_pairs", "message": str(e)[:150]}
-            stats = client.make_error(src_region_tag, dst_region_tag, error_dict, args)
-            destination = client.write_usage_data(stats)
-            client.report_usage_data("error", stats, destination)
-
-            raise typer.Exit(1)
+            UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
+            return 1
 
         if multipart and (provider_src == "azure" or provider_dst == "azure"):
-            typer.secho(
-                "Warning: Azure is not yet supported for multipart transfers, you may observe slow performance", fg="yellow", err=True
-            )
+            typer.secho("Warning: Azure is not yet supported for multipart transfers. Disabling multipart.", fg="yellow", err=True)
             multipart = False
 
         topo = generate_topology(
-            src_region,
-            dst_region,
+            src_region_tag,
+            dst_region_tag,
             solve,
             num_connections=cloud_config.get_flag("num_connections"),
             max_instances=max_instances,
@@ -187,42 +192,56 @@ def cp(
         )
         confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
 
-        transfer_stats = launch_replication_job(
-            topo=topo,
-            job=job,
-            debug=debug,
-            reuse_gateways=reuse_gateways,
-            use_bbr=cloud_config.get_flag("bbr"),
-            use_compression=cloud_config.get_flag("compress") if src_region != dst_region else False,
-            use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
-            use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
-            aws_instance_class=cloud_config.get_flag("aws_instance_class"),
-            aws_use_spot_instances=cloud_config.get_flag("aws_use_spot_instances"),
-            azure_instance_class=cloud_config.get_flag("azure_instance_class"),
-            azure_use_spot_instances=cloud_config.get_flag("azure_use_spot_instances"),
-            gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
-            gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
-            gcp_use_spot_instances=cloud_config.get_flag("gcp_use_spot_instances"),
-            multipart_enabled=multipart,
-            multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
-            multipart_min_size_mb=cloud_config.get_flag("multipart_min_size_mb"),
-            multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
-            error_reporting_args=args,
-        )
-
-        if cloud_config.get_flag("verify_checksums"):
-            provider_dst = topo.sink_region().split(":")[0]
-            with Progress(SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}")) as progress:
-                progress.add_task("", total=None)
-                ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
-
-        client = UsageClient()
-        if client.enabled():
+        small_transfer_cmd = replicate_small_cp_cmd(src, dst, recursive)
+        if (
+            cloud_config.get_flag("native_cmd_enabled")
+            and (job.transfer_size / GB) < cloud_config.get_flag("native_cmd_threshold_gb")
+            and small_transfer_cmd
+        ):
+            typer.secho(f"Transfer is small enough to delegate to native tools. Delegating to: {small_transfer_cmd}", fg="yellow")
+            os.system(small_transfer_cmd)
+            return 0
+        else:
+            transfer_stats = launch_replication_job(
+                topo=topo,
+                job=job,
+                debug=debug,
+                reuse_gateways=reuse_gateways,
+                use_bbr=cloud_config.get_flag("bbr"),
+                use_compression=cloud_config.get_flag("compress") if src_region_tag != dst_region_tag else False,
+                use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region_tag != dst_region_tag else False,
+                use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region_tag != dst_region_tag else False,
+                aws_instance_class=cloud_config.get_flag("aws_instance_class"),
+                aws_use_spot_instances=cloud_config.get_flag("aws_use_spot_instances"),
+                azure_instance_class=cloud_config.get_flag("azure_instance_class"),
+                azure_use_spot_instances=cloud_config.get_flag("azure_use_spot_instances"),
+                gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
+                gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
+                gcp_use_spot_instances=cloud_config.get_flag("gcp_use_spot_instances"),
+                multipart_enabled=multipart,
+                multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
+                multipart_chunk_size_mb=cloud_config.get_flag("multipart_chunk_size_mb"),
+                multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
+                error_reporting_args=args,
+            )
+            if cloud_config.get_flag("verify_checksums"):
+                provider_dst = topo.sink_region().split(":")[0]
+                with Progress(SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}")) as progress:
+                    progress.add_task("", total=None)
+                    try:
+                        ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+                    except exceptions.TransferFailedException as e:
+                        console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+                        console.print(e.pretty_print_str())
+                        UsageClient.log_exception("cli_verify_checksums", e, args, src_region_tag, dst_region_tag)
+                        return 1
             if transfer_stats.monitor_status == "completed":
-                stats = client.make_stat(src_region, dst_region, arguments_dict=args, transfer_stats=transfer_stats)
-                destination = client.write_usage_data(stats)
-                client.report_usage_data("usage", stats, destination)
-        return 0 if transfer_stats.monitor_status == "completed" else 1
+                rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
+                runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{transfer_stats.total_runtime_s:.2f}s[/bright_black]"
+                throughput_line = f"[white]Throughput:[/white] [bright_black]{transfer_stats.throughput_gbits:.2f}Gbps[/bright_black]"
+                rprint(f"{runtime_line}, {throughput_line}")
+            UsageClient.log_transfer(transfer_stats, args, src_region_tag, dst_region_tag)
+            return 0 if transfer_stats.monitor_status == "completed" else 1
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
 
@@ -231,7 +250,6 @@ def cp(
 def sync(
     src: str,
     dst: str,
-    recursive: bool = typer.Option(False, "--recursive", "-r", help="If true, will copy objects at folder prefix recursively"),
     reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
     # transfer flags
@@ -289,12 +307,9 @@ def sync(
 
     provider_src, bucket_src, path_src = parse_path(src)
     provider_dst, bucket_dst, path_dst = parse_path(dst)
-
-    clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
-
+    src_region_tag, dst_region_tag = f"{provider_src}:infer", f"{provider_dst}:infer"
     args = {
         "cmd": "sync",
-        "recursive": recursive,
         "reuse_gateways": reuse_gateways,
         "debug": debug,
         "multipart": multipart,
@@ -306,117 +321,133 @@ def sync(
     # check config
     try:
         cloud_config.check_config()
-    except exceptions.BadConfigException:
+    except exceptions.BadConfigException as e:
         typer.secho(
             f"Skyplane configuration file is not valid. Please reset your config by running `rm {config_path}` and then rerunning `skyplane init` to fix.",
             fg="red",
         )
-        raise typer.Exit(1)
+        UsageClient.log_exception("cli_check_config", e, args, src_region_tag, dst_region_tag)
+        return 1
 
-    try:
-        src_client = ObjectStoreInterface.create(clouds[provider_src], bucket_src)
-        src_region = src_client.region_tag()
-        dst_client = ObjectStoreInterface.create(clouds[provider_dst], bucket_dst)
-        dst_region = dst_client.region_tag()
-        full_transfer_pairs = generate_full_transferobjlist(
-            src_region, bucket_src, path_src, dst_region, bucket_dst, path_dst, recursive=recursive
-        )
-    except exceptions.SkyplaneException as e:
-        console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
-        console.print(e.pretty_print_str())
-
-        client = UsageClient()
-        src_region_tag = provider_src + ":" + bucket_src
-        dst_region_tag = provider_dst + ":" + bucket_dst
-        error_dict = {"loc": "create_pairs", "message": str(e)[:150]}
-        stats = client.make_error(src_region_tag, dst_region_tag, error_dict, args)
-        destination = client.write_usage_data(stats)
-        client.report_usage_data("error", stats, destination)
-
-        raise typer.Exit(1)
-
-    # filter out any transfer pairs that are already in the destination
-    transfer_pairs = []
-    for src_obj, dst_obj in full_transfer_pairs:
-        if not dst_obj.exists or (src_obj.last_modified > dst_obj.last_modified or src_obj.size != dst_obj.size):
-            transfer_pairs.append((src_obj, dst_obj))
-
-    if not transfer_pairs:
-        err = "No objects need updating. Exiting..."
-        typer.secho(err)
-
-        client = UsageClient()
-        error_dict = {"loc": "create_pairs", "message": err}
-        stats = client.make_error(src_region, dst_region, error_dict, args)
-        destination = client.write_usage_data(stats)
-        client.report_usage_data("error", stats, destination)
-
-        raise typer.Exit(0)
-
-    if multipart and (provider_src == "azure" or provider_dst == "azure"):
-        typer.secho("Warning: Azure is not yet supported for multipart transfers, you may observe slow performance", fg="yellow", err=True)
-        multipart = False
-
-    topo = generate_topology(
-        src_region,
-        dst_region,
-        solve,
-        num_connections=cloud_config.get_flag("num_connections"),
-        max_instances=max_instances,
-        solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
-        solver_required_throughput_gbits=solver_required_throughput_gbits,
-        solver_throughput_grid=solver_throughput_grid,
-        solver_verbose=solver_verbose,
-        args=args,
-    )
-
-    job = ReplicationJob(
-        source_region=topo.source_region(),
-        source_bucket=bucket_src,
-        dest_region=topo.sink_region(),
-        dest_bucket=bucket_dst,
-        transfer_pairs=transfer_pairs,
-    )
-    confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
-    transfer_stats = launch_replication_job(
-        topo=topo,
-        job=job,
-        debug=debug,
-        reuse_gateways=reuse_gateways,
-        use_bbr=cloud_config.get_flag("bbr"),
-        use_compression=cloud_config.get_flag("compress") if src_region != dst_region else False,
-        use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region != dst_region else False,
-        use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region != dst_region else False,
-        aws_instance_class=cloud_config.get_flag("aws_instance_class"),
-        aws_use_spot_instances=cloud_config.get_flag("aws_use_spot_instances"),
-        azure_instance_class=cloud_config.get_flag("azure_instance_class"),
-        azure_use_spot_instances=cloud_config.get_flag("azure_use_spot_instances"),
-        gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
-        gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
-        gcp_use_spot_instances=cloud_config.get_flag("gcp_use_spot_instances"),
-        multipart_enabled=multipart,
-        multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
-        multipart_min_size_mb=cloud_config.get_flag("multipart_min_size_mb"),
-        multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
-        error_reporting_args=args,
-    )
-
-    if cloud_config.get_flag("verify_checksums"):
-        provider_dst = topo.sink_region().split(":")[0]
-        if provider_dst == "azure":
-            typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True, err=True)
+    if provider_src == "local" or provider_dst == "local":
+        cmd = replicate_onprem_sync_cmd(src, dst)
+        if cmd:
+            typer.secho(f"Delegating to: {cmd}", fg="yellow")
+            os.system(cmd)
+            return 0
         else:
-            with Progress(SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}"), transient=True) as progress:
-                progress.add_task("", total=None)
-                ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+            typer.secho("Transfer not supported", fg="red")
+            return 1
+    elif provider_src in ["aws", "gcp", "azure"] and provider_dst in ["aws", "gcp", "azure"]:
+        try:
+            src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
+            src_region_tag = src_client.region_tag()
+            dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
+            dst_region_tag = dst_client.region_tag()
+            full_transfer_pairs = generate_full_transferobjlist(
+                src_region_tag, bucket_src, path_src, dst_region_tag, bucket_dst, path_dst, recursive=True
+            )
+            enrich_dest_objs(dst_region_tag, path_dst, bucket_dst, [i[1] for i in full_transfer_pairs])
+        except exceptions.SkyplaneException as e:
+            console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+            console.print(e.pretty_print_str())
+            UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
+            return 1
 
-    client = UsageClient()
-    if client.enabled():
-        if transfer_stats.monitor_status == "completed":
-            stats = client.make_stat(src_region, dst_region, arguments_dict=args, transfer_stats=transfer_stats)
-            destination = client.write_usage_data(stats)
-            client.report_usage_data("usage", stats, destination)
-    return 0 if transfer_stats.monitor_status == "completed" else 1
+        # filter out any transfer pairs that are already in the destination
+        transfer_pairs = []
+        for src_obj, dst_obj in full_transfer_pairs:
+            if not dst_obj.exists or (src_obj.last_modified > dst_obj.last_modified or src_obj.size != dst_obj.size):
+                transfer_pairs.append((src_obj, dst_obj))
+
+        if not transfer_pairs:
+            err = "No objects need updating. Exiting..."
+            typer.secho(err)
+            return 0
+
+        if multipart and (provider_src == "azure" or provider_dst == "azure"):
+            typer.secho("Warning: Azure is not yet supported for multipart transfers. Disabling multipart.", fg="yellow", err=True)
+            multipart = False
+
+        topo = generate_topology(
+            src_region_tag,
+            dst_region_tag,
+            solve,
+            num_connections=cloud_config.get_flag("num_connections"),
+            max_instances=max_instances,
+            solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
+            solver_required_throughput_gbits=solver_required_throughput_gbits,
+            solver_throughput_grid=solver_throughput_grid,
+            solver_verbose=solver_verbose,
+            args=args,
+        )
+
+        job = ReplicationJob(
+            source_region=topo.source_region(),
+            source_bucket=bucket_src,
+            dest_region=topo.sink_region(),
+            dest_bucket=bucket_dst,
+            transfer_pairs=transfer_pairs,
+        )
+        confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
+
+        small_transfer_cmd = replicate_small_sync_cmd(src, dst)
+        if (
+            cloud_config.get_flag("native_cmd_enabled")
+            and (job.transfer_size / GB) < cloud_config.get_flag("native_cmd_threshold_gb")
+            and small_transfer_cmd
+        ):
+            typer.secho(f"Transfer is small enough to delegate to native tools. Delegating to: {small_transfer_cmd}", fg="yellow")
+            os.system(small_transfer_cmd)
+            return 0
+        else:
+            transfer_stats = launch_replication_job(
+                topo=topo,
+                job=job,
+                debug=debug,
+                reuse_gateways=reuse_gateways,
+                use_bbr=cloud_config.get_flag("bbr"),
+                use_compression=cloud_config.get_flag("compress") if src_region_tag != dst_region_tag else False,
+                use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region_tag != dst_region_tag else False,
+                use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region_tag != dst_region_tag else False,
+                aws_instance_class=cloud_config.get_flag("aws_instance_class"),
+                aws_use_spot_instances=cloud_config.get_flag("aws_use_spot_instances"),
+                azure_instance_class=cloud_config.get_flag("azure_instance_class"),
+                azure_use_spot_instances=cloud_config.get_flag("azure_use_spot_instances"),
+                gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
+                gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
+                gcp_use_spot_instances=cloud_config.get_flag("gcp_use_spot_instances"),
+                multipart_enabled=multipart,
+                multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
+                multipart_chunk_size_mb=cloud_config.get_flag("multipart_chunk_size_mb"),
+                multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
+                error_reporting_args=args,
+            )
+            if cloud_config.get_flag("verify_checksums"):
+                provider_dst = topo.sink_region().split(":")[0]
+                if provider_dst == "azure":
+                    typer.secho("Note: Azure post-transfer verification is not yet supported.", fg="yellow", bold=True, err=True)
+                else:
+                    with Progress(
+                        SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}"), transient=True
+                    ) as progress:
+                        progress.add_task("", total=None)
+                        try:
+                            ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
+                        except exceptions.TransferFailedException as e:
+                            console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+                            console.print(e.pretty_print_str())
+                            UsageClient.log_exception("cli_verify_checksums", e, args, src_region_tag, dst_region_tag)
+                            return 1
+            if transfer_stats.monitor_status == "completed":
+                rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
+                runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{transfer_stats.total_runtime_s:.2f}s[/bright_black]"
+                throughput_line = f"[white]Throughput:[/white] [bright_black]{transfer_stats.throughput_gbits:.2f}Gbps[/bright_black]"
+                rprint(f"{runtime_line}, {throughput_line}")
+            UsageClient.log_transfer(transfer_stats, args, src_region_tag, dst_region_tag)
+            return 0 if transfer_stats.monitor_status == "completed" else 1
+    else:
+        raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
 
 
 @app.command()

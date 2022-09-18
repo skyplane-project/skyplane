@@ -22,7 +22,7 @@ jobs:
           - gcp:us-west1-a gcp:us-east1-a
           # Azure to Azure
           - azure:westus azure:westus
-          - azure:eastus azure:centralus
+          - azure:eastus azure:westus
           # cross cloud tests
           - aws:us-west-1 gcp:us-west2-a
           - gcp:us-west2-a aws:us-west-1
@@ -67,6 +67,7 @@ jobs:
       - name: Skyplane init
         run: |
           poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
+          poetry run skyplane config set native_cmd_enabled false
           cat ~/.skyplane/config
           poetry run skyplane init -y
       - name: Test
