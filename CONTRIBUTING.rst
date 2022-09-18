@@ -29,20 +29,29 @@ Submitting pull requests
 Before you submit a pull request, make sure to complete the following steps: 
 
 
-#. Fork the Skyplane repository to create a copy of the project in your own account.
-#. Set up a developer environment as described in the `Development Guide <development_guide.md>`_.
-#. Create a development branch (\ ``git checkout -b feature_name``\ )
-#. Test your changes manually using ``skyplane cp`` and with the unit test suite:
-   .. code-block:: bash
+1. Fork the Skyplane repository to create a copy of the project in your own account.
+2. Set up a developer environment as described in the `Development Guide <development_guide.md>`_.
+3. Create a development branch (\ ``git checkout -b feature_name``\ )
+4. Test your changes manually using ``skyplane cp`` and with the unit test suite:
 
-      $ pytest tests/unit_nocloud/
+.. code-block:: console
 
-#. Ensure your code is autoformatted and passes type checks:
-   .. code-block:: bash
+   $ pytest tests/unit_nocloud/
+5. Ensure your code is autoformatted and passes type checks:
 
-      $ pip install black pytype
-      $ black -l 140 .
-      $ pytype --config .pytype.cfg skyplane
+.. code-block:: console
 
-#. Commit your changes using a `descriptive commit message <https://cbea.ms/git-commit/>`_.
-#. Create a pull request on the main Skyplane repo from your fork. Consult `Github Help <https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests>`_ for more details.
+   $ pip install black pytype autoflake
+   $ black -l 140 .
+   $ pytype --config .pytype.cfg skyplane
+   $ autoflake --in-place --remove-all-unused-imports --remove-unused-variables --recursive skyplane
+6. If you updated documentation, test the docs:
+
+.. code-block:: console
+
+   $ pip install sphinx-autobuild
+   $ cd docs
+   $ pip install -r requirements.txt
+   $ sphinx-autobuild -b html . /tmp/docs_build
+7. Commit your changes using a `descriptive commit message <https://cbea.ms/git-commit/>`_.
+8. Create a pull request on the main Skyplane repo from your fork. Consult `Github Help <https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests>`_ for more details.
