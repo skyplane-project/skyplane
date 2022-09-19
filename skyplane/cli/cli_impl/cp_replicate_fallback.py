@@ -15,7 +15,7 @@ def fallback_cmd_s3_cp(src_path: str, dest_path: str, recursive: bool) -> str:
 
 
 def fallback_cmd_s3_sync(src_path, dest_path):
-    return f"aws s3 sync {src_path} {dest_path}"
+    return f"aws s3 sync --no-follow-symlinks {src_path} {dest_path}"
 
 
 def fallback_cmd_gcp_cp(src_path: str, dest_path: str) -> str:
