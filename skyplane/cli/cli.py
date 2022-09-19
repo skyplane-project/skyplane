@@ -114,7 +114,7 @@ def cp(
     provider_dst, bucket_dst, path_dst = parse_path(dst)
 
     clouds = {"s3": "aws:infer", "gs": "gcp:infer", "azure": "azure:infer"}
-    cloud_provider_api = {"s3": "aws s3 cp", "gs": "gsutil -m cp -r"}
+    cloud_provider_api = {"s3": "aws s3 cp", "gs": "gsutil -m cp -r", "azure": "azcopy cp"}
 
     args = {
         "cmd": "cp",
@@ -145,11 +145,13 @@ def cp(
 
     elif provider_src == "local" and provider_dst in clouds:
         typer.secho(f"Copying from local to {provider_dst}", fg="yellow")
-        cmd = (
-            cloud_provider_api[provider_dst] + " " + path_src + f" {provider_dst}://{bucket_dst}/{path_dst}" + " --recursive"
-            if (provider_dst == "s3")
-            else ""
-        )
+        if (provider_dst == "s3"):
+            cmd = cloud_provider_api[provider_dst] + " " + path_src + f" {provider_dst}://{bucket_dst}/{path_dst}" + " --recursive"
+        elif (provider_dst == "azure"):
+            storage_account, container = bucket_dst.split("/", 1)
+            cmd = cloud_provider_api[provider_dst] + " " + path_src + f" https://{storage_account}.blob.core.windows.net/{container}/{path_dst}" + " --recursive=true"
+        else:
+            cmd = ""
         typer.secho(f"Falling back to: {cmd}")
         os.system(cmd)
 
