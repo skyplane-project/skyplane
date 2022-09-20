@@ -111,8 +111,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
 
         # check if the az CLI is installed
         out, err = subprocess.Popen("az --version".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-        if err:
-            print("out: ", out, "\nerr: ", err)
+        if not out.decode("utf-8").startswith("azure-cli"):
             typer.secho("    Azure CLI not found, please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli",
                 fg="red",
                 err=True,
