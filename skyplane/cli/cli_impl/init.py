@@ -94,24 +94,11 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             return config
 
         # load credentials from environment variables or input
-        inferred_subscription_id = (
-            os.environ.get("AZURE_SUBSCRIPTION_ID") or config.azure_subscription_id or AzureAuthentication.infer_subscription_id()
-        )
         defaults = {
             "client_id": os.environ.get("AZURE_CLIENT_ID") or config.azure_client_id,
-            "subscription_id": inferred_subscription_id,
+            "subscription_id": os.environ.get("AZURE_SUBSCRIPTION_ID") or config.azure_subscription_id or AzureAuthentication.infer_subscription_id(),
             "resource_group": os.environ.get("AZURE_RESOURCE_GROUP") or AzureServer.resource_group_name,
         }
-
-        # check if the az CLI is installed
-        out, err = subprocess.Popen("az --version".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-        if err:
-            typer.secho(
-                "    Azure CLI not found, please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli",
-                fg="red",
-                err=True,
-            )
-            return clear_azure_config(config)
 
         config.azure_subscription_id = (
             typer.prompt("    Which Azure subscription ID do you want to use?", default=defaults["subscription_id"])
@@ -122,6 +109,16 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             typer.secho("    Invalid Azure subscription ID", fg="red", err=True)
             return clear_azure_config(config)
 
+        # check if the az CLI is installed
+        out, err = subprocess.Popen("az --version".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+        if err:
+            print("out: ", out, "\nerr: ", err)
+            typer.secho("    Azure CLI not found, please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli",
+                fg="red",
+                err=True,
+            )
+            return clear_azure_config(config)
+        
         change_subscription_cmd = f"az account set --subscription {config.azure_subscription_id}"
         create_rg_cmd = f"az group create -l westus2 -n {AzureServer.resource_group_name}"
         create_umi_cmd = f"az identity create -g skyplane -n skyplane_umi"

@@ -66,6 +66,7 @@ jobs:
           creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
       - name: Skyplane init
         run: |
+          which az
           poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
           poetry run skyplane config set native_cmd_enabled false
           cat ~/.skyplane/config
