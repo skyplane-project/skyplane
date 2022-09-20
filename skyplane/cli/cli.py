@@ -23,7 +23,6 @@ import skyplane.cli.cli_aws
 import skyplane.cli.cli_azure
 import skyplane.cli.cli_config
 import skyplane.cli.cli_internal as cli_internal
-import skyplane.cli.cli_solver
 import skyplane.cli.experiments
 from skyplane import cloud_config, config_path, exceptions, skyplane_root
 from skyplane.cli.common import print_header, console
@@ -57,7 +56,6 @@ app.add_typer(skyplane.cli.experiments.app, name="experiments")
 app.add_typer(skyplane.cli.cli_aws.app, name="aws")
 app.add_typer(skyplane.cli.cli_azure.app, name="azure")
 app.add_typer(skyplane.cli.cli_config.app, name="config")
-app.add_typer(skyplane.cli.cli_solver.app, name="solver")
 
 
 @app.command()
@@ -178,7 +176,7 @@ def cp(
             num_connections=cloud_config.get_flag("num_connections"),
             max_instances=max_instances,
             solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
-            solver_required_throughput_gbits=solver_required_throughput_gbits,
+            throughput_per_instance_gbits=4,
             solver_throughput_grid=solver_throughput_grid,
             solver_verbose=solver_verbose,
             args=args,
