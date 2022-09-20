@@ -1,8 +1,10 @@
+import cmd
 import json
 import os
 from pathlib import Path
 import subprocess
 import traceback
+from typing import List
 
 import boto3
 import typer
@@ -74,6 +76,15 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             for role in roles
         ]
 
+    def run_az_cmd(cmd: List[str]):
+        out, err = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+        if err:
+            typer.secho(f"    Error running command: {cmd}", fg="red", err=True)
+            typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red", err=True)
+            typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
+            return False, out, err
+        return True, out, err
+
     if non_interactive or typer.confirm("    Do you want to configure Azure support in Skyplane?", default=True):
         if force_init:
             typer.secho("    Azure credentials will be re-initialized", fg="red", err=True)
@@ -91,12 +102,15 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             "subscription_id": inferred_subscription_id,
             "resource_group": os.environ.get("AZURE_RESOURCE_GROUP") or AzureServer.resource_group_name,
         }
-        create_rg_cmd = "az group create -l westus2 -n skyplane"
-        out, err = subprocess.Popen(create_rg_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+
+        # check if the az CLI is installed
+        out, err = subprocess.Popen("az --version".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
         if err:
-            typer.secho(f"    Error running command: {create_rg_cmd}", fg="red", err=True)
-            typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red", err=True)
-            typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
+            typer.secho(
+                "    Azure CLI not found, please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli",
+                fg="red",
+                err=True,
+            )
             return clear_azure_config(config)
 
         config.azure_subscription_id = (
@@ -109,32 +123,30 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             return clear_azure_config(config)
 
         change_subscription_cmd = f"az account set --subscription {config.azure_subscription_id}"
+        create_rg_cmd = f"az group create -l westus2 -n {AzureServer.resource_group_name}"
         create_umi_cmd = f"az identity create -g skyplane -n skyplane_umi"
         typer.secho(f"    I will run the following commands to create an Azure managed identity:", fg="blue")
         typer.secho(f"        $ {change_subscription_cmd}", fg="yellow")
+        typer.secho(f"        $ {create_rg_cmd}", fg="yellow")
         typer.secho(f"        $ {create_umi_cmd}", fg="yellow")
 
         with Progress(
             TextColumn("    "), SpinnerColumn(), TextColumn("Creating Skyplane managed identity{task.description}"), transient=True
         ) as progress:
             progress.add_task("", total=None)
-            out, err = subprocess.Popen(change_subscription_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-            if out or err:
-                typer.secho(f"    Error running command: {change_subscription_cmd}", fg="red", err=True)
-                typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red", err=True)
-                typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
+            cmd_success, out, err = run_az_cmd(change_subscription_cmd.split())
+            if not cmd_success:
                 return clear_azure_config(config)
-
-            out, err = subprocess.Popen(create_umi_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-            try:
+            cmd_success, out, err = run_az_cmd(create_rg_cmd.split())
+            if not cmd_success:
+                return clear_azure_config(config)
+            cmd_success, out, err = run_az_cmd(create_umi_cmd.split())
+            if not cmd_success:
+                return clear_azure_config(config)
+            else:
                 identity_json = json.loads(out.decode("utf-8"))
-            except:
-                typer.secho(f"    Error running command: {create_umi_cmd}", fg="red", err=True)
-                typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red", err=True)
-                typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
-                return clear_azure_config(config)
-            config.azure_client_id = identity_json["clientId"]
-            config.azure_principal_id = identity_json["principalId"]
+                config.azure_client_id = identity_json["clientId"]
+                config.azure_principal_id = identity_json["principalId"]
 
         if not config.azure_client_id or not config.azure_principal_id or not config.azure_subscription_id:
             typer.secho("    Azure credentials not configured correctly, disabling Azure support.", fg="red", err=True)
@@ -157,11 +169,8 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         ) as progress:
             progress.add_task("", total=None)
             for role_cmd in role_cmds:
-                out, err = subprocess.Popen(role_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-                if err:
-                    typer.secho(f"    Error running command: {role_cmd}", fg="red", err=True)
-                    typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red", err=True)
-                    typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
+                cmd_success, out, err = run_az_cmd(role_cmd)
+                if not cmd_success:
                     return clear_azure_config(config)
         typer.secho(
             f"    Azure managed identity created successfully! To delete it, run `az identity delete -n skyplane_umi -g skyplane`.",

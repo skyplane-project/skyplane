@@ -555,7 +555,6 @@ def init(
     typer.secho(f"\nConfig file saved to {config_path}", fg="green")
 
     # Set metrics collection by default
-    print("\n")
     usage_stats_var = UsageClient.usage_stats_status()
     if usage_stats_var is UsageStatsStatus.DISABLED_EXPLICITLY:
         rprint(skyplane.cli.usage.definitions.USAGE_STATS_DISABLED_MESSAGE)
