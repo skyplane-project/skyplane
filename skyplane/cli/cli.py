@@ -71,7 +71,7 @@ def cp(
     max_instances: int = typer.Option(cloud_config.get_flag("max_instances"), "--max-instances", "-n", help="Number of gateways"),
     # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
-    solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
+    throughput_per_instance_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
     solver_throughput_grid: Path = typer.Option(
         skyplane_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
     ),
@@ -104,8 +104,8 @@ def cp(
     :type max_instances: int
     :param solve: If true, will use solver to optimize transfer, else direct path is chosen
     :type solve: bool
-    :param solver_required_throughput_gbits: The required throughput in Gbps when using the solver (default: 4)
-    :type solver_required_throughput_gbits: float
+    :param throughput_per_instance_gbits: The required throughput in Gbps when using the solver (default: 4)
+    :type throughput_per_instance_gbits: float
     :param solver_throughput_grid: The throughput grid profile to use for the solver, defaults to author-provided profile
     :type solver_throughput_grid: Path
     :param solver_verbose: If true, will print out the solver's output, defaults to False
@@ -176,7 +176,7 @@ def cp(
             num_connections=cloud_config.get_flag("num_connections"),
             max_instances=max_instances,
             solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
-            throughput_per_instance_gbits=4,
+            throughput_per_instance_gbits=throughput_per_instance_gbits,
             solver_throughput_grid=solver_throughput_grid,
             solver_verbose=solver_verbose,
             args=args,
@@ -256,7 +256,7 @@ def sync(
     multipart: bool = typer.Option(cloud_config.get_flag("multipart_enabled"), help="If true, will use multipart uploads."),
     # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
-    solver_required_throughput_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
+    throughput_per_instance_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps per instance"),
     solver_throughput_grid: Path = typer.Option(
         skyplane_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
     ),
@@ -293,8 +293,8 @@ def sync(
     :type max_instances: int
     :param solve: If true, will use solver to optimize transfer, else direct path is chosen
     :type solve: bool
-    :param solver_required_throughput_gbits: The required throughput in Gbps when using the solver (default: 4)
-    :type solver_required_throughput_gbits: float
+    :param throughput_per_instance_gbits: The required throughput in Gbps per instance when using the solver (default: 4)
+    :type throughput_per_instance_gbits: float
     :param solver_throughput_grid: The throughput grid profile to use for the solver, defaults to author-provided profile
     :type solver_throughput_grid: Path
     :param solver_verbose: If true, will print out the solver's output, defaults to False
@@ -374,7 +374,7 @@ def sync(
             num_connections=cloud_config.get_flag("num_connections"),
             max_instances=max_instances,
             solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
-            solver_required_throughput_gbits=solver_required_throughput_gbits,
+            throughput_per_instance_gbits=throughput_per_instance_gbits,
             solver_throughput_grid=solver_throughput_grid,
             solver_verbose=solver_verbose,
             args=args,
