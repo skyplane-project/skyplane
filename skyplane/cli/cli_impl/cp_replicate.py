@@ -30,11 +30,12 @@ def generate_topology(
     max_instances: int = 1,
     solver_class: str = "ILP",
     solver_total_gbyte_to_transfer: Optional[float] = None,
-    solver_required_throughput_gbits: float = 4,
+    throughput_per_instance_gbits: float = 4,
     solver_throughput_grid: Optional[pathlib.Path] = skyplane_root / "profiles" / "throughput.csv",
     solver_verbose: Optional[bool] = False,
     args: Optional[Dict] = None,
 ) -> ReplicationTopology:
+    solver_required_throughput_gbits = throughput_per_instance_gbits * max_instances
     if src_region == dst_region:  # intra-region transfer w/o solver
         topo = ReplicationTopology()
         for i in range(max_instances):
