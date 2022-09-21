@@ -16,9 +16,9 @@ jobs:
         id: cache
         with:
           path: ~/.virtualenvs
-          key: poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+          key: poetry-lint-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
-            poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+            poetry-lint-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
       - name: Set Poetry config
         run: |
           poetry config virtualenvs.in-project false
