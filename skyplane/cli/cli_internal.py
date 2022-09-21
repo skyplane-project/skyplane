@@ -83,7 +83,7 @@ def replicate_random_solve(
     use_bbr: bool = typer.Option(True, help="If true, will use BBR congestion control"),
     reuse_gateways: bool = False,
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
-    solver_required_throughput_gbits: float = typer.Option(2, help="Solver option: Required throughput in gbps."),
+    throughput_per_instance_gbits: float = typer.Option(2, help="Solver option: Required throughput in gbps."),
     solver_throughput_grid: Path = typer.Option(
         skyplane_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
     ),
@@ -94,20 +94,8 @@ def replicate_random_solve(
     print_header()
 
     if solve:
-        from skyplane.cli.cli_solver import solve_throughput  # lazy import due to pip dependencies
-
-        with tempfile.NamedTemporaryFile(mode="w") as f:
-            solve_throughput(
-                src_region,
-                dst_region,
-                solver_required_throughput_gbits,
-                gbyte_to_transfer=total_transfer_size_mb / 1024.0,
-                max_instances=num_gateways,
-                throughput_grid=solver_throughput_grid,
-                solver_verbose=solver_verbose,
-                out=Path(f.name),
-            )
-            topo = ReplicationTopology.from_json(Path(f.name).read_text())
+        logger.error(f"This has been deprecated. Please use the 'skyplane cp' command instead.")
+        raise typer.Exit(code=1)
     elif inter_region:
         assert inter_region not in [src_region, dst_region] and src_region != dst_region
         topo = ReplicationTopology()
