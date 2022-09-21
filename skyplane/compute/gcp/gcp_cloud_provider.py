@@ -4,9 +4,10 @@ import uuid
 from pathlib import Path
 from typing import List
 
-import googleapiclient
 import warnings
 from cryptography.utils import CryptographyDeprecationWarning
+
+from skyplane.utils import imports
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
@@ -156,11 +157,12 @@ class GCPCloudProvider(CloudProvider):
             with open(self.public_key_path, "w") as f:
                 f.write(f"{key.get_name()} {key.get_base64()}\n")
 
-    def configure_skyplane_network(self):
+    @imports.inject("googleapiclient.errors", pip_extra="gcp")
+    def configure_skyplane_network(errors, self):
         compute = self.auth.get_gcp_client()
         try:
             compute.networks().get(project=self.auth.project_id, network="skyplane").execute()
-        except googleapiclient.errors.HttpError as e:
+        except errors.HttpError as e:
             if e.resp.status == 404:  # create network
                 op = (
                     compute.networks()
@@ -171,7 +173,8 @@ class GCPCloudProvider(CloudProvider):
             else:
                 raise e
 
-    def configure_skyplane_firewall(self, ip="0.0.0.0/0"):
+    @imports.inject("googleapiclient.errors", pip_extra="gcp")
+    def configure_skyplane_firewall(errors, self, ip="0.0.0.0/0"):
         """Configure skyplane firewall to allow SSH from all ports from all IPs (if not exists)."""
         compute = self.auth.get_gcp_client()
 
@@ -184,7 +187,7 @@ class GCPCloudProvider(CloudProvider):
 
         try:
             current_firewall = compute.firewalls().get(project=self.auth.project_id, firewall="skyplanessh").execute()
-        except googleapiclient.errors.HttpError as e:
+        except errors.HttpError as e:
             if e.resp.status == 404:
                 current_firewall = None
             else:
@@ -205,7 +208,8 @@ class GCPCloudProvider(CloudProvider):
             create_firewall(fw_body, update_firewall=True)
             logger.fs.debug(f"[GCP] Updated firewall")
 
-    def delete_vpc(self, vpc_name="skyplane"):
+    @imports.inject("googleapiclient.errors", pip_extra="gcp")
+    def delete_vpc(errors, self, vpc_name="skyplane"):
         """
         Delete VPC. This might error our in some cases.
         """
@@ -214,13 +218,14 @@ class GCPCloudProvider(CloudProvider):
         try:
             delete_vpc_response = request.execute()
             self.wait_for_operation_to_complete("global", delete_vpc_response)
-        except googleapiclient.errors.HttpError as e:
+        except errors.HttpError as e:
             logger.fs.warn(
                 f"Unable to Delete. Ensure no active firewall rules acting upon the {vpc_name} VPC. Ensure no instances provisioned in the VPC "
             )
             logger.fs.error(e)
 
-    def add_ips_to_firewall(self, ips: List[str]):
+    @imports.inject("googleapiclient.errors", pip_extra="gcp")
+    def add_ips_to_firewall(errors, self, ips: List[str]):
         """
         Other than "default" VPCs start with 2 rules at 65535 priority:
          - Allow all egress
@@ -249,7 +254,7 @@ class GCPCloudProvider(CloudProvider):
             }
             try:
                 current_firewall = compute.firewalls().get(project=self.auth.project_id, firewall=firewall_name).execute()
-            except googleapiclient.errors.HttpError as e:
+            except errors.HttpError as e:
                 if e.resp.status == 404:
                     current_firewall = None
                 else:
@@ -261,14 +266,15 @@ class GCPCloudProvider(CloudProvider):
                 create_firewall(fw_body, update_firewall=True)
                 logger.fs.debug(f"[GCP] Updated firewall {firewall_name}")
 
-    def remove_ips_from_firewall(self, ips: List[str]):
+    @imports.inject("googleapiclient.errors", pip_extra="gcp")
+    def remove_ips_from_firewall(errors, self, ips: List[str]):
         compute = self.auth.get_gcp_client()
         for ip in ips:
             firewall_name = "skyplane" + ip.replace(".", "")  # Each firewall rule is called by the ip name, so it's easier to delete
             logger.fs.debug(f"[GCP] Deleting firewall rule {firewall_name}")
             try:
                 compute.firewalls().delete(project=self.auth.project_id, firewall=firewall_name).execute()
-            except googleapiclient.errors.HttpError as e:
+            except errors.HttpError as e:
                 if e.resp.status == 404:  # Firewall doesnt exist. Continue
                     logger.fs.warning(f"[GCP] Unable to delete {firewall_name}, does not exist.")
                 else:
@@ -293,7 +299,9 @@ class GCPCloudProvider(CloudProvider):
                     return operation_state
             time.sleep(time_intervals.pop(0))
 
+    @imports.inject("googleapiclient.errors", pip_extra="gcp")
     def provision_instance(
+        errors,
         self,
         region,
         instance_class,
@@ -344,7 +352,7 @@ class GCPCloudProvider(CloudProvider):
         try:
             result = compute.instances().insert(project=self.auth.project_id, zone=region, body=req_body).execute()
             self.wait_for_operation_to_complete(region, result["name"])
-        except googleapiclient.errors.HttpError as e:
+        except errors.HttpError as e:
             if e.resp.status == 409:
                 if "ZONE_RESOURCE_POOL_EXHAUSTED" in e.content:
                     raise exceptions.InsufficientVCPUException(f"Got ZONE_RESOURCE_POOL_EXHAUSTED in region {region}") from e

@@ -22,10 +22,11 @@ Skyplane currently only supports MacOS and Linux. For Windows, first [install Li
 # Getting started
 
 ## Installation
-We recommend installation from PyPi: `pip install skyplane`
+We recommend installation from PyPi: `pip install skyplane[aws]`
+To install support for all clouds, run: `pip install skyplane[aws,azure,gcp]`
 
-*Installation on M1 Mac*: If you are using an M1 Mac with the arm64 architecture, you will need to install Skyplane as follows
-`GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 GRPC_PYTHON_BUILD_SYSTEM_ZLIB=1 pip install skyplane`
+*GCP support on the M1 Mac*: If you are using an M1 Mac with the arm64 architecture and want to install GCP support for Skyplane, you will need to install as follows
+`GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 GRPC_PYTHON_BUILD_SYSTEM_ZLIB=1 pip install skyplane[aws,gcp]`
 
 ## Authenticating with cloud providers
 
@@ -123,13 +124,13 @@ The easiest way to use Skyplane is to use the CLI. `skyplane cp` supports any lo
 
 ```bash
 # copy files between two AWS S3 buckets
-$ skyplane cp s3://... s3://...
+$ skyplane cp -r s3://... s3://...
 
 # copy files from an AWS S3 bucket to a GCP GCS bucket
-$ skyplane cp s3://... gs://...
+$ skyplane cp -r s3://... gs://...
 
 # copy files from a local directory to/from a cloud object store
-$ skyplane cp /path/to/local/files gs://...
+$ skyplane cp -r /path/to/local/files gs://...
 ```
 
 Skyplane also supports incremental copies via `skyplane sync`:    
@@ -147,7 +148,7 @@ With default arguments, Skyplane sets up a one VM (called gateway) in the source
 
 To double the transfer speeds by using two VMs in each region, run:
 ```bash
-$ skyplane cp s3://... s3://... -n 2
+$ skyplane cp -r s3://... s3://... -n 2
 ```
 
 ⚠️ If you do not have enough vCPU capacity in each region, you may get a InsufficientVCPUException. Either request more vCPUs or reduce the number of parallel VMs.
@@ -157,7 +158,7 @@ Skyplane can transfer a single large object across multiple VMs to accelerate tr
 
 To stripe large objects into multiple chunks, run:
 ```bash
-$ skyplane cp s3://... s3://... --max_chunk_size_mb 16
+$ skyplane cp -r s3://... s3://... --max_chunk_size_mb 16
 ```
 
 ⚠️ Large object transfers are only supported for transfers between AWS S3 buckets at the moment.

@@ -1,10 +1,8 @@
 from functools import lru_cache
 
-from azure.core.exceptions import ResourceExistsError
-
 from skyplane import exceptions
 from skyplane.compute.azure.azure_auth import AzureAuthentication
-from skyplane.utils import logger
+from skyplane.utils import logger, imports
 
 
 class AzureStorageAccountInterface:
@@ -47,12 +45,13 @@ class AzureStorageAccountInterface:
         except exceptions.MissingBucketException:
             return False
 
-    def create_storage_account(self, azure_region, resource_group, tier="Premium_LRS"):
+    @imports.inject("azure.core.exceptions", pip_extra="azure")
+    def create_storage_account(exceptions, self, azure_region, resource_group, tier="Premium_LRS"):
         try:
             operation = self.storage_management_client.storage_accounts.begin_create(
                 resource_group, self.account_name, {"sku": {"name": tier}, "kind": "BlockBlobStorage", "location": azure_region}
             )
             operation.result()
-        except ResourceExistsError as e:
+        except exceptions.ResourceExistsError as e:
             logger.warning(f"Unable to create storage account as it already exists: {e}")
         self.storage_account_obj.cache_clear()

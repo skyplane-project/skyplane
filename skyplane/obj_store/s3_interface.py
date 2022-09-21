@@ -4,14 +4,11 @@ import hashlib
 import os
 from typing import Iterator, List, Optional
 
-import botocore.exceptions
-import botocore.client
-
 from skyplane import exceptions
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.exceptions import NoSuchObjectException
-from skyplane.utils import logger
+from skyplane.utils import logger, imports
 from skyplane.utils.timer import Timer
 
 
@@ -40,7 +37,7 @@ class S3Interface(ObjectStoreInterface):
             if "An error occurred (AccessDenied) when calling the GetBucketLocation operation" in str(e):
                 logger.error(f"Bucket location {self.bucket_name} is not public. Assuming region is us-east-1.")
                 return "us-east-1"
-            logger.error(f"Specified bucket {self.bucket_name} does not exist, got AWS error: {e}")
+            logger.warning(f"Specified bucket {self.bucket_name} does not exist, got AWS error: {e}")
             raise exceptions.MissingBucketException(f"S3 bucket {self.bucket_name} does not exist") from e
 
     def region_tag(self):
@@ -53,13 +50,14 @@ class S3Interface(ObjectStoreInterface):
         region = region if region is not None else self.aws_region
         return self.auth.get_boto3_client("s3", region)
 
-    def bucket_exists(self):
+    @imports.inject("botocore.exceptions", pip_extra="aws")
+    def bucket_exists(botocore_exceptions, self):
         s3_client = self._s3_client("us-east-1")
         try:
             requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
             s3_client.list_objects_v2(Bucket=self.bucket_name, MaxKeys=1, **requester_pays)
             return True
-        except botocore.exceptions.ClientError as e:
+        except botocore_exceptions.ClientError as e:
             if e.response["Error"]["Code"] == "NoSuchBucket" or e.response["Error"]["Code"] == "AccessDenied":
                 return False
             raise e
@@ -90,11 +88,12 @@ class S3Interface(ObjectStoreInterface):
             s3_client.delete_objects(Bucket=self.bucket_name, Delete={"Objects": [{"Key": k} for k in batch]})
 
     @lru_cache(maxsize=1024)
-    def get_obj_metadata(self, obj_name):
+    @imports.inject("botocore.exceptions", pip_extra="aws")
+    def get_obj_metadata(botocore_exceptions, self, obj_name):
         s3_client = self._s3_client()
         try:
             return s3_client.head_object(Bucket=self.bucket_name, Key=str(obj_name))
-        except botocore.exceptions.ClientError as e:
+        except botocore_exceptions.ClientError as e:
             raise NoSuchObjectException(f"Object {obj_name} does not exist, or you do not have permission to access it") from e
 
     def get_obj_size(self, obj_name):
@@ -151,7 +150,8 @@ class S3Interface(ObjectStoreInterface):
         response["Body"].close()
         return m.digest() if generate_md5 else None
 
-    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None):
+    @imports.inject("botocore.exceptions", pip_extra="aws")
+    def upload_object(botocore_exceptions, self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None):
         dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
         s3_client = self._s3_client()
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
@@ -171,7 +171,7 @@ class S3Interface(ObjectStoreInterface):
                     )
                 else:
                     s3_client.put_object(Body=f, Key=dst_object_name, Bucket=self.bucket_name, **checksum_args)
-        except botocore.exceptions.ClientError as e:
+        except botocore_exceptions.ClientError as e:
             # catch MD5 mismatch error and raise appropriate exception
             if "Error" in e.response and "Code" in e.response["Error"] and e.response["Error"]["Code"] == "InvalidDigest":
                 raise exceptions.ChecksumMismatchException(f"Checksum mismatch for object {dst_object_name}") from e

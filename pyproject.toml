@@ -13,25 +13,31 @@ include = ["profiles/*"]
 
 [tool.poetry.dependencies]
 python = ">=3.7.1,<3.11"
-azure-identity = "^1"
-azure-mgmt-authorization = ">=1.0.0"
-azure-mgmt-compute = ">=24.0.0"
-azure-mgmt-network = ">=10.0.0"
-azure-mgmt-resource = ">=11.0.0"
-azure-mgmt-storage = ">=11.0.0"
-azure-storage-blob = ">=12.0.0"
-boto3 = ">=1.16.0"
 cachetools = ">=4.1.0"
-click = ">=8.0.0"
-google-api-python-client = ">=2.0.2"
-google-auth = ">=2.0.0"
-google-cloud-compute = ">=1.0.0"
-google-cloud-storage = ">=1.30.0"
 pandas = ">=1.0.0"
 paramiko = ">=2.7.2"
 rich = ">=9.0.0"
 sshtunnel = ">=0.3.0"
 typer = ">=0.4.0"
+
+# aws dependencies
+boto3 = { version = ">=1.16.0", optional = true }
+
+# azure dependencies
+azure-identity = { version = ">=1.0.0", optional = true }
+azure-mgmt-authorization = { version = ">=1.0.0", optional = true }
+azure-mgmt-compute = { version = ">=24.0.0", optional = true }
+azure-mgmt-network = { version = ">=10.0.0", optional = true }
+azure-mgmt-resource = { version = ">=11.0.0", optional = true }
+azure-mgmt-storage = { version = ">=11.0.0", optional = true }
+azure-storage-blob = { version = ">=12.0.0", optional = true }
+azure-mgmt-subscription = { version = ">=0.6.0", optional = true }
+
+# gcp dependencies
+google-api-python-client = { version = ">=2.0.2", optional = true }
+google-auth = { version = ">=2.0.0", optional = true }
+google-cloud-compute = { version = ">=1.0.0", optional = true }
+google-cloud-storage = { version = ">=1.30.0", optional = true }
 
 # solver dependencies
 cvxpy = { version = ">=1.1.0", optional = true, extras = ["cvxopt"] }
@@ -47,6 +53,9 @@ pyopenssl = { version = "^22.0.0", optional = true }
 werkzeug = { version = "^2.1.2", optional = true }
 
 [tool.poetry.extras]
+aws = ["boto3"]
+azure = ["azure-identity", "azure-mgmt-authorization", "azure-mgmt-compute", "azure-mgmt-network", "azure-mgmt-resource", "azure-mgmt-storage", "azure-storage-blob", "azure-mgmt-subscription"]
+gcp = ["google-api-python-client", "google-auth", "google-cloud-compute", "google-cloud-storage"]
 gateway = ["flask", "lz4", "pynacl", "pyopenssl", "werkzeug"]
 solver = ["cvxpy", "graphviz", "matplotlib", "numpy"]
 

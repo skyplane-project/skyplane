@@ -31,7 +31,7 @@ jobs:
         with:
           python-version: 3.8
       - name: Install Poetry
-        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.0b1
+        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.1
       - name: Cache Poetry virtualenv
         uses: actions/cache@v1
         id: cache
@@ -47,7 +47,7 @@ jobs:
           poetry config repositories.test-pypi https://test.pypi.org/legacy/
           poetry config pypi-token.test-pypi ${{ secrets.TEST_PYPI_API_TOKEN }}
       - name: Install Dependencies
-        run: poetry install -E gateway -E solver
+        run: poetry install -E gateway -E solver -E aws -E azure -E gcp
         if: steps.cache.outputs.cache-hit != 'true'
       - name: Build package
         run: |
@@ -74,7 +74,7 @@ jobs:
         with:
           python-version: 3.8
       - name: Install Poetry
-        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.0b1
+        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.1
       - name: Cache Poetry virtualenv
         uses: actions/cache@v1
         id: cache
@@ -89,7 +89,7 @@ jobs:
           poetry config virtualenvs.path ~/.virtualenvs
           poetry config pypi-token.pypi ${{ secrets.PYPI_API_TOKEN }}
       - name: Install Dependencies
-        run: poetry install -E gateway -E solver
+        run: poetry install -E gateway -E solver -E aws -E azure -E gcp
         if: steps.cache.outputs.cache-hit != 'true'
       - name: Build package under skyplane-dev name
         run: |
