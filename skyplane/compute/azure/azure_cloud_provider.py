@@ -11,14 +11,12 @@ from cryptography.utils import CryptographyDeprecationWarning
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
-from azure.mgmt.compute.models import ResourceIdentityType
-from azure.core.exceptions import HttpResponseError
 
 from skyplane import cloud_config, exceptions, key_root
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.compute.cloud_providers import CloudProvider
-from skyplane.utils import logger
+from skyplane.utils import logger, imports
 from skyplane.utils.timer import Timer
 
 
@@ -231,8 +229,16 @@ class AzureCloudProvider(CloudProvider):
 
     # This code, along with some code in azure_server.py, is based on
     # https://github.com/ucbrise/mage-scripts/blob/main/azure_cloud.py.
+    @imports.inject("azure.mgmt.compute.models.ResourceIdentityType", "azure.core.exceptions.HttpResponseError")
     def provision_instance(
-        self, location: str, vm_size: str, name: Optional[str] = None, uname: str = "skyplane", use_spot_instances: bool = False
+        ResourceIdentityType,
+        HttpResponseError,
+        self,
+        location: str,
+        vm_size: str,
+        name: Optional[str] = None,
+        uname: str = "skyplane",
+        use_spot_instances: bool = False,
     ) -> AzureServer:
         assert ":" not in location, "invalid colon in Azure location"
 

@@ -35,6 +35,6 @@ RUN --mount=type=cache,target=/root/.cache/pip pip3 install --no-cache-dir -r /t
 
 WORKDIR /pkg
 COPY . .
-RUN pip3 install --no-dependencies -e ".[gateway]"
+RUN pip3 install --no-dependencies -e ".[aws,azure,gcp,gateway]"
 
 CMD /etc/init.d/stunnel4 start; python3 /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks --outgoing-ports '{}' --region local

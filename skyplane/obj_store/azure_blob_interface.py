@@ -4,15 +4,13 @@ import os
 from functools import lru_cache, partial
 from typing import Iterator, List, Optional
 
-from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError, HttpResponseError
-
 from skyplane import exceptions, is_gateway_env
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.obj_store.azure_storage_account_interface import AzureStorageAccountInterface
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.exceptions import NoSuchObjectException
-from skyplane.utils import logger
+from skyplane.utils import logger, imports
 
 
 class AzureBlobObject(ObjectStoreObject):
@@ -43,20 +41,22 @@ class AzureBlobInterface(ObjectStoreInterface):
     def container_client(self):
         return self.auth.get_container_client(f"https://{self.account_name}.blob.core.windows.net", self.container_name)
 
-    def bucket_exists(self):
+    @imports.inject("azure.core.exceptions", pip_extra="azure")
+    def bucket_exists(exceptions, self):
         try:
             self.container_client.get_container_properties()
             return True
-        except ResourceNotFoundError:
+        except exceptions.ResourceNotFoundError:
             return False
 
     def exists(self, obj_name):
         return self.blob_service_client.get_blob_client(container=self.container_name, blob=obj_name).exists()
 
-    def create_container(self):
+    @imports.inject("azure.core.exceptions", pip_extra="azure")
+    def create_container(exceptions, self):
         try:
             self.container_client.create_container()
-        except ResourceExistsError:
+        except exceptions.ResourceExistsError:
             logger.warning(f"Unable to create container {self.container_name} as it already exists")
 
     def create_bucket(self, azure_region, resource_group=AzureServer.resource_group_name, premium_tier=True):
@@ -68,21 +68,23 @@ class AzureBlobInterface(ObjectStoreInterface):
             logger.debug(f"Creating container {self.container_name}")
             self.create_container()
 
-    def delete_container(self):
+    @imports.inject("azure.core.exceptions", pip_extra="azure")
+    def delete_container(exceptions, self):
         try:
             self.container_client.delete_container()
-        except ResourceNotFoundError:
+        except exceptions.ResourceNotFoundError:
             logger.warning("Unable to delete container as it doesn't exists")
 
     def delete_bucket(self):
         return self.delete_container()
 
-    def list_objects(self, prefix="") -> Iterator[AzureBlobObject]:
+    @imports.inject("azure.core.exceptions", pip_extra="azure")
+    def list_objects(exceptions, self, prefix="") -> Iterator[AzureBlobObject]:
         blobs = self.container_client.list_blobs(name_starts_with=prefix)
         try:
             for blob in blobs:
                 yield AzureBlobObject("azure", f"{self.account_name}/{blob.container}", blob.name, blob.size, blob.last_modified)
-        except HttpResponseError as e:
+        except exceptions.HttpResponseError as e:
             if "AuthorizationPermissionMismatch" in str(e):
                 logger.error(
                     f"Unable to list objects in container {self.container_name} as you don't have permission to access it. You need the 'Storage Blob Data Contributor' and 'Storage Account Contributor' roles: {e}"
@@ -95,11 +97,12 @@ class AzureBlobInterface(ObjectStoreInterface):
             blob_client.delete_blob()
 
     @lru_cache(maxsize=1024)
-    def get_obj_metadata(self, obj_name):
+    @imports.inject("azure.core.exceptions", pip_extra="azure")
+    def get_obj_metadata(exceptions, self, obj_name):
         blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=obj_name)
         try:
             return blob_client.get_blob_properties()
-        except ResourceNotFoundError as e:
+        except exceptions.ResourceNotFoundError as e:
             raise NoSuchObjectException(f"Object {obj_name} does not exist, or you do not have permission to access it") from e
 
     def get_obj_size(self, obj_name):
@@ -108,28 +111,15 @@ class AzureBlobInterface(ObjectStoreInterface):
     def get_obj_last_modified(self, obj_name):
         return self.get_obj_metadata(obj_name).last_modified
 
-    @staticmethod
-    def _run_azure_op_with_retry(fn, interval=0.5, timeout=180):
-        try:
-            return fn()
-        except HttpResponseError as e:
-            # catch permissions errors if in a gateway environment and auto-retry after 5 seconds as it takes time for Azure to propogate role assignments
-            if "This request is not authorized to perform this operation using this permission." in str(e) and is_gateway_env:
-                logger.fs.warning("Unable to download object as you do not have permission to access it")
-            raise
-
     def download_object(
         self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5=False
     ) -> Optional[bytes]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
-        downloader = self._run_azure_op_with_retry(
-            partial(
-                self.container_client.download_blob,
-                src_object_name,
-                offset=offset_bytes,
-                length=size_bytes,
-                max_concurrency=self.max_concurrency,
-            )
+        downloader = self.container_client.download_blob(
+            src_object_name,
+            offset=offset_bytes,
+            length=size_bytes,
+            max_concurrency=self.max_concurrency,
         )
 
         if not os.path.exists(dst_file_path):
@@ -151,16 +141,6 @@ class AzureBlobInterface(ObjectStoreInterface):
             raise NotImplementedError("Multipart upload is not implemented for Azure")
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         with open(src_file_path, "rb") as f:
-            # blob_client = self._run_azure_op_with_retry(
-            #     partial(
-            #         self.container_client.upload_blob,
-            #         name=dst_object_name,
-            #         data=f,
-            #         length=os.path.getsize(src_file_path),
-            #         max_concurrency=self.max_concurrency,
-            #         overwrite=True,
-            #     )
-            # )
             print(f"Uploading {src_file_path} to {dst_object_name}")
             blob_client = self.container_client.upload_blob(
                 name=dst_object_name,
