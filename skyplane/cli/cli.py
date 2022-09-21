@@ -5,6 +5,7 @@ from functools import partial
 from pathlib import Path
 from shlex import split
 import traceback
+from urllib import request
 import uuid
 import os
 
@@ -15,7 +16,7 @@ import skyplane.cli.usage.definitions
 import skyplane.cli.usage.client
 from skyplane import GB
 from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
-from skyplane.replicate.replicator_client import ReplicatorClient
+from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 
 import typer
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -150,14 +151,24 @@ def cp(
 
             # calculate gbits and throughput
             if provider_src == "local":
-                gbits = get_usage_gbits(src)
+                client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
+                dst_region_tag = client.region_tag()
+                size_byte = get_usage_gbits(src)
             else:
-                gbits = get_usage_gbits(dst)
-            throughput = gbits / 2**30 / request_time
+                client = ObjectStoreInterface.create(src_region_tag, bucket_src)
+                src_region_tag = client.region_tag()
+                size_byte = get_usage_gbits(dst)
+            throughput_gbps = size_byte / 2**30 / request_time
 
             # print stats
             if not rc:
-                print_stats_completed(request_time, throughput)
+                print_stats_completed(request_time, throughput_gbps)
+                transfer_stats = TransferStats(
+                    monitor_status="completed",
+                    total_runtime_s=request_time,
+                    throughput_gbits=throughput_gbps,
+                )
+                UsageClient.log_transfer(transfer_stats, args, src_region_tag, dst_region_tag)
             return 0
         else:
             typer.secho("Transfer not supported", fg="red")
