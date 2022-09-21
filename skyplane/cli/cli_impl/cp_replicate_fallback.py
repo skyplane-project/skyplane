@@ -1,5 +1,6 @@
 from typing import Optional
 from skyplane.cli.common import parse_path
+import os
 
 
 def fallback_cmd_local_cp(src_path: str, dest_path: str, recursive: bool) -> str:
@@ -110,3 +111,19 @@ def replicate_small_sync_cmd(src, dst) -> Optional[str]:
     # unsupported fallback
     else:
         return None
+    
+def get_usage_gbits(path):
+    if os.path.isdir(path):
+        return get_dir_size(path)
+    else:
+        return os.path.getsize(path)
+    
+def get_dir_size(path):
+    total = 0
+    with os.scandir(path) as it:
+        for entry in it:
+            if entry.is_file():
+                total += entry.stat().st_size
+            elif entry.is_dir():
+                total += get_dir_size(entry.path)
+    return total
