@@ -66,11 +66,13 @@ def parse_path(path: str):
         return "local", None, path
     raise ValueError(f"Parse error {path}")
 
+
 def print_stats_completed(total_runtime_s, throughput_gbits):
     rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
     runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{total_runtime_s:.2f}s[/bright_black]"
     throughput_line = f"[white]Throughput:[/white] [bright_black]{throughput_gbits:.2f}Gbps[/bright_black]"
     rprint(f"{runtime_line}, {throughput_line}")
+
 
 def check_ulimit(hard_limit=1024 * 1024):
     # Get the current fs.file-max limit

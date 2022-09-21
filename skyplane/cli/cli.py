@@ -40,7 +40,7 @@ from skyplane.cli.cli_impl.cp_replicate_fallback import (
     replicate_onprem_sync_cmd,
     replicate_small_cp_cmd,
     replicate_small_sync_cmd,
-    get_usage_gbits
+    get_usage_gbits,
 )
 from skyplane.replicate.replication_plan import ReplicationJob
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
@@ -149,16 +149,16 @@ def cp(
             start = time.perf_counter()
             rc = os.system(cmd)
             request_time = time.perf_counter() - start
-            
-            #calculate gbits and throughput
+
+            # calculate gbits and throughput
             if provider_src == "local":
                 gbits = get_usage_gbits(src)
             else:
                 gbits = get_usage_gbits(dst)
             throughput = gbits / 2**30 / request_time
-            
-            #print stats
-            if (not rc):
+
+            # print stats
+            if not rc:
                 print_stats_completed(request_time, throughput)
             return 0
         else:
