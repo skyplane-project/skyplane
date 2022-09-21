@@ -5,10 +5,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
-      - name: Set up Python 3.8
+      - name: Set up Python 3.10
         uses: actions/setup-python@v1
         with:
-          python-version: 3.8
+          python-version: 3.10
       - name: Install Poetry
         run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.1
       - name: Cache Poetry virtualenv
@@ -48,9 +48,9 @@ jobs:
         id: cache
         with:
           path: ~/.virtualenvs
-          key: poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+          key: poetry-unit-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-${{ matrix.python-version }}
           restore-keys: |
-            poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+            poetry-unit-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-${{ matrix.python-version }}
       - name: Set Poetry config
         run: |
           poetry config virtualenvs.in-project false
@@ -67,10 +67,10 @@ jobs:
     needs: test-unit
     steps:
       - uses: actions/checkout@v1
-      - name: Set up Python 3.8
+      - name: Set up Python 3.10
         uses: actions/setup-python@v1
         with:
-          python-version: 3.8
+          python-version: 3.10
       - name: Install Poetry
         run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.1
       - name: Cache Poetry virtualenv
@@ -101,10 +101,10 @@ jobs:
     needs: test-unit
     steps:
       - uses: actions/checkout@v1
-      - name: Set up Python 3.8
+      - name: Set up Python 3.10
         uses: actions/setup-python@v1
         with:
-          python-version: 3.8
+          python-version: 3.10
       - name: Install Poetry
         run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.1
       - name: Cache Poetry virtualenv
@@ -140,10 +140,10 @@ jobs:
       STRATEGY_UUID: pytest-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v1
-      - name: Set up Python 3.8
+      - name: Set up Python 3.10
         uses: actions/setup-python@v1
         with:
-          python-version: 3.8
+          python-version: 3.10
       - name: Install Poetry
         run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.1
       - name: Cache Poetry virtualenv
