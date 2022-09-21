@@ -3,10 +3,7 @@ LOKI_URL = "http://34.212.234.105:9090/loki/api/v1/push"
 USAGE_STATS_ENABLED_ENV_VAR = "SKYPLANE_USAGE_STATS_ENABLED"
 USAGE_STATS_FILE = "usage_stats.json"
 USAGE_STATS_ENABLED_MESSAGE = (
-    "[yellow]We collect high-level usage statistics for Skyplane. All data is anonymous and\n"
-    "helps us maintain an open-source map of cloud network performance data. This data is used\n"
-    "to improve the speed of your transfers by routing your traffic around slow links.[/yellow]\n"
-    "To disable anonymous usage statistics, run [bold]skyplane config set usage_stats false[/bold]"
+    "[bright_black]To disable performance logging info: https://skyplane.org/en/latest/performance_stats_collection.html[/bright_black]"
 )
 USAGE_STATS_DISABLED_RECONFIRMATION_MESSAGE = (
     "[green][bold]We are an academic research group working to improve inter-cloud network performance.[/bold] "
