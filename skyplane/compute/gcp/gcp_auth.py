@@ -3,13 +3,9 @@ from typing import Optional
 import base64
 import os
 
-import google.auth
-from google.cloud import storage  # type: ignore
-from googleapiclient import discovery
-
 from skyplane import config_path, gcp_config_path, key_root
 from skyplane.config import SkyplaneConfig
-from skyplane.utils import logger
+from skyplane.utils import logger, imports
 from skyplane.utils.retry import retry_backoff
 
 
@@ -22,7 +18,8 @@ class GCPAuthentication:
         self._credentials = None
         self._service_credentials_file = None
 
-    def save_region_config(self):
+    @imports.inject("googleapiclient.discovery", pip_extra="gcp")
+    def save_region_config(discovery, self):
         if self.project_id is None:
             print(
                 f"    No project ID detected when trying to save GCP region list! Consquently, the GCP region list is empty. Run 'skyplane init --reinit-gcp' or file an issue to remedy this."
@@ -80,10 +77,11 @@ class GCPAuthentication:
         return self.config.gcp_project_id
 
     @staticmethod
-    def get_adc_credential(project_id=None):
+    @imports.inject("google.auth", pip_extra="gcp")
+    def get_adc_credential(google_auth, project_id=None):
         try:
-            inferred_cred, inferred_project = google.auth.default(quota_project_id=project_id)
-        except google.auth.exceptions.DefaultCredentialsError as e:
+            inferred_cred, inferred_project = google_auth.default(quota_project_id=project_id)
+        except google_auth.exceptions.DefaultCredentialsError as e:
             logger.warning(f"Failed to load GCP credentials for project {project_id}: {e}")
             inferred_cred, inferred_project = (None, None)
         if project_id is not None and project_id != inferred_project:
@@ -192,10 +190,12 @@ class GCPAuthentication:
         service_usage = self.get_gcp_client(service_name="serviceusage")
         return service_usage.services().enable(name=f"projects/{self.project_id}/services/{service_name}.googleapis.com").execute()
 
-    def get_gcp_client(self, service_name="compute", version="v1"):
+    @imports.inject("googleapiclient.discovery", pip_extra="gcp")
+    def get_gcp_client(discovery, self, service_name="compute", version="v1"):
         return discovery.build(service_name, version, credentials=self.credentials, client_options={"quota_project_id": self.project_id})
 
-    def get_storage_client(self, service_account=None):
+    @imports.inject("google.cloud.storage", pip_extra="gcp")
+    def get_storage_client(storage, self):
         # must use service account for XML storage API
         return storage.Client.from_service_account_json(self.service_account_credentials)
 

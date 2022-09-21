@@ -4,40 +4,15 @@ import os
 import subprocess
 from typing import Dict, List, Optional
 
-from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
-from azure.mgmt.authorization import AuthorizationManagementClient
-from azure.mgmt.storage import StorageManagementClient
-from azure.storage.blob import BlobServiceClient, ContainerClient
-
 from skyplane import azure_config_path
 from skyplane import azure_sku_path
 from skyplane import config_path
 from skyplane import is_gateway_env
 from skyplane.config import SkyplaneConfig
+from skyplane.utils import imports
 from skyplane.utils.fn import do_parallel, wait_for
 
 from skyplane.compute.const_cmds import query_which_cloud
-
-# optional imports due to large package size
-try:
-    from azure.mgmt.network import NetworkManagementClient
-except ImportError:
-    NetworkManagementClient = None
-
-try:
-    from azure.mgmt.compute import ComputeManagementClient
-except ImportError:
-    ComputeManagementClient = None
-
-try:
-    from azure.mgmt.resource import ResourceManagementClient
-except ImportError:
-    ResourceManagementClient = None
-
-try:
-    from azure.mgmt.resource.subscriptions import SubscriptionClient
-except ImportError:
-    SubscriptionClient = None
 
 
 class AzureAuthentication:
@@ -46,7 +21,8 @@ class AzureAuthentication:
         self._credential = None
 
     @property
-    def credential(self) -> DefaultAzureCredential:
+    @imports.inject("azure.identity.DefaultAzureCredential", "azure.identity.ManagedIdentityCredential", pip_extra="azure")
+    def credential(DefaultAzureCredential, ManagedIdentityCredential, self):
         if self._credential is None:
             if is_gateway_env:
                 print("Configured managed identity credential.")
@@ -161,31 +137,35 @@ class AzureAuthentication:
     def get_token(self, resource: str):
         return self.credential.get_token(resource)
 
-    def get_compute_client(self):
-        assert ComputeManagementClient is not None, "ComputeManagementClient is not installed"
+    @imports.inject("azure.mgmt.compute.ComputeManagementClient", pip_extra="azure")
+    def get_compute_client(ComputeManagementClient, self):
         return ComputeManagementClient(self.credential, self.subscription_id)
 
-    def get_resource_client(self):
-        assert ResourceManagementClient is not None, "ResourceManagementClient is not installed"
+    @imports.inject("azure.mgmt.resource.ResourceManagementClient", pip_extra="azure")
+    def get_resource_client(ResourceManagementClient, self):
         return ResourceManagementClient(self.credential, self.subscription_id)
 
-    def get_subscription_client(self):
-        assert SubscriptionClient is not None, "SubscriptionClient is not installed"
+    @imports.inject("azure.mgmt.subscription.SubscriptionClient", pip_extra="azure")
+    def get_subscription_client(SubscriptionClient, self):
         return SubscriptionClient(self.credential)
 
-    def get_network_client(self):
-        assert NetworkManagementClient is not None, "NetworkManagementClient is not installed"
+    @imports.inject("azure.mgmt.network.NetworkManagementClient", pip_extra="azure")
+    def get_network_client(NetworkManagementClient, self):
         return NetworkManagementClient(self.credential, self.subscription_id)
 
-    def get_authorization_client(self):
+    @imports.inject("azure.mgmt.authorization.AuthorizationManagementClient", pip_extra="azure")
+    def get_authorization_client(AuthorizationManagementClient, self):
         # set API version to avoid UnsupportedApiVersionForRoleDefinitionHasDataActions error
         return AuthorizationManagementClient(self.credential, self.subscription_id, api_version="2018-01-01-preview")
 
-    def get_storage_management_client(self):
+    @imports.inject("azure.mgmt.storage.StorageManagementClient", pip_extra="azure")
+    def get_storage_management_client(StorageManagementClient, self):
         return StorageManagementClient(self.credential, self.subscription_id)
 
-    def get_container_client(self, account_url: str, container_name: str):
+    @imports.inject("azure.storage.blob.ContainerClient", pip_extra="azure")
+    def get_container_client(ContainerClient, self, account_url: str, container_name: str):
         return ContainerClient(account_url, container_name, credential=self.credential)
 
-    def get_blob_service_client(self, account_url: str):
+    @imports.inject("azure.storage.blob.BlobServiceClient", pip_extra="azure")
+    def get_blob_service_client(BlobServiceClient, self, account_url: str):
         return BlobServiceClient(account_url=account_url, credential=self.credential)

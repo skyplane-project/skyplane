@@ -1,9 +1,10 @@
 import logging
 from typing import Dict, Optional
 
-import boto3
 import warnings
 from cryptography.utils import CryptographyDeprecationWarning
+
+from skyplane.utils import imports
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
@@ -24,8 +25,14 @@ class AWSServer(Server):
         self.auth = AWSAuthentication()
         self.aws_region = self.region_tag.split(":")[1]
         self.instance_id = instance_id
-        self.boto3_session = boto3.Session(region_name=self.aws_region)
         self.local_keyfile = key_root / "aws" / f"skyplane-{self.aws_region}.pem"
+
+    @property
+    @imports.inject("boto3", pip_extra="aws")
+    def boto3_session(boto3, self):
+        if not hasattr(self, "_boto3_session"):
+            self._boto3_session = self._boto3_session = boto3.Session(region_name=self.aws_region)
+        return self._boto3_session
 
     def uuid(self):
         return f"{self.region_tag}:{self.instance_id}"

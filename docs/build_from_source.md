@@ -42,7 +42,7 @@ By default, new packages on ghcr are private. To make the package public so gate
 ### Building the Skyplane client
 We use [Poetry](https://python-poetry.org/) to manage package dependencies during development. For convenience, we provide a Poetry wrapper via `setup.py`. To build the client, install the Skyplane package in development mode. The package points to your current checked-out version of the code, and any edits to the Skyplane client will immediately apply to the `skyplane` CLI command.
 ```bash
-pip install -e .
+pip install -e ".[aws,azure,gcp]"
 ```
 
 ### Testing a transfer

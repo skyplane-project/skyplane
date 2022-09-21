@@ -1,11 +1,10 @@
 import threading
 from typing import Optional
 
-import boto3
-
 from skyplane import aws_config_path
 from skyplane import config_path
 from skyplane.config import SkyplaneConfig
+from skyplane.utils import imports
 
 
 class AWSAuthentication:
@@ -27,7 +26,8 @@ class AWSAuthentication:
             self._access_key = None
             self._secret_key = None
 
-    def save_region_config(self, config: SkyplaneConfig):
+    @imports.inject("boto3", pip_extra="aws")
+    def save_region_config(boto3, self, config: SkyplaneConfig):
         if config.aws_enabled == False:
             self.clear_region_config()
             return
@@ -71,7 +71,8 @@ class AWSAuthentication:
     def enabled(self):
         return self.config.aws_enabled
 
-    def infer_credentials(self):
+    @imports.inject("boto3", pip_extra="aws")
+    def infer_credentials(boto3, self):
         # todo load temporary credentials from STS
         cached_credential = getattr(self.__cached_credentials, "boto3_credential", None)
         if cached_credential == None:
@@ -83,7 +84,8 @@ class AWSAuthentication:
             setattr(self.__cached_credentials, "boto3_credential", cached_credential)
         return cached_credential if cached_credential else (None, None)
 
-    def get_boto3_session(self, aws_region: Optional[str] = None):
+    @imports.inject("boto3", pip_extra="aws")
+    def get_boto3_session(boto3, self, aws_region: Optional[str] = None):
         if self.config_mode == "manual":
             return boto3.Session(aws_access_key_id=self.access_key, aws_secret_access_key=self.secret_key, region_name=aws_region)
         else:

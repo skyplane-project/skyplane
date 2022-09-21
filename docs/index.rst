@@ -23,7 +23,7 @@ Copy a large dataset in the cloud in a minute, not hours:
 
 .. code-block:: bash
 
-   $ pip install skyplane
+   $ pip install skyplane[aws]
    $ skyplane init
    $ skyplane [sync/cp] [local/s3/gcp/azure]://mybucket/big_dataset [local/s3/gcp/azure]://mybucket2/
 

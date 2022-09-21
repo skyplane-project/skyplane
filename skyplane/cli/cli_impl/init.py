@@ -1,4 +1,3 @@
-import cmd
 import json
 import os
 from pathlib import Path
@@ -6,7 +5,6 @@ import subprocess
 import traceback
 from typing import List
 
-import boto3
 import typer
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
@@ -19,8 +17,13 @@ from skyplane.compute.azure.azure_server import AzureServer
 
 
 def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> SkyplaneConfig:
+    try:
+        import boto3
+    except ImportError:
+        config.aws_enabled = False
+        typer.secho("    AWS support disabled because boto3 is not installed. Run `pip install skyplane[aws].`", fg="red", err=True)
+        return config
     if non_interactive or typer.confirm("    Do you want to configure AWS support in Skyplane?", default=True):
-        # get AWS credentials from boto3
         session = boto3.Session()
         credentials_session = session.get_credentials()
         if credentials_session is None:
