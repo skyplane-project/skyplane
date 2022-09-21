@@ -264,7 +264,6 @@ class UsageClient:
         dir_path.mkdir(exist_ok=True, parents=True)
         destination = dir_path / skyplane.cli.usage.definitions.USAGE_STATS_FILE
 
-        typer.secho(f"Storing usage information for transfer in {destination}", fg="yellow", err=True)
         with open(destination, "w+") as json_file:
             json_file.write(json.dumps(asdict(data)))
         return destination
@@ -289,10 +288,6 @@ class UsageClient:
             timeout=0.5,
         )
 
-        if r.status_code != 204:
-            logger.debug(f"Grafana Loki failed with response: {r.text}\n")
-            logger.debug(f"The log file is located at {path} and will be synced to remote later\n")
-        else:
+        if r.status_code == 204:
             with open(path, "w") as json_file:
                 json_file.write(json.dumps(asdict(data)))
-            typer.secho("Successfully sent the log file to remote\n", fg="yellow", err=True)
