@@ -22,14 +22,14 @@ class ChunkStore:
 
         # multiprocess-safe concurrent structures
         self.manager = Manager()
-        self.chunk_requests: Dict[int, ChunkRequest] = self.manager.dict()
-        self.chunk_status: Dict[int, ChunkState] = self.manager.dict()
+        self.chunk_requests: Dict[int, ChunkRequest] = self.manager.dict()  # type: ignore
+        self.chunk_status: Dict[int, ChunkState] = self.manager.dict()  # type: ignore
 
         # state log
         self.chunk_status_queue: Queue[Dict] = Queue()
 
         # metric log
-        self.sender_compressed_sizes: Dict[int, float] = self.manager.dict()
+        self.sender_compressed_sizes: Dict[int, float] = self.manager.dict()  # type: ignore
 
     def get_chunk_file_path(self, chunk_id: int) -> Path:
         return self.chunk_dir / f"{chunk_id:05d}.chunk"
