@@ -16,9 +16,9 @@ jobs:
         id: cache
         with:
           path: ~/.virtualenvs
-          key: poetry-lint-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+          key: poetry-lint-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-3.10
           restore-keys: |
-            poetry-lint-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+            poetry-lint-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-3.10
       - name: Set Poetry config
         run: |
           poetry config virtualenvs.in-project false
@@ -78,9 +78,9 @@ jobs:
         id: cache
         with:
           path: ~/.virtualenvs
-          key: aws-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+          key: aws-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-3.10
           restore-keys: |
-            aws-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+            aws-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-3.10
       - name: Set Poetry config
         run: |
           poetry config virtualenvs.in-project false
@@ -114,9 +114,9 @@ jobs:
           path: |
             ~/.virtualenvs
             /var/cache/apt/archives
-          key: azure-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+          key: azure-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-3.10
           restore-keys: |
-            azure-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+            azure-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-3.10
       - name: Set Poetry config
         run: |
           poetry config virtualenvs.in-project false
@@ -151,9 +151,9 @@ jobs:
         id: cache
         with:
           path: ~/.virtualenvs
-          key: gcp-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+          key: gcp-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-3.10
           restore-keys: |
-            gcp-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+            gcp-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-3.10
       - name: Set Poetry config
         run: |
           poetry config virtualenvs.in-project false
