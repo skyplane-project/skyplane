@@ -73,7 +73,7 @@ def run(src_region, dest_region, n_files=1, file_size_mb=1, multipart=True):
         confirm=True,
         max_instances=1,
         solve=False,
-        solver_required_throughput_gbits=None,
+        throughput_per_instance_gbits=None,
         solver_throughput_grid=None,
     )
 
