@@ -7,7 +7,6 @@ def inject(*modules, pip_extra=None):
     Decorator for dependency injection
     @inject("google.auth")
     def example_fn(auth):
-        # auth is now available
         auth.discovery.build()
     """
 

@@ -98,6 +98,7 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
       - name: Run cloud tests
         run: |
+          poetry run pip freeze
           poetry run skyplane init -y --disable-config-aws --disable-config-gcp
           poetry run pytest -s tests/unit_azure
   test-gcp:
