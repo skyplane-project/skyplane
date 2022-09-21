@@ -71,7 +71,7 @@ def cp(
     max_instances: int = typer.Option(cloud_config.get_flag("max_instances"), "--max-instances", "-n", help="Number of gateways"),
     # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
-    throughput_per_instance_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
+    solver_target_tput_per_vm_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
     solver_throughput_grid: Path = typer.Option(
         skyplane_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
     ),
@@ -176,7 +176,7 @@ def cp(
             num_connections=cloud_config.get_flag("num_connections"),
             max_instances=max_instances,
             solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
-            throughput_per_instance_gbits=throughput_per_instance_gbits,
+            solver_target_tput_per_vm_gbits=solver_target_tput_per_vm_gbits,
             solver_throughput_grid=solver_throughput_grid,
             solver_verbose=solver_verbose,
             args=args,
@@ -256,7 +256,7 @@ def sync(
     multipart: bool = typer.Option(cloud_config.get_flag("multipart_enabled"), help="If true, will use multipart uploads."),
     # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
-    throughput_per_instance_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps per instance"),
+    solver_target_tput_per_vm_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps per instance"),
     solver_throughput_grid: Path = typer.Option(
         skyplane_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
     ),
@@ -374,7 +374,7 @@ def sync(
             num_connections=cloud_config.get_flag("num_connections"),
             max_instances=max_instances,
             solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
-            throughput_per_instance_gbits=throughput_per_instance_gbits,
+            solver_target_tput_per_vm_gbits=solver_target_tput_per_vm_gbits,
             solver_throughput_grid=solver_throughput_grid,
             solver_verbose=solver_verbose,
             args=args,
