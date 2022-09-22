@@ -338,12 +338,15 @@ def launch_replication_job(
             write_socket_profile=debug,
             copy_gateway_logs=debug,
         )
-    except (KeyboardInterrupt, exceptions.SkyplaneException) as e:
+    except Exception as e:
         if isinstance(e, KeyboardInterrupt):
             rprint("\n[bold red]Transfer cancelled by user. Exiting.[/bold red]")
         elif isinstance(e, exceptions.SkyplaneException):
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
             console.print(e.pretty_print_str())
+        else:
+            console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+            console.print(e)
         if not reuse_gateways:
             logger.fs.warning("Deprovisioning gateways then exiting. Please wait...")
             # disable sigint to prevent repeated KeyboardInterrupts
