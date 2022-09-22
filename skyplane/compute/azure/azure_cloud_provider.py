@@ -13,7 +13,7 @@ with warnings.catch_warnings():
     import paramiko
 
 from skyplane import cloud_config, exceptions, key_root
-from skyplane.compute.azure.azure_auth import AzureAuthentication
+from skyplane.compute.azure.azure_auth_provider import AzureAuthenticationProvider
 from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.utils import logger, imports
@@ -23,7 +23,7 @@ from skyplane.utils.timer import Timer
 class AzureCloudProvider(CloudProvider):
     def __init__(self, key_root=key_root / "azure"):
         super().__init__()
-        self.auth = AzureAuthentication()
+        self.auth = AzureAuthenticationProvider()
 
         key_root.mkdir(parents=True, exist_ok=True)
         self.private_key_path = key_root / "azure_key"
@@ -37,7 +37,7 @@ class AzureCloudProvider(CloudProvider):
 
     @staticmethod
     def region_list():
-        return AzureAuthentication.get_region_config()
+        return AzureAuthenticationProvider.get_region_config()
 
     @staticmethod
     def lookup_continent(region: str) -> str:
@@ -95,7 +95,7 @@ class AzureCloudProvider(CloudProvider):
 
     @staticmethod
     def lookup_valid_instance(region: str, instance_name: str) -> Optional[str]:
-        sku_mapping = AzureAuthentication.get_sku_mapping()
+        sku_mapping = AzureAuthenticationProvider.get_sku_mapping()
         if instance_name in sku_mapping[region]:
             return instance_name
         match = re.match(r"^(?P<base_name>.*)_v(?P<version>\d+)$", instance_name)

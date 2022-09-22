@@ -9,9 +9,9 @@ import typer
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from skyplane import SkyplaneConfig, gcp_config_path, aws_config_path
-from skyplane.compute.aws.aws_auth import AWSAuthentication
-from skyplane.compute.azure.azure_auth import AzureAuthentication
-from skyplane.compute.gcp.gcp_auth import GCPAuthentication
+from skyplane.compute.aws.aws_auth_provider import AWSAuthenticationProvider
+from skyplane.compute.azure.azure_auth_provider import AzureAuthenticationProvider
+from skyplane.compute.gcp.gcp_auth_provider import GCPAuthenticationProvider
 
 from skyplane.compute.azure.azure_server import AzureServer
 
@@ -35,7 +35,7 @@ def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> Sk
             else:
                 config.aws_enabled = True
 
-        auth = AWSAuthentication(config=config)
+        auth = AWSAuthenticationProvider()
         if config.aws_enabled:
             typer.secho(
                 f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials_frozen.access_key[-6:]}]", fg="blue"
@@ -101,7 +101,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             "client_id": os.environ.get("AZURE_CLIENT_ID") or config.azure_client_id,
             "subscription_id": os.environ.get("AZURE_SUBSCRIPTION_ID")
             or config.azure_subscription_id
-            or AzureAuthentication.infer_subscription_id(),
+            or AzureAuthenticationProvider.infer_subscription_id(),
             "resource_group": os.environ.get("AZURE_RESOURCE_GROUP") or AzureServer.resource_group_name,
         }
 
@@ -180,7 +180,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         )
 
         config.azure_enabled = True
-        auth = AzureAuthentication(config=config)
+        auth = AzureAuthenticationProvider(config=config)
         with Progress(
             TextColumn("    "),
             SpinnerColumn(),
@@ -194,7 +194,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         return clear_azure_config(config)
 
 
-def check_gcp_service(gcp_auth: GCPAuthentication, non_interactive: bool = False):
+def check_gcp_service(gcp_auth: GCPAuthenticationProvider, non_interactive: bool = False):
     services = {"iam": "IAM", "compute": "Compute Engine", "storage": "Storage", "cloudresourcemanager": "Cloud Resource Manager"}
     for service, name in services.items():
         if not gcp_auth.check_api_enabled(service):
@@ -212,7 +212,7 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
         typer.secho("    Disabling Google Cloud support", fg="blue")
         config.gcp_enabled = False
         config.gcp_project_id = None
-        GCPAuthentication.clear_region_config()
+        GCPAuthenticationProvider.clear_region_config()
         return config
 
     if non_interactive or typer.confirm("    Do you want to configure GCP support in Skyplane?", default=True):
@@ -229,7 +229,7 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
             return config
 
         # check if GCP is enabled
-        inferred_cred, inferred_project = GCPAuthentication.get_adc_credential()
+        inferred_cred, inferred_project = GCPAuthenticationProvider.get_adc_credential()
         if inferred_cred is None or inferred_project is None:
             typer.secho("    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.", fg="red", err=True)
             typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red", err=True)
@@ -243,7 +243,7 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
                     config.gcp_project_id = inferred_project
                 assert config.gcp_project_id is not None, "GCP project ID must not be None"
                 config.gcp_enabled = True
-                auth = GCPAuthentication(config=config)
+                auth = GCPAuthenticationProvider(config=config)
                 typer.secho(f"    Using GCP service account {auth.service_account_name}", fg="blue")
                 if not check_gcp_service(auth, non_interactive):
                     return disable_gcp_support()

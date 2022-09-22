@@ -9,7 +9,7 @@ with warnings.catch_warnings():
     import paramiko
 
 from skyplane import key_root
-from skyplane.compute.gcp.gcp_auth import GCPAuthentication
+from skyplane.compute.gcp.gcp_auth_provider import GCPAuthenticationProvider
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils.fn import PathLike
 
@@ -19,7 +19,7 @@ class GCPServer(Server):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "gcp", f"Region name doesn't match pattern gcp:<region> {self.region_tag}"
         self.gcp_region = self.region_tag.split(":")[1]
-        self.auth = GCPAuthentication()
+        self.auth = GCPAuthenticationProvider()
         self.gcp_instance_name = instance_name
         key_root = Path(key_root)
         key_root.mkdir(parents=True, exist_ok=True)

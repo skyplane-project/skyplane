@@ -11,7 +11,7 @@ with warnings.catch_warnings():
     import paramiko
 
 from skyplane import key_root
-from skyplane.compute.aws.aws_auth import AWSAuthentication
+from skyplane.compute.aws.aws_auth_provider import AWSAuthenticationProvider
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils.cache import ignore_lru_cache
 
@@ -22,7 +22,7 @@ class AWSServer(Server):
     def __init__(self, region_tag, instance_id, log_dir=None):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "aws"
-        self.auth = AWSAuthentication()
+        self.auth = AWSAuthenticationProvider()
         self.aws_region = self.region_tag.split(":")[1]
         self.instance_id = instance_id
         self.local_keyfile = key_root / "aws" / f"skyplane-{self.aws_region}.pem"

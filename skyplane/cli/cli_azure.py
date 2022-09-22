@@ -7,7 +7,7 @@ from typing import List
 
 import typer
 
-from skyplane.compute.azure.azure_auth import AzureAuthentication
+from skyplane.compute.azure.azure_auth_provider import AzureAuthenticationProvider
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skyplane.utils.fn import do_parallel
 
@@ -20,7 +20,7 @@ def get_valid_skus(
     prefix: str = typer.Option("", "--prefix", help="Filter by prefix"),
     top_k: int = typer.Option(-1, "--top-k", help="Print top k entries"),
 ):
-    auth = AzureAuthentication()
+    auth = AzureAuthenticationProvider()
     client = auth.get_compute_client()
 
     def get_skus(region):
