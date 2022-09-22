@@ -30,15 +30,15 @@ jobs:
           - azure:westus aws:us-west-1
           - gcp:us-west2-a azure:westus
           - azure:westus gcp:us-west2-a
-    timeout-minutes: 20
+    timeout-minutes: 40
     env:
       STRATEGY_UUID: itest-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
     steps:
       - uses: actions/checkout@v1
-      - name: Set up Python 3.8
+      - name: Set up Python 3.10
         uses: actions/setup-python@v1
         with:
-          python-version: 3.8
+          python-version: "3.10"
       - name: Install Poetry
         run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.1
       - name: Cache Poetry virtualenv
@@ -46,15 +46,15 @@ jobs:
         id: cache
         with:
           path: ~/.virtualenvs
-          key: poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+          key: integration-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-py310
           restore-keys: |
-            poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+            integration-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-py310
       - name: Set Poetry config
         run: |
           poetry config virtualenvs.in-project false
           poetry config virtualenvs.path ~/.virtualenvs
       - name: Install Dependencies
-        run: poetry install -E gateway -E solver -E aws -E azure -E gcp
+        run: poetry install -E aws -E azure -E gcp
         if: steps.cache.outputs.cache-hit != 'true'
       - id: 'auth'
         uses: 'google-github-actions/auth@v0'
@@ -83,10 +83,10 @@ jobs:
       STRATEGY_UUID: itest-d-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v1
-      - name: Set up Python 3.8
+      - name: Set up Python 3.10
         uses: actions/setup-python@v1
         with:
-          python-version: 3.8
+          python-version: "3.10"
       - name: Install Poetry
         run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.1
       - name: Cache Poetry virtualenv
@@ -94,9 +94,9 @@ jobs:
         id: cache
         with:
           path: ~/.virtualenvs
-          key: poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+          key: integration-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-py310
           restore-keys: |
-            poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}
+            integration-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-py310
       - name: Set Poetry config
         run: |
           poetry config virtualenvs.in-project false
