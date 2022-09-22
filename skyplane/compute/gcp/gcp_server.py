@@ -8,8 +8,13 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
 
+<<<<<<< HEAD
 from skyplane import key_root, exceptions
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
+=======
+from skyplane import key_root
+from skyplane.compute.gcp.gcp_auth_provider import GCPAuthenticationProvider
+>>>>>>> 3c11b99 (Add additional code to rename member methods of cloud provider auth, add basic AWS auth config)
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils.fn import PathLike
 
@@ -19,7 +24,7 @@ class GCPServer(Server):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "gcp", f"Region name doesn't match pattern gcp:<region> {self.region_tag}"
         self.gcp_region = self.region_tag.split(":")[1]
-        self.auth = GCPAuthentication()
+        self.auth = GCPAuthenticationProvider()
         self.gcp_instance_name = instance_name
         key_root = Path(key_root)
         key_root.mkdir(parents=True, exist_ok=True)

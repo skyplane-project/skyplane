@@ -8,7 +8,7 @@ import time
 import typer
 
 from skyplane import GB
-from skyplane.compute.aws.aws_auth import AWSAuthentication
+from skyplane.compute.aws.aws_auth_provider import AWSAuthenticationProvider
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.obj_store.s3_interface import S3Interface
 from skyplane.utils import logger
@@ -21,7 +21,7 @@ app = typer.Typer(name="skyplane-aws")
 @app.command()
 def vcpu_limits(quota_code="L-1216C47A"):
     """List the vCPU limits for each region."""
-    aws_auth = AWSAuthentication()
+    aws_auth = AWSAuthenticationProvider()
 
     def get_service_quota(region):
         service_quotas = aws_auth.get_boto3_client("service-quotas", region)
@@ -40,7 +40,7 @@ def vcpu_limits(quota_code="L-1216C47A"):
 
 @app.command()
 def cp_datasync(src_bucket: str, dst_bucket: str, path: str):
-    aws_auth = AWSAuthentication()
+    aws_auth = AWSAuthenticationProvider()
     src_region = S3Interface(src_bucket).aws_region
     dst_region = S3Interface(dst_bucket).aws_region
 

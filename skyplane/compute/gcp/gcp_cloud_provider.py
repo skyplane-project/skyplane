@@ -16,7 +16,7 @@ with warnings.catch_warnings():
 from skyplane import exceptions, key_root
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skyplane.compute.cloud_providers import CloudProvider
-from skyplane.compute.gcp.gcp_auth import GCPAuthentication
+from skyplane.compute.gcp.gcp_auth_provider import GCPAuthenticationProvider
 from skyplane.compute.gcp.gcp_server import GCPServer
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils import logger
@@ -26,7 +26,7 @@ from skyplane.utils.fn import wait_for
 class GCPCloudProvider(CloudProvider):
     def __init__(self, key_root=key_root / "gcp"):
         super().__init__()
-        self.auth = GCPAuthentication()
+        self.auth = GCPAuthenticationProvider()
         key_root.mkdir(parents=True, exist_ok=True)
         self.private_key_path = key_root / "gcp-cert.pem"
         self.public_key_path = key_root / "gcp-cert.pub"
@@ -38,7 +38,7 @@ class GCPCloudProvider(CloudProvider):
     @staticmethod
     def region_list():
         """See https://cloud.google.com/network-tiers/docs/overview#regions_supporting_standard_tier for a list of regions in the standard tier."""
-        return GCPAuthentication.get_region_config()
+        return GCPAuthenticationProvider.get_region_config()
 
     @staticmethod
     def region_list_standard():

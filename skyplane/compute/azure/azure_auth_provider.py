@@ -8,6 +8,7 @@ from skyplane import azure_config_path
 from skyplane import azure_sku_path
 from skyplane import config_path
 from skyplane import is_gateway_env
+from skyplane.compute.cloud_auth_provider import CloudAuthenticationProvider
 from skyplane.config import SkyplaneConfig
 from skyplane.utils import imports
 from skyplane.utils.fn import do_parallel, wait_for
@@ -15,7 +16,7 @@ from skyplane.utils.fn import do_parallel, wait_for
 from skyplane.compute.const_cmds import query_which_cloud
 
 
-class AzureAuthentication:
+class AzureAuthenticationProvider(CloudAuthenticationProvider):
     def __init__(self, config: Optional[SkyplaneConfig] = None):
         self.config = config if config is not None else SkyplaneConfig.load_config(config_path)
         self._credential = None

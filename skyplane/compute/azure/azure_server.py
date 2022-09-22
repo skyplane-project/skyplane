@@ -8,8 +8,13 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
 
+<<<<<<< HEAD
 from skyplane import key_root, exceptions
 from skyplane.compute.azure.azure_auth import AzureAuthentication
+=======
+from skyplane import key_root
+from skyplane.compute.azure.azure_auth_provider import AzureAuthenticationProvider
+>>>>>>> 3c11b99 (Add additional code to rename member methods of cloud provider auth, add basic AWS auth config)
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils.cache import ignore_lru_cache
 from skyplane.utils.fn import PathLike
@@ -20,7 +25,7 @@ class AzureServer(Server):
     resource_group_location = "westus2"
 
     def __init__(self, name: str, key_root: PathLike = key_root / "azure", log_dir=None, ssh_private_key=None, assume_exists=True):
-        self.auth = AzureAuthentication()
+        self.auth = AzureAuthenticationProvider()
         self.name = name
         self.location = None
 

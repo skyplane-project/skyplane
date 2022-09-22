@@ -12,7 +12,7 @@ import botocore
 from skyplane import exceptions
 from skyplane import key_root
 from skyplane import skyplane_root
-from skyplane.compute.aws.aws_auth import AWSAuthentication
+from skyplane.compute.aws.aws_auth_provider import AWSAuthenticationProvider
 from skyplane.compute.aws.aws_server import AWSServer
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.utils import logger
@@ -28,7 +28,7 @@ except ImportError:
 class AWSCloudProvider(CloudProvider):
     def __init__(self):
         super().__init__()
-        self.auth = AWSAuthentication()
+        self.auth = AWSAuthenticationProvider()
         self.provisioning_semaphore = BoundedSemaphore(16)
 
     @property
@@ -37,7 +37,7 @@ class AWSCloudProvider(CloudProvider):
 
     @staticmethod
     def region_list() -> List[str]:
-        return AWSAuthentication.get_region_config()
+        return AWSAuthenticationProvider.get_region_config()
 
     @staticmethod
     @functools.lru_cache(maxsize=None)

@@ -4,12 +4,13 @@ import base64
 import os
 
 from skyplane import config_path, gcp_config_path, key_root
+from skyplane.compute.cloud_auth_provider import CloudAuthenticationProvider
 from skyplane.config import SkyplaneConfig
 from skyplane.utils import logger, imports
 from skyplane.utils.retry import retry_backoff
 
 
-class GCPAuthentication:
+class GCPAuthenticationProvider(CloudAuthenticationProvider):
     def __init__(self, config: Optional[SkyplaneConfig] = None):
         if not config == None:
             self.config = config

@@ -45,7 +45,7 @@ from skyplane.cli.cli_impl.cp_replicate_fallback import (
 from skyplane.replicate.replication_plan import ReplicationJob
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.common import parse_path, query_instances
-from skyplane.compute.aws.aws_auth import AWSAuthentication
+from skyplane.compute.aws.aws_auth_provider import AWSAuthenticationProvider
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.config import SkyplaneConfig
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
@@ -478,7 +478,7 @@ def deprovision():
     else:
         typer.secho("No instances to deprovision", fg="yellow", bold=True)
 
-    if AWSAuthentication().enabled():
+    if AWSAuthenticationProvider().enabled():
         aws = AWSCloudProvider()
         # remove skyplane vpc
         vpcs = do_parallel(partial(aws.get_vpcs), aws.region_list(), desc="Querying VPCs", spinner=True)
