@@ -1,9 +1,11 @@
 """CLI for the Skyplane object store"""
 import subprocess
+import time
 from functools import partial
 from pathlib import Path
 from shlex import split
 import traceback
+from urllib import request
 import uuid
 import os
 
@@ -14,7 +16,7 @@ import skyplane.cli.usage.definitions
 import skyplane.cli.usage.client
 from skyplane import GB
 from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
-from skyplane.replicate.replicator_client import ReplicatorClient
+from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 
 import typer
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -25,7 +27,7 @@ import skyplane.cli.cli_config
 import skyplane.cli.cli_internal as cli_internal
 import skyplane.cli.experiments
 from skyplane import cloud_config, config_path, exceptions, skyplane_root
-from skyplane.cli.common import print_header, console
+from skyplane.cli.common import print_header, console, print_stats_completed
 from skyplane.cli.cli_impl.cp_replicate import (
     enrich_dest_objs,
     generate_full_transferobjlist,
@@ -38,6 +40,7 @@ from skyplane.cli.cli_impl.cp_replicate_fallback import (
     replicate_onprem_sync_cmd,
     replicate_small_cp_cmd,
     replicate_small_sync_cmd,
+    get_usage_gbits,
 )
 from skyplane.replicate.replication_plan import ReplicationJob
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
@@ -142,7 +145,30 @@ def cp(
         cmd = replicate_onprem_cp_cmd(src, dst, recursive)
         if cmd:
             typer.secho(f"Delegating to: {cmd}", fg="yellow")
-            os.system(cmd)
+            start = time.perf_counter()
+            rc = os.system(cmd)
+            request_time = time.perf_counter() - start
+
+            # calculate gbits and throughput
+            if provider_src == "local":
+                client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
+                dst_region_tag = client.region_tag()
+                size_byte = get_usage_gbits(src)
+            else:
+                client = ObjectStoreInterface.create(src_region_tag, bucket_src)
+                src_region_tag = client.region_tag()
+                size_byte = get_usage_gbits(dst)
+            throughput_gbps = size_byte / 2**30 / request_time
+
+            # print stats
+            if not rc:
+                print_stats_completed(request_time, throughput_gbps)
+                transfer_stats = TransferStats(
+                    monitor_status="completed",
+                    total_runtime_s=request_time,
+                    throughput_gbits=throughput_gbps,
+                )
+                UsageClient.log_transfer(transfer_stats, args, src_region_tag, dst_region_tag)
             return 0
         else:
             typer.secho("Transfer not supported", fg="red")
@@ -234,10 +260,7 @@ def cp(
                         UsageClient.log_exception("cli_verify_checksums", e, args, src_region_tag, dst_region_tag)
                         return 1
             if transfer_stats.monitor_status == "completed":
-                rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
-                runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{transfer_stats.total_runtime_s:.2f}s[/bright_black]"
-                throughput_line = f"[white]Throughput:[/white] [bright_black]{transfer_stats.throughput_gbits:.2f}Gbps[/bright_black]"
-                rprint(f"{runtime_line}, {throughput_line}")
+                print_stats_completed(transfer_stats.total_runtime_s, transfer_stats.throughput_gbits)
             UsageClient.log_transfer(transfer_stats, args, src_region_tag, dst_region_tag)
             return 0 if transfer_stats.monitor_status == "completed" else 1
     else:
