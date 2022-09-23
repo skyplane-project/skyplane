@@ -8,7 +8,7 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
 
-from skyplane import key_root
+from skyplane import key_root, exceptions
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils.fn import PathLike
@@ -84,13 +84,18 @@ class GCPServer(Server):
         """Return paramiko client that connects to this instance."""
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh_client.connect(
-            hostname=self.public_ip(),
-            username=uname,
-            pkey=paramiko.RSAKey.from_private_key_file(str(self.ssh_private_key), password=ssh_key_password),
-            look_for_keys=False,
-            banner_timeout=200,
-        )
+        try:
+            ssh_client.connect(
+                hostname=self.public_ip(),
+                username=uname,
+                pkey=paramiko.RSAKey.from_private_key_file(str(self.ssh_private_key), password=ssh_key_password),
+                look_for_keys=False,
+                banner_timeout=200,
+            )
+        except paramiko.AuthenticationException as e:
+            raise exceptions.BadConfigException(
+                f"Failed to connect to GCP server {self.uuid()}. Delete local GCP keys and retry: `rm -rf {key_root / 'gcp'}`"
+            ) from e
         return ssh_client
 
     def get_sftp_client(self, uname="skyplane", ssh_key_password="skyplane"):

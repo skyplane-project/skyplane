@@ -8,7 +8,7 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
 
-from skyplane import key_root
+from skyplane import key_root, exceptions
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils.cache import ignore_lru_cache
@@ -168,14 +168,19 @@ class AzureServer(Server):
         """Return paramiko client that connects to this instance."""
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh_client.connect(
-            hostname=self.public_ip(),
-            username=uname,
-            key_filename=str(self.ssh_private_key),
-            passphrase=ssh_key_password,
-            look_for_keys=False,
-            banner_timeout=200,
-        )
+        try:
+            ssh_client.connect(
+                hostname=self.public_ip(),
+                username=uname,
+                key_filename=str(self.ssh_private_key),
+                passphrase=ssh_key_password,
+                look_for_keys=False,
+                banner_timeout=200,
+            )
+        except paramiko.AuthenticationException as e:
+            raise exceptions.BadConfigException(
+                f"Failed to connect to Azure server {self.uuid()}. Delete local Azure keys and retry: `rm -rf {key_root / 'azure'}`"
+            ) from e
         return ssh_client
 
     def get_sftp_client(self, uname="skyplane", ssh_key_password="skyplane"):

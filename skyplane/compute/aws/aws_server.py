@@ -10,7 +10,7 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
 
-from skyplane import key_root
+from skyplane import key_root, exceptions
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils.cache import ignore_lru_cache
@@ -92,15 +92,21 @@ class AWSServer(Server):
     def get_ssh_client_impl(self):
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(
-            self.public_ip(),
-            username="ec2-user",
-            # todo generate keys with password "skyplane"
-            pkey=paramiko.RSAKey.from_private_key_file(str(self.local_keyfile)),
-            look_for_keys=False,
-            allow_agent=False,
-            banner_timeout=200,
-        )
+        try:
+            client.connect(
+                self.public_ip(),
+                username="ec2-user",
+                # todo generate keys with password "skyplane"
+                pkey=paramiko.RSAKey.from_private_key_file(str(self.local_keyfile)),
+                look_for_keys=False,
+                allow_agent=False,
+                banner_timeout=200,
+            )
+            return client
+        except paramiko.AuthenticationException as e:
+            raise exceptions.BadConfigException(
+                f"Failed to connect to AWS server {self.uuid()}. Delete local AWS keys and retry: `rm -rf {key_root / 'aws'}`"
+            ) from e
         return client
 
     def get_sftp_client(self):

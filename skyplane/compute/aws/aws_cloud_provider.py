@@ -307,19 +307,19 @@ class AWSCloudProvider(CloudProvider):
         local_key_file = prefix / f"{key_name}.pem"
 
         if not local_key_file.exists():
-            if not local_key_file.exists():  # double check due to lock
-                local_key_file.parent.mkdir(parents=True, exist_ok=True)
-                if key_name in set(p["KeyName"] for p in ec2_client.describe_key_pairs()["KeyPairs"]):
-                    logger.fs.warning(f"Deleting key {key_name} in region {aws_region}")
-                    ec2_client.delete_key_pair(KeyName=key_name)
-                key_pair = ec2.create_key_pair(KeyName=f"skyplane-{aws_region}", KeyType="rsa")
-                with local_key_file.open("w") as f:
-                    key_str = key_pair.key_material
-                    if not key_str.endswith("\n"):
-                        key_str += "\n"
-                    f.write(key_str)
-                os.chmod(local_key_file, 0o600)
-                logger.fs.info(f"Created key file {local_key_file}")
+            logger.fs.debug(f"[AWS] Creating key file {local_key_file}")
+            local_key_file.parent.mkdir(parents=True, exist_ok=True)
+            if key_name in set(p["KeyName"] for p in ec2_client.describe_key_pairs()["KeyPairs"]):
+                logger.fs.warning(f"Deleting key {key_name} in region {aws_region}")
+                ec2_client.delete_key_pair(KeyName=key_name)
+            key_pair = ec2.create_key_pair(KeyName=f"skyplane-{aws_region}", KeyType="rsa")
+            with local_key_file.open("w") as f:
+                key_str = key_pair.key_material
+                if not key_str.endswith("\n"):
+                    key_str += "\n"
+                f.write(key_str)
+            os.chmod(local_key_file, 0o600)
+            logger.fs.info(f"Created key file {local_key_file}")
 
         return local_key_file
 

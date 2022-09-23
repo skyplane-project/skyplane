@@ -281,12 +281,7 @@ class UsageClient:
         data.sent_time = int(time.time() * 1000)
         payload = {"streams": [{"stream": prom_labels, "values": [[str(_get_current_timestamp_ns()), json.dumps(asdict(data))]]}]}
         payload = json.dumps(payload)
-        r = requests.post(
-            skyplane.cli.usage.definitions.LOKI_URL,
-            headers=headers,
-            data=payload,
-            timeout=0.5,
-        )
+        r = requests.post(skyplane.cli.usage.definitions.LOKI_URL, headers=headers, data=payload, timeout=0.5)
 
         if r.status_code == 204:
             with open(path, "w") as json_file:
