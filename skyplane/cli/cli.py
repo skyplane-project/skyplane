@@ -158,7 +158,7 @@ def cp(
                 client = ObjectStoreInterface.create(src_region_tag, bucket_src)
                 src_region_tag = client.region_tag()
                 size_byte = get_usage_gbits(dst)
-            throughput_gbps = size_byte / 2 ** 30 / request_time
+            throughput_gbps = size_byte / 2**30 / request_time
 
             # print stats
             if not rc:
