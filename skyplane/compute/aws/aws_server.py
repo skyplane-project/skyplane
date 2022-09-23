@@ -4,9 +4,6 @@ from typing import Dict, Optional
 import warnings
 from cryptography.utils import CryptographyDeprecationWarning
 
-from skyplane.utils import imports
-from skyplane import exceptions
-
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
@@ -15,6 +12,7 @@ from skyplane import key_root, exceptions
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils.cache import ignore_lru_cache
+from skyplane.utils import imports
 
 
 class AWSServer(Server):
