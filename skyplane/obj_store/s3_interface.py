@@ -22,6 +22,7 @@ class S3Interface(ObjectStoreInterface):
         self.auth = AWSAuthentication()
         self.requester_pays = False
         self.bucket_name = bucket_name
+        self._cached_s3_clients = {}
 
     def path(self):
         return f"s3://{self.bucket_name}"
@@ -35,7 +36,7 @@ class S3Interface(ObjectStoreInterface):
             return region if region is not None else "us-east-1"
         except Exception as e:
             if "An error occurred (AccessDenied) when calling the GetBucketLocation operation" in str(e):
-                logger.error(f"Bucket location {self.bucket_name} is not public. Assuming region is us-east-1.")
+                logger.warning(f"Bucket location {self.bucket_name} is not public. Assuming region is us-east-1.")
                 return "us-east-1"
             logger.warning(f"Specified bucket {self.bucket_name} does not exist, got AWS error: {e}")
             raise exceptions.MissingBucketException(f"S3 bucket {self.bucket_name} does not exist") from e
@@ -48,7 +49,9 @@ class S3Interface(ObjectStoreInterface):
 
     def _s3_client(self, region=None):
         region = region if region is not None else self.aws_region
-        return self.auth.get_boto3_client("s3", region)
+        if region not in self._cached_s3_clients:
+            self._cached_s3_clients[region] = self.auth.get_boto3_client("s3", region)
+        return self._cached_s3_clients[region]
 
     @imports.inject("botocore.exceptions", pip_extra="aws")
     def bucket_exists(botocore_exceptions, self):
@@ -117,7 +120,7 @@ class S3Interface(ObjectStoreInterface):
         size_bytes=None,
         write_at_offset=False,
         generate_md5=False,
-        write_block_size=2**16,
+        write_block_size=2 ** 16,
     ) -> Optional[bytes]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
 
@@ -177,19 +180,20 @@ class S3Interface(ObjectStoreInterface):
                 raise exceptions.ChecksumMismatchException(f"Checksum mismatch for object {dst_object_name}") from e
             raise
 
-    def initiate_multipart_upload(self, dst_object_name):
-        assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
-        s3_client = self._s3_client()
-        with Timer(f"Initiate multipart upload for {dst_object_name}"):
-            response = s3_client.create_multipart_upload(
-                Bucket=self.bucket_name,
-                Key=dst_object_name,
-            )
-        return response["UploadId"]
+    def initiate_multipart_uploads(self, dst_object_names: List[str]) -> List[str]:
+        client = self._s3_client()
+        upload_ids = []
+        for dst_object_name in dst_object_names:
+            assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
+            response = client.create_multipart_upload(Bucket=self.bucket_name, Key=dst_object_name)
+            if "UploadId" in response:
+                upload_ids.append(response["UploadId"])
+            else:
+                raise exceptions.SkyplaneException(f"Failed to initiate multipart upload for {dst_object_name}: {response}")
+        return upload_ids
 
     def complete_multipart_upload(self, dst_object_name, upload_id):
         s3_client = self._s3_client()
-
         all_parts = []
         while True:
             response = s3_client.list_parts(
@@ -201,8 +205,6 @@ class S3Interface(ObjectStoreInterface):
                 if len(response["Parts"]) == 0:
                     break
                 all_parts += response["Parts"]
-
-        # sort by part-number
         all_parts = sorted(all_parts, key=lambda d: d["PartNumber"])
         response = s3_client.complete_multipart_upload(
             UploadId=upload_id,

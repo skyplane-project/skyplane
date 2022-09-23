@@ -5,6 +5,7 @@ import warnings
 from cryptography.utils import CryptographyDeprecationWarning
 
 from skyplane.utils import imports
+from skyplane import exceptions
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
@@ -107,7 +108,6 @@ class AWSServer(Server):
             raise exceptions.BadConfigException(
                 f"Failed to connect to AWS server {self.uuid()}. Delete local AWS keys and retry: `rm -rf {key_root / 'aws'}`"
             ) from e
-        return client
 
     def get_sftp_client(self):
         t = paramiko.Transport((self.public_ip(), 22))
