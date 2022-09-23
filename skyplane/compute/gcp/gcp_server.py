@@ -8,7 +8,7 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
 
-from skyplane import key_root, skyplane
+from skyplane import key_root, exceptions
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils.fn import PathLike
@@ -94,7 +94,7 @@ class GCPServer(Server):
             )
         except paramiko.AuthenticationException as e:
             raise exceptions.BadConfigException(
-                f"Failed to connect to AWS server {self.uuid()}. Delete local AWS keys and retry: `rm -rf {key_root / 'aws'}`"
+                f"Failed to connect to GCP server {self.uuid()}. Delete local GCP keys and retry: `rm -rf {key_root / 'gcp'}`"
             ) from e
         return ssh_client
 

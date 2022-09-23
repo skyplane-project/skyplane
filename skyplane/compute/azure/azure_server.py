@@ -8,7 +8,7 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
 
-from skyplane import key_root, skyplane
+from skyplane import key_root, exceptions
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils.cache import ignore_lru_cache
@@ -179,7 +179,7 @@ class AzureServer(Server):
             )
         except paramiko.AuthenticationException as e:
             raise exceptions.BadConfigException(
-                f"Failed to connect to AWS server {self.uuid()}. Delete local AWS keys and retry: `rm -rf {key_root / 'aws'}`"
+                f"Failed to connect to Azure server {self.uuid()}. Delete local Azure keys and retry: `rm -rf {key_root / 'azure'}`"
             ) from e
         return ssh_client
 
