@@ -254,9 +254,7 @@ class GCSInterface(ObjectStoreInterface):
             response = self.send_xml_request(
                 dst_object_name, {"uploadId": upload_id}, "POST", data=xml_data, content_type="application/xml"
             )
-        except Exception:
+        except Exception as e:
             # cancel upload
             response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "DELETE")
-            return False
-
-        return True
+            raise exceptions.SkyplaneException("Failed to complete multipart upload") from e

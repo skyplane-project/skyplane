@@ -212,4 +212,4 @@ class S3Interface(ObjectStoreInterface):
             Key=dst_object_name,
             MultipartUpload={"Parts": [{"PartNumber": p["PartNumber"], "ETag": p["ETag"]} for p in all_parts]},
         )
-        return True
+        assert "ETag" in response, f"Failed to complete multipart upload for {dst_object_name}: {response}"

@@ -87,7 +87,7 @@ class ObjectStoreInterface:
     def initiate_multipart_uploads(self, dst_object_names: List[str]):
         return ValueError("Multipart uploads not supported")
 
-    def complete_multipart_upload(self, dst_object_name, upload_id):
+    def complete_multipart_upload(self, dst_object_name: str, upload_id: str):
         return ValueError("Multipart uploads not supported")
 
     @staticmethod

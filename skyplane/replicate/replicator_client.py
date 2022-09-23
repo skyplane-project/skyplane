@@ -629,13 +629,15 @@ class ReplicatorClient:
                                 for key in groups:
                                     with Timer(f"Complete multi-part uploads for {key[0]} {key[1]}"):
                                         region, bucket = key
-                                        obj_store_interface = ObjectStoreInterface.create(region, bucket)
-                                        complete_fn = lambda req: obj_store_interface.complete_multipart_upload(
-                                            req["key"], req["upload_id"]
-                                        )
                                         batch_len = max(1, len(groups[key]) // 128)
                                         batches = [groups[key][i : i + batch_len] for i in range(0, len(groups[key]), batch_len)]
-                                        do_parallel(lambda x: map(complete_fn, x), batches, n=-1)
+
+                                        def complete_fn(batch):
+                                            obj_store_interface = ObjectStoreInterface.create(region, bucket)
+                                            for req in batch:
+                                                obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"])
+
+                                        do_parallel(complete_fn, batches, n=-1)
                             return TransferStats(
                                 monitor_status="completed", total_runtime_s=total_runtime_s, throughput_gbits=throughput_gbits
                             )
