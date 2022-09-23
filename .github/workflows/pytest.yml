@@ -5,20 +5,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
+      - name: Install poetry
+        run: pipx install poetry
       - name: Set up Python 3.10
         uses: actions/setup-python@v1
         with:
           python-version: "3.10"
-      - name: Install Poetry
-        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.1
-      - name: Cache Poetry virtualenv
-        uses: actions/cache@v1
-        id: cache
-        with:
-          path: ~/.virtualenvs
-          key: poetry-lint-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-3.10
-          restore-keys: |
-            poetry-lint-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-3.10
+          cache: "poetry"
       - name: Set Poetry config
         run: |
           poetry config virtualenvs.in-project false
@@ -29,7 +22,7 @@ jobs:
       - name: black
         run: poetry run black . --check --line-length=140
       - name: pytype
-        run: poetry run pytype --config .pytype.cfg -j 2
+        run: poetry run pytype --config .pytype.cfg -j 4
   test-unit:
     runs-on: ubuntu-latest
     strategy:
@@ -37,20 +30,13 @@ jobs:
         python-version: ["3.7", "3.8", "3.9", "3.10"]
     steps:
       - uses: actions/checkout@v1
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Install poetry
+        run: pipx install poetry
+      - name: Set up Python 3.10
         uses: actions/setup-python@v1
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install Poetry
-        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.1
-      - name: Cache Poetry virtualenv
-        uses: actions/cache@v1
-        id: cache
-        with:
-          path: ~/.virtualenvs
-          key: poetry-unit-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-${{ matrix.python-version }}
-          restore-keys: |
-            poetry-unit-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-${{ matrix.python-version }}
+          python-version: "3.10"
+          cache: "poetry"
       - name: Set Poetry config
         run: |
           poetry config virtualenvs.in-project false
@@ -67,20 +53,13 @@ jobs:
     needs: test-unit
     steps:
       - uses: actions/checkout@v1
+      - name: Install poetry
+        run: pipx install poetry
       - name: Set up Python 3.10
         uses: actions/setup-python@v1
         with:
           python-version: "3.10"
-      - name: Install Poetry
-        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.1
-      - name: Cache Poetry virtualenv
-        uses: actions/cache@v1
-        id: cache
-        with:
-          path: ~/.virtualenvs
-          key: aws-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-3.10
-          restore-keys: |
-            aws-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-3.10
+          cache: "poetry"
       - name: Set Poetry config
         run: |
           poetry config virtualenvs.in-project false
@@ -101,22 +80,13 @@ jobs:
     needs: test-unit
     steps:
       - uses: actions/checkout@v1
+      - name: Install poetry
+        run: pipx install poetry
       - name: Set up Python 3.10
         uses: actions/setup-python@v1
         with:
           python-version: "3.10"
-      - name: Install Poetry
-        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.1
-      - name: Cache Poetry virtualenv
-        uses: actions/cache@v1
-        id: cache
-        with:
-          path: |
-            ~/.virtualenvs
-            /var/cache/apt/archives
-          key: azure-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-3.10
-          restore-keys: |
-            azure-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-3.10
+          cache: "poetry"
       - name: Set Poetry config
         run: |
           poetry config virtualenvs.in-project false
@@ -140,20 +110,13 @@ jobs:
       STRATEGY_UUID: pytest-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v1
+      - name: Install poetry
+        run: pipx install poetry
       - name: Set up Python 3.10
         uses: actions/setup-python@v1
         with:
           python-version: "3.10"
-      - name: Install Poetry
-        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.1
-      - name: Cache Poetry virtualenv
-        uses: actions/cache@v1
-        id: cache
-        with:
-          path: ~/.virtualenvs
-          key: gcp-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-3.10
-          restore-keys: |
-            gcp-poetry-${{ hashFiles('**/poetry.lock') }}-${{ hashFiles('pyproject.toml') }}-3.10
+          cache: "poetry"
       - name: Set Poetry config
         run: |
           poetry config virtualenvs.in-project false
