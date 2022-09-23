@@ -631,9 +631,9 @@ class ReplicatorClient:
                                         region, bucket = key
                                         batch_len = max(1, len(groups[key]) // 128)
                                         batches = [groups[key][i : i + batch_len] for i in range(0, len(groups[key]), batch_len)]
+                                        obj_store_interface = ObjectStoreInterface.create(region, bucket)
 
                                         def complete_fn(batch):
-                                            obj_store_interface = ObjectStoreInterface.create(region, bucket)
                                             for req in batch:
                                                 obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"])
 
