@@ -116,10 +116,7 @@ class AzureBlobInterface(ObjectStoreInterface):
     ) -> Optional[bytes]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         downloader = self.container_client.download_blob(
-            src_object_name,
-            offset=offset_bytes,
-            length=size_bytes,
-            max_concurrency=self.max_concurrency,
+            src_object_name, offset=offset_bytes, length=size_bytes, max_concurrency=self.max_concurrency
         )
 
         if not os.path.exists(dst_file_path):
@@ -143,11 +140,7 @@ class AzureBlobInterface(ObjectStoreInterface):
         with open(src_file_path, "rb") as f:
             print(f"Uploading {src_file_path} to {dst_object_name}")
             blob_client = self.container_client.upload_blob(
-                name=dst_object_name,
-                data=f,
-                length=os.path.getsize(src_file_path),
-                max_concurrency=self.max_concurrency,
-                overwrite=True,
+                name=dst_object_name, data=f, length=os.path.getsize(src_file_path), max_concurrency=self.max_concurrency, overwrite=True
             )
         if check_md5:
             b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None

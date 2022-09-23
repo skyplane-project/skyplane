@@ -27,7 +27,7 @@ def print_header():
  `--. \    \   \ / |  __/| |    |  _  || . ` ||  __| 
 /\__/ / |\  \  | | | |   | |____| | | || |\  || |___ 
 \____/\_| \_/  \_/ \_|   \_____/\_| |_/\_| \_/\____/"""
-    console.print(f"[blue]{header}[/blue]\n")
+    console.print(f"[bright_black]{header}[/bright_black]\n")
 
 
 def parse_path(path: str):

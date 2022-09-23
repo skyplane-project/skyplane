@@ -163,11 +163,7 @@ def cp(
             # print stats
             if not rc:
                 print_stats_completed(request_time, throughput_gbps)
-                transfer_stats = TransferStats(
-                    monitor_status="completed",
-                    total_runtime_s=request_time,
-                    throughput_gbits=throughput_gbps,
-                )
+                transfer_stats = TransferStats(monitor_status="completed", total_runtime_s=request_time, throughput_gbits=throughput_gbps)
                 UsageClient.log_transfer(transfer_stats, args, src_region_tag, dst_region_tag)
             return 0
         else:
