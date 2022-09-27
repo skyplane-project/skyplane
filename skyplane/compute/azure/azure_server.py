@@ -9,7 +9,7 @@ with warnings.catch_warnings():
     import paramiko
 
 from skyplane import key_root
-from skyplane.compute.azure.azure_auth import AzureAuthentication
+from skyplane.compute.azure.azure_auth_provider import AzureAuthenticationProvider
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils.cache import ignore_lru_cache
 from skyplane.utils.fn import PathLike
@@ -20,7 +20,7 @@ class AzureServer(Server):
     resource_group_location = "westus2"
 
     def __init__(self, name: str, key_root: PathLike = key_root / "azure", log_dir=None, ssh_private_key=None, assume_exists=True):
-        self.auth = AzureAuthentication()
+        self.auth = AzureAuthenticationProvider()
         self.name = name
         self.location = None
 

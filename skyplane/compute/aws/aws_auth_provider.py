@@ -2,21 +2,16 @@ import threading
 from typing import Optional
 
 from skyplane import aws_config_path
-from skyplane import config_path
+from skyplane.compute.cloud_auth_provider import CloudAuthenticationProvider
 from skyplane.config import SkyplaneConfig
 from skyplane.utils import imports
 
 
-class AWSAuthentication:
+class AWSAuthenticationProvider(CloudAuthenticationProvider):
     __cached_credentials = threading.local()
 
-    def __init__(self, config: Optional[SkyplaneConfig] = None, access_key: Optional[str] = None, secret_key: Optional[str] = None):
+    def __init__(self, access_key: Optional[str] = None, secret_key: Optional[str] = None):
         """Loads AWS authentication details. If no access key is provided, it will try to load credentials using boto3"""
-        if not config == None:
-            self.config = config
-        else:
-            self.config = SkyplaneConfig.load_config(config_path)
-
         if access_key and secret_key:
             self.config_mode = "manual"
             self._access_key = access_key
@@ -69,7 +64,11 @@ class AWSAuthentication:
         return self._secret_key
 
     def enabled(self):
-        return self.config.aws_enabled
+        try:
+            self.get_boto3_client("ec2").describe_regions()
+            return True
+        except Exception:
+            return False
 
     @imports.inject("boto3", pip_extra="aws")
     def infer_credentials(boto3, self):

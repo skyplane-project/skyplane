@@ -6,11 +6,11 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
-from skyplane.compute.aws.aws_auth import AWSAuthentication
+from skyplane.compute.aws.aws_auth_provider import AWSAuthenticationProvider
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
-from skyplane.compute.azure.azure_auth import AzureAuthentication
+from skyplane.compute.azure.azure_auth_provider import AzureAuthenticationProvider
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
-from skyplane.compute.gcp.gcp_auth import GCPAuthentication
+from skyplane.compute.gcp.gcp_auth_provider import GCPAuthenticationProvider
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
@@ -104,13 +104,13 @@ def query_instances():
 
         return run
 
-    if AWSAuthentication().enabled():
+    if AWSAuthenticationProvider().enabled():
         aws = AWSCloudProvider()
         for region in aws.region_list():
             query_jobs.append(catch_error(partial(aws.get_matching_instances, region)))
-    if AzureAuthentication().enabled():
+    if AzureAuthenticationProvider().enabled():
         query_jobs.append(catch_error(lambda: AzureCloudProvider().get_matching_instances()))
-    if GCPAuthentication().enabled():
+    if GCPAuthenticationProvider().enabled():
         query_jobs.append(catch_error(lambda: GCPCloudProvider().get_matching_instances()))
     # query in parallel
     for instance_list in do_parallel(
