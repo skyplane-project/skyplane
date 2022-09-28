@@ -17,6 +17,7 @@ You can use Skyplane to transfer data:
 * Between object stores across multiple cloud providers
 * Between local storage and cloud object stores
 
+Skyplane supports all major public clouds including AWS, Azure, and GCP. It can also transfer data between any combination of these clouds:
 <img src="docs/_static/supported-destinations.png" width="512" />
 
 # Getting started
