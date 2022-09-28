@@ -17,7 +17,9 @@ You can use Skyplane to transfer data:
 * Between object stores across multiple cloud providers
 * Between local storage and cloud object stores
 
-Skyplane currently only supports MacOS and Linux. For Windows, first [install Linux on Windows with WSL](https://docs.microsoft.com/en-us/windows/wsl/install) to run Skyplane.
+Skyplane supports all major public clouds including AWS, Azure, and GCP. It can also transfer data between any combination of these clouds:
+
+<img src="docs/_static/supported-destinations.png" width="512" />
 
 # Getting started
 
