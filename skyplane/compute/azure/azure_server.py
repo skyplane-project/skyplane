@@ -177,11 +177,11 @@ class AzureServer(Server):
                 look_for_keys=False,
                 banner_timeout=200,
             )
+            return ssh_client
         except paramiko.AuthenticationException as e:
             raise exceptions.BadConfigException(
                 f"Failed to connect to Azure server {self.uuid()}. Delete local Azure keys and retry: `rm -rf {key_root / 'azure'}`"
             ) from e
-        return ssh_client
 
     def get_sftp_client(self, uname="skyplane", ssh_key_password="skyplane"):
         t = paramiko.Transport((self.public_ip(), 22))

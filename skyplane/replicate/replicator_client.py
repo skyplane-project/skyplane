@@ -1,3 +1,4 @@
+import itertools
 import json
 import math
 import pickle
@@ -384,11 +385,21 @@ class ReplicatorClient:
                     idx += 1
 
             # initiate multipart transfers in parallel
-            progress.update(prepare_task, description=f": Queuing {len(multipart_pairs)} files for multipart transfers")
+            progress.update(prepare_task, description=f": Initiating multipart transfers for {len(multipart_pairs)} objects")
             obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
-            upload_ids = do_parallel(lambda x: obj_store_interface.initiate_multipart_upload(x[1].key), multipart_pairs, n=16)
+            with Timer("initiate_multipart_transfers"):
+                batch_size = max(1, len(multipart_pairs) // 64)
+                multipart_batches = []
+                for i in range(0, len(multipart_pairs), batch_size):
+                    multipart_batches.append(multipart_pairs[i : i + batch_size])
+                dispatch_fn = lambda x: obj_store_interface.initiate_multipart_uploads([y.key for _, y in x])
+                upload_ids = do_parallel(dispatch_fn, multipart_batches, n=-1)
+
+            # build chunks for multipart transfers
+            upload_ids = zip(
+                itertools.chain.from_iterable(i for i, _ in upload_ids), itertools.chain.from_iterable(o for _, o in upload_ids)
+            )
             for (src_object, dest_object), upload_id in upload_ids:
-                # determine number of chunks via the following algorithm:
                 chunk_size_bytes = int(multipart_chunk_size_mb * MB)
                 num_chunks = math.ceil(src_object.size / chunk_size_bytes)
                 if num_chunks > multipart_max_chunks:
@@ -419,13 +430,7 @@ class ReplicatorClient:
                     offset += chunk_size_bytes
                 # add multipart upload request
                 self.multipart_upload_requests.append(
-                    {
-                        "region": job.dest_region,
-                        "bucket": job.dest_bucket,
-                        "upload_id": upload_id,
-                        "key": dest_object.key,
-                        "parts": parts,
-                    }
+                    {"region": job.dest_region, "bucket": job.dest_bucket, "upload_id": upload_id, "key": dest_object.key, "parts": parts}
                 )
 
             # partition chunks into roughly equal-sized batches (by bytes)
@@ -579,11 +584,7 @@ class ReplicatorClient:
                             copy_gateway_logs = True
                             write_profile = True
                             write_socket_profile = True
-                            return TransferStats(
-                                monitor_status="error",
-                                total_runtime_s=t.elapsed,
-                                errors=errors,
-                            )
+                            return TransferStats(monitor_status="error", total_runtime_s=t.elapsed, errors=errors)
 
                         log_df = self.get_chunk_status_log_df()
                         if log_df.empty:
@@ -617,33 +618,35 @@ class ReplicatorClient:
                         )
                         if len(completed_chunk_ids) == len(job.chunk_requests):
                             if multipart:
-                                # Complete multi-part uploads
-                                def complete_upload(req):
-                                    obj_store_interface = ObjectStoreInterface.create(req["region"], req["bucket"])
-                                    succ = obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"])
-                                    if not succ:
-                                        raise ValueError(f"Failed to complete upload {req['upload_id']}")
+                                # complete multipart transfers in batches
+                                progress.update(copy_task, description=" (completing multi-part uploads)")
+                                groups = {}
+                                for req in self.multipart_upload_requests:
+                                    key = (req["region"], req["bucket"])
+                                    if key not in groups:
+                                        groups[key] = []
+                                    groups[key].append(req)
+                                for key in groups:
+                                    with Timer(f"Complete multi-part uploads for {key[0]} {key[1]}"):
+                                        region, bucket = key
+                                        batch_len = max(1, len(groups[key]) // 128)
+                                        batches = [groups[key][i : i + batch_len] for i in range(0, len(groups[key]), batch_len)]
+                                        obj_store_interface = ObjectStoreInterface.create(region, bucket)
 
-                                do_parallel(
-                                    complete_upload,
-                                    self.multipart_upload_requests,
-                                    n=-1,
-                                    desc="Completing multipart uploads",
-                                    spinner=False,
-                                )
+                                        def complete_fn(batch):
+                                            for req in batch:
+                                                obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"])
+
+                                        do_parallel(complete_fn, batches, n=-1)
                             return TransferStats(
-                                monitor_status="completed",
-                                total_runtime_s=total_runtime_s,
-                                throughput_gbits=throughput_gbits,
+                                monitor_status="completed", total_runtime_s=total_runtime_s, throughput_gbits=throughput_gbits
                             )
                         elif time_limit_seconds is not None and t.elapsed > time_limit_seconds or t.elapsed > 600 and completed_bytes == 0:
                             logger.error("Transfer timed out without progress, please check the debug log!")
                             logger.fs.error("Transfer timed out! Please retry.")
                             logger.error(f"Please share debug logs from: {self.transfer_dir}")
                             return TransferStats(
-                                monitor_status="timed_out",
-                                total_runtime_s=total_runtime_s,
-                                throughput_gbits=throughput_gbits,
+                                monitor_status="timed_out", total_runtime_s=total_runtime_s, throughput_gbits=throughput_gbits
                             )
                         else:
                             current_time = datetime.now()

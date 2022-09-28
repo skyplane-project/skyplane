@@ -306,9 +306,9 @@ class AWSCloudProvider(CloudProvider):
         key_name = f"skyplane-{aws_region}"
         local_key_file = prefix / f"{key_name}.pem"
 
+        local_key_file.parent.mkdir(parents=True, exist_ok=True)
         if not local_key_file.exists():
-            logger.fs.debug(f"[AWS] Creating key file {local_key_file}")
-            local_key_file.parent.mkdir(parents=True, exist_ok=True)
+            logger.fs.debug(f"[AWS] Creating keypair {key_name} in {aws_region}")
             if key_name in set(p["KeyName"] for p in ec2_client.describe_key_pairs()["KeyPairs"]):
                 logger.fs.warning(f"Deleting key {key_name} in region {aws_region}")
                 ec2_client.delete_key_pair(KeyName=key_name)

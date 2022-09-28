@@ -218,12 +218,14 @@ class GCSInterface(ObjectStoreInterface):
                 f"Upload of object {dst_object_name} in bucket {self.bucket_name} failed, got status code {response.status_code} w/ response {response.text}"
             )
 
-    def initiate_multipart_upload(self, dst_object_name):
-        assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
-        response = self.send_xml_request(dst_object_name, {"uploads": None}, "POST")
-        tree = ElementTree.fromstring(response.content)
-        upload_id = tree[2].text
-        return upload_id
+    def initiate_multipart_uploads(self, dst_object_names: List[str]):
+        upload_ids = []
+        for dst_object_name in dst_object_names:
+            assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
+            response = self.send_xml_request(dst_object_name, {"uploads": None}, "POST")
+            tree = ElementTree.fromstring(response.content)[2].text
+            upload_ids.append(tree)
+        return upload_ids
 
     def complete_multipart_upload(self, dst_object_name, upload_id):
         # get parts
@@ -252,9 +254,7 @@ class GCSInterface(ObjectStoreInterface):
             response = self.send_xml_request(
                 dst_object_name, {"uploadId": upload_id}, "POST", data=xml_data, content_type="application/xml"
             )
-        except Exception:
+        except Exception as e:
             # cancel upload
             response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "DELETE")
-            return False
-
-        return True
+            raise exceptions.SkyplaneException("Failed to complete multipart upload") from e

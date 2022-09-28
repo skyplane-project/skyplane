@@ -24,7 +24,7 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
             file_md5 = hashlib.md5(f.read()).hexdigest()
 
         if multipart:
-            upload_id = interface.initiate_multipart_upload(obj_name)
+            upload_id = interface.initiate_multipart_uploads([obj_name])[0]
             time.sleep(5)
             interface.upload_object(fpath, obj_name, 1, upload_id)
             time.sleep(5)
