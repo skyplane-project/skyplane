@@ -17,7 +17,7 @@ You can use Skyplane to transfer data:
 * Between object stores across multiple cloud providers
 * Between local storage and cloud object stores
 
-<img src="docs/_static/supported-destinations.png" width="300" />
+<img src="docs/_static/supported-destinations.png" width="512" />
 
 # Getting started
 
