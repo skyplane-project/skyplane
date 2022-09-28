@@ -609,11 +609,16 @@ class ReplicatorClient:
                         # update progress bar
                         total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
                         throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
+                        pending_chunk_ids = set([cr.chunk.chunk_id for cr in job.chunk_requests]) - set(completed_chunk_ids)
+                        if len(pending_chunk_ids) < 5:
+                            pending_chunks = " [" + ", ".join([str(cid) for cid in pending_chunk_ids]) + "]"
+                        else:
+                            pending_chunks = ""
 
                         # make log line
                         progress.update(
                             copy_task,
-                            description=f" ({len(completed_chunk_ids)} of {len(job.chunk_requests)} chunks)",
+                            description=f" ({len(completed_chunk_ids)} of {len(job.chunk_requests)} chunks{pending_chunks})",
                             completed=completed_bytes,
                         )
                         if len(completed_chunk_ids) == len(job.chunk_requests):
