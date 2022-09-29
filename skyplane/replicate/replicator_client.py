@@ -611,7 +611,7 @@ class ReplicatorClient:
                         throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
                         pending_chunk_ids = set([cr.chunk.chunk_id for cr in job.chunk_requests]) - set(completed_chunk_ids)
                         if len(pending_chunk_ids) < 5:
-                            pending_chunks = " [" + ", ".join([str(cid) for cid in pending_chunk_ids]) + "]"
+                            pending_chunks = ", chunks [" + ", ".join([str(cid) for cid in pending_chunk_ids]) + "] remain"
                         else:
                             pending_chunks = ""
 

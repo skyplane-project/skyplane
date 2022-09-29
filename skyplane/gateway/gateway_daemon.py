@@ -65,7 +65,7 @@ class GatewayDaemon:
             use_compression=use_compression,
             e2ee_key_bytes=e2ee_key_bytes,
         )
-        self.obj_store_conn = GatewayObjStoreConn(self.chunk_store, self.error_event, self.error_queue, max_conn=32)
+        self.obj_store_conn = GatewayObjStoreConn(self.chunk_store, self.error_event, self.error_queue, max_conn=30)
 
         # Download thread pool
         self.dl_pool_semaphore = BoundedSemaphore(value=128)
