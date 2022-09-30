@@ -10,12 +10,12 @@ from skyplane.utils import imports
 class AWSAuthenticationProvider(CloudAuthenticationProvider):
     __cached_credentials = threading.local()
 
-    def __init__(self, access_key: Optional[str] = None, secret_key: Optional[str] = None):
+    def __init__(self, config = None):
         """Loads AWS authentication details. If no access key is provided, it will try to load credentials using boto3"""
-        if access_key and secret_key:
+        if config.aws_access_key and config.aws_secret_key:
             self.config_mode = "manual"
-            self._access_key = access_key
-            self._secret_key = secret_key
+            self._access_key = config.aws_access_key
+            self._secret_key = config.aws_secret_key
         else:
             self.config_mode = "iam_inferred"
             self._access_key = None

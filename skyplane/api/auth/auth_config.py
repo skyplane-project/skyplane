@@ -13,11 +13,12 @@ class AuthenticationConfig:
 
 class AWSAuthenticationConfig(AuthenticationConfig):
     def __init__(self, access_key_id: Optional[str], secret_access_key: Optional[str]):
-        self.access_key_id = access_key_id
-        self.secret_access_key = secret_access_key
+        self.aws_access_key = access_key_id
+        self.aws_secret_key = secret_access_key
+        self.aws_enabled = True
 
     def make_auth_provider(self) -> AWSAuthenticationProvider:
-        return AWSAuthenticationProvider(access_key=self.access_key_id, secret_key=self.secret_access_key)
+        return AWSAuthenticationProvider(config=self)
 
 class GCPAuthenticationConfig(AuthenticationConfig):
     def __init__(self, project_id: str):
