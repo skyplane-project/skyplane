@@ -175,11 +175,12 @@ def cp(
             dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
             src_region_tag = src_client.region_tag()
             dst_region_tag = dst_client.region_tag()
-            if cloud_config.get_flag("requester_pays"):
+            requester_pays = cloud_config.get_flag("requester_pays")
+            if requester_pays:
                 src_client.set_requester_bool(True)
                 dst_client.set_requester_bool(True)
             transfer_pairs = generate_full_transferobjlist(
-                src_region_tag, bucket_src, path_src, dst_region_tag, bucket_dst, path_dst, recursive=recursive
+                src_region_tag, bucket_src, path_src, dst_region_tag, bucket_dst, path_dst, recursive=recursive, requester_pays=requester_pays,
             )
         except exceptions.SkyplaneException as e:
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
