@@ -385,53 +385,54 @@ class ReplicatorClient:
                     idx += 1
 
             # initiate multipart transfers in parallel
-            progress.update(prepare_task, description=f": Initiating multipart transfers for {len(multipart_pairs)} objects")
-            obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
-            with Timer("initiate_multipart_transfers"):
-                batch_size = max(1, len(multipart_pairs) // 64)
-                multipart_batches = []
-                for i in range(0, len(multipart_pairs), batch_size):
-                    multipart_batches.append(multipart_pairs[i : i + batch_size])
-                dispatch_fn = lambda x: obj_store_interface.initiate_multipart_uploads([y.key for _, y in x])
-                upload_ids = do_parallel(dispatch_fn, multipart_batches, n=-1)
+            if not job.random_chunk_size_mb:
+                progress.update(prepare_task, description=f": Initiating multipart transfers for {len(multipart_pairs)} objects")
+                obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
+                with Timer("initiate_multipart_transfers"):
+                    batch_size = max(1, len(multipart_pairs) // 64)
+                    multipart_batches = []
+                    for i in range(0, len(multipart_pairs), batch_size):
+                        multipart_batches.append(multipart_pairs[i : i + batch_size])
+                    dispatch_fn = lambda x: obj_store_interface.initiate_multipart_uploads([y.key for _, y in x])
+                    upload_ids = do_parallel(dispatch_fn, multipart_batches, n=-1)
 
-            # build chunks for multipart transfers
-            upload_ids = zip(
-                itertools.chain.from_iterable(i for i, _ in upload_ids), itertools.chain.from_iterable(o for _, o in upload_ids)
-            )
-            for (src_object, dest_object), upload_id in upload_ids:
-                chunk_size_bytes = int(multipart_chunk_size_mb * MB)
-                num_chunks = math.ceil(src_object.size / chunk_size_bytes)
-                if num_chunks > multipart_max_chunks:
-                    chunk_size_bytes = int(src_object.size / multipart_max_chunks)
-                    chunk_size_bytes = math.ceil(chunk_size_bytes / MB) * MB  # round to next largest mb
-                    num_chunks = math.ceil(src_object.size / chunk_size_bytes)
-                offset = 0
-                part_num = 1
-                parts = []
-                for chunk in range(num_chunks):
-                    file_size_bytes = min(chunk_size_bytes, src_object.size - offset)  # size is min(chunk_size, remaining data)
-                    assert file_size_bytes > 0, f"file size <= 0 {file_size_bytes}"
-                    chunks.append(
-                        Chunk(
-                            src_key=src_object.key,
-                            dest_key=dest_object.key,
-                            chunk_id=idx,
-                            file_offset_bytes=offset,
-                            chunk_length_bytes=file_size_bytes,
-                            part_number=part_num,
-                            upload_id=upload_id,
-                        )
-                    )
-                    parts.append(part_num)
-
-                    idx += 1
-                    part_num += 1
-                    offset += chunk_size_bytes
-                # add multipart upload request
-                self.multipart_upload_requests.append(
-                    {"region": job.dest_region, "bucket": job.dest_bucket, "upload_id": upload_id, "key": dest_object.key, "parts": parts}
+                # build chunks for multipart transfers
+                upload_ids = zip(
+                    itertools.chain.from_iterable(i for i, _ in upload_ids), itertools.chain.from_iterable(o for _, o in upload_ids)
                 )
+                for (src_object, dest_object), upload_id in upload_ids:
+                    chunk_size_bytes = int(multipart_chunk_size_mb * MB)
+                    num_chunks = math.ceil(src_object.size / chunk_size_bytes)
+                    if num_chunks > multipart_max_chunks:
+                        chunk_size_bytes = int(src_object.size / multipart_max_chunks)
+                        chunk_size_bytes = math.ceil(chunk_size_bytes / MB) * MB  # round to next largest mb
+                        num_chunks = math.ceil(src_object.size / chunk_size_bytes)
+                    offset = 0
+                    part_num = 1
+                    parts = []
+                    for chunk in range(num_chunks):
+                        file_size_bytes = min(chunk_size_bytes, src_object.size - offset)  # size is min(chunk_size, remaining data)
+                        assert file_size_bytes > 0, f"file size <= 0 {file_size_bytes}"
+                        chunks.append(
+                            Chunk(
+                                src_key=src_object.key,
+                                dest_key=dest_object.key,
+                                chunk_id=idx,
+                                file_offset_bytes=offset,
+                                chunk_length_bytes=file_size_bytes,
+                                part_number=part_num,
+                                upload_id=upload_id,
+                            )
+                        )
+                        parts.append(part_num)
+
+                        idx += 1
+                        part_num += 1
+                        offset += chunk_size_bytes
+                    # add multipart upload request
+                    self.multipart_upload_requests.append(
+                        {"region": job.dest_region, "bucket": job.dest_bucket, "upload_id": upload_id, "key": dest_object.key, "parts": parts}
+                    )
 
             # partition chunks into roughly equal-sized batches (by bytes)
             def partition(items: List[Chunk], n_batches: int) -> List[List[Chunk]]:
