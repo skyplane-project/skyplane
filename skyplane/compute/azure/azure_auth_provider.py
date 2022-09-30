@@ -17,7 +17,7 @@ from skyplane.compute.const_cmds import query_which_cloud
 
 
 class AzureAuthenticationProvider(CloudAuthenticationProvider):
-    def __init__(self, config: Optional[SkyplaneConfig] = None):
+    def __init__(self, config = None):
         self.config = config if config is not None else SkyplaneConfig.load_config(config_path)
         self._credential = None
 
