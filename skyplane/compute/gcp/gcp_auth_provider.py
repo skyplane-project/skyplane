@@ -11,11 +11,9 @@ from skyplane.utils.retry import retry_backoff
 
 
 class GCPAuthenticationProvider(CloudAuthenticationProvider):
-    def __init__(self, config: Optional[SkyplaneConfig] = None):
-        if not config == None:
-            self.config = config
-        else:
-            self.config = SkyplaneConfig.load_config(config_path)
+    def __init__(self, config = None):
+        if config.gcp_project_id:
+            self.project_id = config.gcp_project_id
         self._credentials = None
         self._service_credentials_file = None
 
@@ -73,9 +71,9 @@ class GCPAuthenticationProvider(CloudAuthenticationProvider):
     @property
     def project_id(self):
         assert (
-            self.config.gcp_project_id is not None
+            self.project_id is not None
         ), "No project ID detected. Run 'skyplane init --reinit-gcp' or file an issue to remedy this."
-        return self.config.gcp_project_id
+        return self.project_id
 
     @staticmethod
     @imports.inject("google.auth", pip_extra="gcp")
