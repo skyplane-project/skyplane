@@ -8,13 +8,8 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
 
-<<<<<<< HEAD
 from skyplane import key_root, exceptions
-from skyplane.compute.gcp.gcp_auth import GCPAuthentication
-=======
-from skyplane import key_root
 from skyplane.compute.gcp.gcp_auth_provider import GCPAuthenticationProvider
->>>>>>> 3c11b99 (Add additional code to rename member methods of cloud provider auth, add basic AWS auth config)
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils.fn import PathLike
 
