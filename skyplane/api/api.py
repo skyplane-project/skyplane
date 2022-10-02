@@ -216,7 +216,7 @@ def cp(
                         console.print(e.pretty_print_str())
                         UsageClient.log_exception("cli_verify_checksums", e, args, src_region_tag, dst_region_tag)
                         return 1
-            if transfer_stats.monitor_status == "completed":
+            # if transfer_stats.monitor_status == "completed":
                 # rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
                 # runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{transfer_stats.total_runtime_s:.2f}s[/bright_black]"
                 # throughput_line = f"[white]Throughput:[/white] [bright_black]{transfer_stats.throughput_gbits:.2f}Gbps[/bright_black]"
@@ -236,6 +236,7 @@ def deprovision():
         # typer.secho(f"Deprovisioning {len(instances)} instances", fg="yellow", bold=True)
         do_parallel(lambda instance: instance.terminate_instance(), instances, desc="Deprovisioning", spinner=True, spinner_persist=True)
     else:
+        pass
         # typer.secho("No instances to deprovision", fg="yellow", bold=True)
 
     if AWSAuthenticationProvider().enabled():
