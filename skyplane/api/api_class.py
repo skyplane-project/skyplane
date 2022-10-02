@@ -1,9 +1,13 @@
 from skyplane.api.api import cp, deprovision
 from skyplane.cli.common import parse_path
+import asyncio
+
+def new_client(auth):
+    return Skyplane(auth)
 
 class Skyplane:
     def __init__(self, auth):
-        # TODO: How to pass in auth to cloud api's own functions?
+        # TODO: Pass auth to cloud api's own functions
         # auth = Skyplane.Auth(aws=AWSAuthenticationConfig, azure=, )
         pass
     
@@ -13,7 +17,7 @@ class Skyplane:
         src_bucket = provider_src + ":" + bucket_src
         dst_bucket = provider_dst + ":" + bucket_dst
         with Session(src_bucket, dst_bucket, num_vms, solver=None) as session:
-            session.replicate_job(path_src, path_dst, recursive=recursive)
+            session.copy(path_src, path_dst, recursive=recursive)
             session.run()
 
     def new_session(src_bucket="aws:us-east-1", dst_bucket="aws:us-east-2", num_vms=1, solver=None):
@@ -48,17 +52,21 @@ class Session:
     def auto_terminate(self):
         self.auto_terminate = True
 
-    def replicate_job(self, src_file="foo", dst_file="bar", recursive=False):
+    def copy(self, src_file="foo", dst_file="bar", recursive=False):
         src = self.src_bucket + "/" + src_file
         dst = self.dst_bucket + "/" + dst_file
         job = Job(src, dst, self.num_vms, recursive)
         self.job_list.append(job)
-
-    def run(self):
-        # TODO: Add reuse_gateways
-        for job in self.job_list:
-            job.run()
     
+    async def run_async(self):
+        # TODO: Add reuse_gateways
+        jobs_to_run = self.job_list
+        self.job_list = []
+        result = [job.run() for job in jobs_to_run]
+        await asyncio.gather(result)
+        
+    def run(self):
+        asyncio.run(self.run_async())
 
 class Job:
     def __init__(self, src, dst, num_vms, recursive):
@@ -67,9 +75,8 @@ class Job:
         self.num_vms = num_vms
         self.recursive = recursive
 
-    def run(self):
-        # TODO: Need a job manager to run asynchronously
-        cp(self.src, self.dst, recursive=self.recursive, max_instances=self.num_vms)
+    async def run(self):
+        await cp(self.src, self.dst, recursive=self.recursive, max_instances=self.num_vms)
 
     def estimate_cost():
         # TODO
