@@ -122,11 +122,11 @@ def cp(
     if provider_src == "local" or provider_dst == "local":
         cmd = replicate_onprem_cp_cmd(src, dst, recursive)
         if cmd:
-            typer.secho(f"Delegating to: {cmd}", fg="yellow")
+            # typer.secho(f"Delegating to: {cmd}", fg="yellow")
             os.system(cmd)
             return 0
         else:
-            typer.secho("Transfer not supported", fg="red")
+            # typer.secho("Transfer not supported", fg="red")
             return 1
     elif provider_src in ["aws", "gcp", "azure"] and provider_dst in ["aws", "gcp", "azure"]:
         try:
@@ -148,7 +148,7 @@ def cp(
             return 1
 
         if multipart and (provider_src == "azure" or provider_dst == "azure"):
-            typer.secho("Warning: Azure is not yet supported for multipart transfers. Disabling multipart.", fg="yellow", err=True)
+            # typer.secho("Warning: Azure is not yet supported for multipart transfers. Disabling multipart.", fg="yellow", err=True)
             multipart = False
 
         topo = generate_topology(
@@ -179,7 +179,7 @@ def cp(
             and (job.transfer_size / GB) < config_default_flags.get("native_cmd_threshold_gb")
             and small_transfer_cmd
         ):
-            typer.secho(f"Transfer is small enough to delegate to native tools. Delegating to: {small_transfer_cmd}", fg="yellow")
+            # typer.secho(f"Transfer is small enough to delegate to native tools. Delegating to: {small_transfer_cmd}", fg="yellow")
             os.system(small_transfer_cmd)
             return 0
         else:
@@ -217,10 +217,10 @@ def cp(
                         UsageClient.log_exception("cli_verify_checksums", e, args, src_region_tag, dst_region_tag)
                         return 1
             if transfer_stats.monitor_status == "completed":
-                rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
-                runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{transfer_stats.total_runtime_s:.2f}s[/bright_black]"
-                throughput_line = f"[white]Throughput:[/white] [bright_black]{transfer_stats.throughput_gbits:.2f}Gbps[/bright_black]"
-                rprint(f"{runtime_line}, {throughput_line}")
+                # rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
+                # runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{transfer_stats.total_runtime_s:.2f}s[/bright_black]"
+                # throughput_line = f"[white]Throughput:[/white] [bright_black]{transfer_stats.throughput_gbits:.2f}Gbps[/bright_black]"
+                # rprint(f"{runtime_line}, {throughput_line}")
             UsageClient.log_transfer(transfer_stats, args, src_region_tag, dst_region_tag)
             return 0 if transfer_stats.monitor_status == "completed" else 1
     else:
@@ -233,10 +233,10 @@ def deprovision():
     instances = query_instances()
 
     if instances:
-        typer.secho(f"Deprovisioning {len(instances)} instances", fg="yellow", bold=True)
+        # typer.secho(f"Deprovisioning {len(instances)} instances", fg="yellow", bold=True)
         do_parallel(lambda instance: instance.terminate_instance(), instances, desc="Deprovisioning", spinner=True, spinner_persist=True)
     else:
-        typer.secho("No instances to deprovision", fg="yellow", bold=True)
+        # typer.secho("No instances to deprovision", fg="yellow", bold=True)
 
     if AWSAuthenticationProvider().enabled():
         aws = AWSCloudProvider()
