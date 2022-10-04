@@ -291,7 +291,7 @@ class AWSCloudProvider(CloudProvider):
             logger.fs.debug(f"[AWS] Removing IPs {ips} from security group {sg.group_name}")
             sg.revoke_ingress(
                 IpPermissions=[
-                    {"IpProtocol": "tcp", "FromPort": 12000, "ToPort": 65535, "IpRanges": [{"CidrIp": ip + "/32"}]} for ip in ips
+                    {"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": f"{ip}/32"}]} for ip in ips
                 ]
             )
         except botocore.exceptions.ClientError as e:

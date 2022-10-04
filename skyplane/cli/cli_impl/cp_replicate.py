@@ -338,7 +338,7 @@ def launch_replication_job(
             write_socket_profile=debug,
             copy_gateway_logs=debug,
         )
-    except Exception as e:
+    except BaseException as e:
         if isinstance(e, KeyboardInterrupt):
             rprint("\n[bold red]Transfer cancelled by user. Exiting.[/bold red]")
         elif isinstance(e, exceptions.SkyplaneException):
