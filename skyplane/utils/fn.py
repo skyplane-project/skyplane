@@ -1,4 +1,3 @@
-from os import getpid, system
 import ctypes
 import threading
 import time
@@ -20,7 +19,7 @@ R = TypeVar("R")
 def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, desc="Waiting", debug=False) -> Optional[float]:
     """Wait for fn to return True. Returns number of seconds waited."""
     start = time.time()
-    try: 
+    try:
         while time.time() - start < timeout:
             if fn() == True:
                 logger.fs.debug(f"[wait_for] {desc} fn={fn} completed in {time.time() - start:.2f}s")
@@ -71,10 +70,9 @@ def do_parallel(
                     logger.fs.debug(f"Exiting do_parallel.")
                     executor.shutdown(wait=False)
                     for thread_id in threads:
-                        ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(thread_id),
- ctypes.py_object(KeyboardInterrupt))
+                        ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(thread_id), ctypes.py_object(KeyboardInterrupt))
                     raise e
-            
+
     if spinner_persist:
         rprint(f"[bold green]✓[/] [bright_black]{desc} ({len(results)}/{len(args_list)}) in {t.elapsed:.2f}s[/]")
     return results if return_args else [result for _, result in results]

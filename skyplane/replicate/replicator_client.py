@@ -203,7 +203,9 @@ class ReplicatorClient:
                     server = self.aws.provision_instance(subregion, self.aws_instance_class, use_spot_instances=aws_use_spot_instances)
                 elif provider == "azure":
                     assert self.azure.auth.enabled()
-                    server = self.azure.provision_instance(subregion, self.azure_instance_class, use_spot_instances=azure_use_spot_instances)
+                    server = self.azure.provision_instance(
+                        subregion, self.azure_instance_class, use_spot_instances=azure_use_spot_instances
+                    )
                 elif provider == "gcp":
                     assert self.gcp.auth.enabled()
                     # todo specify network tier in ReplicationTopology
@@ -221,7 +223,7 @@ class ReplicatorClient:
             except KeyboardInterrupt as e:
                 logger.fs.debug("KeyboardInterrupt during provisioning, cleaning up")
                 raise e
-    
+
         results = do_parallel(
             provision_gateway_instance,
             list(aws_regions_to_provision + azure_regions_to_provision + gcp_regions_to_provision),
