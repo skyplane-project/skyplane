@@ -431,7 +431,13 @@ class ReplicatorClient:
                         offset += chunk_size_bytes
                     # add multipart upload request
                     self.multipart_upload_requests.append(
-                        {"region": job.dest_region, "bucket": job.dest_bucket, "upload_id": upload_id, "key": dest_object.key, "parts": parts}
+                        {
+                            "region": job.dest_region,
+                            "bucket": job.dest_bucket,
+                            "upload_id": upload_id,
+                            "key": dest_object.key,
+                            "parts": parts,
+                        }
                     )
 
             # partition chunks into roughly equal-sized batches (by bytes)
