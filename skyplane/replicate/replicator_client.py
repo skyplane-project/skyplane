@@ -544,11 +544,7 @@ class ReplicatorClient:
         log_interval_s: Optional[float] = None,
         log_to_file: bool = True,
         time_limit_seconds: Optional[float] = None,
-        cleanup_gateway: bool = True,
-        save_log: bool = True,
-        write_profile: bool = False,
-        write_socket_profile: bool = False,  # slow but useful for debugging
-        copy_gateway_logs: bool = False,
+        debug: bool = False,
         multipart: bool = False,  # multipart object uploads/downloads
     ) -> TransferStats:
         assert job.chunk_requests is not None
@@ -560,8 +556,7 @@ class ReplicatorClient:
         sinks = self.topology.sink_instances()
         sink_regions = set(s.region for s in sinks)
 
-        if save_log:
-            (self.transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
+        (self.transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
         try:
             with Progress(
                 SpinnerColumn(),
@@ -609,11 +604,13 @@ class ReplicatorClient:
                         # update progress bar
                         total_runtime_s = (log_df.time.max() - log_df.time.min()).total_seconds()
                         throughput_gbits = completed_bytes * 8 / GB / total_runtime_s if total_runtime_s > 0 else 0.0
-                        pending_chunk_ids = set([cr.chunk.chunk_id for cr in job.chunk_requests]) - set(completed_chunk_ids)
-                        if len(pending_chunk_ids) < 5:
-                            pending_chunks = ", chunks [" + ", ".join([str(cid) for cid in pending_chunk_ids]) + "] remain"
-                        else:
-                            pending_chunks = ""
+
+                        # compute list of chunks that are in progress
+                        pending_chunks = ""
+                        if debug:
+                            pending_chunk_ids = set([cr.chunk.chunk_id for cr in job.chunk_requests]) - set(completed_chunk_ids)
+                            if len(pending_chunk_ids) < 5:
+                                pending_chunks = ", chunks [" + ", ".join([str(cid) for cid in pending_chunk_ids]) + "] remain"
 
                         # make log line
                         progress.update(
@@ -686,24 +683,12 @@ class ReplicatorClient:
                     logger.fs.info(f"Compression ratio: {compression_ratio}")
                     progress.console.print(f"[bold yellow]Compression saved {(1. - compression_ratio)*100.:.2f}% of egress fees")
 
-                if copy_gateway_logs:
+                if debug:
 
                     def copy_log(instance):
                         instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
                         instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
                         instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
-
-                    progress.update(cleanup_task, description=": Copying gateway logs")
-                    do_parallel(copy_log, self.bound_nodes.values(), n=-1)
-                if write_profile:
-                    progress.update(cleanup_task, description=": Writing chunk profiles")
-                    chunk_status_df = self.get_chunk_status_log_df()
-                    (self.transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
-                    traceevent = status_df_to_traceevent(chunk_status_df)
-                    profile_out = self.transfer_dir / f"traceevent_{uuid.uuid4()}.json"
-                    profile_out.parent.mkdir(parents=True, exist_ok=True)
-                    profile_out.write_text(json.dumps(traceevent))
-                if write_socket_profile:
 
                     def write_socket_profile(instance):
                         receiver_reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/profile/socket/receiver")
@@ -714,18 +699,32 @@ class ReplicatorClient:
                             )
                         (self.transfer_dir / f"receiver_socket_profile_{instance.uuid()}.json").write_text(text)
 
+                    # copy logs from gateways
+                    progress.update(cleanup_task, description=": Copying gateway logs")
+                    do_parallel(copy_log, self.bound_nodes.values(), n=-1)
+
+                    # write chunk profiles
+                    progress.update(cleanup_task, description=": Writing chunk profiles")
+                    chunk_status_df = self.get_chunk_status_log_df()
+                    (self.transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
+                    traceevent = status_df_to_traceevent(chunk_status_df)
+                    profile_out = self.transfer_dir / f"traceevent_{uuid.uuid4()}.json"
+                    profile_out.parent.mkdir(parents=True, exist_ok=True)
+                    profile_out.write_text(json.dumps(traceevent))
+
+                    # write socket profiles
                     progress.update(cleanup_task, description=": Writing socket profiles")
                     do_parallel(write_socket_profile, self.bound_nodes.values(), n=-1)
-                if cleanup_gateway:
 
-                    def fn(s: Server):
-                        try:
-                            self.http_pool.request("POST", f"{s.gateway_api_url}/api/v1/shutdown")
-                        except:
-                            return  # ignore connection errors since server may be shutting down
+                # cleanup gateways
+                def fn(s: Server):
+                    try:
+                        self.http_pool.request("POST", f"{s.gateway_api_url}/api/v1/shutdown")
+                    except:
+                        return  # ignore connection errors since server may be shutting down
 
-                    do_parallel(fn, self.bound_nodes.values(), n=-1)
-                    progress.update(cleanup_task, description=": Shutting down gateways")
+                do_parallel(fn, self.bound_nodes.values(), n=-1)
+                progress.update(cleanup_task, description=": Shutting down gateways")
         raise exceptions.SkyplaneException("Transfer failed, cleanup did not run")  # should never get here
 
     @staticmethod
