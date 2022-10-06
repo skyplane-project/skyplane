@@ -683,26 +683,24 @@ class ReplicatorClient:
                     logger.fs.info(f"Compression ratio: {compression_ratio}")
                     progress.console.print(f"[bold yellow]Compression saved {(1. - compression_ratio)*100.:.2f}% of egress fees")
 
+                def copy_log(instance):
+                    instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
+                    instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
+                    instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
+
+                def write_socket_profile(instance):
+                    receiver_reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/profile/socket/receiver")
+                    text = receiver_reply.data.decode("utf-8")
+                    if receiver_reply.status != 200:
+                        logger.fs.error(
+                            f"Failed to get receiver socket profile from {instance.gateway_api_url}: {receiver_reply.status} {text}"
+                        )
+                    (self.transfer_dir / f"receiver_socket_profile_{instance.uuid()}.json").write_text(text)
+
                 if debug:
-
-                    def copy_log(instance):
-                        instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
-                        instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
-                        instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
-
-                    def write_socket_profile(instance):
-                        receiver_reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/profile/socket/receiver")
-                        text = receiver_reply.data.decode("utf-8")
-                        if receiver_reply.status != 200:
-                            logger.fs.error(
-                                f"Failed to get receiver socket profile from {instance.gateway_api_url}: {receiver_reply.status} {text}"
-                            )
-                        (self.transfer_dir / f"receiver_socket_profile_{instance.uuid()}.json").write_text(text)
-
                     # copy logs from gateways
                     progress.update(cleanup_task, description=": Copying gateway logs")
                     do_parallel(copy_log, self.bound_nodes.values(), n=-1)
-
                     # write chunk profiles
                     progress.update(cleanup_task, description=": Writing chunk profiles")
                     chunk_status_df = self.get_chunk_status_log_df()
@@ -711,7 +709,6 @@ class ReplicatorClient:
                     profile_out = self.transfer_dir / f"traceevent_{uuid.uuid4()}.json"
                     profile_out.parent.mkdir(parents=True, exist_ok=True)
                     profile_out.write_text(json.dumps(traceevent))
-
                     # write socket profiles
                     progress.update(cleanup_task, description=": Writing socket profiles")
                     do_parallel(write_socket_profile, self.bound_nodes.values(), n=-1)
