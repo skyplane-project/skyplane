@@ -7,15 +7,13 @@ from multiprocessing import BoundedSemaphore
 from pathlib import Path
 from typing import List, Optional
 
-import botocore
-
-from skyplane import exceptions
+from skyplane import exceptions as skyplane_exceptions
 from skyplane import key_root
 from skyplane import skyplane_root
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_server import AWSServer
 from skyplane.compute.cloud_providers import CloudProvider
-from skyplane.utils import logger
+from skyplane.utils import logger, imports
 from skyplane.utils.fn import do_parallel, wait_for
 
 try:
@@ -64,13 +62,14 @@ class AWSCloudProvider(CloudProvider):
         else:
             return transfer_df.loc[src, "internet"]["cost"]
 
-    def get_instance_list(self, region: str) -> List[AWSServer]:
+    @imports.inject("botocore.exceptions", pip_extra="aws")
+    def get_instance_list(exceptions, self, region: str) -> List[AWSServer]:
         ec2 = self.auth.get_boto3_resource("ec2", region)
         valid_states = ["pending", "running", "stopped", "stopping"]
         instances = ec2.instances.filter(Filters=[{"Name": "instance-state-name", "Values": valid_states}])
         try:
             instance_ids = [i.id for i in instances]
-        except botocore.exceptions.ClientError as e:
+        except exceptions.ClientError as e:
             logger.error(f"error provisioning in {region}: {e}")
             return []
 
@@ -92,7 +91,8 @@ class AWSCloudProvider(CloudProvider):
         else:
             return vpcs
 
-    def make_vpc(self, region: str, vpc_name="skyplane"):
+    @imports.inject("botocore.exceptions", pip_extra="aws")
+    def make_vpc(exceptions, self, region: str, vpc_name="skyplane"):
         ec2 = self.auth.get_boto3_resource("ec2", region)
         ec2client = ec2.meta.client
         vpcs = list(ec2.vpcs.filter(Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]).all())
@@ -114,7 +114,7 @@ class AWSCloudProvider(CloudProvider):
                     if vpc != matching_vpc:
                         try:
                             self.delete_vpc(region, vpc.id)
-                        except botocore.exceptions.ClientError as e:
+                        except exceptions.ClientError as e:
                             logger.warning(f"Failed to delete VPC {vpc.id} in {region}: {e}")
                 break
 
@@ -264,7 +264,8 @@ class AWSCloudProvider(CloudProvider):
         logger.fs.debug(f"[AWS] Authorizing {client_ip}:{port} in {sg.group_name}")
         sg.authorize_ingress(IpPermissions=[{"IpProtocol": "tcp", "FromPort": port, "ToPort": port, "IpRanges": [{"CidrIp": client_ip}]}])
 
-    def add_ips_to_security_group(self, aws_region: str, ips: Optional[List[str]] = None):
+    @imports.inject("botocore.exceptions", pip_extra="aws")
+    def add_ips_to_security_group(exceptions, self, aws_region: str, ips: Optional[List[str]] = None):
         """Add IPs to security group. If security group ID is None, use group named skyplane (create if not exists). If ip is None, authorize all IPs."""
         sg = self.get_security_group(aws_region)
         try:
@@ -275,7 +276,7 @@ class AWSCloudProvider(CloudProvider):
                     for ip in ips
                 ]
             )
-        except botocore.exceptions.ClientError as e:
+        except exceptions.ClientError as e:
             if str(e).endswith("already exists") or str(e).endswith("already exist"):
                 logger.warn(f"[AWS] Error adding IPs to security group, since it already exits: {e}")
             else:
@@ -283,7 +284,8 @@ class AWSCloudProvider(CloudProvider):
                 logger.fs.exception(e)
                 raise e
 
-    def remove_ips_from_security_group(self, aws_region: str, ips: List[str]):
+    @imports.inject("botocore.exceptions", pip_extra="aws")
+    def remove_ips_from_security_group(exceptions, self, aws_region: str, ips: List[str]):
         """Remove IP from security group. If security group ID is None, return."""
         # Remove instance IP from security group
         sg = self.get_security_group(aws_region)
@@ -294,7 +296,7 @@ class AWSCloudProvider(CloudProvider):
                     {"IpProtocol": "tcp", "FromPort": 12000, "ToPort": 65535, "IpRanges": [{"CidrIp": ip + "/32"}]} for ip in ips
                 ]
             )
-        except botocore.exceptions.ClientError as e:
+        except exceptions.ClientError as e:
             logger.fs.error(f"[AWS] Error removing IPs {ips} from security group {sg.group_name}: {e}")
             if "The specified rule does not exist in this security group." not in str(e):
                 logger.warn(f"[AWS] Error removing IPs from security group: {e}")
@@ -323,12 +325,13 @@ class AWSCloudProvider(CloudProvider):
 
         return local_key_file
 
+    @imports.inject("botocore.exceptions", pip_extra="aws")
     def provision_instance(
+        exceptions,
         self,
         region: str,
         instance_class: str,
         name: Optional[str] = None,
-        # ami_id: Optional[str] = None,
         tags={"skyplane": "true"},
         ebs_volume_size: int = 128,
         iam_name: str = "skyplane_gateway",
@@ -423,11 +426,11 @@ class AWSCloudProvider(CloudProvider):
                 try:
                     instance = start_instance(subnets[current_subnet_id].id)
                     break
-                except botocore.exceptions.ClientError as e:
+                except exceptions.ClientError as e:
                     if i == max_retries - 1:
                         raise e
                     elif "VcpuLimitExceeded" in str(e):
-                        raise exceptions.InsufficientVCPUException() from e
+                        raise skyplane_exceptions.InsufficientVCPUException() from e
                     elif "Invalid IAM Instance Profile name" not in str(e):
                         logger.warning(str(e))
                     elif "InsufficientInstanceCapacity" in str(e):

@@ -26,8 +26,8 @@ Skyplane supports all major public clouds including AWS, Azure, and GCP. It can 
 ## Installation
 We recommend installation from PyPi:
 ```
-# Install Skyplane (default to [aws])
-$ pip install skyplane
+# Install Skyplane
+$ pip install skyplane[aws]
 # $ pip install skyplane[azure]
 # $ pip install skyplane[gcp]
 # $ pip install skyplane[all]
