@@ -14,12 +14,45 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface, Obje
 from skyplane.obj_store.s3_interface import S3Object
 from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
-from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
+from skyplane.replicate.replication_plan import ReplicationTopology, BroadcastReplicationTopology, ReplicationJob
 from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
 from skyplane.cli.common import console
 from skyplane.cli.usage.client import UsageClient
+
+
+def generate_broadcast_topology(
+    src_region: str,
+    dst_regions: List[str],
+    solve: bool,
+    num_blocks = 4, # max number of blocks transferred over unique paths
+    num_connections: int = 32,
+    max_instances: int = 1,
+    solver_class: str = "ILP",
+    solver_total_gbyte_to_transfer: Optional[float] = None,
+    solver_target_tput_per_vm_gbits: Optional[float] = None,
+    solver_throughput_grid: Optional[pathlib.Path] = skyplane_root / "profiles" / "throughput.csv",
+    solver_verbose: Optional[bool] = False,
+    args: Optional[Dict] = None,
+) -> BroadcastReplicationTopology:
+
+    """
+    Create representation of topology for broadcast replication.
+    """
+
+    # TODO: Actually call solver here 
+    topo = BroadcastReplicationTopology()
+    block_ids = range(num_blocks)
+    for i in range(max_instances):
+        topo.add_objstore_instance_edge(src_region, src_region, i, block_ids)
+        topo.add_instance_instance_edge(src_region, i, dst_region, i, num_connections, block_ids)
+        topo.add_instance_objstore_edge(dst_region, i, dst_region, block_ids)
+
+    # TODO: fix this calculation
+    topo.cost_per_gb = CloudProvider.get_transfer_cost(src_region, dst_region)
+
+    return topo
 
 
 def generate_topology(
@@ -93,6 +126,11 @@ def generate_topology(
             topo.add_instance_instance_edge(src_region, i, dst_region, i, num_connections)
             topo.add_instance_objstore_edge(dst_region, i, dst_region)
         topo.cost_per_gb = CloudProvider.get_transfer_cost(src_region, dst_region)
+
+        # BC: return topo from 
+        # edges define connections  
+        # instance=n defines which ID node in the region 
+        print("Topology", topo.to_json()) 
         return topo
 
 

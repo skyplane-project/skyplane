@@ -138,7 +138,7 @@ class ReplicationTopology:
         edges = []
         for e in self.edges:
             edges.append({"src": e[0].to_dict(), "dest": e[1].to_dict(), "num_connections": int(e[2])})
-        return json.dumps(dict(replication_topology_edges=edges))
+        return json.dumps(dict(replication_topology_edges=edges), indent=2)
 
     @classmethod
     def from_json(cls, json_str: str):
@@ -204,9 +204,89 @@ class ReplicationTopology:
 
         return g
 
+class BroadcastReplicationTopology(ReplicationTopology):
+    """
+    Multiple destinations - edges specify a which block of data they are responsible for carrying
+    """
+
+    def __init__(
+        self,
+        edges: Optional[List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int, int]]] = None,
+        cost_per_gb: Optional[float] = None,
+    ):
+
+        """
+        Edge is represented by: 
+        Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int, int] -> [src_node, dst_node, num_conn, block_index]
+
+        """
+        self.edges: List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int, int]] = edges or []
+        self.nodes: Set[ReplicationTopologyNode] = set(k[0] for k in self.edges) | set(k[1] for k in self.edges)
+        self.cost_per_gb: Optional[float] = cost_per_gb
+
+    def source_instances(self) -> Set[ReplicationTopologyGateway]:
+        nodes = self.nodes - {v for u, v, _, _ in self.edges if not isinstance(u, ReplicationTopologyObjectStore)}
+        return {n for n in nodes if isinstance(n, ReplicationTopologyGateway)}
+
+    def sink_instances(self) -> Set[ReplicationTopologyGateway]:
+        nodes = self.nodes - {u for u, v, _, _ in self.edges if not isinstance(v, ReplicationTopologyObjectStore)}
+        return {n for n in nodes if isinstance(n, ReplicationTopologyGateway)}
+
+    def add_instance_instance_edge(self, src_region: str, src_instance: int, dest_region: str, dest_instance: int, num_connections: int, block_ids: List[int]):
+        """Add relay edge between two instances."""
+        src_gateway = ReplicationTopologyGateway(src_region, src_instance)
+        dest_gateway = ReplicationTopologyGateway(dest_region, dest_instance)
+        for block_id in block_ids:
+            self.edges.append((src_gateway, dest_gateway, int(num_connections)), block_id)
+        self.nodes.add(src_gateway)
+        self.nodes.add(dest_gateway)
+
+    def add_objstore_instance_edge(self, src_region: str, dest_region: str, dest_instance: int, block_ids: List[int]):
+        """Add object store to instance node (i.e. source bucket to source gateway)."""
+        src_objstore = ReplicationTopologyObjectStore(src_region)
+        dest_gateway = ReplicationTopologyGateway(dest_region, dest_instance)
+        for block_id in block_ids:
+            self.edges.append((src_objstore, dest_gateway, 0, block_id))
+        self.nodes.add(src_objstore)
+        self.nodes.add(dest_gateway)
+
+    def add_instance_objstore_edge(self, src_region: str, src_instance: int, dest_region: str, block_ids: List[int]):
+        """Add instance to object store edge (i.e. destination gateway to destination bucket)."""
+        src_gateway = ReplicationTopologyGateway(src_region, src_instance)
+        dest_objstore = ReplicationTopologyObjectStore(dest_region)
+        for block_id in block_ids:
+            self.edges.append((src_gateway, dest_objstore, 0, block_id))
+        self.nodes.add(src_gateway)
+        self.nodes.add(dest_objstore)
+
+
 
 @dataclass
 class ReplicationJob:
+    source_region: str
+    source_bucket: Optional[str]
+    dest_region: str
+    dest_bucket: Optional[str]
+
+    # object transfer pairs (src, dest)
+    transfer_pairs: List[Tuple[ObjectStoreObject, ObjectStoreObject]]
+
+    # progress tracking via a list of chunk_requests
+    chunk_requests: Optional[List[ChunkRequest]] = None
+
+    # Generates random chunks for testing on the gateways
+    random_chunk_size_mb: Optional[int] = None
+
+    @property
+    def transfer_size(self):
+        if not self.random_chunk_size_mb:
+            return sum(source_object.size for source_object, _ in self.transfer_pairs)
+        else:
+            return self.random_chunk_size_mb * len(self.transfer_pairs) * MB
+
+
+@dataclass
+class BroadcastReplicationJob:
     source_region: str
     source_bucket: Optional[str]
     dest_region: str
