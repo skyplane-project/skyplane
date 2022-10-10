@@ -203,6 +203,7 @@ def cp(
             solver_verbose=solver_verbose,
             args=args,
         )
+        print("Generate topology", topo)
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=bucket_src,
@@ -262,8 +263,7 @@ def cp(
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
 
-
-@app.command()
+app.command()
 def sync(
     src: str,
     dst: str,

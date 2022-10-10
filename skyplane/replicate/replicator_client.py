@@ -89,6 +89,7 @@ class ReplicatorClient:
 
         # logging
         self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
+        print("TRANSFER LOGS", self.transfer_dir)
         self.transfer_dir.mkdir(exist_ok=True, parents=True)
         logger.open_log_file(self.transfer_dir / "client.log")
 
@@ -216,6 +217,8 @@ class ReplicatorClient:
                 raise NotImplementedError(f"Unknown provider {provider}")
             server.enable_auto_shutdown()
             self.temp_nodes.append(server)
+
+            # BC: return server object
             return server
 
         results = do_parallel(
@@ -228,6 +231,7 @@ class ReplicatorClient:
         instances_by_region = {
             r: [instance for instance_region, instance in results if instance_region == r] for r in set(regions_to_provision)
         }
+        print("instances_by_region", instances_by_region)
 
         # add existing instances
         if reuse_instances:
@@ -248,6 +252,7 @@ class ReplicatorClient:
                 self.temp_nodes.extend(ilist)
 
         # bind instances to nodes
+        # BC: bind nodes to the information post-deployment
         for node in self.topology.gateway_nodes:
             instance = instances_by_region[node.region].pop()
             self.bound_nodes[node] = instance
@@ -272,11 +277,16 @@ class ReplicatorClient:
 
         # setup instances
         def setup(args: Tuple[Server, Dict[str, int], bool, bool]):
+
+            # BC: str = int, int = number of connection
+            # BC:  Dict[str, int] = outgoing_ports
             server, outgoing_ports, am_source, am_sink = args
             if log_dir:
                 server.init_log_files(log_dir)
             if authorize_ssh_pub_key:
                 server.copy_public_key(authorize_ssh_pub_key)
+
+            # BC: server.py calls docker container
             server.start_gateway(
                 outgoing_ports,
                 gateway_docker_image=self.gateway_docker_image,
@@ -290,9 +300,11 @@ class ReplicatorClient:
         sources = self.topology.source_instances()
         sinks = self.topology.sink_instances()
         for node, server in self.bound_nodes.items():
+            # BC: server = concrete, node = abstract
+            # TODO: put this into `def setup`
             setup_args = {
                 self.bound_nodes[n].public_ip(): v
-                for n, v in self.topology.get_outgoing_paths(node).items()
+                for n, v in self.topology.get_outgoing_paths(node).items() # BC: successor nodes
                 if isinstance(n, ReplicationTopologyGateway)
             }
             args.append((server, setup_args, node in sources, node in sinks))
@@ -741,3 +753,55 @@ class ReplicatorClient:
 
         if dst_keys:
             raise exceptions.TransferFailedException(f"{len(dst_keys)} objects failed verification", [obj.key for obj in dst_keys.values()])
+
+class BroadcastReplicatorClient(ReplicatorClient):
+
+    def __init__(
+        self,
+        topology: ReplicationTopology,
+        gateway_docker_image: str = gateway_docker_image(),
+        aws_instance_class: Optional[str] = "m5.4xlarge",  # set to None to disable AWS
+        azure_instance_class: Optional[str] = "Standard_D2_v5",  # set to None to disable Azure
+        gcp_instance_class: Optional[str] = "n2-standard-16",  # set to None to disable GCP
+        gcp_use_premium_network: bool = True,
+    ):
+
+        super(ReplicatorClient, self).__init__(
+            topology, 
+            gateway_docker_image, 
+            aws_instance_class, 
+            azure_instance_class, 
+            gcp_instance_class, 
+            gcp_use_premium_network
+        )
+
+    def provision_gateways(
+        self,
+        reuse_instances=False,
+        log_dir: Optional[PathLike] = None,
+        authorize_ssh_pub_key: Optional[PathLike] = None,
+        use_bbr=True,
+        use_compression=True,
+        use_e2ee=True,
+        use_socket_tls=False,
+        aws_use_spot_instances: bool = False,
+        azure_use_spot_instances: bool = False,
+        gcp_use_spot_instances: bool = False,
+    ):
+        pass
+ 
+    def run_replication_plan(
+        self,
+        job: ReplicationJob, #BroadcastReplicationJob,
+        multipart_enabled: bool,
+        multipart_min_threshold_mb: int,
+        multipart_chunk_size_mb: int,
+        multipart_max_chunks: int,
+    ) -> ReplicationJob: #BroadcastReplicationJob
+
+        """
+        Initiate broadcast replication job. 
+        """
+        pass
+
+ 
