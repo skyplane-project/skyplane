@@ -24,8 +24,16 @@ Skyplane supports all major public clouds including AWS, Azure, and GCP. It can 
 # Getting started
 
 ## Installation
-We recommend installation from PyPi: `pip install skyplane[aws]`
-To install support for all clouds, run: `pip install skyplane[aws,azure,gcp]`
+We recommend installation from PyPi:
+```
+# Install Skyplane (default to [aws])
+$ pip install skyplane
+# $ pip install skyplane[azure]
+# $ pip install skyplane[gcp]
+# $ pip install skyplane[all]
+```
+
+Skyplane supports AWS, Azure, and GCP. You can install Skyplane with support for one or more of these clouds by specifying the corresponding extras. To install two out of three clouds, you can run `pip install skyplane[aws,azure]`.
 
 *GCP support on the M1 Mac*: If you are using an M1 Mac with the arm64 architecture and want to install GCP support for Skyplane, you will need to install as follows
 `GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 GRPC_PYTHON_BUILD_SYSTEM_ZLIB=1 pip install skyplane[aws,gcp]`
