@@ -53,7 +53,6 @@ def generate_broadcast_topology(
     # TODO: fix this calculation
     #topo.cost_per_gb = CloudProvider.get_transfer_cost(src_region, dst_region)
     topo.cost_per_gb = 1
-
     return topo
 
 
