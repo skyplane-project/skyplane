@@ -3,6 +3,7 @@ import subprocess
 from functools import partial
 from pathlib import Path
 from shlex import split
+from tkinter import ON
 import traceback
 import uuid
 import os
@@ -52,7 +53,9 @@ from skyplane.utils.fn import do_parallel
 
 def cp(
     src: str,
+    src_client: ObjectStoreInterface,
     dst: str,
+    dst_client: ObjectStoreInterface,
     recursive: bool = False,
     reuse_gateways: bool = True, # All in the session and will be deprovisioned after
     debug: bool = False,
@@ -130,8 +133,6 @@ def cp(
             return 1
     elif provider_src in ["aws", "gcp", "azure"] and provider_dst in ["aws", "gcp", "azure"]:
         try:
-            src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
-            dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
             src_region_tag = src_client.region_tag()
             dst_region_tag = dst_client.region_tag()
             requester_pays = config_default_flags.get("requester_pays")
@@ -139,7 +140,7 @@ def cp(
                 src_client.set_requester_bool(True)
                 dst_client.set_requester_bool(True)
             transfer_pairs = generate_full_transferobjlist(
-                src_region_tag, bucket_src, path_src, dst_region_tag, bucket_dst, path_dst, recursive=recursive, requester_pays=requester_pays,
+                src_region_tag, bucket_src, path_src, src_client, dst_region_tag, bucket_dst, path_dst, dst_client, recursive=recursive, requester_pays=requester_pays,
             )
         except exceptions.SkyplaneException as e:
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")

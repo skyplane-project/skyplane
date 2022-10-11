@@ -5,6 +5,7 @@ from functools import lru_cache, partial
 from typing import Iterator, List, Optional
 
 from skyplane import exceptions, is_gateway_env
+from skyplane.api.auth.auth_config import AuthenticationConfig
 from skyplane.compute.azure.azure_auth_provider import AzureAuthenticationProvider
 from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.obj_store.azure_storage_account_interface import AzureStorageAccountInterface
@@ -20,8 +21,8 @@ class AzureBlobObject(ObjectStoreObject):
 
 
 class AzureBlobInterface(ObjectStoreInterface):
-    def __init__(self, account_name: str, container_name: str, max_concurrency=1):
-        self.auth = AzureAuthenticationProvider()
+    def __init__(self, account_name: str, container_name: str, config: AuthenticationConfig = None, max_concurrency=1):
+        self.auth = AzureAuthenticationProvider(config=config)
         self.storage_account_interface = AzureStorageAccountInterface(account_name)
         self.account_name = account_name
         self.container_name = container_name

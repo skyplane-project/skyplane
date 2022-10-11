@@ -5,6 +5,7 @@ import os
 from typing import Iterator, List, Optional
 
 from skyplane import exceptions
+from skyplane.api.auth.auth_config import AuthenticationConfig
 from skyplane.compute.aws.aws_auth_provider import AWSAuthenticationProvider
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.exceptions import NoSuchObjectException
@@ -18,8 +19,8 @@ class S3Object(ObjectStoreObject):
 
 
 class S3Interface(ObjectStoreInterface):
-    def __init__(self, bucket_name: str):
-        self.auth = AWSAuthenticationProvider()
+    def __init__(self, bucket_name: str, config: AuthenticationConfig = None):
+        self.auth = AWSAuthenticationProvider(config=config)
         self.requester_pays = False
         self.bucket_name = bucket_name
         self._cached_s3_clients = {}

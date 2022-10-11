@@ -180,7 +180,7 @@ def cp(
                 src_client.set_requester_bool(True)
                 dst_client.set_requester_bool(True)
             transfer_pairs = generate_full_transferobjlist(
-                src_region_tag, bucket_src, path_src, dst_region_tag, bucket_dst, path_dst, recursive=recursive, requester_pays=requester_pays,
+                src_region_tag, bucket_src, path_src, src_client, dst_region_tag, bucket_dst, path_dst, dst_client, recursive=recursive, requester_pays=requester_pays,
             )
         except exceptions.SkyplaneException as e:
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
@@ -363,9 +363,9 @@ def sync(
             dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
             dst_region_tag = dst_client.region_tag()
             full_transfer_pairs = generate_full_transferobjlist(
-                src_region_tag, bucket_src, path_src, dst_region_tag, bucket_dst, path_dst, recursive=True
+                src_region_tag, bucket_src, path_src, src_client, dst_region_tag, bucket_dst, path_dst, dst_client, recursive=True
             )
-            enrich_dest_objs(dst_region_tag, path_dst, bucket_dst, [i[1] for i in full_transfer_pairs])
+            enrich_dest_objs(dst_region_tag, path_dst, bucket_dst, [i[1] for i in full_transfer_pairs], dst_client)
         except exceptions.SkyplaneException as e:
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
             console.print(e.pretty_print_str())

@@ -141,16 +141,15 @@ def generate_full_transferobjlist(
     source_region: str,
     source_bucket: str,
     source_prefix: str,
+    source_iface: ObjectStoreInterface,
     dest_region: str,
     dest_bucket: str,
     dest_prefix: str,
+    dest_iface: ObjectStoreInterface,
     recursive: bool = False,
     requester_pays: bool = False,
 ) -> List[Tuple[ObjectStoreObject, ObjectStoreObject]]:
     """Query source region and return list of objects to transfer."""
-    source_iface = ObjectStoreInterface.create(source_region, source_bucket)
-    dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
-
     if requester_pays:
         source_iface.set_requester_bool(True)
 
@@ -191,11 +190,10 @@ def generate_full_transferobjlist(
     return list(zip(source_objs, dest_objs))
 
 
-def enrich_dest_objs(dest_region: str, dest_prefix: str, dest_bucket: str, dest_objs: list):
+def enrich_dest_objs(dest_region: str, dest_prefix: str, dest_bucket: str, dest_objs: list, dest_iface: ObjectStoreInterface):
     """
     For skyplane sync, we enrich dest obj metadata with our existing dest obj metadata from the dest bucket following a query.
     """
-    dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
 
     # query destination at dest_key
     logger.fs.debug(f"Querying objects in {dest_bucket}")
