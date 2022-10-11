@@ -18,9 +18,9 @@ Skyplane is:
 3. 🌐 Universal (AWS, Azure and GCP)
 
 You can use Skyplane to transfer data: 
-* Between object stores within a cloud provider (e.g. AWS us-east-1 to AWS us-west-2)
-* Between object stores across multiple cloud providers (e.g. AWS us-east-1 to GCP us-central1)
-* Between local storage and cloud object stores (experimental)
+* between object stores within a cloud provider (e.g. AWS us-east-1 to AWS us-west-2)
+* between object stores across multiple cloud providers (e.g. AWS us-east-1 to GCP us-central1)
+* between local storage and cloud object stores (experimental)
 
 Skyplane supports all major public clouds including AWS, Azure, and GCP. It can also transfer data between any combination of these clouds:
 
