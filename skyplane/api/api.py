@@ -49,8 +49,9 @@ from skyplane.config import _DEFAULT_FLAGS as config_default_flags
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
+import asyncio
 
-def cp(
+async def cp(
     src: str,
     dst: str,
     recursive: bool = False,

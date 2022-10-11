@@ -11,7 +11,7 @@ class Skyplane:
         # auth = Skyplane.Auth(aws=AWSAuthenticationConfig, azure=, )
         pass
     
-    def copy(src="s3://us-east-1/foo", dst="s3://us-east-2/bar", num_vms=1, recursive=False):
+    def copy(self, src="s3://us-east-1/foo", dst="s3://us-east-2/bar", num_vms=1, recursive=False):
         provider_src, bucket_src, path_src = parse_path(src)
         provider_dst, bucket_dst, path_dst = parse_path(dst)
         src_bucket = provider_src + ":" + bucket_src
@@ -20,7 +20,7 @@ class Skyplane:
             session.copy(path_src, path_dst, recursive=recursive)
             session.run()
 
-    def new_session(src_bucket="aws:us-east-1", dst_bucket="aws:us-east-2", num_vms=1, solver=None):
+    def new_session(self, src_bucket="aws:us-east-1", dst_bucket="aws:us-east-2", num_vms=1, solver=None):
         # solver = [None, "ILP", "RON"]
         return Session(src_bucket, dst_bucket, num_vms, solver)
 
@@ -63,7 +63,7 @@ class Session:
         jobs_to_run = self.job_list
         self.job_list = []
         result = [job.run() for job in jobs_to_run]
-        await asyncio.gather(result)
+        await asyncio.gather(*result)
         
     def run(self):
         asyncio.run(self.run_async())
@@ -78,6 +78,6 @@ class Job:
     async def run(self):
         await cp(self.src, self.dst, recursive=self.recursive, max_instances=self.num_vms)
 
-    def estimate_cost():
+    def estimate_cost(self):
         # TODO
         pass

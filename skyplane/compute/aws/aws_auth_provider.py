@@ -12,14 +12,14 @@ class AWSAuthenticationProvider(CloudAuthenticationProvider):
 
     def __init__(self, config = None):
         """Loads AWS authentication details. If no access key is provided, it will try to load credentials using boto3"""
-        if config.aws_access_key and config.aws_secret_key:
-            self.config_mode = "manual"
-            self._access_key = config.aws_access_key
-            self._secret_key = config.aws_secret_key
-        else:
+        if not config:
             self.config_mode = "iam_inferred"
             self._access_key = None
             self._secret_key = None
+        elif config.aws_access_key and config.aws_secret_key:
+            self.config_mode = "manual"
+            self._access_key = config.aws_access_key
+            self._secret_key = config.aws_secret_key
 
     @imports.inject("boto3", pip_extra="aws")
     def save_region_config(boto3, self, config: SkyplaneConfig):
