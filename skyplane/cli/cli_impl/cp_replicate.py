@@ -334,9 +334,7 @@ def launch_replication_job(
             log_to_file=True,
             time_limit_seconds=time_limit_seconds,
             multipart=multipart_enabled,
-            write_profile=debug,
-            write_socket_profile=debug,
-            copy_gateway_logs=debug,
+            debug=debug,
         )
     except Exception as e:
         if isinstance(e, KeyboardInterrupt):

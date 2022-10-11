@@ -10,7 +10,7 @@ Skyplane comes with a variety of knobs to tune to adjust performance or change h
 * Transfer parallelism
     * `max_instances`: Maximum number of instances to use for parallel transfers. (default 10)
 * Network configuration
-    * `bbr`: If set, the VM will use BBR congestion control instead of CUBIC. (default False)
+    * `bbr`: If set, the VM will use BBR congestion control instead of CUBIC. (default True)
     * `compress`: If set, gateway VMs will compress data before egress to reduce costs. (default True)
     * `encrypt_e2e`: If set, gateway VMs will encrypt data end-to-end. (default True)
     * `encrypt_socket_tls`: If set, all sockets between gateways will be encrypted with TLS. (default False)
