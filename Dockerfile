@@ -5,6 +5,7 @@ FROM python:3.10-slim
 RUN --mount=type=cache,target=/var/cache/apt apt update \
     && apt-get install --no-install-recommends -y curl ca-certificates stunnel4 \
     && apt-get clean \
+    && apt-get -y install gcc mono-mcs \ 
     && rm -rf /var/lib/apt/lists/*
 
 # configure stunnel
