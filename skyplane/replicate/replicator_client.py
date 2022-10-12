@@ -365,6 +365,7 @@ class ReplicatorClient:
                             src_key=src_object.key,
                             dest_key=dest_object.key,
                             chunk_id=idx,
+                            partition_id=0, #TODO: fix
                             file_offset_bytes=0,
                             chunk_length_bytes=job.random_chunk_size_mb * MB,
                         )
@@ -378,6 +379,7 @@ class ReplicatorClient:
                         src_key=src_object.key,
                         dest_key=dest_object.key,
                         chunk_id=idx,
+                        partition_id=0, #TODO: fix
                         file_offset_bytes=0,
                         chunk_length_bytes=src_object.size,
                     )
@@ -417,6 +419,7 @@ class ReplicatorClient:
                             src_key=src_object.key,
                             dest_key=dest_object.key,
                             chunk_id=idx,
+                            partition_id=0, #TODO: fix
                             file_offset_bytes=offset,
                             chunk_length_bytes=file_size_bytes,
                             part_number=part_num,
