@@ -224,6 +224,12 @@ class BroadcastReplicationTopology(ReplicationTopology):
         self.nodes: Set[ReplicationTopologyNode] = set(k[0] for k in self.edges) | set(k[1] for k in self.edges)
         self.cost_per_gb: Optional[float] = cost_per_gb
 
+    def sink_regions(self) -> str:
+        instances = list(self.sink_instances())
+        #assert all(i.region == instances[0].region for i in instances), "All sink instances must be in the same region"
+        return [instance.region for instance in instances]
+
+
     def source_instances(self) -> Set[ReplicationTopologyGateway]:
         nodes = self.nodes - {v for u, v, _, _ in self.edges if not isinstance(u, ReplicationTopologyObjectStore)}
         return {n for n in nodes if isinstance(n, ReplicationTopologyGateway)}
@@ -237,7 +243,7 @@ class BroadcastReplicationTopology(ReplicationTopology):
         src_gateway = ReplicationTopologyGateway(src_region, src_instance)
         dest_gateway = ReplicationTopologyGateway(dest_region, dest_instance)
         for block_id in block_ids:
-            self.edges.append((src_gateway, dest_gateway, int(num_connections)), block_id)
+            self.edges.append((src_gateway, dest_gateway, int(num_connections), block_id))
         self.nodes.add(src_gateway)
         self.nodes.add(dest_gateway)
 
@@ -289,8 +295,8 @@ class ReplicationJob:
 class BroadcastReplicationJob:
     source_region: str
     source_bucket: Optional[str]
-    dest_region: str
-    dest_bucket: Optional[str]
+    dest_regions: List[str]
+    dest_buckets: Optional[List[str]]
 
     # object transfer pairs (src, dest)
     transfer_pairs: List[Tuple[ObjectStoreObject, ObjectStoreObject]]

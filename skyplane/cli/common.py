@@ -41,6 +41,8 @@ def parse_path(path: str):
             return True
         return False
 
+    print("path", path)
+
     if path.startswith("s3://") or path.startswith("gs://"):
         provider, parsed = path[:2], path[5:]
         if len(parsed) == 0:

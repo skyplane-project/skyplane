@@ -37,6 +37,7 @@ class CloudProvider:
 
             return AzureCloudProvider.get_transfer_cost(src_key, dst_key, premium_tier)
         else:
+            print(src_provider)
             raise NotImplementedError
 
     def get_instance_list(self, region) -> List[Server]:
