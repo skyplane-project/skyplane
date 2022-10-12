@@ -46,11 +46,13 @@ def generate_broadcast_topology(
     block_ids = range(num_blocks)
     for i in range(max_instances):
         topo.add_objstore_instance_edge(src_region, src_region, i, block_ids)
-        topo.add_instance_instance_edge(src_region, i, dst_region, i, num_connections, block_ids)
-        topo.add_instance_objstore_edge(dst_region, i, dst_region, block_ids)
+        for dst_region in dst_regions: 
+            topo.add_instance_instance_edge(src_region, i, dst_region, i, num_connections, block_ids)
+            topo.add_instance_objstore_edge(dst_region, i, dst_region, block_ids)
 
     # TODO: fix this calculation
-    topo.cost_per_gb = CloudProvider.get_transfer_cost(src_region, dst_region)
+    #topo.cost_per_gb = CloudProvider.get_transfer_cost(src_region, dst_region)
+    topo.cost_per_gb = 1
 
     return topo
 
