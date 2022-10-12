@@ -53,7 +53,7 @@ class GCPServer(Server):
 
     def private_ip(self):
         return self.get_instance_property("networkInterfaces")[0]["networkIP"]
-        
+
     def instance_class(self):
         machine_type = self.get_instance_property("machineType")
         return machine_type.split("/")[-1] if machine_type else None
