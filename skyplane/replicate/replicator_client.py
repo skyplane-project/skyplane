@@ -256,12 +256,13 @@ class ReplicatorClient:
         # Firewall rules
         # todo add firewall rules for Azure
         public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.gateway_nodes]
+        private_ips = [self.bound_nodes[n].private_ip() for n in self.topology.gateway_nodes if n.region.split(":")[0] == "gcp"]
         authorize_ip_jobs = []
         authorize_ip_jobs.extend(
             [partial(self.aws.add_ips_to_security_group, r.split(":")[1], public_ips) for r in set(aws_regions_to_provision)]
         )
         if gcp_regions_to_provision:
-            authorize_ip_jobs.append(partial(self.gcp.add_ips_to_firewall, public_ips))
+            authorize_ip_jobs.append(partial(self.gcp.add_ips_to_firewall, public_ips + private_ips))
         do_parallel(lambda fn: fn(), authorize_ip_jobs, spinner=True, desc="Applying firewall rules")
 
         # generate E2EE key
@@ -290,11 +291,16 @@ class ReplicatorClient:
         sources = self.topology.source_instances()
         sinks = self.topology.sink_instances()
         for node, server in self.bound_nodes.items():
-            setup_args = {
-                self.bound_nodes[n].public_ip(): v
-                for n, v in self.topology.get_outgoing_paths(node).items()
-                if isinstance(n, ReplicationTopologyGateway)
-            }
+            setup_args = {}
+            for n, v in self.topology.get_outgoing_paths(node).items():
+                if isinstance(n, ReplicationTopologyGateway):
+                    # use private ips for gcp to gcp connection
+                    src_provider, dst_provider = node.region.split(":")[0], n.region.split(":")[0]
+                    if src_provider == dst_provider and src_provider == "gcp":
+                        setup_args[self.bound_nodes[n].private_ip()] = v
+                    else:
+                        setup_args[self.bound_nodes[n].public_ip()] = v
+
             args.append((server, setup_args, node in sources, node in sinks))
         do_parallel(setup, args, n=-1, spinner=True, spinner_persist=True, desc="Installing gateway package")
 
@@ -308,10 +314,12 @@ class ReplicatorClient:
         # Clear IPs from security groups
         # todo remove firewall rules for Azure
         public_ips = [i.public_ip() for i in self.bound_nodes.values()] + [i.public_ip() for i in self.temp_nodes]
+        private_ips = [i.private_ip() for n, i in self.bound_nodes.items() if n.region.split(":")[0] == "gcp"]
+        private_ips += [i.private_ip() for i in self.temp_nodes if i.region_tag.split(":")[0] == "gcp"]
         aws_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("aws:")]
         aws_jobs = [partial(self.aws.remove_ips_from_security_group, r.split(":")[1], public_ips) for r in set(aws_regions)]
         gcp_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("gcp:")]
-        gcp_jobs = [partial(self.gcp.remove_ips_from_firewall, public_ips)] if gcp_regions else []
+        gcp_jobs = [partial(self.gcp.remove_ips_from_firewall, public_ips + private_ips)] if gcp_regions else []
         do_parallel(lambda fn: fn(), aws_jobs + gcp_jobs, desc="Removing firewall rules")
 
         # Terminate instances

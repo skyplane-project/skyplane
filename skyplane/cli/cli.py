@@ -20,6 +20,7 @@ from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 
 import typer
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.prompt import IntPrompt
 
 import skyplane.cli.cli_aws
 import skyplane.cli.cli_azure
@@ -505,7 +506,7 @@ def ssh():
     typer.secho("Select an instance:", fg="yellow", bold=True)
     for i, choice in enumerate(choices):
         typer.secho(f"{i+1}) {choice}", fg="yellow")
-    choice = typer.prompt(f"Enter a number: ", validators=[typer.Range(1, len(choices))])
+    choice = IntPrompt.ask("Enter an instance number", choices=list([str(i) for i in range(1, len(choices) + 1)]), show_choices=False)
     instance = instance_map[choices[choice - 1]]
 
     # ssh
