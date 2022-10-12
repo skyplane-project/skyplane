@@ -338,7 +338,7 @@ class AWSCloudProvider(CloudProvider):
         ebs_volume_size: int = 128,
         iam_name: str = "skyplane_gateway",
         use_spot_instances: bool = False,
-        instance_os: str = "aws-linux-2",
+        instance_os: str = "ecs-aws-linux-2",
     ) -> AWSServer:
         assert not region.startswith("aws:"), "Region should be AWS region"
         if name is None:
@@ -348,8 +348,10 @@ class AWSCloudProvider(CloudProvider):
         # set default image used for provisioning instances in AWS
         if instance_os == "ubuntu":
             image_id = "resolve:ssm:/aws/service/canonical/ubuntu/server/bionic/stable/current/amd64/hvm/ebs-gp2/ami-id"
-        else:  # default: "aws-linux-2"
+        elif instance_os == "ecs-aws-linux-2":
             image_id = "resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id"
+        else:
+            raise ValueError(f"Provisioning in {region}: instance OS {instance_os} not supported")
 
         with self.provisioning_semaphore:
             iam = self.auth.get_boto3_client("iam", region)

@@ -24,7 +24,7 @@ def provision(
     aws_instance_class: str,
     azure_instance_class: str,
     gcp_instance_class: str,
-    aws_instance_os: str = "aws-linux-2",
+    aws_instance_os: str = "ecs-aws-linux-2",
     gcp_instance_os: str = "cos",
     azure_instance_os: str = "ubuntu",
     gcp_use_premium_network: bool = True,

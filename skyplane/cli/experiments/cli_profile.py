@@ -308,7 +308,7 @@ def throughput_grid(
             )
             new_througput_results.extend([rec for rec in results if rec is not None])
 
-            # build dataframe from resultsytre
+            # build dataframe from results
             pbar.console.print(f"Saving intermediate results to {output_file}")
             df = pd.DataFrame(new_througput_results)
             if resume and copy_resume_file:

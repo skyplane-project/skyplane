@@ -325,8 +325,10 @@ class GCPCloudProvider(CloudProvider):
 
         if instance_os == "ubuntu":
             image = "projects/ubuntu-os-cloud/global/images/family/ubuntu-1804-lts"
-        else:  # default: cos
+        elif instance_os == "cos":
             image = "projects/cos-cloud/global/images/family/cos-stable"
+        else:
+            raise ValueError(f"Provisioning in {region}: instance OS {instance_os} not supported")
 
         req_body = {
             "name": name,

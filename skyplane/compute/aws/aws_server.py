@@ -1,4 +1,5 @@
 import logging
+import functools
 from typing import Dict, Optional
 
 import warnings
@@ -26,14 +27,17 @@ class AWSServer(Server):
         self.instance_id = instance_id
         self.local_keyfile = key_root / "aws" / f"skyplane-{self.aws_region}.pem"
 
+    @property
+    @functools.lru_cache(maxsize=None)
+    def login_name(self) -> str:
         # update the login name according to AMI
         ec2 = self.auth.get_boto3_resource("ec2", self.aws_region)
         ec2client = ec2.meta.client
         image_info = ec2client.describe_images(ImageIds=[ec2.Instance(self.instance_id).image_id])
         if [r["Name"] for r in image_info["Images"]][0].split("/")[0] == "ubuntu":
-            self.login_name = "ubuntu"
+            return "ubuntu"
         else:
-            self.login_name = "ec2-user"
+            return "ec2-user"
 
     @property
     @imports.inject("boto3", pip_extra="aws")
