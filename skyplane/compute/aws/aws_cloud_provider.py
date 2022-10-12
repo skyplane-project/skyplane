@@ -73,7 +73,7 @@ class AWSCloudProvider(CloudProvider):
             logger.error(f"error provisioning in {region}: {e}")
             return []
 
-        return [AWSServer(f"aws:{region}", i) for i in instance_ids]  # TODO: this is wrong, just for checking
+        return [AWSServer(f"aws:{region}", i) for i in instance_ids]
 
     def get_security_group(self, region: str, vpc_name="skyplane", sg_name="skyplane"):
         ec2 = self.auth.get_boto3_resource("ec2", region)
@@ -294,7 +294,6 @@ class AWSCloudProvider(CloudProvider):
         sg = self.get_security_group(aws_region)
         try:
             logger.fs.debug(f"[AWS] Removing IPs {ips} from security group {sg.group_name}")
-            # TODO: might need to revoke ingress if ips are None
             sg.revoke_ingress(
                 IpPermissions=[
                     {"IpProtocol": "tcp", "FromPort": 12000, "ToPort": 65535, "IpRanges": [{"CidrIp": ip + "/32"}]} for ip in ips

@@ -21,7 +21,6 @@ from skyplane.compute.gcp.gcp_server import GCPServer
 from skyplane.compute.server import Server
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
-from tqdm import tqdm
 
 all_aws_regions = AWSCloudProvider.region_list()
 all_azure_regions = AzureCloudProvider.region_list()
@@ -286,10 +285,8 @@ def throughput_grid(
         if rec is not None:
             result_rec.update(rec)
 
-        # pbar.console.print(f"{result_rec['tag']}: {result_rec.get('throughput_sent', 0.) / GB:.2f}Gbps")
-        # pbar.update(task_total, advance=1)
-        tqdm.write(f"{result_rec['tag']}: {result_rec.get('throughput_sent', 0.) / GB:.2f}Gbps")
-        pbar.update(1)
+        pbar.console.print(f"{result_rec['tag']}: {result_rec.get('throughput_sent', 0.) / GB:.2f}Gbps")
+        pbar.update(task_total, advance=1)
 
         return result_rec
 
@@ -297,19 +294,17 @@ def throughput_grid(
     new_througput_results = []
     output_file = log_dir / "throughput.csv"
 
-    # with Progress() as pbar:
-    with tqdm(total=len(instance_pairs), desc="Total throughput evaluation", colour="green") as pbar:
-        # task_total = pbar.add_task("Total throughput evaluation", total=len(instance_pairs))
+    with Progress() as pbar:
+        task_total = pbar.add_task("Total throughput evaluation", total=len(instance_pairs))
         for group_idx, group in enumerate(groups):
             tag_fmt = lambda x: f"{x[0].region_tag}:{x[0].network_tier()} to {x[1].region_tag}:{x[1].network_tier()}"
             results = do_parallel(
-                client_fn, group, spinner=True, desc=f"Parallel eval group {group_idx}", n=-1, arg_fmt=tag_fmt, return_args=False
+                client_fn, group, spinner=False, desc=f"Parallel eval group {group_idx}", n=-1, arg_fmt=tag_fmt, return_args=False
             )
             new_througput_results.extend([rec for rec in results if rec is not None])
 
-            # build dataframe from results
-            # pbar.console.print(f"Saving intermediate results to {output_file}")
-            tqdm.write(f"Saving intermediate results to {output_file}")
+            # build dataframe from resultsytre
+            pbar.console.print(f"Saving intermediate results to {output_file}")
             df = pd.DataFrame(new_througput_results)
             if resume and copy_resume_file:
                 logger.debug(f"Copying old CSV entries from {resume}")
