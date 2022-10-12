@@ -50,9 +50,14 @@ def start_iperf3_client(arg_pair: Tuple[Server, Server], iperf3_log_dir: Path, i
     tag = f"{instance_src.region_tag}:{instance_src.network_tier()}_{instance_dst.region_tag}:{instance_dst.network_tier()}"
 
     # run benchmark
-    stdout, stderr = instance_src.run_command(
-        f"iperf3 -J -Z -C cubic -t {iperf3_runtime} -P {iperf3_connections} -c {instance_dst.public_ip()}"
-    )
+    if instance_src.region_tag.split(":")[0] == "gcp" and instance_dst.region_tag.split(":")[0] == "gcp":
+        stdout, stderr = instance_src.run_command(
+            f"iperf3 -J -Z -C cubic -t {iperf3_runtime} -P {iperf3_connections} -c {instance_dst.private_ip()}"
+        )
+    else:
+        stdout, stderr = instance_src.run_command(
+            f"iperf3 -J -Z -C cubic -t {iperf3_runtime} -P {iperf3_connections} -c {instance_dst.public_ip()}"
+        )
 
     # save logs
     with (iperf3_log_dir / f"{tag}.stdout").open("w") as f:
