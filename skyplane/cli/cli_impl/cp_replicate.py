@@ -14,7 +14,7 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface, Obje
 from skyplane.obj_store.s3_interface import S3Object
 from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
-from skyplane.replicate.replication_plan import ReplicationTopology, BroadcastReplicationTopology, ReplicationJob
+from skyplane.replicate.replication_plan import ReplicationTopology, BroadcastReplicationTopology, ReplicationJob, BroadcastReplicationJob
 from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
@@ -391,7 +391,13 @@ def launch_replication_job(
             s = signal.signal(signal.SIGINT, signal.SIG_IGN)
             rc.deprovision_gateways()
             signal.signal(signal.SIGINT, s)
-        UsageClient.log_exception("launch_replication_job", e, error_reporting_args, job.source_region, job.dest_region)
+
+        if isinstance(job, BroadcastReplicationJob):
+       
+            # TODO: make into broadcast error
+            UsageClient.log_exception("launch_replication_job", e, error_reporting_args, job.source_region, job.dest_regions[0])
+        else: 
+            UsageClient.log_exception("launch_replication_job", e, error_reporting_args, job.source_region, job.dest_region)
         os._exit(1)  # exit now
 
     if not reuse_gateways:
