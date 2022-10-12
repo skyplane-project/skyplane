@@ -12,6 +12,7 @@ class Chunk:
     src_key: str  # human readable path where object is stored
     dest_key: str  # human readable path where object is stored
     chunk_id: int
+    partition_id: int
     chunk_length_bytes: int
 
     # checksum

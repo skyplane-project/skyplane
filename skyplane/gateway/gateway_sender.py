@@ -30,7 +30,8 @@ class GatewaySender:
         chunk_store: ChunkStore,
         error_event,
         error_queue: Queue,
-        outgoing_ports: Dict[str, int]
+        outgoing_ports: Dict[str, int],
+        partition_map: Dict[int, str],
         use_tls: bool = True,
         use_compression: bool = True,
         e2ee_key_bytes: Optional[bytes] = None,
@@ -59,7 +60,8 @@ class GatewaySender:
             self.ssl_context = None
 
         # shared state
-        self.worker_queue: queue.Queue[int] = Queue()
+        self.partition_map: Dict[int, str] = partition_map  # mapping between partition id and ip addresses
+        self.worker_queues: Dict[str, queue.Queue[int]] = {ip_address: Queue() for ip_address in self.partition_map.values()}
         self.exit_flags = [Event() for _ in range(self.n_processes)]
 
         # process-local state
@@ -89,7 +91,7 @@ class GatewaySender:
         while not self.exit_flags[worker_id].is_set() and not self.error_event.is_set():
             try:
                 try:
-                    next_chunk_id = self.worker_queue.get_nowait()
+                    next_chunk_id = self.worker_queues[dest_ip].get_nowait()
                 except queue.Empty:
                     continue
 
@@ -141,7 +143,9 @@ class GatewaySender:
             logger.info(f"[sender:{worker_id}] closed destination socket {dst_host}:{dst_port}")
 
     def queue_request(self, chunk_request: ChunkRequest):
-        self.worker_queue.put(chunk_request.chunk.chunk_id)
+        chunk = chunk_request.chunk
+        ip_address = self.partition_map[chunk.partition_id]
+        self.worker_queues[ip_address].put(chunk.chunk_id)
 
     def make_socket(self, dst_host):
         response = self.http_pool.request("POST", f"https://{dst_host}:8080/api/v1/servers")
