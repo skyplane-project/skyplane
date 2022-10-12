@@ -21,6 +21,9 @@ from skyplane.utils.timer import Timer
 
 
 class GatewaySender:
+
+    # BC: figure out how to test the gateway independently - paras used to have some scripts (run tests with local copy) 
+
     def __init__(
         self,
         region: str,
