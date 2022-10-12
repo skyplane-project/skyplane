@@ -224,6 +224,15 @@ class BroadcastReplicationTopology(ReplicationTopology):
         self.nodes: Set[ReplicationTopologyNode] = set(k[0] for k in self.edges) | set(k[1] for k in self.edges)
         self.cost_per_gb: Optional[float] = cost_per_gb
 
+    def get_outgoing_paths(self, src: ReplicationTopologyNode):
+        """Return nodes that follow src in the topology."""
+        return {dest_gateway: num_connections for src_gateway, dest_gateway, num_connections, _ in self.edges if src_gateway == src}
+
+    def get_incoming_paths(self, dest: ReplicationTopologyNode):
+        """Return nodes that precede dest in the topology."""
+        return {src_gateway: num_connections for dest_gateway, src_gateway, num_connections, _ in self.edges if dest_gateway == dest}
+
+
     def sink_regions(self) -> str:
         instances = list(self.sink_instances())
         #assert all(i.region == instances[0].region for i in instances), "All sink instances must be in the same region"
