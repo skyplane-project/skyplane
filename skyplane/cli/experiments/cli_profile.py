@@ -21,6 +21,7 @@ from skyplane.compute.gcp.gcp_server import GCPServer
 from skyplane.compute.server import Server
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
+from tqdm import tqdm
 
 all_aws_regions = AWSCloudProvider.region_list()
 all_azure_regions = AzureCloudProvider.region_list()
@@ -77,8 +78,8 @@ def start_iperf3_client(arg_pair: Tuple[Server, Server], iperf3_log_dir: Path, i
         out_rec["raw_output"] = str(stdout)
         return out_rec
 
-    instance_src.close_server()
-    instance_dst.close_server()
+    # instance_src.close_server()
+    # instance_dst.close_server()
     return out_rec
 
 
@@ -174,6 +175,8 @@ def throughput_grid(
         aws_instance_class=aws_instance_class,
         azure_instance_class=azure_instance_class,
         gcp_instance_class=gcp_instance_class,
+        aws_instance_os="ubuntu",
+        gcp_instance_os="ubuntu",
         gcp_use_premium_network=True,
     )
     instance_list: List[Server] = [i for ilist in aws_instances.values() for i in ilist]
@@ -191,6 +194,8 @@ def throughput_grid(
         aws_instance_class=aws_instance_class,
         azure_instance_class=azure_instance_class,
         gcp_instance_class=gcp_instance_class,
+        aws_instance_os="ubuntu",
+        gcp_instance_os="ubuntu",
         gcp_use_premium_network=False,
     )
     instance_list.extend([i for ilist in gcp_standard_instances.values() for i in ilist])
@@ -198,6 +203,7 @@ def throughput_grid(
     # setup instances
     def setup(server: Server):
         check_stderr(server.run_command("echo 'debconf debconf/frontend select Noninteractive' | sudo debconf-set-selections"))
+        check_stderr(server.run_command("sudo add-apt-repository universe"))
         check_stderr(
             server.run_command(
                 "(sudo apt-get update && sudo apt-get install -y dialog apt-utils && sudo apt-get install -y iperf3); pkill iperf3; iperf3 -s -D -J"
@@ -279,15 +285,21 @@ def throughput_grid(
         )
         if rec is not None:
             result_rec.update(rec)
-        pbar.console.print(f"{result_rec['tag']}: {result_rec.get('throughput_sent', 0.) / GB:.2f}Gbps")
-        pbar.update(task_total, advance=1)
+
+        # pbar.console.print(f"{result_rec['tag']}: {result_rec.get('throughput_sent', 0.) / GB:.2f}Gbps")
+        # pbar.update(task_total, advance=1)
+        tqdm.write(f"{result_rec['tag']}: {result_rec.get('throughput_sent', 0.) / GB:.2f}Gbps")
+        pbar.update(1)
+
         return result_rec
 
     # run experiment
     new_througput_results = []
     output_file = log_dir / "throughput.csv"
-    with Progress() as pbar:
-        task_total = pbar.add_task("Total throughput evaluation", total=len(instance_pairs))
+
+    # with Progress() as pbar:
+    with tqdm(total=len(instance_pairs), desc="Total throughput evaluation", colour="green") as pbar:
+        # task_total = pbar.add_task("Total throughput evaluation", total=len(instance_pairs))
         for group_idx, group in enumerate(groups):
             tag_fmt = lambda x: f"{x[0].region_tag}:{x[0].network_tier()} to {x[1].region_tag}:{x[1].network_tier()}"
             results = do_parallel(
@@ -296,7 +308,8 @@ def throughput_grid(
             new_througput_results.extend([rec for rec in results if rec is not None])
 
             # build dataframe from results
-            pbar.console.print(f"Saving intermediate results to {output_file}")
+            # pbar.console.print(f"Saving intermediate results to {output_file}")
+            tqdm.write(f"Saving intermediate results to {output_file}")
             df = pd.DataFrame(new_througput_results)
             if resume and copy_resume_file:
                 logger.debug(f"Copying old CSV entries from {resume}")
@@ -305,6 +318,10 @@ def throughput_grid(
 
     logger.info(f"Experiment complete: {experiment_tag}")
     logger.info(f"Results saved to {output_file}")
+
+    # close servers here
+    for instance in instance_list:
+        instance.close_server()
 
 
 def latency_grid(

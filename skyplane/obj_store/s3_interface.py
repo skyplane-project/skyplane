@@ -9,7 +9,6 @@ from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.utils import logger, imports
-from skyplane.utils.timer import Timer
 
 
 class S3Object(ObjectStoreObject):

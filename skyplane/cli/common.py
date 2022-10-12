@@ -5,7 +5,6 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
-from rich import print as rprint
 
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider

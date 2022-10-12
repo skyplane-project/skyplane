@@ -5,7 +5,6 @@ from functools import partial
 from pathlib import Path
 from shlex import split
 import traceback
-from urllib import request
 import uuid
 import os
 

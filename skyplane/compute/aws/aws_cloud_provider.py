@@ -6,7 +6,6 @@ import uuid
 from multiprocessing import BoundedSemaphore
 from pathlib import Path
 from typing import List, Optional
-
 import botocore
 
 from skyplane import exceptions
@@ -74,7 +73,7 @@ class AWSCloudProvider(CloudProvider):
             logger.error(f"error provisioning in {region}: {e}")
             return []
 
-        return [AWSServer(f"aws:{region}", i) for i in instance_ids]
+        return [AWSServer(f"aws:{region}", i) for i in instance_ids]  # TODO: this is wrong, just for checking
 
     def get_security_group(self, region: str, vpc_name="skyplane", sg_name="skyplane"):
         ec2 = self.auth.get_boto3_resource("ec2", region)
@@ -269,12 +268,18 @@ class AWSCloudProvider(CloudProvider):
         sg = self.get_security_group(aws_region)
         try:
             logger.fs.debug(f"[AWS] Adding IPs {ips} to security group {sg.group_name}")
-            sg.authorize_ingress(
-                IpPermissions=[
-                    {"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": f"{ip}/32" if ip else "0.0.0.0/0"}]}
-                    for ip in ips
-                ]
-            )
+            if ips is None:
+                sg.authorize_ingress(
+                    IpPermissions=[{"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": f"0.0.0.0/0"}]}]
+                )
+            else:
+                sg.authorize_ingress(
+                    IpPermissions=[
+                        {"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": f"{ip}/32" if ip else "0.0.0.0/0"}]}
+                        for ip in ips
+                    ]
+                )
+
         except botocore.exceptions.ClientError as e:
             if str(e).endswith("already exists") or str(e).endswith("already exist"):
                 logger.warn(f"[AWS] Error adding IPs to security group, since it already exits: {e}")
@@ -289,6 +294,7 @@ class AWSCloudProvider(CloudProvider):
         sg = self.get_security_group(aws_region)
         try:
             logger.fs.debug(f"[AWS] Removing IPs {ips} from security group {sg.group_name}")
+            # TODO: might need to revoke ingress if ips are None
             sg.revoke_ingress(
                 IpPermissions=[
                     {"IpProtocol": "tcp", "FromPort": 12000, "ToPort": 65535, "IpRanges": [{"CidrIp": ip + "/32"}]} for ip in ips
@@ -333,11 +339,19 @@ class AWSCloudProvider(CloudProvider):
         ebs_volume_size: int = 128,
         iam_name: str = "skyplane_gateway",
         use_spot_instances: bool = False,
+        instance_os: str = "aws-linux-2",
     ) -> AWSServer:
         assert not region.startswith("aws:"), "Region should be AWS region"
         if name is None:
             name = f"skyplane-aws-{str(uuid.uuid4()).replace('-', '')}"
         iam_instance_profile_name = f"{name}_profile"
+
+        # set default image used for provisioning instances in AWS
+        if instance_os == "ubuntu":
+            image_id = "resolve:ssm:/aws/service/canonical/ubuntu/server/bionic/stable/current/amd64/hvm/ebs-gp2/ami-id"
+        else:  # default: "aws-linux-2"
+            image_id = "resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id"
+
         with self.provisioning_semaphore:
             iam = self.auth.get_boto3_client("iam", region)
             ec2 = self.auth.get_boto3_resource("ec2", region)
@@ -384,7 +398,7 @@ class AWSCloudProvider(CloudProvider):
                 else:
                     market_options = {}
                 return ec2.create_instances(
-                    ImageId="resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id",
+                    ImageId=image_id,
                     InstanceType=instance_class,
                     MinCount=1,
                     MaxCount=1,

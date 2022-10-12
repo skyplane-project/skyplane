@@ -576,8 +576,6 @@ class ReplicatorClient:
                         # check for errors and exit if there are any (while setting debug flags)
                         errors = self.check_error_logs()
                         if any(errors.values()):
-                            copy_gateway_logs = True
-                            write_profile = True
                             write_socket_profile = True
                             return TransferStats(monitor_status="error", total_runtime_s=t.elapsed, errors=errors)
 
