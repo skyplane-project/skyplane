@@ -61,7 +61,7 @@ class GatewayDaemon:
             self.error_event,
             self.error_queue,
             outgoing_ports=outgoing_ports,
-            partition_map=dict(), #TODO: fix
+            partition_map=dict(),  # TODO: fix
             use_tls=use_tls,
             use_compression=use_compression,
             e2ee_key_bytes=e2ee_key_bytes,

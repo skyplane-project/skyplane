@@ -57,8 +57,8 @@ class GatewaySender:
             self.ssl_context = None
 
         # shared state
-        self.partition_map: Dict[int, str] = partition_map # mapping between partition id and ip addresses
-        self.worker_queues: Dict[str, queue.Queue[int]] = { ip_address: Queue() for ip_address in self.partition_map.values() }  
+        self.partition_map: Dict[int, str] = partition_map  # mapping between partition id and ip addresses
+        self.worker_queues: Dict[str, queue.Queue[int]] = {ip_address: Queue() for ip_address in self.partition_map.values()}
         self.exit_flags = [Event() for _ in range(self.n_processes)]
 
         # process-local state
