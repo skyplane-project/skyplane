@@ -13,5 +13,5 @@ class Auth:
         self.gcp_auth_config = gcp
         self.azure_auth_config = azure
 
-    def load_config(path: str):
+    def load_config(path):
         raise NotImplementedError

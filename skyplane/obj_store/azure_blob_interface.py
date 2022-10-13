@@ -21,7 +21,7 @@ class AzureBlobObject(ObjectStoreObject):
 
 
 class AzureBlobInterface(ObjectStoreInterface):
-    def __init__(self, account_name: str, container_name: str, config: AuthenticationConfig = None, max_concurrency=1):
+    def __init__(self, account_name: str, container_name: str, config: Optional[AuthenticationConfig] = None, max_concurrency=1):
         self.auth = AzureAuthenticationProvider(config=config)
         self.storage_account_interface = AzureStorageAccountInterface(account_name)
         self.account_name = account_name
