@@ -13,6 +13,7 @@ from skyplane.utils.retry import retry_backoff
 class GCPAuthenticationProvider(CloudAuthenticationProvider):
     def __init__(self, config = None):
         if config and config.gcp_project_id:
+            self.config = config
             self.project_id = config.gcp_project_id
         self._credentials = None
         self._service_credentials_file = None
