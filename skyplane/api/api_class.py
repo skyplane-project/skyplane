@@ -15,13 +15,14 @@ class Skyplane:
     
     def copy(self, src="s3://us-east-1/foo", dst="s3://us-east-2/bar", num_vms=1, recursive=False):
         provider_src, bucket_src, path_src = parse_path(src)
+        provider_dst, bucket_dst, path_dst = parse_path(dst)
         src_region_tag, dst_region_tag = f"{provider_src}:infer", f"{provider_dst}:infer"
         src_client = ObjectStoreInterface.create(src_region_tag, bucket_src, config=self.auth)
-        provider_dst, bucket_dst, path_dst = parse_path(dst)
         dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst, config=self.auth)
         src_bucket = provider_src + ":" + bucket_src
         dst_bucket = provider_dst + ":" + bucket_dst
         with Session(src_bucket, dst_bucket, self.auth, num_vms, solver=None) as session:
+            session.auto_terminate()
             session.copy(path_src, src_client, path_dst, dst_client, recursive=recursive)
             session.run()
 
@@ -45,18 +46,18 @@ class Session:
         self.num_vms = num_vms
         self.solver = solver
         self.auth = auth
-        self.auto_terminate = False
+        self._auto_terminate = False
         self.job_list = []
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_value, exc_tb):
-        if self.auto_terminate:
+        if self._auto_terminate:
             deprovision()
     
     def auto_terminate(self):
-        self.auto_terminate = True
+        self._auto_terminate = True
 
     def copy(self, src_file="foo", src_client=None, dst_file="bar", dst_client=None, recursive=False):
         src = self.src_bucket + "/" + src_file
