@@ -291,13 +291,14 @@ class ReplicatorClient:
 
     
             # TODO: create partition map for each gateway
-            partition_map = {0: outgoing_ports}
+            partition_map = {0: list(outgoing_ports.keys())}
             print(partition_map)
 
             # BC: server.py calls docker container
             # TODO: pass in partition map into here
             server.start_gateway(
                 outgoing_ports,
+                partition_map=partition_map,
                 gateway_docker_image=self.gateway_docker_image,
                 use_bbr=use_bbr,
                 use_compression=use_compression,

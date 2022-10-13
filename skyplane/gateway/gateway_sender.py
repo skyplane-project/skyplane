@@ -1,4 +1,5 @@
 import json
+from typing import List
 import queue
 import socket
 import ssl
@@ -20,6 +21,7 @@ from skyplane.utils.retry import retry_backoff
 from skyplane.utils.timer import Timer
 
 
+
 class GatewaySender:
 
     # BC: figure out how to test the gateway independently - paras used to have some scripts (run tests with local copy) 
@@ -31,10 +33,10 @@ class GatewaySender:
         error_event,
         error_queue: Queue,
         outgoing_ports: Dict[str, int],
-        partition_map: Dict[int, str],
         use_tls: bool = True,
         use_compression: bool = True,
         e2ee_key_bytes: Optional[bytes] = None,
+        partition_map: Dict[int, List[str]] = {}
     ):
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         self.region = region
@@ -60,8 +62,9 @@ class GatewaySender:
             self.ssl_context = None
 
         # shared state
-        self.partition_map: Dict[int, str] = partition_map  # mapping between partition id and ip addresses
-        self.worker_queues: Dict[str, queue.Queue[int]] = {ip_address: Queue() for ip_address in self.partition_map.values()}
+        ip_addrs = list(set(sum(self.partition_map.values())))
+        # each ip addr gets different queue
+        self.worker_queues: Dict[str, queue.Queue[int]] = {ip_addr: Queue() for ipaddr in ipaddrs}
         self.exit_flags = [Event() for _ in range(self.n_processes)]
 
         # process-local state

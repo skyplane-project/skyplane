@@ -10,7 +10,7 @@ from multiprocessing import Event, Queue
 from os import PathLike
 from pathlib import Path
 from threading import BoundedSemaphore
-from typing import Dict
+from typing import Dict, List
 
 from skyplane import MB
 from skyplane.chunk import ChunkState
@@ -32,6 +32,7 @@ class GatewayDaemon:
         use_tls=True,
         use_compression=False,
         use_e2ee=True,
+        partition_map: Dict[int, List[str]] = {}
     ):
         # todo max_incoming_ports should be configurable rather than static
         self.region = region
@@ -61,7 +62,7 @@ class GatewayDaemon:
             self.error_event,
             self.error_queue,
             outgoing_ports=outgoing_ports,
-            partition_map=dict(),  # TODO: fix
+            partition_map=partition_map,  # TODO: fix
             use_tls=use_tls,
             use_compression=use_compression,
             e2ee_key_bytes=e2ee_key_bytes,
@@ -177,6 +178,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--outgoing-ports", type=str, required=True, help="JSON encoded path mapping destination ip to number of outgoing ports"
     )
+    parser.add_argument(
+        "--partition-map", type=str, required=True, help="JSON encoded path mapping partition id to destination "
+    )
     parser.add_argument("--chunk-dir", type=Path, default="/tmp/skyplane/chunks", help="Directory to store chunks")
     parser.add_argument("--disable-tls", action="store_true")
     parser.add_argument("--use-compression", action="store_true")
@@ -187,6 +191,7 @@ if __name__ == "__main__":
     daemon = GatewayDaemon(
         region=args.region,
         outgoing_ports=json.loads(args.outgoing_ports),
+        partition_map=json.loads(args.partition_map),
         chunk_dir=args.chunk_dir,
         use_tls=not args.disable_tls,
         use_compression=args.use_compression,
