@@ -10,7 +10,7 @@ from skyplane.utils import imports
 class AWSAuthenticationProvider(CloudAuthenticationProvider):
     __cached_credentials = threading.local()
 
-    def __init__(self, config = None):
+    def __init__(self, config=None):
         """Loads AWS authentication details. If no access key is provided, it will try to load credentials using boto3"""
         if not config:
             self.config_mode = "iam_inferred"
@@ -65,9 +65,10 @@ class AWSAuthenticationProvider(CloudAuthenticationProvider):
 
     def enabled(self):
         try:
-            self.get_boto3_client("ec2").describe_regions()
+            self.get_boto3_client("ec2", "us-west-2").describe_regions()
             return True
-        except Exception:
+        except Exception as e:
+            print("Error inferring whether aws is enabled:", str(e))
             return False
 
     @imports.inject("boto3", pip_extra="aws")

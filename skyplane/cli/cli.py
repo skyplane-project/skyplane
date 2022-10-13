@@ -180,7 +180,16 @@ def cp(
                 src_client.set_requester_bool(True)
                 dst_client.set_requester_bool(True)
             transfer_pairs = generate_full_transferobjlist(
-                src_region_tag, bucket_src, path_src, src_client, dst_region_tag, bucket_dst, path_dst, dst_client, recursive=recursive, requester_pays=requester_pays,
+                src_region_tag,
+                bucket_src,
+                path_src,
+                src_client,
+                dst_region_tag,
+                bucket_dst,
+                path_dst,
+                dst_client,
+                recursive=recursive,
+                requester_pays=requester_pays,
             )
         except exceptions.SkyplaneException as e:
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
