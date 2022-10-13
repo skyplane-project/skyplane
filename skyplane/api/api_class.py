@@ -78,9 +78,9 @@ class Session:
 class Job:
     def __init__(self, src, src_client, dst, dst_client, num_vms, recursive):
         self.src = src
-        self.src = src_client
+        self.src_client = src_client
         self.dst = dst
-        self.dst = dst_client
+        self.dst_client = dst_client
         self.num_vms = num_vms
         self.recursive = recursive
 
