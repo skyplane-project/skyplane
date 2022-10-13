@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Iterator, List, Optional, Type
 
+from skyplane.api.auth.auth_config import AuthenticationConfig
+
 
 @dataclass
 class ObjectStoreObject:
@@ -91,19 +93,19 @@ class ObjectStoreInterface:
         return ValueError("Multipart uploads not supported")
 
     @staticmethod
-    def create(region_tag: str, bucket: str):
+    def create(region_tag: str, bucket: str, config: AuthenticationConfig = None):
         if region_tag.startswith("aws"):
             from skyplane.obj_store.s3_interface import S3Interface
 
-            return S3Interface(bucket)
+            return S3Interface(bucket, config=config)
         elif region_tag.startswith("gcp"):
             from skyplane.obj_store.gcs_interface import GCSInterface
 
-            return GCSInterface(bucket)
+            return GCSInterface(bucket, config=config)
         elif region_tag.startswith("azure"):
             from skyplane.obj_store.azure_blob_interface import AzureBlobInterface
 
             storage_account, container = bucket.split("/", 1)  # <storage_account>/<container>
-            return AzureBlobInterface(storage_account, container)
+            return AzureBlobInterface(storage_account, container, config=config)
         else:
             raise ValueError(f"Invalid region_tag {region_tag} - could not create interface")
