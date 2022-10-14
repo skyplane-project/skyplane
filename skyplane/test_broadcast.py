@@ -10,6 +10,7 @@ import os
 
 from rich import print as rprint
 
+from skyplane.obj_store.object_store_interface import ObjectStoreObject
 import skyplane.cli
 import skyplane.cli.usage.definitions
 import skyplane.cli.usage.client
@@ -166,14 +167,24 @@ def cp(
                 dst_regions.append(setup_bucket(dst_region_tag, bucket_dst))
 
             # get transfer pairs for only first dest
-            transfer_pairs = generate_full_transferobjlist(
-                src_region_tag, bucket_src, path_src, dst_region_tags[0], bucket_dsts[0], path_dsts[0], recursive=recursive
-            )
+            #transfer_pairs = generate_full_transferobjlist(
+            #    src_region_tag, bucket_src, path_src, dst_region_tags[0], bucket_dsts[0], path_dsts[0], recursive=recursive
+            #)
         except exceptions.SkyplaneException as e:
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
             console.print(e.pretty_print_str())
             UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
             return 1
+
+        # create transfer list
+        n_chunks = 20
+        transfer_list = []
+        for i in range(n_chunks):
+            src_obj = ObjectStoreObject(src_region.split(":")[0], "", str(i))
+            dst_obj = ObjectStoreObject(dst_regions[0].split(":")[0], "", str(i))
+            transfer_list.append((src_obj, dst_obj))
+
+        print(transfer_list)
 
         topo = generate_broadcast_topology(
             src_region,
@@ -181,62 +192,29 @@ def cp(
             solve,
             num_connections=cloud_config.get_flag("num_connections"),
             max_instances=max_instances,
-            solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
+            solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_list) if solve else None,
             solver_target_tput_per_vm_gbits=solver_target_tput_per_vm_gbits,
             solver_throughput_grid=solver_throughput_grid,
             solver_verbose=solver_verbose,
             args=args,
         )
         print("Generate topology", topo.to_json())
+
+        random_chunk_size_mb = 8 # sets replicate random (no object store)
         job = BroadcastReplicationJob(
             source_region=topo.source_region(),
             source_bucket=bucket_src,
             dest_regions=topo.sink_regions(),
             dest_buckets=bucket_dsts,
-            transfer_pairs=transfer_pairs, # can't have transfer pairs for broadcast
+            transfer_pairs=transfer_list, # can't have transfer pairs for broadcast
+            random_chunk_size_mb=random_chunk_size_mb
         )
         #confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
-
-        transfer_stats = launch_replication_job(
-            topo=topo,
-            job=job,
-            debug=debug,
-            reuse_gateways=reuse_gateways,
-            use_bbr=cloud_config.get_flag("bbr"),
-            use_compression=cloud_config.get_flag("compress") if src_region_tag != dst_region_tag else False,
-            use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region_tag != dst_region_tag else False,
-            use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region_tag != dst_region_tag else False,
-            aws_instance_class=cloud_config.get_flag("aws_instance_class"),
-            aws_use_spot_instances=cloud_config.get_flag("aws_use_spot_instances"),
-            azure_instance_class=cloud_config.get_flag("azure_instance_class"),
-            azure_use_spot_instances=cloud_config.get_flag("azure_use_spot_instances"),
-            gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
-            gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
-            gcp_use_spot_instances=cloud_config.get_flag("gcp_use_spot_instances"),
-            multipart_enabled=multipart,
-            multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
-            multipart_chunk_size_mb=cloud_config.get_flag("multipart_chunk_size_mb"),
-            multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
-            error_reporting_args=args,
+        confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=False)
+        stats = launch_replication_job(
+            topo=topo, job=job, debug=debug, reuse_gateways=reuse_gateways, use_compression=False, use_e2ee=True
         )
-        #if cloud_config.get_flag("verify_checksums"):
-        #    provider_dst = topo.sink_region().split(":")[0]
-        #    with Progress(SpinnerColumn(), TextColumn("Verifying all files were copied{task.description}")) as progress:
-        #        progress.add_task("", total=None)
-        #        try:
-        #            ReplicatorClient.verify_transfer_prefix(dest_prefix=path_dst, job=job)
-        #        except exceptions.TransferFailedException as e:
-        #            console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
-        #            console.print(e.pretty_print_str())
-        #            UsageClient.log_exception("cli_verify_checksums", e, args, src_region_tag, dst_region_tag)
-        #            return 1
-
-        if transfer_stats.monitor_status == "completed":
-            print_stats_completed(transfer_stats.total_runtime_s, transfer_stats.throughput_gbits)
-        UsageClient.log_transfer(transfer_stats, args, src_region_tag, dst_region_tag)
-        return 0 if transfer_stats.monitor_status == "completed" else 1
-    else:
-        raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
+        return 0 if stats.monitor_status == "completed" else 1
 
 if __name__ == "__main__":
     app()

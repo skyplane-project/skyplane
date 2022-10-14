@@ -42,7 +42,7 @@ def generate_broadcast_topology(
     """
 
     # TODO: Actually call solver here 
-    topo = BroadcastReplicationTopology()
+    topo = BroadcastReplicationTopology(num_blocks)
     block_ids = range(num_blocks)
     for i in range(max_instances):
         topo.add_objstore_instance_edge(src_region, src_region, i, block_ids)

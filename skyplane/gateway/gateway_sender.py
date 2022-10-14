@@ -62,9 +62,14 @@ class GatewaySender:
             self.ssl_context = None
 
         # shared state
-        ip_addrs = list(set(sum(self.partition_map.values())))
+        self.partition_map = partition_map
+        ip_addrs = [] 
+        for ips in self.partition_map.values(): 
+            for ip in ips: 
+                if ip in ip_addrs: continue 
+                ip_addrs.append(ip)
         # each ip addr gets different queue
-        self.worker_queues: Dict[str, queue.Queue[int]] = {ip_addr: Queue() for ipaddr in ipaddrs}
+        self.worker_queues: Dict[str, queue.Queue[int]] = {ip_addr: Queue() for ip_addr in ip_addrs}
         self.exit_flags = [Event() for _ in range(self.n_processes)]
 
         # process-local state

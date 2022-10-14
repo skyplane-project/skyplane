@@ -211,6 +211,7 @@ class BroadcastReplicationTopology(ReplicationTopology):
 
     def __init__(
         self,
+        num_blocks,
         edges: Optional[List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int, int]]] = None,
         cost_per_gb: Optional[float] = None,
     ):
@@ -220,6 +221,7 @@ class BroadcastReplicationTopology(ReplicationTopology):
         Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int, int] -> [src_node, dst_node, num_conn, block_index]
 
         """
+        self.num_blocks = num_blocks
         self.edges: List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int, int]] = edges or []
         self.nodes: Set[ReplicationTopologyNode] = set(k[0] for k in self.edges) | set(k[1] for k in self.edges)
         self.cost_per_gb: Optional[float] = cost_per_gb
@@ -307,6 +309,7 @@ class BroadcastReplicationJob:
     dest_regions: List[str]
     dest_buckets: Optional[List[str]]
 
+
     # object transfer pairs (src, dest)
     transfer_pairs: List[Tuple[ObjectStoreObject, ObjectStoreObject]]
 
@@ -315,6 +318,8 @@ class BroadcastReplicationJob:
 
     # Generates random chunks for testing on the gateways
     random_chunk_size_mb: Optional[int] = None
+    dest_bucket: Optional[str] = None
+    dest_region: Optional[str] = None
 
     @property
     def transfer_size(self):
