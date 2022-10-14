@@ -63,6 +63,7 @@ class GatewaySender:
 
         # shared state
         self.partition_map = partition_map
+        logger.info("Partition map: " + str(self.partition_map))
         ip_addrs = [] 
         for ips in self.partition_map.values(): 
             for ip in ips: 
@@ -152,8 +153,9 @@ class GatewaySender:
 
     def queue_request(self, chunk_request: ChunkRequest):
         chunk = chunk_request.chunk
-        ip_address = self.partition_map[chunk.partition_id]
-        self.worker_queues[ip_address].put(chunk.chunk_id)
+        for ip_address in self.partition_map[str(chunk.partition_id)]:
+            # add to each queue chunk should send to
+            self.worker_queues[ip_address].put(chunk.chunk_id)
 
     def make_socket(self, dst_host):
         response = self.http_pool.request("POST", f"https://{dst_host}:8080/api/v1/servers")

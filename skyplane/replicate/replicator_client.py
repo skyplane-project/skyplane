@@ -291,7 +291,12 @@ class ReplicatorClient:
 
     
             # TODO: create partition map for each gateway
-            partition_map = {0: list(outgoing_ports.keys())}
+            partition_map = {
+                0: list(outgoing_ports.keys()),
+                1: list(outgoing_ports.keys()),
+                2: list(outgoing_ports.keys()),
+                3: list(outgoing_ports.keys())
+            }
             print(partition_map)
 
             # BC: server.py calls docker container
@@ -497,7 +502,7 @@ class ReplicatorClient:
                             ChunkRequest(
                                 chunk=chunk,
                                 src_region=job.source_region,
-                                dst_region=None, #job.dest_region, #TODO: figure out different way to send info to gateway
+                                dst_region=job.dest_regions[0], #TODO: figure out different way to send info to gateway
                                 #src_type="object_store" if job.dest_bucket else "random",
                                 #dst_type="object_store" if job.dest_bucket else "save_local",
                                 src_type="random", 
@@ -508,6 +513,7 @@ class ReplicatorClient:
                             )
                         )
                     logger.fs.debug(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")
+                print("chunk req", chunk_requests_sharded)
 
                 # send chunk requests to start gateways in parallel
                 progress.update(prepare_task, description=": Dispatching chunk requests to source gateways")
