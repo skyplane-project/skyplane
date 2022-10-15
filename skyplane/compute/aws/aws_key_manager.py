@@ -75,6 +75,7 @@ class AWSKeyManager:
             return self.make_key(aws_region, key_name)
         else:
             if delete_remote:
+                logger.warning(f"Key {key_name} exists in AWS region {aws_region} but not locally. Deleting the remote key.")
                 self.delete_key(aws_region, key_name)
                 return self.make_key(aws_region, key_name)
             else:
