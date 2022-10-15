@@ -57,23 +57,27 @@ class AWSKeyManager:
         if self.key_exists_local(key_name):
             (self.local_key_dir / f"{key_name}.pem").unlink()
 
-    def get_key(self, aws_region: str, key_name: str) -> Path:
-        """Returns path to local keyfile if it exists."""
-        if not self.key_exists_aws(aws_region, key_name):
-            logger.error(f"Key {key_name} does not exist in AWS region {aws_region}")
-            raise skyplane_exceptions.PermissionsException(f"Key {key_name} does not exist in AWS region {aws_region}")
-        if not self.key_exists_local(key_name):
-            logger.error(f"Key {key_name} does not exist locally")
-            raise skyplane_exceptions.PermissionsException(f"Key {key_name} does not exist locally")
+    def get_key(self, key_name: str) -> Path:
+        """Returns path to local keyfile."""
         return self.local_key_dir / f"{key_name}.pem"
 
-    def ensure_key_exists(self, aws_region: str, key_name: str) -> Path:
+    def ensure_key_exists(self, aws_region: str, key_name: str, delete_remote: bool = True) -> Path:
         """Ensures that a key exists in AWS and locally, creating it if necessary. Raise an exception if it's on AWS and not locally."""
-        if not self.key_exists_aws(aws_region, key_name):
+        local_exists, remote_exists = self.key_exists_local(key_name), self.key_exists_aws(aws_region, key_name)
+        if local_exists and remote_exists:
+            return self.get_key(key_name)
+        elif not local_exists and not remote_exists:
             return self.make_key(aws_region, key_name)
-        if not self.key_exists_local(key_name):
-            logger.error(f"Key {key_name} exists in AWS region {aws_region} but not locally")
-            raise skyplane_exceptions.PermissionsException(
-                f"Key {key_name} exists in AWS region {aws_region} but not locally. Delete it from AWS or download it locally."
-            )
-        return self.local_key_dir / f"{key_name}.pem"  # key exists in AWS and locally
+        elif local_exists and not remote_exists:
+            local_key_path = self.get_key(key_name)
+            logger.warning(f"Key {key_name} exists locally but not in AWS region {aws_region}. Moving the local key {local_key_path}.bak")
+            local_key_path.rename(local_key_path.with_suffix(".pem.bak"))
+            return self.make_key(aws_region, key_name)
+        else:
+            if delete_remote:
+                self.delete_key(aws_region, key_name)
+                return self.make_key(aws_region, key_name)
+            else:
+                raise skyplane_exceptions.PermissionsException(
+                    f"Key {key_name} exists in AWS region {aws_region} but not locally. Please delete the key from AWS or move it locally."
+                )
