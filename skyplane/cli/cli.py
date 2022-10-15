@@ -481,14 +481,7 @@ def deprovision():
 
     if AWSAuthentication().enabled():
         aws = AWSCloudProvider()
-        # remove skyplane vpc
-        vpcs = do_parallel(partial(aws.get_vpcs), aws.region_list(), desc="Querying VPCs", spinner=True)
-        args = [(x[0], vpc.id) for x in vpcs for vpc in x[1]]
-        do_parallel(lambda args: aws.remove_sg_ips(*args), args, desc="Removing IPs from VPCs", spinner=True, spinner_persist=True)
-        # remove all instance profiles
-        profiles = aws.list_instance_profiles(prefix="skyplane-aws")
-        if profiles:
-            do_parallel(aws.delete_instance_profile, profiles, desc="Deleting instance profiles", spinner=True, spinner_persist=True, n=4)
+        aws.deprovision_all()
 
 
 @app.command()

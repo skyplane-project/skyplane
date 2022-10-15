@@ -14,6 +14,7 @@ import nacl.utils
 import pandas as pd
 import urllib3
 from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, TransferSpeedColumn
+
 from skyplane import GB, MB, exceptions, gateway_docker_image, tmp_log_dir
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
@@ -178,12 +179,7 @@ class ReplicatorClient:
         if aws_regions_to_provision:
             jobs.append(partial(self.aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
             for r in set(aws_regions_to_provision):
-
-                def init_aws_vpc(r):
-                    self.aws.make_vpc(r)
-                    self.aws.authorize_client(r, "0.0.0.0/0")
-
-                jobs.append(partial(init_aws_vpc, r.split(":")[1]))
+                jobs.append(partial(self.aws.setup_network, r.split(":")[1]))
                 jobs.append(partial(self.aws.ensure_keyfile_exists, r.split(":")[1]))
         if azure_regions_to_provision:
             jobs.append(self.azure.create_ssh_key)

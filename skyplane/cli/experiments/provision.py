@@ -38,7 +38,7 @@ def provision(
     jobs.append(partial(aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
     if aws_regions_to_provision:
         for r in set(aws_regions_to_provision):
-            jobs.append(partial(aws.make_vpc, r))
+            jobs.append(partial(aws.setup_network, r))
             jobs.append(partial(aws.ensure_keyfile_exists, r))
     if azure_regions_to_provision:
         jobs.append(azure.create_ssh_key)
@@ -58,9 +58,6 @@ def provision(
             "state": [ServerState.PENDING, ServerState.RUNNING],
         }
         do_parallel(aws.add_ips_to_security_group, aws_regions_to_provision, spinner=True, desc="Add IP to aws security groups")
-        do_parallel(
-            lambda x: aws.authorize_client(*x), [(r, "0.0.0.0/0") for r in aws_regions_to_provision], spinner=True, desc="authorize client"
-        )
         aws_instances = refresh_instance_list(aws, aws_regions_to_provision, aws_instance_filter)
         missing_aws_regions = set(aws_regions_to_provision) - set(aws_instances.keys())
         if missing_aws_regions:
