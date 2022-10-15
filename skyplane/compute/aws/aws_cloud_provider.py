@@ -187,7 +187,7 @@ class AWSCloudProvider(CloudProvider):
                     NetworkInterfaces=[
                         {
                             "DeviceIndex": 0,
-                            "Groups": [self.get_security_group(region).group_id],
+                            "Groups": [self.network.get_security_group(region).group_id],
                             "SubnetId": subnet_id,
                             "AssociatePublicIpAddress": True,
                             "DeleteOnTermination": True,
