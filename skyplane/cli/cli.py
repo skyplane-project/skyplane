@@ -552,10 +552,6 @@ def init(
     else:
         cloud_config = SkyplaneConfig.default_config()
 
-    # create client_id
-    if cloud_config.anon_clientid is None:
-        cloud_config.anon_clientid = str(uuid.uuid4())
-
     # load AWS config
     typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)
     if not disable_config_aws:

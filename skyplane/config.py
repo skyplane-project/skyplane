@@ -3,6 +3,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
+import uuid
 
 from skyplane.exceptions import BadConfigException
 
@@ -89,11 +90,15 @@ class SkyplaneConfig:
     anon_clientid: Optional[str] = None
 
     @staticmethod
-    def default_config() -> "SkyplaneConfig":
-        return SkyplaneConfig(aws_enabled=False, azure_enabled=False, gcp_enabled=False, anon_clientid=None)
+    def generate_machine_id() -> str:
+        return uuid.UUID(int=uuid.getnode()).hex
 
-    @staticmethod
-    def load_config(path) -> "SkyplaneConfig":
+    @classmethod
+    def default_config(cls) -> "SkyplaneConfig":
+        return cls(aws_enabled=False, azure_enabled=False, gcp_enabled=False, anon_clientid=cls.generate_machine_id())
+
+    @classmethod
+    def load_config(cls, path) -> "SkyplaneConfig":
         """Load from a config file."""
         path = Path(path)
         config = configparser.ConfigParser()
@@ -101,9 +106,10 @@ class SkyplaneConfig:
             raise FileNotFoundError(f"Config file not found: {path}")
         config.read(path)
 
-        anon_clientid = None
         if "client" in config and "anon_clientid" in config["client"]:
             anon_clientid = config.get("client", "anon_clientid")
+        else:
+            anon_clientid = cls.generate_machine_id()
 
         aws_enabled = False
         if "aws" in config:
@@ -132,7 +138,7 @@ class SkyplaneConfig:
             if "project_id" in config["gcp"]:
                 gcp_project_id = config.get("gcp", "project_id")
 
-        skyplane_config = SkyplaneConfig(
+        skyplane_config = cls(
             aws_enabled=aws_enabled,
             azure_enabled=azure_enabled,
             gcp_enabled=gcp_enabled,

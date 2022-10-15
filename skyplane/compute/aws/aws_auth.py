@@ -1,4 +1,3 @@
-import threading
 from typing import Optional
 
 from skyplane import aws_config_path
@@ -8,8 +7,6 @@ from skyplane.utils import imports
 
 
 class AWSAuthentication:
-    __cached_credentials = threading.local()
-
     def __init__(self, config: Optional[SkyplaneConfig] = None, access_key: Optional[str] = None, secret_key: Optional[str] = None):
         """Loads AWS authentication details. If no access key is provided, it will try to load credentials using boto3"""
         if not config == None:
