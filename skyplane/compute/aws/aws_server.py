@@ -1,7 +1,7 @@
 import logging
+import warnings
 from typing import Dict, Optional
 
-import warnings
 from cryptography.utils import CryptographyDeprecationWarning
 
 with warnings.catch_warnings():

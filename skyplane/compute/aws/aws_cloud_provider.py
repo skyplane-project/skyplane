@@ -1,14 +1,12 @@
 import json
-import os
 import time
 import uuid
 from multiprocessing import BoundedSemaphore
-from pathlib import Path
 from typing import List, Optional
 
 from skyplane import exceptions as skyplane_exceptions
-from skyplane import key_root
 from skyplane.compute.aws.aws_auth import AWSAuthentication
+from skyplane.compute.aws.aws_key_manager import AWSKeyManager
 from skyplane.compute.aws.aws_network import AWSNetwork
 from skyplane.compute.aws.aws_pricing import AWSPricing
 from skyplane.compute.aws.aws_server import AWSServer
@@ -20,10 +18,12 @@ from skyplane.utils.fn import do_parallel, wait_for
 class AWSCloudProvider(CloudProvider):
     pricing = AWSPricing()
 
-    def __init__(self):
+    def __init__(self, key_prefix: str = "skyplane"):
         super().__init__()
+        self.key_prefix = key_prefix
         self.auth = AWSAuthentication()
         self.network = AWSNetwork(self.auth)
+        self.key_manager = AWSKeyManager(self.auth)
         self.provisioning_semaphore = BoundedSemaphore(16)
 
     @property
@@ -89,9 +89,13 @@ class AWSCloudProvider(CloudProvider):
         if attach_policy_arn:
             iam.attach_role_policy(RoleName=iam_name, PolicyArn=attach_policy_arn)
 
-    def setup_network(self, aws_region: str):
+    def setup_region(self, aws_region: str):
+        # set up network
         self.network.make_vpc(aws_region)
         self.network.add_ssh_to_security_group(aws_region)
+
+        # set up keys
+        self.key_manager.ensure_key_exists(aws_region, f"{self.key_prefix}-{aws_region}")
 
     def add_ips_to_security_group(self, aws_region: str, ips: Optional[List[str]] = None):
         """Add IPs to security group. If security group ID is None, use group named skyplane (create if not exists). If ip is None, authorize all IPs."""
@@ -100,30 +104,6 @@ class AWSCloudProvider(CloudProvider):
     def remove_ips_from_security_group(self, aws_region: str, ips: List[str]):
         """Remove IP from security group. If security group ID is None, return."""
         self.network.remove_ips_from_security_group(aws_region, ips)
-
-    def ensure_keyfile_exists(self, aws_region, prefix=key_root / "aws"):
-        ec2 = self.auth.get_boto3_resource("ec2", aws_region)
-        ec2_client = self.auth.get_boto3_client("ec2", aws_region)
-        prefix = Path(prefix)
-        key_name = f"skyplane-{aws_region}"
-        local_key_file = prefix / f"{key_name}.pem"
-
-        local_key_file.parent.mkdir(parents=True, exist_ok=True)
-        if not local_key_file.exists():
-            logger.fs.debug(f"[AWS] Creating keypair {key_name} in {aws_region}")
-            if key_name in set(p["KeyName"] for p in ec2_client.describe_key_pairs()["KeyPairs"]):
-                logger.fs.warning(f"Deleting key {key_name} in region {aws_region}")
-                ec2_client.delete_key_pair(KeyName=key_name)
-            key_pair = ec2.create_key_pair(KeyName=f"skyplane-{aws_region}", KeyType="rsa")
-            with local_key_file.open("w") as f:
-                key_str = key_pair.key_material
-                if not key_str.endswith("\n"):
-                    key_str += "\n"
-                f.write(key_str)
-            os.chmod(local_key_file, 0o600)
-            logger.fs.info(f"Created key file {local_key_file}")
-
-        return local_key_file
 
     @imports.inject("botocore.exceptions", pip_extra="aws")
     def provision_instance(
@@ -145,7 +125,7 @@ class AWSCloudProvider(CloudProvider):
             iam = self.auth.get_boto3_client("iam", region)
             ec2 = self.auth.get_boto3_resource("ec2", region)
             ec2_client = self.auth.get_boto3_client("ec2", region)
-            vpcs = self.get_vpcs(region)
+            vpcs = self.network.get_vpcs(region)
             assert vpcs, "No VPC found"
             vpc = vpcs[0]
 
@@ -191,7 +171,7 @@ class AWSCloudProvider(CloudProvider):
                     InstanceType=instance_class,
                     MinCount=1,
                     MaxCount=1,
-                    KeyName=f"skyplane-{region}",
+                    KeyName=f"{self.key_prefix}-{region}",
                     TagSpecifications=[
                         {
                             "ResourceType": "instance",

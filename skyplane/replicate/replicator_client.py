@@ -179,8 +179,7 @@ class ReplicatorClient:
         if aws_regions_to_provision:
             jobs.append(partial(self.aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
             for r in set(aws_regions_to_provision):
-                jobs.append(partial(self.aws.setup_network, r.split(":")[1]))
-                jobs.append(partial(self.aws.ensure_keyfile_exists, r.split(":")[1]))
+                jobs.append(partial(self.aws.setup_region, r.split(":")[1]))
         if azure_regions_to_provision:
             jobs.append(self.azure.create_ssh_key)
             jobs.append(self.azure.set_up_resource_group)

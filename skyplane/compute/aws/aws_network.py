@@ -147,7 +147,7 @@ class AWSNetwork:
 
             # make security group named "skyplane"
             tagSpecifications = [{"Tags": [{"Key": "skyplane", "Value": "true"}], "ResourceType": "security-group"}]
-            sg = ec2.create_security_group(
+            ec2.create_security_group(
                 GroupName="skyplane",
                 Description="Default security group for Skyplane VPC",
                 VpcId=matching_vpc.id,
