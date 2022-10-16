@@ -481,7 +481,7 @@ def deprovision():
 
     if AWSAuthentication().enabled():
         aws = AWSCloudProvider()
-        aws.deprovision_all()
+        aws.teardown_global()
 
 
 @app.command()

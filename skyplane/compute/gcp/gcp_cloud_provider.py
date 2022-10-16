@@ -2,7 +2,7 @@ import os
 import time
 import uuid
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import warnings
 from cryptography.utils import CryptographyDeprecationWarning
@@ -303,13 +303,14 @@ class GCPCloudProvider(CloudProvider):
     def provision_instance(
         errors,
         self,
-        region,
-        instance_class,
-        name=None,
-        premium_network=False,
-        uname="skyplane",
-        tags={"skyplane": "true"},
+        region: str,
+        instance_class: str,
+        disk_size: int = 32,
         use_spot_instances: bool = False,
+        name: Optional[str] = None,
+        tags={"skyplane": "true"},
+        gcp_premium_network=False,
+        gcp_vm_uname="skyplane",
     ) -> GCPServer:
         assert not region.startswith("gcp:"), "Region should be GCP region"
         if name is None:
@@ -337,12 +338,12 @@ class GCPCloudProvider(CloudProvider):
                 {
                     "network": "global/networks/skyplane",
                     "accessConfigs": [
-                        {"name": "External NAT", "type": "ONE_TO_ONE_NAT", "networkTier": "PREMIUM" if premium_network else "STANDARD"}
+                        {"name": "External NAT", "type": "ONE_TO_ONE_NAT", "networkTier": "PREMIUM" if gcp_premium_network else "STANDARD"}
                     ],
                 }
             ],
             "serviceAccounts": [{"email": "default", "scopes": ["https://www.googleapis.com/auth/cloud-platform"]}],
-            "metadata": {"items": [{"key": "ssh-keys", "value": f"{uname}:{pub_key}\n"}]},
+            "metadata": {"items": [{"key": "ssh-keys", "value": f"{gcp_vm_uname}:{pub_key}\n"}]},
             "scheduling": {"onHostMaintenance": "TERMINATE", "automaticRestart": False},
             "deletionProtection": False,
         }

@@ -177,7 +177,7 @@ class ReplicatorClient:
         # init clouds
         jobs = []
         if aws_regions_to_provision:
-            jobs.append(partial(self.aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
+            jobs.append(partial(self.aws.setup_global, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
             for r in set(aws_regions_to_provision):
                 jobs.append(partial(self.aws.setup_region, r.split(":")[1]))
         if azure_regions_to_provision:
@@ -204,8 +204,8 @@ class ReplicatorClient:
                 server = self.gcp.provision_instance(
                     subregion,
                     self.gcp_instance_class,
-                    premium_network=self.gcp_use_premium_network,
                     use_spot_instances=gcp_use_spot_instances,
+                    gcp_premium_network=self.gcp_use_premium_network,
                 )
             else:
                 raise NotImplementedError(f"Unknown provider {provider}")

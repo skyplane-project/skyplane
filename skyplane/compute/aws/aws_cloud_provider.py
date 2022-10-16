@@ -51,7 +51,29 @@ class AWSCloudProvider(CloudProvider):
             return []
         return [AWSServer(f"aws:{region}", i) for i in instance_ids]
 
-    def deprovision_all(self):
+    def setup_global(self, iam_name: str = "skyplane_gateway", attach_policy_arn: Optional[str] = None):
+        # Create IAM role if it doesn't exist and grant managed role if given.
+        iam = self.auth.get_boto3_client("iam")
+        try:
+            iam.get_role(RoleName=iam_name)
+        except iam.exceptions.NoSuchEntityException:
+            doc = {
+                "Version": "2012-10-17",
+                "Statement": [{"Effect": "Allow", "Principal": {"Service": "ec2.amazonaws.com"}, "Action": "sts:AssumeRole"}],
+            }
+            iam.create_role(RoleName=iam_name, AssumeRolePolicyDocument=json.dumps(doc), Tags=[{"Key": "skyplane", "Value": "true"}])
+        if attach_policy_arn:
+            iam.attach_role_policy(RoleName=iam_name, PolicyArn=attach_policy_arn)
+
+    def setup_region(self, region: str):
+        # set up network
+        self.network.make_vpc(region)
+        self.network.add_ssh_to_security_group(region)
+
+        # set up keys
+        self.key_manager.ensure_key_exists(region, f"{self.key_prefix}-{region}")
+
+    def teardown_global(self):
         def list_instance_profiles(prefix: Optional[str] = None):
             paginator = self.auth.get_boto3_client("iam").get_paginator("list_instance_profiles")
             matched_names = []
@@ -75,28 +97,6 @@ class AWSCloudProvider(CloudProvider):
         if profiles:
             do_parallel(delete_instance_profile, profiles, desc="Deleting instance profiles", spinner=True, spinner_persist=True, n=4)
 
-    def create_iam(self, iam_name: str = "skyplane_gateway", attach_policy_arn: Optional[str] = None):
-        """Create IAM role if it doesn't exist and grant managed role if given."""
-        iam = self.auth.get_boto3_client("iam")
-        try:
-            iam.get_role(RoleName=iam_name)
-        except iam.exceptions.NoSuchEntityException:
-            doc = {
-                "Version": "2012-10-17",
-                "Statement": [{"Effect": "Allow", "Principal": {"Service": "ec2.amazonaws.com"}, "Action": "sts:AssumeRole"}],
-            }
-            iam.create_role(RoleName=iam_name, AssumeRolePolicyDocument=json.dumps(doc), Tags=[{"Key": "skyplane", "Value": "true"}])
-        if attach_policy_arn:
-            iam.attach_role_policy(RoleName=iam_name, PolicyArn=attach_policy_arn)
-
-    def setup_region(self, aws_region: str):
-        # set up network
-        self.network.make_vpc(aws_region)
-        self.network.add_ssh_to_security_group(aws_region)
-
-        # set up keys
-        self.key_manager.ensure_key_exists(aws_region, f"{self.key_prefix}-{aws_region}")
-
     def add_ips_to_security_group(self, aws_region: str, ips: Optional[List[str]] = None):
         """Add IPs to security group. If security group ID is None, use group named skyplane (create if not exists). If ip is None, authorize all IPs."""
         self.network.add_ips_to_security_group(aws_region, ips)
@@ -111,11 +111,11 @@ class AWSCloudProvider(CloudProvider):
         self,
         region: str,
         instance_class: str,
+        disk_size: int = 32,
+        use_spot_instances: bool = False,
         name: Optional[str] = None,
         tags={"skyplane": "true"},
-        ebs_volume_size: int = 128,
-        iam_name: str = "skyplane_gateway",
-        use_spot_instances: bool = False,
+        aws_iam_name: str = "skyplane_gateway",
     ) -> AWSServer:
         assert not region.startswith("aws:"), "Region should be AWS region"
         if name is None:
@@ -143,7 +143,7 @@ class AWSCloudProvider(CloudProvider):
 
             def check_iam_role():
                 try:
-                    iam.get_role(RoleName=iam_name)
+                    iam.get_role(RoleName=aws_iam_name)
                     return True
                 except iam.exceptions.NoSuchEntityException:
                     return False
@@ -158,7 +158,7 @@ class AWSCloudProvider(CloudProvider):
             # wait for iam_role to be created and create instance profile
             wait_for(check_iam_role, timeout=60, interval=0.5)
             iam.create_instance_profile(InstanceProfileName=iam_instance_profile_name, Tags=[{"Key": "skyplane", "Value": "true"}])
-            iam.add_role_to_instance_profile(InstanceProfileName=iam_instance_profile_name, RoleName=iam_name)
+            iam.add_role_to_instance_profile(InstanceProfileName=iam_instance_profile_name, RoleName=aws_iam_name)
             wait_for(check_instance_profile, timeout=60, interval=0.5)
 
             def start_instance(subnet_id: str):
@@ -181,7 +181,7 @@ class AWSCloudProvider(CloudProvider):
                     BlockDeviceMappings=[
                         {
                             "DeviceName": "/dev/sda1",
-                            "Ebs": {"DeleteOnTermination": True, "VolumeSize": ebs_volume_size, "VolumeType": "gp2"},
+                            "Ebs": {"DeleteOnTermination": True, "VolumeSize": disk_size, "VolumeType": "gp2"},
                         }
                     ],
                     NetworkInterfaces=[

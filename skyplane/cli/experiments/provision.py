@@ -35,7 +35,7 @@ def provision(
     # TODO: It might be significantly faster to provision AWS, Azure, and GCP concurrently (e.g., using threads)
 
     jobs = []
-    jobs.append(partial(aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
+    jobs.append(partial(aws.setup_global, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
     if aws_regions_to_provision:
         for r in set(aws_regions_to_provision):
             jobs.append(partial(aws.setup_region, r))
@@ -125,7 +125,7 @@ def provision(
 
             def gcp_provisioner(r):
                 try:
-                    gcp.provision_instance(r, gcp_instance_class, premium_network=gcp_use_premium_network)
+                    gcp.provision_instance(r, gcp_instance_class, gcp_premium_network=gcp_use_premium_network)
                 except Exception as e:
                     logger.error(f"Failed to provision GCP instance in {r}: {e}")
                     logger.error(f"Skipping region {r}")
