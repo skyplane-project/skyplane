@@ -66,6 +66,7 @@ def replicate_random(
     stats = launch_replication_job(
         topo=topo, job=job, debug=debug, reuse_gateways=reuse_gateways, use_bbr=use_bbr, use_compression=False, use_e2ee=True
     )
+    print(stats)
     return 0 if stats.monitor_status == "completed" else 1
 
 

@@ -46,6 +46,10 @@ class AWSServer(Server):
         return self.get_boto3_instance_resource().public_ip_address
 
     @ignore_lru_cache()
+    def private_ip(self) -> str:
+        return self.get_boto3_instance_resource().private_ip_address
+
+    @ignore_lru_cache()
     def instance_class(self) -> str:
         return self.get_boto3_instance_resource().instance_type
 

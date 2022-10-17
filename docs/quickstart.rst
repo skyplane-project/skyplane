@@ -9,7 +9,12 @@ We're ready to install Skyplane. It's as easy as:
 .. code-block:: bash
 
    ---> Install skyplane from PyPI:
-   $ pip install skyplane-nightly
+   $ pip install skyplane[aws]
+
+   # install support for other clouds as needed:
+   #   $ pip install skyplane[azure]
+   #   $ pip install skyplane[gcp]
+   #   $ pip install skyplane[all]
 
 .. dropdown for M1 Macbook users
 .. note::
@@ -18,7 +23,7 @@ We're ready to install Skyplane. It's as easy as:
 
    .. code-block:: bash
 
-      $ GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 GRPC_PYTHON_BUILD_SYSTEM_ZLIB=1 pip install skyplane-nightly
+      $ GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 GRPC_PYTHON_BUILD_SYSTEM_ZLIB=1 pip install skyplane[all]
 
 Cloud Credentials
 -----------------------

@@ -140,6 +140,9 @@ class Server:
     def public_ip(self):
         raise NotImplementedError()
 
+    def private_ip(self):
+        raise NotImplementedError()
+
     def instance_class(self):
         raise NotImplementedError()
 
