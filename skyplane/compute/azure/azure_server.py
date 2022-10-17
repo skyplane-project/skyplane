@@ -1,16 +1,16 @@
+import warnings
 from pathlib import Path
 
-import azure.core.exceptions
-import warnings
 from cryptography.utils import CryptographyDeprecationWarning
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
 
-from skyplane import key_root, exceptions
+from skyplane import exceptions, key_root
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.server import Server, ServerState
+from skyplane.utils import imports
 from skyplane.utils.cache import ignore_lru_cache
 from skyplane.utils.fn import PathLike
 
@@ -94,11 +94,12 @@ class AzureServer(Server):
 
         return vm
 
-    def is_valid(self):
+    @imports.inject("azure.core.exceptions", pip_extra="azure")
+    def is_valid(azure_exceptions, self):
         try:
             vm = self.get_virtual_machine()
             return vm.provisioning_state == "Succeeded"
-        except azure.core.exceptions.ResourceNotFoundError:
+        except azure_exceptions.ResourceNotFoundError:
             return False
 
     def uuid(self):
