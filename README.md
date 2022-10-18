@@ -136,11 +136,10 @@ To transfer only new objects, you can instead use `skyplane sync`:
 $ skyplane sync s3://... gs://...
 ```
 
-You can configure Skyplane to use more VMs per region with the `-n` flag. To double the transfer speed with two VMs, run: 
+You can configure Skyplane to use more VMs per region with the `-n` flag. For example, to double the transfer speed with two VMs, run: 
 ```
 $ skyplane cp -r s3://... s3://... -n 2
 ```
-With 8 VMs per region, Skyplane is capable of moving data at up to 50Gbps.
 
 ## 4. Clean Up 
 Skyplane will automatically attempt to terminate VMs that it starts, but to double check and forcefuly terminate all VMs, run `skyplane deprovision`.
