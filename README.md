@@ -145,11 +145,9 @@ $ skyplane cp -r s3://... s3://... -n 2
 Skyplane will automatically attempt to terminate VMs that it starts, but to double check and forcefuly terminate all VMs, run `skyplane deprovision`.
 
 # Technical Details
-Skyplane is based on research at UC Berkeley into accelerated networks between cloud providers. 
+Skyplane is based on research at UC Berkeley into accelerated networks between cloud providers. Under the hood, Skyplane starts a fleet of VMs in the source and destination regions. It then uses a custom TCP protocol to accelerate the transfer between the VMs. Skyplane may use a L7 overlay network to route traffic around congested network hot spots. 
 
 <img src="docs/_static/skyplane-data-plane.png" width="384" />
-
-Under the hood, Skyplane starts a fleet of VMs in the source and destination regions. It then uses a custom TCP protocol to accelerate the transfer between the VMs. Skyplane may use a L7 overlay network to route traffic around congested network hot spots. 
 
 For more details on Skyplane, see: 
 - [Technical Talk](https://skyplane.org/en/latest/architecture.html)
