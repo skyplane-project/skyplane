@@ -32,7 +32,7 @@ Skyplane currently supports the following source and destination endpoints (any 
 | Local Disk         | :white_check_mark: | (in progress)      |
 
 # Resources 
-- [Getting Started](#quickstart)
+- [Quickstart](#quickstart)
 - [Contributing](https://skyplane.org/en/latest/contributing.html)
 - [Roadmap](https://skyplane.org/en/latest/roadmap.html)
 - [Slack Community](https://join.slack.com/t/skyplaneworkspace/shared_invite/zt-1cxmedcuc-GwIXLGyHTyOYELq7KoOl6Q)
