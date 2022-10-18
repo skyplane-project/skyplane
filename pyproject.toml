@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "skyplane"
 packages = [{ include = "skyplane" }]
-version = "0.2.0"
+version = "0.2.1"
 description = "Skyplane efficiently transports data between cloud regions and providers."
 authors = ["Skyplane authors <skyplaneproject@gmail.com>"]
 license = "Apache-2.0"
@@ -16,6 +16,7 @@ python = ">=3.7.1,<3.11"
 cachetools = ">=4.1.0"
 pandas = ">=1.0.0"
 paramiko = ">=2.7.2"
+requests = ">=2.23.0"
 rich = ">=9.0.0"
 sshtunnel = ">=0.3.0"
 typer = ">=0.4.0"

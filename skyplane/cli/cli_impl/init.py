@@ -1,19 +1,19 @@
 import json
 import os
-from pathlib import Path
+import shutil
 import subprocess
 import traceback
+from pathlib import Path
 from typing import List
 
 import typer
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from skyplane import SkyplaneConfig, gcp_config_path, aws_config_path
+from skyplane import SkyplaneConfig, aws_config_path, gcp_config_path
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.azure.azure_auth import AzureAuthentication
-from skyplane.compute.gcp.gcp_auth import GCPAuthentication
-
 from skyplane.compute.azure.azure_server import AzureServer
+from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 
 
 def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> SkyplaneConfig:
@@ -95,6 +95,15 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         if config.azure_enabled and config.azure_subscription_id and config.azure_principal_id and config.azure_client_id:
             typer.secho("    Azure credentials already configured! To reconfigure Azure, run `skyplane init --reinit-azure`.", fg="blue")
             return config
+
+        # check if az cli is installed
+        if not shutil.which("az"):
+            typer.secho(
+                "    Azure CLI not found, please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli",
+                fg="red",
+                err=True,
+            )
+            return clear_azure_config(config)
 
         # load credentials from environment variables or input
         defaults = {
