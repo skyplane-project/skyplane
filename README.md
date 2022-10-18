@@ -26,51 +26,16 @@ Skyplane supports all major public clouds including AWS, Azure, and GCP. It can 
 
 <img src="docs/_static/supported-destinations.png" width="384" />
 
-# Using Skyplane
+# Resources 
+- [Getting Started](https://skyplane.org/en/latest/quickstart.html)
+- [Contributing](https://skyplane.org/en/latest/contributing.html)
+- [Roadmap](https://skyplane.org/en/latest/roadmap.html)
+- [Slack Community](https://join.slack.com/t/skyplaneworkspace/shared_invite/zt-1cxmedcuc-GwIXLGyHTyOYELq7KoOl6Q)
 
-The easiest way to use Skyplane is to use the CLI. `skyplane cp` supports any local path or cloud object store destination as an argument.
+# Learn More 
+- [Technical Talk](https://skyplane.org/en/latest/architecture.html)
+- [NSDI '23 Paper](https://arxiv.org/abs/2210.07259)
 
-```bash
-# copy files between two AWS S3 buckets
-$ skyplane cp -r s3://... s3://...
-
-# copy files from an AWS S3 bucket to a GCP GCS bucket
-$ skyplane cp -r s3://... gs://...
-
-# copy files from a local directory to/from a cloud object store
-$ skyplane cp -r /path/to/local/files gs://...
-```
-
-Skyplane also supports incremental copies via `skyplane sync`:    
-```bash
-# copy changed files from S3 to GCS
-$ skyplane sync s3://... gcs://...
-```
-
-`skyplane sync` will diff the contents of the source and destination and only copy the files that are different or have changed. It will not delete files that are no longer present in the source so it's always safe to run `skyplane sync`.
-
-### Accelerating transfers with multiple VMs
-
-With default arguments, Skyplane sets up a one VM (called gateway) in the source and destination regions. We can further accelerate the transfer by using more VMs.
-
-To double the transfer speeds by using two VMs in each region, run:
-```bash
-$ skyplane cp -r s3://... s3://... -n 2
-```
-
-With 8 VMs per region, Skyplane is capable of moving data at up to 50Gbps.
-
-If you do not have enough vCPU capacity in each region, you may get a InsufficientVCPUException. Either request more vCPUs or reduce the number of parallel VMs.
-
-### ⚠️ Ensure the VMs that Skyplane starts are terminated
-Skyplane will automatically attempt to terminate VMs that it starts, but to double check and forcefuly terminate all VMs, run `skyplane deprovision`.
-
-# How Skyplane works
-Skyplane is based on research at UC Berkeley into accelerated networks between cloud providers. Our NSDI 2023 paper is upcoming, but a [technical talk](https://skyplane.org/en/latest/architecture.html) is available.
-
-<img src="docs/_static/skyplane-data-plane.png" width="384" />
-
-Under the hood, Skyplane starts a fleet of VMs in the source and destination regions. It then uses a custom TCP protocol to accelerate the transfer between the VMs. Skyplane may use a L7 overlay network to route traffic around congested network hot spots. Notably, Skyplane does all this from a simple CLI interface.
 
 # Getting started
 
