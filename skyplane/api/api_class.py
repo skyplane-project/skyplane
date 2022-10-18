@@ -10,7 +10,7 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 
 
 def new_client(auth):
-    return Skyplane(auth)
+    return SkyplaneClient(auth)
 
 def start_background_loop(loop):
     asyncio.set_event_loop(loop)
@@ -20,7 +20,7 @@ def deprovision():
     _deprovision()
 
 
-class Skyplane:
+class SkyplaneClient:
     def __init__(self, auth: AuthenticationConfig):
         # TODO: Pass auth to cloud api's own functions
         self.auth = auth

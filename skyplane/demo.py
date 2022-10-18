@@ -5,12 +5,11 @@ import time
 # keep the logging
 
 # Simple Copy
-client1 = new_client(None)
-client1.copy(src="s3://jason-us-east-1/imagenet-train-000000.tar", 
-            dst="s3://jason-us-west-2/imagenet-train-000000.tar", recursive=False)
+# client1 = SkyplaneClient(None)
+# client1.copy(src="s3://jason-us-east-1/fake_imagenet/", dst="s3://jason-us-west-2/fake_imagenet_1/", recursive=True)
 
 # Session Copy
-client2 = new_client(None)
+client2 = SkyplaneClient(None)
 session = client2.new_session(
     src_bucket="aws:jason-us-east-1", 
     dst_bucket="aws:jason-us-west-2", 
