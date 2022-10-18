@@ -576,6 +576,7 @@ class ReplicatorClient:
         sink_regions = set(s.region for s in sinks)
 
         (self.transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
+        error = False
         try:
             with Progress(
                 SpinnerColumn(),
@@ -588,7 +589,6 @@ class ReplicatorClient:
             ) as progress:
                 copy_task = progress.add_task("", total=total_bytes)
                 with Timer() as t:
-                    error = False
                     while True:
                         # refresh shutdown status by running noop
                         do_parallel(lambda i: i.run_command("echo 1"), self.bound_nodes.values(), n=-1)
