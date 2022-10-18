@@ -9,17 +9,17 @@ import typer
 from rich import print as rprint
 
 from skyplane import exceptions, GB, format_bytes, gateway_docker_image, skyplane_root, cloud_config
+from skyplane.cli.common import console
+from skyplane.cli.usage.client import UsageClient
 from skyplane.compute.cloud_providers import CloudProvider
+from skyplane.obj_store.azure_blob_interface import AzureBlobObject
+from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.obj_store.s3_interface import S3Object
-from skyplane.obj_store.gcs_interface import GCSObject
-from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
 from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
-from skyplane.cli.common import console
-from skyplane.cli.usage.client import UsageClient
 
 
 def generate_topology(

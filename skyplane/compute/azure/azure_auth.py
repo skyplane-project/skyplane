@@ -8,11 +8,10 @@ from skyplane import azure_config_path
 from skyplane import azure_sku_path
 from skyplane import config_path
 from skyplane import is_gateway_env
+from skyplane.compute.const_cmds import query_which_cloud
 from skyplane.config import SkyplaneConfig
 from skyplane.utils import imports
 from skyplane.utils.fn import do_parallel, wait_for
-
-from skyplane.compute.const_cmds import query_which_cloud
 
 
 class AzureAuthentication:

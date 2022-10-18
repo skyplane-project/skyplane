@@ -1,9 +1,9 @@
 import configparser
 import os
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
-import uuid
 
 from skyplane.exceptions import BadConfigException
 
