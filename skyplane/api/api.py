@@ -52,21 +52,22 @@ from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
 import asyncio
 
+
 async def cp(
     src: str,
     src_client: ObjectStoreInterface,
     dst: str,
     dst_client: ObjectStoreInterface,
     recursive: bool = False,
-    reuse_gateways: bool = True, # All in the session and will be deprovisioned after
+    reuse_gateways: bool = True,  # All in the session and will be deprovisioned after
     debug: bool = False,
     multipart: bool = config_default_flags.get("multipart_enabled"),
     # transfer flags
     confirm: bool = True,
     max_instances: int = config_default_flags.get("max_instances"),
     # solver
-    solve: bool = False, # use direct path
-    solver_class: str = "ILP", # used only if solve = True
+    solve: bool = False,  # use direct path
+    solver_class: str = "ILP",  # used only if solve = True
     solver_target_tput_per_vm_gbits: float = 4,
     solver_throughput_grid: Path = Path(skyplane_root / "profiles" / "throughput.csv"),
     solver_verbose: bool = False,
@@ -141,7 +142,16 @@ async def cp(
                 src_client.set_requester_bool(True)
                 dst_client.set_requester_bool(True)
             transfer_pairs = generate_full_transferobjlist(
-                src_region_tag, bucket_src, path_src, src_client, dst_region_tag, bucket_dst, path_dst, dst_client, recursive=recursive, requester_pays=requester_pays,
+                src_region_tag,
+                bucket_src,
+                path_src,
+                src_client,
+                dst_region_tag,
+                bucket_dst,
+                path_dst,
+                dst_client,
+                recursive=recursive,
+                requester_pays=requester_pays,
             )
         except exceptions.SkyplaneException as e:
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
@@ -157,7 +167,7 @@ async def cp(
             src_region_tag,
             dst_region_tag,
             solve,
-            solver_class = "ILP",
+            solver_class="ILP",
             num_connections=config_default_flags.get("num_connections"),
             max_instances=max_instances,
             solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
@@ -219,15 +229,14 @@ async def cp(
                         UsageClient.log_exception("cli_verify_checksums", e, args, src_region_tag, dst_region_tag)
                         return 1
             # if transfer_stats.monitor_status == "completed":
-                # rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
-                # runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{transfer_stats.total_runtime_s:.2f}s[/bright_black]"
-                # throughput_line = f"[white]Throughput:[/white] [bright_black]{transfer_stats.throughput_gbits:.2f}Gbps[/bright_black]"
-                # rprint(f"{runtime_line}, {throughput_line}")
+            # rprint(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
+            # runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{transfer_stats.total_runtime_s:.2f}s[/bright_black]"
+            # throughput_line = f"[white]Throughput:[/white] [bright_black]{transfer_stats.throughput_gbits:.2f}Gbps[/bright_black]"
+            # rprint(f"{runtime_line}, {throughput_line}")
             UsageClient.log_transfer(transfer_stats, args, src_region_tag, dst_region_tag)
             return 0 if transfer_stats.monitor_status == "completed" else 1
     else:
         raise NotImplementedError(f"{provider_src} to {provider_dst} not supported yet")
-
 
 
 def deprovision():

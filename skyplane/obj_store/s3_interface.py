@@ -19,7 +19,7 @@ class S3Object(ObjectStoreObject):
 
 
 class S3Interface(ObjectStoreInterface):
-    def __init__(self, bucket_name: str, config: AuthenticationConfig = None):
+    def __init__(self, bucket_name: str, config: Optional[AuthenticationConfig] = None):
         self.auth = AWSAuthenticationProvider(config=config)
         self.requester_pays = False
         self.bucket_name = bucket_name

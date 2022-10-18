@@ -20,6 +20,7 @@ class AWSAuthenticationConfig(AuthenticationConfig):
     def make_auth_provider(self) -> AWSAuthenticationProvider:
         return AWSAuthenticationProvider(config=self)
 
+
 class GCPAuthenticationConfig(AuthenticationConfig):
     def __init__(self, project_id: str):
         self.gcp_project_id = project_id
@@ -27,6 +28,7 @@ class GCPAuthenticationConfig(AuthenticationConfig):
 
     def make_auth_provider(self) -> GCPAuthenticationProvider:
         return GCPAuthenticationProvider(config=self)
+
 
 class AzureAuthenticationConfig(AuthenticationConfig):
     def __init__(self, client_id: str, subscription_id: str, umi_id: str, umi_name: str, resource_group: str):

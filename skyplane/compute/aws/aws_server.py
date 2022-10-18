@@ -8,7 +8,7 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
 
-from skyplane import key_root
+from skyplane import key_root, exceptions
 from skyplane.compute.aws.aws_auth_provider import AWSAuthenticationProvider
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils.cache import ignore_lru_cache

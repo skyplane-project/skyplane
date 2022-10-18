@@ -93,7 +93,7 @@ class ObjectStoreInterface:
         return ValueError("Multipart uploads not supported")
 
     @staticmethod
-    def create(region_tag: str, bucket: str, config: AuthenticationConfig = None):
+    def create(region_tag: str, bucket: str, config: Optional[AuthenticationConfig] = None):
         if region_tag.startswith("aws"):
             from skyplane.obj_store.s3_interface import S3Interface
 

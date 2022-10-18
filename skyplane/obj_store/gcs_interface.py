@@ -21,7 +21,7 @@ class GCSObject(ObjectStoreObject):
 
 
 class GCSInterface(ObjectStoreInterface):
-    def __init__(self, bucket_name: str, config: AuthenticationConfig = None):
+    def __init__(self, bucket_name: str, config: Optional[AuthenticationConfig] = None):
         self.bucket_name = bucket_name
         self.auth = GCPAuthenticationProvider(config=config)
         self._gcs_client = self.auth.get_storage_client()
