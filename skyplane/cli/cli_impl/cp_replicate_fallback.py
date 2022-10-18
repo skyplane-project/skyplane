@@ -1,6 +1,7 @@
-from typing import Optional
-from skyplane.cli.common import parse_path
 import os
+from typing import Optional
+
+from skyplane.cli.common import parse_path
 
 
 def fallback_cmd_local_cp(src_path: str, dest_path: str, recursive: bool) -> str:

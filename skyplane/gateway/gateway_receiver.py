@@ -4,12 +4,12 @@ import socket
 import ssl
 import time
 import traceback
-import nacl.secret
 from contextlib import closing
 from multiprocessing import Event, Process, Value, Queue
 from typing import Optional, Tuple
 
 import lz4.frame
+import nacl.secret
 
 from skyplane import MB
 from skyplane.chunk import WireProtocolHeader

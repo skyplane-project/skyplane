@@ -588,6 +588,7 @@ class ReplicatorClient:
             ) as progress:
                 copy_task = progress.add_task("", total=total_bytes)
                 with Timer() as t:
+                    error = False
                     while True:
                         # refresh shutdown status by running noop
                         do_parallel(lambda i: i.run_command("echo 1"), self.bound_nodes.values(), n=-1)
@@ -595,9 +596,7 @@ class ReplicatorClient:
                         # check for errors and exit if there are any (while setting debug flags)
                         errors = self.check_error_logs()
                         if any(errors.values()):
-                            copy_gateway_logs = True
-                            write_profile = True
-                            write_socket_profile = True
+                            error = True
                             return TransferStats(monitor_status="error", total_runtime_s=t.elapsed, errors=errors)
 
                         log_df = self.get_chunk_status_log_df()
@@ -716,10 +715,11 @@ class ReplicatorClient:
                         )
                     (self.transfer_dir / f"receiver_socket_profile_{instance.uuid()}.json").write_text(text)
 
-                if debug:
+                if debug or error:
                     # copy logs from gateways
                     progress.update(cleanup_task, description=": Copying gateway logs")
                     do_parallel(copy_log, self.bound_nodes.values(), n=-1)
+                if debug:
                     # write chunk profiles
                     progress.update(cleanup_task, description=": Writing chunk profiles")
                     chunk_status_df = self.get_chunk_status_log_df()

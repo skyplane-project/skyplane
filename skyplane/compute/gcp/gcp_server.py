@@ -1,7 +1,7 @@
+import warnings
 from functools import lru_cache
 from pathlib import Path
 
-import warnings
 from cryptography.utils import CryptographyDeprecationWarning
 
 with warnings.catch_warnings():

@@ -5,7 +5,6 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
-from rich import print as rprint
 
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
@@ -15,7 +14,6 @@ from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
-
 
 console = Console()
 

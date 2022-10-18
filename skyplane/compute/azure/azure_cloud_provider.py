@@ -1,11 +1,11 @@
 import os
 import re
 import uuid
+import warnings
 from multiprocessing import BoundedSemaphore
 from pathlib import Path
 from typing import List, Optional
 
-import warnings
 from cryptography.utils import CryptographyDeprecationWarning
 
 with warnings.catch_warnings():
