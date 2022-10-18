@@ -22,9 +22,14 @@ You can use Skyplane to transfer data:
 * between object stores across multiple cloud providers (e.g. AWS us-east-1 to GCP us-central1)
 * between local storage and cloud object stores (experimental)
 
-## Supported Providers
-Skyplane can also transfer data between any combination of these clouds:
-<img src="docs/_static/supported-destinations.png" width="384" />
+## Supported Endpoints 
+
+| Endpoint           | Source             | Destination        |
+|--------------------|--------------------|--------------------|
+| AWS S3             | :white_check_mark: | :white_check_mark: |
+| Google Storage     | :white_check_mark: | :white_check_mark: |
+| Azure Blob Storage | :white_check_mark: | :white_check_mark: |
+| Local Disk         | :white_check_mark: | (in progress)      |
 
 ## Features 
 * End-to-end encryption 
