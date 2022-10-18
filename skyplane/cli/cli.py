@@ -496,6 +496,7 @@ def deprovision(
             azure = AzureCloudProvider()
             azure.teardown_global()
 
+
 @app.command()
 def ssh():
     """SSH into a running gateway."""
