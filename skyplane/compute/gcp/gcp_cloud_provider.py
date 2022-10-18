@@ -350,9 +350,27 @@ class GCPCloudProvider(CloudProvider):
         # use preemtible instances if use_spot_instances is True
         if use_spot_instances:
             req_body["scheduling"]["preemptible"] = True
+
         try:
             result = compute.instances().insert(project=self.auth.project_id, zone=region, body=req_body).execute()
             self.wait_for_operation_to_complete(region, result["name"])
+            server = GCPServer(f"gcp:{region}", name)
+
+            # wait for server to reach RUNNING state
+            try:
+                wait_for(
+                    lambda: server.instance_state() == ServerState.RUNNING,
+                    timeout=120,
+                    interval=0.1,
+                    desc=f"Wait for RUNNING status on {server.uuid()}",
+                )
+                server.wait_for_ssh_ready()
+            except:
+                logger.fs.error(f"Instance {server.uuid()} did not reach RUNNING status")
+                server.terminate_instance()
+                raise
+            server.run_command("sudo /sbin/iptables -A INPUT -j ACCEPT")
+            return server
         except errors.HttpError as e:
             if e.resp.status == 409:
                 if "ZONE_RESOURCE_POOL_EXHAUSTED" in e.content:
@@ -365,20 +383,8 @@ class GCPCloudProvider(CloudProvider):
                     raise exceptions.InsufficientVCPUException(f"Got QUOTA_LIMIT in region {region}") from e
                 else:
                     raise e
-
-        # wait for server to reach RUNNING state
-        server = GCPServer(f"gcp:{region}", name)
-        try:
-            wait_for(
-                lambda: server.instance_state() == ServerState.RUNNING,
-                timeout=120,
-                interval=0.1,
-                desc=f"Wait for RUNNING status on {server.uuid()}",
-            )
-            server.wait_for_ssh_ready()
-        except:
-            logger.fs.error(f"Instance {server.uuid()} did not reach RUNNING status")
-            server.terminate_instance()
+        except KeyboardInterrupt:
+            logger.fs.info(f"Keyboard interrupt, deleting instance {name}")
+            op = compute.instances().delete(project=self.auth.project_id, zone=region, instance=name).execute()
+            self.wait_for_operation_to_complete(region, op["name"])
             raise
-        server.run_command("sudo /sbin/iptables -A INPUT -j ACCEPT")
-        return server

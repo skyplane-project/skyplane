@@ -336,29 +336,35 @@ def launch_replication_job(
             multipart=multipart_enabled,
             debug=debug,
         )
-    except Exception as e:
-        if isinstance(e, KeyboardInterrupt):
-            rprint("\n[bold red]Transfer cancelled by user. Exiting.[/bold red]")
-        elif isinstance(e, exceptions.SkyplaneException):
-            console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
-            console.print(e.pretty_print_str())
-        else:
-            console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
-            console.print(e)
-        if not reuse_gateways:
-            logger.fs.warning("Deprovisioning gateways then exiting. Please wait...")
-            # disable sigint to prevent repeated KeyboardInterrupts
-            s = signal.signal(signal.SIGINT, signal.SIG_IGN)
-            rc.deprovision_gateways()
-            signal.signal(signal.SIGINT, s)
+        error_occurred = False
+    except KeyboardInterrupt:
+        logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt)")
+        rprint("\n[bold red]Transfer cancelled by user. Exiting.[/bold red]")
+        error_occurred = True
+    except exceptions.SkyplaneException as e:
+        logger.fs.exception(e)
+        console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+        console.print(e.pretty_print_str())
         UsageClient.log_exception("launch_replication_job", e, error_reporting_args, job.source_region, job.dest_region)
-        os._exit(1)  # exit now
+        error_occurred = True
+    except Exception as e:
+        logger.fs.exception(e)
+        console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+        console.print(e)
+        UsageClient.log_exception("launch_replication_job", e, error_reporting_args, job.source_region, job.dest_region)
+        error_occurred = True
 
     if not reuse_gateways:
+        logger.fs.warning("Deprovisioning gateways then exiting. Please wait...")
         s = signal.signal(signal.SIGINT, signal.SIG_IGN)
         rc.deprovision_gateways()
         signal.signal(signal.SIGINT, s)
-    if stats.monitor_status == "error":
+
+    # handle errors
+    if error_occurred:  # client error
+        logger.fs.error("Exiting as an error occurred")
+        os._exit(1)  # exit now
+    if stats.monitor_status == "error":  # gateway error
         err = ""
         for instance, errors in stats.errors.items():
             for error in errors:
@@ -370,8 +376,7 @@ def launch_replication_job(
         )
         raise typer.Exit(1)
     elif stats.monitor_status == "completed":
-        # success message will be handled by the caller
-        pass
+        pass  # success message will be handled by the caller
     else:
         rprint(f"\n:x: [bold red]Transfer failed[/bold red]")
         rprint(stats)

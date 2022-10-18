@@ -209,8 +209,9 @@ class ReplicatorClient:
                 )
             else:
                 raise NotImplementedError(f"Unknown provider {provider}")
-            server.enable_auto_shutdown()
             self.temp_nodes.append(server)
+            server.wait_for_ssh_ready()
+            server.enable_auto_shutdown()
             return server
 
         results = do_parallel(
