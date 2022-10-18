@@ -142,7 +142,23 @@ To transfer only new objects, you can instead use `skyplane sync`:
 $ skyplane sync s3://... gs://...
 ```
 
-# Learn More 
+You can configure Skyplane to use more VMs per region with the `-n` flag. To double the transfer speed with two VMs, run: 
+```
+$ skyplane cp -r s3://... s3://... -n 2
+```
+With 8 VMs per region, Skyplane is capable of moving data at up to 50Gbps.
+
+## 4. Clean Up 
+Skyplane will automatically attempt to terminate VMs that it starts, but to double check and forcefuly terminate all VMs, run `skyplane deprovision`.
+
+# Technical Details
+Skyplane is based on research at UC Berkeley into accelerated networks between cloud providers. 
+
+<img src="docs/_static/skyplane-data-plane.png" width="384" />
+
+Under the hood, Skyplane starts a fleet of VMs in the source and destination regions. It then uses a custom TCP protocol to accelerate the transfer between the VMs. Skyplane may use a L7 overlay network to route traffic around congested network hot spots. 
+
+For more details on Skyplane, see: 
 - [Technical Talk](https://skyplane.org/en/latest/architecture.html)
 - [NSDI '23 Paper](https://arxiv.org/abs/2210.07259)
 
