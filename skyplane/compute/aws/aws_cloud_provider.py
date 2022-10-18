@@ -1,5 +1,4 @@
 import json
-import re
 import time
 import uuid
 from multiprocessing import BoundedSemaphore
