@@ -1,11 +1,12 @@
-from pathlib import Path
-from typing import Optional
 import base64
 import os
+import time
+from pathlib import Path
+from typing import Optional
 
 from skyplane import config_path, gcp_config_path, key_root
 from skyplane.config import SkyplaneConfig
-from skyplane.utils import logger, imports
+from skyplane.utils import imports, logger
 from skyplane.utils.retry import retry_backoff
 
 
@@ -90,6 +91,25 @@ class GCPAuthentication:
             )
             inferred_project = project_id
         return inferred_cred, inferred_project
+
+    def get_operation_state(self, zone, operation_name):
+        compute = self.get_gcp_client()
+        if zone == "global":
+            return compute.globalOperations().get(project=self.project_id, operation=operation_name).execute()
+        else:
+            return compute.zoneOperations().get(project=self.project_id, zone=zone, operation=operation_name).execute()
+
+    def wait_for_operation_to_complete(self, zone, operation_name, timeout=120):
+        time_intervals = [0.1] * 10 + [0.2] * 10 + [1.0] * int(timeout)  # backoff
+        start = time.time()
+        while time.time() - start < timeout:
+            operation_state = self.get_operation_state(zone, operation_name)
+            if operation_state["status"] == "DONE":
+                if "error" in operation_state:
+                    raise Exception(operation_state["error"])
+                else:
+                    return operation_state
+            time.sleep(time_intervals.pop(0))
 
     @property
     def service_account_name(self):

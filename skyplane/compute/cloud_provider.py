@@ -82,10 +82,10 @@ class CloudProvider:
         raise NotImplementedError
 
     def setup_global(self, **kwargs):
-        raise NotImplementedError
+        pass
 
     def setup_region(self, region: str):
-        raise NotImplementedError
+        pass
 
     def teardown_global(self):
-        raise NotImplementedError
+        pass

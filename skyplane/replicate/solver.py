@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from skyplane import GB
-from skyplane.compute.cloud_providers import CloudProvider
+from skyplane.compute.cloud_provider import CloudProvider
 from skyplane.replicate.replication_plan import ReplicationTopology
 from skyplane.utils import logger
 
