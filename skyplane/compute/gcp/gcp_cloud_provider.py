@@ -381,10 +381,9 @@ class GCPCloudProvider(CloudProvider):
                     raise exceptions.InsufficientVCPUException(f"Got QUOTA_EXCEEDED in region {region}") from e
                 elif "QUOTA_LIMIT" in e.content:
                     raise exceptions.InsufficientVCPUException(f"Got QUOTA_LIMIT in region {region}") from e
-                else:
-                    raise e
-        except KeyboardInterrupt:
+            raise e
+        except KeyboardInterrupt as e:
             logger.fs.info(f"Keyboard interrupt, deleting instance {name}")
             op = compute.instances().delete(project=self.auth.project_id, zone=region, instance=name).execute()
             self.wait_for_operation_to_complete(region, op["name"])
-            raise
+            raise e
