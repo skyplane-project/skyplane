@@ -21,7 +21,7 @@ def deprovision():
 
 
 class SkyplaneClient:
-    def __init__(self, auth: AuthenticationConfig):
+    def __init__(self, auth: AuthenticationConfig = None):
         # TODO: Pass auth to cloud api's own functions
         self.auth = auth
 
