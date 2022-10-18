@@ -16,6 +16,10 @@ import skyplane.cli.usage.definitions
 import skyplane.cli.usage.client
 from skyplane import GB
 from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
+from skyplane.compute.azure.azure_auth import AzureAuthentication
+from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
+from skyplane.compute.gcp.gcp_auth import GCPAuthentication
+from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 
 import typer
@@ -469,7 +473,9 @@ def sync(
 
 
 @app.command()
-def deprovision():
+def deprovision(
+    all: bool = typer.Option(False, "--all", "-a", help="Deprovision all resources including networks."),
+):
     """Deprovision all resources created by skyplane."""
     instances = query_instances()
 
@@ -479,9 +485,16 @@ def deprovision():
     else:
         typer.secho("No instances to deprovision", fg="yellow", bold=True)
 
-    if AWSAuthentication().enabled():
-        aws = AWSCloudProvider()
-        aws.teardown_global()
+    if all:
+        if AWSAuthentication().enabled():
+            aws = AWSCloudProvider()
+            aws.teardown_global()
+        if GCPAuthentication().enabled():
+            gcp = GCPCloudProvider()
+            gcp.teardown_global()
+        if AzureAuthentication().enabled():
+            azure = AzureCloudProvider()
+            azure.teardown_global()
 
 
 @app.command()
