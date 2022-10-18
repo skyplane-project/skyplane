@@ -39,7 +39,7 @@ class AWSKeyManager:
         local_key_file = self.local_key_dir / f"{key_name}.pem"
         local_key_file.parent.mkdir(parents=True, exist_ok=True)
         logger.fs.debug(f"[AWS] Creating keypair {key_name} in {aws_region}")
-        key_pair = ec2.create_key_pair(KeyName=f"skyplane-{aws_region}", KeyType="rsa")
+        key_pair = ec2.create_key_pair(KeyName=key_name, KeyType="rsa")
         with local_key_file.open("w") as f:
             key_str = key_pair.key_material
             if not key_str.endswith("\n"):
