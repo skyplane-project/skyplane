@@ -27,17 +27,12 @@ Skyplane supports all major public clouds including AWS, Azure, and GCP. It can 
 <img src="docs/_static/supported-destinations.png" width="384" />
 
 # Resources 
-- [Getting Started](https://skyplane.org/en/latest/quickstart.html)
+- [Getting Started](#quickstart)
 - [Contributing](https://skyplane.org/en/latest/contributing.html)
 - [Roadmap](https://skyplane.org/en/latest/roadmap.html)
 - [Slack Community](https://join.slack.com/t/skyplaneworkspace/shared_invite/zt-1cxmedcuc-GwIXLGyHTyOYELq7KoOl6Q)
 
-# Learn More 
-- [Technical Talk](https://skyplane.org/en/latest/architecture.html)
-- [NSDI '23 Paper](https://arxiv.org/abs/2210.07259)
-
-
-# Getting started
+# Quickstart
 
 ## 1. Installation
 We recommend installation from PyPi:
@@ -124,5 +119,20 @@ Config file saved to /home/ubuntu/.skyplane/config
 ```
 
 </details>
+
+## 3. Run Transfers 
+
+We’re ready to use Skyplane! Let’s use `skyplane cp` to copy files from AWS to GCP:
+```
+skyplane cp s3://... gs://...
+```
+To transfer only new objects, you can instead use `skyplane sync`:
+```
+$ skyplane sync s3://... gs://...
+```
+
+# Learn More 
+- [Technical Talk](https://skyplane.org/en/latest/architecture.html)
+- [NSDI '23 Paper](https://arxiv.org/abs/2210.07259)
 
 
