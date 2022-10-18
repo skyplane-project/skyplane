@@ -117,6 +117,10 @@ def cp(
     """
     print_header()
 
+    # check sky camp!
+    assert not reuse_gateways, "Reusing gateways is not supported for Sky Camp!"
+    assert not solve, "Solver is not supported for Sky Camp!"
+
     provider_src, bucket_src, path_src = parse_path(src)
     provider_dst, bucket_dst, path_dst = parse_path(dst)
     src_region_tag, dst_region_tag = f"{provider_src}:infer", f"{provider_dst}:infer"
@@ -324,6 +328,10 @@ def sync(
 
     print_header()
 
+    # check sky camp!
+    assert not reuse_gateways, "Reusing gateways is not supported for Sky Camp!"
+    assert not solve, "Solver is not supported for Sky Camp!"
+
     provider_src, bucket_src, path_src = parse_path(src)
     provider_dst, bucket_dst, path_dst = parse_path(dst)
     src_region_tag, dst_region_tag = f"{provider_src}:infer", f"{provider_dst}:infer"
@@ -473,9 +481,14 @@ def sync(
 @app.command()
 def deprovision(
     all: bool = typer.Option(False, "--all", "-a", help="Deprovision all resources including networks."),
-    filter_client_id: Optional[str] = typer.Option(None, help="Only deprovision instances with this client ID under the instance tag."),
+    filter_client_id: Optional[str] = typer.Option(
+        cloud_config.anon_clientid, help="Only deprovision instances with this client ID under the instance tag."
+    ),
 ):
     """Deprovision all resources created by skyplane."""
+    # sky camp config
+    assert filter_client_id == cloud_config.anon_clientid, "Only deprovisioning instances with your client ID is supported for now."
+
     instances = query_instances()
     if filter_client_id:
         instances = [instance for instance in instances if instance.tags().get("skyplaneclientid") == filter_client_id]
