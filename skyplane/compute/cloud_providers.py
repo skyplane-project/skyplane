@@ -1,5 +1,5 @@
 import functools
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Type
 
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils.fn import do_parallel
@@ -68,3 +68,24 @@ class CloudProvider:
                     continue
                 matching_instances.append(instance)
         return matching_instances
+
+    def provision_instance(
+        self,
+        region: str,
+        instance_class: str,
+        disk_size: int = 32,
+        use_spot_instances: bool = False,
+        name: Optional[str] = None,
+        tags={"skyplane": "true"},
+        **kwargs
+    ) -> Type[Server]:
+        raise NotImplementedError
+
+    def setup_global(self, **kwargs):
+        raise NotImplementedError
+
+    def setup_region(self, region: str):
+        raise NotImplementedError
+
+    def teardown_global(self):
+        raise NotImplementedError

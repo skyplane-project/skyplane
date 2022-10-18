@@ -4,7 +4,13 @@ class SkyplaneException(Exception):
         return err
 
 
-class MissingBucketException(SkyplaneException):
+class PermissionsException(SkyplaneException):
+    def pretty_print_str(self):
+        err = f"[bold][red]PermissionsException: {str(self)}[/red][/bold]"
+        return err
+
+
+class MissingBucketException(PermissionsException):
     def pretty_print_str(self):
         err = f"[red][bold]:x: MissingBucketException:[/bold] {str(self)}[/red]"
         err += "\n[red][bold]Please ensure that the bucket exists and is accessible.[/bold] See https://skyplane.org/en/latest/faq.html#TroubleshootingMissingBucketException.[/red]"
@@ -47,9 +53,9 @@ class TransferFailedException(SkyplaneException):
         return err
 
 
-class NoSuchObjectException(Exception):
+class NoSuchObjectException(SkyplaneException):
     pass
 
 
-class BadConfigException(Exception):
+class BadConfigException(SkyplaneException):
     pass
