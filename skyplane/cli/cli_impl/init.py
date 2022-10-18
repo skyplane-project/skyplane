@@ -88,117 +88,120 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             return False, out, err
         return True, out, err
 
-    if non_interactive or typer.confirm("    Do you want to configure Azure support in Skyplane?", default=True):
-        if force_init:
-            typer.secho("    Azure credentials will be re-initialized", fg="red", err=True)
-            clear_azure_config(config, verbose=False)
-        if config.azure_enabled and config.azure_subscription_id and config.azure_principal_id and config.azure_client_id:
-            typer.secho("    Azure credentials already configured! To reconfigure Azure, run `skyplane init --reinit-azure`.", fg="blue")
-            return config
+    if non_interactive or typer.confirm("    Do you want to configure Azure support in Skyplane?", default=False):
+        # sky camp: no azure
+        typer.secho("    Azure is disabled for Sky camp, please try it out afterwards!", fg="red", err=True)
+        return clear_azure_config(config)
+        # if force_init:
+        #     typer.secho("    Azure credentials will be re-initialized", fg="red", err=True)
+        #     clear_azure_config(config, verbose=False)
+        # if config.azure_enabled and config.azure_subscription_id and config.azure_principal_id and config.azure_client_id:
+        #     typer.secho("    Azure credentials already configured! To reconfigure Azure, run `skyplane init --reinit-azure`.", fg="blue")
+        #     return config
 
-        # check if az cli is installed
-        if not shutil.which("az"):
-            typer.secho(
-                "    Azure CLI not found, please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli",
-                fg="red",
-                err=True,
-            )
-            return clear_azure_config(config)
+        # # check if az cli is installed
+        # if not shutil.which("az"):
+        #     typer.secho(
+        #         "    Azure CLI not found, please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli",
+        #         fg="red",
+        #         err=True,
+        #     )
+        #     return clear_azure_config(config)
 
-        # load credentials from environment variables or input
-        defaults = {
-            "client_id": os.environ.get("AZURE_CLIENT_ID") or config.azure_client_id,
-            "subscription_id": os.environ.get("AZURE_SUBSCRIPTION_ID")
-            or config.azure_subscription_id
-            or AzureAuthentication.infer_subscription_id(),
-            "resource_group": os.environ.get("AZURE_RESOURCE_GROUP") or AzureServer.resource_group_name,
-        }
+        # # load credentials from environment variables or input
+        # defaults = {
+        #     "client_id": os.environ.get("AZURE_CLIENT_ID") or config.azure_client_id,
+        #     "subscription_id": os.environ.get("AZURE_SUBSCRIPTION_ID")
+        #     or config.azure_subscription_id
+        #     or AzureAuthentication.infer_subscription_id(),
+        #     "resource_group": os.environ.get("AZURE_RESOURCE_GROUP") or AzureServer.resource_group_name,
+        # }
 
-        config.azure_subscription_id = (
-            typer.prompt("    Which Azure subscription ID do you want to use?", default=defaults["subscription_id"])
-            if not non_interactive
-            else defaults["subscription_id"]
-        )
-        if not config.azure_subscription_id:
-            typer.secho("    Invalid Azure subscription ID", fg="red", err=True)
-            return clear_azure_config(config)
+        # config.azure_subscription_id = (
+        #     typer.prompt("    Which Azure subscription ID do you want to use?", default=defaults["subscription_id"])
+        #     if not non_interactive
+        #     else defaults["subscription_id"]
+        # )
+        # if not config.azure_subscription_id:
+        #     typer.secho("    Invalid Azure subscription ID", fg="red", err=True)
+        #     return clear_azure_config(config)
 
-        # check if the az CLI is installed
-        out, err = subprocess.Popen("az --version".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-        if not out.decode("utf-8").startswith("azure-cli"):
-            typer.secho(
-                "    Azure CLI not found, please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli",
-                fg="red",
-                err=True,
-            )
-            return clear_azure_config(config)
+        # # check if the az CLI is installed
+        # out, err = subprocess.Popen("az --version".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+        # if not out.decode("utf-8").startswith("azure-cli"):
+        #     typer.secho(
+        #         "    Azure CLI not found, please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli",
+        #         fg="red",
+        #         err=True,
+        #     )
+        #     return clear_azure_config(config)
 
-        change_subscription_cmd = f"az account set --subscription {config.azure_subscription_id}"
-        create_rg_cmd = f"az group create -l westus2 -n {AzureServer.resource_group_name}"
-        create_umi_cmd = f"az identity create -g skyplane -n skyplane_umi"
-        typer.secho(f"    I will run the following commands to create an Azure managed identity:", fg="blue")
-        typer.secho(f"        $ {change_subscription_cmd}", fg="yellow")
-        typer.secho(f"        $ {create_rg_cmd}", fg="yellow")
-        typer.secho(f"        $ {create_umi_cmd}", fg="yellow")
+        # change_subscription_cmd = f"az account set --subscription {config.azure_subscription_id}"
+        # create_rg_cmd = f"az group create -l westus2 -n {AzureServer.resource_group_name}"
+        # create_umi_cmd = f"az identity create -g skyplane -n skyplane_umi"
+        # typer.secho(f"    I will run the following commands to create an Azure managed identity:", fg="blue")
+        # typer.secho(f"        $ {change_subscription_cmd}", fg="yellow")
+        # typer.secho(f"        $ {create_rg_cmd}", fg="yellow")
+        # typer.secho(f"        $ {create_umi_cmd}", fg="yellow")
 
-        with Progress(
-            TextColumn("    "), SpinnerColumn(), TextColumn("Creating Skyplane managed identity{task.description}"), transient=True
-        ) as progress:
-            progress.add_task("", total=None)
-            cmd_success, out, err = run_az_cmd(change_subscription_cmd.split())
-            if not cmd_success:
-                return clear_azure_config(config)
-            cmd_success, out, err = run_az_cmd(create_rg_cmd.split())
-            if not cmd_success:
-                return clear_azure_config(config)
-            cmd_success, out, err = run_az_cmd(create_umi_cmd.split())
-            if not cmd_success:
-                return clear_azure_config(config)
-            else:
-                identity_json = json.loads(out.decode("utf-8"))
-                config.azure_client_id = identity_json["clientId"]
-                config.azure_principal_id = identity_json["principalId"]
+        # with Progress(
+        #     TextColumn("    "), SpinnerColumn(), TextColumn("Creating Skyplane managed identity{task.description}"), transient=True
+        # ) as progress:
+        #     progress.add_task("", total=None)
+        #     cmd_success, out, err = run_az_cmd(change_subscription_cmd.split())
+        #     if not cmd_success:
+        #         return clear_azure_config(config)
+        #     cmd_success, out, err = run_az_cmd(create_rg_cmd.split())
+        #     if not cmd_success:
+        #         return clear_azure_config(config)
+        #     cmd_success, out, err = run_az_cmd(create_umi_cmd.split())
+        #     if not cmd_success:
+        #         return clear_azure_config(config)
+        #     else:
+        #         identity_json = json.loads(out.decode("utf-8"))
+        #         config.azure_client_id = identity_json["clientId"]
+        #         config.azure_principal_id = identity_json["principalId"]
 
-        if not config.azure_client_id or not config.azure_principal_id or not config.azure_subscription_id:
-            typer.secho("    Azure credentials not configured correctly, disabling Azure support.", fg="red", err=True)
-            return clear_azure_config(config)
+        # if not config.azure_client_id or not config.azure_principal_id or not config.azure_subscription_id:
+        #     typer.secho("    Azure credentials not configured correctly, disabling Azure support.", fg="red", err=True)
+        #     return clear_azure_config(config)
 
-        # authorize new managed identity with Storage Blob Data Contributor and Storage Account Contributor roles to the subscription
-        role_cmds = make_role_cmds(config.azure_principal_id, config.azure_subscription_id)
-        typer.secho(
-            f"    I will run the following commands to authorize the newly created Skyplane managed identity to access your storage accounts:",
-            fg="blue",
-        )
-        for role_cmd in role_cmds:
-            typer.secho(f"        $ {' '.join(role_cmd)}", fg="yellow")
+        # # authorize new managed identity with Storage Blob Data Contributor and Storage Account Contributor roles to the subscription
+        # role_cmds = make_role_cmds(config.azure_principal_id, config.azure_subscription_id)
+        # typer.secho(
+        #     f"    I will run the following commands to authorize the newly created Skyplane managed identity to access your storage accounts:",
+        #     fg="blue",
+        # )
+        # for role_cmd in role_cmds:
+        #     typer.secho(f"        $ {' '.join(role_cmd)}", fg="yellow")
 
-        with Progress(
-            TextColumn("    "),
-            SpinnerColumn(),
-            TextColumn("Authorizing managed identity to access storage accounts{task.description}"),
-            transient=True,
-        ) as progress:
-            progress.add_task("", total=None)
-            for role_cmd in role_cmds:
-                cmd_success, out, err = run_az_cmd(role_cmd)
-                if not cmd_success:
-                    return clear_azure_config(config)
-        typer.secho(
-            f"    Azure managed identity created successfully! To delete it, run `az identity delete -n skyplane_umi -g skyplane`.",
-            fg="green",
-        )
+        # with Progress(
+        #     TextColumn("    "),
+        #     SpinnerColumn(),
+        #     TextColumn("Authorizing managed identity to access storage accounts{task.description}"),
+        #     transient=True,
+        # ) as progress:
+        #     progress.add_task("", total=None)
+        #     for role_cmd in role_cmds:
+        #         cmd_success, out, err = run_az_cmd(role_cmd)
+        #         if not cmd_success:
+        #             return clear_azure_config(config)
+        # typer.secho(
+        #     f"    Azure managed identity created successfully! To delete it, run `az identity delete -n skyplane_umi -g skyplane`.",
+        #     fg="green",
+        # )
 
-        config.azure_enabled = True
-        auth = AzureAuthentication(config=config)
-        with Progress(
-            TextColumn("    "),
-            SpinnerColumn(),
-            TextColumn("Querying Azure for available regions and VM SKUs{task.description}"),
-            transient=True,
-        ) as progress:
-            progress.add_task("", total=None)
-            auth.save_region_config()
-        return config
+        # config.azure_enabled = True
+        # auth = AzureAuthentication(config=config)
+        # with Progress(
+        #     TextColumn("    "),
+        #     SpinnerColumn(),
+        #     TextColumn("Querying Azure for available regions and VM SKUs{task.description}"),
+        #     transient=True,
+        # ) as progress:
+        #     progress.add_task("", total=None)
+        #     auth.save_region_config()
+        # return config
     else:
         return clear_azure_config(config)
 
@@ -225,45 +228,48 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
         return config
 
     if non_interactive or typer.confirm("    Do you want to configure GCP support in Skyplane?", default=True):
-        if force_init:
-            typer.secho("    GCP credentials will be re-initialized", fg="red", err=True)
-            config.gcp_project_id = None
-        elif not Path(gcp_config_path).is_file():
-            typer.secho("    GCP region config missing! GCP will be reconfigured.", fg="red", err=True)
-            config.gcp_project_id = None
+        # sky camp: disable gcp support
+        typer.secho("    GCP is disabled for Sky camp, please try it out afterwards!", fg="red", err=True)
+        return disable_gcp_support()
+        # if force_init:
+        #     typer.secho("    GCP credentials will be re-initialized", fg="red", err=True)
+        #     config.gcp_project_id = None
+        # elif not Path(gcp_config_path).is_file():
+        #     typer.secho("    GCP region config missing! GCP will be reconfigured.", fg="red", err=True)
+        #     config.gcp_project_id = None
 
-        if config.gcp_project_id is not None:
-            typer.secho("    GCP already configured! To reconfigure GCP, run `skyplane init --reinit-gcp`.", fg="blue")
-            config.gcp_enabled = True
-            return config
+        # if config.gcp_project_id is not None:
+        #     typer.secho("    GCP already configured! To reconfigure GCP, run `skyplane init --reinit-gcp`.", fg="blue")
+        #     config.gcp_enabled = True
+        #     return config
 
-        # check if GCP is enabled
-        inferred_cred, inferred_project = GCPAuthentication.get_adc_credential()
-        if inferred_cred is None or inferred_project is None:
-            typer.secho("    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.", fg="red", err=True)
-            typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red", err=True)
-            return disable_gcp_support()
-        else:
-            typer.secho("    GCP credentials found in GCP CLI", fg="blue")
-            if non_interactive or typer.confirm("    GCP credentials found, do you want to enable GCP support in Skyplane?", default=True):
-                if not non_interactive:
-                    config.gcp_project_id = typer.prompt("    Enter the GCP project ID", default=inferred_project)
-                else:
-                    config.gcp_project_id = inferred_project
-                assert config.gcp_project_id is not None, "GCP project ID must not be None"
-                config.gcp_enabled = True
-                auth = GCPAuthentication(config=config)
-                typer.secho(f"    Using GCP service account {auth.service_account_name}", fg="blue")
-                if not check_gcp_service(auth, non_interactive):
-                    return disable_gcp_support()
-                try:
-                    auth.save_region_config()
-                except Exception as e:
-                    typer.secho(f"    Error saving GCP region config", fg="red", err=True)
-                    typer.secho(f"    {e}\n{traceback.format_exc()}", fg="red", err=True)
-                    return disable_gcp_support()
-                return config
-            else:
-                return disable_gcp_support()
+        # # check if GCP is enabled
+        # inferred_cred, inferred_project = GCPAuthentication.get_adc_credential()
+        # if inferred_cred is None or inferred_project is None:
+        #     typer.secho("    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.", fg="red", err=True)
+        #     typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red", err=True)
+        #     return disable_gcp_support()
+        # else:
+        #     typer.secho("    GCP credentials found in GCP CLI", fg="blue")
+        #     if non_interactive or typer.confirm("    GCP credentials found, do you want to enable GCP support in Skyplane?", default=True):
+        #         if not non_interactive:
+        #             config.gcp_project_id = typer.prompt("    Enter the GCP project ID", default=inferred_project)
+        #         else:
+        #             config.gcp_project_id = inferred_project
+        #         assert config.gcp_project_id is not None, "GCP project ID must not be None"
+        #         config.gcp_enabled = True
+        #         auth = GCPAuthentication(config=config)
+        #         typer.secho(f"    Using GCP service account {auth.service_account_name}", fg="blue")
+        #         if not check_gcp_service(auth, non_interactive):
+        #             return disable_gcp_support()
+        #         try:
+        #             auth.save_region_config()
+        #         except Exception as e:
+        #             typer.secho(f"    Error saving GCP region config", fg="red", err=True)
+        #             typer.secho(f"    {e}\n{traceback.format_exc()}", fg="red", err=True)
+        #             return disable_gcp_support()
+        #         return config
+        #     else:
+        #         return disable_gcp_support()
     else:
         return disable_gcp_support()
