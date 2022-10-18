@@ -39,7 +39,7 @@ Skyplane supports all major public clouds including AWS, Azure, and GCP. It can 
 
 # Getting started
 
-## Installation
+## 1. Installation
 We recommend installation from PyPi:
 ```
 $ pip install skyplane[aws]
@@ -55,51 +55,31 @@ Skyplane supports AWS, Azure, and GCP. You can install Skyplane with support for
 *GCP support on the M1 Mac*: If you are using an M1 Mac with the arm64 architecture and want to install GCP support for Skyplane, you will need to install as follows
 `GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 GRPC_PYTHON_BUILD_SYSTEM_ZLIB=1 pip install skyplane[aws,gcp]`
 
-## Authenticating with cloud providers
+## 2. Setup Cloud Credentials 
 
-To transfer files from cloud A to cloud B, Skyplane will start VMs (called gateways) in both A and B. The CLI therefore requires authentication with each cloud provider. Skyplane will infer credentials from each cloud providers CLI. Therefore, log into each cloud.
+Skyplane needs access to cloud credentials to perform transfers. To get started with setting up credentials, make sure you have cloud provider CLI tools installed:
 
-### Setting up AWS credentials
+```
+---> For AWS:
+$ pip install awscli
 
-To set up AWS credentials on your local machine, first [install the AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html).
+---> For Google Cloud:
+$ pip install gcloud
 
-After installing the AWS CLI, configure your AWS IAM access ID and secret with `aws configure` ([more details](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-quickstart.html#getting-started-quickstart-new)).
-<!-- <details>
-<summary>"aws configure" output</summary>
-<br>
- 
-```bash
+---> For Azure:
+$ pip install azure
+```
+Once you have the CLI tools setup, log into each cloud provider's CLI:
+```
+---> For AWS:
 $ aws configure
-AWS Access Key ID [None]: AKIAIOSFODNN7EXAMPLE
-AWS Secret Access Key [None]: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-Default region name [None]: us-west-2
-Default output format [None]: json
-```
-</details> -->
 
-### Setting up GCP credentials
-To set up GCP credentials on your local machine, first [install the gcloud CLI](https://cloud.google.com/sdk/docs/install-sdk).
-
-After installing the gcloud CLI, configure your GCP CLI credentials with `gcloud auth` as follows
-```bash
-$ gcloud auth login
+---> For Google Cloud:
 $ gcloud auth application-default login
-```
-Ensure the GCP Compute Engine, Storage Engine, Cloud Resource Manager, and IAM APIs are enabled for the project.
 
-### Setting up Azure credentials
-
-To set up Azure credentials on your local machine, first [install the Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest).
-
-After installing the Azure CLI, configure your Azure CLI credentials with `az login` as follows:
-```bash
+---> For Azure:
 $ az login
 ```
-
-Skyplane should now be able to authenticate with Azure although you may need to pass your subscription ID to `skyplane init` later.
-
-## Importing cloud credentials into Skyplane
-
 After authenticating with each cloud provider, you can run `skyplane init` to create a configuration file for Skyplane.
 
 ```bash
@@ -144,3 +124,5 @@ Config file saved to /home/ubuntu/.skyplane/config
 ```
 
 </details>
+
+
