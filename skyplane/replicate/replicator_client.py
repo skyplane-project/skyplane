@@ -72,6 +72,7 @@ class ReplicatorClient:
         azure_instance_class: Optional[str] = "Standard_D2_v5",  # set to None to disable Azure
         gcp_instance_class: Optional[str] = "n2-standard-16",  # set to None to disable GCP
         gcp_use_premium_network: bool = True,
+        host_uuid: Optional[str] = None,
     ):
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         self.topology = topology
@@ -80,9 +81,10 @@ class ReplicatorClient:
         self.azure_instance_class = azure_instance_class
         self.gcp_instance_class = gcp_instance_class
         self.gcp_use_premium_network = gcp_use_premium_network
+        self.host_uuid = host_uuid
 
         # provisioning
-        self.aws = AWSCloudProvider()
+        self.aws = AWSCloudProvider(key_prefix=f"skyplane-{host_uuid.replace('-', '') if host_uuid else ''}")
         self.azure = AzureCloudProvider()
         self.gcp = GCPCloudProvider()
         self.bound_nodes: Dict[ReplicationTopologyGateway, Server] = {}
@@ -192,12 +194,17 @@ class ReplicatorClient:
         # provision instances
         def provision_gateway_instance(region: str) -> Server:
             provider, subregion = region.split(":")
+            tags = {"skyplane": "true", "skyplaneclientid": self.host_uuid} if self.host_uuid else {"skyplane": "true"}
             if provider == "aws":
                 assert self.aws.auth.enabled()
-                server = self.aws.provision_instance(subregion, self.aws_instance_class, use_spot_instances=aws_use_spot_instances)
+                server = self.aws.provision_instance(
+                    subregion, self.aws_instance_class, use_spot_instances=aws_use_spot_instances, tags=tags
+                )
             elif provider == "azure":
                 assert self.azure.auth.enabled()
-                server = self.azure.provision_instance(subregion, self.azure_instance_class, use_spot_instances=azure_use_spot_instances)
+                server = self.azure.provision_instance(
+                    subregion, self.azure_instance_class, use_spot_instances=azure_use_spot_instances, tags=tags
+                )
             elif provider == "gcp":
                 assert self.gcp.auth.enabled()
                 # todo specify network tier in ReplicationTopology
@@ -206,6 +213,7 @@ class ReplicatorClient:
                     self.gcp_instance_class,
                     use_spot_instances=gcp_use_spot_instances,
                     gcp_premium_network=self.gcp_use_premium_network,
+                    tags=tags,
                 )
             else:
                 raise NotImplementedError(f"Unknown provider {provider}")

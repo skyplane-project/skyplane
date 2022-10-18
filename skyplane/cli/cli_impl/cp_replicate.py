@@ -278,6 +278,7 @@ def launch_replication_job(
     time_limit_seconds: Optional[int] = None,
     log_interval_s: float = 1.0,
     error_reporting_args: Optional[Dict] = None,
+    host_uuid: Optional[str] = None,
 ):
     if "SKYPLANE_DOCKER_IMAGE" in os.environ:
         rprint(f"[bright_black]Using overridden docker image: {gateway_docker_image}[/bright_black]")
@@ -297,6 +298,7 @@ def launch_replication_job(
         azure_instance_class=azure_instance_class,
         gcp_instance_class=gcp_instance_class,
         gcp_use_premium_network=gcp_use_premium_network,
+        host_uuid=host_uuid,
     )
     typer.secho(f"Storing debug information for transfer in {rc.transfer_dir / 'client.log'}", fg="yellow", err=True)
     (rc.transfer_dir / "topology.json").write_text(topo.to_json())
