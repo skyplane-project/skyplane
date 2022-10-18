@@ -3,6 +3,8 @@ from skyplane.api.api import deprovision as _deprovision
 from skyplane.api.auth.auth_config import AuthenticationConfig
 from skyplane.cli.common import parse_path
 import asyncio
+from threading import Thread
+import time
 
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 
@@ -10,6 +12,9 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 def new_client(auth):
     return Skyplane(auth)
 
+def start_background_loop(loop):
+    asyncio.set_event_loop(loop)
+    loop.run_forever()
 
 def deprovision():
     _deprovision()
@@ -65,6 +70,7 @@ class Session:
     def __exit__(self, exc_type, exc_value, exc_tb):
         if self._auto_terminate:
             deprovision()
+            # clean up event loop
 
     def auto_terminate(self):
         self._auto_terminate = True
@@ -88,9 +94,24 @@ class Session:
 
     def run(self, future=None):
         if not future:
-            asyncio.run(self.run_async())
+            # asyncio.run(self.run_async())
+            task = asyncio.create_task(self.run_async())
+            
+            # loop = asyncio.get_event_loop()
+            # f = asyncio.run_coroutine_threadsafe(self.run_async(), loop)
+            # f.result()
+            # loop.stop()
         else:
             asyncio.run(future)
+
+    # def wait_for_completion(self, future):
+    #     try:
+    #         for e in future.exception():
+    #             raise e
+    #     except Exception as exc:
+    #         print(str(exc))
+    #         raise exc
+    #     # loop.stop()
 
 
 class Job:
