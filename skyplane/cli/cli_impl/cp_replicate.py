@@ -274,7 +274,7 @@ def launch_replication_job(
     gcp_use_premium_network: bool = True,
     # logging options
     time_limit_seconds: Optional[int] = None,
-    log_interval_s: float = 1.0,
+    log_interval_s: float = 7.0,
     error_reporting_args: Optional[Dict] = None,
 ):
     if "SKYPLANE_DOCKER_IMAGE" in os.environ:
