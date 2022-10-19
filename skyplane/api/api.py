@@ -183,7 +183,7 @@ async def cp(
             dest_bucket=bucket_dst,
             transfer_pairs=transfer_pairs,
         )
-        confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
+        # confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
 
         small_transfer_cmd = replicate_small_cp_cmd(src, dst, recursive)
         if (

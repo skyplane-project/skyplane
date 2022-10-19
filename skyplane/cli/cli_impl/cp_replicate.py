@@ -327,9 +327,9 @@ def launch_replication_job(
 
         stats = rc.monitor_transfer(
             job,
-            show_spinner=True,
+            show_spinner=False,
             log_interval_s=log_interval_s,
-            log_to_file=True,
+            log_to_file=False,
             time_limit_seconds=time_limit_seconds,
             multipart=multipart_enabled,
             debug=debug,
