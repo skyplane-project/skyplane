@@ -279,13 +279,13 @@ def launch_replication_job(
 ):
     if "SKYPLANE_DOCKER_IMAGE" in os.environ:
         rprint(f"[bright_black]Using overridden docker image: {gateway_docker_image}[/bright_black]")
-    if reuse_gateways:
-        typer.secho(
-            f"Instances will remain up and may result in continued cloud billing. Remember to call `skyplane deprovision` to deprovision gateways.",
-            fg="red",
-            err=True,
-            bold=True,
-        )
+    # if reuse_gateways:
+    #     typer.secho(
+    #         f"Instances will remain up and may result in continued cloud billing. Remember to call `skyplane deprovision` to deprovision gateways.",
+    #         fg="red",
+    #         err=True,
+    #         bold=True,
+    #     )
 
     # make replicator client
     rc = ReplicatorClient(

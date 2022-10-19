@@ -2,9 +2,11 @@ from skyplane.api.api import cp
 from skyplane.api.api import deprovision as _deprovision
 from skyplane.api.auth.auth_config import AuthenticationConfig
 from skyplane.cli.common import parse_path
+from skyplane.cli.cli_impl.cp_replicate_fallback import replicate_onprem_cp_cmd
 import asyncio
 from threading import Thread
 import time
+import os
 
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 
@@ -26,15 +28,19 @@ class SkyplaneClient:
         self.auth = auth
 
     # src="s3://us-east-1/foo", dst="s3://us-east-2/bar"
-    def copy(self, src, dst, num_vms=1, recursive=False):
+    def copy(self, src, dst, num_vms=1, recursive=False, future=None):
         provider_src, bucket_src, path_src = parse_path(src)
         provider_dst, bucket_dst, path_dst = parse_path(dst)
+        if provider_src == "local":
+            cmd = replicate_onprem_cp_cmd(src, dst, recursive)
+            os.system(cmd)
+            return
         src_bucket = provider_src + ":" + bucket_src
         dst_bucket = provider_dst + ":" + bucket_dst
         with Session(src_bucket, dst_bucket, self.auth, num_vms, solver=None) as session:
-            session.auto_terminate()
+            # Not autoterminate for purpose of skycamp
             session.copy(path_src, path_dst, recursive=recursive)
-            session.run()
+            session.run(future=future)
     # src_bucket="aws:us-east-1", dst_bucket="aws:us-east-2"
     def new_session(self, src_bucket, dst_bucket, num_vms=1, solver=None):
         # solver = [None, "ILP", "RON"]
@@ -68,9 +74,8 @@ class Session:
         return self
 
     def __exit__(self, exc_type, exc_value, exc_tb):
-        if self._auto_terminate:
-            deprovision()
-            # clean up event loop
+        # Not autoterminate for purpose of skycamp
+        return
 
     def auto_terminate(self):
         self._auto_terminate = True
@@ -95,6 +100,8 @@ class Session:
     def run(self, future=None):
         if not future:
             # asyncio.run(self.run_async())
+            # asyncio.new_event_loop()
+            # use this function for purpose of notebook
             task = asyncio.create_task(self.run_async())
             
             # loop = asyncio.get_event_loop()
@@ -102,16 +109,18 @@ class Session:
             # f.result()
             # loop.stop()
         else:
-            asyncio.run(future)
+            # asyncio.run(future)
+            asyncio.run(self.run_async())
 
-    # def wait_for_completion(self, future):
-    #     try:
-    #         for e in future.exception():
-    #             raise e
-    #     except Exception as exc:
-    #         print(str(exc))
-    #         raise exc
-    #     # loop.stop()
+    def wait_for_completion(self, future):
+        pass
+        # try:
+        #     for e in future.exception():
+        #         raise e
+        # except Exception as exc:
+        #     print(str(exc))
+        #     raise exc
+        # # loop.stop()
 
 
 class Job:
