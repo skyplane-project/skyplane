@@ -66,7 +66,7 @@ If you do not have enough vCPU capacity in each region, you may get a Insufficie
 Skyplane will automatically attempt to terminate VMs that it starts, but to double check and forcefuly terminate all VMs, run `skyplane deprovision`.
 
 # How Skyplane works
-Skyplane is based on research at UC Berkeley into accelerated networks between cloud providers. Our NSDI 2023 paper is upcoming, but a [technical talk](https://skyplane.org/en/latest/architecture.html) is available.
+Skyplane is based on research at UC Berkeley into accelerated networks between cloud providers. [NSDI 2023 paper](https://arxiv.org/abs/2210.07259), [technical talk](https://skyplane.org/en/latest/architecture.html).
 
 <img src="docs/_static/skyplane-data-plane.png" width="384" />
 
