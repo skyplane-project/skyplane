@@ -187,7 +187,6 @@ class ReplicatorClient:
             jobs.append(self.azure.create_ssh_key)
             jobs.append(self.azure.set_up_resource_group)
         if gcp_regions_to_provision:
-            jobs.append(self.gcp.create_ssh_key)
             jobs.append(self.gcp.setup_global)
         do_parallel(lambda fn: fn(), jobs, spinner=True, spinner_persist=True, desc="Initializing cloud keys")
 

@@ -1,36 +1,25 @@
-import os
 import uuid
-import warnings
-from pathlib import Path
 from typing import List, Optional
 
-from cryptography.utils import CryptographyDeprecationWarning
-
-from skyplane.compute.gcp.gcp_network import GCPNetwork
-from skyplane.compute.gcp.gcp_pricing import GCPPricing
-from skyplane.utils import imports
-
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
-    import paramiko
-
-from skyplane import exceptions, key_root
+from skyplane import exceptions
 from skyplane.compute.cloud_provider import CloudProvider
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
+from skyplane.compute.gcp.gcp_key_manager import GCPKeyManager
+from skyplane.compute.gcp.gcp_network import GCPNetwork
+from skyplane.compute.gcp.gcp_pricing import GCPPricing
 from skyplane.compute.gcp.gcp_server import GCPServer
 from skyplane.compute.server import Server, ServerState
-from skyplane.utils import logger
+from skyplane.utils import imports, logger
 from skyplane.utils.fn import wait_for
 
 
 class GCPCloudProvider(CloudProvider):
-    def __init__(self, key_root=key_root / "gcp"):
+    def __init__(self, key_prefix: str = "skyplane"):
         super().__init__()
+        self.key_name = f"{key_prefix}-gcp-cert"
         self.auth = GCPAuthentication()
         self.network = GCPNetwork(self.auth)
-        key_root.mkdir(parents=True, exist_ok=True)
-        self.private_key_path = key_root / "gcp-cert.pem"
-        self.public_key_path = key_root / "gcp-cert.pub"
+        self.key_manager = GCPKeyManager()
 
     @property
     def name(self):
@@ -85,7 +74,7 @@ class GCPCloudProvider(CloudProvider):
         if "items" in gcp_instance_result:
             instance_list = []
             for i in gcp_instance_result["items"]:
-                instance_list.append(GCPServer(f"gcp:{region}", i["name"], ssh_private_key=self.private_key_path))
+                instance_list.append(GCPServer(f"gcp:{region}", i["name"], ssh_private_key=self.key_manager.get_private_key(self.key_name)))
             return instance_list
         else:
             return []
@@ -98,18 +87,10 @@ class GCPCloudProvider(CloudProvider):
                 matching_instances.append(instance)
         return matching_instances
 
-    def create_ssh_key(self):
-        private_key_path = Path(self.private_key_path)
-        if not private_key_path.exists():
-            private_key_path.parent.mkdir(parents=True, exist_ok=True)
-            key = paramiko.RSAKey.generate(4096)
-            key.write_private_key_file(self.private_key_path, password="skyplane")
-            with open(self.public_key_path, "w") as f:
-                f.write(f"{key.get_name()} {key.get_base64()}\n")
-
     def setup_global(self):
         self.network.create_network()
         self.network.create_default_firewall_rules()
+        self.key_manager.ensure_key_exists(self.key_name)
 
     def teardown_global(self):
         self.network.delete_network()
@@ -142,8 +123,6 @@ class GCPCloudProvider(CloudProvider):
         if name is None:
             name = f"skyplane-gcp-{str(uuid.uuid4()).replace('-', '')}"
         compute = self.auth.get_gcp_client()
-        with open(os.path.expanduser(self.public_key_path)) as f:
-            pub_key = f.read()
 
         req_body = {
             "name": name,
@@ -156,7 +135,7 @@ class GCPCloudProvider(CloudProvider):
                     "initializeParams": {
                         "sourceImage": "projects/cos-cloud/global/images/family/cos-stable",
                         "diskType": f"zones/{region}/diskTypes/pd-standard",
-                        "diskSizeGb": "100",
+                        "diskSizeGb": disk_size,
                     },
                 }
             ],
@@ -169,7 +148,9 @@ class GCPCloudProvider(CloudProvider):
                 }
             ],
             "serviceAccounts": [{"email": "default", "scopes": ["https://www.googleapis.com/auth/cloud-platform"]}],
-            "metadata": {"items": [{"key": "ssh-keys", "value": f"{gcp_vm_uname}:{pub_key}\n"}]},
+            "metadata": {
+                "items": [{"key": "ssh-keys", "value": f"{gcp_vm_uname}:{self.key_manager.get_public_key(self.key_name).read_text()}\n"}]
+            },
             "scheduling": {"onHostMaintenance": "TERMINATE", "automaticRestart": False},
             "deletionProtection": False,
         }
