@@ -22,59 +22,24 @@ You can use Skyplane to transfer data:
 * between object stores across multiple cloud providers (e.g. AWS us-east-1 to GCP us-central1)
 * between local storage and cloud object stores (experimental)
 
-Skyplane supports all major public clouds including AWS, Azure, and GCP. It can also transfer data between any combination of these clouds:
+Skyplane currently supports the following source and destination endpoints (any source and destination can be combined): 
 
-<img src="docs/_static/supported-destinations.png" width="384" />
+| Endpoint           | Source             | Destination        |
+|--------------------|--------------------|--------------------|
+| AWS S3             | :white_check_mark: | :white_check_mark: |
+| Google Storage     | :white_check_mark: | :white_check_mark: |
+| Azure Blob Storage | :white_check_mark: | :white_check_mark: |
+| Local Disk         | :white_check_mark: | (in progress)      |
 
-# Using Skyplane
+# Resources 
+- [Quickstart](#quickstart)
+- [Contributing](https://skyplane.org/en/latest/contributing.html)
+- [Roadmap](https://skyplane.org/en/latest/roadmap.html)
+- [Slack Community](https://join.slack.com/t/skyplaneworkspace/shared_invite/zt-1cxmedcuc-GwIXLGyHTyOYELq7KoOl6Q)
 
-The easiest way to use Skyplane is to use the CLI. `skyplane cp` supports any local path or cloud object store destination as an argument.
+# Quickstart
 
-```bash
-# copy files between two AWS S3 buckets
-$ skyplane cp -r s3://... s3://...
-
-# copy files from an AWS S3 bucket to a GCP GCS bucket
-$ skyplane cp -r s3://... gs://...
-
-# copy files from a local directory to/from a cloud object store
-$ skyplane cp -r /path/to/local/files gs://...
-```
-
-Skyplane also supports incremental copies via `skyplane sync`:    
-```bash
-# copy changed files from S3 to GCS
-$ skyplane sync s3://... gcs://...
-```
-
-`skyplane sync` will diff the contents of the source and destination and only copy the files that are different or have changed. It will not delete files that are no longer present in the source so it's always safe to run `skyplane sync`.
-
-### Accelerating transfers with multiple VMs
-
-With default arguments, Skyplane sets up a one VM (called gateway) in the source and destination regions. We can further accelerate the transfer by using more VMs.
-
-To double the transfer speeds by using two VMs in each region, run:
-```bash
-$ skyplane cp -r s3://... s3://... -n 2
-```
-
-With 8 VMs per region, Skyplane is capable of moving data at up to 50Gbps.
-
-If you do not have enough vCPU capacity in each region, you may get a InsufficientVCPUException. Either request more vCPUs or reduce the number of parallel VMs.
-
-### ⚠️ Ensure the VMs that Skyplane starts are terminated
-Skyplane will automatically attempt to terminate VMs that it starts, but to double check and forcefuly terminate all VMs, run `skyplane deprovision`.
-
-# How Skyplane works
-Skyplane is based on research at UC Berkeley into accelerated networks between cloud providers. Our NSDI 2023 paper is upcoming, but a [technical talk](https://skyplane.org/en/latest/architecture.html) is available.
-
-<img src="docs/_static/skyplane-data-plane.png" width="384" />
-
-Under the hood, Skyplane starts a fleet of VMs in the source and destination regions. It then uses a custom TCP protocol to accelerate the transfer between the VMs. Skyplane may use a L7 overlay network to route traffic around congested network hot spots. Notably, Skyplane does all this from a simple CLI interface.
-
-# Getting started
-
-## Installation
+## 1. Installation
 We recommend installation from PyPi:
 ```
 $ pip install skyplane[aws]
@@ -90,51 +55,31 @@ Skyplane supports AWS, Azure, and GCP. You can install Skyplane with support for
 *GCP support on the M1 Mac*: If you are using an M1 Mac with the arm64 architecture and want to install GCP support for Skyplane, you will need to install as follows
 `GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 GRPC_PYTHON_BUILD_SYSTEM_ZLIB=1 pip install skyplane[aws,gcp]`
 
-## Authenticating with cloud providers
+## 2. Setup Cloud Credentials 
 
-To transfer files from cloud A to cloud B, Skyplane will start VMs (called gateways) in both A and B. The CLI therefore requires authentication with each cloud provider. Skyplane will infer credentials from each cloud providers CLI. Therefore, log into each cloud.
+Skyplane needs access to cloud credentials to perform transfers. To get started with setting up credentials, make sure you have cloud provider CLI tools installed:
 
-### Setting up AWS credentials
+```
+---> For AWS:
+$ pip install awscli
 
-To set up AWS credentials on your local machine, first [install the AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html).
+---> For Google Cloud:
+$ pip install gcloud
 
-After installing the AWS CLI, configure your AWS IAM access ID and secret with `aws configure` ([more details](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-quickstart.html#getting-started-quickstart-new)).
-<!-- <details>
-<summary>"aws configure" output</summary>
-<br>
- 
-```bash
+---> For Azure:
+$ pip install azure
+```
+Once you have the CLI tools setup, log into each cloud provider's CLI:
+```
+---> For AWS:
 $ aws configure
-AWS Access Key ID [None]: AKIAIOSFODNN7EXAMPLE
-AWS Secret Access Key [None]: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-Default region name [None]: us-west-2
-Default output format [None]: json
-```
-</details> -->
 
-### Setting up GCP credentials
-To set up GCP credentials on your local machine, first [install the gcloud CLI](https://cloud.google.com/sdk/docs/install-sdk).
-
-After installing the gcloud CLI, configure your GCP CLI credentials with `gcloud auth` as follows
-```bash
-$ gcloud auth login
+---> For Google Cloud:
 $ gcloud auth application-default login
-```
-Ensure the GCP Compute Engine, Storage Engine, Cloud Resource Manager, and IAM APIs are enabled for the project.
 
-### Setting up Azure credentials
-
-To set up Azure credentials on your local machine, first [install the Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest).
-
-After installing the Azure CLI, configure your Azure CLI credentials with `az login` as follows:
-```bash
+---> For Azure:
 $ az login
 ```
-
-Skyplane should now be able to authenticate with Azure although you may need to pass your subscription ID to `skyplane init` later.
-
-## Importing cloud credentials into Skyplane
-
 After authenticating with each cloud provider, you can run `skyplane init` to create a configuration file for Skyplane.
 
 ```bash
@@ -179,3 +124,33 @@ Config file saved to /home/ubuntu/.skyplane/config
 ```
 
 </details>
+
+## 3. Run Transfers 
+
+We’re ready to use Skyplane! Let’s use `skyplane cp` to copy files from AWS to GCP:
+```
+skyplane cp s3://... gs://...
+```
+To transfer only new objects, you can instead use `skyplane sync`:
+```
+$ skyplane sync s3://... gs://...
+```
+
+You can configure Skyplane to use more VMs per region with the `-n` flag. For example, to double the transfer speed with two VMs, run: 
+```
+$ skyplane cp -r s3://... s3://... -n 2
+```
+
+## 4. Clean Up 
+Skyplane will automatically attempt to terminate VMs that it starts, but to double check and forcefuly terminate all VMs, run `skyplane deprovision`.
+
+# Technical Details
+Skyplane is based on research at UC Berkeley into accelerated networks between cloud providers. Under the hood, Skyplane starts a fleet of VMs in the source and destination regions. It then uses a custom TCP protocol to accelerate the transfer between the VMs. Skyplane may use a L7 overlay network to route traffic around congested network hot spots. 
+
+<img src="docs/_static/skyplane-data-plane.png" width="384" />
+
+For more details on Skyplane, see: 
+- [Technical Talk](https://skyplane.org/en/latest/architecture.html)
+- [NSDI '23 Paper](https://arxiv.org/abs/2210.07259)
+
+

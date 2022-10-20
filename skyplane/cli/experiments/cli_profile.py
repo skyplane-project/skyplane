@@ -8,7 +8,6 @@ from typing import List, Optional, Tuple
 
 import pandas as pd
 import typer
-
 from rich.progress import Progress
 
 from skyplane import GB, skyplane_root

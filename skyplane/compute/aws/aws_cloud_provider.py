@@ -220,7 +220,10 @@ class AWSCloudProvider(CloudProvider):
                     backoff = min(backoff * 2, max_backoff)
 
             assert len(instance) == 1, f"Expected 1 instance, got {len(instance)}"
-            instance[0].wait_until_running()
-            server = AWSServer(f"aws:{region}", instance[0].id)
-            server.wait_for_ssh_ready()
-            return server
+            try:
+                instance[0].wait_until_running()
+            except KeyboardInterrupt:
+                logger.fs.warning(f"Terminating instance {instance[0].id} due to keyboard interrupt")
+                instance[0].terminate()
+                raise
+            return AWSServer(f"aws:{region}", instance[0].id)

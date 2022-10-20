@@ -1,55 +1,55 @@
-"""CLI for the Skyplane object store"""
+import os
 import subprocess
 import time
-from functools import partial
+import traceback
 from pathlib import Path
 from shlex import split
-import traceback
-from urllib import request
-import uuid
-import os
-
-from rich import print as rprint
-
-import skyplane.cli
-import skyplane.cli.usage.definitions
-import skyplane.cli.usage.client
-from skyplane import GB
-from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
-from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
+from typing import Optional
 
 import typer
+from rich import print as rprint
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.prompt import IntPrompt
 
+import skyplane.cli
+import skyplane.cli
 import skyplane.cli.cli_aws
 import skyplane.cli.cli_azure
 import skyplane.cli.cli_config
 import skyplane.cli.cli_internal as cli_internal
 import skyplane.cli.experiments
-from skyplane import cloud_config, config_path, exceptions, skyplane_root
-from skyplane.cli.common import print_header, console, print_stats_completed
+import skyplane.cli.usage.client
+import skyplane.cli.usage.client
+import skyplane.cli.usage.definitions
+import skyplane.cli.usage.definitions
+from skyplane import GB, cloud_config, config_path, exceptions, skyplane_root
 from skyplane.cli.cli_impl.cp_replicate import (
+    confirm_transfer,
     enrich_dest_objs,
     generate_full_transferobjlist,
     generate_topology,
-    confirm_transfer,
     launch_replication_job,
 )
 from skyplane.cli.cli_impl.cp_replicate_fallback import (
+    get_usage_gbits,
     replicate_onprem_cp_cmd,
     replicate_onprem_sync_cmd,
     replicate_small_cp_cmd,
     replicate_small_sync_cmd,
-    get_usage_gbits,
 )
-from skyplane.replicate.replication_plan import ReplicationJob
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
-from skyplane.cli.common import parse_path, query_instances
+from skyplane.cli.common import console, parse_path, print_header, print_stats_completed, query_instances
+from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
+from skyplane.compute.azure.azure_auth import AzureAuthentication
+from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
+from skyplane.compute.gcp.gcp_auth import GCPAuthentication
+from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.config import SkyplaneConfig
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
+from skyplane.replicate.replication_plan import ReplicationJob
+from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
 
@@ -244,6 +244,7 @@ def cp(
                 multipart_chunk_size_mb=cloud_config.get_flag("multipart_chunk_size_mb"),
                 multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
                 error_reporting_args=args,
+                host_uuid=cloud_config.anon_clientid,
             )
             if cloud_config.get_flag("verify_checksums"):
                 provider_dst = topo.sink_region().split(":")[0]
@@ -440,6 +441,7 @@ def sync(
                 multipart_chunk_size_mb=cloud_config.get_flag("multipart_chunk_size_mb"),
                 multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
                 error_reporting_args=args,
+                host_uuid=cloud_config.anon_clientid,
             )
             if cloud_config.get_flag("verify_checksums"):
                 provider_dst = topo.sink_region().split(":")[0]
@@ -469,9 +471,14 @@ def sync(
 
 
 @app.command()
-def deprovision():
+def deprovision(
+    all: bool = typer.Option(False, "--all", "-a", help="Deprovision all resources including networks."),
+    filter_client_id: Optional[str] = typer.Option(None, help="Only deprovision instances with this client ID under the instance tag."),
+):
     """Deprovision all resources created by skyplane."""
     instances = query_instances()
+    if filter_client_id:
+        instances = [instance for instance in instances if instance.tags().get("skyplaneclientid") == filter_client_id]
 
     if instances:
         typer.secho(f"Deprovisioning {len(instances)} instances", fg="yellow", bold=True)
@@ -479,9 +486,16 @@ def deprovision():
     else:
         typer.secho("No instances to deprovision", fg="yellow", bold=True)
 
-    if AWSAuthentication().enabled():
-        aws = AWSCloudProvider()
-        aws.teardown_global()
+    if all:
+        if AWSAuthentication().enabled():
+            aws = AWSCloudProvider()
+            aws.teardown_global()
+        if GCPAuthentication().enabled():
+            gcp = GCPCloudProvider()
+            gcp.teardown_global()
+        if AzureAuthentication().enabled():
+            azure = AzureCloudProvider()
+            azure.teardown_global()
 
 
 @app.command()

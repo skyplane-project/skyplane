@@ -72,6 +72,7 @@ class ReplicatorClient:
         azure_instance_class: Optional[str] = "Standard_D2_v5",  # set to None to disable Azure
         gcp_instance_class: Optional[str] = "n2-standard-16",  # set to None to disable GCP
         gcp_use_premium_network: bool = True,
+        host_uuid: Optional[str] = None,
     ):
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         self.topology = topology
@@ -80,9 +81,10 @@ class ReplicatorClient:
         self.azure_instance_class = azure_instance_class
         self.gcp_instance_class = gcp_instance_class
         self.gcp_use_premium_network = gcp_use_premium_network
+        self.host_uuid = host_uuid
 
         # provisioning
-        self.aws = AWSCloudProvider()
+        self.aws = AWSCloudProvider(key_prefix=f"skyplane-{host_uuid.replace('-', '') if host_uuid else ''}")
         self.azure = AzureCloudProvider()
         self.gcp = GCPCloudProvider()
         self.gcp_firewall_name = f"skyplane-transfer-{uuid.uuid4().hex}"
@@ -192,12 +194,17 @@ class ReplicatorClient:
         # provision instances
         def provision_gateway_instance(region: str) -> Server:
             provider, subregion = region.split(":")
+            tags = {"skyplane": "true", "skyplaneclientid": self.host_uuid} if self.host_uuid else {"skyplane": "true"}
             if provider == "aws":
                 assert self.aws.auth.enabled()
-                server = self.aws.provision_instance(subregion, self.aws_instance_class, use_spot_instances=aws_use_spot_instances)
+                server = self.aws.provision_instance(
+                    subregion, self.aws_instance_class, use_spot_instances=aws_use_spot_instances, tags=tags
+                )
             elif provider == "azure":
                 assert self.azure.auth.enabled()
-                server = self.azure.provision_instance(subregion, self.azure_instance_class, use_spot_instances=azure_use_spot_instances)
+                server = self.azure.provision_instance(
+                    subregion, self.azure_instance_class, use_spot_instances=azure_use_spot_instances, tags=tags
+                )
             elif provider == "gcp":
                 assert self.gcp.auth.enabled()
                 # todo specify network tier in ReplicationTopology
@@ -206,11 +213,13 @@ class ReplicatorClient:
                     self.gcp_instance_class,
                     use_spot_instances=gcp_use_spot_instances,
                     gcp_premium_network=self.gcp_use_premium_network,
+                    tags=tags,
                 )
             else:
                 raise NotImplementedError(f"Unknown provider {provider}")
-            server.enable_auto_shutdown()
             self.temp_nodes.append(server)
+            server.wait_for_ssh_ready()
+            server.enable_auto_shutdown()
             return server
 
         results = do_parallel(
@@ -568,6 +577,7 @@ class ReplicatorClient:
         sink_regions = set(s.region for s in sinks)
 
         (self.transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
+        error = False
         try:
             with Progress(
                 SpinnerColumn(),
@@ -587,9 +597,7 @@ class ReplicatorClient:
                         # check for errors and exit if there are any (while setting debug flags)
                         errors = self.check_error_logs()
                         if any(errors.values()):
-                            copy_gateway_logs = True
-                            write_profile = True
-                            write_socket_profile = True
+                            error = True
                             return TransferStats(monitor_status="error", total_runtime_s=t.elapsed, errors=errors)
 
                         log_df = self.get_chunk_status_log_df()
@@ -708,10 +716,11 @@ class ReplicatorClient:
                         )
                     (self.transfer_dir / f"receiver_socket_profile_{instance.uuid()}.json").write_text(text)
 
-                if debug:
+                if debug or error:
                     # copy logs from gateways
                     progress.update(cleanup_task, description=": Copying gateway logs")
                     do_parallel(copy_log, self.bound_nodes.values(), n=-1)
+                if debug:
                     # write chunk profiles
                     progress.update(cleanup_task, description=": Writing chunk profiles")
                     chunk_status_df = self.get_chunk_status_log_df()

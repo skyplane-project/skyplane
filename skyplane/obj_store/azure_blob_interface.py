@@ -1,15 +1,15 @@
 import base64
 import hashlib
 import os
-from functools import lru_cache, partial
+from functools import lru_cache
 from typing import Iterator, List, Optional
 
-from skyplane import exceptions, is_gateway_env
+from skyplane import exceptions
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_server import AzureServer
+from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.azure_storage_account_interface import AzureStorageAccountInterface
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
-from skyplane.exceptions import NoSuchObjectException
 from skyplane.utils import logger, imports
 
 

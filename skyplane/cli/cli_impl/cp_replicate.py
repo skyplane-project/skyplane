@@ -10,16 +10,16 @@ from rich import print as rprint
 
 from skyplane import exceptions, GB, format_bytes, gateway_docker_image, skyplane_root, cloud_config
 from skyplane.compute.cloud_provider import CloudProvider
+from skyplane.cli.common import console
+from skyplane.cli.usage.client import UsageClient
+from skyplane.obj_store.azure_blob_interface import AzureBlobObject
+from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.obj_store.s3_interface import S3Object
-from skyplane.obj_store.gcs_interface import GCSObject
-from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
 from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
-from skyplane.cli.common import console
-from skyplane.cli.usage.client import UsageClient
 
 
 def generate_topology(
@@ -278,6 +278,7 @@ def launch_replication_job(
     time_limit_seconds: Optional[int] = None,
     log_interval_s: float = 1.0,
     error_reporting_args: Optional[Dict] = None,
+    host_uuid: Optional[str] = None,
 ):
     if "SKYPLANE_DOCKER_IMAGE" in os.environ:
         rprint(f"[bright_black]Using overridden docker image: {gateway_docker_image}[/bright_black]")
@@ -297,6 +298,7 @@ def launch_replication_job(
         azure_instance_class=azure_instance_class,
         gcp_instance_class=gcp_instance_class,
         gcp_use_premium_network=gcp_use_premium_network,
+        host_uuid=host_uuid,
     )
     typer.secho(f"Storing debug information for transfer in {rc.transfer_dir / 'client.log'}", fg="yellow", err=True)
     (rc.transfer_dir / "topology.json").write_text(topo.to_json())
@@ -336,29 +338,35 @@ def launch_replication_job(
             multipart=multipart_enabled,
             debug=debug,
         )
-    except Exception as e:
-        if isinstance(e, KeyboardInterrupt):
-            rprint("\n[bold red]Transfer cancelled by user. Exiting.[/bold red]")
-        elif isinstance(e, exceptions.SkyplaneException):
-            console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
-            console.print(e.pretty_print_str())
-        else:
-            console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
-            console.print(e)
-        if not reuse_gateways:
-            logger.fs.warning("Deprovisioning gateways then exiting. Please wait...")
-            # disable sigint to prevent repeated KeyboardInterrupts
-            s = signal.signal(signal.SIGINT, signal.SIG_IGN)
-            rc.deprovision_gateways()
-            signal.signal(signal.SIGINT, s)
+        error_occurred = False
+    except KeyboardInterrupt:
+        logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt)")
+        rprint("\n[bold red]Transfer cancelled by user. Exiting.[/bold red]")
+        error_occurred = True
+    except exceptions.SkyplaneException as e:
+        logger.fs.exception(e)
+        console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+        console.print(e.pretty_print_str())
         UsageClient.log_exception("launch_replication_job", e, error_reporting_args, job.source_region, job.dest_region)
-        os._exit(1)  # exit now
+        error_occurred = True
+    except Exception as e:
+        logger.fs.exception(e)
+        console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+        console.print(e)
+        UsageClient.log_exception("launch_replication_job", e, error_reporting_args, job.source_region, job.dest_region)
+        error_occurred = True
 
     if not reuse_gateways:
+        logger.fs.warning("Deprovisioning gateways then exiting. Please wait...")
         s = signal.signal(signal.SIGINT, signal.SIG_IGN)
         rc.deprovision_gateways()
         signal.signal(signal.SIGINT, s)
-    if stats.monitor_status == "error":
+
+    # handle errors
+    if error_occurred:  # client error
+        logger.fs.error("Exiting as an error occurred")
+        os._exit(1)  # exit now
+    if stats.monitor_status == "error":  # gateway error
         err = ""
         for instance, errors in stats.errors.items():
             for error in errors:
@@ -370,8 +378,7 @@ def launch_replication_job(
         )
         raise typer.Exit(1)
     elif stats.monitor_status == "completed":
-        # success message will be handled by the caller
-        pass
+        pass  # success message will be handled by the caller
     else:
         rprint(f"\n:x: [bold red]Transfer failed[/bold red]")
         rprint(stats)

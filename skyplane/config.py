@@ -1,9 +1,9 @@
 import configparser
 import os
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
-import uuid
 
 from skyplane.exceptions import BadConfigException
 
@@ -83,11 +83,11 @@ class SkyplaneConfig:
     aws_enabled: bool
     azure_enabled: bool
     gcp_enabled: bool
+    anon_clientid: str
     azure_principal_id: Optional[str] = None
     azure_subscription_id: Optional[str] = None
     azure_client_id: Optional[str] = None
     gcp_project_id: Optional[str] = None
-    anon_clientid: Optional[str] = None
 
     @staticmethod
     def generate_machine_id() -> str:
@@ -186,8 +186,7 @@ class SkyplaneConfig:
 
         if "client" not in config:
             config.add_section("client")
-        if self.anon_clientid:
-            config.set("client", "anon_clientid", self.anon_clientid)
+        config.set("client", "anon_clientid", self.anon_clientid)
 
         if "flags" not in config:
             config.add_section("flags")
