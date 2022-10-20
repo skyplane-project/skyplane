@@ -43,7 +43,6 @@ def provision(
         jobs.append(azure.create_ssh_key)
         jobs.append(azure.set_up_resource_group)
     if gcp_regions_to_provision:
-        jobs.append(gcp.create_ssh_key)
         jobs.append(gcp.setup_global)
     with Timer("Cloud SSH key initialization"):
         do_parallel(lambda fn: fn(), jobs)
