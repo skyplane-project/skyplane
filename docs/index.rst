@@ -25,7 +25,7 @@ Copy a large dataset in the cloud in a minute, not hours:
 
    $ pip install skyplane[aws]
    $ skyplane init
-   $ skyplane [sync/cp] [local/s3/gcp/azure]://mybucket/big_dataset [local/s3/gcp/azure]://mybucket2/
+   $ skyplane [sync/cp] [local/s3/gs/azure]://mybucket/big_dataset [local/s3/gs/azure]://mybucket2/
 
 
 Skyplane supports copying data between any major public cloud:
