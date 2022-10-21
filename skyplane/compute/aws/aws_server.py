@@ -1,19 +1,21 @@
 import logging
+import warnings
 import functools
 from typing import Dict, Optional
 
-import warnings
 from cryptography.utils import CryptographyDeprecationWarning
+
+from skyplane.compute.aws.aws_key_manager import AWSKeyManager
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
 
-from skyplane import key_root, exceptions
+from skyplane import exceptions, key_root
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.server import Server, ServerState
-from skyplane.utils.cache import ignore_lru_cache
 from skyplane.utils import imports
+from skyplane.utils.cache import ignore_lru_cache
 
 
 class AWSServer(Server):
@@ -23,9 +25,9 @@ class AWSServer(Server):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "aws"
         self.auth = AWSAuthentication()
+        self.key_manager = AWSKeyManager(self.auth)
         self.aws_region = self.region_tag.split(":")[1]
         self.instance_id = instance_id
-        self.local_keyfile = key_root / "aws" / f"skyplane-{self.aws_region}.pem"
 
     @property
     @functools.lru_cache(maxsize=None)
@@ -59,6 +61,10 @@ class AWSServer(Server):
         return self.get_boto3_instance_resource().public_ip_address
 
     @ignore_lru_cache()
+    def private_ip(self) -> str:
+        return self.get_boto3_instance_resource().private_ip_address
+
+    @ignore_lru_cache()
     def instance_class(self) -> str:
         return self.get_boto3_instance_resource().instance_type
 
@@ -79,6 +85,17 @@ class AWSServer(Server):
 
     def instance_state(self):
         return ServerState.from_aws_state(self.get_boto3_instance_resource().state["Name"])
+
+    @property
+    @ignore_lru_cache()
+    def local_keyfile(self):
+        key_name = self.get_boto3_instance_resource().key_name
+        if self.key_manager.key_exists_local(key_name):
+            return self.key_manager.get_key(key_name)
+        else:
+            raise exceptions.BadConfigException(
+                f"Failed to connect to AWS server {self.uuid()}. Delete local AWS keys and retry: `rm -rf {key_root / 'aws'}`"
+            )
 
     def __repr__(self):
         return f"AWSServer(region_tag={self.region_tag}, instance_id={self.instance_id})"

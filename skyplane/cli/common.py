@@ -15,7 +15,6 @@ from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
 
-
 console = Console()
 
 

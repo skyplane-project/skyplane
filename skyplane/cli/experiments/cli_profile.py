@@ -8,7 +8,6 @@ from typing import List, Optional, Tuple
 
 import pandas as pd
 import typer
-
 from rich.progress import Progress
 
 from skyplane import GB, skyplane_root
@@ -207,10 +206,10 @@ def throughput_grid(
     # setup instances
     def setup(server: Server):
         check_stderr(server.run_command("echo 'debconf debconf/frontend select Noninteractive' | sudo debconf-set-selections"))
-        check_stderr(server.run_command("sudo add-apt-repository universe"))
         check_stderr(
             server.run_command(
-                "(sudo apt-get update && sudo apt-get install -y dialog apt-utils && sudo apt-get install -y iperf3); pkill iperf3; iperf3 -s -D -J"
+                "sudo add-apt-repository universe;\
+                (sudo apt-get update -y && sudo apt-get install -y dialog apt-utils && sudo apt-get install -y iperf3); pkill iperf3; iperf3 -s -D -J"
             )
         )
         check_stderr(server.run_command(make_sysctl_tcp_tuning_command(cc="cubic")))

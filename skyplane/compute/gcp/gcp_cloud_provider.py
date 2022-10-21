@@ -1,10 +1,10 @@
 import os
 import time
 import uuid
-from pathlib import Path
-from typing import List
-
 import warnings
+from pathlib import Path
+from typing import List, Optional
+
 from cryptography.utils import CryptographyDeprecationWarning
 
 from skyplane.utils import imports
@@ -307,13 +307,14 @@ class GCPCloudProvider(CloudProvider):
     def provision_instance(
         errors,
         self,
-        region,
-        instance_class,
-        name=None,
-        premium_network=False,
-        uname="skyplane",
-        tags={"skyplane": "true"},
+        region: str,
+        instance_class: str,
+        disk_size: int = 32,
         use_spot_instances: bool = False,
+        name: Optional[str] = None,
+        tags={"skyplane": "true"},
+        gcp_premium_network=False,
+        gcp_vm_uname="skyplane",
         instance_os: str = "cos",
     ) -> GCPServer:
         assert not region.startswith("gcp:"), "Region should be GCP region"
@@ -324,7 +325,7 @@ class GCPCloudProvider(CloudProvider):
             pub_key = f.read()
 
         if instance_os == "ubuntu":
-            image = "projects/ubuntu-os-cloud/global/images/family/ubuntu-1804-lts"
+            image = "projects/ubuntu-os-cloud/global/images/family/ubuntu-2004-lts"
         elif instance_os == "cos":
             image = "projects/cos-cloud/global/images/family/cos-stable"
         else:
@@ -349,21 +350,39 @@ class GCPCloudProvider(CloudProvider):
                 {
                     "network": "global/networks/skyplane",
                     "accessConfigs": [
-                        {"name": "External NAT", "type": "ONE_TO_ONE_NAT", "networkTier": "PREMIUM" if premium_network else "STANDARD"}
+                        {"name": "External NAT", "type": "ONE_TO_ONE_NAT", "networkTier": "PREMIUM" if gcp_premium_network else "STANDARD"}
                     ],
                 }
             ],
             "serviceAccounts": [{"email": "default", "scopes": ["https://www.googleapis.com/auth/cloud-platform"]}],
-            "metadata": {"items": [{"key": "ssh-keys", "value": f"{uname}:{pub_key}\n"}]},
+            "metadata": {"items": [{"key": "ssh-keys", "value": f"{gcp_vm_uname}:{pub_key}\n"}]},
             "scheduling": {"onHostMaintenance": "TERMINATE", "automaticRestart": False},
             "deletionProtection": False,
         }
         # use preemtible instances if use_spot_instances is True
         if use_spot_instances:
             req_body["scheduling"]["preemptible"] = True
+
         try:
             result = compute.instances().insert(project=self.auth.project_id, zone=region, body=req_body).execute()
             self.wait_for_operation_to_complete(region, result["name"])
+            server = GCPServer(f"gcp:{region}", name)
+
+            # wait for server to reach RUNNING state
+            try:
+                wait_for(
+                    lambda: server.instance_state() == ServerState.RUNNING,
+                    timeout=120,
+                    interval=0.1,
+                    desc=f"Wait for RUNNING status on {server.uuid()}",
+                )
+                server.wait_for_ssh_ready()
+            except:
+                logger.fs.error(f"Instance {server.uuid()} did not reach RUNNING status")
+                server.terminate_instance()
+                raise
+            server.run_command("sudo /sbin/iptables -A INPUT -j ACCEPT")
+            return server
         except errors.HttpError as e:
             if e.resp.status == 409:
                 if "ZONE_RESOURCE_POOL_EXHAUSTED" in e.content:
@@ -374,22 +393,9 @@ class GCPCloudProvider(CloudProvider):
                     raise exceptions.InsufficientVCPUException(f"Got QUOTA_EXCEEDED in region {region}") from e
                 elif "QUOTA_LIMIT" in e.content:
                     raise exceptions.InsufficientVCPUException(f"Got QUOTA_LIMIT in region {region}") from e
-                else:
-                    raise e
-
-        # wait for server to reach RUNNING state
-        server = GCPServer(f"gcp:{region}", name)
-        try:
-            wait_for(
-                lambda: server.instance_state() == ServerState.RUNNING,
-                timeout=120,
-                interval=0.1,
-                desc=f"Wait for RUNNING status on {server.uuid()}",
-            )
-            server.wait_for_ssh_ready()
-        except:
-            logger.fs.error(f"Instance {server.uuid()} did not reach RUNNING status")
-            server.terminate_instance()
-            raise
-        server.run_command("sudo /sbin/iptables -A INPUT -j ACCEPT")
-        return server
+            raise e
+        except KeyboardInterrupt as e:
+            logger.fs.info(f"Keyboard interrupt, deleting instance {name}")
+            op = compute.instances().delete(project=self.auth.project_id, zone=region, instance=name).execute()
+            self.wait_for_operation_to_complete(region, op["name"])
+            raise e

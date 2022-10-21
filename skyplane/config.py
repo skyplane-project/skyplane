@@ -1,5 +1,6 @@
 import configparser
 import os
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
@@ -82,18 +83,22 @@ class SkyplaneConfig:
     aws_enabled: bool
     azure_enabled: bool
     gcp_enabled: bool
+    anon_clientid: str
     azure_principal_id: Optional[str] = None
     azure_subscription_id: Optional[str] = None
     azure_client_id: Optional[str] = None
     gcp_project_id: Optional[str] = None
-    anon_clientid: Optional[str] = None
 
     @staticmethod
-    def default_config() -> "SkyplaneConfig":
-        return SkyplaneConfig(aws_enabled=False, azure_enabled=False, gcp_enabled=False, anon_clientid=None)
+    def generate_machine_id() -> str:
+        return uuid.UUID(int=uuid.getnode()).hex
 
-    @staticmethod
-    def load_config(path) -> "SkyplaneConfig":
+    @classmethod
+    def default_config(cls) -> "SkyplaneConfig":
+        return cls(aws_enabled=False, azure_enabled=False, gcp_enabled=False, anon_clientid=cls.generate_machine_id())
+
+    @classmethod
+    def load_config(cls, path) -> "SkyplaneConfig":
         """Load from a config file."""
         path = Path(path)
         config = configparser.ConfigParser()
@@ -101,9 +106,10 @@ class SkyplaneConfig:
             raise FileNotFoundError(f"Config file not found: {path}")
         config.read(path)
 
-        anon_clientid = None
         if "client" in config and "anon_clientid" in config["client"]:
             anon_clientid = config.get("client", "anon_clientid")
+        else:
+            anon_clientid = cls.generate_machine_id()
 
         aws_enabled = False
         if "aws" in config:
@@ -132,7 +138,7 @@ class SkyplaneConfig:
             if "project_id" in config["gcp"]:
                 gcp_project_id = config.get("gcp", "project_id")
 
-        skyplane_config = SkyplaneConfig(
+        skyplane_config = cls(
             aws_enabled=aws_enabled,
             azure_enabled=azure_enabled,
             gcp_enabled=gcp_enabled,
@@ -180,8 +186,7 @@ class SkyplaneConfig:
 
         if "client" not in config:
             config.add_section("client")
-        if self.anon_clientid:
-            config.set("client", "anon_clientid", self.anon_clientid)
+        config.set("client", "anon_clientid", self.anon_clientid)
 
         if "flags" not in config:
             config.add_section("flags")

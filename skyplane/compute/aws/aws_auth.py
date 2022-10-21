@@ -1,4 +1,3 @@
-import threading
 from typing import Optional
 
 from skyplane import aws_config_path
@@ -8,11 +7,9 @@ from skyplane.utils import imports
 
 
 class AWSAuthentication:
-    __cached_credentials = threading.local()
-
     def __init__(self, config: Optional[SkyplaneConfig] = None, access_key: Optional[str] = None, secret_key: Optional[str] = None):
         """Loads AWS authentication details. If no access key is provided, it will try to load credentials using boto3"""
-        if not config == None:
+        if not config is None:
             self.config = config
         else:
             self.config = SkyplaneConfig.load_config(config_path)
@@ -28,7 +25,7 @@ class AWSAuthentication:
 
     @imports.inject("boto3", pip_extra="aws")
     def save_region_config(boto3, self, config: SkyplaneConfig):
-        if config.aws_enabled == False:
+        if not config.aws_enabled:
             self.clear_region_config()
             return
         with aws_config_path.open("w") as f:
@@ -75,7 +72,7 @@ class AWSAuthentication:
     def infer_credentials(boto3, self):
         # todo load temporary credentials from STS
         cached_credential = getattr(self.__cached_credentials, "boto3_credential", None)
-        if cached_credential == None:
+        if cached_credential is None:
             session = boto3.Session()
             credentials = session.get_credentials()
             if credentials:

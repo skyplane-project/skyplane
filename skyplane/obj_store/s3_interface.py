@@ -1,13 +1,13 @@
-from functools import lru_cache
 import base64
 import hashlib
 import os
+from functools import lru_cache
 from typing import Iterator, List, Optional
 
 from skyplane import exceptions
 from skyplane.compute.aws.aws_auth import AWSAuthentication
-from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.exceptions import NoSuchObjectException
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger, imports
 
 

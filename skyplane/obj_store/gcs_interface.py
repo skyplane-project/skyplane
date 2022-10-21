@@ -2,16 +2,17 @@ import base64
 import datetime
 import hashlib
 import os
-import requests
 from functools import lru_cache
 from typing import Iterator, List, Optional
 from xml.etree import ElementTree
 
+import requests
+
 from skyplane import exceptions
-from skyplane.utils import logger
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
-from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.exceptions import NoSuchObjectException
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
+from skyplane.utils import logger
 
 
 class GCSObject(ObjectStoreObject):

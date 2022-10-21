@@ -1,7 +1,7 @@
-from pathlib import Path
-from typing import Optional
 import base64
 import os
+from pathlib import Path
+from typing import Optional
 
 from skyplane import config_path, gcp_config_path, key_root
 from skyplane.config import SkyplaneConfig
@@ -85,9 +85,10 @@ class GCPAuthentication:
             logger.warning(f"Failed to load GCP credentials for project {project_id}: {e}")
             inferred_cred, inferred_project = (None, None)
         if project_id is not None and project_id != inferred_project:
-            logger.warning(
-                f"Google project ID error: Project ID from config {project_id} does not match inferred project from google.auth ADC {inferred_project}. Defaulting to config project."
-            )
+            if inferred_project is not None:
+                logger.warning(
+                    f"Google project ID error: Project ID from config {project_id} does not match inferred project from google.auth ADC {inferred_project}. Defaulting to config project."
+                )
             inferred_project = project_id
         return inferred_cred, inferred_project
 

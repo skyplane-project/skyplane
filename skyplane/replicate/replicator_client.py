@@ -14,6 +14,7 @@ import nacl.utils
 import pandas as pd
 import urllib3
 from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, TransferSpeedColumn
+
 from skyplane import GB, MB, exceptions, gateway_docker_image, tmp_log_dir
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
@@ -71,6 +72,7 @@ class ReplicatorClient:
         azure_instance_class: Optional[str] = "Standard_D2_v5",  # set to None to disable Azure
         gcp_instance_class: Optional[str] = "n2-standard-16",  # set to None to disable GCP
         gcp_use_premium_network: bool = True,
+        host_uuid: Optional[str] = None,
     ):
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         self.topology = topology
@@ -79,9 +81,10 @@ class ReplicatorClient:
         self.azure_instance_class = azure_instance_class
         self.gcp_instance_class = gcp_instance_class
         self.gcp_use_premium_network = gcp_use_premium_network
+        self.host_uuid = host_uuid
 
         # provisioning
-        self.aws = AWSCloudProvider()
+        self.aws = AWSCloudProvider(key_prefix=f"skyplane-{host_uuid.replace('-', '') if host_uuid else ''}")
         self.azure = AzureCloudProvider()
         self.gcp = GCPCloudProvider()
         self.bound_nodes: Dict[ReplicationTopologyGateway, Server] = {}
@@ -176,15 +179,9 @@ class ReplicatorClient:
         # init clouds
         jobs = []
         if aws_regions_to_provision:
-            jobs.append(partial(self.aws.create_iam, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
+            jobs.append(partial(self.aws.setup_global, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
             for r in set(aws_regions_to_provision):
-
-                def init_aws_vpc(r):
-                    self.aws.make_vpc(r)
-                    self.aws.authorize_client(r, "0.0.0.0/0")
-
-                jobs.append(partial(init_aws_vpc, r.split(":")[1]))
-                jobs.append(partial(self.aws.ensure_keyfile_exists, r.split(":")[1]))
+                jobs.append(partial(self.aws.setup_region, r.split(":")[1]))
         if azure_regions_to_provision:
             jobs.append(self.azure.create_ssh_key)
             jobs.append(self.azure.set_up_resource_group)
@@ -197,25 +194,32 @@ class ReplicatorClient:
         # provision instances
         def provision_gateway_instance(region: str) -> Server:
             provider, subregion = region.split(":")
+            tags = {"skyplane": "true", "skyplaneclientid": self.host_uuid} if self.host_uuid else {"skyplane": "true"}
             if provider == "aws":
                 assert self.aws.auth.enabled()
-                server = self.aws.provision_instance(subregion, self.aws_instance_class, use_spot_instances=aws_use_spot_instances)
+                server = self.aws.provision_instance(
+                    subregion, self.aws_instance_class, use_spot_instances=aws_use_spot_instances, tags=tags
+                )
             elif provider == "azure":
                 assert self.azure.auth.enabled()
-                server = self.azure.provision_instance(subregion, self.azure_instance_class, use_spot_instances=azure_use_spot_instances)
+                server = self.azure.provision_instance(
+                    subregion, self.azure_instance_class, use_spot_instances=azure_use_spot_instances, tags=tags
+                )
             elif provider == "gcp":
                 assert self.gcp.auth.enabled()
                 # todo specify network tier in ReplicationTopology
                 server = self.gcp.provision_instance(
                     subregion,
                     self.gcp_instance_class,
-                    premium_network=self.gcp_use_premium_network,
                     use_spot_instances=gcp_use_spot_instances,
+                    gcp_premium_network=self.gcp_use_premium_network,
+                    tags=tags,
                 )
             else:
                 raise NotImplementedError(f"Unknown provider {provider}")
-            server.enable_auto_shutdown()
             self.temp_nodes.append(server)
+            server.wait_for_ssh_ready()
+            server.enable_auto_shutdown()
             return server
 
         results = do_parallel(
@@ -256,12 +260,13 @@ class ReplicatorClient:
         # Firewall rules
         # todo add firewall rules for Azure
         public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.gateway_nodes]
+        private_ips = [self.bound_nodes[n].private_ip() for n in self.topology.gateway_nodes if n.region.split(":")[0] == "gcp"]
         authorize_ip_jobs = []
         authorize_ip_jobs.extend(
             [partial(self.aws.add_ips_to_security_group, r.split(":")[1], public_ips) for r in set(aws_regions_to_provision)]
         )
         if gcp_regions_to_provision:
-            authorize_ip_jobs.append(partial(self.gcp.add_ips_to_firewall, public_ips))
+            authorize_ip_jobs.append(partial(self.gcp.add_ips_to_firewall, public_ips + private_ips))
         do_parallel(lambda fn: fn(), authorize_ip_jobs, spinner=True, desc="Applying firewall rules")
 
         # generate E2EE key
@@ -290,11 +295,16 @@ class ReplicatorClient:
         sources = self.topology.source_instances()
         sinks = self.topology.sink_instances()
         for node, server in self.bound_nodes.items():
-            setup_args = {
-                self.bound_nodes[n].public_ip(): v
-                for n, v in self.topology.get_outgoing_paths(node).items()
-                if isinstance(n, ReplicationTopologyGateway)
-            }
+            setup_args = {}
+            for n, v in self.topology.get_outgoing_paths(node).items():
+                if isinstance(n, ReplicationTopologyGateway):
+                    # use private ips for gcp to gcp connection
+                    src_provider, dst_provider = node.region.split(":")[0], n.region.split(":")[0]
+                    if src_provider == dst_provider and src_provider == "gcp":
+                        setup_args[self.bound_nodes[n].private_ip()] = v
+                    else:
+                        setup_args[self.bound_nodes[n].public_ip()] = v
+
             args.append((server, setup_args, node in sources, node in sinks))
         do_parallel(setup, args, n=-1, spinner=True, spinner_persist=True, desc="Installing gateway package")
 
@@ -308,10 +318,12 @@ class ReplicatorClient:
         # Clear IPs from security groups
         # todo remove firewall rules for Azure
         public_ips = [i.public_ip() for i in self.bound_nodes.values()] + [i.public_ip() for i in self.temp_nodes]
+        private_ips = [i.private_ip() for n, i in self.bound_nodes.items() if n.region.split(":")[0] == "gcp"]
+        private_ips += [i.private_ip() for i in self.temp_nodes if i.region_tag.split(":")[0] == "gcp"]
         aws_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("aws:")]
         aws_jobs = [partial(self.aws.remove_ips_from_security_group, r.split(":")[1], public_ips) for r in set(aws_regions)]
         gcp_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("gcp:")]
-        gcp_jobs = [partial(self.gcp.remove_ips_from_firewall, public_ips)] if gcp_regions else []
+        gcp_jobs = [partial(self.gcp.remove_ips_from_firewall, public_ips + private_ips)] if gcp_regions else []
         do_parallel(lambda fn: fn(), aws_jobs + gcp_jobs, desc="Removing firewall rules")
 
         # Terminate instances
@@ -385,53 +397,60 @@ class ReplicatorClient:
                     idx += 1
 
             # initiate multipart transfers in parallel
-            progress.update(prepare_task, description=f": Initiating multipart transfers for {len(multipart_pairs)} objects")
-            obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
-            with Timer("initiate_multipart_transfers"):
-                batch_size = max(1, len(multipart_pairs) // 64)
-                multipart_batches = []
-                for i in range(0, len(multipart_pairs), batch_size):
-                    multipart_batches.append(multipart_pairs[i : i + batch_size])
-                dispatch_fn = lambda x: obj_store_interface.initiate_multipart_uploads([y.key for _, y in x])
-                upload_ids = do_parallel(dispatch_fn, multipart_batches, n=-1)
+            if not job.random_chunk_size_mb:
+                progress.update(prepare_task, description=f": Initiating multipart transfers for {len(multipart_pairs)} objects")
+                obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
+                with Timer("initiate_multipart_transfers"):
+                    batch_size = max(1, len(multipart_pairs) // 64)
+                    multipart_batches = []
+                    for i in range(0, len(multipart_pairs), batch_size):
+                        multipart_batches.append(multipart_pairs[i : i + batch_size])
+                    dispatch_fn = lambda x: obj_store_interface.initiate_multipart_uploads([y.key for _, y in x])
+                    upload_ids = do_parallel(dispatch_fn, multipart_batches, n=-1)
 
-            # build chunks for multipart transfers
-            upload_ids = zip(
-                itertools.chain.from_iterable(i for i, _ in upload_ids), itertools.chain.from_iterable(o for _, o in upload_ids)
-            )
-            for (src_object, dest_object), upload_id in upload_ids:
-                chunk_size_bytes = int(multipart_chunk_size_mb * MB)
-                num_chunks = math.ceil(src_object.size / chunk_size_bytes)
-                if num_chunks > multipart_max_chunks:
-                    chunk_size_bytes = int(src_object.size / multipart_max_chunks)
-                    chunk_size_bytes = math.ceil(chunk_size_bytes / MB) * MB  # round to next largest mb
-                    num_chunks = math.ceil(src_object.size / chunk_size_bytes)
-                offset = 0
-                part_num = 1
-                parts = []
-                for chunk in range(num_chunks):
-                    file_size_bytes = min(chunk_size_bytes, src_object.size - offset)  # size is min(chunk_size, remaining data)
-                    assert file_size_bytes > 0, f"file size <= 0 {file_size_bytes}"
-                    chunks.append(
-                        Chunk(
-                            src_key=src_object.key,
-                            dest_key=dest_object.key,
-                            chunk_id=idx,
-                            file_offset_bytes=offset,
-                            chunk_length_bytes=file_size_bytes,
-                            part_number=part_num,
-                            upload_id=upload_id,
-                        )
-                    )
-                    parts.append(part_num)
-
-                    idx += 1
-                    part_num += 1
-                    offset += chunk_size_bytes
-                # add multipart upload request
-                self.multipart_upload_requests.append(
-                    {"region": job.dest_region, "bucket": job.dest_bucket, "upload_id": upload_id, "key": dest_object.key, "parts": parts}
+                # build chunks for multipart transfers
+                upload_ids = zip(
+                    itertools.chain.from_iterable(i for i, _ in upload_ids), itertools.chain.from_iterable(o for _, o in upload_ids)
                 )
+                for (src_object, dest_object), upload_id in upload_ids:
+                    chunk_size_bytes = int(multipart_chunk_size_mb * MB)
+                    num_chunks = math.ceil(src_object.size / chunk_size_bytes)
+                    if num_chunks > multipart_max_chunks:
+                        chunk_size_bytes = int(src_object.size / multipart_max_chunks)
+                        chunk_size_bytes = math.ceil(chunk_size_bytes / MB) * MB  # round to next largest mb
+                        num_chunks = math.ceil(src_object.size / chunk_size_bytes)
+                    offset = 0
+                    part_num = 1
+                    parts = []
+                    for chunk in range(num_chunks):
+                        file_size_bytes = min(chunk_size_bytes, src_object.size - offset)  # size is min(chunk_size, remaining data)
+                        assert file_size_bytes > 0, f"file size <= 0 {file_size_bytes}"
+                        chunks.append(
+                            Chunk(
+                                src_key=src_object.key,
+                                dest_key=dest_object.key,
+                                chunk_id=idx,
+                                file_offset_bytes=offset,
+                                chunk_length_bytes=file_size_bytes,
+                                part_number=part_num,
+                                upload_id=upload_id,
+                            )
+                        )
+                        parts.append(part_num)
+
+                        idx += 1
+                        part_num += 1
+                        offset += chunk_size_bytes
+                    # add multipart upload request
+                    self.multipart_upload_requests.append(
+                        {
+                            "region": job.dest_region,
+                            "bucket": job.dest_bucket,
+                            "upload_id": upload_id,
+                            "key": dest_object.key,
+                            "parts": parts,
+                        }
+                    )
 
             # partition chunks into roughly equal-sized batches (by bytes)
             def partition(items: List[Chunk], n_batches: int) -> List[List[Chunk]]:
@@ -557,6 +576,7 @@ class ReplicatorClient:
         sink_regions = set(s.region for s in sinks)
 
         (self.transfer_dir / "job.pkl").write_bytes(pickle.dumps(job))
+        error = False
         try:
             with Progress(
                 SpinnerColumn(),
@@ -576,9 +596,7 @@ class ReplicatorClient:
                         # check for errors and exit if there are any (while setting debug flags)
                         errors = self.check_error_logs()
                         if any(errors.values()):
-                            copy_gateway_logs = True
-                            write_profile = True
-                            write_socket_profile = True
+                            error = True
                             return TransferStats(monitor_status="error", total_runtime_s=t.elapsed, errors=errors)
 
                         log_df = self.get_chunk_status_log_df()
@@ -697,10 +715,11 @@ class ReplicatorClient:
                         )
                     (self.transfer_dir / f"receiver_socket_profile_{instance.uuid()}.json").write_text(text)
 
-                if debug:
+                if debug or error:
                     # copy logs from gateways
                     progress.update(cleanup_task, description=": Copying gateway logs")
                     do_parallel(copy_log, self.bound_nodes.values(), n=-1)
+                if debug:
                     # write chunk profiles
                     progress.update(cleanup_task, description=": Writing chunk profiles")
                     chunk_status_df = self.get_chunk_status_log_df()

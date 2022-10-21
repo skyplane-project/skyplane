@@ -1,6 +1,6 @@
 import json
-import os
 import logging
+import os
 import socket
 from contextlib import closing
 from enum import Enum, auto
@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 import urllib3
+
 from skyplane import config_path, key_root, cloud_config
 from skyplane.compute.const_cmds import make_autoshutdown_script, make_dozzle_command, make_sysctl_tcp_tuning_command
 from skyplane.utils import logger
@@ -138,6 +139,9 @@ class Server:
         raise NotImplementedError()
 
     def public_ip(self):
+        raise NotImplementedError()
+
+    def private_ip(self):
         raise NotImplementedError()
 
     def instance_class(self):

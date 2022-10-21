@@ -2,8 +2,8 @@ import json
 import shutil
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Tuple
-from skyplane import MB
 
+from skyplane import MB
 from skyplane.chunk import ChunkRequest
 from skyplane.obj_store.object_store_interface import ObjectStoreObject
 from skyplane.utils import logger

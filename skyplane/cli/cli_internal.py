@@ -3,9 +3,9 @@ from typing import Optional
 
 import typer
 
-from skyplane.cli.common import print_header
 from skyplane import skyplane_root
 from skyplane.cli.cli_impl.cp_replicate import confirm_transfer, launch_replication_job
+from skyplane.cli.common import print_header
 from skyplane.obj_store.object_store_interface import ObjectStoreObject
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
 from skyplane.utils import logger
@@ -64,8 +64,16 @@ def replicate_random(
     )
     confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=False)
     stats = launch_replication_job(
-        topo=topo, job=job, debug=debug, reuse_gateways=reuse_gateways, use_bbr=use_bbr, use_compression=False, use_e2ee=True
+        topo=topo,
+        job=job,
+        debug=debug,
+        reuse_gateways=reuse_gateways,
+        use_bbr=use_bbr,
+        use_compression=False,
+        use_e2ee=True,
+        host_uuid=None,
     )
+    print(stats)
     return 0 if stats.monitor_status == "completed" else 1
 
 
@@ -126,5 +134,7 @@ def replicate_random_solve(
         random_chunk_size_mb=total_transfer_size_mb // n_chunks,
     )
     confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=False)
-    stats = launch_replication_job(topo=topo, job=job, debug=debug, reuse_gateways=reuse_gateways, use_bbr=use_bbr, use_compression=False)
+    stats = launch_replication_job(
+        topo=topo, job=job, debug=debug, reuse_gateways=reuse_gateways, use_bbr=use_bbr, use_compression=False, host_uuid=None
+    )
     return 0 if stats.monitor_status == "completed" else 1

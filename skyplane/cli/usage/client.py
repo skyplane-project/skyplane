@@ -1,22 +1,22 @@
+import datetime
+import json
 import os
 import sys
 import time
-import datetime
-import requests
-from enum import Enum, auto
-from typing import Optional, Dict
 import uuid
-from skyplane.replicate.replicator_client import TransferStats
-
-import typer
-import json
 from dataclasses import asdict, dataclass
-from rich import print as rprint
+from enum import Enum, auto
 from pathlib import Path
+from typing import Optional, Dict
+
+import requests
+import typer
+from rich import print as rprint
 
 import skyplane.cli.usage.definitions
 from skyplane import cloud_config, config_path, tmp_log_dir
 from skyplane.config import _map_type
+from skyplane.replicate.replicator_client import TransferStats
 from skyplane.utils import logger
 
 

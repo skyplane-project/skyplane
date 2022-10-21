@@ -1,11 +1,11 @@
 import os
 import re
 import uuid
+import warnings
 from multiprocessing import BoundedSemaphore
 from pathlib import Path
 from typing import List, Optional
 
-import warnings
 from cryptography.utils import CryptographyDeprecationWarning
 
 with warnings.catch_warnings():
@@ -387,7 +387,13 @@ class AzureCloudProvider(CloudProvider):
                             "priority": "Spot" if use_spot_instances else "Regular",
                         },
                     )
-                    vm_result = poller.result()
+                    try:
+                        vm_result = poller.result()
+                    except KeyboardInterrupt:
+                        logger.fs.warning(f"Terminating instance {name} due to keyboard interrupt")
+                        vm_poller = compute_client.virtual_machines.begin_delete(AzureServer.resource_group_name, AzureServer.vm_name(name))
+                        vm_poller.result()
+                        raise
                     logger.fs.debug(f"Created Azure VM {vm_result.name} w/ system MSI principal_id = {vm_result.identity.principal_id}")
                 except HttpResponseError as e:
                     if "ResourceQuotaExceeded" in str(e):
@@ -396,7 +402,4 @@ class AzureCloudProvider(CloudProvider):
                         raise exceptions.InsufficientVCPUException(f"Got QuotaExceeded error in Azure region {location}") from e
                     else:
                         raise
-
-        server = AzureServer(name)
-        server.wait_for_ssh_ready()
-        return server
+        return AzureServer(name)

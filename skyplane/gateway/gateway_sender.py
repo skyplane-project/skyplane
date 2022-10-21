@@ -4,13 +4,13 @@ import socket
 import ssl
 import time
 import traceback
-import nacl.secret
 from functools import partial
 from multiprocessing import Event, Process, Queue
 from typing import Dict, List, Optional
-import urllib3
 
 import lz4.frame
+import nacl.secret
+import urllib3
 
 from skyplane import MB
 from skyplane.chunk import ChunkRequest
