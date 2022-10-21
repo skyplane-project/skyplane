@@ -49,9 +49,14 @@ def start_iperf3_client(arg_pair: Tuple[Server, Server], iperf3_log_dir: Path, i
     tag = f"{instance_src.region_tag}:{instance_src.network_tier()}_{instance_dst.region_tag}:{instance_dst.network_tier()}"
 
     # run benchmark
-    stdout, stderr = instance_src.run_command(
-        f"iperf3 -J -Z -C cubic -t {iperf3_runtime} -P {iperf3_connections} -c {instance_dst.public_ip()}"
-    )
+    if instance_src.region_tag.split(":")[0] == "gcp" and instance_dst.region_tag.split(":")[0] == "gcp":
+        stdout, stderr = instance_src.run_command(
+            f"iperf3 -J -Z -C cubic -t {iperf3_runtime} -P {iperf3_connections} -c {instance_dst.private_ip()}"
+        )
+    else:
+        stdout, stderr = instance_src.run_command(
+            f"iperf3 -J -Z -C cubic -t {iperf3_runtime} -P {iperf3_connections} -c {instance_dst.public_ip()}"
+        )
 
     # save logs
     with (iperf3_log_dir / f"{tag}.stdout").open("w") as f:
@@ -76,8 +81,8 @@ def start_iperf3_client(arg_pair: Tuple[Server, Server], iperf3_log_dir: Path, i
         out_rec["raw_output"] = str(stdout)
         return out_rec
 
-    instance_src.close_server()
-    instance_dst.close_server()
+    # instance_src.close_server()
+    # instance_dst.close_server()
     return out_rec
 
 
@@ -173,6 +178,8 @@ def throughput_grid(
         aws_instance_class=aws_instance_class,
         azure_instance_class=azure_instance_class,
         gcp_instance_class=gcp_instance_class,
+        aws_instance_os="ubuntu",
+        gcp_instance_os="ubuntu",
         gcp_use_premium_network=True,
     )
     instance_list: List[Server] = [i for ilist in aws_instances.values() for i in ilist]
@@ -190,6 +197,8 @@ def throughput_grid(
         aws_instance_class=aws_instance_class,
         azure_instance_class=azure_instance_class,
         gcp_instance_class=gcp_instance_class,
+        aws_instance_os="ubuntu",
+        gcp_instance_os="ubuntu",
         gcp_use_premium_network=False,
     )
     instance_list.extend([i for ilist in gcp_standard_instances.values() for i in ilist])
@@ -199,7 +208,8 @@ def throughput_grid(
         check_stderr(server.run_command("echo 'debconf debconf/frontend select Noninteractive' | sudo debconf-set-selections"))
         check_stderr(
             server.run_command(
-                "(sudo apt-get update && sudo apt-get install -y dialog apt-utils && sudo apt-get install -y iperf3); pkill iperf3; iperf3 -s -D -J"
+                "sudo add-apt-repository universe;\
+                (sudo apt-get update -y && sudo apt-get install -y dialog apt-utils && sudo apt-get install -y iperf3); pkill iperf3; iperf3 -s -D -J"
             )
         )
         check_stderr(server.run_command(make_sysctl_tcp_tuning_command(cc="cubic")))
@@ -278,19 +288,22 @@ def throughput_grid(
         )
         if rec is not None:
             result_rec.update(rec)
+
         pbar.console.print(f"{result_rec['tag']}: {result_rec.get('throughput_sent', 0.) / GB:.2f}Gbps")
         pbar.update(task_total, advance=1)
+
         return result_rec
 
     # run experiment
     new_througput_results = []
     output_file = log_dir / "throughput.csv"
+
     with Progress() as pbar:
         task_total = pbar.add_task("Total throughput evaluation", total=len(instance_pairs))
         for group_idx, group in enumerate(groups):
             tag_fmt = lambda x: f"{x[0].region_tag}:{x[0].network_tier()} to {x[1].region_tag}:{x[1].network_tier()}"
             results = do_parallel(
-                client_fn, group, spinner=True, desc=f"Parallel eval group {group_idx}", n=-1, arg_fmt=tag_fmt, return_args=False
+                client_fn, group, spinner=False, desc=f"Parallel eval group {group_idx}", n=-1, arg_fmt=tag_fmt, return_args=False
             )
             new_througput_results.extend([rec for rec in results if rec is not None])
 
@@ -304,6 +317,10 @@ def throughput_grid(
 
     logger.info(f"Experiment complete: {experiment_tag}")
     logger.info(f"Results saved to {output_file}")
+
+    # close servers here
+    for instance in instance_list:
+        instance.close_server()
 
 
 def latency_grid(

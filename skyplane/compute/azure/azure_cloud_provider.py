@@ -239,6 +239,7 @@ class AzureCloudProvider(CloudProvider):
         name: Optional[str] = None,
         uname: str = "skyplane",
         use_spot_instances: bool = False,
+        instance_os: str = "ubuntu",
     ) -> AzureServer:
         assert ":" not in location, "invalid colon in Azure location"
 
