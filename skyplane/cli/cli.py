@@ -170,6 +170,37 @@ def cp(
         else:
             typer.secho("Transfer not supported", fg="red")
             return 1
+    
+    elif provider_src == "pre-signed-url" and provider_dst == ["aws", "gcp", "azure"]:
+        try:
+            dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
+            dst_region_tag = dst_client.region_tag()
+            if cloud_config.get_flag("requester_pays"):
+                dst_client.set_requester_bool(True)
+        except exceptions.SkyplaneException as e:
+            console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+            console.print(e.pretty_print_str())
+            UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
+            return 1
+        # Transparently generate transfer_pairs
+        typer.secho("WIP:Transfer not supported", fg="red")
+        return 1
+    
+    elif provider_src == ["aws", "gcp", "azure"] and provider_dst == "pre-signed-url":
+        try:
+            src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
+            src_region_tag = src_client.region_tag()
+            if cloud_config.get_flag("requester_pays"):
+                src_client.set_requester_bool(True)
+        except exceptions.SkyplaneException as e:
+            console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+            console.print(e.pretty_print_str())
+            UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
+            return 1
+        # Transparently generate transfer_pairs
+        typer.secho("WIP:Transfer not supported", fg="red")
+        return 1
+    
     elif provider_src in ["aws", "gcp", "azure"] and provider_dst in ["aws", "gcp", "azure"]:
         try:
             src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
