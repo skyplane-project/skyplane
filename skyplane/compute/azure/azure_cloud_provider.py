@@ -240,6 +240,7 @@ class AzureCloudProvider(CloudProvider):
         uname: str = "skyplane",
         use_spot_instances: bool = False,
         instance_os: str = "ubuntu",
+        tags={"skyplane": "true"},
     ) -> AzureServer:
         assert ":" not in location, "invalid colon in Azure location"
 
@@ -275,7 +276,7 @@ class AzureCloudProvider(CloudProvider):
                 AzureServer.nsg_name(name),
                 {
                     "location": location,
-                    "tags": {"skyplane": "true"},
+                    "tags": tags,
                     "security_rules": [
                         {
                             "name": name + "-allow-all",
@@ -308,7 +309,7 @@ class AzureCloudProvider(CloudProvider):
                 AzureServer.ip_name(name),
                 {
                     "location": location,
-                    "tags": {"skyplane": "true"},
+                    "tags": tags,
                     "sku": {"name": "Standard"},
                     "public_ip_allocation_method": "Static",
                     "public_ip_address_version": "IPV4",
@@ -325,7 +326,7 @@ class AzureCloudProvider(CloudProvider):
                 AzureServer.nic_name(name),
                 {
                     "location": location,
-                    "tags": {"skyplane": "true"},
+                    "tags": tags,
                     "ip_configurations": [
                         {"name": name + "-ip", "subnet": {"id": subnet_result.id}, "public_ip_address": {"id": public_ip_result.id}}
                     ],
@@ -343,7 +344,7 @@ class AzureCloudProvider(CloudProvider):
                         AzureServer.vm_name(name),
                         {
                             "location": location,
-                            "tags": {"skyplane": "true"},
+                            "tags": tags,
                             "hardware_profile": {"vm_size": self.lookup_valid_instance(location, vm_size)},
                             "storage_profile": {
                                 # "image_reference": {
