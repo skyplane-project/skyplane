@@ -4,7 +4,9 @@ on:
     branches: [ main ]
     # Publish semver tags as releases.
     tags: [ '*.*.*' ]
-  pull_request_target:
+  pull_request:
+  workflow_dispatch:
+  
 jobs:
   black-pytype:
     runs-on: ubuntu-latest
