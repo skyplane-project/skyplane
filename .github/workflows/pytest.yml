@@ -1,5 +1,10 @@
 name: pytest
-on: [push]
+on:
+  push:
+    branches: [ main ]
+    # Publish semver tags as releases.
+    tags: [ '*.*.*' ]
+  pull_request_target:
 jobs:
   black-pytype:
     runs-on: ubuntu-latest

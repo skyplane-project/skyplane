@@ -7,12 +7,10 @@ on:
     branches: [ main ]
     # Publish semver tags as releases.
     tags: [ '*.*.*' ]
-  pull_request:
-    branches: [ main ]
+  pull_request_target:
 
 env:
   IMAGE_NAME: s6m1p0n8/skyplane
-  # IMAGE_NAME: s6m1p0n8/skyplane-test
 
 jobs:
   build:
@@ -31,7 +29,7 @@ jobs:
       # # Install the cosign tool except on PR
       # # https://github.com/sigstore/cosign-installer
       # - name: Install cosign
-      #   # if: github.event_name != 'pull_request'
+      #   # if: github.event_name != 'pull_request_target'
       #   uses: sigstore/cosign-installer@1e95c1de343b5b0c23352d6417ee3e48d5bcd422
       #   with:
       #     cosign-release: 'v1.4.0'
@@ -79,7 +77,7 @@ jobs:
         uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request_target' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=local,src=/tmp/.buildx-cache
@@ -101,7 +99,7 @@ jobs:
       # # transparency data even for private images, pass --force to cosign below.
       # # https://github.com/sigstore/cosign
       # - name: Sign the published Docker image
-      #   # if: ${{ github.event_name != 'pull_request' }}
+      #   # if: ${{ github.event_name != 'pull_request_target' }}
       #   env:
       #     COSIGN_EXPERIMENTAL: "true"
       #   # This step uses the identity token to provision an ephemeral certificate
