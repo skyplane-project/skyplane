@@ -161,12 +161,18 @@ class AWSNetwork:
         sg = self.get_security_group(aws_region)
         try:
             logger.fs.debug(f"[AWS] Adding IPs {ips} to security group {sg.group_name}")
-            sg.authorize_ingress(
-                IpPermissions=[
-                    {"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": f"{ip}/32" if ip else "0.0.0.0/0"}]}
-                    for ip in ips
-                ]
-            )
+            if ips is None:
+                sg.authorize_ingress(
+                    IpPermissions=[{"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": f"0.0.0.0/0"}]}]
+                )
+            else:
+                sg.authorize_ingress(
+                    IpPermissions=[
+                        {"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": f"{ip}/32" if ip else "0.0.0.0/0"}]}
+                        for ip in ips
+                    ]
+                )
+
         except exceptions.ClientError as e:
             if str(e).endswith("already exists") or str(e).endswith("already exist"):
                 logger.warn(f"[AWS] Error adding IPs to security group, since it already exits: {e}")
