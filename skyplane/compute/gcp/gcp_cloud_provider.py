@@ -100,7 +100,6 @@ class GCPCloudProvider(CloudProvider):
         firewall_name = f"skyplane-{uuid.uuid4().hex}" if rule_name is None else rule_name
         self.network.create_firewall_rule(firewall_name, ips, ["0-65535"], ["tcp", "udp", "icmp"])
         return firewall_name
-
     @imports.inject("googleapiclient.errors", pip_extra="gcp")
     def remove_gateway_rule(errors, self, firewall_name: str):
         if self.network.get_firewall_rule(firewall_name):
@@ -118,11 +117,19 @@ class GCPCloudProvider(CloudProvider):
         tags={"skyplane": "true"},
         gcp_premium_network=False,
         gcp_vm_uname="skyplane",
+        instance_os: str = "cos",
     ) -> GCPServer:
         assert not region.startswith("gcp:"), "Region should be GCP region"
         if name is None:
             name = f"skyplane-gcp-{str(uuid.uuid4()).replace('-', '')}"
         compute = self.auth.get_gcp_client()
+
+        if instance_os == "ubuntu":
+            image = "projects/ubuntu-os-cloud/global/images/family/ubuntu-2004-lts"
+        elif instance_os == "cos":
+            image = "projects/cos-cloud/global/images/family/cos-stable"
+        else:
+            raise ValueError(f"Provisioning in {region}: instance OS {instance_os} not supported")
 
         req_body = {
             "name": name,
@@ -133,7 +140,7 @@ class GCPCloudProvider(CloudProvider):
                     "boot": True,
                     "autoDelete": True,
                     "initializeParams": {
-                        "sourceImage": "projects/cos-cloud/global/images/family/cos-stable",
+                        "sourceImage": image,
                         "diskType": f"zones/{region}/diskTypes/pd-standard",
                         "diskSizeGb": disk_size,
                     },

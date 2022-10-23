@@ -1,5 +1,6 @@
 import logging
 import warnings
+import functools
 from typing import Dict, Optional
 
 from cryptography.utils import CryptographyDeprecationWarning
@@ -27,6 +28,18 @@ class AWSServer(Server):
         self.key_manager = AWSKeyManager(self.auth)
         self.aws_region = self.region_tag.split(":")[1]
         self.instance_id = instance_id
+
+    @property
+    @functools.lru_cache(maxsize=None)
+    def login_name(self) -> str:
+        # update the login name according to AMI
+        ec2 = self.auth.get_boto3_resource("ec2", self.aws_region)
+        ec2client = ec2.meta.client
+        image_info = ec2client.describe_images(ImageIds=[ec2.Instance(self.instance_id).image_id])
+        if [r["Name"] for r in image_info["Images"]][0].split("/")[0] == "ubuntu":
+            return "ubuntu"
+        else:
+            return "ec2-user"
 
     @property
     @imports.inject("boto3", pip_extra="aws")
@@ -111,7 +124,8 @@ class AWSServer(Server):
         try:
             client.connect(
                 self.public_ip(),
-                username="ec2-user",
+                # username="ec2-user",
+                username=self.login_name,
                 # todo generate keys with password "skyplane"
                 pkey=paramiko.RSAKey.from_private_key_file(str(self.local_keyfile)),
                 look_for_keys=False,
@@ -126,7 +140,8 @@ class AWSServer(Server):
 
     def get_sftp_client(self):
         t = paramiko.Transport((self.public_ip(), 22))
-        t.connect(username="ec2-user", pkey=paramiko.RSAKey.from_private_key_file(str(self.local_keyfile)))
+        # t.connect(username="ec2-user", pkey=paramiko.RSAKey.from_private_key_file(str(self.local_keyfile)))
+        t.connect(username=self.login_name, pkey=paramiko.RSAKey.from_private_key_file(str(self.local_keyfile)))
         return paramiko.SFTPClient.from_transport(t)
 
     def open_ssh_tunnel_impl(self, remote_port):
@@ -135,11 +150,13 @@ class AWSServer(Server):
         sshtunnel.DEFAULT_LOGLEVEL = logging.FATAL
         return sshtunnel.SSHTunnelForwarder(
             (self.public_ip(), 22),
-            ssh_username="ec2-user",
+            # ssh_username="ec2-user",
+            ssh_username=self.login_name,
             ssh_pkey=str(self.local_keyfile),
             local_bind_address=("127.0.0.1", 0),
             remote_bind_address=("127.0.0.1", remote_port),
         )
 
     def get_ssh_cmd(self):
-        return f"ssh -i {self.local_keyfile} ec2-user@{self.public_ip()}"
+        # return f"ssh -i {self.local_keyfile} ec2-user@{self.public_ip()}"
+        return f"ssh -i {self.local_keyfile} {self.login_name}@{self.public_ip()}"
