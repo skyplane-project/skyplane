@@ -38,9 +38,10 @@ class SkyplaneClient:
         src_bucket = provider_src + ":" + bucket_src
         dst_bucket = provider_dst + ":" + bucket_dst
         with Session(src_bucket, dst_bucket, self.auth, num_vms, solver=None) as session:
-            # Not autoterminate for purpose of skycamp
+            session.auto_terminate()
             session.copy(path_src, path_dst, recursive=recursive)
             session.run(future=future)
+
     # src_bucket="aws:us-east-1", dst_bucket="aws:us-east-2"
     def new_session(self, src_bucket, dst_bucket, num_vms=1, solver=None):
         # solver = [None, "ILP", "RON"]
@@ -74,8 +75,8 @@ class Session:
         return self
 
     def __exit__(self, exc_type, exc_value, exc_tb):
-        # Not autoterminate for purpose of skycamp
-        return
+        if self._auto_terminate:
+            deprovision()
 
     def auto_terminate(self):
         self._auto_terminate = True
@@ -90,37 +91,20 @@ class Session:
     def run_async(self):
         jobs_to_run = self.job_list
         self.job_list = []
-        async def run_async_help(self):
+        async def run_async_help():
             # TODO: Add reuse_gateways
-            # this is not reached since funct is async
             result = [job.run() for job in jobs_to_run]
             await asyncio.gather(*result)
-        return run_async_help(self)
+        return run_async_help()
 
     def run(self, future=None):
         if not future:
-            # asyncio.run(self.run_async())
-            # asyncio.new_event_loop()
-            # use this function for purpose of notebook
-            task = asyncio.create_task(self.run_async())
-            
-            # loop = asyncio.get_event_loop()
-            # f = asyncio.run_coroutine_threadsafe(self.run_async(), loop)
-            # f.result()
-            # loop.stop()
-        else:
-            # asyncio.run(future)
             asyncio.run(self.run_async())
+        else:
+            asyncio.run(future)
 
     def wait_for_completion(self, future):
-        pass
-        # try:
-        #     for e in future.exception():
-        #         raise e
-        # except Exception as exc:
-        #     print(str(exc))
-        #     raise exc
-        # # loop.stop()
+        raise NotImplementedError
 
 
 class Job:
