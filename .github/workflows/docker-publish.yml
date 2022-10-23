@@ -8,11 +8,10 @@ on:
     # Publish semver tags as releases.
     tags: [ '*.*.*' ]
   pull_request:
-    branches: [ main ]
+  workflow_dispatch:
 
 env:
   IMAGE_NAME: s6m1p0n8/skyplane
-  # IMAGE_NAME: s6m1p0n8/skyplane-test
 
 jobs:
   build:
