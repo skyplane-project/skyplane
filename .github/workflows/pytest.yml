@@ -1,12 +1,17 @@
 name: pytest
 on:
   push:
+    branches: [ main ]
+    # Publish semver tags as releases.
+    tags: [ '*.*.*' ]
   pull_request:
-  # pull_request_target:
-  #   types: [labeled]
+  pull_request_target:
+    types: [labeled]
   
 jobs:
   black-pytype:
+    # do not run on pull_request_target since it should be triggered by pull_request
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
@@ -29,6 +34,8 @@ jobs:
       - name: pytype
         run: poetry run pytype --config .pytype.cfg -j 2
   test-unit:
+    # do not run on pull_request_target since it should be triggered by pull_request
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request')
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -54,8 +61,8 @@ jobs:
           poetry run skyplane init -y --disable-config-aws --disable-config-azure --disable-config-gcp
           poetry run pytest -s tests/unit_nocloud
   test-aws:
-    # run if push to main or pull request or pull request target with label 'safe to test'
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'safe to test')
+    # run if push to main or pull request by contributor or pull request target with label 'safe to test' (to avoid running on forks)
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'safe to test'))
     runs-on: ubuntu-latest
     needs: test-unit
     steps:
@@ -83,8 +90,8 @@ jobs:
           poetry run skyplane init -y --disable-config-azure --disable-config-gcp
           poetry run pytest -s tests/unit_aws
   test-azure:
-    # run if push to main or pull request or pull request target with label 'safe to test'
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'safe to test')
+    # run if push to main or pull request by contributor or pull request target with label 'safe to test' (to avoid running on forks)
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'safe to test'))
     runs-on: ubuntu-latest
     needs: test-unit
     steps:
@@ -113,8 +120,8 @@ jobs:
           poetry run skyplane init -y --disable-config-aws --disable-config-gcp
           poetry run pytest -s tests/unit_azure
   test-gcp:
-    # run if push to main or pull request or pull request target with label 'safe to test'
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'safe to test')
+    # run if push to main or pull request or pull request target with label 'safe to test' (to avoid running on forks)
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'safe to test'))
     runs-on: ubuntu-latest
     needs: test-unit
     env:
