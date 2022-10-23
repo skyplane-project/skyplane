@@ -115,6 +115,16 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             "resource_group": os.environ.get("AZURE_RESOURCE_GROUP") or AzureServer.resource_group_name,
         }
 
+        # check if the az CLI is installed
+        out, err = subprocess.Popen("az --version".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+        if not out.decode("utf-8").startswith("azure-cli"):
+            typer.secho(
+                "    Azure CLI not found, please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli",
+                fg="red",
+                err=True,
+            )
+            return clear_azure_config(config)
+
         # query list of subscriptions
         success, out, err = run_az_cmd("az account list -o json --all".split(" "))
         if not success:
@@ -150,15 +160,28 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             typer.secho("    Invalid Azure subscription ID", fg="red", err=True)
             return clear_azure_config(config)
 
-        # check if the az CLI is installed
-        out, err = subprocess.Popen("az --version".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-        if not out.decode("utf-8").startswith("azure-cli"):
-            typer.secho(
-                "    Azure CLI not found, please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli",
-                fg="red",
-                err=True,
-            )
-            return clear_azure_config(config)
+        # ask user which subscriptions Skyplane should be able to read/write to
+        # in order to move data to or from that storage account, they must select it
+        if non_interactive:
+            authorize_subscriptions_ids = [config.azure_subscription_id]
+        else:
+            choices = {f"{name} ({id})": id for name, id in subscriptions.items()}
+            default_choice = f"{defaults['subscription_name']} ({defaults['subscription_id']})" if defaults["subscription_id"] else None
+            authorize_subscription_strs = questionary.checkbox(
+                "Select which Azure subscriptions that Skyplane should be able to read/write data to",
+                choices=list(sorted(choices.keys())),
+                default=default_choice,
+                qmark="    ?",
+                pointer="    > ",
+            ).ask()
+            if not authorize_subscription_strs:
+                typer.secho(
+                    "    Note: Skyplane will not be able to read/write data to any Azure subscriptions so you will not be able to use Azure storage.",
+                    fg="red",
+                )
+                authorize_subscriptions_ids = []
+            else:
+                authorize_subscriptions_ids = [choices[s] for s in authorize_subscription_strs]
 
         change_subscription_cmd = f"az account set --subscription {config.azure_subscription_id}"
         create_rg_cmd = f"az group create -l westus2 -n {AzureServer.resource_group_name}"
@@ -189,29 +212,6 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         if not config.azure_client_id or not config.azure_principal_id or not config.azure_subscription_id:
             typer.secho("    Azure credentials not configured correctly, disabling Azure support.", fg="red", err=True)
             return clear_azure_config(config)
-
-        # ask user which subscriptions Skyplane should be able to read/write to
-        # in order to move data to or from that storage account, they must select it
-        if non_interactive:
-            authorize_subscriptions_ids = [config.azure_subscription_id]
-        else:
-            choices = {f"{name} ({id})": id for name, id in subscriptions.items()}
-            default_choice = f"{defaults['subscription_name']} ({defaults['subscription_id']})" if defaults["subscription_id"] else None
-            authorize_subscription_strs = questionary.checkbox(
-                "Select which Azure subscriptions that Skyplane should be able to read/write data to",
-                choices=list(sorted(choices.keys())),
-                default=default_choice,
-                qmark="    ?",
-                pointer="    > ",
-            ).ask()
-            if not authorize_subscription_strs:
-                typer.secho(
-                    "    Note: Skyplane will not be able to read/write data to any Azure subscriptions so you will not be able to use Azure storage.",
-                    fg="red",
-                )
-                authorize_subscriptions_ids = []
-            else:
-                authorize_subscriptions_ids = [choices[s] for s in authorize_subscription_strs]
 
         # authorize new managed identity with Storage Blob Data Contributor and Storage Account Contributor roles to the subscription
         role_cmds = []
