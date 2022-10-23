@@ -8,6 +8,7 @@ from typing import List
 
 import typer
 from rich.progress import Progress, SpinnerColumn, TextColumn
+import questionary
 
 from skyplane import SkyplaneConfig, aws_config_path, gcp_config_path
 from skyplane.compute.aws.aws_auth import AWSAuthentication
@@ -114,15 +115,6 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             "resource_group": os.environ.get("AZURE_RESOURCE_GROUP") or AzureServer.resource_group_name,
         }
 
-        config.azure_subscription_id = (
-            typer.prompt("    Which Azure subscription ID do you want to use?", default=defaults["subscription_id"])
-            if not non_interactive
-            else defaults["subscription_id"]
-        )
-        if not config.azure_subscription_id:
-            typer.secho("    Invalid Azure subscription ID", fg="red", err=True)
-            return clear_azure_config(config)
-
         # check if the az CLI is installed
         out, err = subprocess.Popen("az --version".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
         if not out.decode("utf-8").startswith("azure-cli"):
@@ -132,6 +124,64 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                 err=True,
             )
             return clear_azure_config(config)
+
+        # query list of subscriptions
+        success, out, err = run_az_cmd("az account list -o json --all".split(" "))
+        if not success:
+            typer.secho("    Error listing Azure subscriptions", fg="red", err=True)
+            return clear_azure_config(config)
+        subscriptions = {}
+        for sub in json.loads(out):
+            if sub["state"] == "Enabled":
+                subscriptions[sub["name"]] = sub["id"]
+        defaults["subscription_name"] = (
+            next((n for n, i in subscriptions.items() if i == defaults["subscription_id"]), None) if defaults["subscription_id"] else None
+        )
+
+        # select subscription to launch Skyplane VMs in
+        if non_interactive:
+            config.azure_subscription_id = defaults["subscription_id"]
+        else:
+            choices = {f"{name} ({id})": id for name, id in subscriptions.items()}
+            default_choice = f"{defaults['subscription_name']} ({defaults['subscription_id']})" if defaults["subscription_id"] else None
+            selected_choice = questionary.select(
+                "Select Azure subscription to launch Skyplane VMs in:",
+                choices=list(sorted(choices.keys())),
+                default=default_choice,
+                qmark="    ?",
+                pointer="    > ",
+            ).ask()
+            if selected_choice is None:
+                typer.secho("    No subscription selected, disabling Azure support", fg="blue")
+                return clear_azure_config(config)
+            config.azure_subscription_id = choices[selected_choice]
+
+        if not config.azure_subscription_id:
+            typer.secho("    Invalid Azure subscription ID", fg="red", err=True)
+            return clear_azure_config(config)
+
+        # ask user which subscriptions Skyplane should be able to read/write to
+        # in order to move data to or from that storage account, they must select it
+        if non_interactive:
+            authorize_subscriptions_ids = [config.azure_subscription_id]
+        else:
+            choices = {f"{name} ({id})": id for name, id in subscriptions.items()}
+            default_choice = f"{defaults['subscription_name']} ({defaults['subscription_id']})" if defaults["subscription_id"] else None
+            authorize_subscription_strs = questionary.checkbox(
+                "Select which Azure subscriptions that Skyplane should be able to read/write data to",
+                choices=list(sorted(choices.keys())),
+                default=default_choice,
+                qmark="    ?",
+                pointer="    > ",
+            ).ask()
+            if not authorize_subscription_strs:
+                typer.secho(
+                    "    Note: Skyplane will not be able to read/write data to any Azure subscriptions so you will not be able to use Azure storage.",
+                    fg="red",
+                )
+                authorize_subscriptions_ids = []
+            else:
+                authorize_subscriptions_ids = [choices[s] for s in authorize_subscription_strs]
 
         change_subscription_cmd = f"az account set --subscription {config.azure_subscription_id}"
         create_rg_cmd = f"az group create -l westus2 -n {AzureServer.resource_group_name}"
@@ -164,25 +214,29 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             return clear_azure_config(config)
 
         # authorize new managed identity with Storage Blob Data Contributor and Storage Account Contributor roles to the subscription
-        role_cmds = make_role_cmds(config.azure_principal_id, config.azure_subscription_id)
-        typer.secho(
-            f"    I will run the following commands to authorize the newly created Skyplane managed identity to access your storage accounts:",
-            fg="blue",
-        )
-        for role_cmd in role_cmds:
-            typer.secho(f"        $ {' '.join(role_cmd)}", fg="yellow")
+        role_cmds = []
+        for subscription_id in authorize_subscriptions_ids:
+            role_cmds.extend(make_role_cmds(config.azure_principal_id, subscription_id))
 
-        with Progress(
-            TextColumn("    "),
-            SpinnerColumn(),
-            TextColumn("Authorizing managed identity to access storage accounts{task.description}"),
-            transient=True,
-        ) as progress:
-            progress.add_task("", total=None)
+        if role_cmds:
+            typer.secho(
+                f"    I will run the following commands to authorize the newly created Skyplane managed identity to access your storage accounts:",
+                fg="blue",
+            )
             for role_cmd in role_cmds:
-                cmd_success, out, err = run_az_cmd(role_cmd)
-                if not cmd_success:
-                    return clear_azure_config(config)
+                typer.secho(f"        $ {' '.join(role_cmd)}", fg="yellow")
+
+            with Progress(
+                TextColumn("    "),
+                SpinnerColumn(),
+                TextColumn("Authorizing managed identity to access storage accounts{task.description}"),
+                transient=True,
+            ) as progress:
+                progress.add_task("", total=None)
+                for role_cmd in role_cmds:
+                    cmd_success, out, err = run_az_cmd(role_cmd)
+                    if not cmd_success:
+                        return clear_azure_config(config)
         typer.secho(
             f"    Azure managed identity created successfully! To delete it, run `az identity delete -n skyplane_umi -g skyplane`.",
             fg="green",
