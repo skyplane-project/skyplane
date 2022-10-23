@@ -8,7 +8,6 @@ on:
     # Publish semver tags as releases.
     tags: [ '*.*.*' ]
   pull_request:
-  workflow_dispatch:
 
 env:
   IMAGE_NAME: s6m1p0n8/skyplane
@@ -47,6 +46,7 @@ jobs:
           restore-keys: ${{ runner.os }}-buildx-
 
       - name: Configure AWS Credentials
+        if: github.event_name != 'pull_request'
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -54,6 +54,7 @@ jobs:
           aws-region: us-east-1
 
       - name: Login to Amazon ECR Public
+        if: github.event_name != 'pull_request'
         id: login-ecr-public
         uses: aws-actions/amazon-ecr-login@v1
         with:

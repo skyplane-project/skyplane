@@ -1,11 +1,9 @@
 name: pytest
 on:
   push:
-    branches: [ main ]
-    # Publish semver tags as releases.
-    tags: [ '*.*.*' ]
   pull_request:
-  workflow_dispatch:
+  # pull_request_target:
+  #   types: [labeled]
   
 jobs:
   black-pytype:
@@ -56,6 +54,8 @@ jobs:
           poetry run skyplane init -y --disable-config-aws --disable-config-azure --disable-config-gcp
           poetry run pytest -s tests/unit_nocloud
   test-aws:
+    # run if push to main or pull request or pull request target with label 'safe to test'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'safe to test')
     runs-on: ubuntu-latest
     needs: test-unit
     steps:
@@ -83,6 +83,8 @@ jobs:
           poetry run skyplane init -y --disable-config-azure --disable-config-gcp
           poetry run pytest -s tests/unit_aws
   test-azure:
+    # run if push to main or pull request or pull request target with label 'safe to test'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'safe to test')
     runs-on: ubuntu-latest
     needs: test-unit
     steps:
@@ -111,6 +113,8 @@ jobs:
           poetry run skyplane init -y --disable-config-aws --disable-config-gcp
           poetry run pytest -s tests/unit_azure
   test-gcp:
+    # run if push to main or pull request or pull request target with label 'safe to test'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'safe to test')
     runs-on: ubuntu-latest
     needs: test-unit
     env:
