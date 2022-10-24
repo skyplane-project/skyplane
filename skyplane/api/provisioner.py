@@ -3,8 +3,11 @@ from dataclasses import dataclass, field
 from functools import partial
 from typing import Optional, Dict, Set, List
 
+from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
+from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
+from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.compute.server import Server
 from skyplane.utils import logger
@@ -60,7 +63,7 @@ class Provisioner:
         vm_type: str,
         spot: bool = False,
         autoterminate_minutes: Optional[int] = None,
-        tags: Dict[str, str] = None,
+        tags: Optional[Dict[str, str]] = None,
     ):
         if tags is None:
             tags = {"skyplane": "true", "skyplaneclientid": self.host_uuid} if self.host_uuid else {"skyplane": "true"}
@@ -150,7 +153,7 @@ class Provisioner:
 
         return [task.uuid for task in provision_tasks]
 
-    def deprovision(self, max_jobs: int = 64, spinner: bool = False) -> List[str]:
+    def deprovision(self, max_jobs: int = 64, spinner: bool = False):
         """Deprovision all nodes. Returns UUIDs of deprovisioned VMs."""
         if not self.provisioned_vms and not self.temp_nodes:
             return []
