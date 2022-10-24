@@ -28,11 +28,14 @@ class Provisioner:
     def __init__(
         self,
         host_uuid: Optional[str] = None,
+        aws_auth: Optional[AWSAuthentication] = None,
+        azure_auth: Optional[AzureAuthentication] = None,
+        gcp_auth: Optional[GCPAuthentication] = None,
     ):
         self.host_uuid = host_uuid
-        self.aws = AWSCloudProvider(key_prefix=f"skyplane-{host_uuid.replace('-', '') if host_uuid else ''}")
-        self.azure = AzureCloudProvider()
-        self.gcp = GCPCloudProvider()
+        self.aws = AWSCloudProvider(key_prefix=f"skyplane-{host_uuid.replace('-', '') if host_uuid else ''}", auth=aws_auth)
+        self.azure = AzureCloudProvider(auth=azure_auth)
+        self.gcp = GCPCloudProvider(auth=gcp_auth)
         self.temp_nodes: Set[Server] = set()  # temporary area to store nodes that should be terminated upon exit
         self.pending_provisioner_tasks: List[ProvisionerTask] = []
         self.provisioned_vms: Dict[str, Server] = {}
