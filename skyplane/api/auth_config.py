@@ -11,7 +11,7 @@ class AuthenticationConfig:
 
 
 class AWSAuthenticationConfig(AuthenticationConfig):
-    def __init__(self, access_key_id: Optional[str], secret_access_key: Optional[str]):
+    def __init__(self, access_key_id: Optional[str] = None, secret_access_key: Optional[str] = None):
         self.aws_access_key = access_key_id
         self.aws_secret_key = secret_access_key
         self.aws_enabled = True
