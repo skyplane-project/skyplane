@@ -1,10 +1,10 @@
 import time
 
 from skyplane.api.api import SkyplaneClient
-from skyplane.api.auth_config import AWSAuthenticationConfig
+from skyplane.api.auth_config import AWSConfig
 
 if __name__ == "__main__":
-    client = SkyplaneClient(aws_config=AWSAuthenticationConfig())
+    client = SkyplaneClient(aws_config=AWSConfig())
     dp = client.direct_dataplane("aws", "us-east-1", "aws", "us-east-2", n_vms=1)
     with dp.auto_deprovision():
         dp.provision()

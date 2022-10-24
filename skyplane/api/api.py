@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from threading import Thread
 from typing import Optional, List, Tuple
 
-from skyplane.api.auth_config import AWSAuthenticationConfig, AzureAuthenticationConfig, GCPAuthenticationConfig
+from skyplane.api.auth_config import AWSConfig, AzureConfig, GCPConfig
 from skyplane.api.dataplane import Dataplane
 from skyplane.api.provisioner import Provisioner
 from skyplane.compute.cloud_providers import CloudProvider
@@ -55,9 +55,9 @@ class TransferProgressTracker(Thread):
 class SkyplaneClient:
     def __init__(
         self,
-        aws_config: Optional[AWSAuthenticationConfig] = None,
-        azure_config: Optional[AzureAuthenticationConfig] = None,
-        gcp_config: Optional[GCPAuthenticationConfig] = None,
+        aws_config: Optional[AWSConfig] = None,
+        azure_config: Optional[AzureConfig] = None,
+        gcp_config: Optional[GCPConfig] = None,
         host_uuid: Optional[str] = None,
     ):
         self.aws_auth = aws_config.make_auth_provider() if aws_config else None
