@@ -4,6 +4,7 @@ import sys
 from typing import Generator, List, Optional, Tuple, Type
 
 from rich import print as rprint
+import urllib3
 
 from skyplane import exceptions
 from skyplane.api.impl.chunker import Chunker, batch_generator, tail_generator
@@ -24,16 +25,16 @@ class TransferJob:
     recursive: bool = False
     requester_pays: bool = False
 
-    def __init__(self):
+    def __post_init__(self):
         provider_src, bucket_src, self.src_prefix = parse_path(self.src_path)
         provider_dst, bucket_dst, self.dst_prefix = parse_path(self.dst_path)
-        self.src_iface = ObjectStoreInterface(f"{provider_src}:infer", bucket_src)
-        self.dst_iface = ObjectStoreInterface(f"{provider_dst}:infer", bucket_dst)
+        self.src_iface = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src)
+        self.dst_iface = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst)
         if self.requester_pays:
-            self.src_iface.set_requester_pays()
-            self.dst_iface.set_requester_pays()
+            self.src_iface.set_requester_bool(True)
+            self.dst_iface.set_requester_bool(True)
 
-    def dispatch(self, src_gateways: List[Type[Server]], **kwargs) -> Generator[ChunkRequest, None, None]:
+    def dispatch(self, src_gateways: List[Server], **kwargs) -> Generator[ChunkRequest, None, None]:
         raise NotImplementedError("Dispatch not implemented")
 
     def verify(self):
@@ -138,9 +139,13 @@ class TransferJob:
 class CopyJob(TransferJob):
     transfer_list: List[Tuple[ObjectStoreObject, ObjectStoreObject]] = []  # transfer list for later verification
 
+    def __post_init__(self):
+        self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
+        return super().__post_init__()
+
     def dispatch(
         self,
-        src_gateways: List[Type[Server]],
+        src_gateways: List[Server],
         multipart_enabled: bool = True,
         multipart_threshold_mb: int = 128,
         multipart_chunk_size_mb: int = 64,
@@ -150,6 +155,7 @@ class CopyJob(TransferJob):
         """Dispatch transfer job to specified gateways."""
         gen_transfer_list = tail_generator(self._transfer_pair_generator(), self.transfer_list)
         chunker = Chunker(
+            self.src_iface,
             self.dst_iface,
             multipart_enabled=multipart_enabled,
             multipart_threshold_mb=multipart_threshold_mb,

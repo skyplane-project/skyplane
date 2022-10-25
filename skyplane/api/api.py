@@ -21,7 +21,7 @@ class TransferProgressTracker(Thread):
     jobs: List[TransferJob]
 
     # config
-    multipart_enabled: bool = (True,)
+    multipart_enabled: bool = True
     multipart_threshold_mb: int = 128
     multipart_chunk_size_mb: int = 64
     multipart_max_chunks: int = 10000

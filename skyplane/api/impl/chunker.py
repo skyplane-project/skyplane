@@ -2,7 +2,7 @@ import math
 import queue
 import threading
 from queue import Queue
-from typing import Optional, Tuple, Generator, List
+from typing import Optional, Tuple, Generator, List, Type
 
 from skyplane import MB
 from skyplane.chunk import Chunk, ChunkRequest
@@ -12,6 +12,7 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface, Obje
 class Chunker:
     def __init__(
         self,
+        src_iface: ObjectStoreInterface,
         dest_iface: ObjectStoreInterface,
         multipart_enabled: bool = True,
         multipart_threshold_mb: int = 128,
@@ -19,6 +20,7 @@ class Chunker:
         multipart_max_chunks: int = 10000,
         concurrent_multipart_chunk_threads: int = 64,
     ):
+        self.src_iface = src_iface
         self.dest_iface = dest_iface
         self.multipart_enabled = multipart_enabled
         self.multipart_threshold_mb = multipart_threshold_mb
@@ -75,7 +77,7 @@ class Chunker:
 
     def chunk(
         self, transfer_pair_generator: Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]
-    ) -> Generator[List[Chunk], None, List[dict]]:
+    ) -> Generator[Chunk, None, None]:
         """Break transfer list into chunks."""
         multipart_send_queue: Queue[Tuple[ObjectStoreObject, ObjectStoreObject]] = Queue()
         multipart_chunk_queue: Queue[Chunk] = Queue()
@@ -86,7 +88,7 @@ class Chunker:
         for _ in range(self.concurrent_multipart_chunk_threads):
             t = threading.Thread(
                 target=self.multipart_chunk_thread,
-                args=(multipart_exit_event, multipart_send_queue, multipart_chunk_queue, self.dest_iface),
+                args=(multipart_exit_event, multipart_send_queue, multipart_chunk_queue, self.src_iface, self.dest_iface),
                 daemon=False,
             )
             t.start()
@@ -132,8 +134,8 @@ class Chunker:
                 chunk=chunk,
                 src_region=self.src_iface.region_tag(),
                 dst_region=self.dest_iface.region_tag(),
-                src_object_store_bucket=self.src_iface.bucket_name(),
-                dst_object_store_bucket=self.dest_iface.bucket_name(),
+                src_object_store_bucket=self.src_iface.bucket(),
+                dst_object_store_bucket=self.dest_iface.bucket(),
                 src_type="object_store",
                 dst_type="object_store",
             )

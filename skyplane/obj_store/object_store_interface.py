@@ -87,11 +87,11 @@ class ObjectStoreInterface:
     def delete_objects(self, keys: List[str]):
         raise NotImplementedError()
 
-    def initiate_multipart_upload(self, dst_object_name: str):
-        return ValueError("Multipart uploads not supported")
+    def initiate_multipart_upload(self, dst_object_name: str) -> str:
+        raise ValueError("Multipart uploads not supported")
 
-    def complete_multipart_upload(self, dst_object_name: str, upload_id: str):
-        return ValueError("Multipart uploads not supported")
+    def complete_multipart_upload(self, dst_object_name: str, upload_id: str) -> None:
+        raise ValueError("Multipart uploads not supported")
 
     @staticmethod
     def create(region_tag: str, bucket: str):
