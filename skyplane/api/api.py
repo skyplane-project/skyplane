@@ -57,13 +57,18 @@ class SkyplaneClient:
         num_connections: int = 32,
         **kwargs,
     ):
-        topo = self._make_direct_topology(
-            f"{src_cloud_provider}:{src_region}", f"{dst_cloud_provider}:{dst_region}", n_vms, num_connections
+        planner = DirectPlanner(
+            src_cloud_provider,
+            src_region,
+            dst_cloud_provider,
+            dst_region,
+            n_vms,
+            num_connections,
         )
+        topo = planner.plan()
         return Dataplane(topology=topo, provisioner=self.provisioner, **kwargs)
 
     # main API methods to dispatch transfers to dataplane
-
     def queue_copy(
         self,
         src: str,
