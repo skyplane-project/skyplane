@@ -18,9 +18,10 @@ if __name__ == "__main__":
 
         # monitor the transfer
         while True:
-            bytes_remaining = tracker.query_bytes_remaining()  # type: ignore
+            bytes_remaining = tracker.query_bytes_remaining()
             if bytes_remaining > 0:
                 print(f"{(bytes_remaining / (2 ** 30)):.2f}GB left")
                 time.sleep(1)
             else:
                 break
+        tracker.join()

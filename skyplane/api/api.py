@@ -52,6 +52,16 @@ class TransferProgressTracker(Thread):
         # todo implement transfer monitoring to update job_complete_chunk_ids and job_pending_chunk_ids while the transfer is in progress
         pass
 
+    def query_bytes_remaining(self):
+        return sum(
+            [
+                cr.chunk.chunk_length_bytes
+                for job in self.jobs
+                for cr in self.job_chunk_requests[job]
+                if cr.chunk.chunk_id in self.job_pending_chunk_ids[job]
+            ]
+        )
+
 
 class SkyplaneClient:
     def __init__(
@@ -121,3 +131,4 @@ class SkyplaneClient:
             logger.error("Dataplane must be pre-provisioned. Call dataplane.provision() before starting a transfer")
         tracker = TransferProgressTracker(dataplane, self.jobs_to_dispatch)
         tracker.start()
+        return tracker
