@@ -41,7 +41,7 @@ Before you submit a pull request, make sure to complete the following steps:
 
    .. code-block:: console
 
-      $ pip install black pytype autoflake
+      $ pip install -r requirements-dev.txt
       $ black -l 140 .
       $ pytype --config .pytype.cfg skyplane
       $ autoflake --in-place --remove-all-unused-imports --remove-unused-variables --recursive skyplane

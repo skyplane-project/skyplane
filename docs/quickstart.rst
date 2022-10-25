@@ -69,7 +69,7 @@ We're ready to use Skyplane! Let's use `skyplane cp` to copy files from AWS to G
 .. code-block:: bash
 
    ---> 🎸 Ready to rock and roll! Copy some files:
-   $ skyplane cp s3://... gs://...
+   $ skyplane cp -r s3://... gs://...
 
 To transfer only new objects, you can instead use `skyplane sync`: 
 

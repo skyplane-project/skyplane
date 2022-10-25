@@ -12,7 +12,7 @@ readme = "README.md"
 include = ["profiles/*"]
 
 [tool.poetry.dependencies]
-python = ">=3.7.1"
+python = ">=3.7.1,<4.0"
 boto3 = ">=1.16.0"
 cachetools = ">=4.1.0"
 pandas = ">=1.0.0"
@@ -61,22 +61,9 @@ gateway = ["flask", "lz4", "pynacl", "pyopenssl", "werkzeug"]
 solver = ["cvxpy", "graphviz", "matplotlib", "numpy"]
 
 [tool.poetry.dev-dependencies]
-black = ">21.3.0"
 pytest = ">=6.0.0"
 pytest-cov = ">=2.10.0"
 pytest-xdist = ">=2.0.0"
-pytype = ">=2022"
-docutils = ">=0.18"
-furo = "^2022.6.21"
-jupyter-sphinx = "^0.4.0"
-myst-nb = "^0.16.0"
-sphinx-autobuild = "^2021.3.14"
-sphinx-autodoc-typehints = "^1.19.2"
-sphinx-click = "^4.3.0"
-sphinx-copybutton = "^0.5.0"
-Sphinx = ">=4.4,!=5.1"
-sphinxext-opengraph = "^0.6.3"
-autoflake = "^1.7.6"
 
 [build-system]
 requires = ["setuptools", "poetry-core>=1.0.0"]
