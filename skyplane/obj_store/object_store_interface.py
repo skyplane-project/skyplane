@@ -27,6 +27,9 @@ class ObjectStoreInterface:
     def region_tag(self) -> str:
         raise NotImplementedError()
 
+    def bucket(self) -> str:
+        raise NotImplementedError()
+
     def set_requester_bool(self, requester: bool):
         return
 
