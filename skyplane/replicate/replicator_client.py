@@ -405,7 +405,7 @@ class ReplicatorClient:
                     multipart_batches = []
                     for i in range(0, len(multipart_pairs), batch_size):
                         multipart_batches.append(multipart_pairs[i : i + batch_size])
-                    dispatch_fn = lambda x: obj_store_interface.initiate_multipart_uploads([y.key for _, y in x])
+                    dispatch_fn = lambda x: [obj_store_interface.initiate_multipart_upload(y.key) for _, y in x]
                     upload_ids = do_parallel(dispatch_fn, multipart_batches, n=-1)
 
                 # build chunks for multipart transfers

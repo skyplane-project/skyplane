@@ -182,17 +182,14 @@ class S3Interface(ObjectStoreInterface):
                 raise exceptions.ChecksumMismatchException(f"Checksum mismatch for object {dst_object_name}") from e
             raise
 
-    def initiate_multipart_uploads(self, dst_object_names: List[str]) -> List[str]:
+    def initiate_multipart_upload(self, dst_object_name: str) -> str:
         client = self._s3_client()
-        upload_ids = []
-        for dst_object_name in dst_object_names:
-            assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
-            response = client.create_multipart_upload(Bucket=self.bucket_name, Key=dst_object_name)
-            if "UploadId" in response:
-                upload_ids.append(response["UploadId"])
-            else:
-                raise exceptions.SkyplaneException(f"Failed to initiate multipart upload for {dst_object_name}: {response}")
-        return upload_ids
+        assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
+        response = client.create_multipart_upload(Bucket=self.bucket_name, Key=dst_object_name)
+        if "UploadId" in response:
+            return response["UploadId"]
+        else:
+            raise exceptions.SkyplaneException(f"Failed to initiate multipart upload for {dst_object_name}: {response}")
 
     def complete_multipart_upload(self, dst_object_name, upload_id):
         s3_client = self._s3_client()
