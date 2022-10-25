@@ -6,7 +6,7 @@ from typing import Generator, List, Optional, Tuple, Type
 from rich import print as rprint
 
 from skyplane import exceptions
-from skyplane.api.impl.chunker import Chunker, batch_generator
+from skyplane.api.impl.chunker import Chunker, batch_generator, tail_generator
 from skyplane.api.impl.path import parse_path
 from skyplane.chunk import ChunkRequest
 from skyplane.compute.server import Server
@@ -22,10 +22,7 @@ class TransferJob:
     src_path: str
     dst_path: str
     recursive: bool = False
-
-    # flags
     requester_pays: bool = False
-    multipart_threshold_mb: Optional[int] = None
 
     def __init__(self):
         provider_src, bucket_src, self.src_prefix = parse_path(self.src_path)
@@ -35,6 +32,13 @@ class TransferJob:
         if self.requester_pays:
             self.src_iface.set_requester_pays()
             self.dst_iface.set_requester_pays()
+
+    def dispatch(self, src_gateways: List[Type[Server]], **kwargs) -> Generator[ChunkRequest, None, None]:
+        raise NotImplementedError("Dispatch not implemented")
+
+    def verify(self):
+        """Verifies the transfer completed, otherwise raises TransferFailedException."""
+        raise NotImplementedError("Verify not implemented")
 
     def estimate_cost(self):
         # TODO
@@ -132,6 +136,8 @@ class TransferJob:
 
 @dataclass
 class CopyJob(TransferJob):
+    transfer_list: List[Tuple[ObjectStoreObject, ObjectStoreObject]] = []  # transfer list for later verification
+
     def dispatch(
         self,
         src_gateways: List[Type[Server]],
@@ -142,7 +148,7 @@ class CopyJob(TransferJob):
         dispatch_batch_size: int = 64,
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways."""
-        gen_transfer_list = self._transfer_pair_generator()
+        gen_transfer_list = tail_generator(self._transfer_pair_generator(), self.transfer_list)
         chunker = Chunker(
             self.dst_iface,
             multipart_enabled=multipart_enabled,
@@ -168,6 +174,18 @@ class CopyJob(TransferJob):
             if reply.status != 200:
                 raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
             yield from batch
+
+        def verify(self):
+            dst_keys = {dst_o.key: src_o for src_o, dst_o in self.transfer_list}
+            for obj in self.dst_iface.list_objects(self.dst_prefix):
+                # check metadata (src.size == dst.size) && (src.modified <= dst.modified)
+                src_obj = dst_keys.get(obj.key)
+                if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:
+                    del dst_keys[obj.key]
+            if dst_keys:
+                raise exceptions.TransferFailedException(
+                    f"{len(dst_keys)} objects failed verification", [obj.key for obj in dst_keys.values()]
+                )
 
 
 @dataclass

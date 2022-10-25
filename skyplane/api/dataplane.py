@@ -1,7 +1,7 @@
 from collections import defaultdict
 from functools import partial
 import threading
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import nacl.secret
 import nacl.utils
@@ -184,3 +184,6 @@ class Dataplane:
     def auto_deprovision(self) -> DataplaneAutoDeprovision:
         """Returns a context manager that will automatically call deprovision upon exit."""
         return DataplaneAutoDeprovision(self)
+
+    def source_gateways(self) -> List[Server]:
+        return [self.bound_nodes[n] for n in self.topology.source_instances()]

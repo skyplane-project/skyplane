@@ -149,3 +149,10 @@ def batch_generator(gen_in, batch_size: int):
             batch = []
     if len(batch) > 0:
         yield batch
+
+
+def tail_generator(gen_in, out_list: List):
+    """Tails generator"""
+    for item in gen_in:
+        out_list.append(item)
+        yield item

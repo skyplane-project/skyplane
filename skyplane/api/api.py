@@ -1,12 +1,13 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from threading import Thread
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from skyplane.api.auth_config import AWSConfig, AzureConfig, GCPConfig
 from skyplane.api.dataplane import Dataplane
 from skyplane.api.impl.planner import DirectPlanner
 from skyplane.api.impl.transfer_job import TransferJob, CopyJob, SyncJob
 from skyplane.api.impl.provisioner import Provisioner
+from skyplane.chunk import ChunkRequest
 from skyplane.obj_store.object_store_interface import ObjectStoreObject
 from skyplane.utils import logger
 
@@ -19,9 +20,37 @@ class TransferProgressTracker(Thread):
     dataplane: Dataplane
     jobs: List[TransferJob]
 
+    # config
+    multipart_enabled: bool = (True,)
+    multipart_threshold_mb: int = 128
+    multipart_chunk_size_mb: int = 64
+    multipart_max_chunks: int = 10000
+
+    # chunk_requests state
+    job_chunk_requests: Dict[TransferJob, List[ChunkRequest]] = field(default_factory=dict)
+    job_pending_chunk_ids: Dict[TransferJob, Set[int]] = field(default_factory=dict)
+    job_complete_chunk_ids: Dict[TransferJob, Set[int]] = field(default_factory=dict)
+
     def run(self):
-        # todo: implement following cp_replicate.py and cli.py
-        raise NotImplementedError()
+        job_chunk_request_gen = {}
+        for job in self.jobs:
+            job_chunk_request_gen[job] = list(
+                job.dispatch(
+                    self.dataplane.source_gateways(),
+                    multipart_enabled=self.multipart_enabled,
+                    multipart_threshold_mb=self.multipart_threshold_mb,
+                    multipart_chunk_size_mb=self.multipart_chunk_size_mb,
+                    multipart_max_chunks=self.multipart_max_chunks,
+                )
+            )
+            self.job_pending_chunk_ids[job] = set([cr.chunk.chunk_id for cr in job_chunk_request_gen[job]])
+        self.monitor_transfer()
+        for job in self.jobs:
+            job.verify()
+
+    def monitor_transfer(self):
+        # todo implement transfer monitoring to update job_complete_chunk_ids and job_pending_chunk_ids while the transfer is in progress
+        pass
 
 
 class SkyplaneClient:
