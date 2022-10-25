@@ -1390,8 +1390,8 @@ solver = ["cvxpy", "graphviz", "matplotlib", "numpy"]
 
 [metadata]
 lock-version = "1.1"
-python-versions = ">=3.7.1,<4.0"
-content-hash = "17de76d9559895cdc98885ff88b46c6fd5bb3ec89304b677b025c7e08b82afaa"
+python-versions = ">=3.7.1,<3.12"
+content-hash = "02ea79461bbeedbd01999242c060e8f354a2ae0ee2ae60a671de38e0e0bbb38f"
 
 [metadata.files]
 attrs = [
