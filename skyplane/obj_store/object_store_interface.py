@@ -42,7 +42,7 @@ class ObjectStoreInterface:
     def exists(self, obj_name: str) -> bool:
         raise NotImplementedError()
 
-    def list_objects(self, prefix="") -> Iterator[Type[ObjectStoreObject]]:
+    def list_objects(self, prefix="") -> Iterator[ObjectStoreObject]:
         raise NotImplementedError()
 
     def get_obj_size(self, obj_name) -> int:

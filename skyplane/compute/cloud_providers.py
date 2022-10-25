@@ -78,7 +78,7 @@ class CloudProvider:
         name: Optional[str] = None,
         tags={"skyplane": "true"},
         **kwargs
-    ) -> Type[Server]:
+    ) -> Server:
         raise NotImplementedError
 
     def setup_global(self, **kwargs):
