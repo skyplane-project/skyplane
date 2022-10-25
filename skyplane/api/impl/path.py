@@ -1,0 +1,41 @@
+import re
+from pathlib import Path
+
+import typer
+
+
+def parse_path(path: str):
+    def is_plausible_local_path(path_test: str):
+        path_test = Path(path_test)
+        if path_test.exists():
+            return True
+        if path_test.is_dir():
+            return True
+        if path_test.parent.exists():
+            return True
+        return False
+
+    if path.startswith("s3://") or path.startswith("gs://"):
+        provider, parsed = path[:2], path[5:]
+        if len(parsed) == 0:
+            typer.secho(f"Invalid path: '{path}'", fg="red", err=True)
+            raise typer.Exit(code=1)
+        bucket, *keys = parsed.split("/", 1)
+        key = keys[0] if len(keys) > 0 else ""
+        provider = "aws" if provider == "s3" else "gcp"
+        return provider, bucket, key
+    elif (path.startswith("https://") or path.startswith("http://")) and "blob.core.windows.net" in path:
+        # Azure blob storage
+        regex = re.compile(r"https?://([^/]+).blob.core.windows.net/([^/]+)/?(.*)")
+        match = regex.match(path)
+        if match is None:
+            raise ValueError(f"Invalid Azure path: {path}")
+        account, container, blob_path = match.groups()
+        return "azure", f"{account}/{container}", blob_path
+    elif path.startswith("azure://"):
+        bucket_name = path[8:]
+        region = path[8:].split("-", 2)[-1]
+        return "azure", bucket_name, region
+    elif is_plausible_local_path(path):
+        return "local", None, path
+    raise ValueError(f"Parse error {path}")

@@ -38,7 +38,8 @@ from skyplane.cli.cli_impl.cp_replicate_fallback import (
     replicate_small_sync_cmd,
 )
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
-from skyplane.cli.common import console, parse_path, print_header, print_stats_completed, query_instances
+from skyplane.cli.common import console, print_header, print_stats_completed, query_instances
+from skyplane.api.impl.path import parse_path
 from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
