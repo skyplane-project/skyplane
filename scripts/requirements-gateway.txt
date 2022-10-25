@@ -1,5 +1,5 @@
 # cloud dependencies
-awscrt
+# awscrt
 azure-identity
 # removed from gateway due to large size
 # azure-mgmt-compute
