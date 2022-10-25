@@ -1,11 +1,15 @@
 from dataclasses import dataclass
+import json
 import sys
-from typing import Callable, Generator, Optional, Tuple
+from typing import Generator, List, Optional, Tuple, Type
 
 from rich import print as rprint
 
 from skyplane import exceptions
-from skyplane.api.api import TransferList
+from skyplane.api.impl.chunker import Chunker, batch_generator
+from skyplane.api.impl.path import parse_path
+from skyplane.chunk import ChunkRequest
+from skyplane.compute.server import Server
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
@@ -19,12 +23,62 @@ class TransferJob:
     dst_path: str
     recursive: bool = False
 
+    # flags
+    requester_pays: bool = False
+    multipart_threshold_mb: Optional[int] = None
+
+    def __init__(self):
+        provider_src, bucket_src, self.src_prefix = parse_path(self.src_path)
+        provider_dst, bucket_dst, self.dst_prefix = parse_path(self.dst_path)
+        self.src_iface = ObjectStoreInterface(f"{provider_src}:infer", bucket_src)
+        self.dst_iface = ObjectStoreInterface(f"{provider_dst}:infer", bucket_dst)
+        if self.requester_pays:
+            self.src_iface.set_requester_pays()
+            self.dst_iface.set_requester_pays()
+
     def estimate_cost(self):
         # TODO
         raise NotImplementedError
 
+    def _transfer_pair_generator(self) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
+        """Query source region and return list of objects to transfer."""
+        if not self.src_iface.bucket_exists():
+            raise exceptions.MissingBucketException(f"Source bucket {self.src_iface.path()} does not exist or is not readable.")
+        if not self.dst_iface.bucket_exists():
+            raise exceptions.MissingBucketException(f"Destination bucket {self.dst_iface.path()} does not exist or is not readable.")
+
+        # query all source region objects
+        logger.fs.debug(f"Querying objects in {self.src_iface.path()}")
+        n_objs = 0
+        for obj in self.src_iface.list_objects(self.src_prefix):
+            if self._pre_filter_fn(obj):
+                try:
+                    dest_key = self._map_object_key_prefix(self.src_prefix, obj.key, self.dst_prefix, recursive=self.recursive)
+                except exceptions.MissingObjectException as e:
+                    logger.fs.exception(e)
+                    raise e
+
+                # make destination object
+                dest_provider, dest_region = self.dst_iface.region_tag().split(":")
+                if dest_provider == "aws":
+                    dest_obj = S3Object(dest_provider, self.dst_iface.bucket(), dest_key)
+                elif dest_provider == "azure":
+                    dest_obj = AzureBlobObject(dest_provider, self.dst_iface.bucket(), dest_key)
+                elif dest_provider == "gcp":
+                    dest_obj = GCSObject(dest_provider, self.dst_iface.bucket(), dest_key)
+                else:
+                    raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
+
+                if self._post_filter_fn(obj, dest_obj):
+                    yield obj, dest_obj
+                    n_objs += 1
+
+        if n_objs == 0:
+            logger.error("Specified object does not exist.\n")
+            raise exceptions.MissingObjectException(f"No objects were found in the specified prefix")
+
     @classmethod
-    def map_object_key_prefix(cls, source_prefix: str, source_key: str, dest_prefix: str, recursive: bool = False):
+    def _map_object_key_prefix(cls, source_prefix: str, source_key: str, dest_prefix: str, recursive: bool = False):
         """
         map_object_key_prefix computes the mapping of a source key in a bucket prefix to the destination.
         Users invoke a transfer via the CLI; aws s3 cp s3://bucket/source_prefix s3://bucket/dest_prefix.
@@ -66,68 +120,58 @@ class TransferJob:
                     return join(dest_prefix, src_path_after_prefix)
 
     @classmethod
-    def _make_abstract_object(cls, dest_bucket, dest_key, dest_region) -> ObjectStoreObject:
-        if dest_region.startswith("aws"):
-            return S3Object(dest_region.split(":")[0], dest_bucket, dest_key)
-        elif dest_region.startswith("gcp"):
-            return GCSObject(dest_region.split(":")[0], dest_bucket, dest_key)
-        elif dest_region.startswith("azure"):
-            return AzureBlobObject(dest_region.split(":")[0], dest_bucket, dest_key)
-        else:
-            raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
+    def _pre_filter_fn(cls, obj: ObjectStoreObject) -> bool:
+        """Optionally filter source objects before they are transferred."""
+        return True
 
     @classmethod
-    def _query_bucket_generator(
-        cls,
-        src_iface: ObjectStoreInterface,
-        dst_iface: ObjectStoreInterface,
-        source_prefix: str,
-        dest_prefix: str,
-        recursive: bool = False,
-        pre_filter_fn: Optional[Callable[[ObjectStoreObject], bool]] = None,
-        post_filter_fn: Optional[Callable[[ObjectStoreObject, ObjectStoreObject], bool]] = None,
-    ) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
-        """Query source region and return list of objects to transfer."""
-        if not src_iface.bucket_exists():
-            raise exceptions.MissingBucketException(f"Source bucket {src_iface.path()} does not exist or is not readable.")
-        if not dst_iface.bucket_exists():
-            raise exceptions.MissingBucketException(f"Destination bucket {dst_iface.path()} does not exist or is not readable.")
-
-        # query all source region objects
-        logger.fs.debug(f"Querying objects in {src_iface.path()}")
-        n_objs = 0
-        for obj in src_iface.list_objects(source_prefix):
-            if pre_filter_fn(obj):
-                try:
-                    dest_key = cls.map_object_key_prefix(source_prefix, obj.key, dest_prefix, recursive=recursive)
-                except exceptions.MissingObjectException as e:
-                    logger.fs.exception(e)
-                    raise e
-
-                dest_region = dst_iface.region_tag()
-                dest_bucket = dst_iface.bucket()
-                dest_obj = cls._make_abstract_object(dest_bucket, dest_key, dest_region)
-
-                if post_filter_fn(obj, dest_obj):
-                    yield obj, dest_obj
-                    n_objs += 1
-
-        if n_objs == 0:
-            logger.error("Specified object does not exist.\n")
-            raise exceptions.MissingObjectException(f"No objects were found in the specified prefix")
+    def _post_filter_fn(cls, src_obj: ObjectStoreObject, dest_obj: ObjectStoreObject) -> bool:
+        """Optionally filter objects by comparing the source and destination objects."""
+        return True
 
 
 @dataclass
 class CopyJob(TransferJob):
-    def filter_transfer_list(self, transfer_list: TransferList) -> TransferList:
-        return transfer_list
+    def dispatch(
+        self,
+        src_gateways: List[Type[Server]],
+        multipart_enabled: bool = True,
+        multipart_threshold_mb: int = 128,
+        multipart_chunk_size_mb: int = 64,
+        multipart_max_chunks: int = 10000,
+        dispatch_batch_size: int = 64,
+    ) -> Generator[ChunkRequest, None, None]:
+        """Dispatch transfer job to specified gateways."""
+        gen_transfer_list = self._transfer_pair_generator()
+        chunker = Chunker(
+            self.dst_iface,
+            multipart_enabled=multipart_enabled,
+            multipart_threshold_mb=multipart_threshold_mb,
+            multipart_chunk_size_mb=multipart_chunk_size_mb,
+            multipart_max_chunks=multipart_max_chunks,
+        )
+        chunks = chunker.chunk(gen_transfer_list)
+        chunk_requests = chunker.to_chunk_requests(chunks)
+        batches = batch_generator(chunk_requests, dispatch_batch_size)
+        bytes_dispatched = [0] * len(src_gateways)
+        for batch in batches:
+            min_idx = bytes_dispatched.index(min(bytes_dispatched))
+            server = src_gateways[min_idx]
+            n_bytes = sum([cr.chunk.chunk_length_bytes for cr in batch])
+            bytes_dispatched[min_idx] += n_bytes
+            reply = self.http_pool.request(
+                "POST",
+                f"{server.gateway_api_url}/api/v1/chunk_requests",
+                body=json.dumps([c.as_dict() for c in batch]).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+            )
+            if reply.status != 200:
+                raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
+            yield from batch
 
 
 @dataclass
 class SyncJob(CopyJob):
-    def filter_transfer_list(self, transfer_list: TransferList) -> TransferList:
-        transfer_pairs = []
-        for src_obj, dst_obj in transfer_list:
-            if not dst_obj.exists or (src_obj.last_modified > dst_obj.last_modified or src_obj.size != dst_obj.size):
-                transfer_pairs.append((src_obj, dst_obj))
-        return transfer_pairs
+    @classmethod
+    def _post_filter_fn(cls, src_obj: ObjectStoreObject, dest_obj: ObjectStoreObject) -> bool:
+        return not dest_obj.exists or (src_obj.last_modified > dest_obj.last_modified or src_obj.size != dest_obj.size)
