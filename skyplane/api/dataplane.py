@@ -7,7 +7,7 @@ import nacl.secret
 import nacl.utils
 
 from skyplane import gateway_docker_image
-from skyplane.api.provisioner import Provisioner
+from skyplane.api.impl.provisioner import Provisioner
 from skyplane.compute.server import Server
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
