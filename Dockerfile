@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 # install apt packages
 RUN --mount=type=cache,target=/var/cache/apt apt update \
-    && apt-get install --no-install-recommends -y curl ca-certificates stunnel4 gcc \
+    && apt-get install --no-install-recommends -y curl ca-certificates stunnel4 gcc libc-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
