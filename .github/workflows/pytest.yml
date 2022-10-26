@@ -27,7 +27,9 @@ jobs:
           poetry config virtualenvs.in-project false
           poetry config virtualenvs.path ~/.virtualenvs
       - name: Install Dependencies
-        run: poetry install -E gateway -E solver -E aws -E azure -E gcp
+        run: |
+          poetry install -E gateway -E solver -E aws -E azure -E gcp
+          poetry run pip install -r requirements-dev.txt
         if: steps.cache.outputs.cache-hit != 'true'
       - name: black
         run: poetry run black . --check --line-length=140
@@ -54,7 +56,9 @@ jobs:
           poetry config virtualenvs.in-project false
           poetry config virtualenvs.path ~/.virtualenvs
       - name: Install Dependencies
-        run: poetry install -E gateway -E solver -E aws -E azure -E gcp
+        run: |
+          poetry install -E gateway -E solver -E aws -E azure -E gcp
+          poetry run pip install -r requirements-dev.txt
         if: steps.cache.outputs.cache-hit != 'true'
       - name: Run unit tests
         run: |
@@ -78,7 +82,9 @@ jobs:
           poetry config virtualenvs.in-project false
           poetry config virtualenvs.path ~/.virtualenvs
       - name: Install Dependencies
-        run: poetry install -E gateway -E solver -E aws -E azure -E gcp
+        run: |
+          poetry install -E gateway -E solver -E aws -E azure -E gcp
+          poetry run pip install -r requirements-dev.txt
         if: steps.cache.outputs.cache-hit != 'true'
       - name: Run cloud tests
         env:
@@ -110,7 +116,9 @@ jobs:
         with:
           creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
       - name: Install Dependencies
-        run: poetry install -E gateway -E solver -E aws -E azure -E gcp
+        run: |
+          poetry install -E gateway -E solver -E aws -E azure -E gcp
+          poetry run pip install -r requirements-dev.txt
         if: steps.cache.outputs.cache-hit != 'true'
       - name: Run cloud tests
         run: |
@@ -137,7 +145,9 @@ jobs:
           poetry config virtualenvs.in-project false
           poetry config virtualenvs.path ~/.virtualenvs
       - name: Install Dependencies
-        run: poetry install -E gateway -E solver -E aws -E azure -E gcp
+        run: |
+          poetry install -E gateway -E solver -E aws -E azure -E gcp
+          poetry run pip install -r requirements-dev.txt
         if: steps.cache.outputs.cache-hit != 'true'
       - id: 'auth'
         uses: 'google-github-actions/auth@v0'

@@ -47,7 +47,9 @@ jobs:
           poetry config repositories.test-pypi https://test.pypi.org/legacy/
           poetry config pypi-token.test-pypi ${{ secrets.TEST_PYPI_API_TOKEN }}
       - name: Install Dependencies
-        run: poetry install -E gateway -E solver -E aws -E azure -E gcp
+        run: |
+          poetry install -E gateway -E solver -E aws -E azure -E gcp
+          poetry run pip install -r requirements-dev.txt
         if: steps.cache.outputs.cache-hit != 'true'
       - name: Build package
         run: |
@@ -89,7 +91,9 @@ jobs:
           poetry config virtualenvs.path ~/.virtualenvs
           poetry config pypi-token.pypi ${{ secrets.PYPI_API_TOKEN }}
       - name: Install Dependencies
-        run: poetry install -E gateway -E solver -E aws -E azure -E gcp
+        run: |
+          poetry install -E gateway -E solver -E aws -E azure -E gcp
+          poetry run pip install -r requirements-dev.txt
         if: steps.cache.outputs.cache-hit != 'true'
       - name: Build package under skyplane-dev name
         run: |
