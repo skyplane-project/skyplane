@@ -25,7 +25,7 @@ class ProvisionerTask:
     autoterminate_minutes: Optional[int] = None
     tags: Dict[str, str] = field(default_factory=dict)
     uuid: str = field(default_factory=lambda: str(uuid.uuid4()))
-    
+
     def __hash__(self):
         return uuid.UUID(self.uuid).int
 
