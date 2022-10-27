@@ -85,7 +85,7 @@ class ReplicationTopology:
         src_objstore = ReplicationTopologyObjectStore(src_region)
         dest_gateway = ReplicationTopologyGateway(dest_region, dest_instance)
         self.edges.append((src_objstore, dest_gateway, 0))
-        self.nodes.add(src_objstore)
+        # self.nodes.add(src_objstore)
         self.nodes.add(dest_gateway)
 
     def add_instance_objstore_edge(self, src_region: str, src_instance: int, dest_region: str):
@@ -94,7 +94,7 @@ class ReplicationTopology:
         dest_objstore = ReplicationTopologyObjectStore(dest_region)
         self.edges.append((src_gateway, dest_objstore, 0))
         self.nodes.add(src_gateway)
-        self.nodes.add(dest_objstore)
+        # self.nodes.add(dest_objstore)
 
     def get_outgoing_paths(self, src: ReplicationTopologyNode):
         """Return nodes that follow src in the topology."""
