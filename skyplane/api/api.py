@@ -75,7 +75,9 @@ class SkyplaneClient:
         self.azure_auth = azure_config.make_auth_provider() if azure_config else None
         self.gcp_auth = gcp_config.make_auth_provider() if gcp_config else None
         self.host_uuid = host_uuid
+
         self.provisioner = Provisioner(
+            host_uuid=self.host_uuid,
             aws_auth=self.aws_auth,
             azure_auth=self.azure_auth,
             gcp_auth=self.gcp_auth,

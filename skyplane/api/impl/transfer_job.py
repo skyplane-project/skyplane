@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import sys
 from typing import Generator, List, Optional, Tuple, Type
@@ -137,7 +137,7 @@ class TransferJob:
 
 @dataclass
 class CopyJob(TransferJob):
-    transfer_list: List[Tuple[ObjectStoreObject, ObjectStoreObject]] = []  # transfer list for later verification
+    transfer_list: list = field(default_factory=list)  # transfer list for later verification
 
     def __post_init__(self):
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
