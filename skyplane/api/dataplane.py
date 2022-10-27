@@ -1,7 +1,7 @@
 from collections import defaultdict
 from functools import partial
 import threading
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import nacl.secret
 import nacl.utils
@@ -49,7 +49,7 @@ class Dataplane:
             "aws_use_spot_instances": False,
             "azure_use_spot_instances": False,
             "gcp_use_spot_instances": False,
-            "aws_instance_class": "m5.4xlarge",
+            "aws_instance_class": "m5.8xlarge",
             "azure_instance_class": "Standard_D2_v5",
             "gcp_instance_class": "n2-standard-16",
             "gcp_use_premium_network": True,
@@ -184,3 +184,6 @@ class Dataplane:
     def auto_deprovision(self) -> DataplaneAutoDeprovision:
         """Returns a context manager that will automatically call deprovision upon exit."""
         return DataplaneAutoDeprovision(self)
+
+    def source_gateways(self) -> List[Server]:
+        return [self.bound_nodes[n] for n in self.topology.source_instances()]

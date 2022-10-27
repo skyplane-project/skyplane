@@ -25,6 +25,9 @@ class ProvisionerTask:
     autoterminate_minutes: Optional[int] = None
     tags: Dict[str, str] = field(default_factory=dict)
     uuid: str = field(default_factory=lambda: str(uuid.uuid4()))
+    
+    def __hash__(self):
+        return uuid.UUID(self.uuid).int
 
 
 class Provisioner:
@@ -36,7 +39,7 @@ class Provisioner:
         gcp_auth: Optional[GCPAuthentication] = None,
     ):
         self.host_uuid = host_uuid
-        self.aws = AWSCloudProvider(key_prefix=f"skyplane-{host_uuid.replace('-', '') if host_uuid else ''}", auth=aws_auth)
+        self.aws = AWSCloudProvider(key_prefix=f"skyplane{'-'+host_uuid.replace('-', '') if host_uuid else ''}", auth=aws_auth)
         self.azure = AzureCloudProvider(auth=azure_auth)
         self.gcp = GCPCloudProvider(auth=gcp_auth)
         self.temp_nodes: Set[Server] = set()  # temporary area to store nodes that should be terminated upon exit
@@ -160,7 +163,7 @@ class Provisioner:
 
         def deprovision_gateway_instance(server: Server):
             server.terminate_instance()
-            for idx, s in self.provisioned_vms:
+            for idx, s in list(self.provisioned_vms.items()):
                 if s == server:
                     del self.provisioned_vms[idx]
             if server in self.temp_nodes:
