@@ -30,8 +30,13 @@ RUN (echo 'net.ipv4.ip_local_port_range = 12000 65535' >> /etc/sysctl.conf) \
     && (echo 'root             hard    nofile          1048576' >> /etc/security/limits.conf)
 
 # install gateway
-COPY scripts/requirements-gateway.txt /tmp/requirements-gateway.txt
-RUN --mount=type=cache,target=/root/.cache/pip pip3 install --no-cache-dir -r /tmp/requirements-gateway.txt && rm -r /tmp/requirements-gateway.txt
+RUN --mount=type=cache,target=/root/.cache/pip pip3 install --no-cache-dir 'poetry==1.2.2'
+COPY pyproject.toml /tmp/pyproject.toml
+RUN --mount=type=cache,target=/root/.cache/pip cd /tmp \
+    && poetry config virtualenvs.create false \
+    && poetry install --no-interaction --no-ansi --only gateway \
+    && rm -rf /tmp/pyproject.toml
+
 
 WORKDIR /pkg
 COPY . .
