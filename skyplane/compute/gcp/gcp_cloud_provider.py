@@ -24,9 +24,9 @@ from skyplane.utils.fn import wait_for
 
 
 class GCPCloudProvider(CloudProvider):
-    def __init__(self, key_root=key_root / "gcp"):
+    def __init__(self, key_root=key_root / "gcp", auth: Optional[GCPAuthentication] = None):
         super().__init__()
-        self.auth = GCPAuthentication()
+        self.auth = auth if auth else GCPAuthentication()
         key_root.mkdir(parents=True, exist_ok=True)
         self.private_key_path = key_root / "gcp-cert.pem"
         self.public_key_path = key_root / "gcp-cert.pub"

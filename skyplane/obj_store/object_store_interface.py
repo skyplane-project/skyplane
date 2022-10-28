@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Iterator, List, Optional, Type
+from typing import Iterator, List, Optional
 
 
 @dataclass
@@ -27,6 +27,9 @@ class ObjectStoreInterface:
     def region_tag(self) -> str:
         raise NotImplementedError()
 
+    def bucket(self) -> str:
+        raise NotImplementedError()
+
     def set_requester_bool(self, requester: bool):
         return
 
@@ -42,7 +45,7 @@ class ObjectStoreInterface:
     def exists(self, obj_name: str) -> bool:
         raise NotImplementedError()
 
-    def list_objects(self, prefix="") -> Iterator[Type[ObjectStoreObject]]:
+    def list_objects(self, prefix="") -> Iterator[ObjectStoreObject]:
         raise NotImplementedError()
 
     def get_obj_size(self, obj_name) -> int:

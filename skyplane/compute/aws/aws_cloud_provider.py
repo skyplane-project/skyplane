@@ -18,12 +18,18 @@ from skyplane.utils.fn import do_parallel, wait_for
 class AWSCloudProvider(CloudProvider):
     pricing = AWSPricing()
 
-    def __init__(self, key_prefix: str = "skyplane"):
+    def __init__(
+        self,
+        key_prefix: str = "skyplane",
+        auth: Optional[AWSAuthentication] = None,
+        key_manager: Optional[AWSKeyManager] = None,
+        network: Optional[AWSNetwork] = None,
+    ):
         super().__init__()
         self.key_prefix = key_prefix
-        self.auth = AWSAuthentication()
-        self.network = AWSNetwork(self.auth)
-        self.key_manager = AWSKeyManager(self.auth)
+        self.auth = auth if auth else AWSAuthentication()
+        self.network = network if network else AWSNetwork(self.auth)
+        self.key_manager = key_manager if key_manager else AWSKeyManager(self.auth)
         self.provisioning_semaphore = BoundedSemaphore(16)
 
     @property
