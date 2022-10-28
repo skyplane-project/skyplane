@@ -1,5 +1,5 @@
 import functools
-from typing import List, Optional, Union, Type
+from typing import List, Optional, Union
 
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils.fn import do_parallel
