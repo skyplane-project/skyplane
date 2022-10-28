@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 import json
 import sys
-from typing import Generator, List, Optional, Tuple, Type
+from typing import Generator, List, Tuple
 
 from rich import print as rprint
 import urllib3

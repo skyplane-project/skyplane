@@ -1,5 +1,3 @@
-import time
-
 from skyplane.api.api import SkyplaneClient
 from skyplane.api.auth_config import AWSConfig
 

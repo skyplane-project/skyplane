@@ -2,7 +2,7 @@ import math
 import queue
 import threading
 from queue import Queue
-from typing import Optional, Tuple, Generator, List, Type
+from typing import Generator, List, Tuple
 
 from skyplane import MB
 from skyplane.chunk import Chunk, ChunkRequest
