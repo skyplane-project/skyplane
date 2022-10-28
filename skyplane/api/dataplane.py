@@ -1,5 +1,6 @@
 from collections import defaultdict
 from functools import partial
+import os
 import threading
 from typing import Dict, List, Optional
 
@@ -71,7 +72,7 @@ class Dataplane:
         # provisioning options
         allow_firewall: bool = True,
         # gateway options
-        gateway_docker_image: str = gateway_docker_image(),
+        gateway_docker_image: str = os.environ.get("SKYPLANE_DOCKER_IMAGE", gateway_docker_image()),
         log_dir: Optional[str] = None,
         authorize_ssh_pub_key: Optional[str] = None,
         max_jobs: int = 16,
