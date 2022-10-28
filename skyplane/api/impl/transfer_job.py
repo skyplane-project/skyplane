@@ -9,6 +9,7 @@ import urllib3
 from skyplane import exceptions
 from skyplane.api.impl.chunker import Chunker, batch_generator, tail_generator
 from skyplane.api.impl.path import parse_path
+from skyplane.api.tracker import TransferConfig
 from skyplane.chunk import ChunkRequest
 from skyplane.compute.server import Server
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
@@ -146,7 +147,7 @@ class CopyJob(TransferJob):
     def dispatch(
         self,
         src_gateways: List[Server],
-        transfer_config: "TransferConfig",
+        transfer_config: TransferConfig,
         dispatch_batch_size: int = 64,
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways."""

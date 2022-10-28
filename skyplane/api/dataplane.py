@@ -8,6 +8,7 @@ import nacl.utils
 
 from skyplane import gateway_docker_image
 from skyplane.api.impl.provisioner import Provisioner
+from skyplane.api.tracker import TransferProgressTracker
 from skyplane.compute.server import Server
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
@@ -38,6 +39,9 @@ class Dataplane:
         self.provisioner = provisioner
         self.provisioning_lock = threading.Lock()
         self.provisioned = False
+
+        # pending tracker tasks
+        self.pending_transfers: List[TransferProgressTracker] = []
 
         # config parameters
         self.config = {
@@ -174,10 +178,17 @@ class Dataplane:
             use_socket_tls=self.config.get("use_socket_tls", False),
         )
 
+    def register_pending_transfer(self, tracker: TransferProgressTracker):
+        self.pending_transfers.append(tracker)
+
     def deprovision(self, max_jobs: int = 64, spinner: bool = False):
         with self.provisioning_lock:
             if not self.provisioned:
                 logger.warning("Attempting to deprovision dataplane that is not provisioned")
+            # wait for tracker tasks
+            for task in self.pending_transfers:
+                logger.warning(f"[Dataplane.deprovision] Waiting for tracker task {task} to finish")
+                task.join()
             self.provisioner.deprovision(
                 max_jobs=max_jobs,
                 spinner=spinner,
