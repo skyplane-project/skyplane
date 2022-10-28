@@ -128,15 +128,11 @@ class S3Interface(ObjectStoreInterface):
 
         s3_client = self._s3_client()
         assert len(src_object_name) > 0, f"Source object name must be non-empty: '{src_object_name}'"
-
         args = {"Bucket": self.bucket_name, "Key": src_object_name}
-
-        if size_bytes:
+        if offset_bytes:
             args["Range"] = f"bytes={offset_bytes}-{offset_bytes + size_bytes - 1}"
-
         if self.requester_pays:
             args["RequestPayer"] = "requester"
-
         response = s3_client.get_object(**args)
 
         # write response data
