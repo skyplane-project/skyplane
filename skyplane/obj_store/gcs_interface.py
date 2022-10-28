@@ -66,6 +66,9 @@ class GCSInterface(ObjectStoreInterface):
     def region_tag(self):
         return "gcp:" + self.gcp_region
 
+    def bucket(self) -> str:
+        return self.bucket_name
+
     def bucket_exists(self):
         iterator = self._gcs_client.list_blobs(self.bucket_name, page_size=1)
         try:

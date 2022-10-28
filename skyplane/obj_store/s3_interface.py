@@ -43,6 +43,9 @@ class S3Interface(ObjectStoreInterface):
     def region_tag(self):
         return "aws:" + self.aws_region
 
+    def bucket(self) -> str:
+        return self.bucket_name
+
     def set_requester_bool(self, requester: bool):
         self.requester_pays = requester
 

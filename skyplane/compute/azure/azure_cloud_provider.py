@@ -21,9 +21,9 @@ from skyplane.utils.timer import Timer
 
 
 class AzureCloudProvider(CloudProvider):
-    def __init__(self, key_root=key_root / "azure"):
+    def __init__(self, key_root=key_root / "azure", auth: Optional[AzureAuthentication] = None):
         super().__init__()
-        self.auth = AzureAuthentication()
+        self.auth = auth if auth else AzureAuthentication()
 
         key_root.mkdir(parents=True, exist_ok=True)
         self.private_key_path = key_root / "azure_key"
