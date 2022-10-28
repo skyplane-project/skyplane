@@ -1,6 +1,6 @@
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional
 import uuid
 
 from skyplane.api.auth_config import AWSConfig, AzureConfig, GCPConfig
@@ -9,7 +9,6 @@ from skyplane.api.impl.planner import DirectPlanner
 from skyplane.api.impl.transfer_job import TransferJob, CopyJob, SyncJob
 from skyplane.api.impl.provisioner import Provisioner
 from skyplane.api.tracker import TransferConfig, TransferProgressTracker
-from skyplane.obj_store.object_store_interface import ObjectStoreObject
 from skyplane.utils import logger
 from skyplane import tmp_log_dir
 
