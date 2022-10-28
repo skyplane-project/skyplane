@@ -5,7 +5,6 @@ from typing import Dict, List, Optional
 
 import nacl.secret
 import nacl.utils
-from numpy import isin
 
 from skyplane import gateway_docker_image
 from skyplane.api.impl.provisioner import Provisioner
