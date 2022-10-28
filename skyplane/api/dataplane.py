@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 
 import nacl.secret
 import nacl.utils
+from numpy import isin
 
 from skyplane import gateway_docker_image
 from skyplane.api.impl.provisioner import Provisioner
@@ -82,7 +83,7 @@ class Dataplane:
             gcp_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.nodes if n.region.startswith("gcp:"))
 
             # create VMs from the topology
-            for node in self.topology.nodes:
+            for node in self.topology.gateway_nodes:
                 cloud_provider, region = node.region.split(":")
                 self.provisioner.add_task(
                     cloud_provider=cloud_provider,
