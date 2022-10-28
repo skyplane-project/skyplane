@@ -101,7 +101,7 @@ class Dataplane:
 
             # provision VMs
             uuids = self.provisioner.provision(
-                allow_firewall=allow_firewall,
+                authorize_firewall=allow_firewall,
                 max_jobs=max_jobs,
                 spinner=spinner,
             )
@@ -114,6 +114,7 @@ class Dataplane:
             for node in self.topology.gateway_nodes:
                 instance = servers_by_region[node.region].pop()
                 self.bound_nodes[node] = instance
+            logger.fs.debug(f"[Dataplane.provision] {self.bound_nodes=}")
 
             # todo: move server.py:start_gateway here
             # generate end-to-end key and configure gateway start script
@@ -130,8 +131,10 @@ class Dataplane:
             jobs = []
             for node, server in self.bound_nodes.items():
                 jobs.append(partial(start_fn, node, server))
-            do_parallel(lambda fn: fn(), jobs, n=max_jobs, spinner=spinner, spinner_persist=True, desc="Starting gateway container on VMs")
-
+            logger.fs.debug(f"[Dataplane.provision] Starting gateways on {len(jobs)} servers")
+            do_parallel(
+                lambda fn: fn(), jobs, n=max_jobs, spinner=spinner, spinner_persist=spinner, desc="Starting gateway container on VMs"
+            )
             self.provisioned = True
 
     def _start_gateway(
@@ -153,9 +156,9 @@ class Dataplane:
                     setup_args[self.bound_nodes[n].private_ip()] = v
                 else:
                     setup_args[self.bound_nodes[n].public_ip()] = v
-
         am_source = gateway_node in self.topology.source_instances()
         am_sink = gateway_node in self.topology.sink_instances()
+        logger.fs.debug(f"[Dataplane._start_gateway] Setup args for {gateway_node}: {setup_args}")
 
         # start gateway
         if log_dir:

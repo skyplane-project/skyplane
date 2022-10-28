@@ -7,6 +7,8 @@ from typing import Optional, Tuple, Generator, List, Type
 from skyplane import MB
 from skyplane.chunk import Chunk, ChunkRequest
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
+from skyplane.utils.timer import Timer
+from skyplane.utils import logger
 
 
 class Chunker:
@@ -32,8 +34,8 @@ class Chunker:
     def multipart_chunk_thread(
         self,
         exit_event: threading.Event,
-        in_queue: Queue[Tuple[ObjectStoreObject, ObjectStoreObject]],
-        out_queue: Queue[Chunk],
+        in_queue: "Queue[Tuple[ObjectStoreObject, ObjectStoreObject]]",
+        out_queue: "Queue[Chunk]",
         dest_iface: ObjectStoreInterface,
     ):
         """Chunks large files into many small chunks."""
@@ -45,7 +47,8 @@ class Chunker:
 
             # get source and destination object and then compute number of chunks
             src_object, dest_object = input_data
-            upload_id = dest_iface.initiate_multipart_upload(dest_object.key)
+            with Timer(f"initiate_multipart_upload {src_object}"):
+                upload_id = dest_iface.initiate_multipart_upload(dest_object.key)
             chunk_size_bytes = int(self.multipart_chunk_size_mb * MB)
             num_chunks = math.ceil(src_object.size / chunk_size_bytes)
             if num_chunks > self.multipart_max_chunks:
@@ -88,7 +91,7 @@ class Chunker:
         for _ in range(self.concurrent_multipart_chunk_threads):
             t = threading.Thread(
                 target=self.multipart_chunk_thread,
-                args=(multipart_exit_event, multipart_send_queue, multipart_chunk_queue, self.src_iface, self.dest_iface),
+                args=(multipart_exit_event, multipart_send_queue, multipart_chunk_queue, self.dest_iface),
                 daemon=False,
             )
             t.start()
@@ -145,8 +148,10 @@ def batch_generator(gen_in, batch_size: int):
     """Batches generator, while handling StopIteration"""
     batch = []
     for item in gen_in:
+        logger.fs.debug(f"batch_generator: {item=}")
         batch.append(item)
         if len(batch) == batch_size:
+            logger.fs.debug(f"batch_generator: yielding batch {batch=}")
             yield batch
             batch = []
     if len(batch) > 0:

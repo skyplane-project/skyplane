@@ -146,10 +146,7 @@ class CopyJob(TransferJob):
     def dispatch(
         self,
         src_gateways: List[Server],
-        multipart_enabled: bool = True,
-        multipart_threshold_mb: int = 128,
-        multipart_chunk_size_mb: int = 64,
-        multipart_max_chunks: int = 10000,
+        transfer_config: "TransferConfig",
         dispatch_batch_size: int = 64,
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways."""
@@ -157,10 +154,10 @@ class CopyJob(TransferJob):
         chunker = Chunker(
             self.src_iface,
             self.dst_iface,
-            multipart_enabled=multipart_enabled,
-            multipart_threshold_mb=multipart_threshold_mb,
-            multipart_chunk_size_mb=multipart_chunk_size_mb,
-            multipart_max_chunks=multipart_max_chunks,
+            multipart_enabled=transfer_config.multipart_enabled,
+            multipart_threshold_mb=transfer_config.multipart_threshold_mb,
+            multipart_chunk_size_mb=transfer_config.multipart_chunk_size_mb,
+            multipart_max_chunks=transfer_config.multipart_max_chunks,
         )
         chunks = chunker.chunk(gen_transfer_list)
         chunk_requests = chunker.to_chunk_requests(chunks)
@@ -179,19 +176,18 @@ class CopyJob(TransferJob):
             )
             if reply.status != 200:
                 raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
+            logger.fs.debug(f"Dispatched {len(batch)} chunk requests to {server.instance_name()} ({n_bytes} bytes)")
             yield from batch
 
-        def verify(self):
-            dst_keys = {dst_o.key: src_o for src_o, dst_o in self.transfer_list}
-            for obj in self.dst_iface.list_objects(self.dst_prefix):
-                # check metadata (src.size == dst.size) && (src.modified <= dst.modified)
-                src_obj = dst_keys.get(obj.key)
-                if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:
-                    del dst_keys[obj.key]
-            if dst_keys:
-                raise exceptions.TransferFailedException(
-                    f"{len(dst_keys)} objects failed verification", [obj.key for obj in dst_keys.values()]
-                )
+    def verify(self):
+        dst_keys = {dst_o.key: src_o for src_o, dst_o in self.transfer_list}
+        for obj in self.dst_iface.list_objects(self.dst_prefix):
+            # check metadata (src.size == dst.size) && (src.modified <= dst.modified)
+            src_obj = dst_keys.get(obj.key)
+            if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:
+                del dst_keys[obj.key]
+        if dst_keys:
+            raise exceptions.TransferFailedException(f"{len(dst_keys)} objects failed verification", [obj.key for obj in dst_keys.values()])
 
 
 @dataclass
