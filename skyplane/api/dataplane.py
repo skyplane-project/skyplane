@@ -77,7 +77,7 @@ class Dataplane:
         max_jobs: int = 16,
         spinner: bool = False,
     ):
-        logger.fn.info(f"Using {gateway_docker_image=}")
+        logger.fs.info(f"Using {gateway_docker_image=}")
         with self.provisioning_lock:
             if self.provisioned:
                 logger.error("Cannot provision dataplane, already provisioned!")

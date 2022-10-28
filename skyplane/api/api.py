@@ -8,7 +8,8 @@ from skyplane.api.dataplane import Dataplane
 from skyplane.api.impl.planner import DirectPlanner
 from skyplane.api.impl.transfer_job import TransferJob, CopyJob, SyncJob
 from skyplane.api.impl.provisioner import Provisioner
-from skyplane.api.tracker import TransferConfig, TransferProgressTracker
+from skyplane.api.tracker import TransferProgressTracker
+from skyplane.api.config import TransferConfig
 from skyplane.utils import logger
 from skyplane import tmp_log_dir
 

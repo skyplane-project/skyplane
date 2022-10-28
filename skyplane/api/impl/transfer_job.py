@@ -9,7 +9,7 @@ import urllib3
 from skyplane import exceptions
 from skyplane.api.impl.chunker import Chunker, batch_generator, tail_generator
 from skyplane.api.impl.path import parse_path
-from skyplane.api.tracker import TransferConfig
+from skyplane.api.config import TransferConfig
 from skyplane.chunk import ChunkRequest
 from skyplane.compute.server import Server
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject

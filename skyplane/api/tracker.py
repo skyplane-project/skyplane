@@ -1,22 +1,13 @@
-from dataclasses import dataclass
 from threading import Thread
 from typing import List
 
-from skyplane.api.dataplane import Dataplane
+from skyplane.api.config import TransferConfig
 from skyplane.api.impl.transfer_job import TransferJob
 from skyplane.utils import logger
 
 
-@dataclass(frozen=True)
-class TransferConfig:
-    multipart_enabled: bool = False
-    multipart_threshold_mb: int = 128
-    multipart_chunk_size_mb: int = 64
-    multipart_max_chunks: int = 10000
-
-
 class TransferProgressTracker(Thread):
-    def __init__(self, dataplane: Dataplane, jobs: List[TransferJob], transfer_config: TransferConfig):
+    def __init__(self, dataplane, jobs: List[TransferJob], transfer_config: TransferConfig):
         super().__init__()
         self.dataplane = dataplane
         self.jobs = jobs
