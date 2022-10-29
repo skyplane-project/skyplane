@@ -1,7 +1,9 @@
+from copy import deepcopy
+import pickle
 import uuid
 from dataclasses import dataclass, field
 from functools import partial
-from typing import Optional, Dict, Set, List
+from typing import Optional, Dict, Set, List, Tuple
 
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
@@ -11,7 +13,8 @@ from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.compute.server import Server
 from skyplane.utils import logger
-from skyplane.utils.fn import do_parallel
+from skyplane.utils.fn import PathLike, do_parallel
+from skyplane.utils.timer import Timer
 
 
 @dataclass
@@ -33,20 +36,29 @@ class ProvisionerTask:
 class Provisioner:
     def __init__(
         self,
-        host_uuid: Optional[str] = None,
         aws_auth: Optional[AWSAuthentication] = None,
         azure_auth: Optional[AzureAuthentication] = None,
         gcp_auth: Optional[GCPAuthentication] = None,
+        host_uuid: Optional[str] = None,
     ):
+        self.aws_auth = aws_auth
+        self.azure_auth = azure_auth
+        self.gcp_auth = gcp_auth
         self.host_uuid = host_uuid
-        self.aws = AWSCloudProvider(key_prefix=f"skyplane{'-'+host_uuid.replace('-', '') if host_uuid else ''}", auth=aws_auth)
-        self.azure = AzureCloudProvider(auth=azure_auth)
-        self.gcp = GCPCloudProvider(auth=gcp_auth)
+        self._make_cloud_providers()
         self.temp_nodes: Set[Server] = set()  # temporary area to store nodes that should be terminated upon exit
         self.pending_provisioner_tasks: List[ProvisionerTask] = []
         self.provisioned_vms: Dict[str, Server] = {}
 
+    def _make_cloud_providers(self):
+        self.aws = AWSCloudProvider(
+            key_prefix=f"skyplane{'-'+self.host_uuid.replace('-', '') if self.host_uuid else ''}", auth=self.aws_auth
+        )
+        self.azure = AzureCloudProvider(auth=self.azure_auth)
+        self.gcp = GCPCloudProvider(auth=self.gcp_auth)
+
     def init_global(self, aws: bool = True, azure: bool = True, gcp: bool = True):
+        logger.fs.info(f"[Provisioner.init_global] Initializing global resources for {aws=}, {azure=}, {gcp=}")
         jobs = []
         if aws:
             jobs.append(partial(self.aws.setup_global, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
@@ -72,30 +84,33 @@ class Provisioner:
             tags = {"skyplane": "true", "skyplaneclientid": self.host_uuid} if self.host_uuid else {"skyplane": "true"}
         task = ProvisionerTask(cloud_provider, region, vm_type, spot, autoterminate_minutes, tags)
         self.pending_provisioner_tasks.append(task)
+        logger.fs.info(f"[Provisioner.add_task] Queue {task}")
         return task.uuid
 
     def get_node(self, uuid: str) -> Server:
         return self.provisioned_vms[uuid]
 
     def _provision_task(self, task: ProvisionerTask):
-        if task.cloud_provider == "aws":
-            assert self.aws.auth.enabled(), "AWS credentials not configured"
-            server = self.aws.provision_instance(task.region, task.vm_type, use_spot_instances=task.spot, tags=task.tags)
-        elif task.cloud_provider == "azure":
-            assert self.azure.auth.enabled(), "Azure credentials not configured"
-            server = self.azure.provision_instance(task.region, task.vm_type, use_spot_instances=task.spot, tags=task.tags)
-        elif task.cloud_provider == "gcp":
-            assert self.gcp.auth.enabled(), "GCP credentials not configured"
-            # todo specify network tier in ReplicationTopology
-            server = self.gcp.provision_instance(
-                task.region,
-                task.vm_type,
-                use_spot_instances=task.spot,
-                gcp_premium_network=False,
-                tags=task.tags,
-            )
-        else:
-            raise NotImplementedError(f"Unknown provider {task.cloud_provider}")
+        with Timer() as t:
+            if task.cloud_provider == "aws":
+                assert self.aws.auth.enabled(), "AWS credentials not configured"
+                server = self.aws.provision_instance(task.region, task.vm_type, use_spot_instances=task.spot, tags=task.tags)
+            elif task.cloud_provider == "azure":
+                assert self.azure.auth.enabled(), "Azure credentials not configured"
+                server = self.azure.provision_instance(task.region, task.vm_type, use_spot_instances=task.spot, tags=task.tags)
+            elif task.cloud_provider == "gcp":
+                assert self.gcp.auth.enabled(), "GCP credentials not configured"
+                # todo specify network tier in ReplicationTopology
+                server = self.gcp.provision_instance(
+                    task.region,
+                    task.vm_type,
+                    use_spot_instances=task.spot,
+                    gcp_premium_network=False,
+                    tags=task.tags,
+                )
+            else:
+                raise NotImplementedError(f"Unknown provider {task.cloud_provider}")
+        logger.fs.debug(f"[Provisioner._provision_task] Provisioned {server} in {t.elapsed:.2f}s")
         self.temp_nodes.add(server)
         self.provisioned_vms[task.uuid] = server
         server.wait_for_ssh_ready()
@@ -104,39 +119,41 @@ class Provisioner:
         self.temp_nodes.remove(server)
         return server
 
-    def provision(self, allow_firewall: bool = True, max_jobs: int = 16, spinner: bool = False) -> List[str]:
+    def provision(self, authorize_firewall: bool = True, max_jobs: int = 16, spinner: bool = False) -> List[str]:
         """Provision the VMs in the pending_provisioner_tasks list. Returns UUIDs of provisioned VMs."""
         if not self.pending_provisioner_tasks:
             return []
 
         # copy list to avoid concurrency issue
-        provision_tasks = set(self.pending_provisioner_tasks)
+        provision_tasks = list(self.pending_provisioner_tasks)
         aws_provisioned = any([task.cloud_provider == "aws" for task in provision_tasks])
+        aws_regions = set([task.region for task in provision_tasks if task.cloud_provider == "aws"])
         azure_provisioned = any([task.cloud_provider == "azure" for task in provision_tasks])
         gcp_provisioned = any([task.cloud_provider == "gcp" for task in provision_tasks])
-        results: Dict[ProvisionerTask, Server] = dict(
-            do_parallel(
-                self._provision_task,
-                provision_tasks,
-                n=max_jobs,
-                spinner=spinner,
-                spinner_persist=True,
-                desc="Provisioning VMs",
-            )
-        )
 
         # configure regions
-        aws_regions = set([task.region for task in provision_tasks if task.cloud_provider == "aws"])
         if aws_provisioned:
             do_parallel(
                 self.aws.setup_region, list(set(aws_regions)), spinner=spinner, spinner_persist=False, desc="Configuring AWS regions"
             )
+            logger.fs.info(f"[Provisioner.provision] Configured AWS regions {aws_regions=}")
+
+        # provision VMs
+        logger.fs.info(f"[Provisioner.provision] Provisioning {len(provision_tasks)} VMs")
+        results: List[Tuple[ProvisionerTask, Server]] = do_parallel(
+            self._provision_task,
+            provision_tasks,
+            n=max_jobs,
+            spinner=spinner,
+            spinner_persist=spinner,
+            desc="Provisioning VMs",
+        )
 
         # configure firewall
-        if allow_firewall:
-            public_ips = [s.public_ip() for s in results.values()]
+        if authorize_firewall:
+            public_ips = [s.public_ip() for _, s in results]
             # authorize access to private IPs for GCP VMs due to global VPC
-            private_ips = [s.private_ip() for t, s in results.items() if t.cloud_provider == "gcp"]
+            private_ips = [s.private_ip() for t, s in results if t.cloud_provider == "gcp"]
             authorize_ip_jobs = []
             if aws_provisioned:
                 authorize_ip_jobs.extend([partial(self.aws.add_ips_to_security_group, r, public_ips) for r in set(aws_regions)])
@@ -150,24 +167,33 @@ class Provisioner:
                 spinner_persist=False,
                 desc="Authorizing gateways with firewalls",
             )
+            logger.fs.info(f"[Provisioner.provision] Authorized AWS gateways with firewalls: {public_ips=}")
+            logger.fs.info(f"[Provisioner.provision] Authorized GCP gateways with firewalls: {public_ips=}, {private_ips=}")
 
         for task in provision_tasks:
             self.pending_provisioner_tasks.remove(task)
 
         return [task.uuid for task in provision_tasks]
 
-    def deprovision(self, max_jobs: int = 64, spinner: bool = False):
+    def deprovision(self, deauthorize_firewall: bool = True, max_jobs: int = 64, spinner: bool = False):
         """Deprovision all nodes. Returns UUIDs of deprovisioned VMs."""
         if not self.provisioned_vms and not self.temp_nodes:
             return []
 
         def deprovision_gateway_instance(server: Server):
             server.terminate_instance()
+            idx_to_del = None
             for idx, s in list(self.provisioned_vms.items()):
                 if s == server:
-                    del self.provisioned_vms[idx]
+                    idx_to_del = idx
+                    break
+            if idx_to_del:
+                del self.provisioned_vms[idx_to_del]
+            else:
+                logger.fs.warning(f"[Provisioner.deprovision] Could not find {server} in {self.provisioned_vms=}")
             if server in self.temp_nodes:
                 self.temp_nodes.remove(server)
+            logger.fs.info(f"[Provisioner.deprovision] Terminated {server}")
 
         servers = list(self.provisioned_vms.values()) + list(self.temp_nodes)
         aws_deprovisioned = any([s.provider == "aws" for s in servers])
@@ -175,6 +201,7 @@ class Provisioner:
         gcp_deprovisioned = any([s.provider == "gcp" for s in servers])
         if azure_deprovisioned:
             logger.warning("Azure deprovisioning is very slow. Please be patient.")
+        logger.fs.info(f"[Provisioner.deprovision] Deprovisioning {len(servers)} VMs")
         do_parallel(
             deprovision_gateway_instance,
             servers,
@@ -185,14 +212,19 @@ class Provisioner:
         )
 
         # clean up firewall
-        # todo remove firewall rules for Azure
-        public_ips = [s.public_ip() for s in servers]
-        # deauthorize access to private IPs for GCP VMs due to global VPC
-        private_ips = [s.private_ip() for s in servers if s.provider == "gcp"]
-        jobs = []
-        if aws_deprovisioned:
-            aws_regions = set([s.region() for s in servers if s.provider == "aws"])
-            jobs.extend([partial(self.aws.remove_ips_from_security_group, r, public_ips) for r in set(aws_regions)])
-        if gcp_deprovisioned:
-            jobs.append(partial(self.gcp.remove_ips_from_firewall, public_ips + private_ips))
-        do_parallel(lambda fn: fn(), jobs, n=max_jobs, spinner=spinner, spinner_persist=False, desc="Deauthorizing gateways from firewalls")
+        if deauthorize_firewall:
+            # todo remove firewall rules for Azure
+            public_ips = [s.public_ip() for s in servers]
+            # deauthorize access to private IPs for GCP VMs due to global VPC
+            private_ips = [s.private_ip() for s in servers if s.provider == "gcp"]
+            jobs = []
+            if aws_deprovisioned:
+                aws_regions = set([s.region() for s in servers if s.provider == "aws"])
+                jobs.extend([partial(self.aws.remove_ips_from_security_group, r, public_ips) for r in set(aws_regions)])
+            if gcp_deprovisioned:
+                jobs.append(partial(self.gcp.remove_ips_from_firewall, public_ips + private_ips))
+            logger.fs.info(f"[Provisioner.deprovision] Deauthorizing AWS gateways with firewalls: {public_ips=}")
+            logger.fs.info(f"[Provisioner.deprovision] Deauthorizing GCP gateways with firewalls: {public_ips=}, {private_ips=}")
+            do_parallel(
+                lambda fn: fn(), jobs, n=max_jobs, spinner=spinner, spinner_persist=False, desc="Deauthorizing gateways from firewalls"
+            )
