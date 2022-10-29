@@ -56,7 +56,7 @@ class SkyplaneClient:
         n_vms: int = 1,
         num_connections: int = 32,
         **kwargs,
-    ):
+    ) -> Dataplane:
         planner = DirectPlanner(
             src_cloud_provider,
             src_region,
@@ -75,20 +75,22 @@ class SkyplaneClient:
         src: str,
         dst: str,
         recursive: bool = False,
-    ):
+    ) -> str:
         job = CopyJob(src, dst, recursive)
         logger.fs.debug(f"[SkyplaneClient] Queued copy job {job}")
         self.jobs_to_dispatch.append(job)
+        return job.uuid
 
     def queue_sync(
         self,
         src: str,
         dst: str,
         recursive: bool = False,
-    ):
+    ) -> str:
         job = SyncJob(src, dst, recursive)
         logger.fs.debug(f"[SkyplaneClient] Queued sync job {job}")
         self.jobs_to_dispatch.append(job)
+        return job.uuid
 
     def run_async(self, dataplane: Dataplane, **kwargs) -> TransferProgressTracker:
         if not dataplane.provisioned:

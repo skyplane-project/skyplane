@@ -1,8 +1,9 @@
 from threading import Thread
-from typing import List
+from typing import Dict, List, Set
 
 from skyplane.api.config import TransferConfig
 from skyplane.api.impl.transfer_job import TransferJob
+from skyplane.chunk import ChunkRequest
 from skyplane.utils import logger
 
 
@@ -10,32 +11,33 @@ class TransferProgressTracker(Thread):
     def __init__(self, dataplane, jobs: List[TransferJob], transfer_config: TransferConfig):
         super().__init__()
         self.dataplane = dataplane
-        self.jobs = jobs
+        self.jobs = {job.uuid: job for job in jobs}
         self.transfer_config = transfer_config
+
+        # log job details
         logger.fs.debug(f"[TransferProgressTracker] Using dataplane {dataplane}")
         logger.fs.debug(f"[TransferProgressTracker] Initialized with {len(jobs)} jobs:")
-        for job in jobs:
-            logger.fs.debug(f"[TransferProgressTracker]   * {job}")
+        for job_uuid, job in self.jobs.items():
+            logger.fs.debug(f"[TransferProgressTracker]   * {job_uuid}: {job}")
         logger.fs.debug(f"[TransferProgressTracker] Transfer config: {transfer_config}")
 
         # transfer state
-        self.job_chunk_requests = {}
-        self.job_pending_chunk_ids = {}
-        self.job_complete_chunk_ids = {}
+        self.job_chunk_requests: Dict[str, List[ChunkRequest]] = {}
+        self.job_pending_chunk_ids: Dict[str, Set[int]] = {}
+        self.job_complete_chunk_ids: Dict[str, Set[int]] = {}
 
     def run(self):
-        job_chunk_request_gen = {}
-        for job in self.jobs:
+        for job_uuid, job in self.jobs.items():
             logger.fs.debug(f"[TransferProgressTracker] Dispatching job {job}")
-            job_chunk_request_gen[job] = list(
+            self.job_chunk_requests[job_uuid] = list(
                 job.dispatch(
                     self.dataplane.source_gateways(),
                     transfer_config=self.transfer_config,
                 )
             )
-            self.job_pending_chunk_ids[job] = set([cr.chunk.chunk_id for cr in job_chunk_request_gen[job]])
-            self.job_complete_chunk_ids[job] = set()
-            logger.fs.debug(f"[TransferProgressTracker] Job {job} dispatched with {len(job_chunk_request_gen[job])} chunks")
+            self.job_pending_chunk_ids[job_uuid] = set([cr.chunk.chunk_id for cr in self.job_chunk_requests[job_uuid]])
+            self.job_complete_chunk_ids[job_uuid] = set()
+            logger.fs.debug(f"[TransferProgressTracker] Job {job} dispatched with {len(self.job_chunk_requests[job_uuid])} chunk requests")
         # self.monitor_transfer()
         # for job in self.jobs:
         #     logger.fs.debug(f"[TransferProgressTracker] Verifying job {job}")
@@ -46,12 +48,14 @@ class TransferProgressTracker(Thread):
         pass
 
     def query_bytes_remaining(self):
-        bytes_remaining_per_job = {
-            job: sum(
-                [cr.chunk.chunk_length_bytes for cr in self.job_chunk_requests[job] if cr.chunk.chunk_id in self.job_pending_chunk_ids[job]]
+        bytes_remaining_per_job = {}
+        for job_uuid in self.jobs.keys():
+            bytes_remaining_per_job[job_uuid] = sum(
+                [
+                    cr.chunk.chunk_length_bytes
+                    for cr in self.job_chunk_requests[job_uuid]
+                    if cr.chunk.chunk_id in self.job_pending_chunk_ids[job_uuid]
+                ]
             )
-            for job in self.jobs
-        }
         logger.fs.debug(f"[TransferProgressTracker] Bytes remaining per job: {bytes_remaining_per_job}")
-        bytes_remaining = sum(bytes_remaining_per_job.values())
-        return bytes_remaining
+        return sum(bytes_remaining_per_job.values())

@@ -1,3 +1,5 @@
+from copy import deepcopy
+import pickle
 import uuid
 from dataclasses import dataclass, field
 from functools import partial
@@ -11,7 +13,7 @@ from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.compute.server import Server
 from skyplane.utils import logger
-from skyplane.utils.fn import do_parallel
+from skyplane.utils.fn import PathLike, do_parallel
 from skyplane.utils.timer import Timer
 
 
@@ -39,13 +41,21 @@ class Provisioner:
         gcp_auth: Optional[GCPAuthentication] = None,
         host_uuid: Optional[str] = None,
     ):
+        self.aws_auth = aws_auth
+        self.azure_auth = azure_auth
+        self.gcp_auth = gcp_auth
         self.host_uuid = host_uuid
-        self.aws = AWSCloudProvider(key_prefix=f"skyplane{'-'+host_uuid.replace('-', '') if host_uuid else ''}", auth=aws_auth)
-        self.azure = AzureCloudProvider(auth=azure_auth)
-        self.gcp = GCPCloudProvider(auth=gcp_auth)
+        self._make_cloud_providers()
         self.temp_nodes: Set[Server] = set()  # temporary area to store nodes that should be terminated upon exit
         self.pending_provisioner_tasks: List[ProvisionerTask] = []
         self.provisioned_vms: Dict[str, Server] = {}
+
+    def _make_cloud_providers(self):
+        self.aws = AWSCloudProvider(
+            key_prefix=f"skyplane{'-'+self.host_uuid.replace('-', '') if self.host_uuid else ''}", auth=self.aws_auth
+        )
+        self.azure = AzureCloudProvider(auth=self.azure_auth)
+        self.gcp = GCPCloudProvider(auth=self.gcp_auth)
 
     def init_global(self, aws: bool = True, azure: bool = True, gcp: bool = True):
         logger.fs.info(f"[Provisioner.init_global] Initializing global resources for {aws=}, {azure=}, {gcp=}")

@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 import json
 import sys
 from typing import Generator, List, Tuple
+import uuid
 
 from rich import print as rprint
 import urllib3
@@ -19,12 +20,13 @@ from skyplane.obj_store.s3_interface import S3Object
 from skyplane.utils import logger
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class TransferJob:
     src_path: str
     dst_path: str
     recursive: bool = False
     requester_pays: bool = False
+    uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
 
     def __post_init__(self):
         provider_src, bucket_src, self.src_prefix = parse_path(self.src_path)
@@ -136,7 +138,7 @@ class TransferJob:
         return True
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class CopyJob(TransferJob):
     transfer_list: list = field(default_factory=list)  # transfer list for later verification
 
@@ -151,7 +153,6 @@ class CopyJob(TransferJob):
         dispatch_batch_size: int = 64,
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways."""
-        gen_transfer_list = tail_generator(self._transfer_pair_generator(), self.transfer_list)
         chunker = Chunker(
             self.src_iface,
             self.dst_iface,
@@ -160,6 +161,7 @@ class CopyJob(TransferJob):
             multipart_chunk_size_mb=transfer_config.multipart_chunk_size_mb,
             multipart_max_chunks=transfer_config.multipart_max_chunks,
         )
+        gen_transfer_list = tail_generator(self._transfer_pair_generator(), self.transfer_list)
         chunks = chunker.chunk(gen_transfer_list)
         chunk_requests = chunker.to_chunk_requests(chunks)
         batches = batch_generator(chunk_requests, dispatch_batch_size)
