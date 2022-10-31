@@ -185,3 +185,9 @@ def check(
     from azure.storage.blob import ContainerClient
 
     check_assert(isinstance(container_client, ContainerClient), "Azure Python SDK container client is ContainerClient")
+
+    # check skyplane AzureBlobInterface
+    rprint(f"\n{hline}\n[bold]Checking Skyplane AzureBlobInterface[/bold]\n{hline}")
+    from skyplane.obj_store.azure_blob_interface import AzureBlobInterface
+    iface = AzureBlobInterface(account, container)
+    print(iface.container_client.get_container_properties())
