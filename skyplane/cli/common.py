@@ -66,7 +66,7 @@ def parse_path(path: str):
         return "azure", f"{account}/{container}", blob_path if blob_path else ""
     else:
         if not is_plausible_local_path(path):
-            raise ValueError(f"Local path was passed, but it does not exist: '{path}'")
+            logger.warning(f"Local path '{path}' does not exist")
         return "local", None, path
 
 

@@ -7,8 +7,7 @@ def test_parse_path():
     # test local
     assert parse_path("/") == ("local", None, "/")
     assert parse_path("/tmp") == ("local", None, "/tmp")
-    # with pytest.raises(ValueError):
-    #     parse_path("does-not-exist-0000000")
+    assert parse_path("does-not-exist-0000000/file") == ("local", None, "does-not-exist-0000000/file")
 
     # test s3://
     assert parse_path("s3://bucket") == ("aws", "bucket", "")
