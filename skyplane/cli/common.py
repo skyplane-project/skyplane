@@ -57,12 +57,17 @@ def parse_path(path: str):
         account, container, blob_path = match.groups()
         return "azure", f"{account}/{container}", blob_path
     elif path.startswith("azure://"):
-        bucket_name = path[8:]
-        region = path[8:].split("-", 2)[-1]
-        return "azure", bucket_name, region
-    elif is_plausible_local_path(path):
+        regex = re.compile(r"azure://([^/]+)/([^/]+)/?(.*)")
+        match = regex.match(path)
+        if match is None:
+            raise ValueError(f"Invalid Azure path: {path}")
+        account, container, blob_path = match.groups()
+        print(account, container, blob_path)
+        return "azure", f"{account}/{container}", blob_path if blob_path else ""
+    else:
+        if not is_plausible_local_path(path):
+            raise ValueError(f"Local path was passed, but it does not exist: '{path}'")
         return "local", None, path
-    raise ValueError(f"Parse error {path}")
 
 
 def print_stats_completed(total_runtime_s, throughput_gbits):
