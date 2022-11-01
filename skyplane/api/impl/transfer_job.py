@@ -20,7 +20,6 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface, Obje
 from skyplane.obj_store.s3_interface import S3Object
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
-from skyplane.utils.timer import Timer
 
 
 @dataclass
@@ -198,6 +197,8 @@ class CopyJob(TransferJob):
     def finalize(self):
         groups = defaultdict(list)
         for req in self.multipart_transfer_list:
+            if "region" not in req or "bucket" not in req:
+                raise Exception(f"Invalid multipart upload request: {req}")
             groups[(req["region"], req["bucket"])].append(req)
         for key, group in groups.items():
             region, bucket = key

@@ -9,7 +9,6 @@ from skyplane import MB
 from skyplane.chunk import Chunk, ChunkRequest
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger
-from skyplane.utils.timer import Timer
 
 T = TypeVar("T")
 
@@ -42,6 +41,8 @@ class Chunker:
         dest_iface: ObjectStoreInterface,
     ):
         """Chunks large files into many small chunks."""
+        region = dest_iface.region_tag()
+        bucket = dest_iface.bucket()
         while not exit_event.is_set():
             try:
                 input_data = in_queue.get(block=False, timeout=0.1)
@@ -78,7 +79,7 @@ class Chunker:
                 parts.append(part_num)
                 part_num += 1
                 out_queue.put(chunk)
-            self.multipart_upload_requests.append(dict(upload_id=upload_id, key=dest_object.key, parts=parts))
+            self.multipart_upload_requests.append(dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket))
 
     def chunk(
         self, transfer_pair_generator: Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]
