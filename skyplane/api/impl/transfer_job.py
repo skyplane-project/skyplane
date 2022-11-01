@@ -4,7 +4,7 @@ import time
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Generator, Tuple
+from typing import Generator, Tuple, TYPE_CHECKING
 
 import urllib3
 from rich import print as rprint
@@ -20,6 +20,10 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface, Obje
 from skyplane.obj_store.s3_interface import S3Object
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
+
+
+if TYPE_CHECKING:
+    from skyplane.api.dataplane import Dataplane
 
 
 @dataclass
