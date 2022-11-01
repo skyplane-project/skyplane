@@ -4,18 +4,16 @@ import time
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Generator, List, Tuple
+from typing import Generator, Tuple
 
 import urllib3
 from rich import print as rprint
 
 from skyplane import exceptions
-from skyplane.api.dataplane import Dataplane
 from skyplane.api.transfer_config import TransferConfig
 from skyplane.api.impl.chunker import Chunker, batch_generator, tail_generator
 from skyplane.api.impl.path import parse_path
 from skyplane.chunk import ChunkRequest
-from skyplane.compute.server import Server
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
@@ -41,7 +39,7 @@ class TransferJob:
             self.src_iface.set_requester_bool(True)
             self.dst_iface.set_requester_bool(True)
 
-    def dispatch(self, dataplane: Dataplane, **kwargs) -> Generator[ChunkRequest, None, None]:
+    def dispatch(self, dataplane: "Dataplane", **kwargs) -> Generator[ChunkRequest, None, None]:
         raise NotImplementedError("Dispatch not implemented")
 
     def finalize(self):
@@ -156,7 +154,7 @@ class CopyJob(TransferJob):
 
     def dispatch(
         self,
-        dataplane: Dataplane,
+        dataplane: "Dataplane",
         transfer_config: TransferConfig,
         dispatch_batch_size: int = 64,
     ) -> Generator[ChunkRequest, None, None]:
