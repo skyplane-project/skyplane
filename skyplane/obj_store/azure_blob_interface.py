@@ -86,7 +86,14 @@ class AzureBlobInterface(ObjectStoreInterface):
         blobs = self.container_client.list_blobs(name_starts_with=prefix)
         try:
             for blob in blobs:
-                yield AzureBlobObject("azure", f"{self.account_name}/{blob.container}", blob.name, blob.size, blob.last_modified)
+                yield AzureBlobObject(
+                    "azure",
+                    f"{self.account_name}/{blob.container}",
+                    blob.name,
+                    blob.size,
+                    blob.last_modified,
+                    mime_type=getattr(blob.content_settings, "content_type", None),
+                )
         except exceptions.HttpResponseError as e:
             if "AuthorizationPermissionMismatch" in str(e):
                 logger.error(
@@ -135,7 +142,8 @@ class AzureBlobInterface(ObjectStoreInterface):
 
         return m.digest() if generate_md5 else None
 
-    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None):
+    @imports.inject("azure.storage.blob", pip_extra="azure")
+    def upload_object(azure_blob, self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None, mime_type=None):
         if part_number is not None or upload_id is not None:
             # todo implement multipart upload
             raise NotImplementedError("Multipart upload is not implemented for Azure")
@@ -143,7 +151,12 @@ class AzureBlobInterface(ObjectStoreInterface):
         with open(src_file_path, "rb") as f:
             print(f"Uploading {src_file_path} to {dst_object_name}")
             blob_client = self.container_client.upload_blob(
-                name=dst_object_name, data=f, length=os.path.getsize(src_file_path), max_concurrency=self.max_concurrency, overwrite=True
+                name=dst_object_name,
+                data=f,
+                length=os.path.getsize(src_file_path),
+                max_concurrency=self.max_concurrency,
+                overwrite=True,
+                content_settings=azure_blob.ContentSettings(content_type=mime_type),
             )
         if check_md5:
             b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None

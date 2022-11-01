@@ -13,6 +13,7 @@ class Chunk:
     dest_key: str  # human readable path where object is stored
     chunk_id: int
     chunk_length_bytes: int
+    mime_type: Optional[str] = None
 
     # checksum
     md5_hash: Optional[bytes] = None  # 128 bits

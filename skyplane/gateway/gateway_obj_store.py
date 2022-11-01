@@ -100,6 +100,7 @@ class GatewayObjStoreConn:
                             chunk_req.chunk.part_number,
                             chunk_req.chunk.upload_id,
                             check_md5=chunk_req.chunk.md5_hash,
+                            mime_type=chunk_req.chunk.mime_type,
                         ),
                         max_retries=4,
                     )

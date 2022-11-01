@@ -11,6 +11,7 @@ class ObjectStoreObject:
     key: str
     size: Optional[int] = None
     last_modified: Optional[str] = None
+    mime_type: Optional[str] = None
 
     @property
     def exists(self):
@@ -71,7 +72,15 @@ class ObjectStoreInterface:
         """
         raise NotImplementedError()
 
-    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5: Optional[bytes] = None):
+    def upload_object(
+        self,
+        src_file_path,
+        dst_object_name,
+        part_number=None,
+        upload_id=None,
+        check_md5: Optional[bytes] = None,
+        mime_type: Optional[str] = None,
+    ):
         """
         Uploads a file to the specified object
 

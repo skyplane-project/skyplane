@@ -100,7 +100,7 @@ class GCSInterface(ObjectStoreInterface):
     def list_objects(self, prefix="") -> Iterator[GCSObject]:
         blobs = self._gcs_client.list_blobs(self.bucket_name, prefix=prefix)
         for blob in blobs:
-            yield GCSObject("gcs", self.bucket_name, blob.name, blob.size, blob.updated)
+            yield GCSObject("gcs", self.bucket_name, blob.name, blob.size, blob.updated, mime_type=getattr(blob, "content_type", None))
 
     def delete_objects(self, keys: List[str]):
         for key in keys:
@@ -184,7 +184,7 @@ class GCSInterface(ObjectStoreInterface):
                 m.update(chunk)
         return m.digest() if generate_md5 else None
 
-    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None):
+    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None, mime_type=None):
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
         os.path.getsize(src_file_path)
@@ -193,7 +193,7 @@ class GCSInterface(ObjectStoreInterface):
 
         if part_number is None:
             blob = bucket.blob(dst_object_name)
-            blob.upload_from_filename(src_file_path)
+            blob.upload_from_filename(src_file_path, content_type=mime_type or "application/octet-stream")
             if check_md5:
                 blob_md5 = blob.md5_hash
                 if b64_md5sum != blob_md5:

@@ -85,7 +85,7 @@ class S3Interface(ObjectStoreInterface):
         for page in page_iterator:
             objs = []
             for obj in page.get("Contents", []):
-                objs.append(S3Object("aws", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"]))
+                objs.append(S3Object("aws", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"], mime_type=obj.get("ContentType")))
             yield from objs
 
     def delete_objects(self, keys: List[str]):
@@ -155,7 +155,9 @@ class S3Interface(ObjectStoreInterface):
         return m.digest() if generate_md5 else None
 
     @imports.inject("botocore.exceptions", pip_extra="aws")
-    def upload_object(botocore_exceptions, self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None):
+    def upload_object(
+        botocore_exceptions, self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None, mime_type=None
+    ):
         dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
         s3_client = self._s3_client()
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
@@ -174,7 +176,8 @@ class S3Interface(ObjectStoreInterface):
                         **checksum_args,
                     )
                 else:
-                    s3_client.put_object(Body=f, Key=dst_object_name, Bucket=self.bucket_name, **checksum_args)
+                    mime_args = dict(ContentType=mime_type) if mime_type else dict()
+                    s3_client.put_object(Body=f, Key=dst_object_name, Bucket=self.bucket_name, **checksum_args, **mime_args)
         except botocore_exceptions.ClientError as e:
             # catch MD5 mismatch error and raise appropriate exception
             if "Error" in e.response and "Code" in e.response["Error"] and e.response["Error"]["Code"] == "InvalidDigest":

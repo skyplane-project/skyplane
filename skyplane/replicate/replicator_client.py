@@ -381,6 +381,7 @@ class ReplicatorClient:
                             chunk_id=idx,
                             file_offset_bytes=0,
                             chunk_length_bytes=job.random_chunk_size_mb * MB,
+                            mime_type=src_object.mime_type,
                         )
                     )
                     idx += 1
@@ -394,6 +395,7 @@ class ReplicatorClient:
                         chunk_id=idx,
                         file_offset_bytes=0,
                         chunk_length_bytes=src_object.size,
+                        mime_type=src_object.mime_type,
                     )
                     chunks.append(chunk)
                     idx += 1
@@ -436,6 +438,7 @@ class ReplicatorClient:
                                 chunk_length_bytes=file_size_bytes,
                                 part_number=part_num,
                                 upload_id=upload_id,
+                                mime_type=src_object.mime_type,
                             )
                         )
                         parts.append(part_num)
