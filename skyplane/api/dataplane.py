@@ -11,7 +11,7 @@ import urllib3
 
 from skyplane import gateway_docker_image
 from skyplane.api.impl.provisioner import Provisioner
-from skyplane.api.tracker import TransferProgressTracker
+from skyplane.api.impl.tracker import TransferProgressTracker
 from skyplane.compute.server import Server
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
@@ -19,10 +19,10 @@ from skyplane.utils.fn import PathLike, do_parallel
 
 from typing import List, Optional
 
-from skyplane.api.config import TransferConfig
+from skyplane.api.transfer_config import TransferConfig
 from skyplane.api.impl.provisioner import Provisioner
 from skyplane.api.impl.transfer_job import CopyJob, SyncJob, TransferJob
-from skyplane.api.tracker import TransferProgressTracker
+from skyplane.api.impl.tracker import TransferProgressTracker
 from skyplane.utils import logger
 
 

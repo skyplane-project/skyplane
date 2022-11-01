@@ -9,7 +9,7 @@ import urllib3
 from rich import print as rprint
 
 from skyplane import exceptions
-from skyplane.api.config import TransferConfig
+from skyplane.api.transfer_config import TransferConfig
 from skyplane.api.impl.chunker import Chunker, batch_generator, tail_generator
 from skyplane.api.impl.path import parse_path
 from skyplane.chunk import ChunkRequest

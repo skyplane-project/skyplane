@@ -5,7 +5,7 @@ from typing import Optional
 
 from skyplane import tmp_log_dir
 from skyplane.api.auth_config import AWSConfig, AzureConfig, GCPConfig
-from skyplane.api.config import TransferConfig
+from skyplane.api.transfer_config import TransferConfig
 from skyplane.api.dataplane import Dataplane
 from skyplane.api.impl.path import parse_path
 from skyplane.api.impl.planner import DirectPlanner

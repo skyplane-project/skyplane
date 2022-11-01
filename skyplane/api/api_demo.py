@@ -1,10 +1,8 @@
+import skyplane
 import time
 
-from skyplane.api.api import SkyplaneClient
-from skyplane.api.auth_config import AWSConfig
-
 if __name__ == "__main__":
-    client = SkyplaneClient(aws_config=AWSConfig())
+    client = skyplane.SkyplaneClient(aws_config=skyplane.AWSConfig())
     print(f"Log dir: {client.log_dir}/client.log")
     dp = client.dataplane("aws", "us-east-1", "aws", "us-east-2", n_vms=1)
     with dp.auto_deprovision():

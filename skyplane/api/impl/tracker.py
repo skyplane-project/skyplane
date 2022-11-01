@@ -9,7 +9,7 @@ import pandas as pd
 import urllib3
 
 from skyplane import exceptions
-from skyplane.api.config import TransferConfig
+from skyplane.api.transfer_config import TransferConfig
 from skyplane.api.impl.transfer_job import TransferJob
 from skyplane.chunk import ChunkRequest, ChunkState
 from skyplane.utils import logger
