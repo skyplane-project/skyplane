@@ -1,6 +1,4 @@
-import pytest
-import typer
-from skyplane.cli.common import parse_path
+from skyplane.api.impl.path import parse_path
 
 
 def test_parse_path():
