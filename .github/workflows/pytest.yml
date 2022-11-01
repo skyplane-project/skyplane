@@ -7,7 +7,8 @@ on:
   pull_request:
   pull_request_target:
     types: [labeled]
-  
+env:
+  SKYPLANE_USAGE_STATS_ENABLED: 0
 jobs:
   black-pytype:
     # do not run on pull_request_target since it should be triggered by pull_request
@@ -63,6 +64,7 @@ jobs:
       - name: Run unit tests
         run: |
           poetry run skyplane init -y --disable-config-aws --disable-config-azure --disable-config-gcp
+          poetry run skyplane config set usage_stats false
           poetry run pytest -s tests/unit_nocloud
   test-aws:
     # run if push to main or pull request by contributor or pull request target with label 'safe to test' (to avoid running on forks)
@@ -93,6 +95,7 @@ jobs:
           AWS_DEFAULT_REGION: us-east-1
         run: |
           poetry run skyplane init -y --disable-config-azure --disable-config-gcp
+          poetry run skyplane config set usage_stats false
           poetry run pytest -s tests/unit_aws
   test-azure:
     # run if push to main or pull request by contributor or pull request target with label 'safe to test' (to avoid running on forks)
@@ -124,6 +127,7 @@ jobs:
         run: |
           poetry run pip freeze
           poetry run skyplane init -y --disable-config-aws --disable-config-gcp
+          poetry run skyplane config set usage_stats false
           poetry run pytest -s tests/unit_azure
   test-gcp:
     # run if push to main or pull request or pull request target with label 'safe to test' (to avoid running on forks)
@@ -162,6 +166,7 @@ jobs:
         run: |
           poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
           poetry run skyplane init -y --disable-config-aws --disable-config-azure
+          poetry run skyplane config set usage_stats false
           poetry run pytest -s tests/unit_gcs
       - name: Cleanup GCP service account
         if: always()
