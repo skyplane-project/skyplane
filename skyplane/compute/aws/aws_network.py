@@ -188,11 +188,11 @@ class AWSNetwork:
         sg = self.get_security_group(aws_region)
         try:
             logger.fs.debug(f"[AWS] Removing IPs {ips} from security group {sg.group_name}")
-            sg.revoke_ingress(
-                IpPermissions=[
-                    {"IpProtocol": "tcp", "FromPort": 12000, "ToPort": 65535, "IpRanges": [{"CidrIp": ip + "/32"}]} for ip in ips
-                ]
-            )
+            for rule in sg.ip_permissions:
+                for ip_range in rule.get("IpRanges", []):
+                    if ip_range.get("CidrIp", "").split("/")[0] in ips:
+                        logger.fs.debug(f"[AWS] Removing IP {ip_range} from security group {sg.group_name}")
+                        sg.revoke_ingress(IpPermissions=[rule])
         except exceptions.ClientError as e:
             logger.fs.error(f"[AWS] Error removing IPs {ips} from security group {sg.group_name}: {e}")
             if "The specified rule does not exist in this security group." not in str(e):

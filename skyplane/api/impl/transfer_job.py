@@ -1,16 +1,17 @@
-from dataclasses import dataclass, field
 import json
 import sys
-from typing import Generator, List, Tuple
 import uuid
+from collections import defaultdict
+from dataclasses import dataclass, field
+from typing import Generator, List, Tuple
 
-from rich import print as rprint
 import urllib3
+from rich import print as rprint
 
 from skyplane import exceptions
+from skyplane.api.config import TransferConfig
 from skyplane.api.impl.chunker import Chunker, batch_generator, tail_generator
 from skyplane.api.impl.path import parse_path
-from skyplane.api.config import TransferConfig
 from skyplane.chunk import ChunkRequest
 from skyplane.compute.server import Server
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
@@ -18,9 +19,11 @@ from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.obj_store.s3_interface import S3Object
 from skyplane.utils import logger
+from skyplane.utils.fn import do_parallel
+from skyplane.utils.timer import Timer
 
 
-@dataclass(unsafe_hash=True)
+@dataclass
 class TransferJob:
     src_path: str
     dst_path: str
@@ -39,6 +42,9 @@ class TransferJob:
 
     def dispatch(self, src_gateways: List[Server], **kwargs) -> Generator[ChunkRequest, None, None]:
         raise NotImplementedError("Dispatch not implemented")
+
+    def finalize(self):
+        raise NotImplementedError("Finalize not implemented")
 
     def verify(self):
         """Verifies the transfer completed, otherwise raises TransferFailedException."""
@@ -138,9 +144,10 @@ class TransferJob:
         return True
 
 
-@dataclass(unsafe_hash=True)
+@dataclass
 class CopyJob(TransferJob):
     transfer_list: list = field(default_factory=list)  # transfer list for later verification
+    multipart_transfer_list: list = field(default_factory=list)
 
     def __post_init__(self):
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
@@ -161,6 +168,7 @@ class CopyJob(TransferJob):
             multipart_chunk_size_mb=transfer_config.multipart_chunk_size_mb,
             multipart_max_chunks=transfer_config.multipart_max_chunks,
         )
+        n_multiparts = 0
         gen_transfer_list = tail_generator(self._transfer_pair_generator(), self.transfer_list)
         chunks = chunker.chunk(gen_transfer_list)
         chunk_requests = chunker.to_chunk_requests(chunks)
@@ -181,6 +189,28 @@ class CopyJob(TransferJob):
                 raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
             logger.fs.debug(f"Dispatched {len(batch)} chunk requests to {server.instance_name()} ({n_bytes} bytes)")
             yield from batch
+
+            # copy new multipart transfers to the multipart transfer list
+            updated_len = len(chunker.multipart_upload_requests)
+            self.multipart_transfer_list.extend(chunker.multipart_upload_requests[n_multiparts:updated_len])
+            n_multiparts = updated_len
+
+    def finalize(self):
+        groups = defaultdict(list)
+        for req in self.multipart_transfer_list:
+            groups[(req["region"], req["bucket"])].append(req)
+        for key in groups:
+            with Timer(f"Complete multi-part uploads for {key[0]} {key[1]}"):
+                region, bucket = key
+                batch_len = max(1, len(groups[key]) // 128)
+                batches = [groups[key][i : i + batch_len] for i in range(0, len(groups[key]), batch_len)]
+                obj_store_interface = ObjectStoreInterface.create(region, bucket)
+
+                def complete_fn(batch):
+                    for req in batch:
+                        obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"])
+
+                do_parallel(complete_fn, batches, n=-1)
 
     def verify(self):
         dst_keys = {dst_o.key: src_o for src_o, dst_o in self.transfer_list}

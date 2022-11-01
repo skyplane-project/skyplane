@@ -1,13 +1,13 @@
+import json
+import os
+import threading
 from collections import defaultdict
 from functools import partial
-import os
-from pathlib import Path
-import pickle
-import threading
 from typing import Dict, List, Optional
 
 import nacl.secret
 import nacl.utils
+import urllib3
 
 from skyplane import gateway_docker_image
 from skyplane.api.impl.provisioner import Provisioner
@@ -45,6 +45,9 @@ class Dataplane:
 
         # pending tracker tasks
         self.pending_transfers: List[TransferProgressTracker] = []
+
+        # http pool
+        self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
 
         # config parameters
         self.config = {
@@ -170,7 +173,7 @@ class Dataplane:
     def deprovision(self, max_jobs: int = 64, spinner: bool = False):
         with self.provisioning_lock:
             if not self.provisioned:
-                logger.warning("Attempting to deprovision dataplane that is not provisioned")
+                logger.fs.warning("Attempting to deprovision dataplane that is not provisioned, this may be from auto_deprovision.")
             # wait for tracker tasks
             for task in self.pending_transfers:
                 logger.warning(f"[Dataplane.deprovision] Waiting for tracker task {task} to finish")
@@ -181,12 +184,28 @@ class Dataplane:
             )
             self.provisioned = False
 
+    def check_error_logs(self) -> Dict[str, List[str]]:
+        def get_error_logs(args):
+            _, instance = args
+            reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/errors")
+            if reply.status != 200:
+                raise Exception(f"Failed to get error logs from gateway instance {instance.instance_name()}: {reply.data.decode('utf-8')}")
+            return json.loads(reply.data.decode("utf-8"))["errors"]
+
+        errors: Dict[str, List[str]] = {}
+        for (_, instance), result in do_parallel(get_error_logs, self.bound_nodes.items(), n=-1):
+            errors[instance] = result
+        return errors
+
     def auto_deprovision(self) -> DataplaneAutoDeprovision:
         """Returns a context manager that will automatically call deprovision upon exit."""
         return DataplaneAutoDeprovision(self)
 
     def source_gateways(self) -> List[Server]:
         return [self.bound_nodes[n] for n in self.topology.source_instances()] if self.provisioned else []
+
+    def sink_gateways(self) -> List[Server]:
+        return [self.bound_nodes[n] for n in self.topology.sink_instances()] if self.provisioned else []
 
     def register_pending_transfer(self, tracker: TransferProgressTracker):
         self.pending_transfers.append(tracker)
