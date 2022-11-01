@@ -199,18 +199,17 @@ class CopyJob(TransferJob):
         groups = defaultdict(list)
         for req in self.multipart_transfer_list:
             groups[(req["region"], req["bucket"])].append(req)
-        for key in groups:
-            with Timer(f"Complete multi-part uploads for {key[0]} {key[1]}"):
-                region, bucket = key
-                batch_len = max(1, len(groups[key]) // 128)
-                batches = [groups[key][i : i + batch_len] for i in range(0, len(groups[key]), batch_len)]
-                obj_store_interface = ObjectStoreInterface.create(region, bucket)
+        for key, group in groups.items():
+            region, bucket = key
+            batch_len = max(1, len(group) // 128)
+            batches = [group[i : i + batch_len] for i in range(0, len(group), batch_len)]
+            obj_store_interface = ObjectStoreInterface.create(region, bucket)
 
-                def complete_fn(batch):
-                    for req in batch:
-                        obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"])
+            def complete_fn(batch):
+                for req in batch:
+                    obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"])
 
-                do_parallel(complete_fn, batches, n=-1)
+            do_parallel(complete_fn, batches, n=-1)
 
     def verify(self):
         dst_keys = {dst_o.key: src_o for src_o, dst_o in self.transfer_list}
