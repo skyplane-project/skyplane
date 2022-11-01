@@ -1,16 +1,15 @@
 import math
 import queue
 import threading
-from queue import Queue
 import time
+from queue import Queue
 from typing import Generator, List, Optional, Tuple, TypeVar
 
 from skyplane import MB
 from skyplane.chunk import Chunk, ChunkRequest
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
-from skyplane.utils.timer import Timer
 from skyplane.utils import logger
-
+from skyplane.utils.timer import Timer
 
 T = TypeVar("T")
 
