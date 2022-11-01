@@ -1,16 +1,14 @@
 import math
 import queue
 import threading
-from queue import Queue
 import time
+from queue import Queue
 from typing import Generator, List, Optional, Tuple, TypeVar
 
 from skyplane import MB
 from skyplane.chunk import Chunk, ChunkRequest
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
-from skyplane.utils.timer import Timer
 from skyplane.utils import logger
-
 
 T = TypeVar("T")
 
@@ -43,6 +41,8 @@ class Chunker:
         dest_iface: ObjectStoreInterface,
     ):
         """Chunks large files into many small chunks."""
+        region = dest_iface.region_tag()
+        bucket = dest_iface.bucket()
         while not exit_event.is_set():
             try:
                 input_data = in_queue.get(block=False, timeout=0.1)
@@ -51,8 +51,7 @@ class Chunker:
 
             # get source and destination object and then compute number of chunks
             src_object, dest_object = input_data
-            with Timer(f"initiate_multipart_upload {src_object}"):
-                upload_id = dest_iface.initiate_multipart_upload(dest_object.key)
+            upload_id = dest_iface.initiate_multipart_upload(dest_object.key)
             chunk_size_bytes = int(self.multipart_chunk_size_mb * MB)
             num_chunks = math.ceil(src_object.size / chunk_size_bytes)
             if num_chunks > self.multipart_max_chunks:
@@ -65,7 +64,7 @@ class Chunker:
             part_num = 1
             parts = []
             for _ in range(num_chunks):
-                file_size_bytes = min(chunk_size_bytes, src_object.size - offset)  # size is min(chunk_size, remaining data)
+                file_size_bytes = min(chunk_size_bytes, src_object.size - offset)
                 assert file_size_bytes > 0, f"file size <= 0 {file_size_bytes}"
                 chunk = Chunk(
                     src_key=src_object.key,
@@ -76,11 +75,11 @@ class Chunker:
                     part_number=part_num,
                     upload_id=upload_id,
                 )
-                offset += chunk_size_bytes
+                offset += file_size_bytes
                 parts.append(part_num)
                 part_num += 1
                 out_queue.put(chunk)
-            self.multipart_upload_requests.append(dict(upload_id=upload_id, key=dest_object.key, parts=parts))
+            self.multipart_upload_requests.append(dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket))
 
     def chunk(
         self, transfer_pair_generator: Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]
@@ -161,7 +160,6 @@ def batch_generator(gen_in: Generator[T, None, None], batch_size: int) -> Genera
     for item in gen_in:
         batch.append(item)
         if len(batch) == batch_size:
-            logger.fs.debug(f"batch_generator: yielding batch of size {len(batch)}")
             yield batch
             batch = []
     if len(batch) > 0:

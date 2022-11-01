@@ -1,5 +1,3 @@
-from copy import deepcopy
-import pickle
 import uuid
 from dataclasses import dataclass, field
 from functools import partial
@@ -13,7 +11,7 @@ from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.compute.server import Server
 from skyplane.utils import logger
-from skyplane.utils.fn import PathLike, do_parallel
+from skyplane.utils.fn import do_parallel
 from skyplane.utils.timer import Timer
 
 

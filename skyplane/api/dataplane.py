@@ -1,21 +1,29 @@
+import json
+import os
+import threading
 from collections import defaultdict
 from functools import partial
-import os
-from pathlib import Path
-import pickle
-import threading
 from typing import Dict, List, Optional
 
 import nacl.secret
 import nacl.utils
+import urllib3
 
 from skyplane import gateway_docker_image
 from skyplane.api.impl.provisioner import Provisioner
-from skyplane.api.tracker import TransferProgressTracker
+from skyplane.api.impl.tracker import TransferProgressTracker
 from skyplane.compute.server import Server
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
 from skyplane.utils.fn import PathLike, do_parallel
+
+from typing import List, Optional
+
+from skyplane.api.transfer_config import TransferConfig
+from skyplane.api.impl.provisioner import Provisioner
+from skyplane.api.impl.transfer_job import CopyJob, SyncJob, TransferJob
+from skyplane.api.impl.tracker import TransferProgressTracker
+from skyplane.utils import logger
 
 
 class DataplaneAutoDeprovision:
@@ -26,6 +34,7 @@ class DataplaneAutoDeprovision:
         return self.dataplane
 
     def __exit__(self, exc_type, exc_value, exc_tb):
+        logger.error("Deprovisioning dataplane")
         self.dataplane.deprovision()
 
 
@@ -36,39 +45,26 @@ class Dataplane:
         self,
         topology: ReplicationTopology,
         provisioner: Provisioner,
-        **kwargs,
+        transfer_config: Optional[TransferConfig] = None,
     ):
         self.topology = topology
         self.provisioner = provisioner
+        self.transfer_config = transfer_config if transfer_config else TransferConfig()
+        self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         self.provisioning_lock = threading.Lock()
         self.provisioned = False
 
         # pending tracker tasks
+        self.jobs_to_dispatch: List[TransferJob] = []
         self.pending_transfers: List[TransferProgressTracker] = []
-
-        # config parameters
-        self.config = {
-            "autoterminate_minutes": 15,
-            "use_bbr": True,
-            "use_compression": True,
-            "use_e2ee": True,
-            "use_socket_tls": False,
-            "aws_use_spot_instances": False,
-            "azure_use_spot_instances": False,
-            "gcp_use_spot_instances": False,
-            "aws_instance_class": "m5.8xlarge",
-            "azure_instance_class": "Standard_D2_v5",
-            "gcp_instance_class": "n2-standard-16",
-            "gcp_use_premium_network": True,
-        }
-        self.config.update(kwargs)
-
-        # vm state
         self.bound_nodes: Dict[ReplicationTopologyGateway, Server] = {}
 
     def provision(
         self,
         allow_firewall: bool = True,
+        gateway_docker_image: str = os.environ.get("SKYPLANE_DOCKER_IMAGE", gateway_docker_image()),
+        gateway_log_dir: Optional[PathLike] = None,
+        authorize_ssh_pub_key: Optional[str] = None,
         max_jobs: int = 16,
         spinner: bool = False,
     ):
@@ -86,9 +82,9 @@ class Dataplane:
                 self.provisioner.add_task(
                     cloud_provider=cloud_provider,
                     region=region,
-                    vm_type=self.config[f"{cloud_provider}_instance_class"],
-                    spot=self.config.get(f"{cloud_provider}_use_spot_instances", False),
-                    autoterminate_minutes=self.config.get("autoterminate_minutes", None),
+                    vm_type=getattr(self.transfer_config, f"{cloud_provider}_instance_class"),
+                    spot=getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances"),
+                    autoterminate_minutes=self.transfer_config.autoterminate_minutes,
                 )
 
             # initialize clouds
@@ -114,17 +110,11 @@ class Dataplane:
                 instance = servers_by_region[node.region].pop()
                 self.bound_nodes[node] = instance
             logger.fs.debug(f"[Dataplane.provision] {self.bound_nodes=}")
+            gateway_bound_nodes = self.bound_nodes.copy()
 
             # start gateways
             self.provisioned = True
 
-    def start_gateway(
-        self,
-        gateway_docker_image: str = os.environ.get("SKYPLANE_DOCKER_IMAGE", gateway_docker_image()),
-        gateway_log_dir: Optional[PathLike] = None,
-        authorize_ssh_pub_key: Optional[str] = None,
-        spinner: bool = False,
-    ):
         def _start_gateway(
             gateway_node: ReplicationTopologyGateway,
             gateway_server: Server,
@@ -151,10 +141,10 @@ class Dataplane:
             gateway_server.start_gateway(
                 setup_args,
                 gateway_docker_image=gateway_docker_image,
-                use_bbr=self.config.get("use_bbr", True),
-                use_compression=self.config.get("use_compression", True),
-                e2ee_key_bytes=e2ee_key_bytes if (am_source or am_sink) else None,
-                use_socket_tls=self.config.get("use_socket_tls", False),
+                e2ee_key_bytes=e2ee_key_bytes if (self.transfer_config.use_e2ee and (am_source or am_sink)) else None,
+                use_bbr=self.transfer_config.use_bbr,
+                use_compression=self.transfer_config.use_compression,
+                use_socket_tls=self.transfer_config.use_socket_tls,
             )
 
         # todo: move server.py:start_gateway here
@@ -162,7 +152,7 @@ class Dataplane:
         e2ee_key_bytes = nacl.utils.random(nacl.secret.SecretBox.KEY_SIZE)
 
         jobs = []
-        for node, server in self.bound_nodes.items():
+        for node, server in gateway_bound_nodes.items():
             jobs.append(partial(_start_gateway, node, server))
         logger.fs.debug(f"[Dataplane.provision] Starting gateways on {len(jobs)} servers")
         do_parallel(lambda fn: fn(), jobs, n=-1, spinner=spinner, spinner_persist=spinner, desc="Starting gateway container on VMs")
@@ -170,7 +160,7 @@ class Dataplane:
     def deprovision(self, max_jobs: int = 64, spinner: bool = False):
         with self.provisioning_lock:
             if not self.provisioned:
-                logger.warning("Attempting to deprovision dataplane that is not provisioned")
+                logger.fs.warning("Attempting to deprovision dataplane that is not provisioned, this may be from auto_deprovision.")
             # wait for tracker tasks
             for task in self.pending_transfers:
                 logger.warning(f"[Dataplane.deprovision] Waiting for tracker task {task} to finish")
@@ -181,6 +171,19 @@ class Dataplane:
             )
             self.provisioned = False
 
+    def check_error_logs(self) -> Dict[str, List[str]]:
+        def get_error_logs(args):
+            _, instance = args
+            reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/errors")
+            if reply.status != 200:
+                raise Exception(f"Failed to get error logs from gateway instance {instance.instance_name()}: {reply.data.decode('utf-8')}")
+            return json.loads(reply.data.decode("utf-8"))["errors"]
+
+        errors: Dict[str, List[str]] = {}
+        for (_, instance), result in do_parallel(get_error_logs, self.bound_nodes.items(), n=-1):
+            errors[instance] = result
+        return errors
+
     def auto_deprovision(self) -> DataplaneAutoDeprovision:
         """Returns a context manager that will automatically call deprovision upon exit."""
         return DataplaneAutoDeprovision(self)
@@ -188,5 +191,42 @@ class Dataplane:
     def source_gateways(self) -> List[Server]:
         return [self.bound_nodes[n] for n in self.topology.source_instances()] if self.provisioned else []
 
-    def register_pending_transfer(self, tracker: TransferProgressTracker):
+    def sink_gateways(self) -> List[Server]:
+        return [self.bound_nodes[n] for n in self.topology.sink_instances()] if self.provisioned else []
+
+    def queue_copy(
+        self,
+        src: str,
+        dst: str,
+        recursive: bool = False,
+    ) -> str:
+        job = CopyJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
+        logger.fs.debug(f"[SkyplaneClient] Queued copy job {job}")
+        self.jobs_to_dispatch.append(job)
+        return job.uuid
+
+    def queue_sync(
+        self,
+        src: str,
+        dst: str,
+        recursive: bool = False,
+    ) -> str:
+        job = SyncJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
+        logger.fs.debug(f"[SkyplaneClient] Queued sync job {job}")
+        self.jobs_to_dispatch.append(job)
+        return job.uuid
+
+    def run_async(self) -> TransferProgressTracker:
+        if not self.provisioned:
+            logger.error("Dataplane must be pre-provisioned. Call dataplane.provision() before starting a transfer")
+        tracker = TransferProgressTracker(self, self.jobs_to_dispatch, self.transfer_config)
         self.pending_transfers.append(tracker)
+        tracker.start()
+        logger.fs.info(f"[SkyplaneClient] Started async transfer with {len(self.jobs_to_dispatch)} jobs")
+        self.jobs_to_dispatch = []
+        return tracker
+
+    def run(self):
+        tracker = self.run_async()
+        logger.fs.debug(f"[SkyplaneClient] Waiting for transfer to complete")
+        tracker.join()

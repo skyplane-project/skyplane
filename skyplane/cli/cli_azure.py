@@ -12,7 +12,6 @@ import typer
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skyplane.utils.fn import do_parallel
-from skyplane.utils import logger
 from skyplane import cloud_config
 from rich import print as rprint
 

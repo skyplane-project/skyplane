@@ -52,3 +52,20 @@ is_gateway_env = os.environ.get("SKYPLANE_IS_GATEWAY", None) == "1"
 # load gateway docker image version
 def gateway_docker_image():
     return "public.ecr.aws/s6m1p0n8/skyplane:" + gateway_version
+
+
+# expose API
+from skyplane.api.client import SkyplaneClient
+from skyplane.api.dataplane import Dataplane
+from skyplane.api.transfer_config import TransferConfig
+from skyplane.api.auth_config import AWSConfig, AzureConfig, GCPConfig
+
+__all__ = [
+    "__version__",
+    "SkyplaneClient",
+    "Dataplane",
+    "TransferConfig",
+    "AWSConfig",
+    "AzureConfig",
+    "GCPConfig",
+]
