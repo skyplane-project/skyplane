@@ -83,8 +83,10 @@ class S3Interface(ObjectStoreInterface):
         requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
         page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix, **requester_pays)
         for page in page_iterator:
+            objs = []
             for obj in page.get("Contents", []):
-                yield S3Object("aws", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"])
+                objs.append(S3Object("aws", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"]))
+            yield from objs
 
     def delete_objects(self, keys: List[str]):
         s3_client = self._s3_client()

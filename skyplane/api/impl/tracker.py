@@ -5,14 +5,13 @@ from datetime import datetime
 from threading import Thread
 from typing import Dict, List, Optional, Set
 
-import pandas as pd
 import urllib3
 
 from skyplane import exceptions
 from skyplane.api.transfer_config import TransferConfig
 from skyplane.api.impl.transfer_job import TransferJob
 from skyplane.chunk import ChunkRequest, ChunkState
-from skyplane.utils import logger
+from skyplane.utils import logger, imports
 from skyplane.utils.fn import do_parallel
 
 
@@ -42,12 +41,7 @@ class TransferProgressTracker(Thread):
     def run(self):
         for job_uuid, job in self.jobs.items():
             logger.fs.debug(f"[TransferProgressTracker] Dispatching job {job.uuid}")
-            self.job_chunk_requests[job_uuid] = list(
-                job.dispatch(
-                    self.dataplane.source_gateways(),
-                    transfer_config=self.transfer_config,
-                )
-            )
+            self.job_chunk_requests[job_uuid] = list(job.dispatch(self.dataplane, transfer_config=self.transfer_config))
             self.job_pending_chunk_ids[job_uuid] = set([cr.chunk.chunk_id for cr in self.job_chunk_requests[job_uuid]])
             self.job_complete_chunk_ids[job_uuid] = set()
             logger.fs.debug(
@@ -61,7 +55,8 @@ class TransferProgressTracker(Thread):
             logger.fs.debug(f"[TransferProgressTracker] Verifying job {job.uuid}")
             job.verify()
 
-    def monitor_transfer(self):
+    @imports.inject("pandas")
+    def monitor_transfer(pd, self):
         # todo implement transfer monitoring to update job_complete_chunk_ids and job_pending_chunk_ids while the transfer is in progress
         sinks = self.dataplane.topology.sink_instances()
         sink_regions = set([sink.region for sink in sinks])
@@ -75,7 +70,7 @@ class TransferProgressTracker(Thread):
                 self.errors = errors
                 raise exceptions.SkyplaneGatewayException("Transfer failed with errors", errors)
 
-            log_df = self._query_chunk_status()
+            log_df = pd.DataFrame(self._query_chunk_status())
             if log_df.empty:
                 logger.warning("No chunk status log entries yet")
                 time.sleep(0.05)
@@ -124,7 +119,7 @@ class TransferProgressTracker(Thread):
         rows = []
         for result in do_parallel(get_chunk_status, self.dataplane.bound_nodes.items(), n=-1, return_args=False):
             rows.extend(result)
-        return pd.DataFrame(rows)
+        return rows
 
     @property
     def is_complete(self):

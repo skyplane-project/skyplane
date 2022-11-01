@@ -1,5 +1,6 @@
 import json
 import sys
+import time
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -9,6 +10,7 @@ import urllib3
 from rich import print as rprint
 
 from skyplane import exceptions
+from skyplane.api.dataplane import Dataplane
 from skyplane.api.transfer_config import TransferConfig
 from skyplane.api.impl.chunker import Chunker, batch_generator, tail_generator
 from skyplane.api.impl.path import parse_path
@@ -39,7 +41,7 @@ class TransferJob:
             self.src_iface.set_requester_bool(True)
             self.dst_iface.set_requester_bool(True)
 
-    def dispatch(self, src_gateways: List[Server], **kwargs) -> Generator[ChunkRequest, None, None]:
+    def dispatch(self, dataplane: Dataplane, **kwargs) -> Generator[ChunkRequest, None, None]:
         raise NotImplementedError("Dispatch not implemented")
 
     def finalize(self):
@@ -154,7 +156,7 @@ class CopyJob(TransferJob):
 
     def dispatch(
         self,
-        src_gateways: List[Server],
+        dataplane: Dataplane,
         transfer_config: TransferConfig,
         dispatch_batch_size: int = 64,
     ) -> Generator[ChunkRequest, None, None]:
@@ -172,21 +174,29 @@ class CopyJob(TransferJob):
         chunks = chunker.chunk(gen_transfer_list)
         chunk_requests = chunker.to_chunk_requests(chunks)
         batches = batch_generator(chunk_requests, dispatch_batch_size)
+        src_gateways = dataplane.source_gateways()
         bytes_dispatched = [0] * len(src_gateways)
+        start = time.time()
         for batch in batches:
+            end = time.time()
+            logger.fs.debug(f"Queried {len(batch)} chunks in {end - start:.2f} seconds")
             min_idx = bytes_dispatched.index(min(bytes_dispatched))
             server = src_gateways[min_idx]
             n_bytes = sum([cr.chunk.chunk_length_bytes for cr in batch])
             bytes_dispatched[min_idx] += n_bytes
+            start = time.time()
             reply = self.http_pool.request(
                 "POST",
                 f"{server.gateway_api_url}/api/v1/chunk_requests",
                 body=json.dumps([c.as_dict() for c in batch]).encode("utf-8"),
                 headers={"Content-Type": "application/json"},
             )
+            end = time.time()
             if reply.status != 200:
                 raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
-            logger.fs.debug(f"Dispatched {len(batch)} chunk requests to {server.instance_name()} ({n_bytes} bytes)")
+            logger.fs.debug(
+                f"Dispatched {len(batch)} chunk requests to {server.instance_name()} ({n_bytes} bytes) in {end - start:.2f} seconds"
+            )
             yield from batch
 
             # copy new multipart transfers to the multipart transfer list

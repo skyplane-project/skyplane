@@ -1,8 +1,6 @@
 import re
 from pathlib import Path
 
-import typer
-
 from skyplane.utils import logger
 
 
@@ -20,8 +18,8 @@ def parse_path(path: str):
     if path.startswith("s3://") or path.startswith("gs://"):
         provider, parsed = path[:2], path[5:]
         if len(parsed) == 0:
-            typer.secho(f"Invalid path: '{path}'", fg="red", err=True)
-            raise typer.Exit(code=1)
+            logger.error(f"Invalid S3 path: '{path}'", fg="red", err=True)
+            raise ValueError(f"Invalid S3 path: '{path}'")
         bucket, *keys = parsed.split("/", 1)
         key = keys[0] if len(keys) > 0 else ""
         provider = "aws" if provider == "s3" else "gcp"
