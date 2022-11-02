@@ -6,9 +6,9 @@ import traceback
 from pathlib import Path
 from typing import List
 
+import questionary
 import typer
 from rich.progress import Progress, SpinnerColumn, TextColumn
-import questionary
 
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.azure.azure_auth import AzureAuthentication

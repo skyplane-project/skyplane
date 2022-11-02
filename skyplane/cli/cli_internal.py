@@ -2,7 +2,6 @@ from typing import Optional
 
 import typer
 
-from skyplane import __root__
 from skyplane.cli.cli_impl.cp_replicate import confirm_transfer, launch_replication_job
 from skyplane.cli.common import print_header
 from skyplane.obj_store.object_store_interface import ObjectStoreObject

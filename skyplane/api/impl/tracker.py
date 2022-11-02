@@ -13,7 +13,6 @@ from skyplane.chunk import ChunkRequest, ChunkState
 from skyplane.utils import logger, imports
 from skyplane.utils.fn import do_parallel
 
-
 if TYPE_CHECKING:
     from skyplane.api.impl.transfer_job import TransferJob
 

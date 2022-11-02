@@ -2,7 +2,6 @@ from importlib.resources import path
 
 import typer
 
-from skyplane import __root__
 from skyplane.replicate.solver import ThroughputSolver
 
 

@@ -1,5 +1,6 @@
-import skyplane
 import time
+
+import skyplane
 
 if __name__ == "__main__":
     client = skyplane.SkyplaneClient(aws_config=skyplane.AWSConfig())

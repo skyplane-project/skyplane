@@ -10,9 +10,9 @@ import urllib3
 from rich import print as rprint
 
 from skyplane import exceptions
-from skyplane.api.transfer_config import TransferConfig
 from skyplane.api.impl.chunker import Chunker, batch_generator, tail_generator
 from skyplane.api.impl.path import parse_path
+from skyplane.api.transfer_config import TransferConfig
 from skyplane.chunk import ChunkRequest
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.obj_store.gcs_interface import GCSObject
@@ -20,7 +20,6 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface, Obje
 from skyplane.obj_store.s3_interface import S3Object
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
-
 
 if TYPE_CHECKING:
     from skyplane.api.dataplane import Dataplane

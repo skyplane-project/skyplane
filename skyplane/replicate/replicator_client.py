@@ -13,11 +13,11 @@ import nacl.secret
 import nacl.utils
 import pandas as pd
 import urllib3
-from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, TransferSpeedColumn
+from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, \
+    TransferSpeedColumn
 
 from skyplane import exceptions
 from skyplane.api.client import tmp_log_dir
-from skyplane.utils.definitions import MB, GB, gateway_docker_image
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
@@ -28,6 +28,7 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.replicate.profiler import status_df_to_traceevent
 from skyplane.replicate.replication_plan import ReplicationJob, ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
+from skyplane.utils.definitions import MB, GB, gateway_docker_image
 from skyplane.utils.fn import PathLike, do_parallel
 from skyplane.utils.timer import Timer
 

@@ -18,7 +18,6 @@ from skyplane.utils import logger
 from skyplane.utils.definitions import gateway_docker_image
 from skyplane.utils.fn import PathLike, do_parallel
 
-
 if TYPE_CHECKING:
     from skyplane.api.impl.provisioner import Provisioner
 

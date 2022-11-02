@@ -1,8 +1,8 @@
-from importlib.resources import path
 import os
 import subprocess
 import time
 import traceback
+from importlib.resources import path
 from shlex import split
 from typing import Optional
 
@@ -22,8 +22,8 @@ import skyplane.cli.usage.client
 import skyplane.cli.usage.client
 import skyplane.cli.usage.definitions
 import skyplane.cli.usage.definitions
-from skyplane import exceptions, __root__
-from skyplane.utils.definitions import GB
+from skyplane import exceptions
+from skyplane.api.impl.path import parse_path
 from skyplane.cli.cli_impl.cp_replicate import (
     confirm_transfer,
     enrich_dest_objs,
@@ -40,7 +40,6 @@ from skyplane.cli.cli_impl.cp_replicate_fallback import (
 )
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.common import console, print_header, print_stats_completed, query_instances
-from skyplane.api.impl.path import parse_path
 from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
@@ -54,6 +53,7 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.replicate.replication_plan import ReplicationJob
 from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 from skyplane.utils import logger
+from skyplane.utils.definitions import GB
 from skyplane.utils.fn import do_parallel
 
 app = typer.Typer(name="skyplane")

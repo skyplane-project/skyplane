@@ -1,6 +1,6 @@
+import functools
 import logging
 import warnings
-import functools
 from typing import Dict, Optional
 
 from cryptography.utils import CryptographyDeprecationWarning
