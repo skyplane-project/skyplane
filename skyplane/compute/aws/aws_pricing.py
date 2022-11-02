@@ -15,7 +15,7 @@ class AWSPricing:
     @property
     def transfer_df(self):
         if pd:
-            if not self._transfer_df:
+            if self._transfer_df is None:
                 with path("skyplane.data", "aws_transfer_costs.csv") as transfer_cost_path:
                     self._transfer_df = pd.read_csv(transfer_cost_path).set_index(["src", "dst"])
 
