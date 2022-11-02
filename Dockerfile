@@ -31,12 +31,11 @@ RUN (echo 'net.ipv4.ip_local_port_range = 12000 65535' >> /etc/sysctl.conf) \
 
 # install gateway
 RUN --mount=type=cache,target=/root/.cache/pip pip3 install --no-cache-dir 'poetry==1.2.2'
-COPY pyproject.toml /tmp/pyproject.toml
+COPY pyproject.toml poetry.lock /tmp/
 RUN --mount=type=cache,target=/root/.cache/pip cd /tmp \
     && poetry config virtualenvs.create false \
     && poetry install --no-interaction --no-ansi --only gateway \
     && rm -rf /tmp/pyproject.toml
-
 
 WORKDIR /pkg
 COPY . .
