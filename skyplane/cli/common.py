@@ -26,7 +26,6 @@ def print_header():
     console.print(f"[bright_black]{header}[/bright_black]\n")
 
 
-
 def parse_path(path: str):
     def is_plausible_local_path(path_test: str):
         path_test = Path(path_test)

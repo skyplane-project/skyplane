@@ -194,7 +194,7 @@ def cp(
         # Transparently generate transfer_pairs
         typer.secho("WIP:Transfer not supported", fg="red")
         return 1
-    
+
     elif provider_src in ["aws", "gcp", "azure"] and provider_dst in ["aws", "gcp", "azure"]:
         try:
             src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
