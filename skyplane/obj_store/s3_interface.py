@@ -85,7 +85,9 @@ class S3Interface(ObjectStoreInterface):
         for page in page_iterator:
             objs = []
             for obj in page.get("Contents", []):
-                objs.append(S3Object("aws", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"], mime_type=obj.get("ContentType")))
+                objs.append(
+                    S3Object("aws", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"], mime_type=obj.get("ContentType"))
+                )
             yield from objs
 
     def delete_objects(self, keys: List[str]):
