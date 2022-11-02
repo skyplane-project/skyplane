@@ -24,6 +24,9 @@ def provision(
     aws_instance_class: str,
     azure_instance_class: str,
     gcp_instance_class: str,
+    aws_instance_os: str = "ecs-aws-linux-2",
+    gcp_instance_os: str = "cos",
+    azure_instance_os: str = "ubuntu",
     gcp_use_premium_network: bool = True,
     log_dir: Optional[str] = None,
 ) -> Tuple[Dict[str, List[AWSServer]], Dict[str, List[AzureServer]], Dict[str, List[GCPServer]]]:
@@ -61,7 +64,7 @@ def provision(
         missing_aws_regions = set(aws_regions_to_provision) - set(aws_instances.keys())
         if missing_aws_regions:
             logger.info(f"(AWS) provisioning missing regions: {missing_aws_regions}")
-            aws_provisioner = lambda r: aws.provision_instance(r, aws_instance_class)
+            aws_provisioner = lambda r: aws.provision_instance(r, aws_instance_class, instance_os=aws_instance_os)
             results = do_parallel(aws_provisioner, missing_aws_regions, spinner=True, desc="provision aws")
             for region, result in results:
                 aws_instances[region] = [result]
@@ -81,7 +84,7 @@ def provision(
 
             def azure_provisioner(r):
                 try:
-                    return azure.provision_instance(r, azure_instance_class)
+                    return azure.provision_instance(r, azure_instance_class, instance_os=azure_instance_os)
                 except Exception as e:
                     logger.error(f"Failed to provision Azure instance in {r}: {e}")
                     logger.error(f"Skipping region {r}")
@@ -125,7 +128,7 @@ def provision(
 
             def gcp_provisioner(r):
                 try:
-                    gcp.provision_instance(r, gcp_instance_class, gcp_premium_network=gcp_use_premium_network)
+                    gcp.provision_instance(r, gcp_instance_class, gcp_premium_network=gcp_use_premium_network, instance_os=gcp_instance_os)
                 except Exception as e:
                     logger.error(f"Failed to provision GCP instance in {r}: {e}")
                     logger.error(f"Skipping region {r}")

@@ -66,6 +66,9 @@ class GCSInterface(ObjectStoreInterface):
     def region_tag(self):
         return "gcp:" + self.gcp_region
 
+    def bucket(self) -> str:
+        return self.bucket_name
+
     def bucket_exists(self):
         iterator = self._gcs_client.list_blobs(self.bucket_name, page_size=1)
         try:
@@ -129,7 +132,6 @@ class GCSInterface(ObjectStoreInterface):
         data=None,
         content_type="application/octet-stream",
     ):
-
         blob = self._gcs_client.bucket(self.bucket_name).blob(blob_name)
 
         headers = headers or {}
@@ -219,14 +221,10 @@ class GCSInterface(ObjectStoreInterface):
                 f"Upload of object {dst_object_name} in bucket {self.bucket_name} failed, got status code {response.status_code} w/ response {response.text}"
             )
 
-    def initiate_multipart_uploads(self, dst_object_names: List[str]):
-        upload_ids = []
-        for dst_object_name in dst_object_names:
-            assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
-            response = self.send_xml_request(dst_object_name, {"uploads": None}, "POST")
-            tree = ElementTree.fromstring(response.content)[2].text
-            upload_ids.append(tree)
-        return upload_ids
+    def initiate_multipart_upload(self, dst_object_name: str):
+        assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
+        response = self.send_xml_request(dst_object_name, {"uploads": None}, "POST")
+        return ElementTree.fromstring(response.content)[2].text
 
     def complete_multipart_upload(self, dst_object_name, upload_id):
         # get parts

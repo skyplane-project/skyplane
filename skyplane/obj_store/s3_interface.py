@@ -43,6 +43,9 @@ class S3Interface(ObjectStoreInterface):
     def region_tag(self):
         return "aws:" + self.aws_region
 
+    def bucket(self) -> str:
+        return self.bucket_name
+
     def set_requester_bool(self, requester: bool):
         self.requester_pays = requester
 
@@ -80,8 +83,10 @@ class S3Interface(ObjectStoreInterface):
         requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
         page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix, **requester_pays)
         for page in page_iterator:
+            objs = []
             for obj in page.get("Contents", []):
-                yield S3Object("aws", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"])
+                objs.append(S3Object("aws", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"]))
+            yield from objs
 
     def delete_objects(self, keys: List[str]):
         s3_client = self._s3_client()
@@ -125,15 +130,12 @@ class S3Interface(ObjectStoreInterface):
 
         s3_client = self._s3_client()
         assert len(src_object_name) > 0, f"Source object name must be non-empty: '{src_object_name}'"
-
         args = {"Bucket": self.bucket_name, "Key": src_object_name}
-
-        if size_bytes:
+        assert not (offset_bytes and not size_bytes), f"Cannot specify {offset_bytes=} without {size_bytes=}"
+        if offset_bytes is not None and size_bytes is not None:
             args["Range"] = f"bytes={offset_bytes}-{offset_bytes + size_bytes - 1}"
-
         if self.requester_pays:
             args["RequestPayer"] = "requester"
-
         response = s3_client.get_object(**args)
 
         # write response data
@@ -179,17 +181,14 @@ class S3Interface(ObjectStoreInterface):
                 raise exceptions.ChecksumMismatchException(f"Checksum mismatch for object {dst_object_name}") from e
             raise
 
-    def initiate_multipart_uploads(self, dst_object_names: List[str]) -> List[str]:
+    def initiate_multipart_upload(self, dst_object_name: str) -> str:
         client = self._s3_client()
-        upload_ids = []
-        for dst_object_name in dst_object_names:
-            assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
-            response = client.create_multipart_upload(Bucket=self.bucket_name, Key=dst_object_name)
-            if "UploadId" in response:
-                upload_ids.append(response["UploadId"])
-            else:
-                raise exceptions.SkyplaneException(f"Failed to initiate multipart upload for {dst_object_name}: {response}")
-        return upload_ids
+        assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
+        response = client.create_multipart_upload(Bucket=self.bucket_name, Key=dst_object_name)
+        if "UploadId" in response:
+            return response["UploadId"]
+        else:
+            raise exceptions.SkyplaneException(f"Failed to initiate multipart upload for {dst_object_name}: {response}")
 
     def complete_multipart_upload(self, dst_object_name, upload_id):
         s3_client = self._s3_client()

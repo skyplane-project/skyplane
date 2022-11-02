@@ -18,12 +18,18 @@ from skyplane.utils.fn import do_parallel, wait_for
 class AWSCloudProvider(CloudProvider):
     pricing = AWSPricing()
 
-    def __init__(self, key_prefix: str = "skyplane"):
+    def __init__(
+        self,
+        key_prefix: str = "skyplane",
+        auth: Optional[AWSAuthentication] = None,
+        key_manager: Optional[AWSKeyManager] = None,
+        network: Optional[AWSNetwork] = None,
+    ):
         super().__init__()
         self.key_prefix = key_prefix
-        self.auth = AWSAuthentication()
-        self.network = AWSNetwork(self.auth)
-        self.key_manager = AWSKeyManager(self.auth)
+        self.auth = auth if auth else AWSAuthentication()
+        self.network = network if network else AWSNetwork(self.auth)
+        self.key_manager = key_manager if key_manager else AWSKeyManager(self.auth)
         self.provisioning_semaphore = BoundedSemaphore(16)
 
     @property
@@ -116,11 +122,21 @@ class AWSCloudProvider(CloudProvider):
         name: Optional[str] = None,
         tags={"skyplane": "true"},
         aws_iam_name: str = "skyplane_gateway",
+        instance_os: str = "ecs-aws-linux-2",
     ) -> AWSServer:
         assert not region.startswith("aws:"), "Region should be AWS region"
         if name is None:
             name = f"skyplane-aws-{str(uuid.uuid4()).replace('-', '')}"
         iam_instance_profile_name = f"{name}_profile"
+
+        # set default image used for provisioning instances in AWS
+        if instance_os == "ubuntu":
+            image_id = "resolve:ssm:/aws/service/canonical/ubuntu/server/20.04/stable/current/amd64/hvm/ebs-gp2/ami-id"
+        elif instance_os == "ecs-aws-linux-2":
+            image_id = "resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id"
+        else:
+            raise ValueError(f"Provisioning in {region}: instance OS {instance_os} not supported")
+
         with self.provisioning_semaphore:
             iam = self.auth.get_boto3_client("iam", region)
             ec2 = self.auth.get_boto3_resource("ec2", region)
@@ -167,7 +183,7 @@ class AWSCloudProvider(CloudProvider):
                 else:
                     market_options = {}
                 return ec2.create_instances(
-                    ImageId="resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id",
+                    ImageId=image_id,
                     InstanceType=instance_class,
                     MinCount=1,
                     MaxCount=1,

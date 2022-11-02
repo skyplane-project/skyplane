@@ -13,20 +13,20 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
 
-from skyplane import exceptions, key_root
+from skyplane import exceptions
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.gcp.gcp_server import GCPServer
-from skyplane.compute.server import Server, ServerState
+from skyplane.compute.server import Server, ServerState, key_root
 from skyplane.utils import logger
 from skyplane.utils.fn import wait_for
 
 
 class GCPCloudProvider(CloudProvider):
-    def __init__(self, key_root=key_root / "gcp"):
+    def __init__(self, key_root=key_root / "gcp", auth: Optional[GCPAuthentication] = None):
         super().__init__()
-        self.auth = GCPAuthentication()
+        self.auth = auth if auth else GCPAuthentication()
         key_root.mkdir(parents=True, exist_ok=True)
         self.private_key_path = key_root / "gcp-cert.pem"
         self.public_key_path = key_root / "gcp-cert.pub"
@@ -196,7 +196,11 @@ class GCPCloudProvider(CloudProvider):
         fw_body = {
             "name": "skyplanessh",
             "network": "global/networks/skyplane",
-            "allowed": [{"IPProtocol": "tcp", "ports": ["22"]}, {"IPProtocol": "udp", "ports": ["1-65535"]}, {"IPProtocol": "icmp"}],
+            "allowed": [
+                {"IPProtocol": "tcp", "ports": ["22", "5201"]},
+                {"IPProtocol": "udp", "ports": ["1-65535"]},
+                {"IPProtocol": "icmp"},
+            ],
             "description": "Allow all traffic from all IPs",
             "sourceRanges": [ip],
         }
@@ -311,6 +315,7 @@ class GCPCloudProvider(CloudProvider):
         tags={"skyplane": "true"},
         gcp_premium_network=False,
         gcp_vm_uname="skyplane",
+        instance_os: str = "cos",
     ) -> GCPServer:
         assert not region.startswith("gcp:"), "Region should be GCP region"
         if name is None:
@@ -318,6 +323,13 @@ class GCPCloudProvider(CloudProvider):
         compute = self.auth.get_gcp_client()
         with open(os.path.expanduser(self.public_key_path)) as f:
             pub_key = f.read()
+
+        if instance_os == "ubuntu":
+            image = "projects/ubuntu-os-cloud/global/images/family/ubuntu-2004-lts"
+        elif instance_os == "cos":
+            image = "projects/cos-cloud/global/images/family/cos-stable"
+        else:
+            raise ValueError(f"Provisioning in {region}: instance OS {instance_os} not supported")
 
         req_body = {
             "name": name,
@@ -328,7 +340,7 @@ class GCPCloudProvider(CloudProvider):
                     "boot": True,
                     "autoDelete": True,
                     "initializeParams": {
-                        "sourceImage": "projects/cos-cloud/global/images/family/cos-stable",
+                        "sourceImage": image,
                         "diskType": f"zones/{region}/diskTypes/pd-standard",
                         "diskSizeGb": "100",
                     },

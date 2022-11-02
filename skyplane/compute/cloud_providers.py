@@ -1,5 +1,5 @@
 import functools
-from typing import List, Optional, Union, Type
+from typing import List, Optional, Union
 
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils.fn import do_parallel
@@ -78,7 +78,7 @@ class CloudProvider:
         name: Optional[str] = None,
         tags={"skyplane": "true"},
         **kwargs
-    ) -> Type[Server]:
+    ) -> Server:
         raise NotImplementedError
 
     def setup_global(self, **kwargs):

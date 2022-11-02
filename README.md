@@ -31,6 +31,8 @@ Skyplane currently supports the following source and destination endpoints (any 
 | Azure Blob Storage | :white_check_mark: | :white_check_mark: |
 | Local Disk         | :white_check_mark: | (in progress)      |
 
+Skyplane is an actively developed project. It will have 🔪 SHARP EDGES 🔪. Please file an issue or ask the contributors via [the #help channel on our Slack](https://join.slack.com/t/skyplaneworkspace/shared_invite/zt-1cxmedcuc-GwIXLGyHTyOYELq7KoOl6Q) if you encounter bugs.
+
 # Resources 
 - [Quickstart](#quickstart)
 - [Contributing](https://skyplane.org/en/latest/contributing.html)
