@@ -12,9 +12,8 @@ with warnings.catch_warnings():
     import paramiko
 
 from skyplane import exceptions
-from skyplane.compute.cloud_providers import key_root
 from skyplane.compute.aws.aws_auth import AWSAuthentication
-from skyplane.compute.server import Server, ServerState
+from skyplane.compute.server import Server, ServerState, key_root
 from skyplane.utils import imports
 from skyplane.utils.cache import ignore_lru_cache
 

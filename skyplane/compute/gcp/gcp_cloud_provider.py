@@ -13,12 +13,12 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
 
-from skyplane import exceptions, __config_root__
+from skyplane import exceptions
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
-from skyplane.compute.cloud_providers import CloudProvider, key_root
+from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.gcp.gcp_server import GCPServer
-from skyplane.compute.server import Server, ServerState
+from skyplane.compute.server import Server, ServerState, key_root
 from skyplane.utils import logger
 from skyplane.utils.fn import wait_for
 
@@ -399,6 +399,3 @@ class GCPCloudProvider(CloudProvider):
             op = compute.instances().delete(project=self.auth.project_id, zone=region, instance=name).execute()
             self.wait_for_operation_to_complete(region, op["name"])
             raise e
-
-
-gcp_config_path = __config_root__ / "gcp_config"

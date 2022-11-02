@@ -9,9 +9,8 @@ with warnings.catch_warnings():
     import paramiko
 
 from skyplane import exceptions
-from skyplane.compute.cloud_providers import key_root
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
-from skyplane.compute.server import Server, ServerState
+from skyplane.compute.server import Server, ServerState, key_root
 from skyplane.utils.fn import PathLike
 
 

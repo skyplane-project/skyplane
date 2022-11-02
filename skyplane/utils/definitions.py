@@ -7,15 +7,15 @@ MB = 1024 * 1024
 GB = 1024 * 1024 * 1024
 
 
-def format_bytes(bytes: int):
-    if bytes < KB:
-        return f"{bytes}B"
-    elif bytes < MB:
-        return f"{bytes / KB:.2f}KB"
-    elif bytes < GB:
-        return f"{bytes / MB:.2f}MB"
+def format_bytes(bytes_int: int):
+    if bytes_int < KB:
+        return f"{bytes_int}B"
+    elif bytes_int < MB:
+        return f"{bytes_int / KB:.2f}KB"
+    elif bytes_int < GB:
+        return f"{bytes_int / MB:.2f}MB"
     else:
-        return f"{bytes / GB:.2f}GB"
+        return f"{bytes_int / GB:.2f}GB"
 
 
 is_gateway_env = os.environ.get("SKYPLANE_IS_GATEWAY", None) == "1"
