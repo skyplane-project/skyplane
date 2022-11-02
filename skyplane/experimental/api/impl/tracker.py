@@ -8,8 +8,8 @@ from typing import Dict, List, Optional, Set
 import urllib3
 
 from skyplane import exceptions
-from skyplane.api.transfer_config import TransferConfig
-from skyplane.api.impl.transfer_job import TransferJob
+from skyplane.experimental.api.transfer_config import TransferConfig
+from skyplane.experimental.api.impl.transfer_job import TransferJob
 from skyplane.chunk import ChunkRequest, ChunkState
 from skyplane.utils import logger, imports
 from skyplane.utils.fn import do_parallel
