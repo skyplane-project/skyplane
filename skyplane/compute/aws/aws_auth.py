@@ -1,7 +1,7 @@
 from typing import Optional
 
-from skyplane import aws_config_path
-from skyplane import config_path
+from skyplane.compute.aws.aws_cloud_provider import aws_config_path
+from skyplane.cli import config_path
 from skyplane.config import SkyplaneConfig
 from skyplane.utils import imports
 

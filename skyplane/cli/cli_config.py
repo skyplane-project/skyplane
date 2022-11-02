@@ -10,7 +10,7 @@ Available keys:
 
 import typer
 
-from skyplane import cloud_config, config_path
+from skyplane.cli import config_path, cloud_config
 from skyplane.cli.common import console
 from skyplane.cli.usage.client import UsageClient
 

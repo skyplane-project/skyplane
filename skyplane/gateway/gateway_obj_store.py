@@ -6,7 +6,7 @@ from functools import partial
 from multiprocessing import Event, Manager, Process, Value, Queue
 from typing import Dict, Optional
 
-from skyplane import cloud_config
+from skyplane.cli import cloud_config
 from skyplane.chunk import ChunkRequest
 from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface

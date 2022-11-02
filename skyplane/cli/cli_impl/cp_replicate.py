@@ -8,7 +8,9 @@ from typing import List, Optional, Tuple, Dict
 import typer
 from rich import print as rprint
 
-from skyplane import exceptions, GB, format_bytes, gateway_docker_image, skyplane_root, cloud_config
+from skyplane import exceptions, __root__
+from skyplane.cli import cloud_config
+from skyplane.utils.definitions import GB, format_bytes, gateway_docker_image
 from skyplane.cli.common import console
 from skyplane.cli.usage.client import UsageClient
 from skyplane.compute.cloud_providers import CloudProvider
@@ -31,7 +33,7 @@ def generate_topology(
     solver_class: str = "ILP",
     solver_total_gbyte_to_transfer: Optional[float] = None,
     solver_target_tput_per_vm_gbits: Optional[float] = None,
-    solver_throughput_grid: Optional[pathlib.Path] = skyplane_root / "profiles" / "throughput.csv",
+    solver_throughput_grid: Optional[pathlib.Path] = __root__ / "profiles" / "throughput.csv",
     solver_verbose: Optional[bool] = False,
     args: Optional[Dict] = None,
 ) -> ReplicationTopology:

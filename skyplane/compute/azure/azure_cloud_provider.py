@@ -12,10 +12,11 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
 
-from skyplane import cloud_config, exceptions, key_root
+from skyplane import exceptions, __config_root__
+from skyplane.cli import cloud_config
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_server import AzureServer
-from skyplane.compute.cloud_providers import CloudProvider
+from skyplane.compute.cloud_providers import CloudProvider, key_root
 from skyplane.utils import logger, imports
 from skyplane.utils.timer import Timer
 
@@ -404,3 +405,7 @@ class AzureCloudProvider(CloudProvider):
                     else:
                         raise
         return AzureServer(name)
+
+
+azure_config_path = __config_root__ / "azure_config"
+azure_sku_path = __config_root__ / "azure_sku_mapping"

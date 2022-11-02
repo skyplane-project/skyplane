@@ -4,7 +4,7 @@ import uuid
 from multiprocessing import BoundedSemaphore
 from typing import List, Optional
 
-from skyplane import exceptions as skyplane_exceptions
+from skyplane import exceptions as skyplane_exceptions, __config_root__
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_key_manager import AWSKeyManager
 from skyplane.compute.aws.aws_network import AWSNetwork
@@ -237,3 +237,6 @@ class AWSCloudProvider(CloudProvider):
                 instance[0].terminate()
                 raise
             return AWSServer(f"aws:{region}", instance[0].id)
+
+
+aws_config_path = __config_root__ / "aws_config"

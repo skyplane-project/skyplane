@@ -1,6 +1,7 @@
 import functools
 from typing import List, Optional, Union, Type
 
+from skyplane import __config_root__
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils.fn import do_parallel
 
@@ -89,3 +90,6 @@ class CloudProvider:
 
     def teardown_global(self):
         pass
+
+
+key_root = __config_root__ / "keys"

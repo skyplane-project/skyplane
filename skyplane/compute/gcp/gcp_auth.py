@@ -3,7 +3,9 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from skyplane import config_path, gcp_config_path, key_root
+from skyplane.cli import config_path
+from skyplane.compute.cloud_providers import key_root
+from skyplane.compute.gcp.gcp_cloud_provider import gcp_config_path
 from skyplane.config import SkyplaneConfig
 from skyplane.utils import logger, imports
 from skyplane.utils.retry import retry_backoff

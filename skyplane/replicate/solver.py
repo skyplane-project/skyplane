@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from skyplane import GB
+from skyplane.utils.definitions import GB
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.replicate.replication_plan import ReplicationTopology
 from skyplane.utils import logger

@@ -3,7 +3,7 @@ import os
 import tempfile
 import time
 import uuid
-from skyplane import MB
+from skyplane.utils.definitions import MB
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.cli.cli import cp
 from skyplane.utils import logger

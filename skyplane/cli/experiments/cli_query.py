@@ -2,7 +2,7 @@ from pathlib import Path
 
 import typer
 
-from skyplane import skyplane_root
+from skyplane import __root__
 from skyplane.replicate.solver import ThroughputSolver
 
 
@@ -11,7 +11,7 @@ def util_grid_throughput(
     dest: str,
     src_tier: str = "PREMIUM",
     dest_tier: str = "PREMIUM",
-    throughput_grid: Path = typer.Option(skyplane_root / "profiles" / "throughput.csv", help="Throughput grid file"),
+    throughput_grid: Path = typer.Option(__root__ / "profiles" / "throughput.csv", help="Throughput grid file"),
 ):
     solver = ThroughputSolver(throughput_grid)
     print(solver.get_path_throughput(src, dest, src_tier, dest_tier) / 2**30)
@@ -22,7 +22,7 @@ def util_grid_cost(
     dest: str,
     src_tier: str = "PREMIUM",
     dest_tier: str = "PREMIUM",
-    throughput_grid: Path = typer.Option(skyplane_root / "profiles" / "throughput.csv", help="Throughput grid file"),
+    throughput_grid: Path = typer.Option(__root__ / "profiles" / "throughput.csv", help="Throughput grid file"),
 ):
     solver = ThroughputSolver(throughput_grid)
     print(solver.get_path_cost(src, dest, src_tier, dest_tier))
@@ -42,7 +42,7 @@ def get_max_throughput(region_tag: str):
 
 
 def dump_full_util_cost_grid(
-    throughput_grid: Path = typer.Option(skyplane_root / "profiles" / "throughput.csv", help="Throughput grid file"),
+    throughput_grid: Path = typer.Option(__root__ / "profiles" / "throughput.csv", help="Throughput grid file"),
 ):
     solver = ThroughputSolver(throughput_grid)
     regions = solver.get_regions()
