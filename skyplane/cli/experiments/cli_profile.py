@@ -11,7 +11,6 @@ import typer
 from rich.progress import Progress
 
 from skyplane import __root__
-from skyplane.utils.definitions import GB
 from skyplane.cli.experiments.provision import provision
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
@@ -20,6 +19,7 @@ from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.compute.gcp.gcp_server import GCPServer
 from skyplane.compute.server import Server
 from skyplane.utils import logger
+from skyplane.utils.definitions import GB
 from skyplane.utils.fn import do_parallel
 
 all_aws_regions = AWSCloudProvider.region_list()

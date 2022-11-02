@@ -1,6 +1,23 @@
+from typing import Dict, List
+
+
 class SkyplaneException(Exception):
     def pretty_print_str(self):
         err = f"[bold][red]SkyplaneException: {str(self)}[/red][/bold]"
+        return err
+
+
+class SkyplaneGatewayException(SkyplaneException):
+    def __init__(self, message, errors: Dict[str, List[str]]):
+        super().__init__(message)
+        self.errors = errors
+
+    def pretty_print_str(self):
+        err = f"[bold][red]SkyplaneGatewayException: {str(self)}[/red][/bold]"
+        for node, errors in self.errors.items():
+            err += f"\t[bold][red]Errors on node {node}[/red][/bold]"
+            for error in errors:
+                err += f"\t\t* {error}"
         return err
 
 

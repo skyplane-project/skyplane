@@ -8,12 +8,11 @@ from typing import List, Optional, Tuple, Dict
 import typer
 from rich import print as rprint
 
-from skyplane import exceptions, __root__
-from skyplane.cli import cloud_config
-from skyplane.utils.definitions import GB, format_bytes, gateway_docker_image
+from skyplane import exceptions
 from skyplane.cli.common import console
 from skyplane.cli.usage.client import UsageClient
 from skyplane.compute.cloud_providers import CloudProvider
+from skyplane.config_paths import cloud_config
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
@@ -21,6 +20,7 @@ from skyplane.obj_store.s3_interface import S3Object
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
 from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 from skyplane.utils import logger
+from skyplane.utils.definitions import GB, format_bytes, gateway_docker_image
 from skyplane.utils.timer import Timer
 
 
@@ -33,7 +33,7 @@ def generate_topology(
     solver_class: str = "ILP",
     solver_total_gbyte_to_transfer: Optional[float] = None,
     solver_target_tput_per_vm_gbits: Optional[float] = None,
-    solver_throughput_grid: Optional[pathlib.Path] = __root__ / "profiles" / "throughput.csv",
+    solver_throughput_grid: Optional[pathlib.Path] = None,
     solver_verbose: Optional[bool] = False,
     args: Optional[Dict] = None,
 ) -> ReplicationTopology:

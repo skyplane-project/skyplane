@@ -13,10 +13,11 @@ import requests
 import typer
 from rich import print as rprint
 
+import skyplane
 import skyplane.cli.usage.definitions
-from skyplane import tmp_log_dir
-from skyplane.cli import config_path, cloud_config
+from skyplane.api.client import tmp_log_dir
 from skyplane.config import _map_type
+from skyplane.config_paths import config_path, cloud_config
 from skyplane.replicate.replicator_client import TransferStats
 from skyplane.utils import logger
 

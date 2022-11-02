@@ -15,8 +15,8 @@ import pandas as pd
 import urllib3
 from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, TransferSpeedColumn
 
-from skyplane import exceptions, tmp_log_dir
-from skyplane.utils.definitions import MB, GB, gateway_docker_image
+from skyplane import exceptions
+from skyplane.api.client import tmp_log_dir
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
@@ -27,6 +27,7 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.replicate.profiler import status_df_to_traceevent
 from skyplane.replicate.replication_plan import ReplicationJob, ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
+from skyplane.utils.definitions import MB, GB, gateway_docker_image
 from skyplane.utils.fn import PathLike, do_parallel
 from skyplane.utils.timer import Timer
 
@@ -406,7 +407,7 @@ class ReplicatorClient:
                     multipart_batches = []
                     for i in range(0, len(multipart_pairs), batch_size):
                         multipart_batches.append(multipart_pairs[i : i + batch_size])
-                    dispatch_fn = lambda x: obj_store_interface.initiate_multipart_uploads([y.key for _, y in x])
+                    dispatch_fn = lambda x: [obj_store_interface.initiate_multipart_upload(y.key) for _, y in x]
                     upload_ids = do_parallel(dispatch_fn, multipart_batches, n=-1)
 
                 # build chunks for multipart transfers

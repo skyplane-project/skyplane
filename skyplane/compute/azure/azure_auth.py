@@ -4,12 +4,11 @@ import os
 import subprocess
 from typing import Dict, List, Optional
 
-from skyplane import __config_root__
-from skyplane.cli import config_path
-from skyplane.utils.definitions import is_gateway_env
 from skyplane.compute.const_cmds import query_which_cloud
 from skyplane.config import SkyplaneConfig
+from skyplane.config_paths import config_path, azure_config_path, azure_sku_path
 from skyplane.utils import imports
+from skyplane.utils.definitions import is_gateway_env
 from skyplane.utils.fn import do_parallel, wait_for
 
 
@@ -167,7 +166,3 @@ class AzureAuthentication:
     @imports.inject("azure.storage.blob.BlobServiceClient", pip_extra="azure")
     def get_blob_service_client(BlobServiceClient, self, account_url: str):
         return BlobServiceClient(account_url=account_url, credential=self.credential)
-
-
-azure_config_path = __config_root__ / "azure_config"
-azure_sku_path = __config_root__ / "azure_sku_mapping"

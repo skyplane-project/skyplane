@@ -2,21 +2,18 @@
 Azure convenience interface
 """
 
+import json
+import subprocess
 from collections import defaultdict
 from typing import List
-import subprocess
-import json
 
 import typer
-
-from skyplane.compute.azure.azure_auth import AzureAuthentication
-from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
-from skyplane.utils.fn import do_parallel
-from skyplane.utils import logger
-from skyplane.cli import cloud_config
 from rich import print as rprint
 
 from skyplane.compute.azure.azure_auth import AzureAuthentication
+from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
+from skyplane.config_paths import cloud_config
+from skyplane.utils.fn import do_parallel
 
 app = typer.Typer(name="skyplane-azure")
 
