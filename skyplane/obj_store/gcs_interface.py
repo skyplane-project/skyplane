@@ -58,6 +58,7 @@ class GCSInterface(ObjectStoreInterface):
                     f"No access to the Google Cloud Storage bucket '{self.bucket_name}', assuming bucket is in the 'us-central1-a' zone"
                 )
                 return "us-central1-a"
+            raise e
         if bucket is None:
             raise exceptions.MissingBucketException(f"GCS bucket {self.bucket_name} does not exist")
         else:
