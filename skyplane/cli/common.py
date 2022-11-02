@@ -56,10 +56,14 @@ def parse_path(path: str):
             raise ValueError(f"Invalid Azure path: {path}")
         account, container, blob_path = match.groups()
         return "azure", f"{account}/{container}", blob_path
+    elif path.startswith("https://"):
+        return "pre-signed-url", None, path
     elif path.startswith("azure://"):
         bucket_name = path[8:]
         region = path[8:].split("-", 2)[-1]
         return "azure", bucket_name, region
+    elif path.startswith("/mnt/hdfs"):
+        return "hdfs", None, path
     elif is_plausible_local_path(path):
         return "local", None, path
     raise ValueError(f"Parse error {path}")
