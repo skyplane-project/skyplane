@@ -1,4 +1,4 @@
-from skyplane import skyplane_root
+from skyplane import __root__
 from skyplane.utils import logger
 
 try:
@@ -16,7 +16,7 @@ class AWSPricing:
     def transfer_df(self):
         if pd:
             if not self._transfer_df:
-                self._transfer_df = pd.read_csv(skyplane_root / "profiles" / "aws_transfer_costs.csv").set_index(["src", "dst"])
+                self._transfer_df = pd.read_csv(__root__ / "profiles" / "aws_transfer_costs.csv").set_index(["src", "dst"])
             return self._transfer_df
         else:
             return None

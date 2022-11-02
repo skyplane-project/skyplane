@@ -7,7 +7,7 @@ import time
 
 import typer
 
-from skyplane import GB
+from skyplane.utils.definitions import GB
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.obj_store.s3_interface import S3Interface

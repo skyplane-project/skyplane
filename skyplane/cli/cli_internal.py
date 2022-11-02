@@ -3,7 +3,7 @@ from typing import Optional
 
 import typer
 
-from skyplane import skyplane_root
+from skyplane import __root__
 from skyplane.cli.cli_impl.cp_replicate import confirm_transfer, launch_replication_job
 from skyplane.cli.common import print_header
 from skyplane.obj_store.object_store_interface import ObjectStoreObject
@@ -91,9 +91,7 @@ def replicate_random_solve(
     reuse_gateways: bool = False,
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     throughput_per_instance_gbits: float = typer.Option(2, help="Solver option: Required throughput in gbps."),
-    solver_throughput_grid: Path = typer.Option(
-        skyplane_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
-    ),
+    solver_throughput_grid: Path = typer.Option(__root__ / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"),
     solver_verbose: bool = False,
     debug: bool = False,
 ):

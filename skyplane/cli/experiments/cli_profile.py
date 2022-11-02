@@ -10,7 +10,8 @@ import pandas as pd
 import typer
 from rich.progress import Progress
 
-from skyplane import GB, skyplane_root
+from skyplane import __root__
+from skyplane.utils.definitions import GB
 from skyplane.cli.experiments.provision import provision
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
@@ -240,7 +241,7 @@ def throughput_grid(
     experiment_tag_words = os.popen("bash scripts/get_random_word_hash.sh").read().strip()
     timestamp = datetime.now(timezone.utc).strftime("%Y.%m.%d_%H.%M")
     experiment_tag = f"{timestamp}_{experiment_tag_words}_{iperf3_runtime}s_{iperf3_connections}c"
-    data_dir = skyplane_root / "data"
+    data_dir = __root__ / "data"
     log_dir = data_dir / "logs" / "throughput_grid" / f"{experiment_tag}"
     raw_iperf3_log_dir = log_dir / "raw_iperf3_logs"
 
@@ -433,7 +434,7 @@ def latency_grid(
     experiment_tag_words = os.popen("bash scripts/get_random_word_hash.sh").read().strip()
     timestamp = datetime.now(timezone.utc).strftime("%Y.%m.%d_%H.%M")
     experiment_tag = f"{timestamp}_{experiment_tag_words}"
-    data_dir = skyplane_root / "data"
+    data_dir = __root__ / "data"
     log_dir = data_dir / "logs" / "latency_grid" / f"{experiment_tag}"
 
     # ask for confirmation

@@ -22,7 +22,9 @@ import skyplane.cli.usage.client
 import skyplane.cli.usage.client
 import skyplane.cli.usage.definitions
 import skyplane.cli.usage.definitions
-from skyplane import GB, cloud_config, config_path, exceptions, skyplane_root
+from skyplane import exceptions, __root__
+from skyplane.cli import config_path, cloud_config
+from skyplane.utils.definitions import GB
 from skyplane.cli.cli_impl.cp_replicate import (
     confirm_transfer,
     enrich_dest_objs,
@@ -76,9 +78,7 @@ def cp(
     # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_target_tput_per_vm_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
-    solver_throughput_grid: Path = typer.Option(
-        skyplane_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
-    ),
+    solver_throughput_grid: Path = typer.Option(__root__ / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"),
     solver_verbose: bool = False,
 ):
     """
@@ -278,9 +278,7 @@ def sync(
     # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_target_tput_per_vm_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps per instance"),
-    solver_throughput_grid: Path = typer.Option(
-        skyplane_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
-    ),
+    solver_throughput_grid: Path = typer.Option(__root__ / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"),
     solver_verbose: bool = False,
 ):
     """

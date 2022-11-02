@@ -13,12 +13,12 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
 
-from skyplane import exceptions, key_root
+from skyplane import exceptions
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skyplane.compute.cloud_providers import CloudProvider
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.gcp.gcp_server import GCPServer
-from skyplane.compute.server import Server, ServerState
+from skyplane.compute.server import Server, ServerState, key_root
 from skyplane.utils import logger
 from skyplane.utils.fn import wait_for
 

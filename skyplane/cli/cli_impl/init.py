@@ -10,11 +10,11 @@ import typer
 from rich.progress import Progress, SpinnerColumn, TextColumn
 import questionary
 
-from skyplane import SkyplaneConfig, aws_config_path, gcp_config_path
-from skyplane.compute.aws.aws_auth import AWSAuthentication
+from skyplane.compute.aws.aws_auth import AWSAuthentication, aws_config_path
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_server import AzureServer
-from skyplane.compute.gcp.gcp_auth import GCPAuthentication
+from skyplane.compute.gcp.gcp_auth import GCPAuthentication, gcp_config_path
+from skyplane.config import SkyplaneConfig
 
 
 def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> SkyplaneConfig:
