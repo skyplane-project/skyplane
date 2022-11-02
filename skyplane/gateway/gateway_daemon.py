@@ -12,7 +12,7 @@ from pathlib import Path
 from threading import BoundedSemaphore
 from typing import Dict
 
-from skyplane import MB
+from skyplane.utils.definitions import MB
 from skyplane.chunk import ChunkState
 from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.gateway.gateway_daemon_api import GatewayDaemonAPI

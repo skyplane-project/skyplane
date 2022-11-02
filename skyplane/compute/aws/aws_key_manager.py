@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from skyplane import exceptions as skyplane_exceptions
-from skyplane import key_root
+from skyplane.compute.server import key_root
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.utils import logger
 
