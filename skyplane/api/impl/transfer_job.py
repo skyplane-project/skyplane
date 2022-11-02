@@ -163,14 +163,7 @@ class CopyJob(TransferJob):
         dispatch_batch_size: int = 64,
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways."""
-        chunker = Chunker(
-            self.src_iface,
-            self.dst_iface,
-            multipart_enabled=transfer_config.multipart_enabled,
-            multipart_threshold_mb=transfer_config.multipart_threshold_mb,
-            multipart_chunk_size_mb=transfer_config.multipart_chunk_size_mb,
-            multipart_max_chunks=transfer_config.multipart_max_chunks,
-        )
+        chunker = Chunker(self.src_iface, self.dst_iface, transfer_config)
         n_multiparts = 0
         gen_transfer_list = tail_generator(self._transfer_pair_generator(), self.transfer_list)
         chunks = chunker.chunk(gen_transfer_list)

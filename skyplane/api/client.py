@@ -3,7 +3,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from skyplane import tmp_log_dir
 from skyplane.api.auth_config import AWSConfig, AzureConfig, GCPConfig
 from skyplane.api.transfer_config import TransferConfig
 from skyplane.api.dataplane import Dataplane
@@ -85,3 +84,6 @@ class SkyplaneClient:
             return Dataplane(topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
         else:
             raise NotImplementedError(f"Dataplane type {type} not implemented")
+
+
+tmp_log_dir = Path("/tmp/skyplane")

@@ -9,7 +9,7 @@ import nacl.secret
 import nacl.utils
 import urllib3
 
-from skyplane import gateway_docker_image
+from skyplane.utils.definitions import gateway_docker_image
 from skyplane.compute.server import Server
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils.fn import PathLike, do_parallel

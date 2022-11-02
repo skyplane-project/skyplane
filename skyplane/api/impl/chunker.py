@@ -5,7 +5,7 @@ import time
 from queue import Queue
 from typing import Generator, List, Optional, Tuple, TypeVar
 
-from skyplane import MB
+from skyplane.utils.definitions import MB
 from skyplane.api.transfer_config import TransferConfig
 from skyplane.chunk import Chunk, ChunkRequest
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
