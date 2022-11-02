@@ -12,18 +12,20 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
 
-from skyplane import cloud_config, exceptions, key_root
+from skyplane import exceptions
+from skyplane.config_paths import cloud_config
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.compute.cloud_providers import CloudProvider
+from skyplane.compute.server import key_root
 from skyplane.utils import logger, imports
 from skyplane.utils.timer import Timer
 
 
 class AzureCloudProvider(CloudProvider):
-    def __init__(self, key_root=key_root / "azure"):
+    def __init__(self, key_root=key_root / "azure", auth: Optional[AzureAuthentication] = None):
         super().__init__()
-        self.auth = AzureAuthentication()
+        self.auth = auth if auth else AzureAuthentication()
 
         key_root.mkdir(parents=True, exist_ok=True)
         self.private_key_path = key_root / "azure_key"

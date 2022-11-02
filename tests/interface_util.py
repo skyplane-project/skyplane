@@ -3,7 +3,7 @@ import time
 import os
 import tempfile
 import uuid
-from skyplane import MB
+from skyplane.utils.definitions import MB
 
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils.fn import wait_for
@@ -24,7 +24,7 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
             file_md5 = hashlib.md5(f.read()).hexdigest()
 
         if multipart:
-            upload_id = interface.initiate_multipart_uploads([obj_name])[0]
+            upload_id = interface.initiate_multipart_upload(obj_name)
             time.sleep(5)
             interface.upload_object(fpath, obj_name, 1, upload_id)
             time.sleep(5)

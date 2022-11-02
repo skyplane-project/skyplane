@@ -9,7 +9,7 @@ homepage = "https://skyplane.org/"
 repository = "https://github.com/skyplane-project/skyplane"
 documentation = "https://skyplane.org/"
 readme = "README.md"
-include = ["profiles/*"]
+include = ["skyplane/data/*"]
 
 [tool.poetry.dependencies]
 python = ">=3.7.1,<3.12"
@@ -67,7 +67,7 @@ pytest-cov = ">=2.10.0"
 pytest-xdist = ">=2.0.0"
 
 [build-system]
-requires = ["setuptools", "poetry-core>=1.0.0"]
+requires = ["setuptools", "poetry-core>=1.2.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]

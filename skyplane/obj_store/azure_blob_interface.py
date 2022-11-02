@@ -33,6 +33,9 @@ class AzureBlobInterface(ObjectStoreInterface):
     def region_tag(self):
         return f"azure:{self.storage_account_interface.azure_region}"
 
+    def bucket(self) -> str:
+        return f"{self.account_name}/{self.container_name}"
+
     @property
     def blob_service_client(self):
         return self.auth.get_blob_service_client(f"https://{self.account_name}.blob.core.windows.net")

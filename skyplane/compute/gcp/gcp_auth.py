@@ -3,8 +3,9 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from skyplane import config_path, gcp_config_path, key_root
+from skyplane.compute.server import key_root
 from skyplane.config import SkyplaneConfig
+from skyplane.config_paths import config_path, gcp_config_path
 from skyplane.utils import logger, imports
 from skyplane.utils.retry import retry_backoff
 
@@ -202,6 +203,3 @@ class GCPAuthentication:
 
     def get_gcp_instances(self, gcp_region: str):
         return self.get_gcp_client().instances().list(project=self.project_id, zone=gcp_region).execute()
-
-    def check_compute_engine_enabled(self):
-        """Check if the GCP compute engine API is enabled"""

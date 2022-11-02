@@ -8,9 +8,9 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
 
-from skyplane import key_root, exceptions
+from skyplane import exceptions
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
-from skyplane.compute.server import Server, ServerState
+from skyplane.compute.server import Server, ServerState, key_root
 from skyplane.utils.fn import PathLike
 
 
