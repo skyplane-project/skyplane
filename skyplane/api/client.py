@@ -6,7 +6,7 @@ from typing import Optional
 from skyplane import tmp_log_dir
 from skyplane.experimental.api.auth_config import AWSConfig, AzureConfig, GCPConfig
 from skyplane.experimental.api.transfer_config import TransferConfig
-from skyplane.experimental.api.dataplane import Dataplane
+from skyplane.api.dataplane import Dataplane
 from skyplane.experimental.api.impl.path import parse_path
 from skyplane.experimental.api.impl.planner import DirectPlanner
 from skyplane.experimental.api.impl.provisioner import Provisioner

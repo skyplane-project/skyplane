@@ -55,10 +55,7 @@ def gateway_docker_image():
 
 
 # expose API
-from skyplane.experimental.api.client import SkyplaneClient
-from skyplane.experimental.api.dataplane import Dataplane
-from skyplane.experimental.api.transfer_config import TransferConfig
-from skyplane.experimental.api.auth_config import AWSConfig, AzureConfig, GCPConfig
+from skyplane.api.dataplane import Dataplane
 
 __all__ = [
     "__version__",

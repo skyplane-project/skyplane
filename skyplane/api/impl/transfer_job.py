@@ -23,7 +23,7 @@ from skyplane.utils.fn import do_parallel
 
 
 if TYPE_CHECKING:
-    from skyplane.experimental.api.dataplane import Dataplane
+    from skyplane.api.dataplane import Dataplane
 
 
 @dataclass
