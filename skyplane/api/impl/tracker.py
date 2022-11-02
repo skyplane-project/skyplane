@@ -41,6 +41,9 @@ class TransferProgressTracker(Thread):
         # http_pool
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
 
+    def __str__(self):
+        return f"TransferProgressTracker({self.dataplane}, {self.jobs})"
+
     def run(self):
         for job_uuid, job in self.jobs.items():
             logger.fs.debug(f"[TransferProgressTracker] Dispatching job {job.uuid}")

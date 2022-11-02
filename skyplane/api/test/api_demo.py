@@ -7,7 +7,9 @@ if __name__ == "__main__":
     dp = client.dataplane("aws", "us-east-1", "aws", "us-east-2", n_vms=1)
     with dp.auto_deprovision():
         dp.provision(spinner=True)
-        dp.queue_copy("s3://skycamp-demo-src", "s3://skycamp-demo-us-east-2/imagenet-bucket", recursive=True)
+        dp.queue_copy(
+            "s3://skycamp-demo-src/synset_labels.txt", "s3://skycamp-demo-us-east-2/imagenet-bucket/synset_labels.txt", recursive=False
+        )
         tracker = dp.run_async()
 
         # monitor the transfer
@@ -30,3 +32,4 @@ if __name__ == "__main__":
                 break
             time.sleep(1)
         tracker.join()
+        print("Transfer complete!")

@@ -159,14 +159,19 @@ class Dataplane:
             if not self.provisioned:
                 logger.fs.warning("Attempting to deprovision dataplane that is not provisioned, this may be from auto_deprovision.")
             # wait for tracker tasks
-            for task in self.pending_transfers:
-                logger.warning(f"[Dataplane.deprovision] Waiting for tracker task {task} to finish")
-                task.join()
-            self.provisioner.deprovision(
-                max_jobs=max_jobs,
-                spinner=spinner,
-            )
-            self.provisioned = False
+            try:
+                for task in self.pending_transfers:
+                    logger.warning(f"Before deprovisioning, waiting for jobs to finish: {list(task.jobs.keys())}")
+                    task.join()
+            except KeyboardInterrupt:
+                logger.warning("Interrupted while waiting for transfers to finish, deprovisioning anyway.")
+                raise
+            finally:
+                self.provisioner.deprovision(
+                    max_jobs=max_jobs,
+                    spinner=spinner,
+                )
+                self.provisioned = False
 
     def check_error_logs(self) -> Dict[str, List[str]]:
         def get_error_logs(args):
