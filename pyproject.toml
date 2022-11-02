@@ -58,7 +58,6 @@ azure = ["azure-identity", "azure-mgmt-authorization", "azure-mgmt-compute", "az
 gcp = ["google-api-python-client", "google-auth", "google-cloud-compute", "google-cloud-storage"]
 all = ["boto3", "azure-identity", "azure-mgmt-authorization", "azure-mgmt-compute", "azure-mgmt-network", "azure-mgmt-resource", "azure-mgmt-storage", "azure-mgmt-subscription", "azure-storage-blob", "google-api-python-client", "google-auth", "google-cloud-compute", "google-cloud-storage"]
 gateway = ["azure-identity", "azure-mgmt-storage", "azure-mgmt-authorization", "boto3", "google-api-python-client", "google-auth", "google-cloud-compute", "google-cloud-storage", "cachetools", "paramiko", "rich", "flask", "lz4", "pyopenssl", "werkzeug"]
-
 solver = ["cvxpy", "graphviz", "matplotlib", "numpy"]
 
 [tool.poetry.dev-dependencies]
