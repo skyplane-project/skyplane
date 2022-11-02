@@ -1,4 +1,4 @@
-from pathlib import Path
+from importlib.resources import path
 
 import typer
 
@@ -11,10 +11,10 @@ def util_grid_throughput(
     dest: str,
     src_tier: str = "PREMIUM",
     dest_tier: str = "PREMIUM",
-    throughput_grid: Path = typer.Option(__root__ / "profiles" / "throughput.csv", help="Throughput grid file"),
 ):
-    solver = ThroughputSolver(throughput_grid)
-    print(solver.get_path_throughput(src, dest, src_tier, dest_tier) / 2**30)
+    with path("skyplane.data", "throughput.csv") as throughput_grid_path:
+        solver = ThroughputSolver(throughput_grid_path)
+        print(solver.get_path_throughput(src, dest, src_tier, dest_tier) / 2**30)
 
 
 def util_grid_cost(
@@ -22,10 +22,10 @@ def util_grid_cost(
     dest: str,
     src_tier: str = "PREMIUM",
     dest_tier: str = "PREMIUM",
-    throughput_grid: Path = typer.Option(__root__ / "profiles" / "throughput.csv", help="Throughput grid file"),
 ):
-    solver = ThroughputSolver(throughput_grid)
-    print(solver.get_path_cost(src, dest, src_tier, dest_tier))
+    with path("skyplane.data", "throughput.csv") as throughput_grid_path:
+        solver = ThroughputSolver(throughput_grid_path)
+        print(solver.get_path_cost(src, dest, src_tier, dest_tier))
 
 
 def get_max_throughput(region_tag: str):
@@ -41,18 +41,17 @@ def get_max_throughput(region_tag: str):
         raise typer.Exit(1)
 
 
-def dump_full_util_cost_grid(
-    throughput_grid: Path = typer.Option(__root__ / "profiles" / "throughput.csv", help="Throughput grid file"),
-):
-    solver = ThroughputSolver(throughput_grid)
-    regions = solver.get_regions()
+def dump_full_util_cost_grid():
+    with path("skyplane.data", "throughput.csv") as throughput_grid_path:
+        solver = ThroughputSolver(throughput_grid_path)
+        regions = solver.get_regions()
 
-    print("src,dest,src_tier,dest_tier,cost")
-    for src in regions:
-        for dest in regions:
-            for src_tier in ["PREMIUM", "STANDARD"]:
-                for dest_tier in ["PREMIUM", "STANDARD"]:
-                    try:
-                        print(f"{src},{dest},{src_tier},{dest_tier},{solver.get_path_cost(src, dest, src_tier, dest_tier)}")
-                    except AssertionError:
-                        pass
+        print("src,dest,src_tier,dest_tier,cost")
+        for src in regions:
+            for dest in regions:
+                for src_tier in ["PREMIUM", "STANDARD"]:
+                    for dest_tier in ["PREMIUM", "STANDARD"]:
+                        try:
+                            print(f"{src},{dest},{src_tier},{dest_tier},{solver.get_path_cost(src, dest, src_tier, dest_tier)}")
+                        except AssertionError:
+                            pass

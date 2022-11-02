@@ -13,7 +13,7 @@ with warnings.catch_warnings():
     import paramiko
 
 from skyplane import exceptions
-from skyplane.cli import cloud_config
+from skyplane.config_paths import cloud_config
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_server import AzureServer
 from skyplane.compute.cloud_providers import CloudProvider

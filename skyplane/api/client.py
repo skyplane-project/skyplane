@@ -1,9 +1,8 @@
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-from skyplane.api.auth_config import AWSConfig, AzureConfig, GCPConfig
 from skyplane.api.transfer_config import TransferConfig
 from skyplane.api.dataplane import Dataplane
 from skyplane.api.impl.path import parse_path
@@ -13,12 +12,16 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils import logger
 
 
+if TYPE_CHECKING:
+    from skyplane.api.auth_config import AWSConfig, AzureConfig, GCPConfig
+
+
 class SkyplaneClient:
     def __init__(
         self,
-        aws_config: Optional[AWSConfig] = None,
-        azure_config: Optional[AzureConfig] = None,
-        gcp_config: Optional[GCPConfig] = None,
+        aws_config: Optional["AWSConfig"] = None,
+        azure_config: Optional["AzureConfig"] = None,
+        gcp_config: Optional["GCPConfig"] = None,
         transfer_config: Optional[TransferConfig] = None,
         log_dir: Optional[str] = None,
     ):

@@ -10,8 +10,7 @@ from typing import Dict, Optional, Tuple
 
 import urllib3
 
-from skyplane import __config_root__
-from skyplane.cli import config_path, cloud_config
+from skyplane.config_paths import config_path, cloud_config, __config_root__
 from skyplane.compute.const_cmds import make_autoshutdown_script, make_dozzle_command, make_sysctl_tcp_tuning_command
 from skyplane.utils import logger
 from skyplane.utils.fn import PathLike, wait_for

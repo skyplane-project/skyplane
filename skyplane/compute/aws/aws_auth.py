@@ -1,11 +1,8 @@
 from typing import Optional
 
-from skyplane import __config_root__
-from skyplane.cli import config_path
 from skyplane.config import SkyplaneConfig
+from skyplane.config_paths import config_path, aws_config_path
 from skyplane.utils import imports
-
-aws_config_path = __config_root__ / "aws_config"
 
 
 class AWSAuthentication:

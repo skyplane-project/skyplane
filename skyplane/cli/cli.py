@@ -1,8 +1,8 @@
+from importlib.resources import path
 import os
 import subprocess
 import time
 import traceback
-from pathlib import Path
 from shlex import split
 from typing import Optional
 
@@ -23,7 +23,6 @@ import skyplane.cli.usage.client
 import skyplane.cli.usage.definitions
 import skyplane.cli.usage.definitions
 from skyplane import exceptions, __root__
-from skyplane.cli import config_path, cloud_config
 from skyplane.utils.definitions import GB
 from skyplane.cli.cli_impl.cp_replicate import (
     confirm_transfer,
@@ -50,6 +49,7 @@ from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.config import SkyplaneConfig
+from skyplane.config_paths import config_path, cloud_config
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.replicate.replication_plan import ReplicationJob
 from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
@@ -58,7 +58,6 @@ from skyplane.utils.fn import do_parallel
 
 app = typer.Typer(name="skyplane")
 app.command()(cli_internal.replicate_random)
-app.command()(cli_internal.replicate_random_solve)
 app.add_typer(skyplane.cli.experiments.app, name="experiments")
 app.add_typer(skyplane.cli.cli_aws.app, name="aws")
 app.add_typer(skyplane.cli.cli_azure.app, name="azure")
@@ -79,7 +78,6 @@ def cp(
     # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_target_tput_per_vm_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
-    solver_throughput_grid: Path = typer.Option(__root__ / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"),
     solver_verbose: bool = False,
 ):
     """
@@ -193,18 +191,19 @@ def cp(
             typer.secho("Warning: Azure is not yet supported for multipart transfers. Disabling multipart.", fg="yellow", err=True)
             multipart = False
 
-        topo = generate_topology(
-            src_region_tag,
-            dst_region_tag,
-            solve,
-            num_connections=cloud_config.get_flag("num_connections"),
-            max_instances=max_instances,
-            solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
-            solver_target_tput_per_vm_gbits=solver_target_tput_per_vm_gbits,
-            solver_throughput_grid=solver_throughput_grid,
-            solver_verbose=solver_verbose,
-            args=args,
-        )
+        with path("skyplane.data", "throughput.csv") as throughput_grid_path:
+            topo = generate_topology(
+                src_region_tag,
+                dst_region_tag,
+                solve,
+                num_connections=cloud_config.get_flag("num_connections"),
+                max_instances=max_instances,
+                solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
+                solver_target_tput_per_vm_gbits=solver_target_tput_per_vm_gbits,
+                solver_throughput_grid=throughput_grid_path,
+                solver_verbose=solver_verbose,
+                args=args,
+            )
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=bucket_src,
@@ -279,7 +278,6 @@ def sync(
     # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_target_tput_per_vm_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps per instance"),
-    solver_throughput_grid: Path = typer.Option(__root__ / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"),
     solver_verbose: bool = False,
 ):
     """
@@ -387,18 +385,19 @@ def sync(
             typer.secho("Warning: Azure is not yet supported for multipart transfers. Disabling multipart.", fg="yellow", err=True)
             multipart = False
 
-        topo = generate_topology(
-            src_region_tag,
-            dst_region_tag,
-            solve,
-            num_connections=cloud_config.get_flag("num_connections"),
-            max_instances=max_instances,
-            solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
-            solver_target_tput_per_vm_gbits=solver_target_tput_per_vm_gbits,
-            solver_throughput_grid=solver_throughput_grid,
-            solver_verbose=solver_verbose,
-            args=args,
-        )
+        with path("skyplane.data", "throughput.csv") as throughput_grid_path:
+            topo = generate_topology(
+                src_region_tag,
+                dst_region_tag,
+                solve,
+                num_connections=cloud_config.get_flag("num_connections"),
+                max_instances=max_instances,
+                solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
+                solver_target_tput_per_vm_gbits=solver_target_tput_per_vm_gbits,
+                solver_throughput_grid=throughput_grid_path,
+                solver_verbose=solver_verbose,
+                args=args,
+            )
 
         job = ReplicationJob(
             source_region=topo.source_region(),

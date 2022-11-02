@@ -3,6 +3,7 @@ from functools import partial
 
 import typer
 from rich.console import Console
+from skyplane.cli.experiments.cli_profile import throughput_grid
 
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider

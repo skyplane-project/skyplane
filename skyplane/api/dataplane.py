@@ -3,24 +3,24 @@ import os
 import threading
 from collections import defaultdict
 from functools import partial
-from typing import Dict
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 import nacl.secret
 import nacl.utils
 import urllib3
 
-from skyplane.utils.definitions import gateway_docker_image
+from skyplane.api.impl.tracker import TransferProgressTracker
+from skyplane.api.impl.transfer_job import CopyJob, SyncJob, TransferJob
+from skyplane.api.transfer_config import TransferConfig
 from skyplane.compute.server import Server
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationTopologyGateway
+from skyplane.utils import logger
+from skyplane.utils.definitions import gateway_docker_image
 from skyplane.utils.fn import PathLike, do_parallel
 
-from typing import List, Optional
 
-from skyplane.api.transfer_config import TransferConfig
-from skyplane.api.impl.provisioner import Provisioner
-from skyplane.api.impl.transfer_job import CopyJob, SyncJob, TransferJob
-from skyplane.api.impl.tracker import TransferProgressTracker
-from skyplane.utils import logger
+if TYPE_CHECKING:
+    from skyplane.api.impl.provisioner import Provisioner
 
 
 class DataplaneAutoDeprovision:
@@ -41,12 +41,12 @@ class Dataplane:
     def __init__(
         self,
         topology: ReplicationTopology,
-        provisioner: Provisioner,
-        transfer_config: Optional[TransferConfig] = None,
+        provisioner: "Provisioner",
+        transfer_config: TransferConfig,
     ):
         self.topology = topology
         self.provisioner = provisioner
-        self.transfer_config = transfer_config if transfer_config else TransferConfig()
+        self.transfer_config = transfer_config
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         self.provisioning_lock = threading.Lock()
         self.provisioned = False
