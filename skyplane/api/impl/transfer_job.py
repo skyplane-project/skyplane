@@ -10,9 +10,9 @@ import urllib3
 from rich import print as rprint
 
 from skyplane import exceptions
-from skyplane.experimental.api.transfer_config import TransferConfig
-from skyplane.experimental.api.impl.chunker import Chunker, batch_generator, tail_generator
-from skyplane.experimental.api.impl.path import parse_path
+from skyplane.api.transfer_config import TransferConfig
+from skyplane.api.impl.chunker import Chunker, batch_generator, tail_generator
+from skyplane.api.impl.path import parse_path
 from skyplane.chunk import ChunkRequest
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.obj_store.gcs_interface import GCSObject

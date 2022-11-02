@@ -189,9 +189,10 @@ class AWSNetwork:
         try:
             logger.fs.debug(f"[AWS] Removing IPs {ips} from security group {sg.group_name}")
             for rule in sg.ip_permissions:
+                logger.fs.debug(f"    Found rule {rule}")
                 for ip_range in rule.get("IpRanges", []):
                     if ip_range.get("CidrIp", "").split("/")[0] in ips:
-                        logger.fs.debug(f"[AWS] Removing IP {ip_range} from security group {sg.group_name}")
+                        logger.fs.debug(f"[AWS]         Removing IP {ip_range} from security group {sg.group_name}")
                         sg.revoke_ingress(IpPermissions=[rule])
         except exceptions.ClientError as e:
             logger.fs.error(f"[AWS] Error removing IPs {ips} from security group {sg.group_name}: {e}")
