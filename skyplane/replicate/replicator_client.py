@@ -13,8 +13,7 @@ import nacl.secret
 import nacl.utils
 import pandas as pd
 import urllib3
-from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, \
-    TransferSpeedColumn
+from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, TransferSpeedColumn
 
 from skyplane import exceptions
 from skyplane.api.client import tmp_log_dir
