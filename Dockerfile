@@ -34,7 +34,7 @@ RUN --mount=type=cache,target=/root/.cache/pip pip3 install --no-cache-dir 'poet
 COPY pyproject.toml poetry.lock /tmp/
 RUN --mount=type=cache,target=/root/.cache/pip cd /tmp \
     && poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi --only gateway \
+    && poetry install --no-interaction --no-ansi --only gateway --no-root \
     && rm -rf /tmp/pyproject.toml
 
 WORKDIR /pkg
