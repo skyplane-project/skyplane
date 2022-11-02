@@ -15,8 +15,7 @@ import pandas as pd
 import urllib3
 from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, TransferSpeedColumn
 
-from skyplane import exceptions
-from skyplane.api.client import tmp_log_dir
+from skyplane import exceptions, tmp_log_dir
 from skyplane.utils.definitions import MB, GB, gateway_docker_image
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
