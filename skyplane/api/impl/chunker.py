@@ -6,6 +6,7 @@ from queue import Queue
 from typing import Generator, List, Optional, Tuple, TypeVar
 
 from skyplane import MB
+from skyplane.api.transfer_config import TransferConfig
 from skyplane.chunk import Chunk, ChunkRequest
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger
@@ -18,18 +19,12 @@ class Chunker:
         self,
         src_iface: ObjectStoreInterface,
         dest_iface: ObjectStoreInterface,
-        multipart_enabled: bool = True,
-        multipart_threshold_mb: int = 128,
-        multipart_chunk_size_mb: int = 64,
-        multipart_max_chunks: int = 10000,
+        transfer_config: TransferConfig,
         concurrent_multipart_chunk_threads: int = 64,
     ):
         self.src_iface = src_iface
         self.dest_iface = dest_iface
-        self.multipart_enabled = multipart_enabled
-        self.multipart_threshold_mb = multipart_threshold_mb
-        self.multipart_chunk_size_mb = multipart_chunk_size_mb
-        self.multipart_max_chunks = multipart_max_chunks
+        self.transfer_config = transfer_config
         self.multipart_upload_requests = []
         self.concurrent_multipart_chunk_threads = concurrent_multipart_chunk_threads
 
@@ -52,10 +47,10 @@ class Chunker:
             # get source and destination object and then compute number of chunks
             src_object, dest_object = input_data
             upload_id = dest_iface.initiate_multipart_upload(dest_object.key)
-            chunk_size_bytes = int(self.multipart_chunk_size_mb * MB)
+            chunk_size_bytes = int(self.transfer_config.multipart_chunk_size_mb * MB)
             num_chunks = math.ceil(src_object.size / chunk_size_bytes)
-            if num_chunks > self.multipart_max_chunks:
-                chunk_size_bytes = int(src_object.size / self.multipart_max_chunks)
+            if num_chunks > self.transfer_config.multipart_max_chunks:
+                chunk_size_bytes = int(src_object.size / self.transfer_config.multipart_max_chunks)
                 chunk_size_bytes = math.ceil(chunk_size_bytes / MB) * MB  # round to next largest mb
                 num_chunks = math.ceil(src_object.size / chunk_size_bytes)
 
@@ -91,7 +86,7 @@ class Chunker:
         multipart_chunk_threads = []
 
         # start chunking threads
-        if self.multipart_enabled:
+        if self.transfer_config.multipart_enabled:
             for _ in range(self.concurrent_multipart_chunk_threads):
                 t = threading.Thread(
                     target=self.multipart_chunk_thread,
@@ -104,7 +99,7 @@ class Chunker:
         # begin chunking loop
         current_idx = 0
         for src_obj, dst_obj in transfer_pair_generator:
-            if self.multipart_enabled and src_obj.size > self.multipart_threshold_mb * MB:
+            if self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
                 multipart_send_queue.put((src_obj, dst_obj))
             else:
                 yield Chunk(
@@ -115,7 +110,7 @@ class Chunker:
                 )
                 current_idx += 1
 
-            if self.multipart_enabled:
+            if self.transfer_config.multipart_enabled:
                 # drain multipart chunk queue and yield with updated chunk IDs
                 while not multipart_chunk_queue.empty():
                     chunk = multipart_chunk_queue.get()
@@ -123,7 +118,7 @@ class Chunker:
                     yield chunk
                     current_idx += 1
 
-        if self.multipart_enabled:
+        if self.transfer_config.multipart_enabled:
             # send sentinel to all threads
             multipart_exit_event.set()
             for thread in multipart_chunk_threads:
