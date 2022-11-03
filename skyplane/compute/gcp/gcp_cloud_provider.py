@@ -171,7 +171,7 @@ class GCPCloudProvider(CloudProvider):
                 )
                 self.wait_for_operation_to_complete("global", op["name"])
             else:
-                raise e
+                raise
 
     @imports.inject("googleapiclient.errors", pip_extra="gcp")
     def configure_skyplane_firewall(errors, self, ip="0.0.0.0/0"):
@@ -191,7 +191,7 @@ class GCPCloudProvider(CloudProvider):
             if e.resp.status == 404:
                 current_firewall = None
             else:
-                raise e
+                raise
 
         fw_body = {
             "name": "skyplanessh",
@@ -262,7 +262,7 @@ class GCPCloudProvider(CloudProvider):
                 if e.resp.status == 404:
                     current_firewall = None
                 else:
-                    raise e
+                    raise
             if current_firewall is None:
                 create_firewall(fw_body, update_firewall=False)
                 logger.fs.debug(f"[GCP] Created new firewall {firewall_name}")
@@ -282,7 +282,7 @@ class GCPCloudProvider(CloudProvider):
                 if e.resp.status == 404:  # Firewall doesnt exist. Continue
                     logger.fs.warning(f"[GCP] Unable to delete {firewall_name}, does not exist.")
                 else:
-                    raise e
+                    raise
 
     def get_operation_state(self, zone, operation_name):
         compute = self.auth.get_gcp_client()
@@ -393,9 +393,9 @@ class GCPCloudProvider(CloudProvider):
                     raise exceptions.InsufficientVCPUException(f"Got QUOTA_EXCEEDED in region {region}") from e
                 elif "QUOTA_LIMIT" in e.content:
                     raise exceptions.InsufficientVCPUException(f"Got QUOTA_LIMIT in region {region}") from e
-            raise e
+            raise
         except KeyboardInterrupt as e:
             logger.fs.info(f"Keyboard interrupt, deleting instance {name}")
             op = compute.instances().delete(project=self.auth.project_id, zone=region, instance=name).execute()
             self.wait_for_operation_to_complete(region, op["name"])
-            raise e
+            raise

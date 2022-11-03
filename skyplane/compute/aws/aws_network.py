@@ -179,7 +179,7 @@ class AWSNetwork:
             else:
                 logger.error(f"[aws_network]:{aws_region} Error adding IPs {ips} to security group {sg.group_name}")
                 logger.fs.exception(e)
-                raise e
+                raise e from None
 
     @imports.inject("botocore.exceptions", pip_extra="aws")
     def remove_ips_from_security_group(exceptions, self, aws_region: str, ips: List[str]):
@@ -218,4 +218,4 @@ class AWSNetwork:
             else:
                 logger.error(f"[aws_network]:{aws_region} Error adding SSH port {port} for IPs {ip} to security group {sg.group_name}")
                 logger.fs.exception(e)
-                raise e
+                raise e from None

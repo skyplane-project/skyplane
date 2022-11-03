@@ -77,7 +77,7 @@ class GCSInterface(ObjectStoreInterface):
         except Exception as e:
             if "The specified bucket does not exist" in str(e):
                 return False
-            raise e
+            raise
 
     def exists(self, obj_name):
         try:
