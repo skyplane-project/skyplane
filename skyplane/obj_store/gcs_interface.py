@@ -3,7 +3,7 @@ import datetime
 import hashlib
 import os
 from functools import lru_cache
-from typing import Iterator, List, Optional
+from typing import Iterator, List, Optional, Tuple
 from xml.etree import ElementTree
 
 import requests
@@ -58,7 +58,7 @@ class GCSInterface(ObjectStoreInterface):
                     f"No access to the Google Cloud Storage bucket '{self.bucket_name}', assuming bucket is in the 'us-central1-a' zone"
                 )
                 return "us-central1-a"
-            raise e
+            raise
         if bucket is None:
             raise exceptions.MissingBucketException(f"GCS bucket {self.bucket_name} does not exist")
         else:
@@ -159,7 +159,7 @@ class GCSInterface(ObjectStoreInterface):
 
     def download_object(
         self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5=False
-    ) -> Optional[bytes]:
+    ) -> Tuple[Optional[str], Optional[bytes]]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = src_object_name if src_object_name[0] != "/" else src_object_name
         bucket = self._gcs_client.bucket(self.bucket_name)
@@ -183,7 +183,9 @@ class GCSInterface(ObjectStoreInterface):
             f.write(chunk)
             if generate_md5:
                 m.update(chunk)
-        return m.digest() if generate_md5 else None
+        md5 = m.digest() if generate_md5 else None
+        mime_type = blob.content_type
+        return mime_type, md5
 
     def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None, mime_type=None):
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
@@ -194,7 +196,7 @@ class GCSInterface(ObjectStoreInterface):
 
         if part_number is None:
             blob = bucket.blob(dst_object_name)
-            blob.upload_from_filename(src_file_path, content_type=mime_type or "application/octet-stream")
+            blob.upload_from_filename(src_file_path, content_type=mime_type)
             if check_md5:
                 blob_md5 = blob.md5_hash
                 if b64_md5sum != blob_md5:

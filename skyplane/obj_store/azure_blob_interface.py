@@ -2,7 +2,7 @@ import base64
 import hashlib
 import os
 from functools import lru_cache
-from typing import Iterator, List, Optional
+from typing import Iterator, List, Optional, Tuple
 
 from skyplane import exceptions
 from skyplane.compute.azure.azure_auth import AzureAuthentication
@@ -123,7 +123,7 @@ class AzureBlobInterface(ObjectStoreInterface):
 
     def download_object(
         self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5=False
-    ) -> Optional[bytes]:
+    ) -> Tuple[Optional[str], Optional[bytes]]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         downloader = self.container_client.download_blob(
             src_object_name, offset=offset_bytes, length=size_bytes, max_concurrency=self.max_concurrency
@@ -139,8 +139,8 @@ class AzureBlobInterface(ObjectStoreInterface):
                 if generate_md5:
                     m.update(b)
                 f.write(b)
-
-        return m.digest() if generate_md5 else None
+        md5 = m.digest() if generate_md5 else None
+        mime_type = self.get_obj_metadata(src_object_name).content_settings.content_type
 
     @imports.inject("azure.storage.blob", pip_extra="azure")
     def upload_object(azure_blob, self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None, mime_type=None):

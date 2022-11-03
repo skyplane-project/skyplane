@@ -123,7 +123,7 @@ class GatewayObjStoreConn:
 
                     if self.src_requester_pays:
                         obj_store_interface.set_requester_bool(True)
-                    md5sum = retry_backoff(
+                    mime_type, md5sum = retry_backoff(
                         partial(
                             obj_store_interface.download_object,
                             chunk_req.chunk.src_key,
@@ -140,6 +140,10 @@ class GatewayObjStoreConn:
                         logger.error(f"[obj_store:{self.worker_id}] Checksum was not generated for {chunk_req.chunk.src_key}")
                     else:
                         self.chunk_store.update_chunk_checksum(chunk_req.chunk.chunk_id, md5sum)
+                    if not mime_type:
+                        logger.error(f"[obj_store:{self.worker_id}] Mime type was not generated for {chunk_req.chunk.src_key}")
+                    else:
+                        self.chunk_store.update_chunk_mime_type(chunk_req.chunk.chunk_id, mime_type)
 
                     self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
                     recieved_chunk_size = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).stat().st_size
