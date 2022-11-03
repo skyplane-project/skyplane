@@ -141,7 +141,10 @@ def cp(
         UsageClient.log_exception("cli_check_config", e, args, src_region_tag, dst_region_tag)
         return 1
 
-    if provider_src == ["local", "hdfs", "nfs"] or provider_dst == ["local", "hdfs", "nfs"]:
+    if provider_src in ("local", "hdfs", "nfs") or provider_dst in ("local", "hdfs", "nfs"):
+        if provider_src == "hdfs" or provider_dst == "hdfs":
+            typer.secho("HDFS is not supported yet.", fg="red")
+            return 1
         cmd = replicate_onprem_cp_cmd(src, dst, recursive)
         if cmd:
             typer.secho(f"Delegating to: {cmd}", fg="yellow")
@@ -195,7 +198,7 @@ def cp(
         typer.secho("WIP:Transfer not supported", fg="red")
         return 1
 
-    elif provider_src in ["aws", "gcp", "azure"] and provider_dst in ["aws", "gcp", "azure"]:
+    elif provider_src in ("aws", "gcp", "azure") and provider_dst in ("aws", "gcp", "azure"):
         try:
             src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
             dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)

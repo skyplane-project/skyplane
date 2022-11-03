@@ -60,7 +60,7 @@ def parse_path(path: str):
         bucket_name = path[8:]
         region = path[8:].split("-", 2)[-1]
         return "azure", bucket_name, region
-    elif path.startswith("/mnt/hdfs"):
+    elif path.startswith("/mnt/hdfs") or path.startswith("hdfs://"):
         return "hdfs", None, path
     elif is_plausible_local_path(path):
         return "local", None, path
