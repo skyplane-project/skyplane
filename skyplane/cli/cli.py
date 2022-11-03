@@ -13,8 +13,7 @@ from rich.prompt import IntPrompt
 
 import skyplane.cli
 import skyplane.cli
-import skyplane.cli.cli_aws
-import skyplane.cli.cli_azure
+import skyplane.cli.cli_cloud
 import skyplane.cli.cli_config
 import skyplane.cli.cli_internal as cli_internal
 import skyplane.cli.experiments
@@ -59,8 +58,7 @@ from skyplane.utils.fn import do_parallel
 app = typer.Typer(name="skyplane")
 app.command()(cli_internal.replicate_random)
 app.add_typer(skyplane.cli.experiments.app, name="experiments")
-app.add_typer(skyplane.cli.cli_aws.app, name="aws")
-app.add_typer(skyplane.cli.cli_azure.app, name="azure")
+app.add_typer(skyplane.cli.cli_cloud.app, name="cloud")
 app.add_typer(skyplane.cli.cli_config.app, name="config")
 
 
