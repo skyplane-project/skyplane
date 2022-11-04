@@ -149,52 +149,15 @@ def cp(
             start = time.perf_counter()
             rc = os.system(cmd)
             request_time = time.perf_counter() - start
-            # Create buckets where they don't exist
-            try:
-                if provider_src == ["local", "hdfs", "nfs"]:
-                    client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
-                    dst_region_tag = client.region_tag()
-                elif provider_dst == ["local", "hdfs", "nfs"]:
-                    client = ObjectStoreInterface.create(src_region_tag, bucket_src)
-                    src_region_tag = client.region_tag()
-            except exceptions.SkyplaneException as e:
-                console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
-                console.print(e.pretty_print_str())
-                UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
-                return 1
-            # calculate gbits and throughput
-            size_byte = get_usage_gbits(src)
-            throughput_gbps = size_byte / 2**30 / request_time
-            # print stats
+            # print stats - we do not measure throughput for on-prem
             if not rc:
-                print_stats_completed(request_time, throughput_gbps)
-                transfer_stats = TransferStats(monitor_status="completed", total_runtime_s=request_time, throughput_gbits=throughput_gbps)
+                print_stats_completed(request_time, 0)
+                transfer_stats = TransferStats(monitor_status="completed", total_runtime_s=request_time, throughput_gbits=0)
                 UsageClient.log_transfer(transfer_stats, args, src_region_tag, dst_region_tag)
             return 0
         else:
             typer.secho("Transfer not supported", fg="red")
             return 1
-
-    elif provider_src == "pre-signed-url" or provider_dst == "pre-signed-url":
-        try:
-            if provider_src == "pre-signed-url":
-                dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
-                dst_region_tag = dst_client.region_tag()
-                if cloud_config.get_flag("requester_pays"):
-                    dst_client.set_requester_bool(True)
-            elif provider_dst == "pre-signed-url":
-                src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
-                src_region_tag = src_client.region_tag()
-                if cloud_config.get_flag("requester_pays"):
-                    src_client.set_requester_bool(True)
-        except exceptions.SkyplaneException as e:
-            console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
-            console.print(e.pretty_print_str())
-            UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
-            return 1
-        # Transparently generate transfer_pairs
-        typer.secho("WIP:Transfer not supported", fg="red")
-        return 1
 
     elif provider_src in ("aws", "gcp", "azure") and provider_dst in ("aws", "gcp", "azure"):
         try:

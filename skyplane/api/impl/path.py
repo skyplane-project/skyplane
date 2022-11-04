@@ -32,8 +32,6 @@ def parse_path(path: str):
             raise ValueError(f"Invalid Azure path: {path}")
         account, container, blob_path = match.groups()
         return "azure", f"{account}/{container}", blob_path
-    elif path.startswith("https://"):
-        return "pre-signed-url", None, path
     elif path.startswith("azure://"):
         regex = re.compile(r"azure://([^/]+)/([^/]+)/?(.*)")
         match = regex.match(path)
@@ -42,8 +40,13 @@ def parse_path(path: str):
         account, container, blob_path = match.groups()
         print(account, container, blob_path)
         return "azure", f"{account}/{container}", blob_path if blob_path else ""
-    elif path.startswith("/mnt/hdfs"):
-        return "hdfs", None, path
+    elif path.startswith("hdfs://"):
+        regex = re.compile(r"hdfs://([^/]+)/?(.*)")
+        match = regex.match(path)
+        if match is None:
+            raise ValueError(f"Invalid HDFS path: {path}")
+        host, path = match.groups()
+        return "hdfs", host, path
     else:
         if not is_plausible_local_path(path):
             logger.warning(f"Local path '{path}' does not exist")
