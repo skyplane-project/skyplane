@@ -2,11 +2,10 @@ import base64
 import hashlib
 import os
 from functools import lru_cache
+
 from typing import Iterator, List, Optional, Tuple
 
-from skyplane import exceptions
-from skyplane.compute.azure.azure_auth import AzureAuthentication
-from skyplane.compute.azure.azure_server import AzureServer
+from skyplane import exceptions, compute
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.azure_storage_account_interface import AzureStorageAccountInterface
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
@@ -21,7 +20,7 @@ class AzureBlobObject(ObjectStoreObject):
 
 class AzureBlobInterface(ObjectStoreInterface):
     def __init__(self, account_name: str, container_name: str, max_concurrency=1):
-        self.auth = AzureAuthentication()
+        self.auth = compute.AzureAuthentication()
         self.storage_account_interface = AzureStorageAccountInterface(account_name)
         self.account_name = account_name
         self.container_name = container_name
@@ -62,7 +61,7 @@ class AzureBlobInterface(ObjectStoreInterface):
         except exceptions.ResourceExistsError:
             logger.warning(f"Unable to create container {self.container_name} as it already exists")
 
-    def create_bucket(self, azure_region, resource_group=AzureServer.resource_group_name, premium_tier=True):
+    def create_bucket(self, azure_region, resource_group=compute.AzureServer.resource_group_name, premium_tier=True):
         tier = "Premium_LRS" if premium_tier else "Standard_LRS"
         if not self.storage_account_interface.storage_account_exists_in_account():
             logger.debug(f"Creating storage account {self.account_name}")

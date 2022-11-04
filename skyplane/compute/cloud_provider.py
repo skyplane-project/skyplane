@@ -1,4 +1,5 @@
 import functools
+
 from typing import List, Optional, Union
 
 from skyplane.compute.server import Server, ServerState

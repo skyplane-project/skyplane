@@ -1,28 +1,23 @@
 import itertools
 import json
-import math
 import pickle
 import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
-from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+import math
 import nacl.secret
 import nacl.utils
 import pandas as pd
 import urllib3
 from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, TransferSpeedColumn
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from skyplane import exceptions
+from skyplane import exceptions, compute
 from skyplane.api.client import tmp_log_dir
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
-from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
-from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
-from skyplane.compute.cloud_provider import CloudProvider
-from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
-from skyplane.compute.server import Server, ServerState
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.replicate.profiler import status_df_to_traceevent
 from skyplane.replicate.replication_plan import ReplicationJob, ReplicationTopology, ReplicationTopologyGateway
@@ -32,7 +27,9 @@ from skyplane.utils.fn import PathLike, do_parallel
 from skyplane.utils.timer import Timer
 
 
-def refresh_instance_list(provider: CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1) -> Dict[str, List[Server]]:
+def refresh_instance_list(
+    provider: compute.CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1
+) -> Dict[str, List[compute.Server]]:
     if instance_filter is None:
         instance_filter = {"tags": {"skyplane": "true"}}
     results = do_parallel(
@@ -86,12 +83,12 @@ class ReplicatorClient:
         self.host_uuid = host_uuid
 
         # provisioning
-        self.aws = AWSCloudProvider(key_prefix=f"skyplane-{host_uuid.replace('-', '') if host_uuid else ''}")
-        self.azure = AzureCloudProvider()
-        self.gcp = GCPCloudProvider()
+        self.aws = compute.AWSCloudProvider(key_prefix=f"skyplane-{host_uuid.replace('-', '') if host_uuid else ''}")
+        self.azure = compute.AzureCloudProvider()
+        self.gcp = compute.GCPCloudProvider()
         self.gcp_firewall_name = f"skyplane-transfer-{uuid.uuid4().hex[:8]}"
-        self.bound_nodes: Dict[ReplicationTopologyGateway, Server] = {}
-        self.temp_nodes: List[Server] = []  # saving nodes that are not yet bound so they can be deprovisioned later
+        self.bound_nodes: Dict[ReplicationTopologyGateway, compute.Server] = {}
+        self.temp_nodes: List[compute.Server] = []  # saving nodes that are not yet bound so they can be deprovisioned later
 
         # logging
         self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -135,7 +132,7 @@ class ReplicatorClient:
                 aws_instance_filter = {
                     "tags": {"skyplane": "true"},
                     "instance_type": self.aws_instance_class,
-                    "state": [ServerState.PENDING, ServerState.RUNNING],
+                    "state": [compute.ServerState.PENDING, compute.ServerState.RUNNING],
                 }
                 current_aws_instances = refresh_instance_list(
                     self.aws, set([r.split(":")[1] for r in aws_regions_to_provision]), aws_instance_filter
@@ -151,7 +148,7 @@ class ReplicatorClient:
                 azure_instance_filter = {
                     "tags": {"skyplane": "true"},
                     "instance_type": self.azure_instance_class,
-                    "state": [ServerState.PENDING, ServerState.RUNNING],
+                    "state": [compute.ServerState.PENDING, compute.ServerState.RUNNING],
                 }
                 current_azure_instances = refresh_instance_list(
                     self.azure, set([r.split(":")[1] for r in azure_regions_to_provision]), azure_instance_filter
@@ -167,7 +164,7 @@ class ReplicatorClient:
                 gcp_instance_filter = {
                     "tags": {"skyplane": "true"},
                     "instance_type": self.gcp_instance_class,
-                    "state": [ServerState.PENDING, ServerState.RUNNING],
+                    "state": [compute.ServerState.PENDING, compute.ServerState.RUNNING],
                 }
                 current_gcp_instances = refresh_instance_list(
                     self.gcp, set([r.split(":")[1] for r in gcp_regions_to_provision]), gcp_instance_filter
@@ -193,7 +190,7 @@ class ReplicatorClient:
         do_parallel(lambda fn: fn(), jobs, spinner=True, spinner_persist=True, desc="Initializing cloud keys")
 
         # provision instances
-        def provision_gateway_instance(region: str) -> Server:
+        def provision_gateway_instance(region: str) -> compute.Server:
             provider, subregion = region.split(":")
             tags = {"skyplane": "true", "skyplaneclientid": self.host_uuid} if self.host_uuid else {"skyplane": "true"}
             if provider == "aws":
@@ -278,7 +275,7 @@ class ReplicatorClient:
             e2ee_key_bytes = None
 
         # setup instances
-        def setup(args: Tuple[Server, Dict[str, int], bool, bool]):
+        def setup(args: Tuple[compute.Server, Dict[str, int], bool, bool]):
             server, outgoing_ports, am_source, am_sink = args
             if log_dir:
                 server.init_log_files(log_dir)
@@ -312,8 +309,8 @@ class ReplicatorClient:
 
     def deprovision_gateways(self):
         # This is a good place to tear down Security Groups and the instance since this is invoked by CLI too.
-        def deprovision_gateway_instance(server: Server):
-            if server.instance_state() == ServerState.RUNNING:
+        def deprovision_gateway_instance(server: compute.Server):
+            if server.instance_state() == compute.ServerState.RUNNING:
                 server.terminate_instance()
                 logger.fs.warning(f"Deprovisioned {server.uuid()}")
 
@@ -363,7 +360,7 @@ class ReplicatorClient:
 
             # pre-fetch instance IPs for all gateways
             progress.update(prepare_task, description=": Fetching instance IPs")
-            gateway_ips: Dict[Server, str] = {s: s.public_ip() for s in self.bound_nodes.values()}
+            gateway_ips: Dict[compute.Server, str] = {s: s.public_ip() for s in self.bound_nodes.values()}
 
             # make list of chunks
             n_objs = 0
@@ -510,7 +507,7 @@ class ReplicatorClient:
                 # send chunk requests to start gateways in parallel
                 progress.update(prepare_task, description=": Dispatching chunk requests to source gateways")
 
-                def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
+                def send_chunk_requests(args: Tuple[compute.Server, List[ChunkRequest]]):
                     hop_instance, chunk_requests = args
                     while chunk_requests:
                         batch, chunk_requests = chunk_requests[: 1024 * 16], chunk_requests[1024 * 16 :]
@@ -746,7 +743,7 @@ class ReplicatorClient:
                     do_parallel(write_socket_profile, self.bound_nodes.values(), n=-1)
 
                 # cleanup gateways
-                def fn(s: Server):
+                def fn(s: compute.Server):
                     try:
                         self.http_pool.request("POST", f"{s.gateway_api_url}/api/v1/shutdown")
                     except:

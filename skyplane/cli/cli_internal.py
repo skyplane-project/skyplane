@@ -1,6 +1,5 @@
-from typing import Optional
-
 import typer
+from typing import Optional
 
 from skyplane.cli.cli_impl.cp_replicate import confirm_transfer, launch_replication_job
 from skyplane.cli.common import print_header

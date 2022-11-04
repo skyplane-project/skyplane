@@ -4,9 +4,9 @@ import uuid
 import warnings
 from multiprocessing import BoundedSemaphore
 from pathlib import Path
-from typing import List, Optional
 
 from cryptography.utils import CryptographyDeprecationWarning
+from typing import List, Optional
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)

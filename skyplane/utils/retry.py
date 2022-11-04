@@ -1,4 +1,5 @@
 import time
+
 from typing import Callable, TypeVar
 
 from skyplane.utils import logger

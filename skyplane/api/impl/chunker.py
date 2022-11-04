@@ -1,8 +1,9 @@
-import math
 import queue
 import threading
 import time
 from queue import Queue
+
+import math
 from typing import Generator, List, Optional, Tuple, TypeVar
 
 from skyplane.api.transfer_config import TransferConfig

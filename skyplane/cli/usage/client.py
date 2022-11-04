@@ -7,11 +7,11 @@ import uuid
 from dataclasses import asdict, dataclass
 from enum import Enum, auto
 from pathlib import Path
-from typing import Optional, Dict
 
 import requests
 import typer
 from rich import print as rprint
+from typing import Optional, Dict
 
 import skyplane
 import skyplane.cli.usage.definitions

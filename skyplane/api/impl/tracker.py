@@ -3,9 +3,9 @@ import json
 import time
 from datetime import datetime
 from threading import Thread
-from typing import TYPE_CHECKING, Dict, List, Optional, Set
 
 import urllib3
+from typing import TYPE_CHECKING, Dict, List, Optional, Set
 
 from skyplane import exceptions
 from skyplane.api.transfer_config import TransferConfig

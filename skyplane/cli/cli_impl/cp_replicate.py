@@ -3,15 +3,15 @@ import pathlib
 import signal
 import sys
 import traceback
-from typing import List, Optional, Tuple, Dict
 
 import typer
 from rich import print as rprint
+from typing import List, Optional, Tuple, Dict
 
+from skyplane import compute
 from skyplane import exceptions
 from skyplane.cli.common import console
 from skyplane.cli.usage.client import UsageClient
-from skyplane.compute.cloud_provider import CloudProvider
 from skyplane.config_paths import cloud_config
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.obj_store.gcs_interface import GCSObject
@@ -94,7 +94,7 @@ def generate_topology(
             topo.add_objstore_instance_edge(src_region, src_region, i)
             topo.add_instance_instance_edge(src_region, i, dst_region, i, num_connections)
             topo.add_instance_objstore_edge(dst_region, i, dst_region)
-        topo.cost_per_gb = CloudProvider.get_transfer_cost(src_region, dst_region)
+        topo.cost_per_gb = compute.CloudProvider.get_transfer_cost(src_region, dst_region)
         return topo
 
 
