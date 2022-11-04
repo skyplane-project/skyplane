@@ -39,12 +39,14 @@ from skyplane.cli.cli_impl.cp_replicate_fallback import (
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.common import console, print_header, print_stats_completed, query_instances
 from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
-from skyplane.compute import AWSAuthentication
-from skyplane.compute import AWSCloudProvider
-from skyplane.compute import AzureAuthentication
-from skyplane.compute import AzureCloudProvider
-from skyplane.compute import GCPAuthentication
-from skyplane.compute import GCPCloudProvider
+from skyplane.compute import (
+    AWSAuthentication,
+    AWSCloudProvider,
+    AzureAuthentication,
+    AzureCloudProvider,
+    GCPAuthentication,
+    GCPCloudProvider,
+)
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import config_path, cloud_config
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface

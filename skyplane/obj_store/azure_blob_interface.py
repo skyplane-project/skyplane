@@ -6,8 +6,7 @@ from functools import lru_cache
 from typing import Iterator, List, Optional, Tuple
 
 from skyplane import exceptions
-from skyplane.compute import AzureAuthentication
-from skyplane.compute import AzureServer
+from skyplane.compute import AzureAuthentication, AzureServer
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.azure_storage_account_interface import AzureStorageAccountInterface
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject

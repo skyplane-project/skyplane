@@ -10,10 +10,7 @@ import typer
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from typing import List
 
-from skyplane.compute import AWSAuthentication
-from skyplane.compute import AzureAuthentication
-from skyplane.compute import AzureServer
-from skyplane.compute import GCPAuthentication
+from skyplane.compute import AWSAuthentication, AzureAuthentication, AzureServer, GCPAuthentication
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import aws_config_path, gcp_config_path
 

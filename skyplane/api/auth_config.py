@@ -2,9 +2,7 @@ from dataclasses import dataclass
 
 from typing import Optional
 
-from skyplane.compute import AWSAuthentication
-from skyplane.compute import AzureAuthentication
-from skyplane.compute import GCPAuthentication
+from skyplane.compute import AWSAuthentication, AzureAuthentication, GCPAuthentication
 
 
 class AuthenticationConfig:

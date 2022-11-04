@@ -11,11 +11,7 @@ import typer
 from rich import print as rprint
 from typing import List
 
-from skyplane.compute import AWSAuthentication
-from skyplane.compute import AWSCloudProvider
-from skyplane.compute import AzureAuthentication
-from skyplane.compute import AzureCloudProvider
-from skyplane.compute import GCPAuthentication
+from skyplane.compute import AWSAuthentication, AWSCloudProvider, AzureAuthentication, AzureCloudProvider, GCPAuthentication
 from skyplane.config_paths import cloud_config
 from skyplane.obj_store.s3_interface import S3Interface
 from skyplane.utils import logger

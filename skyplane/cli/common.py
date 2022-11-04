@@ -4,12 +4,14 @@ from functools import partial
 import typer
 from rich.console import Console
 
-from skyplane.compute import AWSAuthentication
-from skyplane.compute import AWSCloudProvider
-from skyplane.compute import AzureAuthentication
-from skyplane.compute import AzureCloudProvider
-from skyplane.compute import GCPAuthentication
-from skyplane.compute import GCPCloudProvider
+from skyplane.compute import (
+    AWSAuthentication,
+    AWSCloudProvider,
+    AzureAuthentication,
+    AzureCloudProvider,
+    GCPAuthentication,
+    GCPCloudProvider,
+)
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
 
