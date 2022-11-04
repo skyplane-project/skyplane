@@ -8,9 +8,10 @@ from pathlib import Path
 from cryptography.utils import CryptographyDeprecationWarning
 from typing import List, Optional
 
+from skyplane.compute.key_utils import generate_keypair
+
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
-    import paramiko
 
 from skyplane import exceptions
 from skyplane.config_paths import cloud_config
@@ -192,15 +193,12 @@ class AzureCloudProvider(CloudProvider):
                     )
         return server_list
 
-    # Copied from gcp_cloud_provider.py --- consolidate later?
     def create_ssh_key(self):
+        public_key_path = Path(self.public_key_path)
         private_key_path = Path(self.private_key_path)
         if not private_key_path.exists():
             private_key_path.parent.mkdir(parents=True, exist_ok=True)
-            key = paramiko.RSAKey.generate(4096)
-            key.write_private_key_file(self.private_key_path, password="skyplane")
-            with open(self.public_key_path, "w") as f:
-                f.write(f"{key.get_name()} {key.get_base64()}\n")
+            generate_keypair(public_key_path, private_key_path)
 
     def set_up_resource_group(self, clean_up_orphans=True):
         resource_client = self.auth.get_resource_client()

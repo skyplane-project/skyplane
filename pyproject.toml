@@ -15,6 +15,7 @@ include = ["skyplane/data/*"]
 python = ">=3.7.1,<3.12"
 boto3 = ">=1.16.0"
 cachetools = ">=4.1.0"
+cryptography = ">=1.4.0"
 pandas = ">=1.0.0"
 paramiko = ">=2.7.2"
 questionary = ">=1.8.0"
