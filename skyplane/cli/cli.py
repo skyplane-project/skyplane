@@ -2,7 +2,7 @@ import os
 import subprocess
 import time
 import traceback
-from pathlib import Path
+from importlib.resources import path
 from shlex import split
 from typing import Optional
 
@@ -13,8 +13,7 @@ from rich.prompt import IntPrompt
 
 import skyplane.cli
 import skyplane.cli
-import skyplane.cli.cli_aws
-import skyplane.cli.cli_azure
+import skyplane.cli.cli_cloud
 import skyplane.cli.cli_config
 import skyplane.cli.cli_internal as cli_internal
 import skyplane.cli.experiments
@@ -22,7 +21,8 @@ import skyplane.cli.usage.client
 import skyplane.cli.usage.client
 import skyplane.cli.usage.definitions
 import skyplane.cli.usage.definitions
-from skyplane import GB, cloud_config, config_path, exceptions, skyplane_root
+from skyplane import exceptions
+from skyplane.api.impl.path import parse_path
 from skyplane.cli.cli_impl.cp_replicate import (
     confirm_transfer,
     enrich_dest_objs,
@@ -38,7 +38,7 @@ from skyplane.cli.cli_impl.cp_replicate_fallback import (
     replicate_small_sync_cmd,
 )
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
-from skyplane.cli.common import console, parse_path, print_header, print_stats_completed, query_instances
+from skyplane.cli.common import console, print_header, print_stats_completed, query_instances
 from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
@@ -47,18 +47,18 @@ from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.config import SkyplaneConfig
+from skyplane.config_paths import config_path, cloud_config
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.replicate.replication_plan import ReplicationJob
 from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 from skyplane.utils import logger
+from skyplane.utils.definitions import GB
 from skyplane.utils.fn import do_parallel
 
 app = typer.Typer(name="skyplane")
 app.command()(cli_internal.replicate_random)
-app.command()(cli_internal.replicate_random_solve)
 app.add_typer(skyplane.cli.experiments.app, name="experiments")
-app.add_typer(skyplane.cli.cli_aws.app, name="aws")
-app.add_typer(skyplane.cli.cli_azure.app, name="azure")
+app.add_typer(skyplane.cli.cli_cloud.app, name="cloud")
 app.add_typer(skyplane.cli.cli_config.app, name="config")
 
 
@@ -76,9 +76,6 @@ def cp(
     # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_target_tput_per_vm_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
-    solver_throughput_grid: Path = typer.Option(
-        skyplane_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
-    ),
     solver_verbose: bool = False,
 ):
     """
@@ -142,35 +139,27 @@ def cp(
         UsageClient.log_exception("cli_check_config", e, args, src_region_tag, dst_region_tag)
         return 1
 
-    if provider_src == "local" or provider_dst == "local":
+    if provider_src in ("local", "hdfs", "nfs") or provider_dst in ("local", "hdfs", "nfs"):
+        if provider_src == "hdfs" or provider_dst == "hdfs":
+            typer.secho("HDFS is not supported yet.", fg="red")
+            return 1
         cmd = replicate_onprem_cp_cmd(src, dst, recursive)
         if cmd:
             typer.secho(f"Delegating to: {cmd}", fg="yellow")
             start = time.perf_counter()
             rc = os.system(cmd)
             request_time = time.perf_counter() - start
-
-            # calculate gbits and throughput
-            if provider_src == "local":
-                client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
-                dst_region_tag = client.region_tag()
-                size_byte = get_usage_gbits(src)
-            else:
-                client = ObjectStoreInterface.create(src_region_tag, bucket_src)
-                src_region_tag = client.region_tag()
-                size_byte = get_usage_gbits(dst)
-            throughput_gbps = size_byte / 2**30 / request_time
-
-            # print stats
+            # print stats - we do not measure throughput for on-prem
             if not rc:
-                print_stats_completed(request_time, throughput_gbps)
-                transfer_stats = TransferStats(monitor_status="completed", total_runtime_s=request_time, throughput_gbits=throughput_gbps)
+                print_stats_completed(request_time, 0)
+                transfer_stats = TransferStats(monitor_status="completed", total_runtime_s=request_time, throughput_gbits=0)
                 UsageClient.log_transfer(transfer_stats, args, src_region_tag, dst_region_tag)
             return 0
         else:
             typer.secho("Transfer not supported", fg="red")
             return 1
-    elif provider_src in ["aws", "gcp", "azure"] and provider_dst in ["aws", "gcp", "azure"]:
+
+    elif provider_src in ("aws", "gcp", "azure") and provider_dst in ("aws", "gcp", "azure"):
         try:
             src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
             dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
@@ -192,18 +181,19 @@ def cp(
             typer.secho("Warning: Azure is not yet supported for multipart transfers. Disabling multipart.", fg="yellow", err=True)
             multipart = False
 
-        topo = generate_topology(
-            src_region_tag,
-            dst_region_tag,
-            solve,
-            num_connections=cloud_config.get_flag("num_connections"),
-            max_instances=max_instances,
-            solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
-            solver_target_tput_per_vm_gbits=solver_target_tput_per_vm_gbits,
-            solver_throughput_grid=solver_throughput_grid,
-            solver_verbose=solver_verbose,
-            args=args,
-        )
+        with path("skyplane.data", "throughput.csv") as throughput_grid_path:
+            topo = generate_topology(
+                src_region_tag,
+                dst_region_tag,
+                solve,
+                num_connections=cloud_config.get_flag("num_connections"),
+                max_instances=max_instances,
+                solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
+                solver_target_tput_per_vm_gbits=solver_target_tput_per_vm_gbits,
+                solver_throughput_grid=throughput_grid_path,
+                solver_verbose=solver_verbose,
+                args=args,
+            )
         job = ReplicationJob(
             source_region=topo.source_region(),
             source_bucket=bucket_src,
@@ -278,9 +268,6 @@ def sync(
     # solver
     solve: bool = typer.Option(False, help="If true, will use solver to optimize transfer, else direct path is chosen"),
     solver_target_tput_per_vm_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps per instance"),
-    solver_throughput_grid: Path = typer.Option(
-        skyplane_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
-    ),
     solver_verbose: bool = False,
 ):
     """
@@ -388,18 +375,19 @@ def sync(
             typer.secho("Warning: Azure is not yet supported for multipart transfers. Disabling multipart.", fg="yellow", err=True)
             multipart = False
 
-        topo = generate_topology(
-            src_region_tag,
-            dst_region_tag,
-            solve,
-            num_connections=cloud_config.get_flag("num_connections"),
-            max_instances=max_instances,
-            solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
-            solver_target_tput_per_vm_gbits=solver_target_tput_per_vm_gbits,
-            solver_throughput_grid=solver_throughput_grid,
-            solver_verbose=solver_verbose,
-            args=args,
-        )
+        with path("skyplane.data", "throughput.csv") as throughput_grid_path:
+            topo = generate_topology(
+                src_region_tag,
+                dst_region_tag,
+                solve,
+                num_connections=cloud_config.get_flag("num_connections"),
+                max_instances=max_instances,
+                solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
+                solver_target_tput_per_vm_gbits=solver_target_tput_per_vm_gbits,
+                solver_throughput_grid=throughput_grid_path,
+                solver_verbose=solver_verbose,
+                args=args,
+            )
 
         job = ReplicationJob(
             source_region=topo.source_region(),

@@ -10,8 +10,8 @@ from typing import Dict, Optional, Tuple
 
 import urllib3
 
-from skyplane import config_path, key_root, cloud_config
 from skyplane.compute.const_cmds import make_autoshutdown_script, make_dozzle_command, make_sysctl_tcp_tuning_command
+from skyplane.config_paths import config_path, cloud_config, __config_root__
 from skyplane.utils import logger
 from skyplane.utils.fn import PathLike, wait_for
 from skyplane.utils.retry import retry_backoff
@@ -369,6 +369,9 @@ class Server:
             logs, err = self.run_command(f"sudo docker logs skyplane_gateway --tail=100")
             logger.fs.error(f"Docker logs: {logs}\nerr: {err}")
             logger.fs.exception(e)
-            raise e
+            raise e from None
         finally:
             logging.disable(logging.NOTSET)
+
+
+key_root = __config_root__ / "keys"

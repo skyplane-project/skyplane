@@ -1,25 +1,34 @@
 import uuid
 from typing import List, Optional
 
+from skyplane.utils import imports
+
 from skyplane import exceptions
+from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skyplane.compute.cloud_provider import CloudProvider
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.gcp.gcp_key_manager import GCPKeyManager
 from skyplane.compute.gcp.gcp_network import GCPNetwork
 from skyplane.compute.gcp.gcp_pricing import GCPPricing
 from skyplane.compute.gcp.gcp_server import GCPServer
-from skyplane.compute.server import Server, ServerState
-from skyplane.utils import imports, logger
+from skyplane.compute.server import Server, ServerState, key_root
+from skyplane.utils import logger
 from skyplane.utils.fn import wait_for
 
 
 class GCPCloudProvider(CloudProvider):
-    def __init__(self, key_prefix: str = "skyplane"):
+    def __init__(
+        self,
+        key_prefix: str = "skyplane",
+        auth: Optional[GCPAuthentication] = None,
+        network: Optional[GCPNetwork] = None,
+        key_manager: Optional[GCPKeyManager] = None,
+    ):
         super().__init__()
         self.key_name = f"{key_prefix}-gcp-cert"
-        self.auth = GCPAuthentication()
-        self.network = GCPNetwork(self.auth)
-        self.key_manager = GCPKeyManager()
+        self.auth = auth if auth else GCPAuthentication()
+        self.network = network if network else GCPNetwork(self.auth)
+        self.key_manager = key_manager if key_manager else GCPKeyManager()
 
     @property
     def name(self):
@@ -100,6 +109,7 @@ class GCPCloudProvider(CloudProvider):
         firewall_name = f"skyplane-{uuid.uuid4().hex}" if rule_name is None else rule_name
         self.network.create_firewall_rule(firewall_name, ips, ["0-65535"], ["tcp", "udp", "icmp"])
         return firewall_name
+
     @imports.inject("googleapiclient.errors", pip_extra="gcp")
     def remove_gateway_rule(errors, self, firewall_name: str):
         if self.network.get_firewall_rule(firewall_name):
@@ -167,7 +177,7 @@ class GCPCloudProvider(CloudProvider):
 
         try:
             result = compute.instances().insert(project=self.auth.project_id, zone=region, body=req_body).execute()
-            self.wait_for_operation_to_complete(region, result["name"])
+            self.auth.wait_for_operation_to_complete(region, result["name"])
             server = GCPServer(f"gcp:{region}", name)
 
             # wait for server to reach RUNNING state
@@ -195,9 +205,9 @@ class GCPCloudProvider(CloudProvider):
                     raise exceptions.InsufficientVCPUException(f"Got QUOTA_EXCEEDED in region {region}") from e
                 elif "QUOTA_LIMIT" in e.content:
                     raise exceptions.InsufficientVCPUException(f"Got QUOTA_LIMIT in region {region}") from e
-            raise e
+            raise
         except KeyboardInterrupt as e:
             logger.fs.info(f"Keyboard interrupt, deleting instance {name}")
             op = compute.instances().delete(project=self.auth.project_id, zone=region, instance=name).execute()
-            self.wait_for_operation_to_complete(region, op["name"])
-            raise e
+            self.auth.wait_for_operation_to_complete(region, op["name"])
+            raise

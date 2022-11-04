@@ -1,9 +1,8 @@
 import argparse
 import os
 import tempfile
-import time
 import uuid
-from skyplane import MB
+from skyplane.utils.definitions import MB
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.cli.cli import cp
 from skyplane.utils import logger
@@ -33,7 +32,7 @@ def setup_buckets(src_region, dest_region, n_files=1, file_size_mb=1):
         with open(fpath, "wb+") as f:
             f.write(os.urandom(int(file_size_mb * MB)))
         for i in range(n_files):
-            src_interface.upload_object(fpath, f"{src_prefix}/{i}")
+            src_interface.upload_object(fpath, f"{src_prefix}/{i}", mime_type="text/plain")
 
     return src_bucket_name, dest_bucket_name, src_prefix, dest_prefix
 
@@ -74,7 +73,6 @@ def run(src_region, dest_region, n_files=1, file_size_mb=1, multipart=True):
         max_instances=1,
         solve=False,
         solver_target_tput_per_vm_gbits=None,
-        solver_throughput_grid=None,
     )
 
     # clean up path

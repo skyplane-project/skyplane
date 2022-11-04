@@ -7,6 +7,7 @@ concurrency: integration-test
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  SKYPLANE_USAGE_STATS_ENABLED: 0
 jobs:
   integration:
     runs-on: ubuntu-latest
@@ -63,6 +64,7 @@ jobs:
           poetry run skyplane config set native_cmd_enabled false
           cat ~/.skyplane/config
           poetry run skyplane init -y
+          poetry run skyplane config set usage_stats false
       - name: Test
         run: poetry run python tests/integration/cp.py ${{ matrix.pairs }}
       - name: Cleanup GCP service account
@@ -88,7 +90,9 @@ jobs:
           poetry config virtualenvs.in-project false
           poetry config virtualenvs.path ~/.virtualenvs
       - name: Install Dependencies
-        run: poetry install -E gateway -E solver -E aws -E azure -E gcp
+        run: |
+          poetry install -E gateway -E solver -E aws -E azure -E gcp
+          poetry run pip install -r requirements-dev.txt
         if: steps.cache.outputs.cache-hit != 'true'
       - id: 'auth'
         uses: 'google-github-actions/auth@v0'
@@ -98,6 +102,7 @@ jobs:
         run: |
           poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
           poetry run skyplane init -y --disable-config-azure
+          poetry run skyplane config set usage_stats false
       - name: Deprovision
         run: poetry run skyplane deprovision
       - name: Cleanup GCP service account

@@ -15,17 +15,19 @@ import pandas as pd
 import urllib3
 from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, TransferSpeedColumn
 
-from skyplane import GB, MB, exceptions, gateway_docker_image, tmp_log_dir
+from skyplane import exceptions
+from skyplane.api.client import tmp_log_dir
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skyplane.compute.cloud_provider import CloudProvider
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.compute.server import Server, ServerState
-from skyplane.obj_store.object_store_interface import ObjectStoreInterface
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.replicate.profiler import status_df_to_traceevent
 from skyplane.replicate.replication_plan import ReplicationJob, ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
+from skyplane.utils.definitions import MB, GB, gateway_docker_image
 from skyplane.utils.fn import PathLike, do_parallel
 from skyplane.utils.timer import Timer
 
@@ -379,6 +381,7 @@ class ReplicatorClient:
                             chunk_id=idx,
                             file_offset_bytes=0,
                             chunk_length_bytes=job.random_chunk_size_mb * MB,
+                            mime_type=dest_object.mime_type,
                         )
                     )
                     idx += 1
@@ -392,6 +395,7 @@ class ReplicatorClient:
                         chunk_id=idx,
                         file_offset_bytes=0,
                         chunk_length_bytes=src_object.size,
+                        mime_type=dest_object.mime_type,
                     )
                     chunks.append(chunk)
                     idx += 1
@@ -399,20 +403,28 @@ class ReplicatorClient:
             # initiate multipart transfers in parallel
             if not job.random_chunk_size_mb:
                 progress.update(prepare_task, description=f": Initiating multipart transfers for {len(multipart_pairs)} objects")
-                obj_store_interface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
+                src_objstore_iface = ObjectStoreInterface.create(job.source_region, job.source_bucket)
+                dst_objstore_iface = ObjectStoreInterface.create(job.dest_region, job.dest_bucket)
+
+                def dispatch_fn(batch) -> List[str]:
+                    results = []
+                    for src_object, dest_object in batch:
+                        mime_type = src_objstore_iface.get_obj_mime_type(src_object.key)
+                        results.append(dst_objstore_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type))
+                    return results
+
                 with Timer("initiate_multipart_transfers"):
                     batch_size = max(1, len(multipart_pairs) // 64)
                     multipart_batches = []
                     for i in range(0, len(multipart_pairs), batch_size):
                         multipart_batches.append(multipart_pairs[i : i + batch_size])
-                    dispatch_fn = lambda x: obj_store_interface.initiate_multipart_uploads([y.key for _, y in x])
                     upload_ids = do_parallel(dispatch_fn, multipart_batches, n=-1)
 
                 # build chunks for multipart transfers
-                upload_ids = zip(
-                    itertools.chain.from_iterable(i for i, _ in upload_ids), itertools.chain.from_iterable(o for _, o in upload_ids)
-                )
-                for (src_object, dest_object), upload_id in upload_ids:
+                obj_pairs = itertools.chain.from_iterable(i for i, _ in upload_ids)
+                batch_upload_ids = itertools.chain.from_iterable(o for _, o in upload_ids)
+                paired_upload_ids = zip(obj_pairs, batch_upload_ids)
+                for (src_object, dest_object), upload_id in paired_upload_ids:
                     chunk_size_bytes = int(multipart_chunk_size_mb * MB)
                     num_chunks = math.ceil(src_object.size / chunk_size_bytes)
                     if num_chunks > multipart_max_chunks:
@@ -434,6 +446,7 @@ class ReplicatorClient:
                                 chunk_length_bytes=file_size_bytes,
                                 part_number=part_num,
                                 upload_id=upload_id,
+                                mime_type=dest_object.mime_type,
                             )
                         )
                         parts.append(part_num)
@@ -672,7 +685,7 @@ class ReplicatorClient:
                             current_time = datetime.now()
                             if log_interval_s and (not last_log or (current_time - last_log).seconds > float(log_interval_s)):
                                 last_log = current_time
-                                log_str = f"{total_runtime_s}s: {len(completed_chunk_ids)}/{len(job.chunk_requests)} chunks, {completed_bytes}/{total_bytes} bytes, "
+                                log_str = f"{total_runtime_s:.2f}s: {len(completed_chunk_ids)}/{len(job.chunk_requests)} chunks, {completed_bytes:.4e}/{total_bytes:.4e} bytes, "
                                 log_str += f"{throughput_gbits:.2f} Gbit/s"
                                 if log_to_file:
                                     logger.fs.debug(log_str)

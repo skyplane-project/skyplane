@@ -6,8 +6,8 @@ from functools import partial
 from multiprocessing import Event, Manager, Process, Value, Queue
 from typing import Dict, Optional
 
-from skyplane import cloud_config
 from skyplane.chunk import ChunkRequest
+from skyplane.config_paths import cloud_config
 from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils import logger
@@ -100,6 +100,7 @@ class GatewayObjStoreConn:
                             chunk_req.chunk.part_number,
                             chunk_req.chunk.upload_id,
                             check_md5=chunk_req.chunk.md5_hash,
+                            mime_type=chunk_req.chunk.mime_type,
                         ),
                         max_retries=4,
                     )
@@ -122,7 +123,7 @@ class GatewayObjStoreConn:
 
                     if self.src_requester_pays:
                         obj_store_interface.set_requester_bool(True)
-                    md5sum = retry_backoff(
+                    mime_type, md5sum = retry_backoff(
                         partial(
                             obj_store_interface.download_object,
                             chunk_req.chunk.src_key,
@@ -139,13 +140,19 @@ class GatewayObjStoreConn:
                         logger.error(f"[obj_store:{self.worker_id}] Checksum was not generated for {chunk_req.chunk.src_key}")
                     else:
                         self.chunk_store.update_chunk_checksum(chunk_req.chunk.chunk_id, md5sum)
+                    if not mime_type:
+                        logger.error(f"[obj_store:{self.worker_id}] Mime type was not generated for {chunk_req.chunk.src_key}")
+                    else:
+                        self.chunk_store.update_chunk_mime_type(chunk_req.chunk.chunk_id, mime_type)
 
                     self.chunk_store.state_finish_download(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
                     recieved_chunk_size = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).stat().st_size
                     assert (
                         recieved_chunk_size == chunk_req.chunk.chunk_length_bytes
                     ), f"Downloaded chunk {chunk_req.chunk.chunk_id} to {fpath} has incorrect size (expected {chunk_req.chunk.chunk_length_bytes} but got {recieved_chunk_size}, {chunk_req.chunk.chunk_length_bytes})"
-                    logger.debug(f"[obj_store:{self.worker_id}] Downloaded {chunk_req.chunk.chunk_id} from {bucket}")
+                    logger.debug(
+                        f"[obj_store:{self.worker_id}] Downloaded {chunk_req.chunk.chunk_id} from {bucket} with {md5sum=} and {mime_type=}"
+                    )
                 else:
                     raise ValueError(f"Invalid location for chunk req, {req_type}: {chunk_req.src_type}->{chunk_req.dst_type}")
             except Exception as e:

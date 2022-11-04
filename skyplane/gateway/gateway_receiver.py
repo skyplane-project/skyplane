@@ -11,11 +11,11 @@ from typing import Optional, Tuple
 import lz4.frame
 import nacl.secret
 
-from skyplane import MB
 from skyplane.chunk import WireProtocolHeader
 from skyplane.gateway.cert import generate_self_signed_certificate
 from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.utils import logger
+from skyplane.utils.definitions import MB
 from skyplane.utils.timer import Timer
 
 
@@ -137,9 +137,7 @@ class GatewayReceiver:
         chunks_received = []
         while True:
             # receive header and write data to file
-            logger.debug(f"[receiver:{server_port}] Blocking for next header")
             chunk_header = WireProtocolHeader.from_socket(conn)
-            logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} Got chunk header {chunk_header}")
             chunk_request = self.chunk_store.get_chunk_request(chunk_header.chunk_id)
             should_decrypt = self.e2ee_secretbox is not None and chunk_request.dst_region == self.region
             should_decompress = chunk_header.is_compressed and chunk_request.dst_region == self.region
@@ -188,5 +186,4 @@ class GatewayReceiver:
             chunks_received.append(chunk_header.chunk_id)
 
             if chunk_header.n_chunks_left_on_socket == 0:
-                logger.debug(f"[receiver:{server_port}] End of stream reached")
                 return

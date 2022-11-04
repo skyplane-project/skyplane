@@ -160,7 +160,7 @@ class AWSNetwork:
         """Add IPs to security group. If security group ID is None, use group named skyplane (create if not exists). If ip is None, authorize all IPs."""
         sg = self.get_security_group(aws_region)
         try:
-            logger.fs.debug(f"[AWS] Adding IPs {ips} to security group {sg.group_name}")
+            logger.fs.debug(f"[aws_network]:{aws_region} Adding IPs {ips} to security group {sg.group_name}")
             if ips is None:
                 sg.authorize_ingress(
                     IpPermissions=[{"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": f"0.0.0.0/0"}]}]
@@ -175,11 +175,11 @@ class AWSNetwork:
 
         except exceptions.ClientError as e:
             if str(e).endswith("already exists") or str(e).endswith("already exist"):
-                logger.warn(f"[AWS] Error adding IPs to security group, since it already exits: {e}")
+                logger.warn(f"[aws_network]:{aws_region} Error adding IPs to security group, since it already exits: {e}")
             else:
-                logger.error(f"[AWS] Error adding IPs {ips} to security group {sg.group_name}")
+                logger.error(f"[aws_network]:{aws_region} Error adding IPs {ips} to security group {sg.group_name}")
                 logger.fs.exception(e)
-                raise e
+                raise e from None
 
     @imports.inject("botocore.exceptions", pip_extra="aws")
     def remove_ips_from_security_group(exceptions, self, aws_region: str, ips: List[str]):
@@ -187,16 +187,16 @@ class AWSNetwork:
         # Remove instance IP from security group
         sg = self.get_security_group(aws_region)
         try:
-            logger.fs.debug(f"[AWS] Removing IPs {ips} from security group {sg.group_name}")
-            sg.revoke_ingress(
-                IpPermissions=[
-                    {"IpProtocol": "tcp", "FromPort": 12000, "ToPort": 65535, "IpRanges": [{"CidrIp": ip + "/32"}]} for ip in ips
-                ]
-            )
+            for rule in sg.ip_permissions:
+                if any([ip_range.get("CidrIp", "").split("/")[0] in ips for ip_range in rule.get("IpRanges", [])]):
+                    response = sg.revoke_ingress(IpPermissions=[rule])
+                    logger.fs.debug(
+                        f"[aws_network]:{aws_region} Removing rule {rule} from security group {sg.group_name}, got response {response}"
+                    )
         except exceptions.ClientError as e:
-            logger.fs.error(f"[AWS] Error removing IPs {ips} from security group {sg.group_name}: {e}")
+            logger.fs.error(f"[aws_network]:{aws_region} Error removing IPs {ips} from security group {sg.group_name}: {e}")
             if "The specified rule does not exist in this security group." not in str(e):
-                logger.warn(f"[AWS] Error removing IPs from security group: {e}")
+                logger.warn(f"[aws_network]:{aws_region} Error removing IPs from security group: {e}")
 
     @imports.inject("botocore.exceptions", pip_extra="aws")
     def add_ssh_to_security_group(exceptions, self, aws_region: str, ip: str = "0.0.0.0/0", port=22):
@@ -206,14 +206,16 @@ class AWSNetwork:
                 if "FromPort" in rule and rule["FromPort"] <= port and "ToPort" in rule and rule["ToPort"] >= port:
                     for ipr in rule["IpRanges"]:
                         if ipr["CidrIp"] == ip:
-                            logger.fs.debug(f"[AWS] Found existing rule for {ip}:{port} in {sg.group_name}, not adding again")
+                            logger.fs.debug(
+                                f"[aws_network]:{aws_region} Found existing rule for {ip}:{port} in {sg.group_name}, not adding again"
+                            )
                             return
-            logger.fs.debug(f"[AWS] Authorizing {ip}:{port} in {sg.group_name}")
+            logger.fs.debug(f"[aws_network]:{aws_region} Authorizing SSH {ip}:{port} in {sg.group_name}")
             sg.authorize_ingress(IpPermissions=[{"IpProtocol": "tcp", "FromPort": port, "ToPort": port, "IpRanges": [{"CidrIp": ip}]}])
         except exceptions.ClientError as e:
             if str(e).endswith("already exists") or str(e).endswith("already exist"):
-                logger.warn(f"[AWS] Error adding IPs to security group, since it already exits: {e}")
+                logger.warn(f"[aws_network]:{aws_region} Error adding IPs to security group, since it already exits: {e}")
             else:
-                logger.error(f"[AWS] Error adding SSH port {port} for IPs {ip} to security group {sg.group_name}")
+                logger.error(f"[aws_network]:{aws_region} Error adding SSH port {port} for IPs {ip} to security group {sg.group_name}")
                 logger.fs.exception(e)
-                raise e
+                raise e from None

@@ -26,7 +26,7 @@ def retry_backoff(
             return fn()
         except exception_class as e:
             if i == max_retries - 1 or type(e) in always_raise_exceptions:
-                raise e
+                raise
             else:
                 # ignore retries due to IAM instance profile propagation
                 if log_errors:

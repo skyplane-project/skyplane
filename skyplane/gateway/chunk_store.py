@@ -130,6 +130,11 @@ class ChunkStore:
         cr.chunk.checksum = checksum
         self.chunk_requests[chunk_id] = cr
 
+    def update_chunk_mime_type(self, chunk_id: int, mime_type: Optional[str]):
+        cr = self.chunk_requests[chunk_id]
+        cr.chunk.mime_type = mime_type
+        self.chunk_requests[chunk_id] = cr
+
     # Memory space calculation
     def remaining_bytes(self):
         return int(subprocess.check_output(["df", "-k", "--output=avail", self.chunk_dir]).decode().strip().split()[-1]) * 1024

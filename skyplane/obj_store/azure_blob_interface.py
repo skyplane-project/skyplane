@@ -2,7 +2,7 @@ import base64
 import hashlib
 import os
 from functools import lru_cache
-from typing import Iterator, List, Optional
+from typing import Iterator, List, Optional, Tuple
 
 from skyplane import exceptions
 from skyplane.compute.azure.azure_auth import AzureAuthentication
@@ -32,6 +32,9 @@ class AzureBlobInterface(ObjectStoreInterface):
 
     def region_tag(self):
         return f"azure:{self.storage_account_interface.azure_region}"
+
+    def bucket(self) -> str:
+        return f"{self.account_name}/{self.container_name}"
 
     @property
     def blob_service_client(self):
@@ -83,13 +86,20 @@ class AzureBlobInterface(ObjectStoreInterface):
         blobs = self.container_client.list_blobs(name_starts_with=prefix)
         try:
             for blob in blobs:
-                yield AzureBlobObject("azure", f"{self.account_name}/{blob.container}", blob.name, blob.size, blob.last_modified)
+                yield AzureBlobObject(
+                    "azure",
+                    f"{self.account_name}/{blob.container}",
+                    blob.name,
+                    blob.size,
+                    blob.last_modified,
+                    mime_type=getattr(blob.content_settings, "content_type", None),
+                )
         except exceptions.HttpResponseError as e:
             if "AuthorizationPermissionMismatch" in str(e):
                 logger.error(
                     f"Unable to list objects in container {self.container_name} as you don't have permission to access it. You need the 'Storage Blob Data Contributor' and 'Storage Account Contributor' roles: {e}"
                 )
-                raise e
+                raise e from None
 
     def delete_objects(self, keys: List[str]):
         for key in keys:
@@ -111,9 +121,12 @@ class AzureBlobInterface(ObjectStoreInterface):
     def get_obj_last_modified(self, obj_name):
         return self.get_obj_metadata(obj_name).last_modified
 
+    def get_obj_mime_type(self, obj_name):
+        return self.get_obj_metadata(obj_name).content_settings.content_type
+
     def download_object(
         self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5=False
-    ) -> Optional[bytes]:
+    ) -> Tuple[Optional[str], Optional[bytes]]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         downloader = self.container_client.download_blob(
             src_object_name, offset=offset_bytes, length=size_bytes, max_concurrency=self.max_concurrency
@@ -129,10 +142,12 @@ class AzureBlobInterface(ObjectStoreInterface):
                 if generate_md5:
                     m.update(b)
                 f.write(b)
+        md5 = m.digest() if generate_md5 else None
+        mime_type = self.get_obj_metadata(src_object_name).content_settings.content_type
+        return mime_type, md5
 
-        return m.digest() if generate_md5 else None
-
-    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None):
+    @imports.inject("azure.storage.blob", pip_extra="azure")
+    def upload_object(azure_blob, self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None, mime_type=None):
         if part_number is not None or upload_id is not None:
             # todo implement multipart upload
             raise NotImplementedError("Multipart upload is not implemented for Azure")
@@ -140,7 +155,12 @@ class AzureBlobInterface(ObjectStoreInterface):
         with open(src_file_path, "rb") as f:
             print(f"Uploading {src_file_path} to {dst_object_name}")
             blob_client = self.container_client.upload_blob(
-                name=dst_object_name, data=f, length=os.path.getsize(src_file_path), max_concurrency=self.max_concurrency, overwrite=True
+                name=dst_object_name,
+                data=f,
+                length=os.path.getsize(src_file_path),
+                max_concurrency=self.max_concurrency,
+                overwrite=True,
+                content_settings=azure_blob.ContentSettings(content_type=mime_type),
             )
         if check_md5:
             b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None

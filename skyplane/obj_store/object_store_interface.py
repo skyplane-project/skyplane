@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Iterator, List, Optional, Type
+from typing import Iterator, List, Optional, Tuple
 
 
 @dataclass
@@ -11,6 +11,7 @@ class ObjectStoreObject:
     key: str
     size: Optional[int] = None
     last_modified: Optional[str] = None
+    mime_type: Optional[str] = None
 
     @property
     def exists(self):
@@ -25,6 +26,9 @@ class ObjectStoreInterface:
         raise NotImplementedError()
 
     def region_tag(self) -> str:
+        raise NotImplementedError()
+
+    def bucket(self) -> str:
         raise NotImplementedError()
 
     def set_requester_bool(self, requester: bool):
@@ -42,7 +46,7 @@ class ObjectStoreInterface:
     def exists(self, obj_name: str) -> bool:
         raise NotImplementedError()
 
-    def list_objects(self, prefix="") -> Iterator[Type[ObjectStoreObject]]:
+    def list_objects(self, prefix="") -> Iterator[ObjectStoreObject]:
         raise NotImplementedError()
 
     def get_obj_size(self, obj_name) -> int:
@@ -51,9 +55,12 @@ class ObjectStoreInterface:
     def get_obj_last_modified(self, obj_name):
         raise NotImplementedError()
 
+    def get_obj_mime_type(self, obj_name):
+        raise NotImplementedError()
+
     def download_object(
         self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5: bool = False
-    ) -> Optional[bytes]:
+    ) -> Tuple[Optional[str], Optional[bytes]]:
         """
         Downloads an object from the bucket to a local file.
 
@@ -68,7 +75,15 @@ class ObjectStoreInterface:
         """
         raise NotImplementedError()
 
-    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5: Optional[bytes] = None):
+    def upload_object(
+        self,
+        src_file_path,
+        dst_object_name,
+        part_number=None,
+        upload_id=None,
+        check_md5: Optional[bytes] = None,
+        mime_type: Optional[str] = None,
+    ):
         """
         Uploads a file to the specified object
 
@@ -84,11 +99,11 @@ class ObjectStoreInterface:
     def delete_objects(self, keys: List[str]):
         raise NotImplementedError()
 
-    def initiate_multipart_uploads(self, dst_object_names: List[str]):
-        return ValueError("Multipart uploads not supported")
+    def initiate_multipart_upload(self, dst_object_name: str, mime_type: Optional[str] = None) -> str:
+        raise ValueError("Multipart uploads not supported")
 
-    def complete_multipart_upload(self, dst_object_name: str, upload_id: str):
-        return ValueError("Multipart uploads not supported")
+    def complete_multipart_upload(self, dst_object_name: str, upload_id: str) -> None:
+        raise ValueError("Multipart uploads not supported")
 
     @staticmethod
     def create(region_tag: str, bucket: str):
