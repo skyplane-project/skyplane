@@ -39,6 +39,13 @@ def parse_path(path: str):
             raise ValueError(f"Invalid Azure path: {path}")
         account, container, blob_path = match.groups()
         return "azure", f"{account}/{container}", blob_path if blob_path else ""
+    elif path.startswith("hdfs://"):
+        regex = re.compile(r"hdfs://([^/]+)/?(.*)")
+        match = regex.match(path)
+        if match is None:
+            raise ValueError(f"Invalid HDFS path: {path}")
+        host, path = match.groups()
+        return "hdfs", host, path
     else:
         if not is_plausible_local_path(path):
             logger.warning(f"Local path '{path}' does not exist")
