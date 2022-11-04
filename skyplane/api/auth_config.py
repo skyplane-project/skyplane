@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from typing import Optional
 
-from skyplane.compute import AWSAuthentication, AzureAuthentication, GCPAuthentication
+from skyplane import compute
 
 
 class AuthenticationConfig:
@@ -16,8 +16,8 @@ class AWSConfig(AuthenticationConfig):
     aws_secret_key: Optional[str] = None
     aws_enabled: bool = True
 
-    def make_auth_provider(self) -> AWSAuthentication:
-        return AWSAuthentication(config=self)  # type: ignore
+    def make_auth_provider(self) -> compute.AWSAuthentication:
+        return compute.AWSAuthentication(config=self)  # type: ignore
 
 
 @dataclass
@@ -29,8 +29,8 @@ class AzureConfig(AuthenticationConfig):
     azure_umi_client_id: str
     azure_enabled: bool = True
 
-    def make_auth_provider(self) -> AzureAuthentication:
-        return AzureAuthentication(config=self)  # type: ignore
+    def make_auth_provider(self) -> compute.AzureAuthentication:
+        return compute.AzureAuthentication(config=self)  # type: ignore
 
 
 @dataclass
@@ -38,5 +38,5 @@ class GCPConfig(AuthenticationConfig):
     gcp_project_id: str
     gcp_enabled: bool = True
 
-    def make_auth_provider(self) -> GCPAuthentication:
-        return GCPAuthentication(config=self)  # type: ignore
+    def make_auth_provider(self) -> compute.GCPAuthentication:
+        return compute.GCPAuthentication(config=self)  # type: ignore

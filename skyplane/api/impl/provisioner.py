@@ -4,15 +4,7 @@ from functools import partial
 
 from typing import Optional, Dict, Set, List, Tuple
 
-from skyplane.compute import (
-    AWSAuthentication,
-    AWSCloudProvider,
-    AzureAuthentication,
-    AzureCloudProvider,
-    GCPAuthentication,
-    GCPCloudProvider,
-    Server,
-)
+from skyplane import compute
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
 from skyplane.utils.timer import Timer
@@ -37,9 +29,9 @@ class ProvisionerTask:
 class Provisioner:
     def __init__(
         self,
-        aws_auth: Optional[AWSAuthentication] = None,
-        azure_auth: Optional[AzureAuthentication] = None,
-        gcp_auth: Optional[GCPAuthentication] = None,
+        aws_auth: Optional[compute.AWSAuthentication] = None,
+        azure_auth: Optional[compute.AzureAuthentication] = None,
+        gcp_auth: Optional[compute.GCPAuthentication] = None,
         host_uuid: Optional[str] = None,
     ):
         self.aws_auth = aws_auth
@@ -47,16 +39,16 @@ class Provisioner:
         self.gcp_auth = gcp_auth
         self.host_uuid = host_uuid
         self._make_cloud_providers()
-        self.temp_nodes: Set[Server] = set()  # temporary area to store nodes that should be terminated upon exit
+        self.temp_nodes: Set[compute.Server] = set()  # temporary area to store nodes that should be terminated upon exit
         self.pending_provisioner_tasks: List[ProvisionerTask] = []
-        self.provisioned_vms: Dict[str, Server] = {}
+        self.provisioned_vms: Dict[str, compute.Server] = {}
 
     def _make_cloud_providers(self):
-        self.aws = AWSCloudProvider(
+        self.aws = compute.AWSCloudProvider(
             key_prefix=f"skyplane{'-'+self.host_uuid.replace('-', '') if self.host_uuid else ''}", auth=self.aws_auth
         )
-        self.azure = AzureCloudProvider(auth=self.azure_auth)
-        self.gcp = GCPCloudProvider(auth=self.gcp_auth)
+        self.azure = compute.AzureCloudProvider(auth=self.azure_auth)
+        self.gcp = compute.GCPCloudProvider(auth=self.gcp_auth)
 
     def init_global(self, aws: bool = True, azure: bool = True, gcp: bool = True):
         logger.fs.info(f"[Provisioner.init_global] Initializing global resources for {aws=}, {azure=}, {gcp=}")
@@ -88,7 +80,7 @@ class Provisioner:
         logger.fs.info(f"[Provisioner.add_task] Queue {task}")
         return task.uuid
 
-    def get_node(self, uuid: str) -> Server:
+    def get_node(self, uuid: str) -> compute.Server:
         return self.provisioned_vms[uuid]
 
     def _provision_task(self, task: ProvisionerTask):
@@ -141,7 +133,7 @@ class Provisioner:
 
         # provision VMs
         logger.fs.info(f"[Provisioner.provision] Provisioning {len(provision_tasks)} VMs")
-        results: List[Tuple[ProvisionerTask, Server]] = do_parallel(
+        results: List[Tuple[ProvisionerTask, compute.Server]] = do_parallel(
             self._provision_task,
             provision_tasks,
             n=max_jobs,
@@ -181,7 +173,7 @@ class Provisioner:
         if not self.provisioned_vms and not self.temp_nodes:
             return []
 
-        def deprovision_gateway_instance(server: Server):
+        def deprovision_gateway_instance(server: compute.Server):
             server.terminate_instance()
             idx_to_del = None
             for idx, s in list(self.provisioned_vms.items()):

@@ -9,10 +9,10 @@ import nacl.utils
 import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional
 
+from skyplane import compute
 from skyplane.api.impl.tracker import TransferProgressTracker
 from skyplane.api.impl.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.transfer_config import TransferConfig
-from skyplane.compute import Server
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
 from skyplane.utils.definitions import gateway_docker_image
@@ -53,7 +53,7 @@ class Dataplane:
         # pending tracker tasks
         self.jobs_to_dispatch: List[TransferJob] = []
         self.pending_transfers: List[TransferProgressTracker] = []
-        self.bound_nodes: Dict[ReplicationTopologyGateway, Server] = {}
+        self.bound_nodes: Dict[ReplicationTopologyGateway, compute.Server] = {}
 
     def provision(
         self,
@@ -113,7 +113,7 @@ class Dataplane:
 
         def _start_gateway(
             gateway_node: ReplicationTopologyGateway,
-            gateway_server: Server,
+            gateway_server: compute.Server,
         ):
             # map outgoing ports
             setup_args = {}
@@ -189,10 +189,10 @@ class Dataplane:
         """Returns a context manager that will automatically call deprovision upon exit."""
         return DataplaneAutoDeprovision(self)
 
-    def source_gateways(self) -> List[Server]:
+    def source_gateways(self) -> List[compute.Server]:
         return [self.bound_nodes[n] for n in self.topology.source_instances()] if self.provisioned else []
 
-    def sink_gateways(self) -> List[Server]:
+    def sink_gateways(self) -> List[compute.Server]:
         return [self.bound_nodes[n] for n in self.topology.sink_instances()] if self.provisioned else []
 
     def queue_copy(

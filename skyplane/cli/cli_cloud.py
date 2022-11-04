@@ -11,7 +11,7 @@ import typer
 from rich import print as rprint
 from typing import List
 
-from skyplane.compute import AWSAuthentication, AWSCloudProvider, AzureAuthentication, AzureCloudProvider, GCPAuthentication
+from skyplane import compute
 from skyplane.config_paths import cloud_config
 from skyplane.obj_store.s3_interface import S3Interface
 from skyplane.utils import logger
@@ -48,7 +48,7 @@ def run_cmd(cmd, debug: bool):
 @app.command()
 def aws_vcpu_limits(quota_code="L-1216C47A"):
     """List the vCPU limits for each region."""
-    aws_auth = AWSAuthentication()
+    aws_auth = compute.AWSAuthentication()
 
     def get_service_quota(region):
         service_quotas = aws_auth.get_boto3_client("service-quotas", region)
@@ -60,14 +60,14 @@ def aws_vcpu_limits(quota_code="L-1216C47A"):
             return -1
         return response["Quota"]["Value"]
 
-    quotas = do_parallel(get_service_quota, AWSCloudProvider.region_list())
+    quotas = do_parallel(get_service_quota, compute.AWSCloudProvider.region_list())
     for region, quota in quotas:
         typer.secho(f"{region}: {int(quota)}", fg="green")
 
 
 @app.command()
 def aws_datasync(src_bucket: str, dst_bucket: str, path: str):
-    aws_auth = AWSAuthentication()
+    aws_auth = compute.AWSAuthentication()
     src_region = S3Interface(src_bucket).aws_region
     dst_region = S3Interface(dst_bucket).aws_region
 
@@ -214,7 +214,7 @@ def azure_check(
         rprint(f"[bright_black]Skyplane UMI tenant ID: {umi['tenantId']}[/bright_black]")
 
     # check that Python SDK
-    auth = AzureAuthentication(cloud_config)
+    auth = compute.AzureAuthentication(cloud_config)
     rprint(f"\n{hline}\n[bold]Checking Azure Python SDK...[/bold]\n{hline}")
     cred = auth.credential
     if debug:
@@ -307,7 +307,7 @@ def gcp_check(
 
     # check that GCP Python SDK works
     rprint(f"\n{hline}\n[bold]Checking GCP Python SDK...[/bold]\n{hline}")
-    auth = GCPAuthentication(cloud_config)
+    auth = compute.GCPAuthentication(cloud_config)
     if debug:
         rprint(f"[bright_black]GCP Python SDK auth: {auth}[/bright_black]")
     check_assert(auth, "GCP Python SDK auth created")
@@ -322,11 +322,11 @@ def gcp_check(
 
 @app.command()
 def azure_get_valid_skus(
-    regions: List[str] = typer.Option(AzureCloudProvider.region_list(), "--regions", "-r"),
+    regions: List[str] = typer.Option(compute.AzureCloudProvider.region_list(), "--regions", "-r"),
     prefix: str = typer.Option("", "--prefix", help="Filter by prefix"),
     top_k: int = typer.Option(-1, "--top-k", help="Print top k entries"),
 ):
-    auth = AzureAuthentication()
+    auth = compute.AzureAuthentication()
     client = auth.get_compute_client()
 
     def get_skus(region):

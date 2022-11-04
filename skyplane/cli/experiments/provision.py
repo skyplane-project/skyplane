@@ -2,7 +2,7 @@ from functools import partial
 
 from typing import Dict, List, Optional, Tuple
 
-from skyplane.compute import AWSCloudProvider, AWSServer, AzureCloudProvider, AzureServer, GCPCloudProvider, GCPServer, Server, ServerState
+from skyplane import compute
 from skyplane.replicate.replicator_client import refresh_instance_list
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
@@ -10,9 +10,9 @@ from skyplane.utils.timer import Timer
 
 
 def provision(
-    aws: AWSCloudProvider,
-    azure: AzureCloudProvider,
-    gcp: GCPCloudProvider,
+    aws: compute.AWSCloudProvider,
+    azure: compute.AzureCloudProvider,
+    gcp: compute.GCPCloudProvider,
     aws_regions_to_provision: List[str],
     azure_regions_to_provision: List[str],
     gcp_regions_to_provision: List[str],
@@ -24,7 +24,7 @@ def provision(
     azure_instance_os: str = "ubuntu",
     gcp_use_premium_network: bool = True,
     log_dir: Optional[str] = None,
-) -> Tuple[Dict[str, List[AWSServer]], Dict[str, List[AzureServer]], Dict[str, List[GCPServer]]]:
+) -> Tuple[Dict[str, List[compute.AWSServer]], Dict[str, List[compute.AzureServer]], Dict[str, List[compute.GCPServer]]]:
     """Provision list of instances in AWS, Azure, and GCP in each specified region."""
     aws_instances = {}
     azure_instances = {}
@@ -52,7 +52,7 @@ def provision(
         aws_instance_filter = {
             "tags": {"skyplane": "true"},
             "instance_type": aws_instance_class,
-            "state": [ServerState.PENDING, ServerState.RUNNING],
+            "state": [compute.ServerState.PENDING, compute.ServerState.RUNNING],
         }
         do_parallel(aws.add_ips_to_security_group, aws_regions_to_provision, spinner=True, desc="Add IP to aws security groups")
         aws_instances = refresh_instance_list(aws, aws_regions_to_provision, aws_instance_filter)
@@ -70,7 +70,7 @@ def provision(
         azure_instance_filter = {
             "tags": {"skyplane": "true"},
             "instance_type": azure_instance_class,
-            "state": [ServerState.PENDING, ServerState.RUNNING],
+            "state": [compute.ServerState.PENDING, compute.ServerState.RUNNING],
         }
         azure_instances = refresh_instance_list(azure, azure_regions_to_provision, azure_instance_filter)
         missing_azure_regions = set(azure_regions_to_provision) - set(azure_instances.keys())
@@ -97,7 +97,7 @@ def provision(
         gcp_instance_filter = {
             "tags": {"skyplane": "true"},
             "instance_type": gcp_instance_class,
-            "state": [ServerState.PENDING, ServerState.RUNNING],
+            "state": [compute.ServerState.PENDING, compute.ServerState.RUNNING],
             "network_tier": "PREMIUM" if gcp_use_premium_network else "STANDARD",
         }
         gcp.create_ssh_key()
@@ -137,7 +137,7 @@ def provision(
             gcp_instances = refresh_instance_list(gcp, gcp_regions_to_provision, gcp_instance_filter)
 
     # init log files
-    def init(i: Server):
+    def init(i: compute.Server):
         i.init_log_files(log_dir)
 
     all_instances = (

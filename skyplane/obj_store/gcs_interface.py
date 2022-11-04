@@ -8,8 +8,7 @@ from xml.etree import ElementTree
 import requests
 from typing import Iterator, List, Optional, Tuple
 
-from skyplane import exceptions
-from skyplane.compute import GCPAuthentication
+from skyplane import exceptions, compute
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger
@@ -23,7 +22,7 @@ class GCSObject(ObjectStoreObject):
 class GCSInterface(ObjectStoreInterface):
     def __init__(self, bucket_name: str):
         self.bucket_name = bucket_name
-        self.auth = GCPAuthentication()
+        self.auth = compute.GCPAuthentication()
         self._gcs_client = self.auth.get_storage_client()
         self._requests_session = requests.Session()
 

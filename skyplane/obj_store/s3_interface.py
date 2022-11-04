@@ -5,8 +5,7 @@ from functools import lru_cache
 
 from typing import Iterator, List, Optional, Tuple
 
-from skyplane import exceptions
-from skyplane.compute import AWSAuthentication
+from skyplane import exceptions, compute
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger, imports
@@ -19,7 +18,7 @@ class S3Object(ObjectStoreObject):
 
 class S3Interface(ObjectStoreInterface):
     def __init__(self, bucket_name: str):
-        self.auth = AWSAuthentication()
+        self.auth = compute.AWSAuthentication()
         self.requester_pays = False
         self.bucket_name = bucket_name
         self._cached_s3_clients = {}

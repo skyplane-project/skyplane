@@ -1,4 +1,4 @@
-from skyplane.compute import CloudProvider
+from skyplane import compute
 from skyplane.replicate.replication_plan import ReplicationTopology
 
 
@@ -35,7 +35,7 @@ class DirectPlanner(Planner):
                 topo.add_objstore_instance_edge(src_region_tag, src_region_tag, i)
                 topo.add_instance_instance_edge(src_region_tag, i, dst_region_tag, i, self.n_connections)
                 topo.add_instance_objstore_edge(dst_region_tag, i, dst_region_tag)
-            topo.cost_per_gb = CloudProvider.get_transfer_cost(src_region_tag, dst_region_tag)
+            topo.cost_per_gb = compute.CloudProvider.get_transfer_cost(src_region_tag, dst_region_tag)
             return topo
 
 

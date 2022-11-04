@@ -11,17 +11,17 @@ from rich.progress import Progress
 from typing import List, Optional, Tuple
 
 from skyplane import __root__
+from skyplane import compute
 from skyplane.cli.experiments.provision import provision
-from skyplane.compute import AWSCloudProvider, AzureCloudProvider, GCPCloudProvider, GCPServer, Server
 from skyplane.compute.const_cmds import make_sysctl_tcp_tuning_command
 from skyplane.utils import logger
 from skyplane.utils.definitions import GB
 from skyplane.utils.fn import do_parallel
 
-all_aws_regions = AWSCloudProvider.region_list()
-all_azure_regions = AzureCloudProvider.region_list()
-all_gcp_regions = GCPCloudProvider.region_list()
-all_gcp_regions_standard = GCPCloudProvider.region_list_standard()
+all_aws_regions = compute.AWSCloudProvider.region_list()
+all_azure_regions = compute.AzureCloudProvider.region_list()
+all_gcp_regions = compute.GCPCloudProvider.region_list()
+all_gcp_regions_standard = compute.GCPCloudProvider.region_list_standard()
 
 
 def split_list(l):
@@ -41,7 +41,9 @@ def split_list(l):
     return groups
 
 
-def start_iperf3_client(arg_pair: Tuple[Server, Server], iperf3_log_dir: Path, iperf3_runtime: int, iperf3_connections: int):
+def start_iperf3_client(
+    arg_pair: Tuple[compute.Server, compute.Server], iperf3_log_dir: Path, iperf3_runtime: int, iperf3_connections: int
+):
     instance_src, instance_dst = arg_pair
     tag = f"{instance_src.region_tag}:{instance_src.network_tier()}_{instance_dst.region_tag}:{instance_dst.network_tier()}"
 
@@ -162,9 +164,9 @@ def throughput_grid(
         raise typer.Abort()
 
     # provision servers
-    aws = AWSCloudProvider()
-    azure = AzureCloudProvider()
-    gcp = GCPCloudProvider()
+    aws = compute.AWSCloudProvider()
+    azure = compute.AzureCloudProvider()
+    gcp = compute.GCPCloudProvider()
     aws_instances, azure_instances, gcp_instances = provision(
         aws=aws,
         azure=azure,
@@ -179,7 +181,7 @@ def throughput_grid(
         gcp_instance_os="ubuntu",
         gcp_use_premium_network=True,
     )
-    instance_list: List[Server] = [i for ilist in aws_instances.values() for i in ilist]
+    instance_list: List[compute.Server] = [i for ilist in aws_instances.values() for i in ilist]
     instance_list.extend([i for ilist in azure_instances.values() for i in ilist])
     instance_list.extend([i for ilist in gcp_instances.values() for i in ilist])
 
@@ -201,7 +203,7 @@ def throughput_grid(
     instance_list.extend([i for ilist in gcp_standard_instances.values() for i in ilist])
 
     # setup instances
-    def setup(server: Server):
+    def setup(server: compute.Server):
         check_stderr(server.run_command("echo 'debconf debconf/frontend select Noninteractive' | sudo debconf-set-selections"))
         check_stderr(
             server.run_command(
@@ -379,9 +381,9 @@ def latency_grid(
         raise typer.Abort()
 
     # provision servers
-    aws = AWSCloudProvider()
-    azure = AzureCloudProvider()
-    gcp = GCPCloudProvider()
+    aws = compute.AWSCloudProvider()
+    azure = compute.AzureCloudProvider()
+    gcp = compute.GCPCloudProvider()
     aws_instances, azure_instances, gcp_instances = provision(
         aws=aws,
         azure=azure,
@@ -394,7 +396,7 @@ def latency_grid(
         gcp_instance_class=gcp_instance_class,
         gcp_use_premium_network=True,
     )
-    instance_list: List[Server] = [i for ilist in aws_instances.values() for i in ilist]
+    instance_list: List[compute.Server] = [i for ilist in aws_instances.values() for i in ilist]
     instance_list.extend([i for ilist in azure_instances.values() for i in ilist])
     instance_list.extend([i for ilist in gcp_instances.values() for i in ilist])
 
@@ -414,7 +416,7 @@ def latency_grid(
     instance_list.extend([i for ilist in gcp_standard_instances.values() for i in ilist])
 
     # setup instances
-    def setup(server: Server):
+    def setup(server: compute.Server):
         check_stderr(server.run_command(make_sysctl_tcp_tuning_command(cc="cubic")))
 
     do_parallel(setup, instance_list, spinner=True, n=-1, desc="Setup")
@@ -456,7 +458,7 @@ def latency_grid(
         )
 
         ping_cmd = f"ping -c 10 {instance_dst.public_ip()}"
-        if isinstance(instance_src, GCPServer):
+        if isinstance(instance_src, compute.GCPServer):
             ping_cmd = f"docker run --net=host alpine {ping_cmd}"
         ping_result_stdout, ping_result_stderr = instance_src.run_command(ping_cmd)
         values = list(map(float, ping_result_stdout.strip().split("\n")[-1].split(" = ")[-1][:-3].split("/")))

@@ -4,14 +4,7 @@ from functools import partial
 import typer
 from rich.console import Console
 
-from skyplane.compute import (
-    AWSAuthentication,
-    AWSCloudProvider,
-    AzureAuthentication,
-    AzureCloudProvider,
-    GCPAuthentication,
-    GCPCloudProvider,
-)
+from skyplane import compute
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
 
@@ -73,14 +66,14 @@ def query_instances():
 
         return run
 
-    if AWSAuthentication().enabled():
-        aws = AWSCloudProvider()
+    if compute.AWSAuthentication().enabled():
+        aws = compute.AWSCloudProvider()
         for region in aws.region_list():
             query_jobs.append(catch_error(partial(aws.get_matching_instances, region)))
-    if AzureAuthentication().enabled():
-        query_jobs.append(catch_error(lambda: AzureCloudProvider().get_matching_instances()))
-    if GCPAuthentication().enabled():
-        query_jobs.append(catch_error(lambda: GCPCloudProvider().get_matching_instances()))
+    if compute.AzureAuthentication().enabled():
+        query_jobs.append(catch_error(lambda: compute.AzureCloudProvider().get_matching_instances()))
+    if compute.GCPAuthentication().enabled():
+        query_jobs.append(catch_error(lambda: compute.GCPCloudProvider().get_matching_instances()))
     # query in parallel
     for instance_list in do_parallel(
         lambda f: f(), query_jobs, n=-1, return_args=False, spinner=True, desc="Querying clouds for instances"

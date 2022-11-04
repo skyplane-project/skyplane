@@ -1,7 +1,6 @@
 from functools import lru_cache
 
-from skyplane import exceptions
-from skyplane.compute import AzureAuthentication
+from skyplane import exceptions, compute
 from skyplane.utils import logger, imports
 
 
@@ -9,7 +8,7 @@ class AzureStorageAccountInterface:
     """Class to manage state for an Azure storage account. Note that storage account names are globally unique."""
 
     def __init__(self, account_name: str):
-        self.auth = AzureAuthentication()
+        self.auth = compute.AzureAuthentication()
         self.account_name = account_name
 
     @lru_cache(maxsize=1)
