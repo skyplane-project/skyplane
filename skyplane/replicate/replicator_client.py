@@ -275,9 +275,9 @@ class ReplicatorClient:
         else:
             e2ee_key_bytes = None
 
-        # setup instances
-            server, outgoing_ports, am_source, am_sink, http_download = args
         def setup(args: Tuple[compute.Server, Dict[str, int], bool, bool, bool]):
+            # setup instances
+            server, outgoing_ports, am_source, am_sink, http_download = args
             if log_dir:
                 server.init_log_files(log_dir)
             if authorize_ssh_pub_key:
@@ -532,7 +532,6 @@ class ReplicatorClient:
 
         job.chunk_requests = [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
         return job
-    
 
     def run_http_replication_plan(
         self,
@@ -555,7 +554,7 @@ class ReplicatorClient:
 
             # pre-fetch instance IPs for all gateways
             progress.update(prepare_task, description=": Fetching instance IPs")
-            gateway_ips: Dict[Server, str] = {s: s.public_ip() for s in self.bound_nodes.values()}
+            gateway_ips: Dict[compute.Server, str] = {s: s.public_ip() for s in self.bound_nodes.values()}
 
             # make list of chunks
             n_objs = 0
@@ -565,13 +564,13 @@ class ReplicatorClient:
             for (url, dest_object) in job.download_pairs:
                 progress.update(prepare_task, description=f": Creating list of chunks for transfer ({n_objs}/{len(job.download_pairs)})")
                 n_objs += 1
-                
+
                 chunk = Chunk(
                     src_key=url,
                     dest_key=dest_object.key,
                     chunk_id=idx,
                     file_offset_bytes=0,
-                    chunk_length_bytes=32000000, # Hardcode as it takes a long time to query every header to get length
+                    chunk_length_bytes=32000000,  # Hardcode as it takes a long time to query every header to get length
                 )
                 chunks.append(chunk)
                 idx += 1
@@ -614,7 +613,7 @@ class ReplicatorClient:
                                 src_random_size_mb=job.random_chunk_size_mb,
                                 src_object_store_bucket=job.source_bucket,
                                 dst_object_store_bucket=job.dest_bucket,
-                                credentials=credentials
+                                credentials=credentials,
                             )
                         )
                     logger.fs.debug(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")
@@ -622,7 +621,7 @@ class ReplicatorClient:
                 # send chunk requests to start gateways in parallel
                 progress.update(prepare_task, description=": Dispatching chunk requests to source gateways")
 
-                def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
+                def send_chunk_requests(args: Tuple[compute.Server, List[ChunkRequest]]):
                     hop_instance, chunk_requests = args
                     while chunk_requests:
                         batch, chunk_requests = chunk_requests[: 1024 * 16], chunk_requests[1024 * 16 :]

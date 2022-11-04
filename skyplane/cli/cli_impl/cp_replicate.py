@@ -192,6 +192,7 @@ def generate_full_transferobjlist(
 
     return list(zip(source_objs, dest_objs))
 
+
 def generate_full_transferobjlist_http(
     url_list: List[str],
     dest_region: str,

@@ -105,7 +105,7 @@ class ObjectStoreInterface:
 
     def complete_multipart_upload(self, dst_object_name: str, upload_id: str) -> None:
         raise NotImplementedError("Multipart uploads not supported")
-    
+
     def download_http(self, chunk_req):
         raise NotImplementedError()
 
@@ -126,8 +126,3 @@ class ObjectStoreInterface:
             return AzureBlobInterface(storage_account, container)
         else:
             raise ValueError(f"Invalid region_tag {region_tag} - could not create interface")
-    
-    @staticmethod
-    def create_http(bucket_name: str):
-        from skyplane.obj_store.http_interface import HttpInterface
-        return HttpInterface(bucket_name)

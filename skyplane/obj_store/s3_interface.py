@@ -10,8 +10,7 @@ from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger, imports
 import requests
-import time
-import random
+
 
 class S3Object(ObjectStoreObject):
     def full_path(self):
@@ -235,10 +234,10 @@ class S3Interface(ObjectStoreInterface):
 
         os.system("touch ~/.netrc")
         os.system(f'echo "machine urs.earthdata.nasa.gov login {username} password {password}" >> ~/.netrc')
-        os.system('chmod 0600 ~/.netrc')
-        os.system('touch ~/.urs_cookies')
+        os.system("chmod 0600 ~/.netrc")
+        os.system("touch ~/.urs_cookies")
 
         response = requests.get(url, stream=True)
-        chunk_req.chunk.chunk_length_bytes = response.headers['Content-length'] # Update file size
+        chunk_req.chunk.chunk_length_bytes = response.headers["Content-length"]  # Update file size
         s3_client.upload_fileobj(response.raw, self.bucket_name, dst_key)
         # time.sleep(10) # To avoid high I/O processing complain from NASA server

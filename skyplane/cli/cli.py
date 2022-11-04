@@ -58,15 +58,13 @@ app.add_typer(skyplane.cli.experiments.app, name="experiments")
 app.add_typer(skyplane.cli.cli_cloud.app, name="cloud")
 app.add_typer(skyplane.cli.cli_config.app, name="config")
 
+
 @app.command()
 def download_pangeo(
     dst: str,
     reuse_gateways: bool = False,
     max_instances: int = typer.Option(cloud_config.get_flag("max_instances"), "--max-instances", "-n", help="Number of gateways"),
     solver_target_tput_per_vm_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
-    solver_throughput_grid: Path = typer.Option(
-        skyplane_root / "profiles" / "throughput.csv", "--throughput-grid", help="Throughput grid file"
-    ),
     solver_verbose: bool = False,
 ):
     print_header()
@@ -82,7 +80,7 @@ def download_pangeo(
     dst_region_tag = f"{provider_dst}:infer"
     dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
     dst_region_tag = dst_client.region_tag()
-    
+
     solve = False
     recursive = False
     args = {
@@ -95,7 +93,8 @@ def download_pangeo(
         "max_instances": max_instances,
         "solve": solve,
     }
-    topo = generate_topology(
+    with path("skyplane.data", "throughput.csv") as throughput_grid_path:
+        topo = generate_topology(
             dst_region_tag,
             dst_region_tag,
             solve,
@@ -103,51 +102,46 @@ def download_pangeo(
             max_instances=max_instances,
             solver_total_gbyte_to_transfer=None,
             solver_target_tput_per_vm_gbits=solver_target_tput_per_vm_gbits,
-            solver_throughput_grid=solver_throughput_grid,
+            solver_throughput_grid=throughput_grid_path,
             solver_verbose=solver_verbose,
             args=args,
         )
     download_pairs = generate_full_transferobjlist_http(url_list, dst_region_tag, bucket_dst, path_dst)
     job = HttpReplicationJob(
-            url_list=url_list,
-            dest_region=dst_region_tag,
-            dest_bucket=bucket_dst,
-            download_pairs=download_pairs,
-            credentials=credentials
-        )
+        url_list=url_list, dest_region=dst_region_tag, dest_bucket=bucket_dst, download_pairs=download_pairs, credentials=credentials
+    )
     src_region_tag = dst_region_tag
     transfer_stats = launch_replication_job_http(
-                topo=topo,
-                job=job,
-                debug=False,
-                reuse_gateways=reuse_gateways,
-                use_bbr=cloud_config.get_flag("bbr"),
-                use_compression=cloud_config.get_flag("compress") if src_region_tag != dst_region_tag else False,
-                use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region_tag != dst_region_tag else False,
-                use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region_tag != dst_region_tag else False,
-                aws_instance_class="m5.xlarge", # Use a smaller instance
-                aws_use_spot_instances=cloud_config.get_flag("aws_use_spot_instances"),
-                azure_instance_class=cloud_config.get_flag("azure_instance_class"),
-                azure_use_spot_instances=cloud_config.get_flag("azure_use_spot_instances"),
-                gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
-                gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
-                gcp_use_spot_instances=cloud_config.get_flag("gcp_use_spot_instances"),
-                multipart_enabled=False,
-                multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
-                multipart_chunk_size_mb=cloud_config.get_flag("multipart_chunk_size_mb"),
-                multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
-                error_reporting_args=args,
-                host_uuid=cloud_config.anon_clientid,
-            )
+        topo=topo,
+        job=job,
+        debug=False,
+        reuse_gateways=reuse_gateways,
+        use_bbr=cloud_config.get_flag("bbr"),
+        use_compression=cloud_config.get_flag("compress") if src_region_tag != dst_region_tag else False,
+        use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region_tag != dst_region_tag else False,
+        use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region_tag != dst_region_tag else False,
+        aws_instance_class="m5.xlarge",  # Use a smaller instance
+        aws_use_spot_instances=cloud_config.get_flag("aws_use_spot_instances"),
+        azure_instance_class=cloud_config.get_flag("azure_instance_class"),
+        azure_use_spot_instances=cloud_config.get_flag("azure_use_spot_instances"),
+        gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
+        gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
+        gcp_use_spot_instances=cloud_config.get_flag("gcp_use_spot_instances"),
+        multipart_enabled=False,
+        multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
+        multipart_chunk_size_mb=cloud_config.get_flag("multipart_chunk_size_mb"),
+        multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
+        error_reporting_args=args,
+        host_uuid=cloud_config.anon_clientid,
+    )
     if transfer_stats.monitor_status == "completed":
         console.print(f"\n:white_check_mark: [bold green]Download completed successfully[/bold green]")
         runtime_line = f"[white]Download runtime:[/white] [bright_black]{transfer_stats.total_runtime_s:.2f}s[/bright_black]"
         throughput_line = f"[white]Throughput:[/white] [bright_black]{transfer_stats.throughput_gbits:.2f}Gbps[/bright_black]"
         console.print(f"{runtime_line}, {throughput_line}")
     return 0 if transfer_stats.monitor_status == "completed" else 1
-    
-    
-    
+
+
 @app.command()
 def cp(
     src: str,

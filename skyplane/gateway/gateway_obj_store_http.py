@@ -6,13 +6,12 @@ from functools import partial
 from multiprocessing import Event, Manager, Process, Value, Queue
 from typing import Dict, Optional
 
-from skyplane import cloud_config
-from skyplane.chunk import ChunkRequest, Chunk
+from skyplane.config_paths import cloud_config
+from skyplane.chunk import ChunkRequest
 from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils import logger
 from skyplane.utils.retry import retry_backoff
-import random
 
 
 @dataclass
@@ -33,6 +32,7 @@ class GatewayHttpConn:
         # shared state
         self.manager = Manager()
         self.next_worker_id = Value("i", 0)
+        self.worker_download_queue: queue.Queue[ObjStoreRequest] = self.manager.Queue()
         self.worker_upload_queue: queue.Queue[ObjStoreRequest] = self.manager.Queue()
         self.exit_flags = [Event() for _ in range(self.n_processes)]
 
@@ -52,7 +52,7 @@ class GatewayHttpConn:
         return self.obj_store_interfaces[key]
 
     def start_workers(self):
-        #logger.log(f"Start worker: {self.n_processes}")
+        # logger.log(f"Start worker: {self.n_processes}")
         for i in range(self.n_processes):
             p = Process(target=self.worker_loop, args=(i,))
             p.start()
@@ -115,4 +115,3 @@ class GatewayHttpConn:
 
     def queue_download_request(self, chunk_request: ChunkRequest):
         self.worker_download_queue.put(ObjStoreRequest(chunk_request, "download"))
-

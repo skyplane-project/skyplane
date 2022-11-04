@@ -73,9 +73,9 @@ class GatewayDaemon:
             n_conn = 32
         elif provider == "azure":
             n_conn = 24  # due to throttling limits from authentication
-        
+
         if http_download:
-            n_conn = 4 # due to throttling limits from NASA GES DISC server
+            n_conn = 4  # due to throttling limits from NASA GES DISC server
             self.obj_store_conn = GatewayHttpConn(self.chunk_store, self.error_event, self.error_queue, max_conn=n_conn)
             # Set chunk status to be "downloaded" so that they will be recognized as upload jobs
             chunk_reqs = self.chunk_store.chunk_requests
@@ -207,6 +207,6 @@ if __name__ == "__main__":
         use_tls=not args.disable_tls,
         use_compression=args.use_compression,
         use_e2ee=not args.disable_e2ee,
-        http_download= args.http_download,
+        http_download=args.http_download,
     )
     daemon.run()
