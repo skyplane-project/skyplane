@@ -12,7 +12,6 @@ from skyplane.compute.key_utils import generate_keypair
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
-    import paramiko
 
 from skyplane import exceptions
 from skyplane.config_paths import cloud_config

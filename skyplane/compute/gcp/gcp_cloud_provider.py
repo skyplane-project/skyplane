@@ -1,5 +1,8 @@
 import uuid
 from typing import List, Optional
+
+
+from skyplane import exceptions
 from skyplane.compute.cloud_provider import CloudProvider
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.gcp.gcp_key_manager import GCPKeyManager
@@ -7,10 +10,7 @@ from skyplane.compute.gcp.gcp_network import GCPNetwork
 from skyplane.compute.gcp.gcp_pricing import GCPPricing
 from skyplane.compute.gcp.gcp_server import GCPServer
 from skyplane.compute.server import Server, ServerState
-
-from skyplane.utils import imports
-from skyplane import exceptions
-from skyplane.utils import logger
+from skyplane.utils import imports, logger
 from skyplane.utils.fn import wait_for
 
 

@@ -1,4 +1,3 @@
-import subprocess
 from pathlib import Path
 
 from skyplane import exceptions as skyplane_exceptions
