@@ -180,11 +180,11 @@ def generate_full_transferobjlist(
         except exceptions.MissingObjectException:
             raise typer.Exit(1)
         if dest_region.startswith("aws"):
-            dest_obj = S3Object(dest_region.split(":")[0], dest_bucket, dest_key)
+            dest_obj = S3Object(dest_region.split(":")[0], dest_bucket, dest_key, mime_type=source_obj.mime_type)
         elif dest_region.startswith("gcp"):
-            dest_obj = GCSObject(dest_region.split(":")[0], dest_bucket, dest_key)
+            dest_obj = GCSObject(dest_region.split(":")[0], dest_bucket, dest_key, mime_type=source_obj.mime_type)
         elif dest_region.startswith("azure"):
-            dest_obj = AzureBlobObject(dest_region.split(":")[0], dest_bucket, dest_key)
+            dest_obj = AzureBlobObject(dest_region.split(":")[0], dest_bucket, dest_key, mime_type=source_obj.mime_type)
         else:
             raise ValueError(f"Invalid dest_region {dest_region} - could not create corresponding object")
         # dest_obj = ObjectStoreObject(dest_region.split(":")[0], dest_bucket, dest_key)
