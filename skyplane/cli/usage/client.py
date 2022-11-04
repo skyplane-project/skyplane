@@ -7,15 +7,17 @@ import uuid
 from dataclasses import asdict, dataclass
 from enum import Enum, auto
 from pathlib import Path
-from typing import Optional, Dict
 
 import requests
 import typer
 from rich import print as rprint
+from typing import Optional, Dict
 
+import skyplane
 import skyplane.cli.usage.definitions
-from skyplane import cloud_config, config_path, tmp_log_dir
+from skyplane.api.client import tmp_log_dir
 from skyplane.config import _map_type
+from skyplane.config_paths import config_path, cloud_config
 from skyplane.replicate.replicator_client import TransferStats
 from skyplane.utils import logger
 

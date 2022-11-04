@@ -1,7 +1,8 @@
 import os
+
 from typing import Optional
 
-from skyplane.cli.common import parse_path
+from skyplane.api.impl.path import parse_path
 
 
 def fallback_cmd_local_cp(src_path: str, dest_path: str, recursive: bool) -> str:
@@ -20,8 +21,8 @@ def fallback_cmd_s3_sync(src_path, dest_path):
     return f"aws s3 sync --no-follow-symlinks {src_path} {dest_path}"
 
 
-def fallback_cmd_gcp_cp(src_path: str, dest_path: str) -> str:
-    return f"gsutil -m cp {src_path} {dest_path}"
+def fallback_cmd_gcp_cp(src_path: str, dest_path: str, recursive: bool) -> str:
+    return f"gsutil -m cp {src_path} {dest_path}" if not recursive else f"gsutil -m cp -r {src_path} {dest_path}"
 
 
 def fallback_cmd_gcp_sync(src_path, dest_path):
@@ -48,7 +49,7 @@ def replicate_onprem_cp_cmd(src, dst, recursive=True) -> Optional[str]:
         return fallback_cmd_s3_cp(src, dst, recursive)
     # local -> gcp or gcp -> local
     elif (provider_src == "local" and provider_dst == "gcp") or (provider_src == "gcp" and provider_dst == "local"):
-        return fallback_cmd_gcp_cp(src, dst)
+        return fallback_cmd_gcp_cp(src, dst, recursive)
     # local -> azure or azure -> local
     elif (provider_src == "local" and provider_dst == "azure") or (provider_src == "azure" and provider_dst == "local"):
         return fallback_cmd_azure_cp(src, dst, recursive)
@@ -87,7 +88,7 @@ def replicate_small_cp_cmd(src, dst, recursive=True) -> Optional[str]:
         return fallback_cmd_s3_cp(src, dst, recursive)
     # gcp -> gcp
     elif provider_src == "gcp" and provider_dst == "gcp":
-        return fallback_cmd_gcp_cp(src, dst)
+        return fallback_cmd_gcp_cp(src, dst, recursive)
     # azure -> azure
     elif provider_src == "azure" and provider_dst == "azure":
         return fallback_cmd_azure_cp(src, dst, recursive)

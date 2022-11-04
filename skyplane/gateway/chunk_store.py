@@ -4,6 +4,7 @@ from multiprocessing import Manager, Queue
 from os import PathLike
 from pathlib import Path
 from queue import Empty
+
 from typing import Dict, List, Optional
 
 from skyplane.chunk import ChunkRequest, ChunkState
@@ -128,6 +129,11 @@ class ChunkStore:
     def update_chunk_checksum(self, chunk_id: int, checksum: Optional[bytes]):
         cr = self.chunk_requests[chunk_id]
         cr.chunk.checksum = checksum
+        self.chunk_requests[chunk_id] = cr
+
+    def update_chunk_mime_type(self, chunk_id: int, mime_type: Optional[str]):
+        cr = self.chunk_requests[chunk_id]
+        cr.chunk.mime_type = mime_type
         self.chunk_requests[chunk_id] = cr
 
     # Memory space calculation

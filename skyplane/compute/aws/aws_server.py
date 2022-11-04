@@ -1,9 +1,9 @@
+import functools
 import logging
 import warnings
-import functools
-from typing import Dict, Optional
 
 from cryptography.utils import CryptographyDeprecationWarning
+from typing import Dict, Optional
 
 from skyplane.compute.aws.aws_key_manager import AWSKeyManager
 
@@ -11,9 +11,9 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
 
-from skyplane import exceptions, key_root
+from skyplane import exceptions
 from skyplane.compute.aws.aws_auth import AWSAuthentication
-from skyplane.compute.server import Server, ServerState
+from skyplane.compute.server import Server, ServerState, key_root
 from skyplane.utils import imports
 from skyplane.utils.cache import ignore_lru_cache
 

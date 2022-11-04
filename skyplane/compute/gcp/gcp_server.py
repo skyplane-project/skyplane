@@ -8,9 +8,9 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
 
-from skyplane import key_root, exceptions
+from skyplane import exceptions
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
-from skyplane.compute.server import Server, ServerState
+from skyplane.compute.server import Server, ServerState, key_root
 from skyplane.utils.fn import PathLike
 
 
@@ -24,7 +24,7 @@ class GCPServer(Server):
         key_root = Path(key_root)
         key_root.mkdir(parents=True, exist_ok=True)
         if ssh_private_key is None:
-            self.ssh_private_key = key_root / f"gcp-cert.pem"
+            self.ssh_private_key = key_root / f"skyplane-gcp-cert.pem"
         else:
             self.ssh_private_key = ssh_private_key
 

@@ -3,15 +3,16 @@ import pathlib
 import signal
 import sys
 import traceback
-from typing import List, Optional, Tuple, Dict
 
 import typer
 from rich import print as rprint
+from typing import List, Optional, Tuple, Dict
 
-from skyplane import exceptions, GB, format_bytes, gateway_docker_image, skyplane_root, cloud_config
+from skyplane import compute
+from skyplane import exceptions
 from skyplane.cli.common import console
 from skyplane.cli.usage.client import UsageClient
-from skyplane.compute.cloud_providers import CloudProvider
+from skyplane.config_paths import cloud_config
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
@@ -19,6 +20,7 @@ from skyplane.obj_store.s3_interface import S3Object
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob, HttpReplicationJob
 from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 from skyplane.utils import logger
+from skyplane.utils.definitions import GB, format_bytes, gateway_docker_image
 from skyplane.utils.timer import Timer
 
 
@@ -31,7 +33,7 @@ def generate_topology(
     solver_class: str = "ILP",
     solver_total_gbyte_to_transfer: Optional[float] = None,
     solver_target_tput_per_vm_gbits: Optional[float] = None,
-    solver_throughput_grid: Optional[pathlib.Path] = skyplane_root / "profiles" / "throughput.csv",
+    solver_throughput_grid: Optional[pathlib.Path] = None,
     solver_verbose: Optional[bool] = False,
     args: Optional[Dict] = None,
 ) -> ReplicationTopology:
@@ -92,7 +94,7 @@ def generate_topology(
             topo.add_objstore_instance_edge(src_region, src_region, i)
             topo.add_instance_instance_edge(src_region, i, dst_region, i, num_connections)
             topo.add_instance_objstore_edge(dst_region, i, dst_region)
-        topo.cost_per_gb = CloudProvider.get_transfer_cost(src_region, dst_region)
+        topo.cost_per_gb = compute.CloudProvider.get_transfer_cost(src_region, dst_region)
         return topo
 
 
@@ -178,11 +180,11 @@ def generate_full_transferobjlist(
         except exceptions.MissingObjectException:
             raise typer.Exit(1)
         if dest_region.startswith("aws"):
-            dest_obj = S3Object(dest_region.split(":")[0], dest_bucket, dest_key)
+            dest_obj = S3Object(dest_region.split(":")[0], dest_bucket, dest_key, mime_type=source_obj.mime_type)
         elif dest_region.startswith("gcp"):
-            dest_obj = GCSObject(dest_region.split(":")[0], dest_bucket, dest_key)
+            dest_obj = GCSObject(dest_region.split(":")[0], dest_bucket, dest_key, mime_type=source_obj.mime_type)
         elif dest_region.startswith("azure"):
-            dest_obj = AzureBlobObject(dest_region.split(":")[0], dest_bucket, dest_key)
+            dest_obj = AzureBlobObject(dest_region.split(":")[0], dest_bucket, dest_key, mime_type=source_obj.mime_type)
         else:
             raise ValueError(f"Invalid dest_region {dest_region} - could not create corresponding object")
         # dest_obj = ObjectStoreObject(dest_region.split(":")[0], dest_bucket, dest_key)

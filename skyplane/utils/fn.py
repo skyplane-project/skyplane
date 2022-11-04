@@ -1,10 +1,10 @@
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Callable, Iterable, List, Optional, Tuple, Union, TypeVar
 
 from rich import print as rprint
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, MofNCompleteColumn, TimeElapsedColumn
+from typing import Callable, Iterable, List, Optional, Tuple, Union, TypeVar
 
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
@@ -43,7 +43,7 @@ def do_parallel(
             return args, func(args)
         except Exception as e:
             logger.error(f"Error running {func.__name__}: {e}")
-            raise e
+            raise
 
     results = []
     with Progress(

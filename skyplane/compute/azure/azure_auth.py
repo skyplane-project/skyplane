@@ -2,15 +2,14 @@ import json
 import logging
 import os
 import subprocess
+
 from typing import Dict, List, Optional
 
-from skyplane import azure_config_path
-from skyplane import azure_sku_path
-from skyplane import config_path
-from skyplane import is_gateway_env
 from skyplane.compute.const_cmds import query_which_cloud
 from skyplane.config import SkyplaneConfig
+from skyplane.config_paths import config_path, azure_config_path, azure_sku_path
 from skyplane.utils import imports
+from skyplane.utils.definitions import is_gateway_env
 from skyplane.utils.fn import do_parallel, wait_for
 
 

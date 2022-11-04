@@ -2,11 +2,10 @@ import base64
 import hashlib
 import os
 from functools import lru_cache
-from typing import Iterator, List, Optional
 
-from skyplane import exceptions
+from typing import Iterator, List, Optional, Tuple
+from skyplane import exceptions, compute
 from skyplane.chunk import ChunkRequest
-from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger, imports
@@ -21,7 +20,7 @@ class S3Object(ObjectStoreObject):
 
 class S3Interface(ObjectStoreInterface):
     def __init__(self, bucket_name: str):
-        self.auth = AWSAuthentication()
+        self.auth = compute.AWSAuthentication()
         self.requester_pays = False
         self.bucket_name = bucket_name
         self._cached_s3_clients = {}
@@ -46,6 +45,9 @@ class S3Interface(ObjectStoreInterface):
     def region_tag(self):
         return "aws:" + self.aws_region
 
+    def bucket(self) -> str:
+        return self.bucket_name
+
     def set_requester_bool(self, requester: bool):
         self.requester_pays = requester
 
@@ -65,7 +67,7 @@ class S3Interface(ObjectStoreInterface):
         except botocore_exceptions.ClientError as e:
             if e.response["Error"]["Code"] == "NoSuchBucket" or e.response["Error"]["Code"] == "AccessDenied":
                 return False
-            raise e
+            raise
 
     def create_bucket(self, aws_region):
         s3_client = self._s3_client(aws_region)
@@ -83,8 +85,12 @@ class S3Interface(ObjectStoreInterface):
         requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
         page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix, **requester_pays)
         for page in page_iterator:
+            objs = []
             for obj in page.get("Contents", []):
-                yield S3Object("aws", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"])
+                objs.append(
+                    S3Object("aws", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"], mime_type=obj.get("ContentType"))
+                )
+            yield from objs
 
     def delete_objects(self, keys: List[str]):
         s3_client = self._s3_client()
@@ -107,6 +113,9 @@ class S3Interface(ObjectStoreInterface):
     def get_obj_last_modified(self, obj_name):
         return self.get_obj_metadata(obj_name)["LastModified"]
 
+    def get_obj_mime_type(self, obj_name):
+        return self.get_obj_metadata(obj_name)["ContentType"]
+
     def exists(self, obj_name):
         try:
             self.get_obj_metadata(obj_name)
@@ -123,20 +132,17 @@ class S3Interface(ObjectStoreInterface):
         write_at_offset=False,
         generate_md5=False,
         write_block_size=2**16,
-    ) -> Optional[bytes]:
+    ) -> Tuple[Optional[str], Optional[bytes]]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
 
         s3_client = self._s3_client()
         assert len(src_object_name) > 0, f"Source object name must be non-empty: '{src_object_name}'"
-
         args = {"Bucket": self.bucket_name, "Key": src_object_name}
-
-        if size_bytes:
+        assert not (offset_bytes and not size_bytes), f"Cannot specify {offset_bytes=} without {size_bytes=}"
+        if offset_bytes is not None and size_bytes is not None:
             args["Range"] = f"bytes={offset_bytes}-{offset_bytes + size_bytes - 1}"
-
         if self.requester_pays:
             args["RequestPayer"] = "requester"
-
         response = s3_client.get_object(**args)
 
         # write response data
@@ -153,10 +159,14 @@ class S3Interface(ObjectStoreInterface):
                 f.write(b)
                 b = response["Body"].read(write_block_size)
         response["Body"].close()
-        return m.digest() if generate_md5 else None
+        md5 = m.digest() if generate_md5 else None
+        mime_type = response["ContentType"]
+        return mime_type, md5
 
     @imports.inject("botocore.exceptions", pip_extra="aws")
-    def upload_object(botocore_exceptions, self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None):
+    def upload_object(
+        botocore_exceptions, self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None, mime_type=None
+    ):
         dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
         s3_client = self._s3_client()
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
@@ -175,24 +185,24 @@ class S3Interface(ObjectStoreInterface):
                         **checksum_args,
                     )
                 else:
-                    s3_client.put_object(Body=f, Key=dst_object_name, Bucket=self.bucket_name, **checksum_args)
+                    mime_args = dict(ContentType=mime_type) if mime_type else dict()
+                    s3_client.put_object(Body=f, Key=dst_object_name, Bucket=self.bucket_name, **checksum_args, **mime_args)
         except botocore_exceptions.ClientError as e:
             # catch MD5 mismatch error and raise appropriate exception
             if "Error" in e.response and "Code" in e.response["Error"] and e.response["Error"]["Code"] == "InvalidDigest":
                 raise exceptions.ChecksumMismatchException(f"Checksum mismatch for object {dst_object_name}") from e
             raise
 
-    def initiate_multipart_uploads(self, dst_object_names: List[str]) -> List[str]:
+    def initiate_multipart_upload(self, dst_object_name: str, mime_type: Optional[str] = None) -> str:
         client = self._s3_client()
-        upload_ids = []
-        for dst_object_name in dst_object_names:
-            assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
-            response = client.create_multipart_upload(Bucket=self.bucket_name, Key=dst_object_name)
-            if "UploadId" in response:
-                upload_ids.append(response["UploadId"])
-            else:
-                raise exceptions.SkyplaneException(f"Failed to initiate multipart upload for {dst_object_name}: {response}")
-        return upload_ids
+        assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
+        response = client.create_multipart_upload(
+            Bucket=self.bucket_name, Key=dst_object_name, **(dict(ContentType=mime_type) if mime_type else dict())
+        )
+        if "UploadId" in response:
+            return response["UploadId"]
+        else:
+            raise exceptions.SkyplaneException(f"Failed to initiate multipart upload for {dst_object_name}: {response}")
 
     def complete_multipart_upload(self, dst_object_name, upload_id):
         s3_client = self._s3_client()

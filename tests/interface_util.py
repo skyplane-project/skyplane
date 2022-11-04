@@ -3,7 +3,7 @@ import time
 import os
 import tempfile
 import uuid
-from skyplane import MB
+from skyplane.utils.definitions import MB
 
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils.fn import wait_for
@@ -24,14 +24,14 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
             file_md5 = hashlib.md5(f.read()).hexdigest()
 
         if multipart:
-            upload_id = interface.initiate_multipart_uploads([obj_name])[0]
+            upload_id = interface.initiate_multipart_upload(obj_name, mime_type="text/plain")
             time.sleep(5)
             interface.upload_object(fpath, obj_name, 1, upload_id)
             time.sleep(5)
             interface.complete_multipart_upload(obj_name, upload_id)
             time.sleep(5)
         else:
-            interface.upload_object(fpath, obj_name)
+            interface.upload_object(fpath, obj_name, mime_type="text/plain")
             time.sleep(5)
         assert not interface.exists("random_nonexistent_file"), "Object should not exist"
 
@@ -42,13 +42,15 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
             os.remove(fpath)
 
         if multipart:
-            interface.download_object(obj_name, fpath, 0, file_size_mb * MB)
+            mime_type, md5 = interface.download_object(obj_name, fpath, 0, file_size_mb * MB)
             time.sleep(5)
         else:
-            interface.download_object(obj_name, fpath)
+            mime_type, md5 = interface.download_object(obj_name, fpath)
             time.sleep(5)
         local_size = os.path.getsize(fpath)
         assert file_size_mb * MB == local_size, f"Object size mismatch: {file_size_mb * MB} != {local_size}"
+        assert md5 is None or file_md5 == md5, f"Object md5 mismatch: {file_md5} != {md5}"
+        assert mime_type == "text/plain", f"Object mime type mismatch: {mime_type} != text/plain"
 
         # check md5
         with open(fpath, "rb") as f:

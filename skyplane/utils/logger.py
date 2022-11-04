@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from rich import print as rprint
 
-from skyplane import is_gateway_env
+from skyplane.utils.definitions import is_gateway_env
 
 log_file = None
 

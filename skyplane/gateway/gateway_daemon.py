@@ -10,9 +10,9 @@ from multiprocessing import Event, Queue
 from os import PathLike
 from pathlib import Path
 from threading import BoundedSemaphore
+
 from typing import Dict
 
-from skyplane import MB
 from skyplane.chunk import ChunkState
 from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.gateway.gateway_daemon_api import GatewayDaemonAPI
@@ -21,6 +21,7 @@ from skyplane.gateway.gateway_obj_store_http import GatewayHttpConn
 from skyplane.gateway.gateway_receiver import GatewayReceiver
 from skyplane.gateway.gateway_sender import GatewaySender
 from skyplane.utils import logger
+from skyplane.utils.definitions import MB
 
 
 class GatewayDaemon:

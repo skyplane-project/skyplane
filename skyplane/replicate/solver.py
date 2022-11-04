@@ -2,15 +2,15 @@ import functools
 import shutil
 from collections import namedtuple
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+from typing import Dict, List, Optional, Tuple
 
-from skyplane import GB
-from skyplane.compute.cloud_providers import CloudProvider
+from skyplane import compute
 from skyplane.replicate.replication_plan import ReplicationTopology
 from skyplane.utils import logger
+from skyplane.utils.definitions import GB
 
 GBIT_PER_GBYTE = 8
 
@@ -117,7 +117,7 @@ class ThroughputSolver:
     @functools.lru_cache(maxsize=None)
     def get_path_cost(self, src, dst, src_tier="PREMIUM", dst_tier="PREMIUM"):
         assert src_tier == "PREMIUM" and dst_tier == "PREMIUM"
-        return CloudProvider.get_transfer_cost(src, dst)
+        return compute.CloudProvider.get_transfer_cost(src, dst)
 
     def get_regions(self):
         return list(sorted(set(list(self.df.index.levels[0].unique()) + list(self.df.index.levels[1].unique()))))

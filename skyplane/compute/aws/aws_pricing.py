@@ -1,4 +1,5 @@
-from skyplane import skyplane_root
+from importlib.resources import path
+
 from skyplane.utils import logger
 
 try:
@@ -15,8 +16,10 @@ class AWSPricing:
     @property
     def transfer_df(self):
         if pd:
-            if not self._transfer_df:
-                self._transfer_df = pd.read_csv(skyplane_root / "profiles" / "aws_transfer_costs.csv").set_index(["src", "dst"])
+            if self._transfer_df is None:
+                with path("skyplane.data", "aws_transfer_costs.csv") as transfer_cost_path:
+                    self._transfer_df = pd.read_csv(transfer_cost_path).set_index(["src", "dst"])
+
             return self._transfer_df
         else:
             return None

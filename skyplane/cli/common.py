@@ -1,17 +1,10 @@
-import re
 import subprocess
 from functools import partial
-from pathlib import Path
 
 import typer
 from rich.console import Console
 
-from skyplane.compute.aws.aws_auth import AWSAuthentication
-from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
-from skyplane.compute.azure.azure_auth import AzureAuthentication
-from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
-from skyplane.compute.gcp.gcp_auth import GCPAuthentication
-from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
+from skyplane import compute
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
 
@@ -26,43 +19,6 @@ def print_header():
 /\__/ / |\  \  | | | |   | |____| | | || |\  || |___ 
 \____/\_| \_/  \_/ \_|   \_____/\_| |_/\_| \_/\____/"""
     console.print(f"[bright_black]{header}[/bright_black]\n")
-
-
-def parse_path(path: str):
-    def is_plausible_local_path(path_test: str):
-        path_test = Path(path_test)
-        if path_test.exists():
-            return True
-        if path_test.is_dir():
-            return True
-        if path_test.parent.exists():
-            return True
-        return False
-
-    if path.startswith("s3://") or path.startswith("gs://"):
-        provider, parsed = path[:2], path[5:]
-        if len(parsed) == 0:
-            typer.secho(f"Invalid path: '{path}'", fg="red", err=True)
-            raise typer.Exit(code=1)
-        bucket, *keys = parsed.split("/", 1)
-        key = keys[0] if len(keys) > 0 else ""
-        provider = "aws" if provider == "s3" else "gcp"
-        return provider, bucket, key
-    elif (path.startswith("https://") or path.startswith("http://")) and "blob.core.windows.net" in path:
-        # Azure blob storage
-        regex = re.compile(r"https?://([^/]+).blob.core.windows.net/([^/]+)/?(.*)")
-        match = regex.match(path)
-        if match is None:
-            raise ValueError(f"Invalid Azure path: {path}")
-        account, container, blob_path = match.groups()
-        return "azure", f"{account}/{container}", blob_path
-    elif path.startswith("azure://"):
-        bucket_name = path[8:]
-        region = path[8:].split("-", 2)[-1]
-        return "azure", bucket_name, region
-    elif is_plausible_local_path(path):
-        return "local", None, path
-    raise ValueError(f"Parse error {path}")
 
 
 def print_stats_completed(total_runtime_s, throughput_gbits):
@@ -110,14 +66,14 @@ def query_instances():
 
         return run
 
-    if AWSAuthentication().enabled():
-        aws = AWSCloudProvider()
+    if compute.AWSAuthentication().enabled():
+        aws = compute.AWSCloudProvider()
         for region in aws.region_list():
             query_jobs.append(catch_error(partial(aws.get_matching_instances, region)))
-    if AzureAuthentication().enabled():
-        query_jobs.append(catch_error(lambda: AzureCloudProvider().get_matching_instances()))
-    if GCPAuthentication().enabled():
-        query_jobs.append(catch_error(lambda: GCPCloudProvider().get_matching_instances()))
+    if compute.AzureAuthentication().enabled():
+        query_jobs.append(catch_error(lambda: compute.AzureCloudProvider().get_matching_instances()))
+    if compute.GCPAuthentication().enabled():
+        query_jobs.append(catch_error(lambda: compute.GCPCloudProvider().get_matching_instances()))
     # query in parallel
     for instance_list in do_parallel(
         lambda f: f(), query_jobs, n=-1, return_args=False, spinner=True, desc="Querying clouds for instances"

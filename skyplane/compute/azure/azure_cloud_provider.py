@@ -4,26 +4,29 @@ import uuid
 import warnings
 from multiprocessing import BoundedSemaphore
 from pathlib import Path
-from typing import List, Optional
 
 from cryptography.utils import CryptographyDeprecationWarning
+from typing import List, Optional
+
+from skyplane.compute.key_utils import generate_keypair
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
-    import paramiko
 
-from skyplane import cloud_config, exceptions, key_root
+from skyplane import exceptions
+from skyplane.config_paths import cloud_config
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_server import AzureServer
-from skyplane.compute.cloud_providers import CloudProvider
+from skyplane.compute.cloud_provider import CloudProvider
+from skyplane.compute.server import key_root
 from skyplane.utils import logger, imports
 from skyplane.utils.timer import Timer
 
 
 class AzureCloudProvider(CloudProvider):
-    def __init__(self, key_root=key_root / "azure"):
+    def __init__(self, key_root=key_root / "azure", auth: Optional[AzureAuthentication] = None):
         super().__init__()
-        self.auth = AzureAuthentication()
+        self.auth = auth if auth else AzureAuthentication()
 
         key_root.mkdir(parents=True, exist_ok=True)
         self.private_key_path = key_root / "azure_key"
@@ -190,15 +193,12 @@ class AzureCloudProvider(CloudProvider):
                     )
         return server_list
 
-    # Copied from gcp_cloud_provider.py --- consolidate later?
     def create_ssh_key(self):
+        public_key_path = Path(self.public_key_path)
         private_key_path = Path(self.private_key_path)
         if not private_key_path.exists():
             private_key_path.parent.mkdir(parents=True, exist_ok=True)
-            key = paramiko.RSAKey.generate(4096)
-            key.write_private_key_file(self.private_key_path, password="skyplane")
-            with open(self.public_key_path, "w") as f:
-                f.write(f"{key.get_name()} {key.get_base64()}\n")
+            generate_keypair(public_key_path, private_key_path)
 
     def set_up_resource_group(self, clean_up_orphans=True):
         resource_client = self.auth.get_resource_client()
