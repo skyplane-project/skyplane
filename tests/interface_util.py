@@ -49,7 +49,7 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
             time.sleep(5)
         local_size = os.path.getsize(fpath)
         assert file_size_mb * MB == local_size, f"Object size mismatch: {file_size_mb * MB} != {local_size}"
-        assert file_md5 == md5, f"Object md5 mismatch: {file_md5} != {md5}"
+        assert md5 is None or file_md5 == md5, f"Object md5 mismatch: {file_md5} != {md5}"
         assert mime_type == "text/plain", f"Object mime type mismatch: {mime_type} != text/plain"
 
         # check md5
