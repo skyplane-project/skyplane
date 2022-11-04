@@ -81,9 +81,7 @@ class GCPCloudProvider(CloudProvider):
         if "items" in gcp_instance_result:
             instance_list = []
             for i in gcp_instance_result["items"]:
-                instance_list.append(
-                    GCPServer(f"gcp:{region}", i["name"], ssh_private_key=self.key_manager.get_private_key(self.key_name))
-                )
+                instance_list.append(GCPServer(f"gcp:{region}", i["name"], ssh_private_key=self.key_manager.get_private_key(self.key_name)))
             return instance_list
         else:
             return []

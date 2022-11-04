@@ -74,21 +74,21 @@ class GCPNetwork:
         ]
         if existing_rule:  # add new ip ranges, ports and protocols to existing rule
             existing_rule["sourceRanges"] = list(set(existing_rule["sourceRanges"] + ip_ranges))
-            existing_rule["allowed"] = list(set(existing_rule["allowed"] + allowed))
+            existing_rule["allowed"] = existing_rule["allowed"] + allowed
             op = compute.firewalls().update(project=self.auth.project_id, firewall=rule_name, body=existing_rule).execute()
             self.auth.wait_for_operation_to_complete("global", op["name"])
             logger.fs.debug(f"Updating firewall rule {rule_name}")
         else:  # create new rule
             body = {
                 "name": rule_name,
-                "network": self.vpc_name,
+                "network": f"global/networks/{self.vpc_name}",
                 "sourceRanges": ip_ranges,
                 "allowed": allowed,
                 "priority": priority,
             }
             op = compute.firewalls().insert(project=self.auth.project_id, body=body).execute()
             self.auth.wait_for_operation_to_complete("global", op["name"])
-            logger.fs.debug(f"Creating firewall rule {rule_name}")
+            logger.fs.debug(f"Creating firewall rule {rule_name} with {body=}")
 
     @imports.inject("googleapiclient.errors", pip_extra="gcp")
     def delete_firewall_rule(errors, self, rule_name: str):
