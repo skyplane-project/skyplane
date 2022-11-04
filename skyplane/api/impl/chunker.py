@@ -33,11 +33,10 @@ class Chunker:
         exit_event: threading.Event,
         in_queue: "Queue[Tuple[ObjectStoreObject, ObjectStoreObject]]",
         out_queue: "Queue[Chunk]",
-        dest_iface: ObjectStoreInterface,
     ):
         """Chunks large files into many small chunks."""
-        region = dest_iface.region_tag()
-        bucket = dest_iface.bucket()
+        region = self.dest_iface.region_tag()
+        bucket = self.dest_iface.bucket()
         while not exit_event.is_set():
             try:
                 input_data = in_queue.get(block=False, timeout=0.1)
@@ -46,7 +45,8 @@ class Chunker:
 
             # get source and destination object and then compute number of chunks
             src_object, dest_object = input_data
-            upload_id = dest_iface.initiate_multipart_upload(dest_object.key)
+            mime_type = self.src_iface.get_obj_mime_type(src_object.key)
+            upload_id = self.dest_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
             chunk_size_bytes = int(self.transfer_config.multipart_chunk_size_mb * MB)
             num_chunks = math.ceil(src_object.size / chunk_size_bytes)
             if num_chunks > self.transfer_config.multipart_max_chunks:

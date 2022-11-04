@@ -121,6 +121,9 @@ class AzureBlobInterface(ObjectStoreInterface):
     def get_obj_last_modified(self, obj_name):
         return self.get_obj_metadata(obj_name).last_modified
 
+    def get_obj_mime_type(self, obj_name):
+        return self.get_obj_metadata(obj_name).content_settings.content_type
+
     def download_object(
         self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5=False
     ) -> Tuple[Optional[str], Optional[bytes]]:
@@ -141,6 +144,7 @@ class AzureBlobInterface(ObjectStoreInterface):
                 f.write(b)
         md5 = m.digest() if generate_md5 else None
         mime_type = self.get_obj_metadata(src_object_name).content_settings.content_type
+        return mime_type, md5
 
     @imports.inject("azure.storage.blob", pip_extra="azure")
     def upload_object(azure_blob, self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None, mime_type=None):

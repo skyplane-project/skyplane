@@ -123,6 +123,9 @@ class GCSInterface(ObjectStoreInterface):
     def get_obj_last_modified(self, obj_name):
         return self.get_obj_metadata(obj_name).updated
 
+    def get_obj_mime_type(self, obj_name):
+        return self.get_obj_metadata(obj_name).content_type
+
     def send_xml_request(
         self,
         blob_name: str,
@@ -210,11 +213,12 @@ class GCSInterface(ObjectStoreInterface):
         assert part_number is not None and upload_id is not None
 
         # send XML api request
+        headers = {"Content-MD5": b64_md5sum} if check_md5 else None
         response = self.send_xml_request(
             dst_object_name,
             {"uploadId": upload_id, "partNumber": part_number},
             "PUT",
-            headers={"Content-MD5": b64_md5sum} if check_md5 else None,
+            headers=headers,
             data=open(src_file_path, "rb"),
         )
 
@@ -224,9 +228,9 @@ class GCSInterface(ObjectStoreInterface):
                 f"Upload of object {dst_object_name} in bucket {self.bucket_name} failed, got status code {response.status_code} w/ response {response.text}"
             )
 
-    def initiate_multipart_upload(self, dst_object_name: str):
+    def initiate_multipart_upload(self, dst_object_name: str, mime_type: Optional[str] = None) -> str:
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
-        response = self.send_xml_request(dst_object_name, {"uploads": None}, "POST")
+        response = self.send_xml_request(dst_object_name, {"uploads": None}, "POST", content_type=mime_type)
         return ElementTree.fromstring(response.content)[2].text
 
     def complete_multipart_upload(self, dst_object_name, upload_id):

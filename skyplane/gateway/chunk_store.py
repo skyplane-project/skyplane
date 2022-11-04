@@ -129,7 +129,7 @@ class ChunkStore:
         cr = self.chunk_requests[chunk_id]
         cr.chunk.checksum = checksum
         self.chunk_requests[chunk_id] = cr
-    
+
     def update_chunk_mime_type(self, chunk_id: int, mime_type: Optional[str]):
         cr = self.chunk_requests[chunk_id]
         cr.chunk.mime_type = mime_type

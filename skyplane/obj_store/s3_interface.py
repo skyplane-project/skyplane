@@ -111,6 +111,9 @@ class S3Interface(ObjectStoreInterface):
     def get_obj_last_modified(self, obj_name):
         return self.get_obj_metadata(obj_name)["LastModified"]
 
+    def get_obj_mime_type(self, obj_name):
+        return self.get_obj_metadata(obj_name)["ContentType"]
+
     def exists(self, obj_name):
         try:
             self.get_obj_metadata(obj_name)
@@ -188,10 +191,12 @@ class S3Interface(ObjectStoreInterface):
                 raise exceptions.ChecksumMismatchException(f"Checksum mismatch for object {dst_object_name}") from e
             raise
 
-    def initiate_multipart_upload(self, dst_object_name: str) -> str:
+    def initiate_multipart_upload(self, dst_object_name: str, mime_type: Optional[str] = None) -> str:
         client = self._s3_client()
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
-        response = client.create_multipart_upload(Bucket=self.bucket_name, Key=dst_object_name)
+        response = client.create_multipart_upload(
+            Bucket=self.bucket_name, Key=dst_object_name, **(dict(ContentType=mime_type) if mime_type else dict())
+        )
         if "UploadId" in response:
             return response["UploadId"]
         else:
