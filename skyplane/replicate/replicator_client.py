@@ -89,7 +89,7 @@ class ReplicatorClient:
         self.aws = AWSCloudProvider(key_prefix=f"skyplane-{host_uuid.replace('-', '') if host_uuid else ''}")
         self.azure = AzureCloudProvider()
         self.gcp = GCPCloudProvider()
-        self.gcp_firewall_name = f"skyplane-transfer-{uuid.uuid4().hex}"
+        self.gcp_firewall_name = f"skyplane-transfer-{uuid.uuid4().hex[:8]}"
         self.bound_nodes: Dict[ReplicationTopologyGateway, Server] = {}
         self.temp_nodes: List[Server] = []  # saving nodes that are not yet bound so they can be deprovisioned later
 
