@@ -139,35 +139,27 @@ def cp(
         UsageClient.log_exception("cli_check_config", e, args, src_region_tag, dst_region_tag)
         return 1
 
-    if provider_src == "local" or provider_dst == "local":
+    if provider_src in ("local", "hdfs", "nfs") or provider_dst in ("local", "hdfs", "nfs"):
+        if provider_src == "hdfs" or provider_dst == "hdfs":
+            typer.secho("HDFS is not supported yet.", fg="red")
+            return 1
         cmd = replicate_onprem_cp_cmd(src, dst, recursive)
         if cmd:
             typer.secho(f"Delegating to: {cmd}", fg="yellow")
             start = time.perf_counter()
             rc = os.system(cmd)
             request_time = time.perf_counter() - start
-
-            # calculate gbits and throughput
-            if provider_src == "local":
-                client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
-                dst_region_tag = client.region_tag()
-                size_byte = get_usage_gbits(src)
-            else:
-                client = ObjectStoreInterface.create(src_region_tag, bucket_src)
-                src_region_tag = client.region_tag()
-                size_byte = get_usage_gbits(dst)
-            throughput_gbps = size_byte / 2**30 / request_time
-
-            # print stats
+            # print stats - we do not measure throughput for on-prem
             if not rc:
-                print_stats_completed(request_time, throughput_gbps)
-                transfer_stats = TransferStats(monitor_status="completed", total_runtime_s=request_time, throughput_gbits=throughput_gbps)
+                print_stats_completed(request_time, 0)
+                transfer_stats = TransferStats(monitor_status="completed", total_runtime_s=request_time, throughput_gbits=0)
                 UsageClient.log_transfer(transfer_stats, args, src_region_tag, dst_region_tag)
             return 0
         else:
             typer.secho("Transfer not supported", fg="red")
             return 1
-    elif provider_src in ["aws", "gcp", "azure"] and provider_dst in ["aws", "gcp", "azure"]:
+
+    elif provider_src in ("aws", "gcp", "azure") and provider_dst in ("aws", "gcp", "azure"):
         try:
             src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
             dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
