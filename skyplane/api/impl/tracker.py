@@ -33,8 +33,8 @@ class TransferProgressTracker(Thread):
 
         # transfer state
         self.job_chunk_requests: Dict[str, List[ChunkRequest]] = {}
-        self.job_pending_chunk_ids: Dict[str, Set[int]] = {}
-        self.job_complete_chunk_ids: Dict[str, Set[int]] = {}
+        self.job_pending_chunk_ids: Dict[str, Set[str]] = {}
+        self.job_complete_chunk_ids: Dict[str, Set[str]] = {}
         self.errors: Optional[Dict[str, List[str]]] = None
 
         # http_pool

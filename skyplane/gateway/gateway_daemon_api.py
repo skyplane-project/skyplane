@@ -128,7 +128,7 @@ class GatewayDaemonAPI(threading.Thread):
             state_name = state.name if state is not None else "unknown"
             return {"req": chunk_req.as_dict(), "state": state_name}
 
-        def get_chunk_reqs(state=None) -> Dict[int, Dict]:
+        def get_chunk_reqs(state=None) -> Dict[str, Dict]:
             out = {}
             for chunk_req in self.chunk_store.get_chunk_requests(state):
                 out[chunk_req.chunk.chunk_id] = make_chunk_req_payload(chunk_req)
@@ -163,8 +163,8 @@ class GatewayDaemonAPI(threading.Thread):
             return jsonify({"chunk_requests": {k: v for k, v in get_chunk_reqs().items() if v["state"] != "upload_complete"}})
 
         # lookup chunk request given chunk worker_id
-        @app.route("/api/v1/chunk_requests/<int:chunk_id>", methods=["GET"])
-        def get_chunk_request(chunk_id: int):
+        @app.route("/api/v1/chunk_requests/<chunk_id>", methods=["GET"])
+        def get_chunk_request(chunk_id: str):
             chunk_req = self.chunk_store.get_chunk_request(chunk_id)
             if chunk_req:
                 return jsonify({"chunk_requests": [make_chunk_req_payload(chunk_req)]})
@@ -179,8 +179,8 @@ class GatewayDaemonAPI(threading.Thread):
             return jsonify({"status": "ok", "n_added": n_added})
 
         # update chunk request
-        @app.route("/api/v1/chunk_requests/<int:chunk_id>", methods=["PUT"])
-        def update_chunk_request(chunk_id: int):
+        @app.route("/api/v1/chunk_requests/<chunk_id>", methods=["PUT"])
+        def update_chunk_request(chunk_id: str):
             chunk_req = self.chunk_store.get_chunk_request(chunk_id)
             if chunk_req is None:
                 return jsonify({"error": f"Chunk {chunk_id} not found"}), 404
