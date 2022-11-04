@@ -2,6 +2,7 @@ import subprocess
 from pathlib import Path
 
 from skyplane import exceptions as skyplane_exceptions
+from skyplane.compute.key_utils import generate_keypair
 from skyplane.compute.server import key_root
 from skyplane.utils import logger
 
@@ -36,10 +37,7 @@ class GCPKeyManager:
         local_key_file_pem, local_key_file_pub = self.get_private_key(key_name), self.get_public_key(key_name)
         logger.fs.debug(f"[GCP] Creating local keypair {key_name}")
         self.local_key_dir.mkdir(parents=True, exist_ok=True)
-        subprocess.Popen(["ssh-keygen", "-t", "rsa", "-b", "4096", "-f", f"{local_key_file_pem}", "-P", "", "-C", f"{key_name}"]).wait()
-        # move local_key_file_pem.pub to self.get_public_key keyfile
-        pub_key = local_key_file_pem.parent / (local_key_file_pem.name + ".pub")
-        pub_key.rename(local_key_file_pub)
+        generate_keypair(local_key_file_pub, local_key_file_pem)
         return local_key_file_pem
 
     def delete_key_local(self, key_name: str):
