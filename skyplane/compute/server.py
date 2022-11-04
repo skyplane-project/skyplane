@@ -369,7 +369,7 @@ class Server:
             logs, err = self.run_command(f"sudo docker logs skyplane_gateway --tail=100")
             logger.fs.error(f"Docker logs: {logs}\nerr: {err}")
             logger.fs.exception(e)
-            raise e
+            raise e from None
         finally:
             logging.disable(logging.NOTSET)
 

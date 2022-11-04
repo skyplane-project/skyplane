@@ -65,7 +65,7 @@ class S3Interface(ObjectStoreInterface):
         except botocore_exceptions.ClientError as e:
             if e.response["Error"]["Code"] == "NoSuchBucket" or e.response["Error"]["Code"] == "AccessDenied":
                 return False
-            raise e
+            raise
 
     def create_bucket(self, aws_region):
         s3_client = self._s3_client(aws_region)

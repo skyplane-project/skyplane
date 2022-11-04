@@ -224,7 +224,7 @@ class AWSCloudProvider(CloudProvider):
                     break
                 except exceptions.ClientError as e:
                     if i == max_retries - 1:
-                        raise e
+                        raise
                     elif "VcpuLimitExceeded" in str(e):
                         raise skyplane_exceptions.InsufficientVCPUException() from e
                     elif "Invalid IAM Instance Profile name" not in str(e):

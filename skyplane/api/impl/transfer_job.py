@@ -72,7 +72,7 @@ class TransferJob:
                     dest_key = self._map_object_key_prefix(self.src_prefix, obj.key, self.dst_prefix, recursive=self.recursive)
                 except exceptions.MissingObjectException as e:
                     logger.fs.exception(e)
-                    raise e
+                    raise e from None
 
                 # make destination object
                 dest_provider, dest_region = self.dst_iface.region_tag().split(":")
