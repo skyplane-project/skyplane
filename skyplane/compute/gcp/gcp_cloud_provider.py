@@ -1,25 +1,32 @@
 import uuid
 from typing import List, Optional
+from skyplane.compute.cloud_provider import CloudProvider
+from skyplane.compute.gcp.gcp_auth import GCPAuthentication
+from skyplane.compute.gcp.gcp_key_manager import GCPKeyManager
+from skyplane.compute.gcp.gcp_network import GCPNetwork
+from skyplane.compute.gcp.gcp_pricing import GCPPricing
+from skyplane.compute.gcp.gcp_server import GCPServer
+from skyplane.compute.server import Server, ServerState
 
 from skyplane.utils import imports
-from skyplane import exceptions, compute
+from skyplane import exceptions
 from skyplane.utils import logger
 from skyplane.utils.fn import wait_for
 
 
-class GCPCloudProvider(compute.CloudProvider):
+class GCPCloudProvider(CloudProvider):
     def __init__(
         self,
         key_prefix: str = "skyplane",
-        auth: Optional[compute.GCPAuthentication] = None,
-        network: Optional[compute.GCPNetwork] = None,
-        key_manager: Optional[compute.GCPKeyManager] = None,
+        auth: Optional[GCPAuthentication] = None,
+        network: Optional[GCPNetwork] = None,
+        key_manager: Optional[GCPKeyManager] = None,
     ):
         super().__init__()
         self.key_name = f"{key_prefix}-gcp-cert"
-        self.auth = auth if auth else compute.GCPAuthentication()
-        self.network = network if network else compute.GCPNetwork(self.auth)
-        self.key_manager = key_manager if key_manager else compute.GCPKeyManager()
+        self.auth = auth if auth else GCPAuthentication()
+        self.network = network if network else GCPNetwork(self.auth)
+        self.key_manager = key_manager if key_manager else GCPKeyManager()
 
     @property
     def name(self):
@@ -28,7 +35,7 @@ class GCPCloudProvider(compute.CloudProvider):
     @staticmethod
     def region_list():
         """See https://cloud.google.com/network-tiers/docs/overview#regions_supporting_standard_tier for a list of regions in the standard tier."""
-        return compute.GCPAuthentication.get_region_config()
+        return GCPAuthentication.get_region_config()
 
     @staticmethod
     def region_list_standard():
@@ -67,22 +74,22 @@ class GCPCloudProvider(compute.CloudProvider):
     @classmethod
     def get_transfer_cost(cls, src_key, dst_key, premium_tier=True):
         assert src_key.startswith("aws:")
-        return compute.GCPPricing.get_transfer_cost(src_key, dst_key, premium_tier)
+        return GCPPricing.get_transfer_cost(src_key, dst_key, premium_tier)
 
-    def get_instance_list(self, region) -> List[compute.GCPServer]:
+    def get_instance_list(self, region) -> List[GCPServer]:
         gcp_instance_result = self.auth.get_gcp_instances(region)
         if "items" in gcp_instance_result:
             instance_list = []
             for i in gcp_instance_result["items"]:
                 instance_list.append(
-                    compute.GCPServer(f"gcp:{region}", i["name"], ssh_private_key=self.key_manager.get_private_key(self.key_name))
+                    GCPServer(f"gcp:{region}", i["name"], ssh_private_key=self.key_manager.get_private_key(self.key_name))
                 )
             return instance_list
         else:
             return []
 
     def get_matching_instances(self, network_tier=None, **kwargs):
-        instances: List[compute.Server] = super().get_matching_instances(**kwargs)
+        instances: List[Server] = super().get_matching_instances(**kwargs)
         matching_instances = []
         for instance in instances:
             if network_tier is None or instance.network_tier() == network_tier:
@@ -121,7 +128,7 @@ class GCPCloudProvider(compute.CloudProvider):
         gcp_premium_network=False,
         gcp_vm_uname="skyplane",
         instance_os: str = "cos",
-    ) -> compute.GCPServer:
+    ) -> GCPServer:
         assert not region.startswith("gcp:"), "Region should be GCP region"
         if name is None:
             name = f"skyplane-gcp-{str(uuid.uuid4()).replace('-', '')}"
@@ -171,12 +178,12 @@ class GCPCloudProvider(compute.CloudProvider):
         try:
             result = compute.instances().insert(project=self.auth.project_id, zone=region, body=req_body).execute()
             self.auth.wait_for_operation_to_complete(region, result["name"])
-            server = compute.GCPServer(f"gcp:{region}", name)
+            server = GCPServer(f"gcp:{region}", name)
 
             # wait for server to reach RUNNING state
             try:
                 wait_for(
-                    lambda: server.instance_state() == compute.ServerState.RUNNING,
+                    lambda: server.instance_state() == ServerState.RUNNING,
                     timeout=120,
                     interval=0.1,
                     desc=f"Wait for RUNNING status on {server.uuid()}",
