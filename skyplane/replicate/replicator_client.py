@@ -735,7 +735,7 @@ class ReplicatorClient:
                     chunk_status_df = self.get_chunk_status_log_df()
                     (self.transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
                     traceevent = status_df_to_traceevent(chunk_status_df)
-                    profile_out = self.transfer_dir / f"traceevent_{uuid.uuid4()}.json"
+                    profile_out = self.transfer_dir / f"traceevent_{uuid.uuid4().hex[:8]}.json"
                     profile_out.parent.mkdir(parents=True, exist_ok=True)
                     profile_out.write_text(json.dumps(traceevent))
                     # write socket profiles

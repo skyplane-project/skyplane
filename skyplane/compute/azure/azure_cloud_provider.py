@@ -245,7 +245,7 @@ class AzureCloudProvider(CloudProvider):
         assert ":" not in location, "invalid colon in Azure location"
 
         if name is None:
-            name = f"skyplane-azure-{str(uuid.uuid4()).replace('-', '')}"
+            name = f"skyplane-azure-{str(uuid.uuid4().hex[:8])}"
 
         with open(os.path.expanduser(self.public_key_path)) as f:
             pub_key = f.read()
