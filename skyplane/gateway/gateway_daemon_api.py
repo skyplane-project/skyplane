@@ -5,9 +5,9 @@ import threading
 from multiprocessing import Queue
 from queue import Empty
 from traceback import TracebackException
-from typing import Dict, List
 
 from flask import Flask, jsonify, request
+from typing import Dict, List
 from werkzeug.serving import make_server
 
 from skyplane.chunk import ChunkRequest, ChunkState

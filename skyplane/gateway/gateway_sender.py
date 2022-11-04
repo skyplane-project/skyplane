@@ -6,11 +6,11 @@ import time
 import traceback
 from functools import partial
 from multiprocessing import Event, Process, Queue
-from typing import Dict, List, Optional
 
 import lz4.frame
 import nacl.secret
 import urllib3
+from typing import Dict, List, Optional
 
 from skyplane.chunk import ChunkRequest
 from skyplane.gateway.chunk_store import ChunkStore

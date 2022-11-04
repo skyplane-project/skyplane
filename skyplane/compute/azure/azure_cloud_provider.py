@@ -4,9 +4,9 @@ import uuid
 import warnings
 from multiprocessing import BoundedSemaphore
 from pathlib import Path
-from typing import List, Optional
 
 from cryptography.utils import CryptographyDeprecationWarning
+from typing import List, Optional
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
@@ -16,7 +16,7 @@ from skyplane import exceptions
 from skyplane.config_paths import cloud_config
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_server import AzureServer
-from skyplane.compute.cloud_providers import CloudProvider
+from skyplane.compute.cloud_provider import CloudProvider
 from skyplane.compute.server import key_root
 from skyplane.utils import logger, imports
 from skyplane.utils.timer import Timer

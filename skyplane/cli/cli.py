@@ -4,12 +4,12 @@ import time
 import traceback
 from importlib.resources import path
 from shlex import split
-from typing import Optional
 
 import typer
 from rich import print as rprint
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.prompt import IntPrompt
+from typing import Optional
 
 import skyplane.cli
 import skyplane.cli
@@ -21,6 +21,7 @@ import skyplane.cli.usage.client
 import skyplane.cli.usage.client
 import skyplane.cli.usage.definitions
 import skyplane.cli.usage.definitions
+from skyplane import compute
 from skyplane import exceptions
 from skyplane.api.impl.path import parse_path
 from skyplane.cli.cli_impl.cp_replicate import (
@@ -31,7 +32,6 @@ from skyplane.cli.cli_impl.cp_replicate import (
     launch_replication_job,
 )
 from skyplane.cli.cli_impl.cp_replicate_fallback import (
-    get_usage_gbits,
     replicate_onprem_cp_cmd,
     replicate_onprem_sync_cmd,
     replicate_small_cp_cmd,
@@ -40,12 +40,6 @@ from skyplane.cli.cli_impl.cp_replicate_fallback import (
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
 from skyplane.cli.common import console, print_header, print_stats_completed, query_instances
 from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
-from skyplane.compute.aws.aws_auth import AWSAuthentication
-from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
-from skyplane.compute.azure.azure_auth import AzureAuthentication
-from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
-from skyplane.compute.gcp.gcp_auth import GCPAuthentication
-from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import config_path, cloud_config
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
@@ -475,14 +469,14 @@ def deprovision(
         typer.secho("No instances to deprovision", fg="yellow", bold=True)
 
     if all:
-        if AWSAuthentication().enabled():
-            aws = AWSCloudProvider()
+        if compute.AWSAuthentication().enabled():
+            aws = compute.AWSCloudProvider()
             aws.teardown_global()
-        if GCPAuthentication().enabled():
-            gcp = GCPCloudProvider()
+        if compute.GCPAuthentication().enabled():
+            gcp = compute.GCPCloudProvider()
             gcp.teardown_global()
-        if AzureAuthentication().enabled():
-            azure = AzureCloudProvider()
+        if compute.AzureAuthentication().enabled():
+            azure = compute.AzureCloudProvider()
             azure.teardown_global()
 
 

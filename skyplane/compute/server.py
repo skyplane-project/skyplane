@@ -6,9 +6,9 @@ from contextlib import closing
 from enum import Enum, auto
 from functools import partial
 from pathlib import Path
-from typing import Dict, Optional, Tuple
 
 import urllib3
+from typing import Dict, Optional, Tuple
 
 from skyplane.compute.const_cmds import make_autoshutdown_script, make_dozzle_command, make_sysctl_tcp_tuning_command
 from skyplane.config_paths import config_path, cloud_config, __config_root__
