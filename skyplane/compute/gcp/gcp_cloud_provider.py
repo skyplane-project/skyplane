@@ -176,7 +176,7 @@ class GCPCloudProvider(CloudProvider):
         try:
             result = compute.instances().insert(project=self.auth.project_id, zone=region, body=req_body).execute()
             self.auth.wait_for_operation_to_complete(region, result["name"])
-            server = GCPServer(f"gcp:{region}", name)
+            server = GCPServer(f"gcp:{region}", name, ssh_private_key=self.key_manager.get_private_key(self.key_name))
 
             # wait for server to reach RUNNING state
             try:
@@ -194,6 +194,9 @@ class GCPCloudProvider(CloudProvider):
             server.run_command("sudo /sbin/iptables -A INPUT -j ACCEPT")
             return server
         except errors.HttpError as e:
+            logger.fs.info(f"Exception, ensuring instance is deprovisioned: {e}")
+            op = compute.instances().delete(project=self.auth.project_id, zone=region, instance=name).execute()
+            self.auth.wait_for_operation_to_complete(region, op["name"])
             if e.resp.status == 409:
                 if "ZONE_RESOURCE_POOL_EXHAUSTED" in e.content:
                     raise exceptions.InsufficientVCPUException(f"Got ZONE_RESOURCE_POOL_EXHAUSTED in region {region}") from e
