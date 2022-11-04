@@ -319,7 +319,7 @@ class GCPCloudProvider(CloudProvider):
     ) -> GCPServer:
         assert not region.startswith("gcp:"), "Region should be GCP region"
         if name is None:
-            name = f"skyplane-gcp-{str(uuid.uuid4()).replace('-', '')}"
+            name = f"skyplane-gcp-{str(uuid.uuid4().hex[:8])}"
         compute = self.auth.get_gcp_client()
         with open(os.path.expanduser(self.public_key_path)) as f:
             pub_key = f.read()

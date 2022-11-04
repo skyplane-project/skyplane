@@ -126,7 +126,7 @@ class AWSCloudProvider(CloudProvider):
     ) -> AWSServer:
         assert not region.startswith("aws:"), "Region should be AWS region"
         if name is None:
-            name = f"skyplane-aws-{str(uuid.uuid4()).replace('-', '')}"
+            name = f"skyplane-aws-{str(uuid.uuid4().hex[:8])}"
         iam_instance_profile_name = f"{name}_profile"
 
         # set default image used for provisioning instances in AWS
