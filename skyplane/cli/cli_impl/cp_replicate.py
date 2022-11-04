@@ -3,15 +3,15 @@ import pathlib
 import signal
 import sys
 import traceback
-from typing import List, Optional, Tuple, Dict
 
 import typer
 from rich import print as rprint
+from typing import List, Optional, Tuple, Dict
 
 from skyplane import exceptions
 from skyplane.cli.common import console
 from skyplane.cli.usage.client import UsageClient
-from skyplane.compute.cloud_providers import CloudProvider
+from skyplane.compute import CloudProvider
 from skyplane.config_paths import cloud_config
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.obj_store.gcs_interface import GCSObject

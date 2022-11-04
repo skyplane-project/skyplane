@@ -1,13 +1,14 @@
 from functools import partial
+
 from typing import Dict, List, Optional, Tuple
 
-from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
-from skyplane.compute.aws.aws_server import AWSServer
-from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
-from skyplane.compute.azure.azure_server import AzureServer
-from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
-from skyplane.compute.gcp.gcp_server import GCPServer
-from skyplane.compute.server import Server, ServerState
+from skyplane.compute import AWSCloudProvider
+from skyplane.compute import AWSServer
+from skyplane.compute import AzureCloudProvider
+from skyplane.compute import AzureServer
+from skyplane.compute import GCPCloudProvider
+from skyplane.compute import GCPServer
+from skyplane.compute import Server, ServerState
 from skyplane.replicate.replicator_client import refresh_instance_list
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel

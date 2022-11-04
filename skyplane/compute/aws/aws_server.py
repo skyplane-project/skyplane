@@ -1,9 +1,9 @@
 import functools
 import logging
 import warnings
-from typing import Dict, Optional
 
 from cryptography.utils import CryptographyDeprecationWarning
+from typing import Dict, Optional
 
 from skyplane.compute.aws.aws_key_manager import AWSKeyManager
 

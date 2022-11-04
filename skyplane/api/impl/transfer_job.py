@@ -4,10 +4,10 @@ import time
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Generator, Tuple, TYPE_CHECKING
 
 import urllib3
 from rich import print as rprint
+from typing import Generator, Tuple, TYPE_CHECKING
 
 from skyplane import exceptions
 from skyplane.api.impl.chunker import Chunker, batch_generator, tail_generator

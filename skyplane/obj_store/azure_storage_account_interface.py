@@ -1,7 +1,7 @@
 from functools import lru_cache
 
 from skyplane import exceptions
-from skyplane.compute.azure.azure_auth import AzureAuthentication
+from skyplane.compute import AzureAuthentication
 from skyplane.utils import logger, imports
 
 

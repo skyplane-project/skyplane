@@ -1,15 +1,16 @@
 import uuid
 from dataclasses import dataclass, field
 from functools import partial
+
 from typing import Optional, Dict, Set, List, Tuple
 
-from skyplane.compute.aws.aws_auth import AWSAuthentication
-from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
-from skyplane.compute.azure.azure_auth import AzureAuthentication
-from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
-from skyplane.compute.gcp.gcp_auth import GCPAuthentication
-from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
-from skyplane.compute.server import Server
+from skyplane.compute import AWSAuthentication
+from skyplane.compute import AWSCloudProvider
+from skyplane.compute import AzureAuthentication
+from skyplane.compute import AzureCloudProvider
+from skyplane.compute import GCPAuthentication
+from skyplane.compute import GCPCloudProvider
+from skyplane.compute import Server
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
 from skyplane.utils.timer import Timer

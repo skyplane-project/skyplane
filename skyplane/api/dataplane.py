@@ -3,16 +3,16 @@ import os
 import threading
 from collections import defaultdict
 from functools import partial
-from typing import TYPE_CHECKING, Dict, List, Optional
 
 import nacl.secret
 import nacl.utils
 import urllib3
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from skyplane.api.impl.tracker import TransferProgressTracker
 from skyplane.api.impl.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.transfer_config import TransferConfig
-from skyplane.compute.server import Server
+from skyplane.compute import Server
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
 from skyplane.utils.definitions import gateway_docker_image

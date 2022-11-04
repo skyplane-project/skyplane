@@ -2,6 +2,7 @@ import json
 import time
 import uuid
 from multiprocessing import BoundedSemaphore
+
 from typing import List, Optional
 
 from skyplane import exceptions as skyplane_exceptions
@@ -10,7 +11,7 @@ from skyplane.compute.aws.aws_key_manager import AWSKeyManager
 from skyplane.compute.aws.aws_network import AWSNetwork
 from skyplane.compute.aws.aws_pricing import AWSPricing
 from skyplane.compute.aws.aws_server import AWSServer
-from skyplane.compute.cloud_providers import CloudProvider
+from skyplane.compute.cloud_provider import CloudProvider
 from skyplane.utils import imports, logger
 from skyplane.utils.fn import do_parallel, wait_for
 

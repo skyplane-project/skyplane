@@ -4,16 +4,16 @@ import shutil
 import subprocess
 import traceback
 from pathlib import Path
-from typing import List
 
 import questionary
 import typer
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from typing import List
 
-from skyplane.compute.aws.aws_auth import AWSAuthentication
-from skyplane.compute.azure.azure_auth import AzureAuthentication
-from skyplane.compute.azure.azure_server import AzureServer
-from skyplane.compute.gcp.gcp_auth import GCPAuthentication
+from skyplane.compute import AWSAuthentication
+from skyplane.compute import AzureAuthentication
+from skyplane.compute import AzureServer
+from skyplane.compute import GCPAuthentication
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import aws_config_path, gcp_config_path
 

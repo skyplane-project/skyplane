@@ -3,9 +3,9 @@ import time
 import uuid
 import warnings
 from pathlib import Path
-from typing import List, Optional
 
 from cryptography.utils import CryptographyDeprecationWarning
+from typing import List, Optional
 
 from skyplane.utils import imports
 
@@ -15,7 +15,7 @@ with warnings.catch_warnings():
 
 from skyplane import exceptions
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
-from skyplane.compute.cloud_providers import CloudProvider
+from skyplane.compute.cloud_provider import CloudProvider
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.gcp.gcp_server import GCPServer
 from skyplane.compute.server import Server, ServerState, key_root

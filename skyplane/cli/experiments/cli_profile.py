@@ -4,20 +4,20 @@ import random
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 import pandas as pd
 import typer
 from rich.progress import Progress
+from typing import List, Optional, Tuple
 
 from skyplane import __root__
 from skyplane.cli.experiments.provision import provision
-from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
-from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
+from skyplane.compute import AWSCloudProvider
+from skyplane.compute import AzureCloudProvider
+from skyplane.compute import GCPCloudProvider
+from skyplane.compute import GCPServer
+from skyplane.compute import Server
 from skyplane.compute.const_cmds import make_sysctl_tcp_tuning_command
-from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
-from skyplane.compute.gcp.gcp_server import GCPServer
-from skyplane.compute.server import Server
 from skyplane.utils import logger
 from skyplane.utils.definitions import GB
 from skyplane.utils.fn import do_parallel

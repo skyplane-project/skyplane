@@ -1,4 +1,4 @@
-from skyplane.compute.cloud_providers import CloudProvider
+from skyplane.compute import CloudProvider
 from skyplane.replicate.replication_plan import ReplicationTopology
 
 

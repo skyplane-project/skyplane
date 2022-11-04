@@ -3,13 +3,13 @@ import datetime
 import hashlib
 import os
 from functools import lru_cache
-from typing import Iterator, List, Optional, Tuple
 from xml.etree import ElementTree
 
 import requests
+from typing import Iterator, List, Optional, Tuple
 
 from skyplane import exceptions
-from skyplane.compute.gcp.gcp_auth import GCPAuthentication
+from skyplane.compute import GCPAuthentication
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger

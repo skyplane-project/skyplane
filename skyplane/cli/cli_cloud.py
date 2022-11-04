@@ -6,16 +6,16 @@ import json
 import subprocess
 import time
 from collections import defaultdict
-from typing import List
-from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 
 import typer
 from rich import print as rprint
+from typing import List
 
-from skyplane.compute.aws.aws_auth import AWSAuthentication
-from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
-from skyplane.compute.azure.azure_auth import AzureAuthentication
-from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
+from skyplane.compute import AWSAuthentication
+from skyplane.compute import AWSCloudProvider
+from skyplane.compute import AzureAuthentication
+from skyplane.compute import AzureCloudProvider
+from skyplane.compute import GCPAuthentication
 from skyplane.config_paths import cloud_config
 from skyplane.obj_store.s3_interface import S3Interface
 from skyplane.utils import logger

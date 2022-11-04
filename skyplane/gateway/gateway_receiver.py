@@ -6,10 +6,10 @@ import time
 import traceback
 from contextlib import closing
 from multiprocessing import Event, Process, Value, Queue
-from typing import Optional, Tuple
 
 import lz4.frame
 import nacl.secret
+from typing import Optional, Tuple
 
 from skyplane.chunk import WireProtocolHeader
 from skyplane.gateway.cert import generate_self_signed_certificate
