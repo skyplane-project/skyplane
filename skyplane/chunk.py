@@ -2,7 +2,7 @@ import socket
 from dataclasses import asdict, dataclass
 from enum import Enum, auto
 from functools import total_ordering
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 
 @dataclass
@@ -35,6 +35,7 @@ class Chunk:
         return Chunk(**d)
 
 
+
 @dataclass
 class ChunkRequest:
     """A ChunkRequest stores all local state in the Gateway pertaining to a ChunkRequest."""
@@ -47,6 +48,7 @@ class ChunkRequest:
     src_random_size_mb: Optional[int] = None
     src_object_store_bucket: Optional[str] = None
     dst_object_store_bucket: Optional[str] = None
+    credentials: Tuple[str, str] = None
 
     def __post_init__(self):
         if self.src_type == "object_store":

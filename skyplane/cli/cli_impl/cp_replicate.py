@@ -16,7 +16,7 @@ from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.obj_store.s3_interface import S3Object
-from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
+from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob, HttpReplicationJob
 from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
@@ -190,6 +190,35 @@ def generate_full_transferobjlist(
 
     return list(zip(source_objs, dest_objs))
 
+def generate_full_transferobjlist_http(
+    url_list: List[str],
+    dest_region: str,
+    dest_bucket: str,
+    dest_prefix: str,
+) -> List[Tuple[str, ObjectStoreObject]]:
+
+    dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
+    if not dest_iface.bucket_exists():
+        raise exceptions.MissingBucketException(f"Destination bucket {dest_bucket} does not exist")
+    dest_objs = []
+
+    # map all urls to destination object paths
+    for url in url_list:
+        filename = url.split("/")[-1]
+        dest_key = dest_prefix + filename
+        if dest_region.startswith("aws"):
+            dest_obj = S3Object(dest_region.split(":")[0], dest_bucket, dest_key)
+        elif dest_region.startswith("gcp"):
+            dest_obj = GCSObject(dest_region.split(":")[0], dest_bucket, dest_key)
+        elif dest_region.startswith("azure"):
+            dest_obj = AzureBlobObject(dest_region.split(":")[0], dest_bucket, dest_key)
+        else:
+            raise ValueError(f"Invalid dest_region {dest_region} - could not create corresponding object")
+        # dest_obj = ObjectStoreObject(dest_region.split(":")[0], dest_bucket, dest_key)
+        dest_objs.append(dest_obj)
+
+    return list(zip(url_list, dest_objs))
+
 
 def enrich_dest_objs(dest_region: str, dest_prefix: str, dest_bucket: str, dest_objs: list):
     """
@@ -320,6 +349,149 @@ def launch_replication_job(
             logger.fs.info(f"\tLog viewer: {gw.gateway_log_viewer_url}")
             logger.fs.info(f"\tAPI: {gw.gateway_api_url}")
         job = rc.run_replication_plan(
+            job,
+            multipart_enabled=multipart_enabled,
+            multipart_min_threshold_mb=multipart_min_threshold_mb,
+            multipart_chunk_size_mb=multipart_chunk_size_mb,
+            multipart_max_chunks=multipart_max_chunks,
+        )
+        total_bytes = sum([chunk_req.chunk.chunk_length_bytes for chunk_req in job.chunk_requests])
+        console.print(f":rocket: [bold blue]{total_bytes / GB:.2f}GB transfer job launched[/bold blue]")
+
+        stats = rc.monitor_transfer(
+            job,
+            show_spinner=True,
+            log_interval_s=log_interval_s,
+            log_to_file=True,
+            time_limit_seconds=time_limit_seconds,
+            multipart=multipart_enabled,
+            debug=debug,
+        )
+        error_occurred = False
+    except KeyboardInterrupt:
+        logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt)")
+        rprint("\n[bold red]Transfer cancelled by user. Exiting.[/bold red]")
+        error_occurred = True
+    except exceptions.SkyplaneException as e:
+        logger.fs.exception(e)
+        console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+        console.print(e.pretty_print_str())
+        UsageClient.log_exception("launch_replication_job", e, error_reporting_args, job.source_region, job.dest_region)
+        error_occurred = True
+    except Exception as e:
+        logger.fs.exception(e)
+        console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+        console.print(e)
+        UsageClient.log_exception("launch_replication_job", e, error_reporting_args, job.source_region, job.dest_region)
+        error_occurred = True
+
+    if not reuse_gateways:
+        logger.fs.warning("Deprovisioning gateways then exiting. Please wait...")
+        s = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        rc.deprovision_gateways()
+        signal.signal(signal.SIGINT, s)
+
+    # handle errors
+    if error_occurred:  # client error
+        logger.fs.error("Exiting as an error occurred")
+        os._exit(1)  # exit now
+    if stats.monitor_status == "error":  # gateway error
+        err = ""
+        for instance, errors in stats.errors.items():
+            for error in errors:
+                typer.secho(f"\n❌ {instance} encountered error:", fg="red", err=True, bold=True)
+                typer.secho(error, fg="red", err=True)
+                err += error + "\n"
+        UsageClient.log_exception(
+            "replicate_monitor", exceptions.SkyplaneException(err), error_reporting_args, job.source_region, job.dest_region
+        )
+        raise typer.Exit(1)
+    elif stats.monitor_status == "completed":
+        pass  # success message will be handled by the caller
+    else:
+        rprint(f"\n:x: [bold red]Transfer failed[/bold red]")
+        rprint(stats)
+        UsageClient.log_exception(
+            "replicate_monitor",
+            exceptions.SkyplaneException(stats.monitor_status),
+            error_reporting_args,
+            job.source_region,
+            job.dest_region,
+        )
+    return stats
+
+
+def launch_replication_job_http(
+    topo: ReplicationTopology,
+    job: HttpReplicationJob,
+    gateway_docker_image: str = os.environ.get("SKYPLANE_DOCKER_IMAGE", gateway_docker_image()),
+    # transfer flags
+    debug: bool = False,
+    reuse_gateways: bool = False,
+    use_bbr: bool = False,
+    use_compression: bool = False,
+    use_e2ee: bool = True,
+    use_socket_tls: bool = False,
+    # multipart
+    multipart_enabled: bool = False,
+    multipart_min_threshold_mb: int = 128,
+    multipart_chunk_size_mb: int = 64,
+    multipart_max_chunks: int = 9990,
+    # cloud provider specific options
+    aws_use_spot_instances: bool = False,
+    aws_instance_class: str = "m5.8xlarge",
+    azure_use_spot_instances: bool = False,
+    azure_instance_class: str = "Standard_D32_v4",
+    gcp_use_spot_instances: bool = False,
+    gcp_instance_class: str = "n2-standard-32",
+    gcp_use_premium_network: bool = True,
+    # logging options
+    time_limit_seconds: Optional[int] = None,
+    log_interval_s: float = 1.0,
+    error_reporting_args: Optional[Dict] = None,
+    host_uuid: Optional[str] = None,
+):
+    if "SKYPLANE_DOCKER_IMAGE" in os.environ:
+        rprint(f"[bright_black]Using overridden docker image: {gateway_docker_image}[/bright_black]")
+    if reuse_gateways:
+        typer.secho(
+            f"Instances will remain up and may result in continued cloud billing. Remember to call `skyplane deprovision` to deprovision gateways.",
+            fg="red",
+            err=True,
+            bold=True,
+        )
+
+    # make replicator client
+    rc = ReplicatorClient(
+        topo,
+        gateway_docker_image=gateway_docker_image,
+        aws_instance_class=aws_instance_class,
+        azure_instance_class=azure_instance_class,
+        gcp_instance_class=gcp_instance_class,
+        gcp_use_premium_network=gcp_use_premium_network,
+        host_uuid=host_uuid,
+    )
+    typer.secho(f"Storing debug information for transfer in {rc.transfer_dir / 'client.log'}", fg="yellow", err=True)
+    (rc.transfer_dir / "topology.json").write_text(topo.to_json())
+
+    stats = TransferStats.empty()
+    try:
+        rc.provision_gateways(
+            reuse_gateways,
+            use_bbr=use_bbr,
+            use_compression=use_compression,
+            use_e2ee=use_e2ee,
+            use_socket_tls=use_socket_tls,
+            aws_use_spot_instances=aws_use_spot_instances,
+            azure_use_spot_instances=azure_use_spot_instances,
+            gcp_use_spot_instances=gcp_use_spot_instances,
+            http_download=True,
+        )
+        for node, gw in rc.bound_nodes.items():
+            logger.fs.info(f"Log URLs for {gw.uuid()} ({node.region}:{node.instance})")
+            logger.fs.info(f"\tLog viewer: {gw.gateway_log_viewer_url}")
+            logger.fs.info(f"\tAPI: {gw.gateway_api_url}")
+        job = rc.run_http_replication_plan(
             job,
             multipart_enabled=multipart_enabled,
             multipart_min_threshold_mb=multipart_min_threshold_mb,

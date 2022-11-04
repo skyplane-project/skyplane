@@ -227,3 +227,11 @@ class ReplicationJob:
             return sum(source_object.size for source_object, _ in self.transfer_pairs)
         else:
             return self.random_chunk_size_mb * len(self.transfer_pairs) * MB
+
+@dataclass
+class HttpReplicationJob(ReplicationJob):
+    def __init__(self, url_list: List[str], dest_region: str, dest_bucket: str, download_pairs: List[Tuple[str, ObjectStoreObject]], credentials: Tuple[str, str]) -> None:
+        super().__init__(dest_region, dest_bucket, dest_region, dest_bucket, None)
+        self.url_list = url_list
+        self.download_pairs = download_pairs
+        self.credentials = credentials

@@ -24,7 +24,7 @@ from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.compute.server import Server, ServerState
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.replicate.profiler import status_df_to_traceevent
-from skyplane.replicate.replication_plan import ReplicationJob, ReplicationTopology, ReplicationTopologyGateway
+from skyplane.replicate.replication_plan import ReplicationJob, ReplicationTopology, ReplicationTopologyGateway, HttpReplicationJob
 from skyplane.utils import logger
 from skyplane.utils.fn import PathLike, do_parallel
 from skyplane.utils.timer import Timer
@@ -110,6 +110,7 @@ class ReplicatorClient:
         aws_use_spot_instances: bool = False,
         azure_use_spot_instances: bool = False,
         gcp_use_spot_instances: bool = False,
+        http_download: bool = False,
     ):
         regions_to_provision = [node.region for node in self.topology.gateway_nodes]
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
@@ -276,8 +277,8 @@ class ReplicatorClient:
             e2ee_key_bytes = None
 
         # setup instances
-        def setup(args: Tuple[Server, Dict[str, int], bool, bool]):
-            server, outgoing_ports, am_source, am_sink = args
+        def setup(args: Tuple[Server, Dict[str, int], bool, bool, bool]):
+            server, outgoing_ports, am_source, am_sink, http_download = args
             if log_dir:
                 server.init_log_files(log_dir)
             if authorize_ssh_pub_key:
@@ -289,6 +290,7 @@ class ReplicatorClient:
                 use_compression=use_compression,
                 e2ee_key_bytes=e2ee_key_bytes if (am_source or am_sink) else None,
                 use_socket_tls=use_socket_tls,
+                http_download=http_download,
             )
 
         args = []
@@ -305,7 +307,7 @@ class ReplicatorClient:
                     else:
                         setup_args[self.bound_nodes[n].public_ip()] = v
 
-            args.append((server, setup_args, node in sources, node in sinks))
+            args.append((server, setup_args, node in sources, node in sinks, http_download))
         do_parallel(setup, args, n=-1, spinner=True, spinner_persist=True, desc="Installing gateway package")
 
     def deprovision_gateways(self):
@@ -516,6 +518,119 @@ class ReplicatorClient:
                         )
 
                 start_instances = list(zip(src_instances, chunk_requests_sharded.values()))
+                do_parallel(send_chunk_requests, start_instances, n=-1)
+
+        job.chunk_requests = [cr for crlist in chunk_requests_sharded.values() for cr in crlist]
+        return job
+    
+
+    def run_http_replication_plan(
+        self,
+        job: HttpReplicationJob,
+        multipart_enabled: bool,
+        multipart_min_threshold_mb: int,
+        multipart_chunk_size_mb: int,
+        multipart_max_chunks: int,
+    ) -> HttpReplicationJob:
+        assert job.source_region.split(":")[0] in [
+            "aws",
+        ], f"Only AWS is supported, but got {job.source_region}"
+        assert job.dest_region.split(":")[0] in [
+            "aws",
+        ], f"Only AWS is supported, but got {job.dest_region}"
+        credentials = job.credentials
+
+        with Progress(SpinnerColumn(), TextColumn("Preparing replication plan{task.description}"), transient=True) as progress:
+            prepare_task = progress.add_task("", total=None)
+
+            # pre-fetch instance IPs for all gateways
+            progress.update(prepare_task, description=": Fetching instance IPs")
+            gateway_ips: Dict[Server, str] = {s: s.public_ip() for s in self.bound_nodes.values()}
+
+            # make list of chunks
+            n_objs = 0
+            chunks = []
+            # multipart_pairs = []
+            idx = 0
+            for (url, dest_object) in job.download_pairs:
+                progress.update(prepare_task, description=f": Creating list of chunks for transfer ({n_objs}/{len(job.download_pairs)})")
+                n_objs += 1
+                
+                chunk = Chunk(
+                    src_key=url,
+                    dest_key=dest_object.key,
+                    chunk_id=idx,
+                    file_offset_bytes=0,
+                    chunk_length_bytes=32000000, # Hardcode as it takes a long time to query every header to get length
+                )
+                chunks.append(chunk)
+                idx += 1
+
+            # partition chunks into roughly equal-sized batches (by bytes)
+            def partition(items: List[Chunk], n_batches: int) -> List[List[Chunk]]:
+                batches = [[] for _ in range(n_batches)]
+                items.sort(key=lambda c: c.chunk_length_bytes, reverse=True)
+                batch_sizes = [0 for _ in range(n_batches)]
+                for item in items:
+                    min_batch = batch_sizes.index(min(batch_sizes))
+                    batches[min_batch].append(item)
+                    batch_sizes[min_batch] += item.chunk_length_bytes
+                return batches
+
+            progress.update(prepare_task, description=": Partitioning chunks into batches")
+            dst_instances = [self.bound_nodes[n] for n in self.topology.sink_instances()]
+            chunk_batches = partition(chunks, len(dst_instances))
+            assert (len(chunk_batches) == (len(dst_instances) - 1)) or (
+                len(chunk_batches) == len(dst_instances)
+            ), f"{len(chunk_batches)} batches, expected {len(dst_instances)}"
+            for batch_idx, batch in enumerate(chunk_batches):
+                logger.fs.info(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")
+
+            # make list of ChunkRequests
+            with Timer("Building chunk requests"):
+                # make list of ChunkRequests
+                progress.update(prepare_task, description=": Building list of chunk requests")
+                chunk_requests_sharded: Dict[int, List[ChunkRequest]] = {}
+                for batch_idx, batch in enumerate(chunk_batches):
+                    chunk_requests_sharded[batch_idx] = []
+                    for chunk in batch:
+                        chunk_requests_sharded[batch_idx].append(
+                            ChunkRequest(
+                                chunk=chunk,
+                                src_region=job.dest_region,
+                                dst_region=job.dest_region,
+                                src_type="http",
+                                dst_type="object_store",
+                                src_random_size_mb=job.random_chunk_size_mb,
+                                src_object_store_bucket=job.source_bucket,
+                                dst_object_store_bucket=job.dest_bucket,
+                                credentials=credentials
+                            )
+                        )
+                    logger.fs.debug(f"Batch {batch_idx} size: {sum(c.chunk_length_bytes for c in batch)} with {len(batch)} chunks")
+
+                # send chunk requests to start gateways in parallel
+                progress.update(prepare_task, description=": Dispatching chunk requests to source gateways")
+
+                def send_chunk_requests(args: Tuple[Server, List[ChunkRequest]]):
+                    hop_instance, chunk_requests = args
+                    while chunk_requests:
+                        batch, chunk_requests = chunk_requests[: 1024 * 16], chunk_requests[1024 * 16 :]
+                        reply = self.http_pool.request(
+                            "POST",
+                            f"{hop_instance.gateway_api_url}/api/v1/chunk_requests",
+                            body=json.dumps([c.as_dict() for c in batch]).encode("utf-8"),
+                            headers={"Content-Type": "application/json"},
+                        )
+                        if reply.status != 200:
+                            raise Exception(
+                                f"Failed to send chunk requests to gateway instance {hop_instance.instance_name()}: {reply.data.decode('utf-8')}"
+                            )
+                        logger.fs.debug(
+                            f"Sent {len(batch)} chunk requests to {hop_instance.instance_name()}, {len(chunk_requests)} remaining"
+                        )
+
+                start_instances = list(zip(dst_instances, chunk_requests_sharded.values()))
                 do_parallel(send_chunk_requests, start_instances, n=-1)
 
         job.chunk_requests = [cr for crlist in chunk_requests_sharded.values() for cr in crlist]

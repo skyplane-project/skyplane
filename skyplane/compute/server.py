@@ -276,6 +276,7 @@ class Server:
         use_compression=False,
         e2ee_key_bytes=None,
         use_socket_tls=False,
+        http_download=False,
     ):
         def check_stderr(tup):
             assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
@@ -333,6 +334,7 @@ class Server:
         gateway_daemon_cmd += f" --region {self.region_tag} {'--use-compression' if use_compression else ''}"
         gateway_daemon_cmd += f" {'--disable-e2ee' if e2ee_key_bytes is None else ''}"
         gateway_daemon_cmd += f" {'--disable-tls' if not use_socket_tls else ''}"
+        gateway_daemon_cmd += f" {'--http-download' if http_download else ''}"
         escaped_gateway_daemon_cmd = gateway_daemon_cmd.replace('"', '\\"')
         docker_launch_cmd = (
             f'sudo docker run {docker_run_flags} --name skyplane_gateway {gateway_docker_image} /bin/bash -c "{escaped_gateway_daemon_cmd}"'

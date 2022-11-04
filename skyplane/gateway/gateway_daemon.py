@@ -17,6 +17,7 @@ from skyplane.chunk import ChunkState
 from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.gateway.gateway_daemon_api import GatewayDaemonAPI
 from skyplane.gateway.gateway_obj_store import GatewayObjStoreConn
+from skyplane.gateway.gateway_obj_store_http import GatewayHttpConn
 from skyplane.gateway.gateway_receiver import GatewayReceiver
 from skyplane.gateway.gateway_sender import GatewaySender
 from skyplane.utils import logger
@@ -32,6 +33,7 @@ class GatewayDaemon:
         use_tls=True,
         use_compression=False,
         use_e2ee=True,
+        http_download=False,
     ):
         # todo max_incoming_ports should be configurable rather than static
         self.region = region
@@ -70,7 +72,16 @@ class GatewayDaemon:
             n_conn = 32
         elif provider == "azure":
             n_conn = 24  # due to throttling limits from authentication
-        self.obj_store_conn = GatewayObjStoreConn(self.chunk_store, self.error_event, self.error_queue, max_conn=n_conn)
+        
+        if http_download:
+            n_conn = 4 # due to throttling limits from NASA GES DISC server
+            self.obj_store_conn = GatewayHttpConn(self.chunk_store, self.error_event, self.error_queue, max_conn=n_conn)
+            # Set chunk status to be "downloaded" so that they will be recognized as upload jobs
+            chunk_reqs = self.chunk_store.chunk_requests
+            for chunk_id in chunk_reqs.keys():
+                self.chunk_store.set_chunk_state(chunk_id, ChunkState.downloaded)
+        else:
+            self.obj_store_conn = GatewayObjStoreConn(self.chunk_store, self.error_event, self.error_queue, max_conn=n_conn)
 
         # Download thread pool
         self.dl_pool_semaphore = BoundedSemaphore(value=128)
@@ -122,6 +133,9 @@ class GatewayDaemon:
 
                 # queue object store downloads and relays (if space is available)
                 for chunk_req in self.chunk_store.get_chunk_requests(ChunkState.registered):
+                    if isinstance(self.obj_store_conn, GatewayHttpConn):
+                        self.chunk_store.set_chunk_state(chunk_req.chunk.chunk_id, ChunkState.downloaded)
+                        continue
                     if self.region == chunk_req.src_region and chunk_req.src_type == "read_local":  # do nothing, read from local ChunkStore
                         self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
                         self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, "read_local")
@@ -180,9 +194,11 @@ if __name__ == "__main__":
     parser.add_argument("--disable-tls", action="store_true")
     parser.add_argument("--use-compression", action="store_true")
     parser.add_argument("--disable-e2ee", action="store_true")
+    parser.add_argument("--http-download", action="store_true")
     args = parser.parse_args()
 
     os.makedirs(args.chunk_dir)
+
     daemon = GatewayDaemon(
         region=args.region,
         outgoing_ports=json.loads(args.outgoing_ports),
@@ -190,5 +206,6 @@ if __name__ == "__main__":
         use_tls=not args.disable_tls,
         use_compression=args.use_compression,
         use_e2ee=not args.disable_e2ee,
+        http_download= args.http_download,
     )
     daemon.run()

@@ -5,11 +5,14 @@ from functools import lru_cache
 from typing import Iterator, List, Optional
 
 from skyplane import exceptions
+from skyplane.chunk import ChunkRequest
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger, imports
-
+import requests
+import time
+import random
 
 class S3Object(ObjectStoreObject):
     def full_path(self):
@@ -212,3 +215,20 @@ class S3Interface(ObjectStoreInterface):
             MultipartUpload={"Parts": [{"PartNumber": p["PartNumber"], "ETag": p["ETag"]} for p in all_parts]},
         )
         assert "ETag" in response, f"Failed to complete multipart upload for {dst_object_name}: {response}"
+
+    def download_http(self, chunk_req: ChunkRequest):
+        url = chunk_req.chunk.src_key
+        dst_key = chunk_req.chunk.dest_key
+        username, password = chunk_req.credentials
+        dst_key, url = str(dst_key), str(url)
+        s3_client = self._s3_client()
+
+        os.system("touch ~/.netrc")
+        os.system(f'echo "machine urs.earthdata.nasa.gov login {username} password {password}" >> ~/.netrc')
+        os.system('chmod 0600 ~/.netrc')
+        os.system('touch ~/.urs_cookies')
+
+        response = requests.get(url, stream=True)
+        chunk_req.chunk.chunk_length_bytes = response.headers['Content-length'] # Update file size
+        s3_client.upload_fileobj(response.raw, self.bucket_name, dst_key)
+        # time.sleep(10) # To avoid high I/O processing complain from NASA server
