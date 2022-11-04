@@ -31,7 +31,6 @@ from skyplane.cli.cli_impl.cp_replicate import (
     launch_replication_job,
 )
 from skyplane.cli.cli_impl.cp_replicate_fallback import (
-    get_usage_gbits,
     replicate_onprem_cp_cmd,
     replicate_onprem_sync_cmd,
     replicate_small_cp_cmd,

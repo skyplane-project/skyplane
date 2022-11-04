@@ -23,7 +23,7 @@ from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skyplane.compute.cloud_provider import CloudProvider
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.compute.server import Server, ServerState
-from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.replicate.profiler import status_df_to_traceevent
 from skyplane.replicate.replication_plan import ReplicationJob, ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger

@@ -4,14 +4,13 @@ from typing import List, Optional
 from skyplane.utils import imports
 
 from skyplane import exceptions
-from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skyplane.compute.cloud_provider import CloudProvider
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.gcp.gcp_key_manager import GCPKeyManager
 from skyplane.compute.gcp.gcp_network import GCPNetwork
 from skyplane.compute.gcp.gcp_pricing import GCPPricing
 from skyplane.compute.gcp.gcp_server import GCPServer
-from skyplane.compute.server import Server, ServerState, key_root
+from skyplane.compute.server import Server, ServerState
 from skyplane.utils import logger
 from skyplane.utils.fn import wait_for
 
@@ -206,7 +205,7 @@ class GCPCloudProvider(CloudProvider):
                 elif "QUOTA_LIMIT" in e.content:
                     raise exceptions.InsufficientVCPUException(f"Got QUOTA_LIMIT in region {region}") from e
             raise
-        except KeyboardInterrupt as e:
+        except KeyboardInterrupt:
             logger.fs.info(f"Keyboard interrupt, deleting instance {name}")
             op = compute.instances().delete(project=self.auth.project_id, zone=region, instance=name).execute()
             self.auth.wait_for_operation_to_complete(region, op["name"])
