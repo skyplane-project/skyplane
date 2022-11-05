@@ -9,7 +9,7 @@ console = Console()
 
 
 def get_credentials() -> Optional[Tuple[str, str]]:
-    cred_file = "/Users/joe/.netrc"
+    cred_file = os.path.expanduser("~/.netrc")
     if not os.path.exists(cred_file):
         return None
     with open(cred_file) as f:
