@@ -12,7 +12,7 @@ class Chunk:
 
     src_key: str  # human readable path where object is stored
     dest_key: str  # human readable path where object is stored
-    chunk_id: int
+    chunk_id: str
     chunk_length_bytes: int
     mime_type: Optional[str] = None
 
@@ -92,7 +92,7 @@ class ChunkState(Enum):
 class WireProtocolHeader:
     """Lightweight wire protocol header for chunk transfers along socket."""
 
-    chunk_id: int  # long
+    chunk_id: str  # 128bit UUID
     data_len: int  # long
     is_compressed: bool  # char
     n_chunks_left_on_socket: int  # long
@@ -105,12 +105,13 @@ class WireProtocolHeader:
     def protocol_version():
         # v1 = base protocol
         # v2 = compression
-        return 2
+        # v3 = uuid chunk_id
+        return 3
 
     @staticmethod
     def length_bytes():
-        # magic (8) + protocol_version (4) + chunk_id (8) + data_len (8) + is_compressed (1) + n_chunks_left_on_socket (8)
-        return 8 + 4 + 8 + 8 + 1 + 8
+        # magic (8) + protocol_version (4) + chunk_id (16) + data_len (8) + is_compressed (1) + n_chunks_left_on_socket (8)
+        return 8 + 4 + 16 + 8 + 1 + 8
 
     @staticmethod
     def from_bytes(data: bytes):
@@ -121,10 +122,10 @@ class WireProtocolHeader:
         version = int.from_bytes(data[8:12], byteorder="big")
         if version != WireProtocolHeader.protocol_version():
             raise ValueError(f"Invalid protocol version, got {version} but expected {WireProtocolHeader.protocol_version()}")
-        chunk_id = int.from_bytes(data[12:20], byteorder="big")
-        chunk_len = int.from_bytes(data[20:28], byteorder="big")
-        is_compressed = bool(int.from_bytes(data[28:29], byteorder="big"))
-        n_chunks_left_on_socket = int.from_bytes(data[29:37], byteorder="big")
+        chunk_id = data[12:28].hex()
+        chunk_len = int.from_bytes(data[28:36], byteorder="big")
+        is_compressed = bool(int.from_bytes(data[36:37], byteorder="big"))
+        n_chunks_left_on_socket = int.from_bytes(data[37:45], byteorder="big")
         return WireProtocolHeader(
             chunk_id=chunk_id, data_len=chunk_len, is_compressed=is_compressed, n_chunks_left_on_socket=n_chunks_left_on_socket
         )
@@ -133,7 +134,9 @@ class WireProtocolHeader:
         out_bytes = b""
         out_bytes += self.magic_hex().to_bytes(8, byteorder="big")
         out_bytes += self.protocol_version().to_bytes(4, byteorder="big")
-        out_bytes += self.chunk_id.to_bytes(8, byteorder="big")
+        chunk_id_bytes = bytes.fromhex(self.chunk_id)
+        assert len(chunk_id_bytes) == 16
+        out_bytes += chunk_id_bytes
         out_bytes += self.data_len.to_bytes(8, byteorder="big")
         out_bytes += self.is_compressed.to_bytes(1, byteorder="big")
         out_bytes += self.n_chunks_left_on_socket.to_bytes(8, byteorder="big")

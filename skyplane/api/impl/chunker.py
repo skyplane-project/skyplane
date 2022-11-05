@@ -5,6 +5,7 @@ from queue import Queue
 
 import math
 from typing import Generator, List, Optional, Tuple, TypeVar
+import uuid
 
 from skyplane.api.transfer_config import TransferConfig
 from skyplane.chunk import Chunk, ChunkRequest
@@ -65,7 +66,7 @@ class Chunker:
                 chunk = Chunk(
                     src_key=src_object.key,
                     dest_key=dest_object.key,
-                    chunk_id=-1,
+                    chunk_id=uuid.uuid4().hex,
                     file_offset_bytes=offset,
                     chunk_length_bytes=file_size_bytes,
                     part_number=part_num,
@@ -98,7 +99,6 @@ class Chunker:
                 multipart_chunk_threads.append(t)
 
         # begin chunking loop
-        current_idx = 0
         for src_obj, dst_obj in transfer_pair_generator:
             if self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
                 multipart_send_queue.put((src_obj, dst_obj))
@@ -106,18 +106,14 @@ class Chunker:
                 yield Chunk(
                     src_key=src_obj.key,
                     dest_key=dst_obj.key,
-                    chunk_id=current_idx,
+                    chunk_id=uuid.uuid4().hex,
                     chunk_length_bytes=src_obj.size,
                 )
-                current_idx += 1
 
             if self.transfer_config.multipart_enabled:
                 # drain multipart chunk queue and yield with updated chunk IDs
                 while not multipart_chunk_queue.empty():
-                    chunk = multipart_chunk_queue.get()
-                    chunk.chunk_id = current_idx
-                    yield chunk
-                    current_idx += 1
+                    yield multipart_chunk_queue.get()
 
         if self.transfer_config.multipart_enabled:
             # send sentinel to all threads
@@ -127,10 +123,7 @@ class Chunker:
 
             # drain multipart chunk queue and yield with updated chunk IDs
             while not multipart_chunk_queue.empty():
-                chunk = multipart_chunk_queue.get()
-                chunk.chunk_id = current_idx
-                yield chunk
-                current_idx += 1
+                yield multipart_chunk_queue.get()
 
     def to_chunk_requests(self, gen_in: Generator[Chunk, None, None]) -> Generator[ChunkRequest, None, None]:
         """Converts a generator of chunks to a generator of chunk requests."""

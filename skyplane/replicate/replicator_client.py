@@ -366,7 +366,6 @@ class ReplicatorClient:
             n_objs = 0
             chunks = []
             multipart_pairs = []
-            idx = 0
             for (src_object, dest_object) in job.transfer_pairs:
                 progress.update(prepare_task, description=f": Creating list of chunks for transfer ({n_objs}/{len(job.transfer_pairs)})")
                 n_objs += 1
@@ -375,13 +374,12 @@ class ReplicatorClient:
                         Chunk(
                             src_key=src_object.key,
                             dest_key=dest_object.key,
-                            chunk_id=idx,
+                            chunk_id=uuid.uuid4().hex,
                             file_offset_bytes=0,
                             chunk_length_bytes=job.random_chunk_size_mb * MB,
                             mime_type=dest_object.mime_type,
                         )
                     )
-                    idx += 1
                 elif multipart_enabled and src_object.size > multipart_min_threshold_mb * MB:
                     # transfer entire object
                     multipart_pairs.append((src_object, dest_object))
@@ -389,13 +387,12 @@ class ReplicatorClient:
                     chunk = Chunk(
                         src_key=src_object.key,
                         dest_key=dest_object.key,
-                        chunk_id=idx,
+                        chunk_id=uuid.uuid4().hex,
                         file_offset_bytes=0,
                         chunk_length_bytes=src_object.size,
                         mime_type=dest_object.mime_type,
                     )
                     chunks.append(chunk)
-                    idx += 1
 
             # initiate multipart transfers in parallel
             if not job.random_chunk_size_mb:
@@ -438,7 +435,7 @@ class ReplicatorClient:
                             Chunk(
                                 src_key=src_object.key,
                                 dest_key=dest_object.key,
-                                chunk_id=idx,
+                                chunk_id=uuid.uuid4().hex,
                                 file_offset_bytes=offset,
                                 chunk_length_bytes=file_size_bytes,
                                 part_number=part_num,
@@ -448,7 +445,6 @@ class ReplicatorClient:
                         )
                         parts.append(part_num)
 
-                        idx += 1
                         part_num += 1
                         offset += chunk_size_bytes
                     # add multipart upload request

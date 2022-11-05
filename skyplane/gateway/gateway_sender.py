@@ -56,7 +56,7 @@ class GatewaySender:
             self.ssl_context = None
 
         # shared state
-        self.worker_queue: queue.Queue[int] = Queue()
+        self.worker_queue: queue.Queue[str] = Queue()
         self.exit_flags = [Event() for _ in range(self.n_processes)]
 
         # process-local state
@@ -64,7 +64,7 @@ class GatewaySender:
         self.sender_port: Optional[int] = None
         self.destination_ports: Dict[str, int] = {}  # ip_address -> int
         self.destination_sockets: Dict[str, socket.socket] = {}  # ip_address -> socket
-        self.sent_chunk_ids: Dict[str, List[int]] = {}  # ip_address -> list of chunk_ids
+        self.sent_chunk_ids: Dict[str, List[str]] = {}  # ip_address -> list of chunk_ids
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3), cert_reqs="CERT_NONE")
 
     def start_workers(self):
@@ -157,7 +157,7 @@ class GatewaySender:
         return sock
 
     # send chunks to other instances
-    def send_chunks(self, chunk_ids: List[int], dst_host: str):
+    def send_chunks(self, chunk_ids: List[str], dst_host: str):
         """Send list of chunks to gateway server, pipelining small chunks together into a single socket stream."""
         # notify server of upcoming ChunkRequests
         with Timer(f"prepare to pre-register chunks {chunk_ids} to {dst_host}"):
