@@ -91,12 +91,14 @@ class UsageClient:
         args: Optional[Dict] = None,
         src_region_tag: Optional[str] = None,
         dest_region_tag: Optional[str] = None,
+        session_start_timestamp_ms: Optional[int] = None,
     ):
         if cls.enabled():
             client = cls()
             error_dict = {"loc": location, "message": str(exception)[:150]}
             stats = client.make_error(
-                error_dict=error_dict, arguments_dict=args, src_region_tag=src_region_tag, dest_region_tag=dest_region_tag
+                error_dict=error_dict, arguments_dict=args, src_region_tag=src_region_tag, dest_region_tag=dest_region_tag,
+                session_start_timestamp_ms=session_start_timestamp_ms,
             )
             destination = client.write_usage_data(stats)
             client.report_usage_data("error", stats, destination)
@@ -108,11 +110,13 @@ class UsageClient:
         args: Optional[Dict] = None,
         src_region_tag: Optional[str] = None,
         dest_region_tag: Optional[str] = None,
+        session_start_timestamp_ms: Optional[int] = None,
     ):
         if cls.enabled():
             client = cls()
             stats = client.make_stat(
-                arguments_dict=args, transfer_stats=transfer_stats, src_region_tag=src_region_tag, dest_region_tag=dest_region_tag
+                arguments_dict=args, transfer_stats=transfer_stats, src_region_tag=src_region_tag, dest_region_tag=dest_region_tag,
+                session_start_timestamp_ms=session_start_timestamp_ms,
             )
             destination = client.write_usage_data(stats)
             client.report_usage_data("usage", stats, destination)
@@ -194,6 +198,7 @@ class UsageClient:
         transfer_stats: Optional[Dict] = None,
         src_region_tag: Optional[str] = None,
         dest_region_tag: Optional[str] = None,
+        session_start_timestamp_ms: Optional[int] = None,
     ):
         if src_region_tag is None:
             src_provider, src_region = None, None
@@ -215,7 +220,7 @@ class UsageClient:
             source_cloud_provider=src_provider,
             destination_cloud_provider=dest_provider,
             os=sys.platform,
-            session_start_timestamp_ms=int(time.time() * 1000),
+            session_start_timestamp_ms=session_start_timestamp_ms if session_start_timestamp_ms else int(time.time() * 1000),
             arguments_dict=arguments_dict,
             transfer_stats=transfer_stats,
         )
@@ -226,6 +231,7 @@ class UsageClient:
         arguments_dict: Optional[Dict] = None,
         src_region_tag: Optional[str] = None,
         dest_region_tag: Optional[str] = None,
+        session_start_timestamp_ms: Optional[int] = None,
     ):
         if src_region_tag is None:
             src_provider, src_region = None, None
@@ -247,7 +253,7 @@ class UsageClient:
             source_cloud_provider=src_provider,
             destination_cloud_provider=dest_provider,
             os=sys.platform,
-            session_start_timestamp_ms=int(time.time() * 1000),
+            session_start_timestamp_ms=session_start_timestamp_ms if session_start_timestamp_ms else int(time.time() * 1000),
             arguments_dict=arguments_dict,
             error_dict=error_dict,
         )

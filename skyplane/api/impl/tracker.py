@@ -62,7 +62,7 @@ class TransferProgressTracker(Thread):
             "src_spot_instance": getattr(self.transfer_config, f"{src_cloud_provider}_use_spot_instances"),
             "dst_spot_instance": getattr(self.transfer_config, f"{dst_cloud_provider}_use_spot_instances"),
         }
-        
+        session_start_timestamp_ms = int(time.time() * 1000)
         try:
             for job_uuid, job in self.jobs.items():
                 logger.fs.debug(f"[TransferProgressTracker] Dispatching job {job.uuid}")
@@ -73,15 +73,22 @@ class TransferProgressTracker(Thread):
                     f"[TransferProgressTracker] Job {job.uuid} dispatched with {len(self.job_chunk_requests[job_uuid])} chunk requests"
                 )
         except Exception as e:
-            UsageClient.log_exception("dispatch job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag)
+            UsageClient.log_exception("dispatch job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
+                                      session_start_timestamp_ms)
             raise e
         
         # Record only the transfer time
         start_time = int(time.time())
         try:    
             self.monitor_transfer()
+        except exceptions.SkyplaneGatewayException as err:
+            reformat_err = Exception(err.pretty_print_str())
+            UsageClient.log_exception("monitor transfer", reformat_err, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
+                                      session_start_timestamp_ms)
+            raise err
         except Exception as e:
-            UsageClient.log_exception("monitor transfer", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag)
+            UsageClient.log_exception("monitor transfer", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
+                                      session_start_timestamp_ms)
             raise e
         end_time = int(time.time())
         
@@ -90,7 +97,8 @@ class TransferProgressTracker(Thread):
                 logger.fs.debug(f"[TransferProgressTracker] Finalizing job {job.uuid}")
                 job.finalize()
         except Exception as e:
-            UsageClient.log_exception("finalize job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag)
+            UsageClient.log_exception("finalize job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
+                                      session_start_timestamp_ms)
             raise e
         
         try:
@@ -98,16 +106,17 @@ class TransferProgressTracker(Thread):
                 logger.fs.debug(f"[TransferProgressTracker] Verifying job {job.uuid}")
                 job.verify()
         except Exception as e:
-            UsageClient.log_exception("verify job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag)
+            UsageClient.log_exception("verify job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
+                                      session_start_timestamp_ms)
             raise e
         
         # transfer successfully completed
-        
         transfer_stats = {
             "total_runtime_s": end_time - start_time,
             "throughput_gbits": self.size / (end_time - start_time),
         }
-        UsageClient.log_transfer(transfer_stats, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag)
+        UsageClient.log_transfer(transfer_stats, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
+                                 session_start_timestamp_ms)
 
 
     @imports.inject("pandas")
