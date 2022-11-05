@@ -44,6 +44,9 @@ class Dataplane:
         transfer_config: TransferConfig,
     ):
         self.topology = topology
+        self.src_region_tag = self.topology.source_region()
+        self.dst_region_tag = self.topology.sink_region()
+        self.max_instances = int(len(self.topology.gateway_nodes) / 2)
         self.provisioner = provisioner
         self.transfer_config = transfer_config
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))

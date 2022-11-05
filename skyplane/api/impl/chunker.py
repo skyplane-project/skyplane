@@ -91,7 +91,7 @@ class Chunker:
             for _ in range(self.concurrent_multipart_chunk_threads):
                 t = threading.Thread(
                     target=self.multipart_chunk_thread,
-                    args=(multipart_exit_event, multipart_send_queue, multipart_chunk_queue, self.dest_iface),
+                    args=(multipart_exit_event, multipart_send_queue, multipart_chunk_queue),
                     daemon=False,
                 )
                 t.start()

@@ -56,6 +56,41 @@ class TransferJob:
         # TODO
         raise NotImplementedError
 
+    def calculate_size(self):
+        # If errors, then return 0 size. Error is raised in _transfer_pair_generator().
+        if not self.src_iface.bucket_exists():
+            return 0
+        if not self.dst_iface.bucket_exists():
+            return 0
+
+        n_objs = 0
+        size = 0
+        for obj in self.src_iface.list_objects(self.src_prefix):
+            if self._pre_filter_fn(obj):
+                try:
+                    dest_key = self._map_object_key_prefix(self.src_prefix, obj.key, self.dst_prefix, recursive=self.recursive)
+                except exceptions.MissingObjectException as e:
+                    continue
+
+                dest_provider, dest_region = self.dst_iface.region_tag().split(":")
+                if dest_provider == "aws":
+                    dest_obj = S3Object(dest_provider, self.dst_iface.bucket(), dest_key)
+                elif dest_provider == "azure":
+                    dest_obj = AzureBlobObject(dest_provider, self.dst_iface.bucket(), dest_key)
+                elif dest_provider == "gcp":
+                    dest_obj = GCSObject(dest_provider, self.dst_iface.bucket(), dest_key)
+                else:
+                    return 0
+
+                if self._post_filter_fn(obj, dest_obj):
+                    size += obj.size / (1024**3)
+                    n_objs += 1
+
+        if n_objs == 0:
+            return 0
+        
+        return size 
+
     def _transfer_pair_generator(self) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
         """Query source region and return list of objects to transfer."""
         if not self.src_iface.bucket_exists():
@@ -152,6 +187,7 @@ class CopyJob(TransferJob):
     multipart_transfer_list: list = field(default_factory=list)
 
     def __post_init__(self):
+        self.type = "copy"
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         return super().__post_init__()
 
@@ -229,6 +265,11 @@ class CopyJob(TransferJob):
 
 @dataclass
 class SyncJob(CopyJob):
+    
+    def __post_init__(self):
+        self.type = "sync"
+        return super().__post_init__()
+
     @classmethod
     def _post_filter_fn(cls, src_obj: ObjectStoreObject, dest_obj: ObjectStoreObject) -> bool:
         return not dest_obj.exists or (src_obj.last_modified > dest_obj.last_modified or src_obj.size != dest_obj.size)
