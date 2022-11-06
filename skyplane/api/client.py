@@ -25,6 +25,7 @@ class SkyplaneClient:
         transfer_config: Optional[TransferConfig] = None,
         log_dir: Optional[str] = None,
     ):
+        self.clientid = uuid.UUID(int=uuid.getnode()).hex
         self.aws_auth = aws_config.make_auth_provider() if aws_config else None
         self.azure_auth = azure_config.make_auth_provider() if azure_config else None
         self.gcp_auth = gcp_config.make_auth_provider() if gcp_config else None
@@ -84,7 +85,7 @@ class SkyplaneClient:
             )
             topo = planner.plan()
             logger.fs.info(f"[SkyplaneClient.direct_dataplane] Topology: {topo.to_json()}")
-            return Dataplane(topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
+            return Dataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
         else:
             raise NotImplementedError(f"Dataplane type {type} not implemented")
 

@@ -1,7 +1,7 @@
 import json
 import os
 import threading
-from collections import defaultdict
+from collections import defaultdict, Counter
 from functools import partial
 
 import nacl.secret
@@ -39,14 +39,17 @@ class Dataplane:
 
     def __init__(
         self,
+        clientid: str,
         topology: ReplicationTopology,
         provisioner: "Provisioner",
         transfer_config: TransferConfig,
     ):
+        self.clientid = clientid
         self.topology = topology
         self.src_region_tag = self.topology.source_region()
         self.dst_region_tag = self.topology.sink_region()
-        self.max_instances = int(len(self.topology.gateway_nodes) / 2)
+        regions = Counter([node.region.split(":")[1] for node in self.topology.gateway_nodes])
+        self.max_instances = int(regions[max(regions, key=regions.get)])
         self.provisioner = provisioner
         self.transfer_config = transfer_config
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))

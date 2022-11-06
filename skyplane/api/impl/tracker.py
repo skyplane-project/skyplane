@@ -24,7 +24,6 @@ class TransferProgressTracker(Thread):
         self.dataplane = dataplane
         self.type_list = set([job.type for job in jobs])
         self.recursive_list = set([str(job.recursive) for job in jobs])
-        self.size = sum([job.calculate_size() for job in jobs])
         
         self.jobs = {job.uuid: job for job in jobs}
         self.transfer_config = transfer_config
@@ -73,7 +72,7 @@ class TransferProgressTracker(Thread):
                     f"[TransferProgressTracker] Job {job.uuid} dispatched with {len(self.job_chunk_requests[job_uuid])} chunk requests"
                 )
         except Exception as e:
-            UsageClient.log_exception("dispatch job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
+            UsageClient(self.dataplane.clientid).log_exception("dispatch job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
                                       session_start_timestamp_ms)
             raise e
         
@@ -82,12 +81,12 @@ class TransferProgressTracker(Thread):
         try:    
             self.monitor_transfer()
         except exceptions.SkyplaneGatewayException as err:
-            reformat_err = Exception(err.pretty_print_str())
-            UsageClient.log_exception("monitor transfer", reformat_err, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
+            reformat_err = Exception(err.pretty_print_str()[37:])
+            UsageClient(self.dataplane.clientid).log_exception("monitor transfer", reformat_err, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
                                       session_start_timestamp_ms)
             raise err
         except Exception as e:
-            UsageClient.log_exception("monitor transfer", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
+            UsageClient(self.dataplane.clientid).log_exception("monitor transfer", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
                                       session_start_timestamp_ms)
             raise e
         end_time = int(time.time())
@@ -97,7 +96,7 @@ class TransferProgressTracker(Thread):
                 logger.fs.debug(f"[TransferProgressTracker] Finalizing job {job.uuid}")
                 job.finalize()
         except Exception as e:
-            UsageClient.log_exception("finalize job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
+            UsageClient(self.dataplane.clientid).log_exception("finalize job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
                                       session_start_timestamp_ms)
             raise e
         
@@ -106,16 +105,16 @@ class TransferProgressTracker(Thread):
                 logger.fs.debug(f"[TransferProgressTracker] Verifying job {job.uuid}")
                 job.verify()
         except Exception as e:
-            UsageClient.log_exception("verify job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
+            UsageClient(self.dataplane.clientid).log_exception("verify job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
                                       session_start_timestamp_ms)
             raise e
         
         # transfer successfully completed
         transfer_stats = {
             "total_runtime_s": end_time - start_time,
-            "throughput_gbits": self.size / (end_time - start_time),
+            "throughput_gbits": self.calculate_size() / (end_time - start_time),
         }
-        UsageClient.log_transfer(transfer_stats, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
+        UsageClient(self.dataplane.clientid).log_transfer(transfer_stats, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
                                  session_start_timestamp_ms)
 
 
@@ -203,3 +202,17 @@ class TransferProgressTracker(Thread):
             )
         logger.fs.debug(f"[TransferProgressTracker] Bytes remaining per job: {bytes_remaining_per_job}")
         return sum(bytes_remaining_per_job.values())
+    
+    def calculate_size(self):
+        if len(self.job_chunk_requests) == 0:
+            return 0
+        bytes_total_per_job = {}
+        for job_uuid in self.job_complete_chunk_ids.keys():
+            bytes_total_per_job[job_uuid] = sum(
+                [
+                    cr.chunk.chunk_length_bytes
+                    for cr in self.job_chunk_requests[job_uuid]
+                    if cr.chunk.chunk_id in self.job_complete_chunk_ids[job_uuid]
+                ]
+            )
+        return sum(bytes_total_per_job.values()) / (2 ** 30)

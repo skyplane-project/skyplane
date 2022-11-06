@@ -17,7 +17,6 @@ google-cloud-storage
 cachetools
 paramiko
 rich
-typer
 # gateway dependencies
 flask
 lz4
