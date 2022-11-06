@@ -293,7 +293,7 @@ class UsageClient:
             requests.HTTPError if requests fails.
         """
 
-        prom_labels = {"type": type, "environment": "prod"}
+        prom_labels = {"type": type, "environment": "api"}
         headers = {"Content-type": "application/json"}
         data.sent_time_ms = int(time.time() * 1000)
         payload = {"streams": [{"stream": prom_labels, "values": [[str(_get_current_timestamp_ns()), json.dumps(asdict(data))]]}]}
