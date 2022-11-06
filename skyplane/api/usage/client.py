@@ -14,10 +14,12 @@ from typing import Optional, Dict
 
 import skyplane
 import skyplane.api.usage.definitions
+
 # from skyplane.api.client import tmp_log_dir
 tmp_log_dir = Path("/tmp/skyplane")
 from skyplane.config import _map_type
 from skyplane.config_paths import config_path, cloud_config
+
 # from skyplane.replicate.replicator_client import TransferStats
 from skyplane.utils import logger, imports
 
@@ -96,7 +98,10 @@ class UsageClient:
             client = cls()
             error_dict = {"loc": location, "message": str(exception)[:150]}
             stats = client.make_error(
-                error_dict=error_dict, arguments_dict=args, src_region_tag=src_region_tag, dest_region_tag=dest_region_tag,
+                error_dict=error_dict,
+                arguments_dict=args,
+                src_region_tag=src_region_tag,
+                dest_region_tag=dest_region_tag,
                 session_start_timestamp_ms=session_start_timestamp_ms,
             )
             destination = client.write_usage_data(stats)
@@ -114,7 +119,10 @@ class UsageClient:
         if cls.enabled():
             client = cls()
             stats = client.make_stat(
-                arguments_dict=args, transfer_stats=transfer_stats, src_region_tag=src_region_tag, dest_region_tag=dest_region_tag,
+                arguments_dict=args,
+                transfer_stats=transfer_stats,
+                src_region_tag=src_region_tag,
+                dest_region_tag=dest_region_tag,
                 session_start_timestamp_ms=session_start_timestamp_ms,
             )
             destination = client.write_usage_data(stats)

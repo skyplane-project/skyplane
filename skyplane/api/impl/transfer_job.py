@@ -231,7 +231,7 @@ class CopyJob(TransferJob):
 @dataclass
 class SyncJob(CopyJob):
     type: str = "sync"
-    
+
     def __post_init__(self):
         return super().__post_init__()
 

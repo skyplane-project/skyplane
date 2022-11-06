@@ -24,7 +24,7 @@ class TransferProgressTracker(Thread):
         self.dataplane = dataplane
         self.type_list = set([job.type for job in jobs])
         self.recursive_list = set([str(job.recursive) for job in jobs])
-        
+
         self.jobs = {job.uuid: job for job in jobs}
         self.transfer_config = transfer_config
 
@@ -50,7 +50,7 @@ class TransferProgressTracker(Thread):
     def run(self):
         src_cloud_provider = self.dataplane.src_region_tag.split(":")[0]
         dst_cloud_provider = self.dataplane.dst_region_tag.split(":")[0]
-        
+
         args = {
             "cmd": ",".join(self.type_list),
             "recursive": ",".join(self.recursive_list),
@@ -72,51 +72,61 @@ class TransferProgressTracker(Thread):
                     f"[TransferProgressTracker] Job {job.uuid} dispatched with {len(self.job_chunk_requests[job_uuid])} chunk requests"
                 )
         except Exception as e:
-            UsageClient(self.dataplane.clientid).log_exception("dispatch job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
-                                      session_start_timestamp_ms)
+            UsageClient(self.dataplane.clientid).log_exception(
+                "dispatch job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
+            )
             raise e
-        
+
         # Record only the transfer time
         start_time = int(time.time())
-        try:    
+        try:
             self.monitor_transfer()
         except exceptions.SkyplaneGatewayException as err:
             reformat_err = Exception(err.pretty_print_str()[37:])
-            UsageClient(self.dataplane.clientid).log_exception("monitor transfer", reformat_err, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
-                                      session_start_timestamp_ms)
+            UsageClient(self.dataplane.clientid).log_exception(
+                "monitor transfer",
+                reformat_err,
+                args,
+                self.dataplane.src_region_tag,
+                self.dataplane.dst_region_tag,
+                session_start_timestamp_ms,
+            )
             raise err
         except Exception as e:
-            UsageClient(self.dataplane.clientid).log_exception("monitor transfer", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
-                                      session_start_timestamp_ms)
+            UsageClient(self.dataplane.clientid).log_exception(
+                "monitor transfer", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
+            )
             raise e
         end_time = int(time.time())
-        
+
         try:
             for job in self.jobs.values():
                 logger.fs.debug(f"[TransferProgressTracker] Finalizing job {job.uuid}")
                 job.finalize()
         except Exception as e:
-            UsageClient(self.dataplane.clientid).log_exception("finalize job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
-                                      session_start_timestamp_ms)
+            UsageClient(self.dataplane.clientid).log_exception(
+                "finalize job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
+            )
             raise e
-        
+
         try:
             for job in self.jobs.values():
                 logger.fs.debug(f"[TransferProgressTracker] Verifying job {job.uuid}")
                 job.verify()
         except Exception as e:
-            UsageClient(self.dataplane.clientid).log_exception("verify job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
-                                      session_start_timestamp_ms)
+            UsageClient(self.dataplane.clientid).log_exception(
+                "verify job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
+            )
             raise e
-        
+
         # transfer successfully completed
         transfer_stats = {
             "total_runtime_s": end_time - start_time,
             "throughput_gbits": self.calculate_size() / (end_time - start_time),
         }
-        UsageClient(self.dataplane.clientid).log_transfer(transfer_stats, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag,
-                                 session_start_timestamp_ms)
-
+        UsageClient(self.dataplane.clientid).log_transfer(
+            transfer_stats, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
+        )
 
     @imports.inject("pandas")
     def monitor_transfer(pd, self):
@@ -202,7 +212,7 @@ class TransferProgressTracker(Thread):
             )
         logger.fs.debug(f"[TransferProgressTracker] Bytes remaining per job: {bytes_remaining_per_job}")
         return sum(bytes_remaining_per_job.values())
-    
+
     def calculate_size(self):
         if len(self.job_chunk_requests) == 0:
             return 0
@@ -215,4 +225,4 @@ class TransferProgressTracker(Thread):
                     if cr.chunk.chunk_id in self.job_complete_chunk_ids[job_uuid]
                 ]
             )
-        return sum(bytes_total_per_job.values()) / (2 ** 30)
+        return sum(bytes_total_per_job.values()) / (2**30)
