@@ -4,6 +4,7 @@ import os
 import sys
 import time
 import uuid
+import configparser
 from dataclasses import asdict, dataclass
 from enum import Enum, auto
 from pathlib import Path
@@ -18,11 +19,27 @@ import skyplane.api.usage.definitions
 # from skyplane.api.client import tmp_log_dir
 tmp_log_dir = Path("/tmp/skyplane")
 from skyplane.config import _map_type
-from skyplane.config_paths import config_path, cloud_config
+from skyplane.config_paths import config_path, cloud_config, host_uuid_path
 
 # from skyplane.replicate.replicator_client import TransferStats
 from skyplane.utils import logger, imports
 
+def get_clientid():
+    path = host_uuid_path
+    config = configparser.ConfigParser()
+    if path.exists():
+        config.read(os.path.expanduser(path))
+    id = uuid.UUID(int=uuid.getnode()).hex
+    if "client" not in config:
+        config.add_section("client")
+        config.set("client", "anon_clientid", id)
+    elif "anon_clientid" not in config["client"]:
+        config.set("client", "anon_clientid", id)
+    else:
+        return config.get("client", "anon_clientid")
+    with path.open("w") as f:
+        config.write(f)
+    return id
 
 def _get_current_timestamp_ns():
     return int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1e9)
@@ -76,9 +93,9 @@ class UsageClient:
     and report usage stats.
     """
 
-    def __init__(self, client_id: Optional[str] = uuid.UUID(int=uuid.getnode()).hex):
+    def __init__(self, client_id: Optional[str] = get_clientid()):
         self.client_id = client_id
-        self.session_id = f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}-{uuid.uuid4()}"
+        self.session_id = f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}-{uuid.uuid4().hex[:8]}"
 
     @classmethod
     def enabled(cls):

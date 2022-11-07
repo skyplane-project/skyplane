@@ -4,6 +4,7 @@ from pathlib import Path
 
 from typing import TYPE_CHECKING, Optional
 
+from skyplane.api.usage.client import get_clientid
 from skyplane.api.dataplane import Dataplane
 from skyplane.api.impl.path import parse_path
 from skyplane.api.impl.planner import DirectPlanner
@@ -25,7 +26,7 @@ class SkyplaneClient:
         transfer_config: Optional[TransferConfig] = None,
         log_dir: Optional[str] = None,
     ):
-        self.clientid = uuid.UUID(int=uuid.getnode()).hex
+        self.clientid = get_clientid()
         self.aws_auth = aws_config.make_auth_provider() if aws_config else None
         self.azure_auth = azure_config.make_auth_provider() if azure_config else None
         self.gcp_auth = gcp_config.make_auth_provider() if gcp_config else None
@@ -41,7 +42,7 @@ class SkyplaneClient:
         logger.open_log_file(self.log_dir / "client.log")
 
         self.provisioner = Provisioner(
-            host_uuid=uuid.UUID(int=uuid.getnode()).hex,
+            host_uuid=self.clientid,
             aws_auth=self.aws_auth,
             azure_auth=self.azure_auth,
             gcp_auth=self.gcp_auth,
@@ -74,6 +75,7 @@ class SkyplaneClient:
         n_vms: int = 1,
         num_connections: int = 32,
     ) -> Dataplane:
+        # print(self.clientid)
         if type == "direct":
             planner = DirectPlanner(
                 src_cloud_provider,

@@ -32,3 +32,4 @@ def load_cloud_config(path):
 
 config_path = load_config_path()
 cloud_config = load_cloud_config(config_path)
+host_uuid_path = __config_root__ / 'host_uuid'
