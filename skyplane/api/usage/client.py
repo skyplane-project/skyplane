@@ -186,9 +186,9 @@ class UsageClient:
 
         return UsageStatsStatus.ENABLED_BY_DEFAULT
 
-    @classmethod
     @imports.inject("typer")
-    def set_usage_stats_via_config(cls, value, config):
+    @classmethod
+    def set_usage_stats_via_config(typer, cls, value, config):
         current_status = cls.usage_stats_status()
         if current_status is UsageStatsStatus.DISABLED_EXPLICITLY:
             if (isinstance(value, bool) and not value) or (isinstance(value, str) and not _map_type(value, bool)):

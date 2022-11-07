@@ -32,6 +32,7 @@ class TransferJob:
     recursive: bool = False
     requester_pays: bool = False
     uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
+    type: str = ""
 
     def __post_init__(self):
         provider_src, bucket_src, self.src_prefix = parse_path(self.src_path)
