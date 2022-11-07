@@ -73,7 +73,7 @@ class GCPCloudProvider(CloudProvider):
 
     @classmethod
     def get_transfer_cost(cls, src_key, dst_key, premium_tier=True):
-        assert src_key.startswith("aws:")
+        assert src_key.startswith("gcp:")
         return GCPPricing.get_transfer_cost(src_key, dst_key, premium_tier)
 
     def get_instance_list(self, region) -> List[GCPServer]:
