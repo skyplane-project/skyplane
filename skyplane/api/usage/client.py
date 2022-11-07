@@ -24,6 +24,7 @@ from skyplane.config_paths import config_path, cloud_config, host_uuid_path
 # from skyplane.replicate.replicator_client import TransferStats
 from skyplane.utils import logger, imports
 
+
 def get_clientid():
     path = host_uuid_path
     config = configparser.ConfigParser()
@@ -40,6 +41,7 @@ def get_clientid():
     with path.open("w") as f:
         config.write(f)
     return id
+
 
 def _get_current_timestamp_ns():
     return int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1e9)
