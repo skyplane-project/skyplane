@@ -48,7 +48,7 @@ class Dataplane:
         self.topology = topology
         self.src_region_tag = self.topology.source_region()
         self.dst_region_tag = self.topology.sink_region()
-        regions = Counter([node.region.split(":")[1] for node in self.topology.gateway_nodes])
+        regions = Counter([node.region for node in self.topology.gateway_nodes])
         self.max_instances = int(regions[max(regions, key=regions.get)])
         self.provisioner = provisioner
         self.transfer_config = transfer_config

@@ -15,14 +15,11 @@ from typing import Optional, Dict
 
 import skyplane
 import skyplane.api.usage.definitions
-
-# from skyplane.api.client import tmp_log_dir
-tmp_log_dir = Path("/tmp/skyplane")
 from skyplane.config import _map_type
 from skyplane.config_paths import config_path, cloud_config, host_uuid_path
-
-# from skyplane.replicate.replicator_client import TransferStats
 from skyplane.utils import logger, imports
+
+tmp_log_dir = Path("/tmp/skyplane")
 
 
 def get_clientid():

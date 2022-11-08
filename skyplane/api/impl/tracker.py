@@ -13,6 +13,7 @@ from skyplane.chunk import ChunkRequest, ChunkState
 from skyplane.utils import logger, imports
 from skyplane.utils.fn import do_parallel
 from skyplane.api.usage.client import UsageClient
+from skyplane.utils.definitions import GB
 
 if TYPE_CHECKING:
     from skyplane.api.impl.transfer_job import TransferJob
@@ -225,4 +226,4 @@ class TransferProgressTracker(Thread):
                     if cr.chunk.chunk_id in self.job_complete_chunk_ids[job_uuid]
                 ]
             )
-        return sum(bytes_total_per_job.values()) / (2**30)
+        return sum(bytes_total_per_job.values()) / GB
