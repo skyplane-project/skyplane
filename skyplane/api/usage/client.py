@@ -92,8 +92,11 @@ class UsageClient:
     and report usage stats.
     """
 
-    def __init__(self, client_id: Optional[str] = get_clientid()):
-        self.client_id = client_id
+    def __init__(self, client_id: Optional[str] = None):
+        if client_id:
+            self.client_id = client_id
+        else:
+            self.client_id = get_clientid()
         self.session_id = f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}-{uuid.uuid4().hex[:8]}"
 
     @classmethod
