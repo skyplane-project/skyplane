@@ -1,11 +1,12 @@
 import time
 
 import skyplane
+import skyplane.broadcast as broadcast
 
 if __name__ == "__main__":
-    client = skyplane.SkyplaneClient(aws_config=skyplane.AWSConfig())
+    client = broadcast.SkyplaneBroadcastClient(aws_config=skyplane.AWSConfig())
     print(f"Log dir: {client.log_dir}/client.log")
-    dp = client.dataplane("aws", "us-east-1", ["aws", "gcp"], ["us-east-2", "europe-central2-a"], n_vms=1)
+    dp = client.broadcast_dataplane("aws", "us-east-1", ["aws", "gcp"], ["us-east-2", "europe-central2-a"], n_vms=1)
     with dp.auto_deprovision():
         dp.provision(spinner=True)
         dp.queue_copy(

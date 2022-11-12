@@ -2,16 +2,15 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, List
 
+from skyplane.api.client import tmp_log_dir
 from skyplane.api.usage.client import get_clientid
 from skyplane.api.dataplane import Dataplane
-from skyplane.api.impl.path import parse_path
-from skyplane.api.impl.planner import DirectPlanner
-from skyplane.api.impl.broadcast_planner import BroadcastDirectPlanner, BroadcastMDSTPlanner, BroadcastHSTPlanner, BroadcastILPSolverPlanner
+from skyplane.broadcast import BroadcastDataplane
+from skyplane.broadcast.bc_planner import BroadcastDirectPlanner, BroadcastMDSTPlanner, BroadcastHSTPlanner, BroadcastILPSolverPlanner
 from skyplane.api.impl.provisioner import Provisioner
 from skyplane.api.transfer_config import TransferConfig
-from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils import logger
 
 if TYPE_CHECKING:
@@ -50,7 +49,7 @@ class SkyplaneBroadcastClient:
         )
 
     # methods to create dataplane
-    def dataplane(
+    def broadcast_dataplane(
         self,
         src_cloud_provider: str,
         src_region: str,
@@ -61,7 +60,7 @@ class SkyplaneBroadcastClient:
         num_connections: int = 32,
         num_partitions: int = 2,
         gbyte_to_transfer: float = 10,
-    ) -> Dataplane:
+    ) -> BroadcastDataplane:
         # TODO: did not change the data plan yet
         if type == "direct":
             planner = BroadcastDirectPlanner(

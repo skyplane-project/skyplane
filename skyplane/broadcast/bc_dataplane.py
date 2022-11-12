@@ -10,10 +10,12 @@ import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 from skyplane import compute
+from skyplane.api.dataplane import Dataplane, DataplaneAutoDeprovision
 from skyplane.api.impl.tracker import TransferProgressTracker
 from skyplane.api.impl.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.transfer_config import TransferConfig
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationTopologyGateway
+from skyplane.broadcast.bc_plan import BroadcastReplicationTopology
 from skyplane.utils import logger
 from skyplane.utils.definitions import gateway_docker_image
 from skyplane.utils.fn import PathLike, do_parallel
@@ -22,19 +24,7 @@ if TYPE_CHECKING:
     from skyplane.api.impl.provisioner import Provisioner
 
 
-class DataplaneAutoDeprovision:
-    def __init__(self, dataplane: "Dataplane"):
-        self.dataplane = dataplane
-
-    def __enter__(self):
-        return self.dataplane
-
-    def __exit__(self, exc_type, exc_value, exc_tb):
-        logger.error("Deprovisioning dataplane")
-        self.dataplane.deprovision()
-
-
-class BroadcastDataplane:
+class BroadcastDataplane(Dataplane):
     # TODO: need to change this
     """A Dataplane represents a concrete Skyplane network, including topology and VMs."""
 
@@ -192,10 +182,6 @@ class BroadcastDataplane:
             errors[instance] = result
         return errors
 
-    def auto_deprovision(self) -> DataplaneAutoDeprovision:
-        """Returns a context manager that will automatically call deprovision upon exit."""
-        return DataplaneAutoDeprovision(self)
-
     def source_gateways(self) -> List[compute.Server]:
         return [self.bound_nodes[n] for n in self.topology.source_instances()] if self.provisioned else []
 
@@ -205,7 +191,7 @@ class BroadcastDataplane:
     def queue_copy(
         self,
         src: str,
-        dst: str,
+        dst: List[str],
         recursive: bool = False,
     ) -> str:
         job = CopyJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
@@ -219,22 +205,4 @@ class BroadcastDataplane:
         dst: str,
         recursive: bool = False,
     ) -> str:
-        job = SyncJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
-        logger.fs.debug(f"[SkyplaneClient] Queued sync job {job}")
-        self.jobs_to_dispatch.append(job)
-        return job.uuid
-
-    def run_async(self) -> TransferProgressTracker:
-        if not self.provisioned:
-            logger.error("Dataplane must be pre-provisioned. Call dataplane.provision() before starting a transfer")
-        tracker = TransferProgressTracker(self, self.jobs_to_dispatch, self.transfer_config)
-        self.pending_transfers.append(tracker)
-        tracker.start()
-        logger.fs.info(f"[SkyplaneClient] Started async transfer with {len(self.jobs_to_dispatch)} jobs")
-        self.jobs_to_dispatch = []
-        return tracker
-
-    def run(self):
-        tracker = self.run_async()
-        logger.fs.debug(f"[SkyplaneClient] Waiting for transfer to complete")
-        tracker.join()
+        raise NotImplementedError("Sync is not yet supported for broadcast")

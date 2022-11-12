@@ -1,13 +1,20 @@
-from skyplane import compute
-from skyplane.replicate.replication_plan import BroadcastReplicationTopology
-from skyplane.replicate.bc_solver import BroadcastProblem, BroadcastSolution
-from skyplane import skyplane_root
+import os
+import subprocess
+from pathlib import Path
 
-from typing import List, Optional, Tuple, Dict
+from skyplane import __root__
+from skyplane.api.client import tmp_log_dir
+from skyplane.broadcast.bc_plan import BroadcastReplicationTopology
+from skyplane.broadcast.bc_solver import BroadcastProblem, BroadcastSolution, GBIT_PER_GBYTE
+
+from typing import List, Optional
 from pprint import pprint
 import networkx as nx
 import pandas as pd
 import numpy as np
+import cvxpy as cp
+
+from skyplane.utils import logger
 
 
 class BroadcastPlanner:
@@ -21,17 +28,17 @@ class BroadcastPlanner:
         n_connections: int,
         n_partitions: int,
         gbyte_to_transfer: float,
-        cost_grid_path: Optional[pathlib.Path] = skyplane_root / "profiles" / "cost.csv",
-        tp_grid_path: Optional[pathlib.Path] = skyplane_root / "profiles" / "throughput.csv",
+        cost_grid_path: Optional[Path] = __root__ / "profiles" / "cost.csv",
+        tp_grid_path: Optional[Path] = __root__ / "profiles" / "throughput.csv",
     ):
 
         self.src_provider = src_provider
         self.src_region = src_region
         self.dst_providers = dst_providers
         self.dst_regions = dst_regions
-        self.n_instances = n_instances 
+        self.n_instances = n_instances
         self.n_connections = n_connections
-        self.n_partitions = n_partitions 
+        self.n_partitions = n_partitions
         self.gbyte_to_transfer = gbyte_to_transfer
 
         # need to input cost_grid and tp_grid
@@ -104,14 +111,24 @@ class BroadcastPlanner:
 
 
 class BroadcastDirectPlanner(BroadcastPlanner):
-    def __init__(self, src_provider: str, src_region, dst_providers: List[str], dst_regions: List[str]):
+    def __init__(
+        self,
+        src_provider: str,
+        src_region,
+        dst_providers: List[str],
+        dst_regions: List[str],
+        n_instances: int,
+        n_connections: int,
+        n_partitions: int,
+        gbyte_to_transfer: float,
+    ):
         super().__init__(src_provider, src_region, dst_providers, dst_regions, n_instances, n_connections, n_partitions, gbyte_to_transfer)
 
     def plan(self) -> BroadcastReplicationTopology:
         direct_graph = nx.DiGraph()
         for dst in self.dst_regions:
             cost_of_edge = self.G[self.src_region][dst]["cost"]
-            direct_graph.add_edge(self.src_region, dst, partitions=list(range(self.num_partitions)), cost=cost_of_edge)
+            direct_graph.add_edge(self.src_region, dst, partitions=list(range(self.n_partitions)), cost=cost_of_edge)
 
         for node in direct_graph.nodes:
             direct_graph.nodes[node]["num_vms"] = self.n_instances
@@ -119,14 +136,24 @@ class BroadcastDirectPlanner(BroadcastPlanner):
 
 
 class BroadcastMDSTPlanner(BroadcastPlanner):
-    def __init__(self, src_provider: str, src_region, dst_providers: List[str], dst_regions: List[str]):
+    def __init__(
+        self,
+        src_provider: str,
+        src_region,
+        dst_providers: List[str],
+        dst_regions: List[str],
+        n_instances: int,
+        n_connections: int,
+        n_partitions: int,
+        gbyte_to_transfer: float,
+    ):
         super().__init__(src_provider, src_region, dst_providers, dst_regions, n_instances, n_connections, n_partitions, gbyte_to_transfer)
 
     def plan(self) -> BroadcastReplicationTopology:
         h = self.G.copy()
-        h.remove_edges_from(list(h.in_edges(self.source_region)) + list(nx.selfloop_edges(h)))
+        h.remove_edges_from(list(h.in_edges(self.src_region)) + list(nx.selfloop_edges(h)))
 
-        DST_graph = Edmonds(h.subgraph([self.source_region] + self.dest_regions))
+        DST_graph = Edmonds(h.subgraph([self.src_region] + self.dst_regions))
         opt_DST = DST_graph.find_optimum(attr="cosst", kind="min", preserve_attrs=True, style="arborescence")
 
         # Construct MDST graph
@@ -134,7 +161,7 @@ class BroadcastMDSTPlanner(BroadcastPlanner):
         for edge in list(opt_DST.edges()):
             s, d = edge[0], edge[1]
             cost_of_edge = self.G[s][d]["cost"]
-            MDST_graph.add_edge(s, d, partitions=list(range(self.num_partitions)), cost=cost_of_edge)
+            MDST_graph.add_edge(s, d, partitions=list(range(self.n_partitions)), cost=cost_of_edge)
 
         for node in MDST_graph.nodes:
             MDST_graph.nodes[node]["num_vms"] = self.n_instances
@@ -143,12 +170,22 @@ class BroadcastMDSTPlanner(BroadcastPlanner):
 
 
 class BroadcastHSTPlanner(BroadcastPlanner):
-    def __init__(self, src_provider: str, src_region, dst_providers: List[str], dst_regions: List[str]):
+    def __init__(
+        self,
+        src_provider: str,
+        src_region,
+        dst_providers: List[str],
+        dst_regions: List[str],
+        n_instances: int,
+        n_connections: int,
+        n_partitions: int,
+        gbyte_to_transfer: float,
+    ):
         super().__init__(src_provider, src_region, dst_providers, dst_regions, n_instances, n_connections, n_partitions, gbyte_to_transfer)
 
     def plan(self, hop_limit=3000) -> BroadcastReplicationTopology:
         # TODO: not usable now
-        source_v, dest_v = source_region, dest_regions
+        source_v, dest_v = self.src_region, self.dst_regions
 
         h = self.G.copy()
         h.remove_edges_from(list(h.in_edges(source_v)) + list(nx.selfloop_edges(h)))
@@ -208,7 +245,7 @@ class BroadcastHSTPlanner(BroadcastPlanner):
                         l = line.split()
                         src_r, dst_r = id_to_name[int(l[1])], id_to_name[int(l[2])]
                         cost_of_edge = self.G[src_r][dst_r]["cost"]
-                        di_stree_graph.add_edge(src_r, dst_r, partitions=list(range(self.num_partitions)), cost=cost_of_edge)
+                        di_stree_graph.add_edge(src_r, dst_r, partitions=list(range(self.n_partitions)), cost=cost_of_edge)
 
             for node in di_stree_graph.nodes:
                 di_stree_graph.nodes[node]["num_vms"] = self.n_instances
@@ -309,7 +346,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         return self.get_topo_from_nxgraph(solution.problem.num_partitions, solution.problem.gbyte_to_transfer, result_g)
 
     def plan(self, solver=cp.GUROBI, solver_verbose=False, save_lp_path=None) -> BroadcastReplicationTopology:
-        problem = self.problem 
+        problem = self.problem
 
         # OPTION1: use the graph with only source and destination nodes
         g = self.G.subgraph([problem.src] + problem.dsts).copy()
@@ -410,6 +447,8 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
                 ingress_limit_gb, egress_limit_gb = problem.gcp_instance_throughput_limit
             elif region == "azure":
                 ingress_limit_gb, egress_limit_gb = problem.azure_instance_throughput_limit
+            else:
+                raise ValueError()
 
             node_i = nodes.index(node)
             # egress

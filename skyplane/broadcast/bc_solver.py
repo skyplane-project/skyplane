@@ -1,7 +1,7 @@
 import networkx as nx
 import pandas as pd
 import numpy as np
-from skyplane.replicate.replication_plan import BroadcastReplicationTopology
+from skyplane.broadcast.bc_plan import BroadcastReplicationTopology
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 

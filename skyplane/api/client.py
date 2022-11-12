@@ -8,7 +8,6 @@ from skyplane.api.usage.client import get_clientid
 from skyplane.api.dataplane import Dataplane
 from skyplane.api.impl.path import parse_path
 from skyplane.api.impl.planner import DirectPlanner
-from skyplane.api.impl.broadcast_planner import BroadcastDirectPlanner
 from skyplane.api.impl.provisioner import Provisioner
 from skyplane.api.transfer_config import TransferConfig
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
