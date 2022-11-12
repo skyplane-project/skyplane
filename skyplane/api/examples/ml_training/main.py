@@ -7,10 +7,9 @@ if __name__ == "__main__":
     # Original location of the training data
     data_urls = get_urls("s3://jason-us-east-1/data")
     # We can use Skyplane!!!
-    client.copy(src="s3://jason-us-east-1/data/", 
-                dst="s3://jason-us-west-2/data/", recursive=True)
+    client.copy(src="s3://jason-us-east-1/data/", dst="s3://jason-us-west-2/data/", recursive=True)
     # Now skyplane copies it to a new region
     data_urls = get_urls("s3://jason-us-west-2/data")
-    
+
     train_loader, model, criterion, optimizer = prepare_training(data_urls)
     train(train_loader, model, criterion, optimizer, epoch=5)
