@@ -1,5 +1,5 @@
 import skyplane
-from helper import get_urls, prepare_training, train
+from skyplane.api.examples.ml_training.helper import get_urls, prepare_training, train
 
 if __name__ == "__main__":
     client = skyplane.SkyplaneClient(aws_config=skyplane.AWSConfig())
