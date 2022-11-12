@@ -29,6 +29,10 @@ class BroadcastPlanner:
         self.src_region = src_region
         self.dst_providers = dst_providers
         self.dst_regions = dst_regions
+        self.n_instances = n_instances 
+        self.n_connections = n_connections
+        self.n_partitions = n_partitions 
+        self.gbyte_to_transfer = gbyte_to_transfer
 
         # need to input cost_grid and tp_grid
         self.costs = pd.read_csv(cost_grid_path)
@@ -53,7 +57,7 @@ class BroadcastPlanner:
         return G
 
     def get_topo_from_nxgraph(
-        self, n_partitions: int, gbyte_to_transfer: float, solution_graph: nx.DiGraph
+        self, num_partitions: int, gbyte_to_transfer: float, solution_graph: nx.DiGraph
     ) -> BroadcastReplicationTopology:
         """
         Convert solutions (i.e. networkx graph) to BroadcastReplicationTopology
@@ -305,7 +309,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         return self.get_topo_from_nxgraph(solution.problem.num_partitions, solution.problem.gbyte_to_transfer, result_g)
 
     def plan(self, solver=cp.GUROBI, solver_verbose=False, save_lp_path=None) -> BroadcastReplicationTopology:
-        problem = self.BroadcastProblem
+        problem = self.problem 
 
         # OPTION1: use the graph with only source and destination nodes
         g = self.G.subgraph([problem.src] + problem.dsts).copy()
