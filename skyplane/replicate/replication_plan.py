@@ -4,7 +4,10 @@ from dataclasses import dataclass
 
 from typing import Dict, List, Optional, Set, Tuple
 
+from skyplane.chunk import ChunkRequest
+from skyplane.obj_store.object_store_interface import ObjectStoreObject
 from skyplane.utils import logger
+from skyplane.utils.definitions import MB
 
 
 @dataclass
@@ -201,3 +204,27 @@ class ReplicationTopology:
             g.subgraph(subgraph)
 
         return g
+
+
+@dataclass
+class ReplicationJob:
+    source_region: str
+    source_bucket: Optional[str]
+    dest_region: str
+    dest_bucket: Optional[str]
+
+    # object transfer pairs (src, dest)
+    transfer_pairs: List[Tuple[ObjectStoreObject, ObjectStoreObject]]
+
+    # progress tracking via a list of chunk_requests
+    chunk_requests: Optional[List[ChunkRequest]] = None
+
+    # Generates random chunks for testing on the gateways
+    random_chunk_size_mb: Optional[int] = None
+
+    @property
+    def transfer_size(self):
+        if not self.random_chunk_size_mb:
+            return sum(source_object.size for source_object, _ in self.transfer_pairs)
+        else:
+            return self.random_chunk_size_mb * len(self.transfer_pairs) * MB
