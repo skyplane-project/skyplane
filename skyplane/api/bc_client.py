@@ -8,7 +8,7 @@ from skyplane.api.usage.client import get_clientid
 from skyplane.api.dataplane import Dataplane
 from skyplane.api.impl.path import parse_path
 from skyplane.api.impl.planner import DirectPlanner
-from skyplane.api.impl.broadcast_planner import BroadcastDirectPlanner
+from skyplane.api.impl.broadcast_planner import BroadcastDirectPlanner, BroadcastMDSTPlanner, BroadcastHSTPlanner, BroadcastILPSolverPlanner
 from skyplane.api.impl.provisioner import Provisioner
 from skyplane.api.transfer_config import TransferConfig
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from skyplane.api.auth_config import AWSConfig, AzureConfig, GCPConfig
 
 
-class SkyplaneClient:
+class SkyplaneBroadcastClient:
     def __init__(
         self,
         aws_config: Optional["AWSConfig"] = None,
@@ -49,48 +49,40 @@ class SkyplaneClient:
             gcp_auth=self.gcp_auth,
         )
 
-    def copy(self, src: str, dst: str, recursive: bool = False, num_vms: int = 1):
-        provider_src, bucket_src, self.src_prefix = parse_path(src)
-        provider_dst, bucket_dst, self.dst_prefix = parse_path(dst)
-        self.src_iface = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src)
-        self.dst_iface = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst)
-        if self.transfer_config.requester_pays:
-            self.src_iface.set_requester_bool(True)
-            self.dst_iface.set_requester_bool(True)
-        src_region = self.src_iface.region_tag()
-        dst_region = self.dst_iface.region_tag()
-        dp = self.dataplane(*src_region.split(":"), *dst_region.split(":"), n_vms=num_vms)
-        with dp.auto_deprovision():
-            dp.provision(spinner=True)
-            dp.queue_copy(src, dst, recursive=recursive)
-            dp.run()
-
     # methods to create dataplane
     def dataplane(
         self,
         src_cloud_provider: str,
         src_region: str,
-        dst_cloud_provider: str,
-        dst_region: str,
+        dst_cloud_providers: List[str],
+        dst_regions: List[str],
         type: str = "direct",
         n_vms: int = 1,
         num_connections: int = 32,
+        num_partitions: int = 2,
+        gbyte_to_transfer: float = 10,
     ) -> Dataplane:
-        # print(self.clientid)
+        # TODO: did not change the data plan yet
         if type == "direct":
-            planner = DirectPlanner(
-                src_cloud_provider,
-                src_region,
-                dst_cloud_provider,
-                dst_region,
-                n_vms,
-                num_connections,
+            planner = BroadcastDirectPlanner(
+                src_cloud_provider, src_region, dst_cloud_providers, dst_regions, n_vms, num_connections, num_partitions, gbyte_to_transfer
             )
-            topo = planner.plan()
-            logger.fs.info(f"[SkyplaneClient.direct_dataplane] Topology: {topo.to_json()}")
-            return Dataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
+        elif type == "MDST":
+            planner = BroadcastMDSTPlanner(
+                src_cloud_provider, src_region, dst_cloud_providers, dst_regions, n_vms, num_connections, num_partitions, gbyte_to_transfer
+            )
+        elif type == "HST":
+            # TODO: not usable now
+            planner = BroadcastHSTPlanner(
+                src_cloud_provider, src_region, dst_cloud_providers, dst_regions, n_vms, num_connections, num_partitions, gbyte_to_transfer
+            )
+        elif type == "ILP":
+            planner = BroadcastILPSolverPlanner(
+                src_cloud_provider, src_region, dst_cloud_providers, dst_regions, n_vms, num_connections, num_partitions, gbyte_to_transfer
+            )
         else:
             raise NotImplementedError(f"Dataplane type {type} not implemented")
 
-
-tmp_log_dir = Path("/tmp/skyplane")
+        topo = planner.plan()
+        logger.fs.info(f"[SkyplaneClient.direct_dataplane] Topology: {topo.to_json()}")
+        return Dataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)

@@ -207,11 +207,11 @@ class ReplicationTopology:
 
 
 @dataclass
-class ReplicationJob:
-    source_region: str
+class BroadcastReplicationJob:
+    ource_region: str
+    dest_regions: List[str]
     source_bucket: Optional[str]
-    dest_region: str
-    dest_bucket: Optional[str]
+    dest_buckets: Optional[List[str]]
 
     # object transfer pairs (src, dest)
     transfer_pairs: List[Tuple[ObjectStoreObject, ObjectStoreObject]]
@@ -302,53 +302,3 @@ class BroadcastReplicationTopology(ReplicationTopology):
             self.edges.append((src_gateway, dest_objstore, 0, partition_id))
         self.nodes.add(src_gateway)
         self.nodes.add(dest_objstore)
-
-
-@dataclass
-class ReplicationJob:
-    source_region: str
-    source_bucket: Optional[str]
-    dest_region: str
-    dest_bucket: Optional[str]
-
-    # object transfer pairs (src, dest)
-    transfer_pairs: List[Tuple[ObjectStoreObject, ObjectStoreObject]]
-
-    # progress tracking via a list of chunk_requests
-    chunk_requests: Optional[List[ChunkRequest]] = None
-
-    # Generates random chunks for testing on the gateways
-    random_chunk_size_mb: Optional[int] = None
-
-    @property
-    def transfer_size(self):
-        if not self.random_chunk_size_mb:
-            return sum(source_object.size for source_object, _ in self.transfer_pairs)
-        else:
-            return self.random_chunk_size_mb * len(self.transfer_pairs) * MB
-
-
-@dataclass
-class BroadcastReplicationJob:
-    source_region: str
-    dest_regions: List[str]
-    source_bucket: Optional[str]
-    dest_buckets: Optional[List[str]]
-
-    # object transfer pairs (src, dest)
-    transfer_pairs: List[Tuple[ObjectStoreObject, ObjectStoreObject]]
-
-    # progress tracking via a list of chunk_requests
-    chunk_requests: Optional[List[ChunkRequest]] = None
-
-    # Generates random chunks for testing on the gateways
-    random_chunk_size_mb: Optional[int] = None
-    dest_bucket: Optional[str] = None
-    dest_region: Optional[str] = None
-
-    @property
-    def transfer_size(self):
-        if not self.random_chunk_size_mb:
-            return sum(source_object.size for source_object, _ in self.transfer_pairs)
-        else:
-            return self.random_chunk_size_mb * len(self.transfer_pairs) * MB

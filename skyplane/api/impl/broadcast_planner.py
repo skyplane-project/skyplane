@@ -17,6 +17,10 @@ class BroadcastPlanner:
         src_region,
         dst_providers: List[str],
         dst_regions: List[str],
+        n_instances: int,
+        n_connections: int,
+        n_partitions: int,
+        gbyte_to_transfer: float,
         cost_grid_path: Optional[pathlib.Path] = skyplane_root / "profiles" / "cost.csv",
         tp_grid_path: Optional[pathlib.Path] = skyplane_root / "profiles" / "throughput.csv",
     ):
@@ -96,22 +100,8 @@ class BroadcastPlanner:
 
 
 class BroadcastDirectPlanner(BroadcastPlanner):
-    def __init__(
-        self,
-        src_provider: str,
-        src_region,
-        dst_providers: str,
-        dst_regions: str,
-        n_instances: int,
-        n_connections: int,
-        n_partitions: int,
-        gbyte_to_transfer: float,
-    ):
-        self.n_instances = n_instances
-        self.n_connections = n_connections
-        self.n_partitions = n_partitions
-        self.gbyte_to_transfer = gbyte_to_transfer
-        super().__init__(src_provider, src_region, dst_providers, dst_regions)
+    def __init__(self, src_provider: str, src_region, dst_providers: List[str], dst_regions: List[str]):
+        super().__init__(src_provider, src_region, dst_providers, dst_regions, n_instances, n_connections, n_partitions, gbyte_to_transfer)
 
     def plan(self) -> BroadcastReplicationTopology:
         direct_graph = nx.DiGraph()
@@ -125,22 +115,8 @@ class BroadcastDirectPlanner(BroadcastPlanner):
 
 
 class BroadcastMDSTPlanner(BroadcastPlanner):
-    def __init__(
-        self,
-        src_provider: str,
-        src_region,
-        dst_providers: str,
-        dst_regions: str,
-        n_instances: int,
-        n_connections: int,
-        n_partitions: int,
-        gbyte_to_transfer: float,
-    ):
-        self.n_instances = n_instances
-        self.n_connections = n_connections
-        self.n_partitions = n_partitions
-        self.gbyte_to_transfer = gbyte_to_transfer
-        super().__init__(src_provider, src_region, dst_providers, dst_regions)
+    def __init__(self, src_provider: str, src_region, dst_providers: List[str], dst_regions: List[str]):
+        super().__init__(src_provider, src_region, dst_providers, dst_regions, n_instances, n_connections, n_partitions, gbyte_to_transfer)
 
     def plan(self) -> BroadcastReplicationTopology:
         h = self.G.copy()
@@ -163,24 +139,11 @@ class BroadcastMDSTPlanner(BroadcastPlanner):
 
 
 class BroadcastHSTPlanner(BroadcastPlanner):
-    def __init__(
-        self,
-        src_provider: str,
-        src_region,
-        dst_providers: str,
-        dst_regions: str,
-        n_instances: int,
-        n_connections: int,
-        n_partitions: int,
-        gbyte_to_transfer: float,
-    ):
-        self.n_instances = n_instances
-        self.n_connections = n_connections
-        self.n_partitions = n_partitions
-        self.gbyte_to_transfer = gbyte_to_transfer
-        super().__init__(src_provider, src_region, dst_providers, dst_regions)
+    def __init__(self, src_provider: str, src_region, dst_providers: List[str], dst_regions: List[str]):
+        super().__init__(src_provider, src_region, dst_providers, dst_regions, n_instances, n_connections, n_partitions, gbyte_to_transfer)
 
     def plan(self, hop_limit=3000) -> BroadcastReplicationTopology:
+        # TODO: not usable now
         source_v, dest_v = source_region, dest_regions
 
         h = self.G.copy()
@@ -266,10 +229,11 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         self,
         src_provider: str,
         src_region,
-        dst_provider: str,
-        dst_region: str,
+        dst_providers: List[str],
+        dst_regions: List[str],
         max_instances: int,
         max_connections: int,
+        n_connections: int,
         n_partitions: int,
         gbyte_to_transfer: float,
         target_time: float,
@@ -282,7 +246,16 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             num_partitions=n_partitions,
             required_time_budget=target_time,
         )
-        super().__init__(src_provider, src_region, dst_providers, dst_regions)
+        super().__init__(
+            src_provider,
+            src_region,
+            dst_providers,
+            dst_regions,
+            n_instances=None,
+            n_connections=n_connections,
+            n_partitions=n_partitions,
+            gbyte_to_transfer=gbyte_to_transfer,
+        )
 
     @staticmethod
     def choose_solver():
