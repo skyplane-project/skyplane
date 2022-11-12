@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Set
 
+import networkx as nx
+
 from skyplane.chunk import ChunkRequest
 from skyplane.obj_store.object_store_interface import ObjectStoreObject
 from skyplane.replicate.replication_plan import (
@@ -81,7 +83,13 @@ class BroadcastReplicationTopology(ReplicationTopology):
         return {n for n in nodes if isinstance(n, ReplicationTopologyGateway)}
 
     def add_instance_instance_edge(
-        self, src_region: str, src_instance: int, dest_region: str, dest_instance: int, num_connections: int, partition_ids: List[int]
+        self,
+        src_region: str,
+        src_instance: int,
+        dest_region: str,
+        dest_instance: int,
+        num_connections: int,
+        partition_ids: List[int],
     ):
         """Add relay edge between two instances."""
         src_gateway = ReplicationTopologyGateway(src_region, src_instance)

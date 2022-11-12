@@ -9,7 +9,7 @@ if __name__ == "__main__":
     dp = client.broadcast_dataplane("aws", "us-east-1", ["aws", "gcp"], ["us-east-2", "europe-central2-a"], n_vms=1)
     with dp.auto_deprovision():
         dp.provision(spinner=True)
-        dp.queue_copy(
+        dp.queue_broadcast_copy(
             "s3://skycamp-demo-src/synset_labels.txt",
             [
                 "s3://skycamp-demo-us-east-2/imagenet-bucket/synset_labels.txt",

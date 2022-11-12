@@ -191,18 +191,31 @@ class BroadcastDataplane(Dataplane):
     def queue_copy(
         self,
         src: str,
-        dst: List[str],
+        dst: str,
         recursive: bool = False,
     ) -> str:
-        job = CopyJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
-        logger.fs.debug(f"[SkyplaneClient] Queued copy job {job}")
-        self.jobs_to_dispatch.append(job)
-        return job.uuid
+        raise NotImplementedError()
 
     def queue_sync(
         self,
         src: str,
         dst: str,
+        recursive: bool = False,
+    ) -> str:
+        raise NotImplementedError()
+
+    def queue_broadcast_copy(
+        self,
+        src: str,
+        dst: List[str],  # type: ignore
+        recursive: bool = False,
+    ) -> str:
+        raise NotImplementedError("Copy is not yet supported for broadcast")
+
+    def queue_broadcast_sync(
+        self,
+        src: str,
+        dst: List[str],
         recursive: bool = False,
     ) -> str:
         raise NotImplementedError("Sync is not yet supported for broadcast")

@@ -179,7 +179,7 @@ class BroadcastSolver:
                 topo.add_instance_objstore_edge(dst_region, i, dst_region, partition_ids)
 
         # set networkx solution graph in topo
-        topo.cost_per_gb = cost_egress / gbyte_to_transfer  # cost per gigabytes
+        topo.cost_per_gb = cost_egress / partition_size_in_GB  # cost per gigabytes
         return topo
 
     def get_throughput_grid(self):

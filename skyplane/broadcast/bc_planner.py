@@ -153,7 +153,7 @@ class BroadcastMDSTPlanner(BroadcastPlanner):
         h = self.G.copy()
         h.remove_edges_from(list(h.in_edges(self.src_region)) + list(nx.selfloop_edges(h)))
 
-        DST_graph = Edmonds(h.subgraph([self.src_region] + self.dst_regions))
+        DST_graph = nx.algorithms.tree.Edmonds(h.subgraph([self.src_region] + self.dst_regions))
         opt_DST = DST_graph.find_optimum(attr="cosst", kind="min", preserve_attrs=True, style="arborescence")
 
         # Construct MDST graph
@@ -273,12 +273,21 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         dst_providers: List[str],
         dst_regions: List[str],
         max_instances: int,
-        max_connections: int,
         n_connections: int,
         n_partitions: int,
         gbyte_to_transfer: float,
         target_time: float,
     ):
+        super().__init__(
+            src_provider,
+            src_region,
+            dst_providers,
+            dst_regions,
+            n_instances=max_instances,
+            n_connections=n_connections,
+            n_partitions=n_partitions,
+            gbyte_to_transfer=gbyte_to_transfer,
+        )
         self.problem = BroadcastProblem(
             src=src_region,
             dsts=dst_regions,
@@ -286,16 +295,6 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             instance_limit=max_instances,
             num_partitions=n_partitions,
             required_time_budget=target_time,
-        )
-        super().__init__(
-            src_provider,
-            src_region,
-            dst_providers,
-            dst_regions,
-            n_instances=None,
-            n_connections=n_connections,
-            n_partitions=n_partitions,
-            gbyte_to_transfer=gbyte_to_transfer,
         )
 
     @staticmethod

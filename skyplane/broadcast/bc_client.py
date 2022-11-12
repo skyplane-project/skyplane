@@ -60,28 +60,58 @@ class SkyplaneBroadcastClient:
         num_connections: int = 32,
         num_partitions: int = 2,
         gbyte_to_transfer: float = 10,
+        target_time: float = 1,
     ) -> BroadcastDataplane:
         # TODO: did not change the data plan yet
         if type == "direct":
             planner = BroadcastDirectPlanner(
-                src_cloud_provider, src_region, dst_cloud_providers, dst_regions, n_vms, num_connections, num_partitions, gbyte_to_transfer
+                src_cloud_provider,
+                src_region,
+                dst_cloud_providers,
+                dst_regions,
+                n_vms,
+                num_connections,
+                num_partitions,
+                gbyte_to_transfer,
             )
         elif type == "MDST":
             planner = BroadcastMDSTPlanner(
-                src_cloud_provider, src_region, dst_cloud_providers, dst_regions, n_vms, num_connections, num_partitions, gbyte_to_transfer
+                src_cloud_provider,
+                src_region,
+                dst_cloud_providers,
+                dst_regions,
+                n_vms,
+                num_connections,
+                num_partitions,
+                gbyte_to_transfer,
             )
         elif type == "HST":
             # TODO: not usable now
             planner = BroadcastHSTPlanner(
-                src_cloud_provider, src_region, dst_cloud_providers, dst_regions, n_vms, num_connections, num_partitions, gbyte_to_transfer
+                src_cloud_provider,
+                src_region,
+                dst_cloud_providers,
+                dst_regions,
+                n_vms,
+                num_connections,
+                num_partitions,
+                gbyte_to_transfer,
             )
         elif type == "ILP":
             planner = BroadcastILPSolverPlanner(
-                src_cloud_provider, src_region, dst_cloud_providers, dst_regions, n_vms, num_connections, num_partitions, gbyte_to_transfer
+                src_cloud_provider,
+                src_region,
+                dst_cloud_providers,
+                dst_regions,
+                n_vms,
+                num_connections,
+                num_partitions,
+                gbyte_to_transfer,
+                target_time,
             )
         else:
             raise NotImplementedError(f"Dataplane type {type} not implemented")
 
         topo = planner.plan()
         logger.fs.info(f"[SkyplaneClient.direct_dataplane] Topology: {topo.to_json()}")
-        return Dataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
+        return BroadcastDataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
