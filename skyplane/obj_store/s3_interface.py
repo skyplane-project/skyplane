@@ -232,12 +232,8 @@ class S3Interface(ObjectStoreInterface):
         dst_key, url = str(dst_key), str(url)
         s3_client = self._s3_client()
 
-        os.system("touch ~/.netrc")
-        os.system(f'echo "machine urs.earthdata.nasa.gov login {username} password {password}" >> ~/.netrc')
-        os.system("chmod 0600 ~/.netrc")
-        os.system("touch ~/.urs_cookies")
-
         response = requests.get(url, stream=True)
-        chunk_req.chunk.chunk_length_bytes = response.headers["Content-length"]  # Update file size
+        if response.status_code != 200:
+            raise exceptions.SkyplaneException(f"Failed to download {url}: {response.status_code} {response.text}")
+        chunk_req.chunk.chunk_length_bytes = response.headers["Content-Length"]  # Update file size
         s3_client.upload_fileobj(response.raw, self.bucket_name, dst_key)
-        # time.sleep(10) # To avoid high I/O processing complain from NASA server

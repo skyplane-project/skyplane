@@ -66,9 +66,15 @@ def download_pangeo(
     max_instances: int = typer.Option(cloud_config.get_flag("max_instances"), "--max-instances", "-n", help="Number of gateways"),
     solver_target_tput_per_vm_gbits: float = typer.Option(4, help="Solver option: Required throughput in Gbps"),
     solver_verbose: bool = False,
+    username: str = typer.Option(None, help="Username for NASA Earthdata login"),
+    password: str = typer.Option(None, help="Password for NASA Earthdata login"),
+    debug: bool = False,
 ):
     print_header()
-    credentials = skyplane.cli.pangeo_util.get_credentials()
+    if username is None or password is None:
+        credentials = skyplane.cli.pangeo_util.get_credentials()
+    else:
+        credentials = (username, password)
     if credentials is None:
         console.print("No .netrc credentials found.")
         return
@@ -114,13 +120,12 @@ def download_pangeo(
     transfer_stats = launch_replication_job_http(
         topo=topo,
         job=job,
-        debug=False,
         reuse_gateways=reuse_gateways,
         use_bbr=cloud_config.get_flag("bbr"),
         use_compression=cloud_config.get_flag("compress") if src_region_tag != dst_region_tag else False,
         use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region_tag != dst_region_tag else False,
         use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region_tag != dst_region_tag else False,
-        aws_instance_class="m5.xlarge",  # Use a smaller instance
+        aws_instance_class=cloud_config.get_flag("aws_instance_class"),
         aws_use_spot_instances=cloud_config.get_flag("aws_use_spot_instances"),
         azure_instance_class=cloud_config.get_flag("azure_instance_class"),
         azure_use_spot_instances=cloud_config.get_flag("azure_use_spot_instances"),
@@ -133,6 +138,7 @@ def download_pangeo(
         multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
         error_reporting_args=args,
         host_uuid=cloud_config.anon_clientid,
+        debug=debug,
     )
     if transfer_stats.monitor_status == "completed":
         console.print(f"\n:white_check_mark: [bold green]Download completed successfully[/bold green]")

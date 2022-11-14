@@ -328,6 +328,10 @@ class Server:
             docker_envs["E2EE_KEY_FILE"] = f"/pkg/data/{e2ee_key_file}"
             docker_run_flags += f" -v /tmp/{e2ee_key_file}:/pkg/data/{e2ee_key_file}"
 
+        # copy .netrc file
+        self.upload_file(os.path.expanduser("~/.netrc"), "/tmp/.netrc")
+        docker_run_flags += " -v /tmp/.netrc:/root/.netrc"
+
         docker_run_flags += " " + " ".join(f"--env {k}={v}" for k, v in docker_envs.items())
         gateway_daemon_cmd = f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
         gateway_daemon_cmd += f" --outgoing-ports '{json.dumps(outgoing_ports)}'"
