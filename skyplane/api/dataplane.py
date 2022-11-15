@@ -111,7 +111,7 @@ class Dataplane:
             for node in self.topology.gateway_nodes:
                 instance = servers_by_region[node.region].pop()
                 self.bound_nodes[node] = instance
-            logger.fs.debug(f"[Dataplane.provision] {self.bound_nodes=}")
+            logger.fs.debug(f"[Dataplane.provision] bound_nodes = {self.bound_nodes}")
             gateway_bound_nodes = self.bound_nodes.copy()
 
             # start gateways
@@ -150,7 +150,7 @@ class Dataplane:
             )
 
         # todo: move server.py:start_gateway here
-        logger.fs.info(f"Using {gateway_docker_image=}")
+        logger.fs.info(f"Using docker image {gateway_docker_image}")
         e2ee_key_bytes = nacl.utils.random(nacl.secret.SecretBox.KEY_SIZE)
 
         jobs = []

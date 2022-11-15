@@ -172,5 +172,5 @@ def profile_generator(gen_in: Generator[T, None, None], desc: Optional[str] = No
         total_time += end - start
         count += 1
         if count % log_every == 0:
-            logger.fs.debug(f"[profile_generator] {desc=}: {total_time / count * 1000:.4f} ms per item")
+            logger.fs.debug(f"[profile_generator] {desc}: {total_time / count * 1000:.4f}ms per item")
         yield item

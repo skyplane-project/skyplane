@@ -136,7 +136,7 @@ class S3Interface(ObjectStoreInterface):
         s3_client = self._s3_client()
         assert len(src_object_name) > 0, f"Source object name must be non-empty: '{src_object_name}'"
         args = {"Bucket": self.bucket_name, "Key": src_object_name}
-        assert not (offset_bytes and not size_bytes), f"Cannot specify {offset_bytes=} without {size_bytes=}"
+        assert not (offset_bytes and not size_bytes), f"Cannot specify {offset_bytes} without {size_bytes}"
         if offset_bytes is not None and size_bytes is not None:
             args["Range"] = f"bytes={offset_bytes}-{offset_bytes + size_bytes - 1}"
         if self.requester_pays:
