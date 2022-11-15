@@ -6,6 +6,7 @@ from pathlib import Path
 
 from typing import Any, Optional
 
+from skyplane.api.auth_config import AWSConfig, AzureConfig, GCPConfig
 from skyplane.exceptions import BadConfigException
 
 _FLAG_TYPES = {
@@ -202,6 +203,13 @@ class SkyplaneConfig:
 
         with path.open("w") as f:
             config.write(f)
+
+    def to_api_config(self):
+        aws_config = AWSConfig(aws_enabled=self.aws_enabled)
+        # todo: fix azure config support by collecting azure umi name and resource group and store in skyplane config
+        azure_config = None
+        gcp_config = GCPConfig(gcp_project_id=self.gcp_project_id, gcp_enabled=self.gcp_enabled)
+        return aws_config, azure_config, gcp_config
 
     def valid_flags(self):
         return list(_FLAG_TYPES.keys())
