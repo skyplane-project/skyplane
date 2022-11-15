@@ -39,7 +39,7 @@ from skyplane.cli.cli_impl.cp_replicate_fallback import (
     replicate_small_sync_cmd,
 )
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
-from skyplane.cli.common import console, print_header, print_stats_completed, query_instances
+from skyplane.cli.common import console, print_header, print_stats_completed, query_instances, to_api_config
 from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
 from skyplane.cli.progress_reporter.simple_reporter import SimpleReporter
 from skyplane.config import SkyplaneConfig
@@ -56,6 +56,7 @@ app.command()(cli_internal.replicate_random)
 app.add_typer(skyplane.cli.experiments.app, name="experiments")
 app.add_typer(skyplane.cli.cli_cloud.app, name="cloud")
 app.add_typer(skyplane.cli.cli_config.app, name="config")
+
 
 @app.command()
 def cp2(
@@ -163,7 +164,7 @@ def cp2(
         os.system(small_transfer_cmd)
         return 0
 
-    aws_config, gcp_config, azure_config = cloud_config.to_api_config()
+    aws_config, gcp_config, azure_config = to_api_config(cloud_config)
     client = SkyplaneClient(aws_config=aws_config, gcp_config=gcp_config, azure_config=azure_config)
     dp = client.dataplane(provider_src, src_region_tag, provider_dst, dst_region_tag, n_vms=max_instances)
     with dp.auto_deprovision():
@@ -173,12 +174,13 @@ def cp2(
 
         # launch the transfer in a background thread
         tracker = dp.run_async()
-        
+
         reporter = SimpleReporter(tracker)
 
         # monitor the transfer
         while reporter.update():
             time.sleep(1)
+
 
 @app.command()
 def cp(

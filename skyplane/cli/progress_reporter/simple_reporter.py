@@ -1,11 +1,9 @@
 import time
 from skyplane.api.dataplane import TransferProgressTracker
 
+
 class SimpleReporter:
-    def __init__(
-        self,
-        tracker: TransferProgressTracker
-    ):
+    def __init__(self, tracker: TransferProgressTracker):
         self.tracker = tracker
 
     def update(self):
@@ -16,4 +14,3 @@ class SimpleReporter:
             return True
         else:
             return False
-    

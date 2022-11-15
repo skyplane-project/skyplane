@@ -5,6 +5,7 @@ import typer
 from rich.console import Console
 
 from skyplane import compute
+from skyplane.api.auth_config import AWSConfig, AzureConfig, GCPConfig
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
 
@@ -80,3 +81,11 @@ def query_instances():
     ):
         instances.extend(instance_list)
     return instances
+
+
+def to_api_config(config):
+    aws_config = AWSConfig(aws_enabled=config.aws_enabled)
+    # todo: fix azure config support by collecting azure umi name and resource group and store in skyplane config
+    azure_config = None
+    gcp_config = GCPConfig(gcp_project_id=config.gcp_project_id, gcp_enabled=config.gcp_enabled)
+    return aws_config, azure_config, gcp_config
