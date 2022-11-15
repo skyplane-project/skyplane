@@ -1,18 +1,19 @@
 import logging
+from collections import defaultdict
 import logging.handlers
 import os
 import threading
 from multiprocessing import Queue
 from queue import Empty
 from traceback import TracebackException
+from typing import Dict, List
 
 from flask import Flask, jsonify, request
-from typing import Dict, List
 from werkzeug.serving import make_server
 
 from skyplane.chunk import ChunkRequest, ChunkState
 from skyplane.gateway.chunk_store import ChunkStore
-from skyplane.gateway.gateway_receiver import GatewayReceiver
+from skyplane.gateway.operators.gateway_receiver import GatewayReceiver
 from skyplane.utils import logger
 
 
@@ -31,7 +32,14 @@ class GatewayDaemonAPI(threading.Thread):
     """
 
     def __init__(
-        self, chunk_store: ChunkStore, gateway_receiver: GatewayReceiver, error_event, error_queue: Queue, host="0.0.0.0", port=8081
+        self,
+        chunk_store: ChunkStore,
+        gateway_receiver: GatewayReceiver,
+        error_event,
+        error_queue: Queue,
+        terminal_operators: Dict[str, List[str]] = None,
+        host="0.0.0.0",
+        port=8081,
     ):
         super().__init__()
         self.app = Flask("gateway_metadata_server")
@@ -39,6 +47,7 @@ class GatewayDaemonAPI(threading.Thread):
         self.gateway_receiver = gateway_receiver
         self.error_event = error_event
         self.error_queue = error_queue
+        self.terminal_operators = terminal_operators
         self.error_list: List[TracebackException] = []
         self.error_list_lock = threading.Lock()
 
@@ -55,8 +64,13 @@ class GatewayDaemonAPI(threading.Thread):
         self.url = "http://{}:{}".format(host, port)
 
         # chunk status log
+        self.chunk_status: Dict[int, str] = {}  # TODO: maintain as chunk_status_log is dumped
+        self.chunk_requests: Dict[int, ChunkRequest] = {}
+        self.sender_compressed_sizes: Dict = {}  # TODO: maintain as chunks are completed
         self.chunk_status_log: List[Dict] = []
         self.chunk_status_log_lock = threading.Lock()
+
+        self.chunk_completions = defaultdict(list)
 
         # socket profiles
         self.sender_socket_profiles: List[Dict] = []
@@ -66,6 +80,55 @@ class GatewayDaemonAPI(threading.Thread):
 
         logging.getLogger("werkzeug").setLevel(logging.WARNING)
         self.server = make_server(host, port, self.app, threaded=True)
+
+    def pull_chunk_status_queue(self) -> List[Dict]:
+        print("pulling queue")
+        out_events = []
+        while True:
+            try:
+                elem = self.chunk_store.chunk_status_queue.get_nowait()
+                print("status queue:", elem)
+                if elem["state"] == ChunkState.upload_complete.name:
+                    self.chunk_completions[elem["chunk_id"]].append(elem["state"])
+
+                chunk_id = elem["chunk_id"]
+
+                if self.chunk_status.get(elem["chunk_id"], None) != ChunkState.upload_complete.name and len(
+                    self.chunk_completions[elem["chunk_id"]]
+                ) == len(self.terminal_operators[elem["partition"]]):
+                    self.chunk_status[elem["chunk_id"]] = ChunkState.upload_complete.name
+                    print(
+                        f"chunk {chunk_id}: complete",
+                        elem["chunk_id"],
+                        "all operators have uploaded",
+                        len(self.terminal_operators[elem["partition"]]),
+                        self.terminal_operators,
+                    )
+                    # remove chunk file
+                    chunk_file_path = self.chunk_store.get_chunk_file_path(elem["chunk_id"])
+                    if os.path.exists(chunk_file_path):
+                        print(f"chunk {chunk_id}: REMOVING FILE")
+                        chunk_file_path.unlink()
+
+                    # record compressed size
+                    if "metadata" in elem and "compressed_size_bytes" in elem["metadata"]:
+                        self.sender_compressed_sizes[elem["chunk_id"]] = elem["metadata"]["compressed_size_bytes"]
+                else:
+                    if elem["state"] == ChunkState.upload_complete.name:
+                        print(
+                            f"chunk {chunk_id}: not complete",
+                            self.chunk_completions[elem["chunk_id"]],
+                            self.terminal_operators[elem["partition"]],
+                            elem["partition"],
+                        )
+                    else:
+                        print(f"chunk {chunk_id}: {elem['state']}")
+
+                out_events.append(elem)
+            except Empty:
+                break
+
+        self.chunk_status_log.extend(out_events)
 
     def run(self):
         self.server.serve_forever()
@@ -124,14 +187,17 @@ class GatewayDaemonAPI(threading.Thread):
 
     def register_request_routes(self, app):
         def make_chunk_req_payload(chunk_req: ChunkRequest):
-            state = self.chunk_store.get_chunk_state(chunk_req.chunk.chunk_id)
+            state = self.chunk_status[chunk_req.chunk.chunk_id]
             state_name = state.name if state is not None else "unknown"
             return {"req": chunk_req.as_dict(), "state": state_name}
 
-        def get_chunk_reqs(state=None) -> Dict[str, Dict]:
+        def get_chunk_reqs(state=None) -> Dict[int, Dict]:
             out = {}
-            for chunk_req in self.chunk_store.get_chunk_requests(state):
-                out[chunk_req.chunk.chunk_id] = make_chunk_req_payload(chunk_req)
+            for chunk_req, chunk_state in self.chunk_status.items():
+                if state is None or chunk_state == state:
+                    out[chunk_req.chunk.chunk_id] = make_chunk_req_payload(chunk_req)
+            # for chunk_req in self.chunk_store.get_chunk_requests(state):
+            #    out[chunk_req.chunk.chunk_id] = make_chunk_req_payload(chunk_req)
             return out
 
         def add_chunk_req(body, state):
@@ -149,6 +215,7 @@ class GatewayDaemonAPI(threading.Thread):
         @app.route("/api/v1/chunk_requests", methods=["GET"])
         def get_chunk_requests():
             state_param = request.args.get("state")
+            print("GOT REQUEST")
             if state_param is not None:
                 try:
                     state = ChunkState.from_str(state_param)
@@ -163,9 +230,9 @@ class GatewayDaemonAPI(threading.Thread):
             return jsonify({"chunk_requests": {k: v for k, v in get_chunk_reqs().items() if v["state"] != "upload_complete"}})
 
         # lookup chunk request given chunk worker_id
-        @app.route("/api/v1/chunk_requests/<chunk_id>", methods=["GET"])
-        def get_chunk_request(chunk_id: str):
-            chunk_req = self.chunk_store.get_chunk_request(chunk_id)
+        @app.route("/api/v1/chunk_requests/<int:chunk_id>", methods=["GET"])
+        def get_chunk_request(chunk_id: int):
+            chunk_req = self.chunk_requests.get(chunk_id)
             if chunk_req:
                 return jsonify({"chunk_requests": [make_chunk_req_payload(chunk_req)]})
             else:
@@ -174,14 +241,16 @@ class GatewayDaemonAPI(threading.Thread):
         # add a new chunk request with default state registered
         @app.route("/api/v1/chunk_requests", methods=["POST"])
         def add_chunk_request():
+            print("GOT CHUNK REQUEST", request.json)
             state_param = request.args.get("state", "registered")
             n_added = add_chunk_req(request.json, ChunkState.from_str(state_param))
+            # TODO: Add to chunk manager queue
             return jsonify({"status": "ok", "n_added": n_added})
 
         # update chunk request
-        @app.route("/api/v1/chunk_requests/<chunk_id>", methods=["PUT"])
-        def update_chunk_request(chunk_id: str):
-            chunk_req = self.chunk_store.get_chunk_request(chunk_id)
+        @app.route("/api/v1/chunk_requests/<int:chunk_id>", methods=["PUT"])
+        def update_chunk_request(chunk_id: int):
+            chunk_req = self.chunk_requests.get(chunk_id)
             if chunk_req is None:
                 return jsonify({"error": f"Chunk {chunk_id} not found"}), 404
             else:
@@ -190,7 +259,7 @@ class GatewayDaemonAPI(threading.Thread):
                         state = ChunkState.from_str(request.args.get("state"))
                     except ValueError:
                         return jsonify({"error": "invalid state"}), 400
-                    self.chunk_store.set_chunk_state(chunk_id, state)
+                    self.chunk_store.log_chunk_state(chunk_req, state)
                     return jsonify({"status": "ok"})
                 else:
                     return jsonify({"error": "update not supported"}), 400
@@ -198,8 +267,8 @@ class GatewayDaemonAPI(threading.Thread):
         # list chunk status log
         @app.route("/api/v1/chunk_status_log", methods=["GET"])
         def get_chunk_status_log():
-            with self.chunk_status_log_lock:
-                self.chunk_status_log.extend(self.chunk_store.drain_chunk_status_queue())
+            with self.chunk_status_log_lock:  # TODO: why is this needed?
+                # self.chunk_status_log.extend(self.chunk_store.drain_chunk_status_queue())
                 return jsonify({"chunk_status_log": self.chunk_status_log})
 
     def register_error_routes(self, app):
@@ -231,8 +300,9 @@ class GatewayDaemonAPI(threading.Thread):
         @app.route("/api/v1/profile/compression", methods=["GET"])
         def get_receiver_compression_profile():
             total_size_compressed_bytes, total_size_uncompressed_bytes = 0, 0
-            for k, v in self.chunk_store.sender_compressed_sizes.items():
+            for k, v in self.sender_compressed_sizes.items():
                 total_size_compressed_bytes += v
+                # TODO: figure out how to get final size of chunks
                 total_size_uncompressed_bytes += self.chunk_store.get_chunk_request(k).chunk.chunk_length_bytes
             return jsonify(
                 {

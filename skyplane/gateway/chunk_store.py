@@ -1,14 +1,17 @@
 import subprocess
+import os
+from collections import defaultdict
 from datetime import datetime
 from multiprocessing import Manager, Queue
 from os import PathLike
 from pathlib import Path
 from queue import Empty
-
 from typing import Dict, List, Optional
 
 from skyplane.chunk import ChunkRequest, ChunkState
 from skyplane.utils import logger
+
+from skyplane.gateway.gateway_queue import GatewayQueue
 
 
 class ChunkStore:
@@ -22,119 +25,55 @@ class ChunkStore:
             chunk_file.unlink()
 
         # multiprocess-safe concurrent structures
-        self.manager = Manager()
-        self.chunk_requests: Dict[str, ChunkRequest] = self.manager.dict()  # type: ignore
-        self.chunk_status: Dict[str, ChunkState] = self.manager.dict()  # type: ignore
+        # TODO: Remove this and use queues instead
+        # self.manager = Manager()
+        # self.chunk_requests: Dict[int, ChunkRequest] = self.manager.dict()  # type: ignore
+        # self.chunk_status: Dict[int, ChunkState] = self.manager.dict()  # type: ignore
+        # self.chunk_requests: Dict[int, ChunkRequest] = {}  # type: ignore
 
-        # state log
+        # queues of incoming chunk requests for each partition from gateway API (passed to operator graph)
+        self.chunk_requests: Dict[int, GatewayQueue] = {}
+
+        # queue of chunk status updates coming from operators (passed to gateway API)
         self.chunk_status_queue: Queue[Dict] = Queue()
 
-        # metric log
-        self.sender_compressed_sizes: Dict[str, float] = self.manager.dict()  # type: ignore
+        self.chunk_completions = defaultdict(list)
 
-    def get_chunk_file_path(self, chunk_id: str) -> Path:
-        return self.chunk_dir / f"{chunk_id}.chunk"
+    def add_partition(self, partition_id: int):
+        if partition_id in self.chunk_requests:
+            raise ValueError(f"Partition {partition_id} already exists")
+        self.chunk_requests[partition_id] = GatewayQueue()
+
+    def get_chunk_file_path(self, chunk_id: int) -> Path:
+        return self.chunk_dir / f"{chunk_id:05d}.chunk"
 
     ###
     # ChunkState management
     ###
-    def get_chunk_state(self, chunk_id: str) -> Optional[ChunkState]:
-        return self.chunk_status[chunk_id] if chunk_id in self.chunk_status else None
+    def log_chunk_state(self, chunk_req: ChunkRequest, new_status: ChunkState, metadata: Optional[Dict] = None):
+        rec = {
+            "chunk_id": chunk_req.chunk.chunk_id,
+            "partition": chunk_req.chunk.partition_id,
+            "state": new_status.name,
+            "time": str(datetime.utcnow().isoformat()),
+        }
 
-    def set_chunk_state(self, chunk_id: str, new_status: ChunkState, log_metadata: Optional[Dict] = None):
-        self.chunk_status[chunk_id] = new_status
-        rec = {"chunk_id": chunk_id, "state": new_status.name, "time": str(datetime.utcnow().isoformat())}
-        if log_metadata is not None:
-            rec.update(log_metadata)
+        if metadata is not None:
+            rec.update(metadata)
+
+        # add to status queue
         self.chunk_status_queue.put(rec)
-
-    def drain_chunk_status_queue(self) -> List[Dict]:
-        out_events = []
-        while True:
-            try:
-                elem = self.chunk_status_queue.get_nowait()
-                out_events.append(elem)
-            except Empty:
-                break
-        return out_events
-
-    def state_queue_download(self, chunk_id: str):
-        state = self.get_chunk_state(chunk_id)
-        if state in [ChunkState.registered, ChunkState.download_queued]:
-            self.set_chunk_state(chunk_id, ChunkState.download_queued)
-        else:
-            raise ValueError(f"Invalid transition queue_download from {state} (id={chunk_id})")
-
-    def state_start_download(self, chunk_id: str, receiver_id: Optional[str] = None):
-        state = self.get_chunk_state(chunk_id)
-        if state in [ChunkState.download_queued, ChunkState.download_in_progress]:
-            self.set_chunk_state(chunk_id, ChunkState.download_in_progress, {"receiver_id": receiver_id})
-        else:
-            raise ValueError(f"Invalid transition start_download from {state}")
-
-    def state_finish_download(self, chunk_id: str, receiver_id: Optional[str] = None):
-        state = self.get_chunk_state(chunk_id)
-        if state in [ChunkState.download_in_progress, ChunkState.downloaded]:
-            self.set_chunk_state(chunk_id, ChunkState.downloaded, {"receiver_id": receiver_id})
-        else:
-            raise ValueError(f"Invalid transition finish_download from {state} (id={chunk_id})")
-
-    def state_queue_upload(self, chunk_id: str):
-        state = self.get_chunk_state(chunk_id)
-        if state in [ChunkState.downloaded, ChunkState.upload_queued]:
-            self.set_chunk_state(chunk_id, ChunkState.upload_queued)
-        else:
-            raise ValueError(f"Invalid transition upload_queued from {state} (id={chunk_id})")
-
-    def state_start_upload(self, chunk_id: str, sender_id: Optional[str] = None):
-        state = self.get_chunk_state(chunk_id)
-        if state in [ChunkState.upload_queued, ChunkState.upload_in_progress]:
-            self.set_chunk_state(chunk_id, ChunkState.upload_in_progress, {"sender_id": sender_id})
-        else:
-            raise ValueError(f"Invalid transition start_upload from {state} (id={chunk_id})")
-
-    def state_finish_upload(self, chunk_id: str, sender_id: Optional[str] = None, compressed_size_bytes: Optional[int] = None):
-        state = self.get_chunk_state(chunk_id)
-        if state in [ChunkState.upload_in_progress, ChunkState.upload_complete]:
-            self.set_chunk_state(chunk_id, ChunkState.upload_complete, {"sender_id": sender_id})
-            if compressed_size_bytes is not None:
-                self.sender_compressed_sizes[chunk_id] = compressed_size_bytes
-        else:
-            raise ValueError(f"Invalid transition finish_upload from {state} (id={chunk_id})")
-
-    def state_fail(self, chunk_id: str):
-        if self.get_chunk_state(chunk_id) != ChunkState.upload_complete:
-            self.set_chunk_state(chunk_id, ChunkState.failed)
-        else:
-            raise ValueError(f"Invalid transition fail from {self.get_chunk_state(chunk_id)} (id={chunk_id})")
 
     ###
     # Chunk management
     ###
-    def get_chunk_requests(self, status: Optional[ChunkState] = None) -> List[ChunkRequest]:
-        if status is None:
-            return list(self.chunk_requests.values())
-        else:
-            return [req for i, req in self.chunk_requests.items() if self.get_chunk_state(i) == status]
+    def add_chunk_request(self, chunk_request: ChunkRequest, state: ChunkState = ChunkState.registered):
 
-    def get_chunk_request(self, chunk_id: str) -> ChunkRequest:
-        if chunk_id not in self.chunk_requests:
-            raise ValueError(f"ChunkRequest {chunk_id} not found")
-        return self.chunk_requests[chunk_id]
+        self.chunk_requests[chunk_request.chunk.partition_id].put(chunk_request)
+        # TODO: consider adding to partition queues here?
 
-    def add_chunk_request(self, chunk_request: ChunkRequest, state=ChunkState.registered):
-        self.set_chunk_state(chunk_request.chunk.chunk_id, state)
-        self.chunk_requests[chunk_request.chunk.chunk_id] = chunk_request
-
-    def update_chunk_checksum(self, chunk_id: str, checksum: Optional[bytes]):
-        cr = self.chunk_requests[chunk_id]
-        cr.chunk.checksum = checksum
-        self.chunk_requests[chunk_id] = cr
-
-    def update_chunk_mime_type(self, chunk_id: str, mime_type: Optional[str]):
-        cr = self.chunk_requests[chunk_id]
-        cr.chunk.mime_type = mime_type
-        self.chunk_requests[chunk_id] = cr
+        # update state
+        self.log_chunk_state(chunk_request, state)
 
     # Memory space calculation
     def remaining_bytes(self):

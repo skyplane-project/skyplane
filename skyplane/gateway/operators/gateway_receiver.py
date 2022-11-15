@@ -6,22 +6,29 @@ import time
 import traceback
 from contextlib import closing
 from multiprocessing import Event, Process, Value, Queue
+from typing import Optional, Tuple
 
 import lz4.frame
 import nacl.secret
-from typing import Optional, Tuple
 
+from skyplane import MB
 from skyplane.chunk import WireProtocolHeader
 from skyplane.gateway.cert import generate_self_signed_certificate
 from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.utils import logger
-from skyplane.utils.definitions import MB
 from skyplane.utils.timer import Timer
+
+from skyplane.gateway.gateway_queue import GatewayQueue
+
+from skyplane.chunk import ChunkRequest, ChunkState
+
+from typing import Dict
 
 
 class GatewayReceiver:
     def __init__(
         self,
+        handle: str,
         region: str,
         chunk_store: ChunkStore,
         error_event,
@@ -32,6 +39,8 @@ class GatewayReceiver:
         use_compression: bool = True,
         e2ee_key_bytes: Optional[bytes] = None,
     ):
+
+        self.handle = handle
         self.region = region
         self.chunk_store = chunk_store
         self.error_event = error_event
@@ -132,23 +141,33 @@ class GatewayReceiver:
         assert len(self.server_ports) == 0
         assert len(self.server_processes) == 0
 
+    def stop_workers(self):
+        self.stop_servers(self)
+
     def recv_chunks(self, conn: socket.socket, addr: Tuple[str, int]):
         server_port = conn.getsockname()[1]
         chunks_received = []
         while True:
             # receive header and write data to file
+            logger.debug(f"[receiver:{server_port}] Blocking for next header")
             chunk_header = WireProtocolHeader.from_socket(conn)
-            chunk_request = self.chunk_store.get_chunk_request(chunk_header.chunk_id)
-            should_decrypt = self.e2ee_secretbox is not None and chunk_request.dst_region == self.region
-            should_decompress = chunk_header.is_compressed and chunk_request.dst_region == self.region
+            logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} Got chunk header {chunk_header}")
+
+            # TODO: this wont work
+            # chunk_request = self.chunk_store.get_chunk_request(chunk_header.chunk_id)
+
+            # should_decrypt = self.e2ee_secretbox is not None and chunk_request.dst_region == self.region
+            # should_decompress = chunk_header.is_compressed and chunk_request.dst_region == self.region
 
             # wait for space
+            # TODO: implement same fix as for gen_data
             while self.chunk_store.remaining_bytes() < chunk_header.data_len * self.max_pending_chunks:
+                logger.debug(f"[reciever] Chunk store full, waiting before recieving more chunks")
                 time.sleep(0.1)
 
             # get data
-            self.chunk_store.state_queue_download(chunk_header.chunk_id)
-            self.chunk_store.state_start_download(chunk_header.chunk_id, f"receiver:{self.worker_id}")
+            # self.chunk_store.state_queue_download(chunk_header.chunk_id)
+            # self.chunk_store.state_start_download(chunk_header.chunk_id, f"receiver:{self.worker_id}")
             logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} wire header length {chunk_header.data_len}")
             with Timer() as t:
                 with self.chunk_store.get_chunk_file_path(chunk_header.chunk_id).open("wb") as f:
@@ -170,20 +189,15 @@ class GatewayReceiver:
                             )
                         )
                     to_write = bytes(to_write)
-                    if should_decrypt:
-                        to_write = self.e2ee_secretbox.decrypt(to_write)
-                    if should_decompress:
-                        data_batch_decompressed = lz4.frame.decompress(to_write)
-                        chunk_received_size_decompressed += len(data_batch_decompressed)
-                        to_write = data_batch_decompressed
                     f.write(to_write)
             assert (
                 socket_data_len == 0 and chunk_received_size == chunk_header.data_len
             ), f"Size mismatch: got {chunk_received_size} expected {chunk_header.data_len} and had {socket_data_len} bytes remaining"
 
             # todo check hash
-            self.chunk_store.state_finish_download(chunk_header.chunk_id, f"receiver:{self.worker_id}")
+            # self.chunk_store.state_finish_download(chunk_header.chunk_id, f"receiver:{self.worker_id}")
             chunks_received.append(chunk_header.chunk_id)
 
             if chunk_header.n_chunks_left_on_socket == 0:
+                logger.debug(f"[receiver:{server_port}] End of stream reached")
                 return
