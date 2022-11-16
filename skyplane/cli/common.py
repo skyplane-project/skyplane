@@ -6,6 +6,7 @@ from rich.console import Console
 
 from skyplane import compute
 from skyplane.api.auth_config import AWSConfig, AzureConfig, GCPConfig
+from skyplane.config import SkyplaneConfig
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
 
@@ -83,9 +84,23 @@ def query_instances():
     return instances
 
 
-def to_api_config(config):
+def to_api_config(config: SkyplaneConfig):
     aws_config = AWSConfig(aws_enabled=config.aws_enabled)
     # todo: fix azure config support by collecting azure umi name and resource group and store in skyplane config
-    azure_config = None
     gcp_config = GCPConfig(gcp_project_id=config.gcp_project_id, gcp_enabled=config.gcp_enabled)
+    if not config.azure_resource_group or not config.azure_umi_name:
+        typer.secho(
+            "    Azure resource group and umi name not configured correctly. Please reinit Azure with `skyplane init --reinit-azure`.",
+            fg="red",
+            err=True,
+        )
+        return aws_config, None, gcp_config
+    azure_config = AzureConfig(
+        config.azure_subscription_id,
+        config.azure_resource_group,
+        config.azure_principal_id,
+        config.azure_umi_name,
+        config.azure_client_id,
+        config.azure_enabled,
+    )
     return aws_config, azure_config, gcp_config

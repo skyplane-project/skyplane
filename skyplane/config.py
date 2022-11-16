@@ -87,6 +87,8 @@ class SkyplaneConfig:
     anon_clientid: str
     azure_principal_id: Optional[str] = None
     azure_subscription_id: Optional[str] = None
+    azure_resource_group: Optional[str] = None
+    azure_umi_name: Optional[str] = None
     azure_client_id: Optional[str] = None
     gcp_project_id: Optional[str] = None
 

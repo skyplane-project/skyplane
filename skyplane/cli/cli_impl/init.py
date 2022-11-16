@@ -111,6 +111,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             or config.azure_subscription_id
             or compute.AzureAuthentication.infer_subscription_id(),
             "resource_group": os.environ.get("AZURE_RESOURCE_GROUP") or compute.AzureServer.resource_group_name,
+            "umi_name": "skyplane_umi",
         }
 
         # check if the az CLI is installed
@@ -181,9 +182,14 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             else:
                 authorize_subscriptions_ids = [choices[s] for s in authorize_subscription_strs]
 
+        if not config.azure_resource_group:
+            config.azure_resource_group = typer.prompt("    Enter the Azure resource group", default=defaults["resource_group"])
+        if not config.azure_umi_name:
+            config.azure_umi_name = typer.prompt("    Enter the name for the managed identity", default=defaults["umi_name"])
+
         change_subscription_cmd = f"az account set --subscription {config.azure_subscription_id}"
-        create_rg_cmd = f"az group create -l westus2 -n {compute.AzureServer.resource_group_name}"
-        create_umi_cmd = f"az identity create -g skyplane -n skyplane_umi"
+        create_rg_cmd = f"az group create -l westus2 -n {config.azure_resource_group}"
+        create_umi_cmd = f"az identity create -g {config.azure_resource_group} -n {config.azure_umi_name}"
         typer.secho(f"    I will run the following commands to create an Azure managed identity:", fg="blue")
         typer.secho(f"        $ {change_subscription_cmd}", fg="yellow")
         typer.secho(f"        $ {create_rg_cmd}", fg="yellow")
@@ -207,7 +213,13 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                 config.azure_client_id = identity_json["clientId"]
                 config.azure_principal_id = identity_json["principalId"]
 
-        if not config.azure_client_id or not config.azure_principal_id or not config.azure_subscription_id:
+        if (
+            not config.azure_client_id
+            or not config.azure_principal_id
+            or not config.azure_subscription_id
+            or not config.azure_umi_name
+            or not config.azure_resource_group
+        ):
             typer.secho("    Azure credentials not configured correctly, disabling Azure support.", fg="red", err=True)
             return clear_azure_config(config)
 
