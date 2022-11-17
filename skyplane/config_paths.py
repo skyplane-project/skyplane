@@ -8,6 +8,7 @@ aws_config_path = __config_root__ / "aws_config"
 azure_config_path = __config_root__ / "azure_config"
 azure_sku_path = __config_root__ / "azure_sku_mapping"
 gcp_config_path = __config_root__ / "gcp_config"
+ibmcloud_config_path = __config_root__ / "ibmcloud_config"
 
 
 @functools.lru_cache(maxsize=None)

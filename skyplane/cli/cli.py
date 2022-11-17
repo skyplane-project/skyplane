@@ -37,7 +37,7 @@ from skyplane.cli.cli_impl.cp_replicate_fallback import (
     replicate_small_cp_cmd,
     replicate_small_sync_cmd,
 )
-from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
+from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config, load_ibmcloud_config
 from skyplane.cli.common import console, print_header, print_stats_completed, query_instances
 from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
 from skyplane.config import SkyplaneConfig
@@ -514,6 +514,7 @@ def init(
     disable_config_aws: bool = False,
     disable_config_azure: bool = False,
     disable_config_gcp: bool = False,
+    disable_config_ibmcloud: bool = False,
 ):
     """
     It loads the configuration file, and if it doesn't exist, it creates a default one. Then it creates
@@ -555,6 +556,11 @@ def init(
     typer.secho("\n(3) Configuring GCP:", fg="yellow", bold=True)
     if not disable_config_gcp:
         cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
+
+    # load IBMCloud config
+    typer.secho("\n(3) Configuring IBM Cloud:", fg="yellow", bold=True)
+    if not disable_config_ibmcloud:
+        cloud_config = load_ibmcloud_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
 
     cloud_config.to_config_file(config_path)
     typer.secho(f"\nConfig file saved to {config_path}", fg="green")

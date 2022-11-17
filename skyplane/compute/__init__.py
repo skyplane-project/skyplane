@@ -8,6 +8,8 @@ from skyplane.compute.cloud_provider import CloudProvider
 from skyplane.compute.gcp.gcp_auth import GCPAuthentication
 from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 from skyplane.compute.gcp.gcp_server import GCPServer
+from skyplane.compute.ibmcloud.ibmcloud_auth import IBMCloudAuthentication
+from skyplane.compute.ibmcloud.ibmcloud_provider import IBMCloudProvider
 from skyplane.compute.server import Server, ServerState
 
 __all__ = [
@@ -22,5 +24,7 @@ __all__ = [
     "AzureServer",
     "GCPAuthentication",
     "GCPCloudProvider",
+    "IBMCloudAuthentication",
+    "IBMCloudProvider",
     "GCPServer",
 ]
