@@ -121,5 +121,10 @@ class ObjectStoreInterface:
 
             storage_account, container = bucket.split("/", 1)  # <storage_account>/<container>
             return AzureBlobInterface(storage_account, container)
+
+        elif region_tag.startswith("cos"):
+            from skyplane.obj_store.cos_interface import COSInterface
+
+            return COSInterface(bucket)
         else:
             raise ValueError(f"Invalid region_tag {region_tag} - could not create interface")

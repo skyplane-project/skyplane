@@ -15,7 +15,16 @@ def parse_path(path: str):
             return True
         return False
 
-    if path.startswith("s3://") or path.startswith("gs://"):
+    if path.startswith("cos://"):
+        provider, parsed = path[:3], path[6:]
+        if len(parsed) == 0:
+            logger.error(f"Invalid path: '{path}'", fg="red", err=True)
+            raise ValueError(f"Invalid IBM COS path: '{path}'")
+        bucket, *keys = parsed.split("/", 1)
+        key = keys[0] if len(keys) > 0 else ""
+        provider = "cos"
+        return provider, bucket, key
+    elif path.startswith("s3://") or path.startswith("gs://"):
         provider, parsed = path[:2], path[5:]
         if len(parsed) == 0:
             logger.error(f"Invalid S3 path: '{path}'", fg="red", err=True)

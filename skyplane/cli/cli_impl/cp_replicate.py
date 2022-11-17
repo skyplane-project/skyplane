@@ -17,6 +17,7 @@ from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.obj_store.s3_interface import S3Object
+from skyplane.obj_store.cos_interface import COSObject
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationJob
 from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 from skyplane.utils import logger
@@ -181,6 +182,8 @@ def generate_full_transferobjlist(
             raise typer.Exit(1)
         if dest_region.startswith("aws"):
             dest_obj = S3Object(dest_region.split(":")[0], dest_bucket, dest_key, mime_type=source_obj.mime_type)
+        elif dest_region.startswith("cos"):
+            dest_obj = COSObject(dest_region.split(":")[0], dest_bucket, dest_key)
         elif dest_region.startswith("gcp"):
             dest_obj = GCSObject(dest_region.split(":")[0], dest_bucket, dest_key, mime_type=source_obj.mime_type)
         elif dest_region.startswith("azure"):
