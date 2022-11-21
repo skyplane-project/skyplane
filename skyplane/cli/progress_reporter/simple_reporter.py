@@ -1,5 +1,4 @@
-import time
-from skyplane.api.dataplane import TransferProgressTracker
+from skyplane.api.tracker import TransferProgressTracker
 
 
 class SimpleReporter:
@@ -8,8 +7,7 @@ class SimpleReporter:
 
     def update(self):
         bytes_remaining = self.tracker.query_bytes_remaining()
-
-        if bytes_remaining > 0:
+        if bytes_remaining is not None and bytes_remaining > 0:
             print(f"{(bytes_remaining / (2 ** 30)):.2f}GB left")
             return True
         else:

@@ -164,8 +164,8 @@ def cp2(
         os.system(small_transfer_cmd)
         return 0
 
-    aws_config, gcp_config, azure_config = to_api_config(cloud_config)
-    client = SkyplaneClient(aws_config=aws_config, gcp_config=gcp_config, azure_config=azure_config)
+    aws_config, azure_config, gcp_config = to_api_config(cloud_config)
+    client = SkyplaneClient(aws_config=aws_config, azure_config=azure_config, gcp_config=gcp_config)
     dp = client.dataplane(provider_src, src_region_tag, provider_dst, dst_region_tag, n_vms=max_instances)
     with dp.auto_deprovision():
         dp.provision()

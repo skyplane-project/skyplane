@@ -5,7 +5,7 @@ import typer
 from rich.console import Console
 
 from skyplane import compute
-from skyplane.api.auth_config import AWSConfig, AzureConfig, GCPConfig
+from skyplane.api.config import AzureConfig, AWSConfig, GCPConfig
 from skyplane.config import SkyplaneConfig
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
