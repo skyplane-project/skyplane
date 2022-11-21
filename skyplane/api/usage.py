@@ -14,7 +14,7 @@ from rich import print as rprint
 from typing import Optional, Dict
 
 import skyplane
-from skyplane.api.client import tmp_log_dir
+from skyplane.utils.definitions import tmp_log_dir
 from skyplane.config import _map_type
 from skyplane.config_paths import config_path, cloud_config, host_uuid_path
 from skyplane.utils import logger, imports
