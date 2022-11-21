@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from skyplane.gateway_version import gateway_version
 
@@ -23,3 +24,6 @@ is_gateway_env = os.environ.get("SKYPLANE_IS_GATEWAY", None) == "1"
 
 def gateway_docker_image():
     return "public.ecr.aws/s6m1p0n8/skyplane:" + gateway_version
+
+
+tmp_log_dir = Path("/tmp/skyplane")

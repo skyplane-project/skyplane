@@ -45,7 +45,7 @@ def generate_topology(
         topo.cost_per_gb = 0
         return topo
     elif solve:
-        from skyplane.replicate.solver import ThroughputProblem
+        from skyplane.planner.solver import ThroughputProblem
 
         if src_region == dst_region:
             e = "Solver is not supported for intra-region transfers, run without the --solve flag"
@@ -65,7 +65,7 @@ def generate_topology(
         )
 
         if solver_class == "ILP":
-            from skyplane.replicate.solver_ilp import ThroughputSolverILP
+            from skyplane.planner.solver_ilp import ThroughputSolverILP
 
             tput = ThroughputSolverILP(solver_throughput_grid)
             with Timer() as t:
@@ -79,7 +79,7 @@ def generate_topology(
             topo.cost_per_gb = solution.cost_egress / solution.problem.gbyte_to_transfer
             return topo
         elif solver_class == "RON":
-            from skyplane.replicate.solver_ron import ThroughputSolverRON
+            from skyplane.planner.solver_ron import ThroughputSolverRON
 
             tput = ThroughputSolverRON(solver_throughput_grid)
             solution = tput.solve(problem)

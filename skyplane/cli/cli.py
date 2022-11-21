@@ -23,7 +23,7 @@ import skyplane.cli.usage.definitions
 import skyplane.cli.usage.definitions
 from skyplane import compute
 from skyplane import exceptions
-from skyplane.api.impl.path import parse_path
+from skyplane.utils.path import parse_path
 from skyplane.cli.cli_impl.cp_replicate import (
     confirm_transfer,
     enrich_dest_objs,

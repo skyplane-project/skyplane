@@ -1,6 +1,6 @@
 import cvxpy as cp
 
-from skyplane.replicate.solver import ThroughputSolver, ThroughputProblem, GBIT_PER_GBYTE, ThroughputSolution
+from skyplane.planner.solver import ThroughputSolver, ThroughputProblem, GBIT_PER_GBYTE, ThroughputSolution
 from skyplane.utils import logger
 
 
