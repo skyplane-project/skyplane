@@ -29,14 +29,14 @@ class GatewayDaemon:
         region: str,
         outgoing_ports: Dict[str, int],
         chunk_dir: PathLike,
-        max_incoming_ports=64,
+        max_inflight_chunks=64,
         use_tls=True,
         use_compression=False,
         use_e2ee=True,
     ):
-        # todo max_incoming_ports should be configurable rather than static
+        # todo max_inflight_chunks should be configurable rather than static
         self.region = region
-        self.max_incoming_ports = max_incoming_ports
+        self.max_inflight_chunks = max_inflight_chunks
         self.chunk_store = ChunkStore(chunk_dir)
         self.error_event = Event()
         self.error_queue = Queue()
@@ -51,7 +51,7 @@ class GatewayDaemon:
             self.chunk_store,
             self.error_event,
             self.error_queue,
-            max_pending_chunks=max_incoming_ports,
+            max_pending_chunks=max_inflight_chunks,
             use_tls=use_tls,
             use_compression=use_compression,
             e2ee_key_bytes=e2ee_key_bytes,
@@ -130,10 +130,10 @@ class GatewayDaemon:
                     elif self.region == chunk_req.src_region and chunk_req.src_type == "random":
                         size_mb = chunk_req.src_random_size_mb
                         assert chunk_req.src_random_size_mb is not None, "Random chunk size not set"
-                        if self.chunk_store.remaining_bytes() >= size_mb * MB * self.max_incoming_ports:
+                        if self.chunk_store.remaining_bytes() >= size_mb * MB * self.max_inflight_chunks:
 
                             def fn(chunk_req, size_mb):
-                                while self.chunk_store.remaining_bytes() < size_mb * MB * self.max_incoming_ports:
+                                while self.chunk_store.remaining_bytes() < size_mb * MB * self.max_inflight_chunks:
                                     time.sleep(0.1)
                                 self.chunk_store.state_start_download(chunk_req.chunk.chunk_id, "random")
                                 fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())

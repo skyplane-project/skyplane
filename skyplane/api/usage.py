@@ -14,12 +14,38 @@ from rich import print as rprint
 from typing import Optional, Dict
 
 import skyplane
-import skyplane.api.usage.definitions
+from skyplane.utils.definitions import tmp_log_dir
 from skyplane.config import _map_type
 from skyplane.config_paths import config_path, cloud_config, host_uuid_path
 from skyplane.utils import logger, imports
 
-tmp_log_dir = Path("/tmp/skyplane")
+SCHEMA_VERSION = "0.2"
+LOKI_URL = "http://34.212.234.105:9090/loki/api/v1/push"
+USAGE_STATS_ENABLED_ENV_VAR = "SKYPLANE_USAGE_STATS_ENABLED"
+USAGE_STATS_FILE = "usage_stats.json"
+USAGE_STATS_ENABLED_MESSAGE = (
+    "[bright_black]To disable performance logging info: https://skyplane.org/en/latest/performance_stats_collection.html[/bright_black]"
+)
+USAGE_STATS_DISABLED_RECONFIRMATION_MESSAGE = (
+    "[green][bold]We are an academic research group working to improve inter-cloud network performance.[/bold] "
+    "You can inspect what we share in the /tmp/skyplane/metrics directory. "
+    "We do not collect any personal data and only collect high-level performance data to improve the accuracy of our solver.[/green]"
+    "\n\nSkyplane collects the following anonymous data:"
+    "\n    * System and OS information (OS version, kernel version, Python version)"
+    "\n    * Anonymized client id and transfer session id"
+    "\n    * Source region and destination region per transfer"
+    "\n    * The collection of command arguments used in the transfer session"
+    "\n    * Total runtime and the aggregated transfer speed in Gbps"
+    "\n    * Error message if the transfer fails"
+)
+USAGE_STATS_REENABLE_MESSAGE = (
+    "[yellow][bold]If you want to re-enable usage statistics, run `skyplane config set usage_stats true`.[/bold][/yellow]"
+)
+USAGE_STATS_REENABLED_MESSAGE = (
+    "[green][bold]Thank you for your support of open-source research![/bold][/green]"
+    "\nIf you want to disable usage statistics, run `skyplane config set usage_stats false`."
+)
+USAGE_STATS_DISABLED_MESSAGE = "Usage stats collection is disabled."
 
 
 def get_clientid():
@@ -92,8 +118,11 @@ class UsageClient:
     and report usage stats.
     """
 
-    def __init__(self, client_id: Optional[str] = get_clientid()):
-        self.client_id = client_id
+    def __init__(self, client_id: Optional[str] = None):
+        if client_id:
+            self.client_id = client_id
+        else:
+            self.client_id = get_clientid()
         self.session_id = f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}-{uuid.uuid4().hex[:8]}"
 
     @classmethod
@@ -147,7 +176,7 @@ class UsageClient:
     @classmethod
     def usage_stats_status(cls) -> UsageStatsStatus:
         # environment vairable has higher priority
-        usage_stats_enabled_env_var = os.getenv(skyplane.api.usage.definitions.USAGE_STATS_ENABLED_ENV_VAR)
+        usage_stats_enabled_env_var = os.getenv(USAGE_STATS_ENABLED_ENV_VAR)
         if usage_stats_enabled_env_var is None:
             pass
         elif not _map_type(usage_stats_enabled_env_var, bool):
@@ -156,7 +185,7 @@ class UsageClient:
             return UsageStatsStatus.ENABLED_EXPLICITLY
         elif usage_stats_enabled_env_var is not None:
             raise ValueError(
-                f"Valid value for {skyplane.api.usage.definitions.USAGE_STATS_ENABLED_ENV_VAR} "
+                f"Valid value for {USAGE_STATS_ENABLED_ENV_VAR} "
                 f"env var is (false/no/0) or (true/yes/1), but got {usage_stats_enabled_env_var}"
             )
         # then check in the config file
@@ -190,23 +219,23 @@ class UsageClient:
         if current_status is UsageStatsStatus.DISABLED_EXPLICITLY:
             if (isinstance(value, bool) and not value) or (isinstance(value, str) and not _map_type(value, bool)):
                 rprint("Usage stats collection is already disabled.")
-                rprint(skyplane.api.usage.definitions.USAGE_STATS_REENABLE_MESSAGE)
+                rprint(USAGE_STATS_REENABLE_MESSAGE)
                 return
         elif current_status is UsageStatsStatus.ENABLED_EXPLICITLY:
             if (isinstance(value, bool) and value) or (isinstance(value, str) and _map_type(value, bool)):
                 rprint("Usage stats collection is already enabled.")
-                rprint(skyplane.api.usage.definitions.USAGE_STATS_REENABLED_MESSAGE)
+                rprint(USAGE_STATS_REENABLED_MESSAGE)
                 return
 
         if (isinstance(value, bool) and not value) or (isinstance(value, str) and not _map_type(value, bool)):
             prompt = "Would you still like to opt out of sharing anonymous usage metrics?"
-            rprint(skyplane.api.usage.definitions.USAGE_STATS_DISABLED_RECONFIRMATION_MESSAGE + "\n")
+            rprint(USAGE_STATS_DISABLED_RECONFIRMATION_MESSAGE + "\n")
             answer = typer.confirm(prompt, default=False)
             if not answer:
                 # Do nothing if the user confirms not to disable
                 return
             else:
-                rprint(skyplane.api.usage.definitions.USAGE_STATS_REENABLE_MESSAGE)
+                rprint(USAGE_STATS_REENABLE_MESSAGE)
 
         try:
             config.set_flag("usage_stats", value)
@@ -214,7 +243,7 @@ class UsageClient:
             raise Exception("Failed to enable/disable by writing to" f"{config_path}") from e
 
         if config.get_flag("usage_stats"):
-            rprint(skyplane.api.usage.definitions.USAGE_STATS_REENABLED_MESSAGE)
+            rprint(USAGE_STATS_REENABLED_MESSAGE)
 
     def make_stat(
         self,
@@ -236,7 +265,7 @@ class UsageClient:
         return UsageStatsToReport(
             skyplane_version=skyplane.__version__,
             python_version=".".join(map(str, sys.version_info[:3])),
-            schema_version=skyplane.api.usage.definitions.SCHEMA_VERSION,
+            schema_version=SCHEMA_VERSION,
             client_id=self.client_id,
             session_id=self.session_id,
             source_region=src_region,
@@ -269,7 +298,7 @@ class UsageClient:
         return UsageStatsToReport(
             skyplane_version=skyplane.__version__,
             python_version=".".join(map(str, sys.version_info[:3])),
-            schema_version=skyplane.api.usage.definitions.SCHEMA_VERSION,
+            schema_version=SCHEMA_VERSION,
             client_id=self.client_id,
             session_id=self.session_id,
             source_region=src_region,
@@ -295,7 +324,7 @@ class UsageClient:
             dir_path = tmp_log_dir / "usage" / client_id_path / str(self.session_id)
         dir_path = Path(dir_path)
         dir_path.mkdir(exist_ok=True, parents=True)
-        destination = dir_path / skyplane.api.usage.definitions.USAGE_STATS_FILE
+        destination = dir_path / USAGE_STATS_FILE
 
         with open(destination, "w+") as json_file:
             json_file.write(json.dumps(asdict(data)))
@@ -314,7 +343,7 @@ class UsageClient:
         data.sent_time_ms = int(time.time() * 1000)
         payload = {"streams": [{"stream": prom_labels, "values": [[str(_get_current_timestamp_ns()), json.dumps(asdict(data))]]}]}
         payload = json.dumps(payload)
-        r = requests.post(skyplane.api.usage.definitions.LOKI_URL, headers=headers, data=payload, timeout=0.5)
+        r = requests.post(LOKI_URL, headers=headers, data=payload, timeout=0.5)
 
         if r.status_code == 204:
             with open(path, "w") as json_file:
