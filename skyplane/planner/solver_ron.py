@@ -1,6 +1,6 @@
 import numpy as np
 
-from skyplane.replicate.solver import ThroughputSolver, ThroughputProblem, ThroughputSolution
+from skyplane.planner.solver import ThroughputSolver, ThroughputProblem, ThroughputSolution
 
 
 class ThroughputSolverRON(ThroughputSolver):

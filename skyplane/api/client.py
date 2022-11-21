@@ -4,17 +4,16 @@ from pathlib import Path
 
 from typing import TYPE_CHECKING, Optional
 
-from skyplane.api.usage.client import get_clientid
-from skyplane.api.dataplane import Dataplane
-from skyplane.api.impl.path import parse_path
-from skyplane.api.impl.planner import DirectPlanner
-from skyplane.api.impl.provisioner import Provisioner
-from skyplane.api.transfer_config import TransferConfig
+from skyplane.api.usage import get_clientid
+from skyplane.api.provision.dataplane import Dataplane
+from skyplane.utils.path import parse_path
+from skyplane.planner.planner import DirectPlanner
+from skyplane.api.provision.provisioner import Provisioner
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils import logger
 
 if TYPE_CHECKING:
-    from skyplane.api.auth_config import AWSConfig, AzureConfig, GCPConfig
+    from skyplane.api.config import AWSConfig, AzureConfig, GCPConfig, TransferConfig
 
 
 class SkyplaneClient:
