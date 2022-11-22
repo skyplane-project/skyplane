@@ -1,12 +1,10 @@
 import subprocess
-import os
 from collections import defaultdict
 from datetime import datetime
-from multiprocessing import Manager, Queue
+from multiprocessing import Queue
 from os import PathLike
 from pathlib import Path
-from queue import Empty
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 from skyplane.chunk import ChunkRequest, ChunkState
 from skyplane.utils import logger

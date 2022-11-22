@@ -214,11 +214,7 @@ class GCSInterface(ObjectStoreInterface):
         # send XML api request
         headers = {"Content-MD5": b64_md5sum} if check_md5 else None
         response = self.send_xml_request(
-            dst_object_name,
-            {"uploadId": upload_id, "partNumber": part_number},
-            "PUT",
-            headers=headers,
-            data=open(src_file_path, "rb"),
+            dst_object_name, {"uploadId": upload_id, "partNumber": part_number}, "PUT", headers=headers, data=open(src_file_path, "rb"),
         )
 
         # check response

@@ -5,21 +5,17 @@ import json
 import os
 import signal
 import sys
-import threading
 import time
 from multiprocessing import Event, Queue
 from os import PathLike
 from pathlib import Path
-from threading import BoundedSemaphore
-from typing import Dict, List
+from typing import Dict
 
-from skyplane import MB
-from skyplane.chunk import ChunkState
 from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.gateway.gateway_daemon_api import GatewayDaemonAPI
 from skyplane.utils import logger
 
-from skyplane.gateway.gateway_queue import GatewayQueue, GatewayANDQueue, GatewayORQueue
+from skyplane.gateway.gateway_queue import GatewayANDQueue, GatewayORQueue
 
 from skyplane.gateway.operators.gateway_operator import (
     GatewaySender,
@@ -31,7 +27,6 @@ from skyplane.gateway.operators.gateway_operator import (
 )
 from skyplane.gateway.operators.gateway_receiver import GatewayReceiver
 
-from queue import Empty
 from collections import defaultdict
 
 # TODO: add default partition ID to main

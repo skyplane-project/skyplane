@@ -38,11 +38,7 @@ class Dataplane:
     """A Dataplane represents a concrete Skyplane network, including topology and VMs."""
 
     def __init__(
-        self,
-        clientid: str,
-        topology: ReplicationTopology,
-        provisioner: "Provisioner",
-        transfer_config: TransferConfig,
+        self, clientid: str, topology: ReplicationTopology, provisioner: "Provisioner", transfer_config: TransferConfig,
     ):
         self.clientid = clientid
         self.topology = topology
@@ -91,17 +87,11 @@ class Dataplane:
 
             # initialize clouds
             self.provisioner.init_global(
-                aws=len(aws_nodes_to_provision) > 0,
-                azure=len(azure_nodes_to_provision) > 0,
-                gcp=len(gcp_nodes_to_provision) > 0,
+                aws=len(aws_nodes_to_provision) > 0, azure=len(azure_nodes_to_provision) > 0, gcp=len(gcp_nodes_to_provision) > 0,
             )
 
             # provision VMs
-            uuids = self.provisioner.provision(
-                authorize_firewall=allow_firewall,
-                max_jobs=max_jobs,
-                spinner=spinner,
-            )
+            uuids = self.provisioner.provision(authorize_firewall=allow_firewall, max_jobs=max_jobs, spinner=spinner,)
 
             # bind VMs to nodes
             servers = [self.provisioner.get_node(u) for u in uuids]
@@ -118,8 +108,7 @@ class Dataplane:
             self.provisioned = True
 
         def _start_gateway(
-            gateway_node: ReplicationTopologyGateway,
-            gateway_server: compute.Server,
+            gateway_node: ReplicationTopologyGateway, gateway_server: compute.Server,
         ):
             # map outgoing ports
             setup_args = {}
@@ -173,8 +162,7 @@ class Dataplane:
                 raise
             finally:
                 self.provisioner.deprovision(
-                    max_jobs=max_jobs,
-                    spinner=spinner,
+                    max_jobs=max_jobs, spinner=spinner,
                 )
                 self.provisioned = False
 
@@ -201,23 +189,13 @@ class Dataplane:
     def sink_gateways(self) -> List[compute.Server]:
         return [self.bound_nodes[n] for n in self.topology.sink_instances()] if self.provisioned else []
 
-    def queue_copy(
-        self,
-        src: str,
-        dst: str,
-        recursive: bool = False,
-    ) -> str:
+    def queue_copy(self, src: str, dst: str, recursive: bool = False,) -> str:
         job = CopyJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
         logger.fs.debug(f"[SkyplaneClient] Queued copy job {job}")
         self.jobs_to_dispatch.append(job)
         return job.uuid
 
-    def queue_sync(
-        self,
-        src: str,
-        dst: str,
-        recursive: bool = False,
-    ) -> str:
+    def queue_sync(self, src: str, dst: str, recursive: bool = False,) -> str:
         job = SyncJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
         logger.fs.debug(f"[SkyplaneClient] Queued sync job {job}")
         self.jobs_to_dispatch.append(job)
