@@ -15,6 +15,7 @@ class Chunk:
     chunk_id: str
     chunk_length_bytes: int
     mime_type: Optional[str] = None
+    partition: str = None
 
     # checksum
     md5_hash: Optional[bytes] = None  # 128 bits
@@ -37,6 +38,7 @@ class Chunk:
         return Chunk(**d)
 
 
+# TODO: remove ChunkRequest abstraction (only need chunks)
 @dataclass
 class ChunkRequest:
     """A ChunkRequest stores all local state in the Gateway pertaining to a ChunkRequest."""
