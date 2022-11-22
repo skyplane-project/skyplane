@@ -183,9 +183,23 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                 authorize_subscriptions_ids = [choices[s] for s in authorize_subscription_strs]
 
         if not config.azure_resource_group:
-            config.azure_resource_group = typer.prompt("    Enter the Azure resource group", default=defaults["resource_group"])
+            config.azure_resource_group = (
+                typer.prompt(
+                    "    Enter the Azure resource group to provision Skyplane VMs in (the default should work in most cases)",
+                    default=defaults["resource_group"],
+                )
+                if not non_interactive
+                else defaults["resource_group"]
+            )
         if not config.azure_umi_name:
-            config.azure_umi_name = typer.prompt("    Enter the name for the managed identity", default=defaults["umi_name"])
+            config.azure_umi_name = (
+                typer.prompt(
+                    "    Enter the name for the user managed identity that Skyplane VMs will use to access your Azure Storage Accounts (the default should work in most cases)",
+                    default=defaults["umi_name"],
+                )
+                if not non_interactive
+                else defaults["umi_name"]
+            )
 
         change_subscription_cmd = f"az account set --subscription {config.azure_subscription_id}"
         create_rg_cmd = f"az group create -l westus2 -n {config.azure_resource_group}"
