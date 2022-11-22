@@ -71,21 +71,21 @@ class SkyplaneClient:
         src_region: str,
         dst_cloud_provider: str,
         dst_region: str,
-        type: str = "direct",
+        solver_type: str = "direct",
         n_vms: int = 1,
-        num_connections: int = 32,
+        n_connections: int = 32,
     ) -> Dataplane:
-        if type == "direct":
+        if solver_type == "direct":
             planner = DirectPlanner(
                 src_cloud_provider,
                 src_region,
                 dst_cloud_provider,
                 dst_region,
                 n_vms,
-                num_connections,
+                n_connections,
             )
             topo = planner.plan()
             logger.fs.info(f"[SkyplaneClient.direct_dataplane] Topology: {topo.to_json()}")
             return Dataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
         else:
-            raise NotImplementedError(f"Dataplane type {type} not implemented")
+            raise NotImplementedError(f"Dataplane type {solver_type} not implemented")

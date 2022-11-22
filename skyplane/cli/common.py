@@ -1,5 +1,6 @@
 import subprocess
 from functools import partial
+from typing import Optional
 
 import typer
 from rich.console import Console
@@ -23,11 +24,13 @@ def print_header():
     console.print(f"[bright_black]{header}[/bright_black]\n")
 
 
-def print_stats_completed(total_runtime_s, throughput_gbits):
+def print_stats_completed(total_runtime_s: float, throughput_gbits: Optional[float]):
     console.print(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
     runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{total_runtime_s:.2f}s[/bright_black]"
-    throughput_line = f"[white]Throughput:[/white] [bright_black]{throughput_gbits:.2f}Gbps[/bright_black]"
-    console.print(f"{runtime_line}, {throughput_line}")
+    throughput_line = (
+        f", [white]Throughput:[/white] [bright_black]{throughput_gbits:.2f}Gbps[/bright_black]" if throughput_gbits is not None else ""
+    )
+    console.print(f"{runtime_line}{throughput_line}")
 
 
 def check_ulimit(hard_limit=1024 * 1024):
@@ -90,7 +93,7 @@ def to_api_config(config: SkyplaneConfig):
     gcp_config = GCPConfig(gcp_project_id=config.gcp_project_id, gcp_enabled=config.gcp_enabled)
     if not config.azure_resource_group or not config.azure_umi_name:
         typer.secho(
-            "    Azure resource group and umi name not configured correctly. Please reinit Azure with `skyplane init --reinit-azure`.",
+            "    Azure resource group and UMI name not configured correctly. Please reinit Azure with `skyplane init --reinit-azure`.",
             fg="red",
             err=True,
         )

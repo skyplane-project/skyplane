@@ -4,12 +4,12 @@ import time
 import traceback
 from importlib.resources import path
 from shlex import split
+from typing import Optional
 
 import typer
 from rich import print as rprint
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.prompt import IntPrompt
-from typing import Optional
 
 import skyplane.cli
 import skyplane.cli
@@ -23,8 +23,6 @@ import skyplane.cli.usage.definitions
 import skyplane.cli.usage.definitions
 from skyplane import compute
 from skyplane import exceptions
-from skyplane.api.client import SkyplaneClient
-from skyplane.utils.path import parse_path
 from skyplane.cli.cli_impl.cp_replicate import (
     confirm_transfer,
     enrich_dest_objs,
@@ -39,9 +37,9 @@ from skyplane.cli.cli_impl.cp_replicate_fallback import (
     replicate_small_sync_cmd,
 )
 from skyplane.cli.cli_impl.init import load_aws_config, load_azure_config, load_gcp_config
-from skyplane.cli.common import console, print_header, print_stats_completed, query_instances, to_api_config
+from skyplane.cli.common import console, print_header, print_stats_completed, query_instances
 from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
-from skyplane.cli.progress_reporter.simple_reporter import SimpleReporter
+from skyplane.cli.v2 import app as v2_app
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import config_path, cloud_config
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
@@ -50,136 +48,14 @@ from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 from skyplane.utils import logger
 from skyplane.utils.definitions import GB
 from skyplane.utils.fn import do_parallel
+from skyplane.utils.path import parse_path
 
 app = typer.Typer(name="skyplane")
 app.command()(cli_internal.replicate_random)
 app.add_typer(skyplane.cli.experiments.app, name="experiments")
 app.add_typer(skyplane.cli.cli_cloud.app, name="cloud")
 app.add_typer(skyplane.cli.cli_config.app, name="config")
-
-
-@app.command()
-def cp2(
-    src: str,
-    dst: str,
-    recursive: bool = typer.Option(False, "--recursive", "-r", help="If true, will copy objects at folder prefix recursively"),
-    debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
-    multipart: bool = typer.Option(cloud_config.get_flag("multipart_enabled"), help="If true, will use multipart uploads."),
-    # transfer flags
-    confirm: bool = typer.Option(cloud_config.get_flag("autoconfirm"), "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
-    max_instances: int = typer.Option(cloud_config.get_flag("max_instances"), "--max-instances", "-n", help="Number of gateways"),
-    # todo - add solver params once API supports it
-):
-    print_header()
-
-    provider_src, bucket_src, path_src = parse_path(src)
-    provider_dst, bucket_dst, path_dst = parse_path(dst)
-    src_region_tag, dst_region_tag = f"{provider_src}:infer", f"{provider_dst}:infer"
-    args = {
-        "cmd": "cp",
-        "recursive": recursive,
-        "debug": debug,
-        "multipart": multipart,
-        "confirm": confirm,
-        "max_instances": max_instances,
-    }
-
-    # check config
-    try:
-        cloud_config.check_config()
-    except exceptions.BadConfigException as e:
-        typer.secho(
-            f"Skyplane configuration file is not valid. Please reset your config by running `rm {config_path}` and then rerunning `skyplane init` to fix.",
-            fg="red",
-        )
-        UsageClient.log_exception("cli_check_config", e, args, src_region_tag, dst_region_tag)
-        return 1
-
-    if provider_src in ("local", "hdfs", "nfs") or provider_dst in ("local", "hdfs", "nfs"):
-        if provider_src == "hdfs" or provider_dst == "hdfs":
-            typer.secho("HDFS is not supported yet.", fg="red")
-            return 1
-        cmd = replicate_onprem_cp_cmd(src, dst, recursive)
-        if cmd:
-            typer.secho(f"Delegating to: {cmd}", fg="yellow")
-            start = time.perf_counter()
-            rc = os.system(cmd)
-            request_time = time.perf_counter() - start
-            # print stats - we do not measure throughput for on-prem
-            if not rc:
-                print_stats_completed(request_time, 0)
-                transfer_stats = TransferStats(monitor_status="completed", total_runtime_s=request_time, throughput_gbits=0)
-                UsageClient.log_transfer(transfer_stats, args, src_region_tag, dst_region_tag)
-            return 0
-        else:
-            typer.secho("Transfer not supported", fg="red")
-            return 1
-
-    elif provider_src in ("aws", "gcp", "azure") and provider_dst in ("aws", "gcp", "azure"):
-        try:
-            src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
-            dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
-            src_region_tag = src_client.region_tag()
-            dst_region_tag = dst_client.region_tag()
-            if cloud_config.get_flag("requester_pays"):
-                src_client.set_requester_bool(True)
-                dst_client.set_requester_bool(True)
-            transfer_pairs = generate_full_transferobjlist(
-                src_region_tag, bucket_src, path_src, dst_region_tag, bucket_dst, path_dst, recursive=recursive
-            )
-        except exceptions.SkyplaneException as e:
-            console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
-            console.print(e.pretty_print_str())
-            UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
-            return 1
-
-        if multipart and (provider_src == "azure" or provider_dst == "azure"):
-            typer.secho("Warning: Azure is not yet supported for multipart transfers. Disabling multipart.", fg="yellow", err=True)
-            multipart = False
-    with path("skyplane.data", "throughput.csv") as throughput_grid_path:
-        topo = generate_topology(
-            src_region_tag,
-            dst_region_tag,
-            False,
-            num_connections=cloud_config.get_flag("num_connections"),
-            max_instances=max_instances,
-            args=args,
-        )
-    job = ReplicationJob(
-        source_region=topo.source_region(),
-        source_bucket=bucket_src,
-        dest_region=topo.sink_region(),
-        dest_bucket=bucket_dst,
-        transfer_pairs=transfer_pairs,
-    )
-    confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
-
-    small_transfer_cmd = replicate_small_cp_cmd(src, dst, recursive)
-    if (
-        cloud_config.get_flag("native_cmd_enabled")
-        and (job.transfer_size / GB) < cloud_config.get_flag("native_cmd_threshold_gb")
-        and small_transfer_cmd
-    ):
-        typer.secho(f"Transfer is small enough to delegate to native tools. Delegating to: {small_transfer_cmd}", fg="yellow")
-        os.system(small_transfer_cmd)
-        return 0
-
-    aws_config, azure_config, gcp_config = to_api_config(cloud_config)
-    client = SkyplaneClient(aws_config=aws_config, azure_config=azure_config, gcp_config=gcp_config)
-    dp = client.dataplane(provider_src, src_region_tag, provider_dst, dst_region_tag, n_vms=max_instances)
-    with dp.auto_deprovision():
-        dp.provision()
-
-        dp.queue_copy(src, dst, recursive=recursive)
-
-        # launch the transfer in a background thread
-        tracker = dp.run_async()
-
-        reporter = SimpleReporter(tracker)
-
-        # monitor the transfer
-        while reporter.update():
-            time.sleep(1)
+app.add_typer(v2_app, name="v2")
 
 
 @app.command()

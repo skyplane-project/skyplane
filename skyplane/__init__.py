@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from skyplane import compute
+from skyplane import compute, exceptions
 from skyplane.api.client import SkyplaneClient
 from skyplane.api.config import TransferConfig, AWSConfig, AzureConfig, GCPConfig
 from skyplane.api.provision.dataplane import Dataplane
@@ -12,6 +12,7 @@ __all__ = [
     "__root__",
     # modules
     "compute",
+    "exceptions",
     # API
     "SkyplaneClient",
     "Dataplane",
