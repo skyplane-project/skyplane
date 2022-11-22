@@ -123,6 +123,8 @@ class SkyplaneConfig:
         azure_subscription_id = None
         azure_client_id = None
         azure_principal_id = None
+        azure_resource_group = None
+        azure_umi_name = None
         if "azure" in config:
             if "azure_enabled" in config["azure"]:
                 azure_enabled = config.getboolean("azure", "azure_enabled")
@@ -132,6 +134,10 @@ class SkyplaneConfig:
                 azure_client_id = config.get("azure", "client_id")
             if "principal_id" in config["azure"]:
                 azure_principal_id = config.get("azure", "principal_id")
+            if "resource_group" in config["azure"]:
+                azure_resource_group = config.get("azure", "resource_group")
+            if "umi_name" in config["azure"]:
+                azure_umi_name = config.get("azure", "umi_name")
 
         gcp_enabled = False
         gcp_project_id = None
@@ -149,6 +155,8 @@ class SkyplaneConfig:
             azure_principal_id=azure_principal_id,
             azure_subscription_id=azure_subscription_id,
             azure_client_id=azure_client_id,
+            azure_resource_group=azure_resource_group,
+            azure_umi_name=azure_umi_name,
             gcp_project_id=gcp_project_id,
         )
 
@@ -179,6 +187,10 @@ class SkyplaneConfig:
             config.set("azure", "client_id", self.azure_client_id)
         if self.azure_principal_id:
             config.set("azure", "principal_id", self.azure_principal_id)
+        if self.azure_resource_group:
+            config.set("azure", "resource_group", self.azure_resource_group)
+        if self.azure_umi_name:
+            config.set("azure", "umi_name", self.azure_umi_name)
 
         if "gcp" not in config:
             config.add_section("gcp")
@@ -225,7 +237,7 @@ class SkyplaneConfig:
         valid_config = True
         if self.anon_clientid is None:
             valid_config = False
-        if self.azure_enabled and (self.azure_client_id is None or self.azure_principal_id is None or self.azure_subscription_id is None):
+        if self.azure_enabled and (self.azure_client_id is None or self.azure_principal_id is None or self.azure_subscription_id is None or self.azure_resource_group is None or self.azure_umi_name is None):
             valid_config = False
         if self.gcp_enabled and self.gcp_project_id is None:
             valid_config = False
