@@ -10,6 +10,7 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils.definitions import GB
 from skyplane.utils.path import parse_path
 from skyplane.utils import logger
+from skyplane.utils.timer import Timer
 
 
 def cp(
