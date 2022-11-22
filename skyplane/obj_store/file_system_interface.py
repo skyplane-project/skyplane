@@ -14,13 +14,13 @@ class LocalFile:
 
     @property
     def exists(self):
-        return os.access(self.path, os.F_OK)
-    
+        raise NotImplementedError()
+
     def write_permissions(self):
-        return os.access(self.path, os.W_OK)
+        raise NotImplementedError()
 
     def real_path(self):
-        return os.path.realpath(self.path)
+        raise NotImplementedError()
 
 
 class FileSystemInterface:
@@ -51,4 +51,3 @@ class FileSystemInterface:
 
     def complete_multipart_upload(self, dst_object_name: str, upload_id: str) -> None:
         raise ValueError("Multipart uploads not supported")
-
