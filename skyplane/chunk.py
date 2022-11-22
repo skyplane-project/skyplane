@@ -15,7 +15,7 @@ class Chunk:
     chunk_id: str
     chunk_length_bytes: int
     mime_type: Optional[str] = None
-    partition: str = None
+    partition: Optional[str] = None
 
     # checksum
     md5_hash: Optional[bytes] = None  # 128 bits
