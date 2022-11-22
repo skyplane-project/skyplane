@@ -112,8 +112,16 @@ class GCPNetwork:
             priority=65533,
         )
         self.create_firewall_rule(
-            "skyplane-default-allow-ssh", ["0.0.0.0/0"], ["22"], ["tcp"], priority=65533,
+            "skyplane-default-allow-ssh",
+            ["0.0.0.0/0"],
+            ["22"],
+            ["tcp"],
+            priority=65533,
         )
         self.create_firewall_rule(
-            "skyplane-default-allow-icmp", ["0.0.0.0/0"], [], ["icmp"], priority=65533,
+            "skyplane-default-allow-icmp",
+            ["0.0.0.0/0"],
+            [],
+            ["icmp"],
+            priority=65533,
         )

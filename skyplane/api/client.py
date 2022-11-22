@@ -41,7 +41,12 @@ class SkyplaneClient:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         logger.open_log_file(self.log_dir / "client.log")
 
-        self.provisioner = Provisioner(host_uuid=self.clientid, aws_auth=self.aws_auth, azure_auth=self.azure_auth, gcp_auth=self.gcp_auth,)
+        self.provisioner = Provisioner(
+            host_uuid=self.clientid,
+            aws_auth=self.aws_auth,
+            azure_auth=self.azure_auth,
+            gcp_auth=self.gcp_auth,
+        )
 
     def copy(self, src: str, dst: str, recursive: bool = False, num_vms: int = 1):
         provider_src, bucket_src, self.src_prefix = parse_path(src)
@@ -71,7 +76,14 @@ class SkyplaneClient:
         num_connections: int = 32,
     ) -> Dataplane:
         if type == "direct":
-            planner = DirectPlanner(src_cloud_provider, src_region, dst_cloud_provider, dst_region, n_vms, num_connections,)
+            planner = DirectPlanner(
+                src_cloud_provider,
+                src_region,
+                dst_cloud_provider,
+                dst_region,
+                n_vms,
+                num_connections,
+            )
             topo = planner.plan()
             logger.fs.info(f"[SkyplaneClient.direct_dataplane] Topology: {topo.to_json()}")
             return Dataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
