@@ -10,7 +10,7 @@ azure_sku_path = __config_root__ / "azure_sku_mapping"
 gcp_config_path = __config_root__ / "gcp_config"
 
 
-@functools.lru_cache
+@functools.lru_cache(maxsize=None)
 def load_config_path():
     if "SKYPLANE_CONFIG" in os.environ:
         path = Path(os.environ["SKYPLANE_CONFIG"]).expanduser()
@@ -20,7 +20,7 @@ def load_config_path():
     return path
 
 
-@functools.lru_cache
+@functools.lru_cache(maxsize=None)
 def load_cloud_config(path):
     from skyplane.config import SkyplaneConfig
 
@@ -32,3 +32,4 @@ def load_cloud_config(path):
 
 config_path = load_config_path()
 cloud_config = load_cloud_config(config_path)
+host_uuid_path = __config_root__ / "host_uuid"
