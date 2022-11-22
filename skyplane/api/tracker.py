@@ -119,7 +119,7 @@ class TransferProgressTracker(Thread):
         # transfer successfully completed
         transfer_stats = {
             "total_runtime_s": end_time - start_time,
-            "throughput_gbits": self.calculate_size() / (end_time - start_time),
+            "throughput_gbits": self.query_bytes_dispatched() / (end_time - start_time) / GB * 8,
         }
         UsageClient.log_transfer(
             transfer_stats, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
@@ -210,7 +210,7 @@ class TransferProgressTracker(Thread):
         logger.fs.debug(f"[TransferProgressTracker] Bytes remaining per job: {bytes_remaining_per_job}")
         return sum(bytes_remaining_per_job.values())
 
-    def calculate_size(self):
+    def query_bytes_dispatched(self):
         if len(self.job_chunk_requests) == 0:
             return 0
         bytes_total_per_job = {}
@@ -222,4 +222,4 @@ class TransferProgressTracker(Thread):
                     if cr.chunk.chunk_id in self.job_complete_chunk_ids[job_uuid]
                 ]
             )
-        return sum(bytes_total_per_job.values()) / GB
+        return sum(bytes_total_per_job.values())

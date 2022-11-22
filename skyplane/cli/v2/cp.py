@@ -73,8 +73,13 @@ def cp(
                 small_transfer_status = cli.transfer_cp_small(src, dst, recursive)
                 if small_transfer_status:
                     return 0
-            dp.provision()
-            tracker = dp.run_async()
-            reporter = SimpleReporter(tracker)
-            while reporter.update():
-                time.sleep(1)
+            dp.provision(spinner=True)
+            with Timer() as t:
+                tracker = dp.run_async()
+                reporter = SimpleReporter(tracker)
+                while reporter.update():
+                    time.sleep(1)
+            print_stats_completed(t.elapsed, (tracker.query_bytes_dispatched() / GB * 8) / t.elapsed)
+
+        if not dp.provisioned:
+            typer.secho("Deprovisioned dataplane!", fg="yellow")
