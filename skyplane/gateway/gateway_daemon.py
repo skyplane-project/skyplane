@@ -21,12 +21,13 @@ from skyplane.gateway.gateway_receiver import GatewayReceiver
 from skyplane.gateway.gateway_sender import GatewaySender
 from skyplane.utils import logger
 from skyplane.utils.definitions import MB
+from skyplane.utils.networking_tools import get_ip, get_cloud_region
 
 
 class GatewayDaemon:
     def __init__(
         self,
-        region: str,
+        region: str = None,
         outgoing_ports: Dict[str, int],
         chunk_dir: PathLike,
         max_incoming_ports=64,
@@ -56,21 +57,35 @@ class GatewayDaemon:
             use_compression=use_compression,
             e2ee_key_bytes=e2ee_key_bytes,
         )
-        self.gateway_sender = GatewaySender(
-            region,
-            self.chunk_store,
-            self.error_event,
-            self.error_queue,
-            outgoing_ports=outgoing_ports,
-            use_tls=use_tls,
-            use_compression=use_compression,
-            e2ee_key_bytes=e2ee_key_bytes,
-        )
+        if provider in ("aws", "gcp", "azure"):
+            self.gateway_sender = GatewaySender(
+                region,
+                self.chunk_store,
+                self.error_event,
+                self.error_queue,
+                outgoing_ports=outgoing_ports,
+                use_tls=use_tls,
+                use_compression=use_compression,
+                e2ee_key_bytes=e2ee_key_bytes,
+            )
+        else:
+            self.gateway_sender = OnPremGatewaySender(
+                None,
+                self.chunk_store,
+                self.error_event,
+                self.error_queue,
+                outgoing_ports=outgoing_ports,
+                use_tls=use_tls,
+                use_compression=use_compression,
+                e2ee_key_bytes=e2ee_key_bytes,
+            )
         provider = region.split(":")[0]
         if provider == "aws" or provider == "gcp":
             n_conn = 32
         elif provider == "azure":
             n_conn = 24  # due to throttling limits from authentication
+        elif provider == "hdsf":
+            n_conn = 128  # Optimization: Check for resource utlization at http://<namenode>:50070
         self.obj_store_conn = GatewayObjStoreConn(self.chunk_store, self.error_event, self.error_queue, max_conn=n_conn)
 
         # Download thread pool

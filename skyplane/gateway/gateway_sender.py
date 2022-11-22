@@ -23,7 +23,7 @@ from skyplane.utils.timer import Timer
 class GatewaySender:
     def __init__(
         self,
-        region: str,
+        region: str = None,
         chunk_store: ChunkStore,
         error_event,
         error_queue: Queue,

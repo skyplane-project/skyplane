@@ -43,6 +43,7 @@ from skyplane.cli.usage.client import UsageClient, UsageStatsStatus
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import config_path, cloud_config
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
+from skyplane.obj_store.file_system_interface import FileSystemInterface
 from skyplane.replicate.replication_plan import ReplicationJob
 from skyplane.replicate.replicator_client import ReplicatorClient, TransferStats
 from skyplane.utils import logger
@@ -133,25 +134,72 @@ def cp(
         UsageClient.log_exception("cli_check_config", e, args, src_region_tag, dst_region_tag)
         return 1
 
-    if provider_src in ("local", "hdfs", "nfs") or provider_dst in ("local", "hdfs", "nfs"):
-        if provider_src == "hdfs" or provider_dst == "hdfs":
-            typer.secho("HDFS is not supported yet.", fg="red")
+    if provider_src in ("local", "hdfs", "nfs") and provider_dst in ("aws", "gcp", "azure"):
+        try:
+            src_client = FileSystemInterface.create(provider_src, bucket_src, path_src)
+            dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
+            dst_region_tag = dst_client.region_tag()
+            transfer_pairs = generate_full_transferobjlist(
+                src_region_tag, bucket_src, path_src, dst_region_tag, bucket_dst, path_dst, recursive=recursive
+            )
+        except exceptions.SkyplaneException as e:
+            console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+            console.print(e.pretty_print_str())
+            UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
             return 1
-        cmd = replicate_onprem_cp_cmd(src, dst, recursive)
-        if cmd:
-            typer.secho(f"Delegating to: {cmd}", fg="yellow")
-            start = time.perf_counter()
-            rc = os.system(cmd)
-            request_time = time.perf_counter() - start
-            # print stats - we do not measure throughput for on-prem
-            if not rc:
-                print_stats_completed(request_time, 0)
-                transfer_stats = TransferStats(monitor_status="completed", total_runtime_s=request_time, throughput_gbits=0)
-                UsageClient.log_transfer(transfer_stats, args, src_region_tag, dst_region_tag)
-            return 0
-        else:
-            typer.secho("Transfer not supported", fg="red")
-            return 1
+
+        if multipart:
+            typer.secho("Warning: HDFS is not yet supported for multipart transfers. Disabling multipart.", fg="yellow", err=True)
+            multipart = False
+
+        with path("skyplane.data", "throughput.csv") as throughput_grid_path:
+            predicted_src_region_tag = get_cloud_region(get_ip(), provider_dst)
+            topo = generate_topology(
+                predicted_src_region_tag,
+                dst_region_tag,
+                solve,
+                num_connections=cloud_config.get_flag("num_connections"),
+                max_instances=max_instances,
+                solver_total_gbyte_to_transfer=sum(src_obj.size for src_obj, _ in transfer_pairs) if solve else None,
+                solver_target_tput_per_vm_gbits=solver_target_tput_per_vm_gbits,
+                solver_throughput_grid=throughput_grid_path,
+                solver_verbose=solver_verbose,
+                args=args,
+            )
+        job = ReplicationJob(
+            source_region=topo.source_region(),
+            source_bucket=bucket_src,
+            dest_region=topo.sink_region(),
+            dest_bucket=bucket_dst,
+            transfer_pairs=transfer_pairs,
+        )
+        confirm_transfer(topo=topo, job=job, ask_to_confirm_transfer=not confirm)
+
+        transfer_stats = launch_replication_job(
+            topo=topo,
+            job=job,
+            debug=debug,
+            reuse_gateways=reuse_gateways,
+            use_bbr=cloud_config.get_flag("bbr"),
+            use_compression=cloud_config.get_flag("compress") if src_region_tag != dst_region_tag else False,
+            use_e2ee=cloud_config.get_flag("encrypt_e2e") if src_region_tag != dst_region_tag else False,
+            use_socket_tls=cloud_config.get_flag("encrypt_socket_tls") if src_region_tag != dst_region_tag else False,
+            aws_instance_class=cloud_config.get_flag("aws_instance_class"),
+            aws_use_spot_instances=cloud_config.get_flag("aws_use_spot_instances"),
+            azure_instance_class=cloud_config.get_flag("azure_instance_class"),
+            azure_use_spot_instances=cloud_config.get_flag("azure_use_spot_instances"),
+            gcp_instance_class=cloud_config.get_flag("gcp_instance_class"),
+            gcp_use_premium_network=cloud_config.get_flag("gcp_use_premium_network"),
+            gcp_use_spot_instances=cloud_config.get_flag("gcp_use_spot_instances"),
+            multipart_enabled=multipart,
+            multipart_min_threshold_mb=cloud_config.get_flag("multipart_min_threshold_mb"),
+            multipart_chunk_size_mb=cloud_config.get_flag("multipart_chunk_size_mb"),
+            multipart_max_chunks=cloud_config.get_flag("multipart_max_chunks"),
+            error_reporting_args=args,
+            host_uuid=cloud_config.anon_clientid,
+        )
+
+        # todo: verify checksums
 
     elif provider_src in ("aws", "gcp", "azure") and provider_dst in ("aws", "gcp", "azure"):
         try:
