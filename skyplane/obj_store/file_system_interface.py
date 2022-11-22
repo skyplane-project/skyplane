@@ -27,7 +27,7 @@ class FileSystemInterface:
     def path(self) -> str:
         raise NotImplementedError()
 
-    def list_files(self, prefix="") -> Iterator[ObjectStoreObject]:
+    def list_files(self, prefix="") -> Iterator[LocalFile]:
         raise NotImplementedError()
 
     def get_file_size(self, file_name) -> int:
