@@ -48,10 +48,7 @@ class Chunker:
         self.concurrent_multipart_chunk_threads = concurrent_multipart_chunk_threads
 
     def _run_multipart_chunk_thread(
-        self,
-        exit_event: threading.Event,
-        in_queue: "Queue[Tuple[ObjectStoreObject, ObjectStoreObject]]",
-        out_queue: "Queue[Chunk]",
+        self, exit_event: threading.Event, in_queue: "Queue[Tuple[ObjectStoreObject, ObjectStoreObject]]", out_queue: "Queue[Chunk]",
     ):
         """Chunks large files into many small chunks."""
         region = self.dest_iface.region_tag()
@@ -224,10 +221,7 @@ class Chunker:
                 multipart_send_queue.put((src_obj, dst_obj))
             else:
                 yield Chunk(
-                    src_key=src_obj.key,
-                    dest_key=dst_obj.key,
-                    chunk_id=uuid.uuid4().hex,
-                    chunk_length_bytes=src_obj.size,
+                    src_key=src_obj.key, dest_key=dst_obj.key, chunk_id=uuid.uuid4().hex, chunk_length_bytes=src_obj.size,
                 )
 
             if self.transfer_config.multipart_enabled:
@@ -328,10 +322,7 @@ class CopyJob(TransferJob):
         )
 
     def dispatch(
-        self,
-        dataplane: "Dataplane",
-        transfer_config: TransferConfig,
-        dispatch_batch_size: int = 64,
+        self, dataplane: "Dataplane", transfer_config: TransferConfig, dispatch_batch_size: int = 64,
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways."""
         chunker = Chunker(self.src_iface, self.dst_iface, transfer_config)

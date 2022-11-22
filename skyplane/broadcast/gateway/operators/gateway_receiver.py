@@ -8,7 +8,6 @@ from contextlib import closing
 from multiprocessing import Event, Process, Value, Queue
 from typing import Optional, Tuple
 
-import lz4.frame
 import nacl.secret
 
 from skyplane import MB
@@ -18,11 +17,8 @@ from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
 
-from skyplane.gateway.gateway_queue import GatewayQueue
 
-from skyplane.chunk import ChunkRequest, ChunkState
 
-from typing import Dict
 
 
 class GatewayReceiver:
@@ -173,7 +169,6 @@ class GatewayReceiver:
                 with self.chunk_store.get_chunk_file_path(chunk_header.chunk_id).open("wb") as f:
                     socket_data_len = chunk_header.data_len
                     chunk_received_size = 0
-                    chunk_received_size_decompressed = 0
                     to_write = bytearray(socket_data_len)
                     to_write_view = memoryview(to_write)
                     while socket_data_len > 0:

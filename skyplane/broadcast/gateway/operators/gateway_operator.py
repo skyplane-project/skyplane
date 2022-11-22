@@ -7,10 +7,9 @@ import ssl
 import time
 import traceback
 from functools import partial
-from multiprocessing import Event, Process, Queue
+from multiprocessing import Event, Process
 from typing import Dict, List, Optional
 
-import lz4.frame
 import nacl.secret
 import urllib3
 from abc import ABC, abstractmethod
@@ -345,7 +344,7 @@ class GatewayRandomDataGen(GatewayOperator):
                 file_size = os.path.getsize(fpath)
                 if file_size == size_bytes:
                     break
-            except Exception as e:
+            except Exception:
                 logger.debug(f"[gen_data] Chunk store full, waiting before generating {chunk_req.chunk.chunk_id}")
                 time.sleep(0.1)
                 continue
