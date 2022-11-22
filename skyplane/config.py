@@ -237,8 +237,12 @@ class SkyplaneConfig:
         valid_config = True
         if self.anon_clientid is None:
             valid_config = False
-        if self.azure_enabled and (self.azure_client_id is None or self.azure_principal_id is None or self.azure_subscription_id is None or self.azure_resource_group is None or self.azure_umi_name is None):
+        if self.azure_enabled and (self.azure_client_id is None or self.azure_principal_id is None or self.azure_subscription_id is None):
             valid_config = False
+        if self.azure_resource_group is None:
+            self.azure_resource_group = "skyplane"
+        if self.azure_umi_name is None:
+            self.azure_umi_name = "skyplane_umi"
         if self.gcp_enabled and self.gcp_project_id is None:
             valid_config = False
         if not valid_config:
