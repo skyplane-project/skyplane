@@ -93,8 +93,8 @@ def to_api_config(config: SkyplaneConfig):
     gcp_config = GCPConfig(gcp_project_id=config.gcp_project_id, gcp_enabled=config.gcp_enabled)
     if not config.azure_resource_group or not config.azure_umi_name:
         typer.secho(
-            "    Azure resource group and UMI name not configured correctly. Please reinit Azure with `skyplane init --reinit-azure`.",
-            fg="red",
+            "Azure resource group and UMI name not configured correctly. Please reinit Azure with `skyplane init --reinit-azure`.",
+            fg=typer.colors.RED,
             err=True,
         )
         return aws_config, None, gcp_config
