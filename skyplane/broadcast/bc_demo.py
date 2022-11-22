@@ -8,8 +8,9 @@ if __name__ == "__main__":
     print(f"Log dir: {client.log_dir}/client.log")
     dp = client.broadcast_dataplane("aws", "us-east-1", ["aws", "gcp"], ["us-east-2", "europe-central2-a"], n_vms=1)
     with dp.auto_deprovision():
-        dp.provision(spinner=True)
-        dp.queue_broadcast_copy(
+        # NOTE: need to queue copy first, then provision
+        # NOTE: otherwise can't upload gateway programs to the gateways
+        dp.queue_copy(
             "s3://skycamp-demo-src/synset_labels.txt",
             [
                 "s3://skycamp-demo-us-east-2/imagenet-bucket/synset_labels.txt",
@@ -17,6 +18,7 @@ if __name__ == "__main__":
             ],
             recursive=False,
         )
+        dp.provision(spinner=True)
         tracker = dp.run_async()
 
         # monitor the transfer

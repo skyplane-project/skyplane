@@ -1,24 +1,42 @@
 import json
 import os
 import threading
+import functools
 from collections import defaultdict, Counter
 from functools import partial
 
 import nacl.secret
 import nacl.utils
 import urllib3
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from skyplane import compute
 from skyplane.api.dataplane import Dataplane, DataplaneAutoDeprovision
-from skyplane.api.impl.tracker import TransferProgressTracker
-from skyplane.api.impl.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.transfer_config import TransferConfig
-from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationTopologyGateway
+from skyplane.replicate.replication_plan import ReplicationTopologyGateway
+
+from skyplane.broadcast.bc_tracker import BCTransferProgressTracker
+
+from skyplane.broadcast.bc_transfer_job import BCCopyJob, BCSyncJob, BCTransferJob
+
 from skyplane.broadcast.bc_plan import BroadcastReplicationTopology
+from skyplane.broadcast.gateway.gateway_program import (
+    GatewayProgram,
+    GatewaySend,
+    GatewayReceive,
+    GatewayReadObjectStore,
+    GatewayWriteObjectStore,
+    GatewayWriteLocal,
+    GatewayGenData,
+    GatewayMuxAnd,
+    GatewayMuxOr,
+    GatewayOperator,
+)
+
 from skyplane.utils import logger
 from skyplane.utils.definitions import gateway_docker_image
 from skyplane.utils.fn import PathLike, do_parallel
+
 
 if TYPE_CHECKING:
     from skyplane.api.impl.provisioner import Provisioner
@@ -26,7 +44,7 @@ if TYPE_CHECKING:
 
 class BroadcastDataplane(Dataplane):
     # TODO: need to change this
-    """A Dataplane represents a concrete Skyplane network, including topology and VMs."""
+    """A Dataplane represents a concrete Skyplane broadcast network, including topology and VMs."""
 
     def __init__(
         self,
@@ -38,7 +56,7 @@ class BroadcastDataplane(Dataplane):
         self.clientid = clientid
         self.topology = topology
         self.src_region_tag = self.topology.source_region()
-        self.dst_region_tag = self.topology.sink_region()
+        self.dst_region_tags = self.topology.sink_regions()
         regions = Counter([node.region for node in self.topology.gateway_nodes])
         self.max_instances = int(regions[max(regions, key=regions.get)])
         self.provisioner = provisioner
@@ -48,139 +66,225 @@ class BroadcastDataplane(Dataplane):
         self.provisioned = False
 
         # pending tracker tasks
-        self.jobs_to_dispatch: List[TransferJob] = []
-        self.pending_transfers: List[TransferProgressTracker] = []
+        self.jobs_to_dispatch: List[BCTransferJob] = []
+        self.pending_transfers: List[BCTransferProgressTracker] = []
         self.bound_nodes: Dict[ReplicationTopologyGateway, compute.Server] = {}
 
-    def provision(
+    def get_ips_in_region(self, region: str):
+        public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.gateway_nodes if n.region == region]
+        private_ips = [self.bound_nodes[n].private_ip() for n in self.topology.gateway_nodes if n.region == region]
+        return public_ips, public_ips
+
+    def get_object_store_connection(self, region: str):
+        provider = region.split(":")[0]
+        if provider == "aws" or provider == "gcp":
+            n_conn = 32
+        elif provider == "azure":
+            n_conn = 24  # due to throttling limits from authentication
+        return n_conn
+
+    def add_operator_receive_send(
         self,
-        allow_firewall: bool = True,
-        gateway_docker_image: str = os.environ.get("SKYPLANE_DOCKER_IMAGE", gateway_docker_image()),
+        bc_pg: GatewayProgram,
+        region: str,
+        partition_id: str,
+        obj_store: Optional[Tuple[str, str]] = None,
+        dst_op: Optional[GatewayOperator] = None,
+        gen_random_data: bool = False,
+        max_conn_per_vm: int = 128,
+    ) -> bool:
+        if dst_op is not None:
+            receive_op = dst_op
+        else:
+            if obj_store is None:
+                if gen_random_data:
+                    receive_op = GatewayGenData(size_mb=self.transfer_config.random_chunk_size_mb)
+                else:
+                    receive_op = GatewayReceive()
+            else:
+                receive_op = GatewayReadObjectStore(
+                    bucket_name=obj_store[0], bucket_region=obj_store[1], num_connections=self.get_object_store_connection(region)
+                )
+
+        if self.topology.default_max_conn_per_vm is not None:
+            max_conn_per_vm = self.topology.default_max_conn_per_vm
+
+        # find set of regions & ips in each region to send to for this partition
+        g = self.topology.nx_graph
+        next_regions = set([edge[1] for edge in g.out_edges(region, data=True) if partition_id in edge[-1]["partitions"]])
+
+        # if no regions to forward data to
+        if len(next_regions) == 0:
+            return False
+
+        # region name --> ips in this region
+        region_to_ips_map = {}
+        region_to_private_ips_map = {}
+        for region in next_regions:
+            region_to_ips_map[region], region_to_private_ips_map[region] = self.get_ips_in_region(region)
+
+        # use muxand or muxor for partition_id
+        operation = "MUX_AND" if len(next_regions) > 1 else "MUX_OR"
+        mux_op = GatewayMuxAnd() if len(next_regions) > 1 else GatewayMuxOr()
+
+        # non-dst node: add receive_op into gateway program
+        if dst_op is None:
+            bc_pg.add_operator(receive_op, partition_id=partition_id)
+
+        # MUX_AND: send this partition to multiple regions
+        if operation == "MUX_AND":
+            if dst_op is not None and dst_op.op_type == "mux_and":
+                mux_op = receive_op
+            else:  # do not add any nested mux_and if dst_op parent is mux_and
+                bc_pg.add_operator(mux_op, receive_op, partition_id=partition_id)
+
+            tot_senders = sum([len(next_region_ips) for next_region_ips in region_to_ips_map.values()])
+
+            for next_region, next_region_ips in region_to_ips_map.items():
+                num_connections = int(max_conn_per_vm / tot_senders)
+
+                if (
+                    next_region.split(":")[0] == region.split(":")[0] and region.split(":")[0] == "gcp"
+                ):  # gcp to gcp connection, use private ips
+                    send_ops = [
+                        GatewaySend(ip, num_connections=num_connections, region=next_region)
+                        for ip in region_to_private_ips_map[next_region]
+                    ]
+                else:
+                    send_ops = [GatewaySend(ip, num_connections=num_connections, region=next_region) for ip in next_region_ips]
+
+                # if next region has >1 gateways, add MUX_OR
+                if len(next_region_ips) > 1:
+                    mux_or_op = GatewayMuxOr()
+                    bc_pg.add_operator(mux_or_op, mux_op, partition_id=partition_id)
+                    bc_pg.add_operators(send_ops, mux_or_op, partition_id=partition_id)
+                else:  # otherwise, the parent of send_op is mux_op ("MUX_AND")
+                    assert len(send_ops) == 1
+                    bc_pg.add_operator(send_ops[0], mux_op)
+        else:
+            # only send this partition to a single region
+            assert len(region_to_ips_map) == 1
+
+            next_region = list(region_to_ips_map.keys())[0]
+
+            if next_region.split(":")[0] == region.split(":")[0] and region.split(":")[0] == "gcp":
+                ips = [ip for next_region_ips in region_to_private_ips_map.values() for ip in next_region_ips]
+            else:
+                ips = [ip for next_region_ips in region_to_ips_map.values() for ip in next_region_ips]
+
+            num_connections = int(max_conn_per_vm / len(ips))
+            send_ops = [GatewaySend(ip, num_connections=num_connections, region=next_region) for ip in ips]
+
+            # if num of gateways > 1, then connect to MUX_OR
+            if len(ips) > 1:
+                bc_pg.add_operator(mux_op, receive_op, partition_id=partition_id)
+                bc_pg.add_operators(send_ops, mux_op)
+            else:
+                bc_pg.add_operators(send_ops, receive_op, partition_id=partition_id)
+
+        return True
+
+    def add_dst_operator(self, bc_pg: GatewayProgram, region: str, partition_id: str, obj_store: Optional[Tuple[str, str]] = None):
+        receive_op = GatewayReceive()
+        bc_pg.add_operator(receive_op, partition_id=partition_id)
+
+        if obj_store is None:
+            write_op = GatewayWriteLocal()
+        else:
+            write_op = GatewayWriteObjectStore(
+                bucket_name=obj_store[0], bucket_region=obj_store[1], num_connections=self.get_object_store_connection(region)
+            )
+
+        g = self.topology.nx_graph
+        next_regions = set([edge[1] for edge in g.out_edges(region, data=True) if partition_id in edge[-1]["partitions"]])
+
+        # if no regions to forward data to, just write
+        if len(next_regions) == 0:
+            bc_pg.add_operator(write_op, receive_op, partition_id=partition_id)
+        else:  # otherwise, "and" --> write and forward
+            mux_and_op = GatewayMuxAnd()
+            bc_pg.add_operator(mux_and_op, receive_op, partition_id=partition_id)
+            bc_pg.add_operator(write_op, mux_and_op, partition_id=partition_id)
+            self.add_operator_receive_send(bc_pg, region, partition_id, dst_op=mux_and_op)
+
+    @property
+    @functools.lru_cache(maxsize=None)
+    def current_gw_programs(self):
+        p = self.topology.broadcast_problem
+        solution_graph = self.topology.nx_graph
+
+        num_partitions = p.num_partitions
+        src = p.src
+        dsts = p.dsts
+
+        # region name --> gateway program shared by all gateways in this region
+        gateway_programs = {}
+
+        # NOTE: assume all transfer object share the same (src, dsts)
+        one_transfer_job = self.jobs_to_dispatch[0]
+        if not self.transfer_config.random_chunk_size_mb:
+            src_obj_store = (one_transfer_job.source_bucket, one_transfer_job.source_region)
+
+            dsts_obj_store_map = {}
+            # dst bucket, dst region
+            for b, r in one_transfer_job.items():
+                dsts_obj_store_map[r] = (b, r)
+
+            gen_random_data = False
+        else:
+            src_obj_store = None
+            dsts_obj_store_map = None
+            gen_random_data = True
+
+        for node in solution_graph.nodes:
+            node_gateway_program = GatewayProgram()
+            for i in range(num_partitions):
+                # source node: read from object store or generate random data, then forward data
+                if node == src:
+                    self.add_operator_receive_send(
+                        node_gateway_program, node, str(i), obj_store=src_obj_store, gen_random_data=gen_random_data
+                    )
+
+                # dst receive data, write to object store / write local (if obj_store=None), forward data if needed
+                elif node in dsts:
+                    dst_obj_store = None if dsts_obj_store_map is None else dsts_obj_store_map[node]
+                    self.add_dst_operator(node_gateway_program, node, str(i), obj_store=dst_obj_store)
+
+                # overlay node only forward data
+                else:
+                    self.add_operator_receive_send(node_gateway_program, node, str(i), obj_store=None)
+
+            gateway_programs[node] = node_gateway_program
+
+        return gateway_programs
+
+    def _start_gateway(
+        self,
+        gateway_docker_image: str,
+        gateway_node: ReplicationTopologyGateway,
+        gateway_server: compute.Server,
         gateway_log_dir: Optional[PathLike] = None,
         authorize_ssh_pub_key: Optional[str] = None,
-        max_jobs: int = 16,
-        spinner: bool = False,
+        e2ee_key_bytes: Optional[str] = None,
     ):
-        with self.provisioning_lock:
-            if self.provisioned:
-                logger.error("Cannot provision dataplane, already provisioned!")
-                return
-            aws_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.nodes if n.region.startswith("aws:"))
-            azure_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.nodes if n.region.startswith("azure:"))
-            gcp_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.nodes if n.region.startswith("gcp:"))
+        am_source = gateway_node in self.topology.source_instances()
+        am_sink = gateway_node in self.topology.sink_instances()
 
-            # create VMs from the topology
-            for node in self.topology.gateway_nodes:
-                cloud_provider, region = node.region.split(":")
-                self.provisioner.add_task(
-                    cloud_provider=cloud_provider,
-                    region=region,
-                    vm_type=getattr(self.transfer_config, f"{cloud_provider}_instance_class"),
-                    spot=getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances"),
-                    autoterminate_minutes=self.transfer_config.autoterminate_minutes,
-                )
+        # start gateway
+        if gateway_log_dir:
+            gateway_server.init_log_files(gateway_log_dir)
+        if authorize_ssh_pub_key:
+            gateway_server.copy_public_key(authorize_ssh_pub_key)
 
-            # initialize clouds
-            self.provisioner.init_global(
-                aws=len(aws_nodes_to_provision) > 0,
-                azure=len(azure_nodes_to_provision) > 0,
-                gcp=len(gcp_nodes_to_provision) > 0,
-            )
-
-            # provision VMs
-            uuids = self.provisioner.provision(
-                authorize_firewall=allow_firewall,
-                max_jobs=max_jobs,
-                spinner=spinner,
-            )
-
-            # bind VMs to nodes
-            servers = [self.provisioner.get_node(u) for u in uuids]
-            servers_by_region = defaultdict(list)
-            for s in servers:
-                servers_by_region[s.region_tag].append(s)
-            for node in self.topology.gateway_nodes:
-                instance = servers_by_region[node.region].pop()
-                self.bound_nodes[node] = instance
-            logger.fs.debug(f"[Dataplane.provision] {self.bound_nodes=}")
-            gateway_bound_nodes = self.bound_nodes.copy()
-
-            # start gateways
-            self.provisioned = True
-
-        def _start_gateway(
-            gateway_node: ReplicationTopologyGateway,
-            gateway_server: compute.Server,
-        ):
-            # map outgoing ports
-            setup_args = {}
-            for n, v in self.topology.get_outgoing_paths(gateway_node).items():
-                if isinstance(n, ReplicationTopologyGateway):
-                    # use private ips for gcp to gcp connection
-                    src_provider, dst_provider = gateway_node.region.split(":")[0], n.region.split(":")[0]
-                    if src_provider == dst_provider and src_provider == "gcp":
-                        setup_args[self.bound_nodes[n].private_ip()] = v
-                    else:
-                        setup_args[self.bound_nodes[n].public_ip()] = v
-            am_source = gateway_node in self.topology.source_instances()
-            am_sink = gateway_node in self.topology.sink_instances()
-            logger.fs.debug(f"[Dataplane._start_gateway] Setup args for {gateway_node}: {setup_args}")
-
-            # start gateway
-            if gateway_log_dir:
-                gateway_server.init_log_files(gateway_log_dir)
-            if authorize_ssh_pub_key:
-                gateway_server.copy_public_key(authorize_ssh_pub_key)
-            gateway_server.start_gateway(
-                setup_args,
-                gateway_docker_image=gateway_docker_image,
-                e2ee_key_bytes=e2ee_key_bytes if (self.transfer_config.use_e2ee and (am_source or am_sink)) else None,
-                use_bbr=self.transfer_config.use_bbr,
-                use_compression=self.transfer_config.use_compression,
-                use_socket_tls=self.transfer_config.use_socket_tls,
-            )
-
-        # todo: move server.py:start_gateway here
-        logger.fs.info(f"Using {gateway_docker_image=}")
-        e2ee_key_bytes = nacl.utils.random(nacl.secret.SecretBox.KEY_SIZE)
-
-        jobs = []
-        for node, server in gateway_bound_nodes.items():
-            jobs.append(partial(_start_gateway, node, server))
-        logger.fs.debug(f"[Dataplane.provision] Starting gateways on {len(jobs)} servers")
-        do_parallel(lambda fn: fn(), jobs, n=-1, spinner=spinner, spinner_persist=spinner, desc="Starting gateway container on VMs")
-
-    def deprovision(self, max_jobs: int = 64, spinner: bool = False):
-        with self.provisioning_lock:
-            if not self.provisioned:
-                logger.fs.warning("Attempting to deprovision dataplane that is not provisioned, this may be from auto_deprovision.")
-            # wait for tracker tasks
-            try:
-                for task in self.pending_transfers:
-                    logger.warning(f"Before deprovisioning, waiting for jobs to finish: {list(task.jobs.keys())}")
-                    task.join()
-            except KeyboardInterrupt:
-                logger.warning("Interrupted while waiting for transfers to finish, deprovisioning anyway.")
-                raise
-            finally:
-                self.provisioner.deprovision(
-                    max_jobs=max_jobs,
-                    spinner=spinner,
-                )
-                self.provisioned = False
-
-    def check_error_logs(self) -> Dict[str, List[str]]:
-        def get_error_logs(args):
-            _, instance = args
-            reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/errors")
-            if reply.status != 200:
-                raise Exception(f"Failed to get error logs from gateway instance {instance.instance_name()}: {reply.data.decode('utf-8')}")
-            return json.loads(reply.data.decode("utf-8"))["errors"]
-
-        errors: Dict[str, List[str]] = {}
-        for (_, instance), result in do_parallel(get_error_logs, self.bound_nodes.items(), n=-1):
-            errors[instance] = result
-        return errors
+        gateway_server.start_gateway(
+            None,  # don't need setup arguments here
+            gateway_programs=self.current_gw_programs,  # NOTE: BC pass in gateway programs
+            gateway_docker_image=gateway_docker_image,
+            e2ee_key_bytes=e2ee_key_bytes if (self.transfer_config.use_e2ee and (am_source or am_sink)) else None,
+            use_bbr=self.transfer_config.use_bbr,
+            use_compression=self.transfer_config.use_compression,
+            use_socket_tls=self.transfer_config.use_socket_tls,
+        )
 
     def source_gateways(self) -> List[compute.Server]:
         return [self.bound_nodes[n] for n in self.topology.source_instances()] if self.provisioned else []
@@ -191,31 +295,31 @@ class BroadcastDataplane(Dataplane):
     def queue_copy(
         self,
         src: str,
-        dst: str,
+        dsts: List[str],
         recursive: bool = False,
     ) -> str:
-        raise NotImplementedError()
+        job = BCCopyJob(src, dsts[0], recursive, dst_paths=dsts, requester_pays=self.transfer_config.requester_pays)
+        logger.fs.debug(f"[SkyplaneClient] Queued copy job {job}")
+        self.jobs_to_dispatch.append(job)
+        return job.uuid
 
     def queue_sync(
         self,
         src: str,
-        dst: str,
+        dsts: List[str],
         recursive: bool = False,
     ) -> str:
-        raise NotImplementedError()
+        job = BCSyncJob(src, dsts[0], recursive, dst_paths=dsts, requester_pays=self.transfer_config.requester_pays)
+        logger.fs.debug(f"[SkyplaneClient] Queued sync job {job}")
+        self.jobs_to_dispatch.append(job)
+        return job.uuid
 
-    def queue_broadcast_copy(
-        self,
-        src: str,
-        dst: List[str],  # type: ignore
-        recursive: bool = False,
-    ) -> str:
-        raise NotImplementedError("Copy is not yet supported for broadcast")
-
-    def queue_broadcast_sync(
-        self,
-        src: str,
-        dst: List[str],
-        recursive: bool = False,
-    ) -> str:
-        raise NotImplementedError("Sync is not yet supported for broadcast")
+    def run_async(self) -> BCTransferProgressTracker:
+        if not self.provisioned:
+            logger.error("Dataplane must be pre-provisioned. Call dataplane.provision() before starting a transfer")
+        tracker = BCTransferProgressTracker(self, self.jobs_to_dispatch, self.transfer_config)
+        self.pending_transfers.append(tracker)
+        tracker.start()
+        logger.fs.info(f"[SkyplaneClient] Started async transfer with {len(self.jobs_to_dispatch)} jobs")
+        self.jobs_to_dispatch = []
+        return tracker

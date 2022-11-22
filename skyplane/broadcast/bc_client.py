@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Optional, List
 
 from skyplane.api.client import tmp_log_dir
 from skyplane.api.usage.client import get_clientid
-from skyplane.api.dataplane import Dataplane
 from skyplane.broadcast import BroadcastDataplane
 from skyplane.broadcast.bc_planner import BroadcastDirectPlanner, BroadcastMDSTPlanner, BroadcastHSTPlanner, BroadcastILPSolverPlanner
 from skyplane.api.impl.provisioner import Provisioner
@@ -60,7 +59,7 @@ class SkyplaneBroadcastClient:
         num_connections: int = 32,
         num_partitions: int = 2,
         gbyte_to_transfer: float = 10,
-        target_time: float = 1,
+        target_time: float = 100,
     ) -> BroadcastDataplane:
         # TODO: did not change the data plan yet
         if type == "direct":
@@ -107,7 +106,7 @@ class SkyplaneBroadcastClient:
                 num_connections,
                 num_partitions,
                 gbyte_to_transfer,
-                target_time,
+                target_time,  # target time budget
             )
         else:
             raise NotImplementedError(f"Dataplane type {type} not implemented")

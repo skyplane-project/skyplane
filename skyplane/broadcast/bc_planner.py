@@ -24,9 +24,9 @@ class BroadcastPlanner:
         src_region,
         dst_providers: List[str],
         dst_regions: List[str],
-        n_instances: int,
-        n_connections: int,
-        n_partitions: int,
+        num_instances: int,
+        num_connections: int,
+        num_partitions: int,
         gbyte_to_transfer: float,
         cost_grid_path: Optional[Path] = __root__ / "profiles" / "cost.csv",
         tp_grid_path: Optional[Path] = __root__ / "profiles" / "throughput.csv",
@@ -36,9 +36,9 @@ class BroadcastPlanner:
         self.src_region = src_region
         self.dst_providers = dst_providers
         self.dst_regions = dst_regions
-        self.n_instances = n_instances
-        self.n_connections = n_connections
-        self.n_partitions = n_partitions
+        self.num_instances = num_instances
+        self.num_connections = num_connections
+        self.num_partitions = num_partitions
         self.gbyte_to_transfer = gbyte_to_transfer
 
         # need to input cost_grid and tp_grid
@@ -63,6 +63,12 @@ class BroadcastPlanner:
                 continue
         return G
 
+    def get_throughput_grid(self):
+        return np.array([e[2] for e in self.G.edges(data="throughput")])
+
+    def get_cost_grid(self):
+        return np.array([e[2] for e in self.G.edges(data="cost")])
+
     def get_topo_from_nxgraph(
         self, num_partitions: int, gbyte_to_transfer: float, solution_graph: nx.DiGraph
     ) -> BroadcastReplicationTopology:
@@ -70,6 +76,7 @@ class BroadcastPlanner:
         Convert solutions (i.e. networkx graph) to BroadcastReplicationTopology
         """
         partition_ids = list(range(num_partitions))
+        partition_ids = [str(id) for id in partition_ids]
         partition_size_in_GB = gbyte_to_transfer / num_partitions
 
         source_region = self.src_region
@@ -92,7 +99,7 @@ class BroadcastPlanner:
             s_num_instances = solution_graph.nodes[s]["num_vms"]
             d_num_instances = solution_graph.nodes[d]["num_vms"]
 
-            # TODO: fix it, this is wrong; if # of src region gateways != # of dst region gateways, how add the edge?
+            # TODO: fix it, might be wrong; if # of src region gateways != # of dst region gateways, how add the edge?
             for i in range(s_num_instances):
                 for j in range(d_num_instances):
                     topo.add_instance_instance_edge(s, i, d, j, 0, partitions_on_edge)  # set num_connections = 0 for now
@@ -104,6 +111,7 @@ class BroadcastPlanner:
 
         # set networkx solution graph in topo
         topo.cost_per_gb = cost_egress / gbyte_to_transfer  # cost per gigabytes
+        topo.default_max_conn_per_vm = self.num_connections
         return topo
 
     def plan(self) -> BroadcastReplicationTopology:
@@ -117,22 +125,24 @@ class BroadcastDirectPlanner(BroadcastPlanner):
         src_region,
         dst_providers: List[str],
         dst_regions: List[str],
-        n_instances: int,
-        n_connections: int,
-        n_partitions: int,
+        num_instances: int,
+        num_connections: int,
+        num_partitions: int,
         gbyte_to_transfer: float,
     ):
-        super().__init__(src_provider, src_region, dst_providers, dst_regions, n_instances, n_connections, n_partitions, gbyte_to_transfer)
+        super().__init__(
+            src_provider, src_region, dst_providers, dst_regions, num_instances, num_connections, num_partitions, gbyte_to_transfer
+        )
 
     def plan(self) -> BroadcastReplicationTopology:
         direct_graph = nx.DiGraph()
         for dst in self.dst_regions:
             cost_of_edge = self.G[self.src_region][dst]["cost"]
-            direct_graph.add_edge(self.src_region, dst, partitions=list(range(self.n_partitions)), cost=cost_of_edge)
+            direct_graph.add_edge(self.src_region, dst, partitions=list(range(self.num_partitions)), cost=cost_of_edge)
 
         for node in direct_graph.nodes:
-            direct_graph.nodes[node]["num_vms"] = self.n_instances
-        return self.get_topo_from_nxgraph(self.n_partitions, self.gbyte_to_transfer, direct_graph)
+            direct_graph.nodes[node]["num_vms"] = self.num_instances
+        return self.get_topo_from_nxgraph(self.num_partitions, self.gbyte_to_transfer, direct_graph)
 
 
 class BroadcastMDSTPlanner(BroadcastPlanner):
@@ -142,31 +152,33 @@ class BroadcastMDSTPlanner(BroadcastPlanner):
         src_region,
         dst_providers: List[str],
         dst_regions: List[str],
-        n_instances: int,
-        n_connections: int,
-        n_partitions: int,
+        num_instances: int,
+        num_connections: int,
+        num_partitions: int,
         gbyte_to_transfer: float,
     ):
-        super().__init__(src_provider, src_region, dst_providers, dst_regions, n_instances, n_connections, n_partitions, gbyte_to_transfer)
+        super().__init__(
+            src_provider, src_region, dst_providers, dst_regions, num_instances, num_connections, num_partitions, gbyte_to_transfer
+        )
 
     def plan(self) -> BroadcastReplicationTopology:
         h = self.G.copy()
         h.remove_edges_from(list(h.in_edges(self.src_region)) + list(nx.selfloop_edges(h)))
 
         DST_graph = nx.algorithms.tree.Edmonds(h.subgraph([self.src_region] + self.dst_regions))
-        opt_DST = DST_graph.find_optimum(attr="cosst", kind="min", preserve_attrs=True, style="arborescence")
+        opt_DST = DST_graph.find_optimum(attr="cost", kind="min", preserve_attrs=True, style="arborescence")
 
         # Construct MDST graph
         MDST_graph = nx.DiGraph()
         for edge in list(opt_DST.edges()):
             s, d = edge[0], edge[1]
             cost_of_edge = self.G[s][d]["cost"]
-            MDST_graph.add_edge(s, d, partitions=list(range(self.n_partitions)), cost=cost_of_edge)
+            MDST_graph.add_edge(s, d, partitions=list(range(self.num_partitions)), cost=cost_of_edge)
 
         for node in MDST_graph.nodes:
-            MDST_graph.nodes[node]["num_vms"] = self.n_instances
+            MDST_graph.nodes[node]["num_vms"] = self.num_instances
 
-        return self.get_topo_from_nxgraph(self.n_partitions, self.gbyte_to_transfer, MDST_graph)
+        return self.get_topo_from_nxgraph(self.num_partitions, self.gbyte_to_transfer, MDST_graph)
 
 
 class BroadcastHSTPlanner(BroadcastPlanner):
@@ -176,12 +188,14 @@ class BroadcastHSTPlanner(BroadcastPlanner):
         src_region,
         dst_providers: List[str],
         dst_regions: List[str],
-        n_instances: int,
-        n_connections: int,
-        n_partitions: int,
+        num_instances: int,
+        num_connections: int,
+        num_partitions: int,
         gbyte_to_transfer: float,
     ):
-        super().__init__(src_provider, src_region, dst_providers, dst_regions, n_instances, n_connections, n_partitions, gbyte_to_transfer)
+        super().__init__(
+            src_provider, src_region, dst_providers, dst_regions, num_instances, num_connections, num_partitions, gbyte_to_transfer
+        )
 
     def plan(self, hop_limit=3000) -> BroadcastReplicationTopology:
         # TODO: not usable now
@@ -245,12 +259,11 @@ class BroadcastHSTPlanner(BroadcastPlanner):
                         l = line.split()
                         src_r, dst_r = id_to_name[int(l[1])], id_to_name[int(l[2])]
                         cost_of_edge = self.G[src_r][dst_r]["cost"]
-                        di_stree_graph.add_edge(src_r, dst_r, partitions=list(range(self.n_partitions)), cost=cost_of_edge)
+                        di_stree_graph.add_edge(src_r, dst_r, partitions=list(range(self.num_partitions)), cost=cost_of_edge)
 
             for node in di_stree_graph.nodes:
-                di_stree_graph.nodes[node]["num_vms"] = self.n_instances
+                di_stree_graph.nodes[node]["num_vms"] = self.num_instances
 
-            # overlays = [node for node in di_stree_graph.nodes if node not in [source_v]+dest_v]
             return di_stree_graph
 
         construct_stp()  # construct problem to a file
@@ -261,8 +274,7 @@ class BroadcastHSTPlanner(BroadcastPlanner):
         os.remove(config_loc)
         os.remove(write_loc)
         os.remove(param_loc)
-        os.remove("test.stplog")
-        return self.get_topo_from_nxgraph(self.n_partitions, self.gbyte_to_transfer, solution_graph)
+        return self.get_topo_from_nxgraph(self.num_partitions, self.gbyte_to_transfer, solution_graph)
 
 
 class BroadcastILPSolverPlanner(BroadcastPlanner):
@@ -273,8 +285,8 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         dst_providers: List[str],
         dst_regions: List[str],
         max_instances: int,
-        n_connections: int,
-        n_partitions: int,
+        num_connections: int,
+        num_partitions: int,
         gbyte_to_transfer: float,
         target_time: float,
     ):
@@ -283,9 +295,9 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             src_region,
             dst_providers,
             dst_regions,
-            n_instances=max_instances,
-            n_connections=n_connections,
-            n_partitions=n_partitions,
+            num_instances=max_instances,
+            num_connections=num_connections,
+            num_partitions=num_partitions,
             gbyte_to_transfer=gbyte_to_transfer,
         )
         self.problem = BroadcastProblem(
@@ -293,7 +305,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             dsts=dst_regions,
             gbyte_to_transfer=gbyte_to_transfer,
             instance_limit=max_instances,
-            num_partitions=n_partitions,
+            num_partitions=num_partitions,
             required_time_budget=target_time,
         )
 
@@ -318,51 +330,52 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         Convert ILP solution to BroadcastReplicationTopology
         """
         v_result = solution.var_instances_per_region
-        # instance cost: v_result.sum() * (solution.problem.cost_per_instance_hr / 3600) * solution.problem.required_time_budget
-        result = solution.var_edge_partitions
-
+        result = np.array(solution.var_edge_partitions)
         result_g = nx.DiGraph()  # solution nx graph
         for i in range(result.shape[0]):
             edge = solution.var_edges[i]
-            partitions = [chunk_i for chunk_i in range(result.shape[1]) if result[i][chunk_i] > 0.5]
+            partitions = [partition_i for partition_i in range(result.shape[1]) if result[i][partition_i] > 0.5]
 
             if len(partitions) == 0:
                 continue
 
             src_node, dst_node = edge[0], edge[1]
-            result_g.add_edge(src_node, dst_node, partitions=partitions, cost=self.G[src_node][dst_node]["cost"])
+            result_g.add_edge(
+                src_node,
+                dst_node,
+                partitions=partitions,
+                throughput=self.G[src_node][dst_node]["throughput"],
+                cost=self.G[src_node][dst_node]["cost"],
+            )
 
         for i in range(len(v_result)):
             num_vms = int(v_result[i])
-            print(f"node: {solution.var_nodes[i]}, vms: {num_vms}")
             node = solution.var_nodes[i]
             if node in result_g.nodes:
                 result_g.nodes[node]["num_vms"] = num_vms
 
-        # TODO: the generated topo itself is wrong, but the networkx graph contains all information needed to generate gateway programs
-        print("solution (edge): ", result_g.edges.data())
-        print("solution (node):", result_g.nodes.data())
+        # TODO: the generated topo itself is not used, but the networkx graph contains all information needed to generate gateway programs
         return self.get_topo_from_nxgraph(solution.problem.num_partitions, solution.problem.gbyte_to_transfer, result_g)
 
     def plan(self, solver=cp.GUROBI, solver_verbose=False, save_lp_path=None) -> BroadcastReplicationTopology:
         problem = self.problem
 
         # OPTION1: use the graph with only source and destination nodes
-        g = self.G.subgraph([problem.src] + problem.dsts).copy()
-        cost = np.array([e[2] for e in g.edges(data="cost")])
-        tp = np.array([e[2] for e in g.edges(data="throughput")])
+        # g = self.G.subgraph([problem.src] + problem.dsts).copy()
+        # cost = np.array([e[2] for e in g.edges(data="cost")])
+        # tp = np.array([e[2] for e in g.edges(data="throughput")])
 
         # OPTION2: use the entire graph
-        # g = self.G
-        # cost = self.get_cost_grid()
-        # tp = self.get_throughput_grid()
+        g = self.G
+        cost = self.get_cost_grid()
+        tp = self.get_throughput_grid()
 
         edges = list(g.edges)
         nodes = list(g.nodes)
         num_edges, num_nodes = len(edges), len(nodes)
         num_dest = len(problem.dsts)
-        partition_size = problem.gbyte_to_transfer * GBIT_PER_GBYTE / problem.num_partitions  # in gigabits
-        print("Partition size (gbit): ", partition_size)
+        partition_size_gb = problem.gbyte_to_transfer / problem.num_partitions
+        partition_size_gbit = partition_size_gb * GBIT_PER_GBYTE
 
         # define variables
         p = cp.Variable((num_edges, problem.num_partitions), boolean=True)  # whether edge is carrying partition
@@ -371,8 +384,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         v = cp.Variable((num_nodes), integer=True)  # number of VMs per region
 
         # define objective
-        # egress_cost = cp.sum(problem.const_cost_per_gb_grid @ p) * partition_size
-        egress_cost = cp.sum(cost @ p) * partition_size
+        egress_cost = cp.sum(cost @ p) * partition_size_gb
         instance_cost = cp.sum(v) * (problem.cost_per_instance_hr / 3600) * problem.required_time_budget
         tot_cost = egress_cost + instance_cost
         obj = cp.Minimize(tot_cost)
@@ -431,23 +443,18 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
 
         # throughput constraint
         for edge_i in range(num_edges):
-            # constraints.append(cp.sum(p[edge_i]*partition_size) <= s*tp[edge_i])
             node_i = nodes.index(edge[0])
-            # TODO: change back
-            # constraints.append(cp.sum(p[edge_i]*partition_size) <= problem.required_time_budget * problem.const_throughput_grid_gbits[edge_i] * v[node_i])
-            constraints.append(cp.sum(p[edge_i] * partition_size) <= problem.required_time_budget * tp * v[node_i])
+            constraints.append(cp.sum(p[edge_i] * partition_size_gbit) <= problem.required_time_budget * tp[edge_i] * v[node_i])
 
         # instance limits
         for node in nodes:
             region = node.split(":")[0]
             if region == "aws":
-                ingress_limit_gb, egress_limit_gb = problem.aws_instance_throughput_limit
+                ingress_limit_gbps, egress_limit_gbps = problem.aws_instance_throughput_limit
             elif region == "gcp":
-                ingress_limit_gb, egress_limit_gb = problem.gcp_instance_throughput_limit
+                ingress_limit_gbps, egress_limit_gbps = problem.gcp_instance_throughput_limit
             elif region == "azure":
-                ingress_limit_gb, egress_limit_gb = problem.azure_instance_throughput_limit
-            else:
-                raise ValueError()
+                ingress_limit_gbps, egress_limit_gbps = problem.azure_instance_throughput_limit
 
             node_i = nodes.index(node)
             # egress
@@ -456,14 +463,15 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
                 if e[0] == node:  # edge goes to dest
                     i[edges.index(e)] = 1
 
-            constraints.append(cp.sum(i @ p) * partition_size <= problem.required_time_budget * egress_limit_gb * v[node_i])
+            constraints.append(cp.sum(i @ p) * partition_size_gbit <= problem.required_time_budget * egress_limit_gbps * v[node_i])
 
             # ingress
             i = np.zeros(num_edges)
             for e in g.edges:
-                if e[1] == node:  # edge goes to dest
+                # edge goes to dest
+                if e[1] == node:
                     i[edges.index(e)] = 1
-            constraints.append(cp.sum(i @ p) * partition_size <= problem.required_time_budget * ingress_limit_gb * v[node_i])
+            constraints.append(cp.sum(i @ p) * partition_size_gbit <= problem.required_time_budget * ingress_limit_gbps * v[node_i])
 
         print("Define problem done.")
 

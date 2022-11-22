@@ -14,6 +14,7 @@ class Chunk:
     dest_key: str  # human readable path where object is stored
     chunk_id: str
     chunk_length_bytes: int
+    partition_id: Optional[str] = None  # for broadcast
     mime_type: Optional[str] = None
 
     # checksum

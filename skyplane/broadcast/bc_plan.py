@@ -46,8 +46,9 @@ class BroadcastReplicationTopology(ReplicationTopology):
     def __init__(
         self,
         nx_graph: nx.DiGraph,
-        edges: Optional[List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int, int]]] = None,
+        edges: Optional[List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int, str]]] = None,
         cost_per_gb: Optional[float] = None,
+        default_max_conn_per_vm: Optional[int] = None,
     ):
 
         """
@@ -57,9 +58,10 @@ class BroadcastReplicationTopology(ReplicationTopology):
         """
         self.nx_graph = nx_graph
 
-        self.edges: List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int, int]] = edges or []
+        self.edges: List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int, str]] = edges or []
         self.nodes: Set[ReplicationTopologyNode] = set(k[0] for k in self.edges) | set(k[1] for k in self.edges)
         self.cost_per_gb: Optional[float] = cost_per_gb
+        self.default_max_conn_per_vm: Optional[int] = default_max_conn_per_vm
 
     def get_outgoing_paths(self, src: ReplicationTopologyNode):
         """Return nodes that follow src in the topology."""
@@ -89,7 +91,7 @@ class BroadcastReplicationTopology(ReplicationTopology):
         dest_region: str,
         dest_instance: int,
         num_connections: int,
-        partition_ids: List[int],
+        partition_ids: List[str],
     ):
         """Add relay edge between two instances."""
         src_gateway = ReplicationTopologyGateway(src_region, src_instance)
@@ -99,7 +101,7 @@ class BroadcastReplicationTopology(ReplicationTopology):
         self.nodes.add(src_gateway)
         self.nodes.add(dest_gateway)
 
-    def add_objstore_instance_edge(self, src_region: str, dest_region: str, dest_instance: int, partition_ids: List[int]):
+    def add_objstore_instance_edge(self, src_region: str, dest_region: str, dest_instance: int, partition_ids: List[str]):
         """Add object store to instance node (i.e. source bucket to source gateway)."""
         src_objstore = ReplicationTopologyObjectStore(src_region)
         dest_gateway = ReplicationTopologyGateway(dest_region, dest_instance)
@@ -108,7 +110,7 @@ class BroadcastReplicationTopology(ReplicationTopology):
         self.nodes.add(src_objstore)
         self.nodes.add(dest_gateway)
 
-    def add_instance_objstore_edge(self, src_region: str, src_instance: int, dest_region: str, partition_ids: List[int]):
+    def add_instance_objstore_edge(self, src_region: str, src_instance: int, dest_region: str, partition_ids: List[str]):
         """Add instance to object store edge (i.e. destination gateway to destination bucket)."""
         src_gateway = ReplicationTopologyGateway(src_region, src_instance)
         dest_objstore = ReplicationTopologyObjectStore(dest_region)

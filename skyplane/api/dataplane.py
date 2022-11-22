@@ -61,6 +61,43 @@ class Dataplane:
         self.pending_transfers: List[TransferProgressTracker] = []
         self.bound_nodes: Dict[ReplicationTopologyGateway, compute.Server] = {}
 
+    def _start_gateway(
+        self,
+        gateway_docker_image: str,
+        gateway_node: ReplicationTopologyGateway,
+        gateway_server: compute.Server,
+        gateway_log_dir: Optional[PathLike] = None,
+        authorize_ssh_pub_key: Optional[str] = None,
+        e2ee_key_bytes: Optional[str] = None,
+    ):
+        # map outgoing ports
+        setup_args = {}
+        for n, v in self.topology.get_outgoing_paths(gateway_node).items():
+            if isinstance(n, ReplicationTopologyGateway):
+                # use private ips for gcp to gcp connection
+                src_provider, dst_provider = gateway_node.region.split(":")[0], n.region.split(":")[0]
+                if src_provider == dst_provider and src_provider == "gcp":
+                    setup_args[self.bound_nodes[n].private_ip()] = v
+                else:
+                    setup_args[self.bound_nodes[n].public_ip()] = v
+        am_source = gateway_node in self.topology.source_instances()
+        am_sink = gateway_node in self.topology.sink_instances()
+        logger.fs.debug(f"[Dataplane._start_gateway] Setup args for {gateway_node}: {setup_args}")
+
+        # start gateway
+        if gateway_log_dir:
+            gateway_server.init_log_files(gateway_log_dir)
+        if authorize_ssh_pub_key:
+            gateway_server.copy_public_key(authorize_ssh_pub_key)
+        gateway_server.start_gateway(
+            setup_args,
+            gateway_docker_image=gateway_docker_image,
+            e2ee_key_bytes=e2ee_key_bytes if (self.transfer_config.use_e2ee and (am_source or am_sink)) else None,
+            use_bbr=self.transfer_config.use_bbr,
+            use_compression=self.transfer_config.use_compression,
+            use_socket_tls=self.transfer_config.use_socket_tls,
+        )
+
     def provision(
         self,
         allow_firewall: bool = True,
@@ -117,45 +154,15 @@ class Dataplane:
             # start gateways
             self.provisioned = True
 
-        def _start_gateway(
-            gateway_node: ReplicationTopologyGateway,
-            gateway_server: compute.Server,
-        ):
-            # map outgoing ports
-            setup_args = {}
-            for n, v in self.topology.get_outgoing_paths(gateway_node).items():
-                if isinstance(n, ReplicationTopologyGateway):
-                    # use private ips for gcp to gcp connection
-                    src_provider, dst_provider = gateway_node.region.split(":")[0], n.region.split(":")[0]
-                    if src_provider == dst_provider and src_provider == "gcp":
-                        setup_args[self.bound_nodes[n].private_ip()] = v
-                    else:
-                        setup_args[self.bound_nodes[n].public_ip()] = v
-            am_source = gateway_node in self.topology.source_instances()
-            am_sink = gateway_node in self.topology.sink_instances()
-            logger.fs.debug(f"[Dataplane._start_gateway] Setup args for {gateway_node}: {setup_args}")
-
-            # start gateway
-            if gateway_log_dir:
-                gateway_server.init_log_files(gateway_log_dir)
-            if authorize_ssh_pub_key:
-                gateway_server.copy_public_key(authorize_ssh_pub_key)
-            gateway_server.start_gateway(
-                setup_args,
-                gateway_docker_image=gateway_docker_image,
-                e2ee_key_bytes=e2ee_key_bytes if (self.transfer_config.use_e2ee and (am_source or am_sink)) else None,
-                use_bbr=self.transfer_config.use_bbr,
-                use_compression=self.transfer_config.use_compression,
-                use_socket_tls=self.transfer_config.use_socket_tls,
-            )
-
         # todo: move server.py:start_gateway here
         logger.fs.info(f"Using {gateway_docker_image=}")
         e2ee_key_bytes = nacl.utils.random(nacl.secret.SecretBox.KEY_SIZE)
 
         jobs = []
         for node, server in gateway_bound_nodes.items():
-            jobs.append(partial(_start_gateway, node, server))
+            jobs.append(
+                partial(self._start_gateway, gateway_docker_image, node, server, gateway_log_dir, authorize_ssh_pub_key, e2ee_key_bytes)
+            )
         logger.fs.debug(f"[Dataplane.provision] Starting gateways on {len(jobs)} servers")
         do_parallel(lambda fn: fn(), jobs, n=-1, spinner=spinner, spinner_persist=spinner, desc="Starting gateway container on VMs")
 
