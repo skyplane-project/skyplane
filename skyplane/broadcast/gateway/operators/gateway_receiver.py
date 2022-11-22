@@ -18,9 +18,6 @@ from skyplane.utils import logger
 from skyplane.utils.timer import Timer
 
 
-
-
-
 class GatewayReceiver:
     def __init__(
         self,
