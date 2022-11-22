@@ -1,7 +1,7 @@
 import os
 import time
 from pyarrow import fs
-import threading
+from multiprocessing import Pool
 import argparse
 
 KB = 1024
@@ -25,7 +25,7 @@ def transfer_file(in_fs, in_path, out_fs, out_path, BATCH_SIZE):
                 if not buf:
                     break
 
-    print(f"Time taken to copy 100 125MB files from local to HDFS for {BATCH_SIZE/KB}KB: {time.time() - before}")
+    print(f"Time taken to copy 100 125MB files from local to HDFS for {BATCH_SIZE/KB}KB: {time.time() - before}", flush=True)
 
 
 def setup_files_and_dirs(outdir):
@@ -66,14 +66,14 @@ if __name__ == "__main__":
     parser.add_argument("--outdir", type=str, default="/tmp/data")
     args = parser.parse_args()
 
-    hdfs = fs.HadoopFileSystem(host=args.HDFS, port=8020, extra_conf={"dfs.client.use.datanode.hostname": "false"})
+    hdfs = 'fs.HadoopFileSystem(host=args.HDFS, port=8020, extra_conf={"dfs.client.use.datanode.hostname": "false"})'
     local = fs.LocalFileSystem()
 
     setup_files_and_dirs(args.outdir)
     transfer_local_to_hdfs(hdfs, local)
     transfer_hdfs_to_local(hdfs, local)
 
-    t1 = threading.Thread(target=parallel_reads, args=(hdfs,))
-    t2 = threading.Thread(target=parallel_reads, args=(hdfs,))
-    t1.start()
-    t2.start()
+    # get the number of available cpu cores
+    n_available_cores = len(os.sched_getaffinity(0))
+    with Pool(n_available_cores) as p:
+        p.apply_async(parallel_reads, (hdfs,))
