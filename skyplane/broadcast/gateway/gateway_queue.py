@@ -29,6 +29,7 @@ class GatewayORQueue(GatewayQueue):
 
 class GatewayANDQueue(GatewayQueue):
     def __init__(self, maxsize=0):
+        super().__init__(maxsize)
         self.q = {}
         self.maxsize = maxsize
 

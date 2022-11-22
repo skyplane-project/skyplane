@@ -6,10 +6,9 @@ from os import PathLike
 from pathlib import Path
 from typing import Dict, Optional
 
+from skyplane.broadcast.gateway.gateway_queue import GatewayQueue
 from skyplane.chunk import ChunkRequest, ChunkState
 from skyplane.utils import logger
-
-from skyplane.gateway.gateway_queue import GatewayQueue
 
 
 class ChunkStore:
@@ -30,19 +29,19 @@ class ChunkStore:
         # self.chunk_requests: Dict[int, ChunkRequest] = {}  # type: ignore
 
         # queues of incoming chunk requests for each partition from gateway API (passed to operator graph)
-        self.chunk_requests: Dict[int, GatewayQueue] = {}
+        self.chunk_requests: Dict[str, GatewayQueue] = {}
 
         # queue of chunk status updates coming from operators (passed to gateway API)
         self.chunk_status_queue: Queue[Dict] = Queue()
 
         self.chunk_completions = defaultdict(list)
 
-    def add_partition(self, partition_id: int):
-        if partition_id in self.chunk_requests:
-            raise ValueError(f"Partition {partition_id} already exists")
-        self.chunk_requests[partition_id] = GatewayQueue()
+    def add_partition(self, partition: str):
+        if partition in self.chunk_requests:
+            raise ValueError(f"Partition {partition} already exists")
+        self.chunk_requests[partition] = GatewayQueue()
 
-    def get_chunk_file_path(self, chunk_id: int) -> Path:
+    def get_chunk_file_path(self, chunk_id: str) -> Path:
         return self.chunk_dir / f"{chunk_id:05d}.chunk"
 
     ###
@@ -51,7 +50,7 @@ class ChunkStore:
     def log_chunk_state(self, chunk_req: ChunkRequest, new_status: ChunkState, metadata: Optional[Dict] = None):
         rec = {
             "chunk_id": chunk_req.chunk.chunk_id,
-            "partition": chunk_req.chunk.partition_id,
+            "partition": chunk_req.chunk.partition,
             "state": new_status.name,
             "time": str(datetime.utcnow().isoformat()),
         }
@@ -67,7 +66,7 @@ class ChunkStore:
     ###
     def add_chunk_request(self, chunk_request: ChunkRequest, state: ChunkState = ChunkState.registered):
 
-        self.chunk_requests[chunk_request.chunk.partition_id].put(chunk_request)
+        self.chunk_requests[chunk_request.chunk.partition].put(chunk_request)
         # TODO: consider adding to partition queues here?
 
         # update state

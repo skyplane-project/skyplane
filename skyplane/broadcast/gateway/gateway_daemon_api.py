@@ -1,8 +1,8 @@
 import logging
-from collections import defaultdict
 import logging.handlers
 import os
 import threading
+from collections import defaultdict
 from multiprocessing import Queue
 from queue import Empty
 from traceback import TracebackException
@@ -11,9 +11,9 @@ from typing import Dict, List
 from flask import Flask, jsonify, request
 from werkzeug.serving import make_server
 
+from skyplane.broadcast.gateway.chunk_store import ChunkStore
+from skyplane.broadcast.gateway.operators.gateway_receiver import GatewayReceiver
 from skyplane.chunk import ChunkRequest, ChunkState
-from skyplane.gateway.chunk_store import ChunkStore
-from skyplane.gateway.operators.gateway_receiver import GatewayReceiver
 from skyplane.utils import logger
 
 
@@ -37,7 +37,7 @@ class GatewayDaemonAPI(threading.Thread):
         gateway_receiver: GatewayReceiver,
         error_event,
         error_queue: Queue,
-        terminal_operators: Dict[str, List[str]] = None,
+        terminal_operators: Optional[Dict[str, List[str]]] = None,
         host="0.0.0.0",
         port=8081,
     ):
@@ -81,7 +81,7 @@ class GatewayDaemonAPI(threading.Thread):
         logging.getLogger("werkzeug").setLevel(logging.WARNING)
         self.server = make_server(host, port, self.app, threaded=True)
 
-    def pull_chunk_status_queue(self) -> List[Dict]:
+    def pull_chunk_status_queue(self):
         print("pulling queue")
         out_events = []
         while True:
