@@ -10,11 +10,11 @@ from typing import Optional, Tuple
 
 import nacl.secret
 
-from skyplane import MB
+from skyplane.broadcast.gateway.cert import generate_self_signed_certificate
+from skyplane.broadcast.gateway.chunk_store import ChunkStore
 from skyplane.chunk import WireProtocolHeader
-from skyplane.gateway.cert import generate_self_signed_certificate
-from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.utils import logger
+from skyplane.utils.definitions import MB
 from skyplane.utils.timer import Timer
 
 
@@ -135,7 +135,7 @@ class GatewayReceiver:
         assert len(self.server_processes) == 0
 
     def stop_workers(self):
-        self.stop_servers(self)
+        self.stop_servers()
 
     def recv_chunks(self, conn: socket.socket, addr: Tuple[str, int]):
         server_port = conn.getsockname()[1]
