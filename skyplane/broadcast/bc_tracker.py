@@ -10,6 +10,7 @@ from skyplane.utils import logger, imports
 from skyplane.utils.fn import do_parallel
 from skyplane.api.usage.client import UsageClient
 from skyplane.api.impl.tracker import TransferProgressTracker
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 if TYPE_CHECKING:
     from skyplane.broadcast.bc_transfer_job import BCTransferJob
@@ -33,8 +34,12 @@ class BCTransferProgressTracker(TransferProgressTracker):
 
         # transfer state
         self.job_chunk_requests: Dict[str, List[ChunkRequest]] = {}
-        self.job_pending_chunk_ids: Dict[str, Set[str]] = {}
-        self.job_complete_chunk_ids: Dict[str, Set[str]] = {}
+
+        # each job can have multiple destination
+        self.dst_regions = set([sink.region for sink in self.dataplane.topology.sink_instances()])
+        self.dst_job_pending_chunk_ids: Dict[str, Dict[str, Set[str]]] = {k: {} for k in self.dst_regions}
+        self.dst_job_complete_chunk_ids: Dict[str, Dict[str, Set[str]]] = {k: {} for k in self.dst_regions}
+
         self.errors: Optional[Dict[str, List[str]]] = None
 
         # http_pool
@@ -62,74 +67,87 @@ class BCTransferProgressTracker(TransferProgressTracker):
             for job_uuid, job in self.jobs.items():
                 logger.fs.debug(f"[TransferProgressTracker] Dispatching job {job.uuid}")
                 self.job_chunk_requests[job_uuid] = list(job.dispatch(self.dataplane, transfer_config=self.transfer_config))
-                self.job_pending_chunk_ids[job_uuid] = set([cr.chunk.chunk_id for cr in self.job_chunk_requests[job_uuid]])
-                self.job_complete_chunk_ids[job_uuid] = set()
-                logger.fs.debug(
-                    f"[TransferProgressTracker] Job {job.uuid} dispatched with {len(self.job_chunk_requests[job_uuid])} chunk requests"
+
+                for dst_region in self.dst_regions:
+                    self.dst_job_pending_chunk_ids[dst_region][job_uuid] = set(
+                        [cr.chunk.chunk_id for cr in self.job_chunk_requests[job_uuid]]
+                    )
+                    self.dst_job_complete_chunk_ids[dst_region][job_uuid] = set()
+                    logger.fs.debug(
+                        f"[TransferProgressTracker] Job {job.uuid} dispatched with {len(self.job_chunk_requests[job_uuid])} chunk requests"
+                    )
+        except Exception as e:
+            UsageClient.log_exception("dispatch job", e, args, self.dataplane.src_region_tag, "", session_start_timestamp_ms)
+            raise e
+
+        def monitor_single_dst_helper(dst_region, dst_region_tag):
+            start_time = int(time.time())
+            try:
+                self.monitor_transfer(dst_region)
+            except exceptions.SkyplaneGatewayException as err:
+                reformat_err = Exception(err.pretty_print_str()[37:])
+                UsageClient.log_exception(
+                    "monitor transfer",
+                    reformat_err,
+                    args,
+                    self.dataplane.src_region_tag,
+                    dst_region_tag,
+                    session_start_timestamp_ms,
                 )
-        except Exception as e:
-            UsageClient.log_exception(
-                "dispatch job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
-            )
-            raise e
+                raise err
+            except Exception as e:
+                UsageClient.log_exception(
+                    "monitor transfer", e, args, self.dataplane.src_region_tag, dst_region_tag, session_start_timestamp_ms
+                )
+                raise e
+            end_time = int(time.time())
 
-        # Record only the transfer time
-        start_time = int(time.time())
-        try:
-            self.monitor_transfer()
-        except exceptions.SkyplaneGatewayException as err:
-            reformat_err = Exception(err.pretty_print_str()[37:])
-            UsageClient.log_exception(
-                "monitor transfer",
-                reformat_err,
-                args,
-                self.dataplane.src_region_tag,
-                self.dataplane.dst_region_tag,
-                session_start_timestamp_ms,
-            )
-            raise err
-        except Exception as e:
-            UsageClient.log_exception(
-                "monitor transfer", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
-            )
-            raise e
-        end_time = int(time.time())
+            try:
+                for job in self.jobs.values():
+                    logger.fs.debug(f"[TransferProgressTracker] Finalizing job {job.uuid}")
+                    job.finalize()
+            except Exception as e:
+                UsageClient.log_exception(
+                    "finalize job", e, args, self.dataplane.src_region_tag, dst_region_tag, session_start_timestamp_ms
+                )
+                raise e
 
-        try:
-            for job in self.jobs.values():
-                logger.fs.debug(f"[TransferProgressTracker] Finalizing job {job.uuid}")
-                job.finalize()
-        except Exception as e:
-            UsageClient.log_exception(
-                "finalize job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
-            )
-            raise e
+            try:
+                for job in self.jobs.values():
+                    logger.fs.debug(f"[TransferProgressTracker] Verifying job {job.uuid}")
+                    job.verify()
+            except Exception as e:
+                UsageClient.log_exception("verify job", e, args, self.dataplane.src_region_tag, dst_region_tag, session_start_timestamp_ms)
+                raise e
 
-        try:
-            for job in self.jobs.values():
-                logger.fs.debug(f"[TransferProgressTracker] Verifying job {job.uuid}")
-                job.verify()
-        except Exception as e:
-            UsageClient.log_exception(
-                "verify job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
-            )
-            raise e
+            # transfer successfully completed
+            transfer_stats = {
+                "dst_region": dst_region,
+                "total_runtime_s": end_time - start_time,
+                "throughput_gbits": self.calculate_size() / (end_time - start_time),
+            }
+            UsageClient.log_transfer(transfer_stats, args, self.dataplane.src_region_tag, dst_region_tag, session_start_timestamp_ms)
+            return transfer_stats
 
-        # transfer successfully completed
-        transfer_stats = {
-            "total_runtime_s": end_time - start_time,
-            "throughput_gbits": self.calculate_size() / (end_time - start_time),
-        }
-        UsageClient.log_transfer(
-            transfer_stats, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
-        )
+        # Record only the transfer time per destination
+        e2e_start_time = int(time.time())
+        results = []
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            future_list = [executor.submit(monitor_single_dst_helper, dst) for dst in self.dst_regions]
+            for future in as_completed(future_list):
+                results.append(future.result())
+        e2e_end_time = int(time.time())
+        print("End to end broadcast transfer time: ", e2e_end_time - e2e_start_time)
 
     @imports.inject("pandas")
-    def monitor_transfer(pd, self):
+    def monitor_transfer(pd, self, dst_region):
         # todo implement transfer monitoring to update job_complete_chunk_ids and job_pending_chunk_ids while the transfer is in progress
-        sinks = self.dataplane.topology.sink_instances()
-        sink_regions = set([sink.region for sink in sinks])
-        while any([len(self.job_pending_chunk_ids[job_uuid]) > 0 for job_uuid in self.job_pending_chunk_ids]):
+        sinks = {n for n in self.topology.sink_instances() if n.region == dst_region}
+        sink_regions = {dst_region}
+
+        assert len(sink_regions) == 1  # BC: only monitor one sink region in this call
+
+        while any([len(self.job_pending_chunk_ids[dst_region][job_uuid]) > 0 for job_uuid in self.job_pending_chunk_ids[dst_region]]):
             # refresh shutdown status by running noop
             do_parallel(lambda i: i.run_command("echo 1"), self.dataplane.bound_nodes.values(), n=-1)
 
@@ -157,8 +175,12 @@ class BCTransferProgressTracker(TransferProgressTracker):
             # update job_complete_chunk_ids and job_pending_chunk_ids
             for job_uuid, job in self.jobs.items():
                 job_complete_chunk_ids = set(chunk_id for chunk_id in completed_chunk_ids if self._chunk_to_job_map[chunk_id] == job_uuid)
-                self.job_complete_chunk_ids[job_uuid] = self.job_complete_chunk_ids[job_uuid].union(job_complete_chunk_ids)
-                self.job_pending_chunk_ids[job_uuid] = self.job_pending_chunk_ids[job_uuid].difference(job_complete_chunk_ids)
+                self.job_complete_chunk_ids[dst_region][job_uuid] = self.job_complete_chunk_ids[dst_region][job_uuid].union(
+                    job_complete_chunk_ids
+                )
+                self.job_pending_chunk_ids[dst_region][job_uuid] = self.job_pending_chunk_ids[dst_region][job_uuid].difference(
+                    job_complete_chunk_ids
+                )
 
             # sleep
             time.sleep(0.05)

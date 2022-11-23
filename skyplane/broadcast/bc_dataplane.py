@@ -214,14 +214,14 @@ class BroadcastDataplane(Dataplane):
         # region name --> gateway program shared by all gateways in this region
         gateway_programs = {}
 
-        # NOTE: assume all transfer object share the same (src, dsts)
+        # NOTE: assume all transfer object share the same (src, dsts)? might not be correct
         one_transfer_job = self.jobs_to_dispatch[0]
         if not self.transfer_config.random_chunk_size_mb:
             src_obj_store = (one_transfer_job.source_bucket, one_transfer_job.source_region)
 
             dsts_obj_store_map = {}
             # dst bucket, dst region
-            for b, r in one_transfer_job.items():
+            for b, r in one_transfer_job.dst_regions.items():
                 dsts_obj_store_map[r] = (b, r)
 
             gen_random_data = False
