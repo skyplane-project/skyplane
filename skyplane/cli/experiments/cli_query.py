@@ -6,21 +6,15 @@ from skyplane.planner.solver import ThroughputSolver
 
 
 def util_grid_throughput(
-    src: str,
-    dest: str,
-    src_tier: str = "PREMIUM",
-    dest_tier: str = "PREMIUM",
+    src: str, dest: str, src_tier: str = "PREMIUM", dest_tier: str = "PREMIUM",
 ):
     with path("skyplane.data", "throughput.csv") as throughput_grid_path:
         solver = ThroughputSolver(throughput_grid_path)
-        print(solver.get_path_throughput(src, dest, src_tier, dest_tier) / 2**30)
+        print(solver.get_path_throughput(src, dest, src_tier, dest_tier) / 2 ** 30)
 
 
 def util_grid_cost(
-    src: str,
-    dest: str,
-    src_tier: str = "PREMIUM",
-    dest_tier: str = "PREMIUM",
+    src: str, dest: str, src_tier: str = "PREMIUM", dest_tier: str = "PREMIUM",
 ):
     with path("skyplane.data", "throughput.csv") as throughput_grid_path:
         solver = ThroughputSolver(throughput_grid_path)

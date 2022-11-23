@@ -6,7 +6,7 @@ from collections import defaultdict
 from multiprocessing import Queue
 from queue import Empty
 from traceback import TracebackException
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from flask import Flask, jsonify, request
 from werkzeug.serving import make_server
@@ -188,16 +188,15 @@ class GatewayDaemonAPI(threading.Thread):
     def register_request_routes(self, app):
         def make_chunk_req_payload(chunk_req: ChunkRequest):
             state = self.chunk_status[chunk_req.chunk.chunk_id]
-            state_name = state.name if state is not None else "unknown"
+            state_name = state if state is not None else "unknown"
             return {"req": chunk_req.as_dict(), "state": state_name}
 
         def get_chunk_reqs(state=None) -> Dict[int, Dict]:
             out = {}
-            for chunk_req, chunk_state in self.chunk_status.items():
+            for chunk_id, chunk_state in self.chunk_status.items():
                 if state is None or chunk_state == state:
-                    out[chunk_req.chunk.chunk_id] = make_chunk_req_payload(chunk_req)
-            # for chunk_req in self.chunk_store.get_chunk_requests(state):
-            #    out[chunk_req.chunk.chunk_id] = make_chunk_req_payload(chunk_req)
+                    chunk_req = self.chunk_requests[chunk_id]
+                    out[chunk_id] = make_chunk_req_payload(chunk_id)
             return out
 
         def add_chunk_req(body, state):
@@ -303,7 +302,7 @@ class GatewayDaemonAPI(threading.Thread):
             for k, v in self.sender_compressed_sizes.items():
                 total_size_compressed_bytes += v
                 # TODO: figure out how to get final size of chunks
-                total_size_uncompressed_bytes += self.chunk_store.get_chunk_request(k).chunk.chunk_length_bytes
+                total_size_uncompressed_bytes += self.chunk_requests[k].chunk.chunk_length_bytes
             return jsonify(
                 {
                     "compressed_bytes_sent": total_size_compressed_bytes,
