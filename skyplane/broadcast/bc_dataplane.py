@@ -10,9 +10,8 @@ from skyplane.api.dataplane import Dataplane
 from skyplane.api.transfer_config import TransferConfig
 from skyplane.replicate.replication_plan import ReplicationTopologyGateway
 
-from skyplane.broadcast.bc_tracker import BCTransferProgressTracker
-
-from skyplane.broadcast.bc_transfer_job import BCCopyJob, BCSyncJob, BCTransferJob
+from skyplane.broadcast.impl.bc_tracker import BCTransferProgressTracker
+from skyplane.broadcast.impl.bc_transfer_job import BCCopyJob, BCSyncJob, BCTransferJob
 
 from skyplane.broadcast.bc_plan import BroadcastReplicationTopology
 from skyplane.broadcast.gateway.gateway_program import (
@@ -204,12 +203,11 @@ class BroadcastDataplane(Dataplane):
     @property
     @functools.lru_cache(maxsize=None)
     def current_gw_programs(self):
-        p = self.topology.broadcast_problem
         solution_graph = self.topology.nx_graph
 
-        num_partitions = p.num_partitions
-        src = p.src
-        dsts = p.dsts
+        num_partitions = self.topology.num_partitions
+        src = self.src_region_tag
+        dsts = self.dst_region_tags
 
         # region name --> gateway program shared by all gateways in this region
         gateway_programs = {}
@@ -217,7 +215,7 @@ class BroadcastDataplane(Dataplane):
         # NOTE: assume all transfer object share the same (src, dsts)? might not be correct
         one_transfer_job = self.jobs_to_dispatch[0]
         if not self.transfer_config.random_chunk_size_mb:
-            src_obj_store = (one_transfer_job.source_bucket, one_transfer_job.source_region)
+            src_obj_store = (one_transfer_job.src_bucket, one_transfer_job.src_region)
 
             dsts_obj_store_map = {}
             # dst bucket, dst region
@@ -271,7 +269,7 @@ class BroadcastDataplane(Dataplane):
             gateway_server.copy_public_key(authorize_ssh_pub_key)
 
         gateway_server.start_gateway(
-            None,  # don't need setup arguments here
+            {},  # don't need setup arguments here to pass as outgoing_ports
             gateway_programs=self.current_gw_programs,  # NOTE: BC pass in gateway programs
             gateway_docker_image=gateway_docker_image,
             e2ee_key_bytes=e2ee_key_bytes if (self.transfer_config.use_e2ee and (am_source or am_sink)) else None,
@@ -292,6 +290,7 @@ class BroadcastDataplane(Dataplane):
         dsts: List[str],
         recursive: bool = False,
     ) -> str:
+        print("dsts:", dsts)
         job = BCCopyJob(src, dsts[0], recursive, dst_paths=dsts, requester_pays=self.transfer_config.requester_pays)
         logger.fs.debug(f"[SkyplaneClient] Queued copy job {job}")
         self.jobs_to_dispatch.append(job)

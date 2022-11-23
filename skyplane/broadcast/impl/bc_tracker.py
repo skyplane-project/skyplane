@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Set
 
 from skyplane import exceptions
 from skyplane.api.transfer_config import TransferConfig
-from skyplane.chunk import ChunkRequest, ChunkState
+from skyplane.broadcast.chunk import ChunkRequest, ChunkState
 from skyplane.utils import logger, imports
 from skyplane.utils.fn import do_parallel
 from skyplane.api.usage.client import UsageClient
@@ -13,11 +13,13 @@ from skyplane.api.impl.tracker import TransferProgressTracker
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 if TYPE_CHECKING:
-    from skyplane.broadcast.bc_transfer_job import BCTransferJob
+    from skyplane.broadcast.impl.bc_transfer_job import BCTransferJob
 
 
 class BCTransferProgressTracker(TransferProgressTracker):
     def __init__(self, dataplane, jobs: List["BCTransferJob"], transfer_config: TransferConfig):
+        super().__init__(dataplane, jobs, transfer_config)
+
         self.dataplane = dataplane
         self.type_list = set([job.type for job in jobs])
         self.recursive_list = set([str(job.recursive) for job in jobs])
@@ -58,9 +60,13 @@ class BCTransferProgressTracker(TransferProgressTracker):
             "multipart": self.transfer_config.multipart_enabled,
             "instances_per_region": self.dataplane.max_instances,
             "src_instance_type": getattr(self.transfer_config, f"{src_cloud_provider}_instance_class"),
-            "dst_instance_type": getattr(self.transfer_config, f"{dst_cloud_providers}_instance_class"),
+            "dst_instance_type": [
+                getattr(self.transfer_config, f"{dst_cloud_provider}_instance_class") for dst_cloud_provider in dst_cloud_providers
+            ],
             "src_spot_instance": getattr(self.transfer_config, f"{src_cloud_provider}_use_spot_instances"),
-            "dst_spot_instance": getattr(self.transfer_config, f"{dst_cloud_providers}_use_spot_instances"),
+            "dst_spot_instance": [
+                getattr(self.transfer_config, f"{dst_cloud_provider}_use_spot_instances") for dst_cloud_provider in dst_cloud_providers
+            ],
         }
         session_start_timestamp_ms = int(time.time() * 1000)
         try:
@@ -77,7 +83,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
                         f"[TransferProgressTracker] Job {job.uuid} dispatched with {len(self.job_chunk_requests[job_uuid])} chunk requests"
                     )
         except Exception as e:
-            UsageClient.log_exception("dispatch job", e, args, self.dataplane.src_region_tag, "", session_start_timestamp_ms)
+            UsageClient.log_exception("dispatch job", e, args, self.dataplane.src_region_tag, ":", session_start_timestamp_ms)
             raise e
 
         def monitor_single_dst_helper(dst_region, dst_region_tag):

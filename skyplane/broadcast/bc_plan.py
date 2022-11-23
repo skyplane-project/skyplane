@@ -3,7 +3,7 @@ from typing import List, Optional, Tuple, Set
 
 import networkx as nx
 
-from skyplane.chunk import ChunkRequest
+from skyplane.broadcast.chunk import ChunkRequest
 from skyplane.obj_store.object_store_interface import ObjectStoreObject
 from skyplane.replicate.replication_plan import (
     ReplicationTopology,
@@ -46,6 +46,7 @@ class BroadcastReplicationTopology(ReplicationTopology):
     def __init__(
         self,
         nx_graph: nx.DiGraph,
+        num_partitions: int,
         edges: Optional[List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int, str]]] = None,
         cost_per_gb: Optional[float] = None,
         default_max_conn_per_vm: Optional[int] = None,
@@ -57,6 +58,7 @@ class BroadcastReplicationTopology(ReplicationTopology):
 
         """
         self.nx_graph = nx_graph
+        self.num_partitions = num_partitions
 
         self.edges: List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int, str]] = edges or []
         self.nodes: Set[ReplicationTopologyNode] = set(k[0] for k in self.edges) | set(k[1] for k in self.edges)

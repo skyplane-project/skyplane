@@ -1,8 +1,4 @@
-from skyplane.broadcast.bc_client import SkyplaneBroadcastClient
-from skyplane.broadcast.bc_dataplane import BroadcastDataplane
+from pathlib import Path
 
-__all__ = [
-    # Broadcast API
-    "SkyplaneBroadcastClient",
-    "BroadcastDataplane",
-]
+__root__ = Path(__file__).parent.parent
+__all__ = ["__root__"]

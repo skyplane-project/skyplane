@@ -2,7 +2,6 @@ import os
 import subprocess
 from pathlib import Path
 
-from skyplane import __root__
 from skyplane.api.client import tmp_log_dir
 from skyplane.broadcast.bc_plan import BroadcastReplicationTopology
 from skyplane.broadcast.bc_solver import BroadcastProblem, BroadcastSolution, GBIT_PER_GBYTE
@@ -15,6 +14,7 @@ import numpy as np
 import cvxpy as cp
 
 from skyplane.utils import logger
+from skyplane.broadcast import __root__
 
 
 class BroadcastPlanner:
@@ -28,8 +28,8 @@ class BroadcastPlanner:
         num_connections: int,
         num_partitions: int,
         gbyte_to_transfer: float,
-        cost_grid_path: Optional[Path] = __root__ / "profiles" / "cost.csv",
-        tp_grid_path: Optional[Path] = __root__ / "profiles" / "throughput.csv",
+        cost_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "cost.csv",
+        tp_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "throughput.csv",
     ):
 
         self.src_provider = src_provider
@@ -79,10 +79,10 @@ class BroadcastPlanner:
         partition_ids = [str(id) for id in partition_ids]
         partition_size_in_GB = gbyte_to_transfer / num_partitions
 
-        source_region = self.src_region
-        dst_regions = self.dst_regions
+        source_region = self.src_provider + ":" + self.src_region
+        dst_regions = [f"{p}:{r}" for p, r in zip(self.dst_providers, self.dst_regions)]
 
-        topo = BroadcastReplicationTopology(solution_graph)
+        topo = BroadcastReplicationTopology(solution_graph, num_partitions)
         cost_egress = 0.0
 
         # adding edges from object store
@@ -136,9 +136,13 @@ class BroadcastDirectPlanner(BroadcastPlanner):
 
     def plan(self) -> BroadcastReplicationTopology:
         direct_graph = nx.DiGraph()
-        for dst in self.dst_regions:
-            cost_of_edge = self.G[self.src_region][dst]["cost"]
-            direct_graph.add_edge(self.src_region, dst, partitions=list(range(self.num_partitions)), cost=cost_of_edge)
+
+        src = self.src_provider + ":" + self.src_region
+        dsts = [f"{p}:{r}" for p, r in zip(self.dst_providers, self.dst_regions)]
+
+        for dst in dsts:
+            cost_of_edge = self.G[src][dst]["cost"]
+            direct_graph.add_edge(src, dst, partitions=list(range(self.num_partitions)), cost=cost_of_edge)
 
         for node in direct_graph.nodes:
             direct_graph.nodes[node]["num_vms"] = self.num_instances
@@ -162,10 +166,13 @@ class BroadcastMDSTPlanner(BroadcastPlanner):
         )
 
     def plan(self) -> BroadcastReplicationTopology:
-        h = self.G.copy()
-        h.remove_edges_from(list(h.in_edges(self.src_region)) + list(nx.selfloop_edges(h)))
+        src = self.src_provider + ":" + self.src_region
+        dsts = [f"{p}:{r}" for p, r in zip(self.dst_providers, self.dst_regions)]
 
-        DST_graph = nx.algorithms.tree.Edmonds(h.subgraph([self.src_region] + self.dst_regions))
+        h = self.G.copy()
+        h.remove_edges_from(list(h.in_edges(src)) + list(nx.selfloop_edges(h)))
+
+        DST_graph = nx.algorithms.tree.Edmonds(h.subgraph([src] + dsts))
         opt_DST = DST_graph.find_optimum(attr="cost", kind="min", preserve_attrs=True, style="arborescence")
 
         # Construct MDST graph
@@ -199,7 +206,7 @@ class BroadcastHSTPlanner(BroadcastPlanner):
 
     def plan(self, hop_limit=3000) -> BroadcastReplicationTopology:
         # TODO: not usable now
-        source_v, dest_v = self.src_region, self.dst_regions
+        source_v, dest_v = self.src_provider + ":" + self.src_region, [f"{p}:{r}" for p, r in zip(self.dst_providers, self.dst_regions)]
 
         h = self.G.copy()
         h.remove_edges_from(list(h.in_edges(source_v)) + list(nx.selfloop_edges(h)))
@@ -300,9 +307,13 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             num_partitions=num_partitions,
             gbyte_to_transfer=gbyte_to_transfer,
         )
+
+        src = self.src_provider + ":" + self.src_region
+        dsts = [f"{p}:{r}" for p, r in zip(self.dst_providers, self.dst_regions)]
+
         self.problem = BroadcastProblem(
-            src=src_region,
-            dsts=dst_regions,
+            src=src,
+            dsts=dsts,
             gbyte_to_transfer=gbyte_to_transfer,
             instance_limit=max_instances,
             num_partitions=num_partitions,

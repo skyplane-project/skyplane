@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Optional, List
 
 from skyplane.api.client import tmp_log_dir
 from skyplane.api.usage.client import get_clientid
-from skyplane.broadcast import BroadcastDataplane
+from skyplane.broadcast.bc_dataplane import BroadcastDataplane
 from skyplane.broadcast.bc_planner import BroadcastDirectPlanner, BroadcastMDSTPlanner, BroadcastHSTPlanner, BroadcastILPSolverPlanner
 from skyplane.api.impl.provisioner import Provisioner
 from skyplane.api.transfer_config import TransferConfig
@@ -29,7 +29,7 @@ class SkyplaneBroadcastClient:
         self.aws_auth = aws_config.make_auth_provider() if aws_config else None
         self.azure_auth = azure_config.make_auth_provider() if azure_config else None
         self.gcp_auth = gcp_config.make_auth_provider() if gcp_config else None
-        self.transfer_config = transfer_config if transfer_config else TransferConfig()
+        self.transfer_config = transfer_config if transfer_config else TransferConfig(multipart_enabled=False)
         self.log_dir = (
             tmp_log_dir / "transfer_logs" / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}-{uuid.uuid4().hex[:8]}"
             if log_dir is None
@@ -113,4 +113,5 @@ class SkyplaneBroadcastClient:
 
         topo = planner.plan()
         logger.fs.info(f"[SkyplaneClient.direct_dataplane] Topology: {topo.to_json()}")
+
         return BroadcastDataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
