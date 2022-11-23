@@ -52,6 +52,7 @@ class SkyplaneCLI:
         small_transfer_cmd = replicate_small_cp_cmd(src, dst, recursive)
         if small_transfer_cmd:
             typer.secho(f"Transfer is small enough to delegate to native tools. Delegating to: {small_transfer_cmd}", fg="yellow")
+            typer.secho(f"You can disable this with `skyplane config set native_cmd_enabled false`", fg="bright_black")
             os.system(small_transfer_cmd)
             return True
         else:
