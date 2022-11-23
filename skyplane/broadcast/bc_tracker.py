@@ -147,7 +147,9 @@ class BCTransferProgressTracker(TransferProgressTracker):
 
         assert len(sink_regions) == 1  # BC: only monitor one sink region in this call
 
-        while any([len(self.job_pending_chunk_ids[dst_region][job_uuid]) > 0 for job_uuid in self.job_pending_chunk_ids[dst_region]]):
+        while any(
+            [len(self.dst_job_pending_chunk_ids[dst_region][job_uuid]) > 0 for job_uuid in self.dst_job_pending_chunk_ids[dst_region]]
+        ):
             # refresh shutdown status by running noop
             do_parallel(lambda i: i.run_command("echo 1"), self.dataplane.bound_nodes.values(), n=-1)
 
@@ -175,12 +177,44 @@ class BCTransferProgressTracker(TransferProgressTracker):
             # update job_complete_chunk_ids and job_pending_chunk_ids
             for job_uuid, job in self.jobs.items():
                 job_complete_chunk_ids = set(chunk_id for chunk_id in completed_chunk_ids if self._chunk_to_job_map[chunk_id] == job_uuid)
-                self.job_complete_chunk_ids[dst_region][job_uuid] = self.job_complete_chunk_ids[dst_region][job_uuid].union(
+                self.dst_job_complete_chunk_ids[dst_region][job_uuid] = self.dst_job_complete_chunk_ids[dst_region][job_uuid].union(
                     job_complete_chunk_ids
                 )
-                self.job_pending_chunk_ids[dst_region][job_uuid] = self.job_pending_chunk_ids[dst_region][job_uuid].difference(
+                self.dst_job_pending_chunk_ids[dst_region][job_uuid] = self.dst_job_pending_chunk_ids[dst_region][job_uuid].difference(
                     job_complete_chunk_ids
                 )
 
             # sleep
             time.sleep(0.05)
+
+    @property
+    def is_complete(self):
+        return all(
+            [
+                len(self.dst_job_pending_chunk_ids[dst_region][job_uuid]) == 0
+                for dst_region in self.dst_regions
+                for job_uuid in self.jobs.keys()
+            ]
+        )
+
+    def query_bytes_remaining(self):
+        if len(self.job_chunk_requests) == 0:
+            return None
+        bytes_remaining_per_job = {}
+        for job_uuid in self.dst_job_pending_chunk_ids.keys():
+            bytes_remaining_per_job[job_uuid] = []
+            # job_uuid --> [dst1_remaining_bytes, dst2_remaining_bytes, ...]
+            for dst_region in self.dst_regions:
+                bytes_remaining_per_job[job_uuid].append(
+                    sum(
+                        [
+                            cr.chunk.chunk_length_bytes
+                            for cr in self.job_chunk_requests[job_uuid]
+                            if cr.chunk.chunk_id in self.dst_job_pending_chunk_ids[dst_region][job_uuid]
+                        ]
+                    )
+                )
+        logger.fs.debug(f"[TransferProgressTracker] Bytes remaining per job: {bytes_remaining_per_job}")
+
+        # return the max remaining byte among dsts for each job
+        return sum([max(li) for li in bytes_remaining_per_job.values()])
