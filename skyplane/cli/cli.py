@@ -205,7 +205,11 @@ def cp(
             and (job.transfer_size / GB) < cloud_config.get_flag("native_cmd_threshold_gb")
             and small_transfer_cmd
         ):
-            typer.secho(f"Transfer is small enough to delegate to native tools. Delegating to: {small_transfer_cmd}", fg="yellow")
+            typer.secho(
+                f"Transfer of {job.transfer_size / GB} is small enough to delegate to native tools. Delegating to: {small_transfer_cmd}",
+                fg="yellow",
+            )
+            typer.secho(f"You can change this by `skyplane config set native_cmd_threshold_gb <value>`")
             os.system(small_transfer_cmd)
             return 0
         else:

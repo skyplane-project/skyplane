@@ -1,29 +1,28 @@
 import json
 import os
-from typing import List
 import queue
 import socket
 import ssl
 import time
 import traceback
+from abc import ABC, abstractmethod
 from functools import partial
 from multiprocessing import Event, Process
 from typing import Dict, List, Optional
 
 import nacl.secret
 import urllib3
-from abc import ABC, abstractmethod
 
-from skyplane import MB, cloud_config
+from skyplane.broadcast.gateway.chunk_store import ChunkStore
+from skyplane.broadcast.gateway.gateway_queue import GatewayQueue
 from skyplane.chunk import ChunkRequest
-from skyplane.gateway.chunk_store import ChunkStore
+from skyplane.chunk import ChunkState
+from skyplane.config_paths import cloud_config
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils import logger
+from skyplane.utils.definitions import MB
 from skyplane.utils.retry import retry_backoff
 from skyplane.utils.timer import Timer
-from skyplane.obj_store.object_store_interface import ObjectStoreInterface
-
-from skyplane.gateway.gateway_queue import GatewayQueue
-from skyplane.chunk import ChunkState
 
 
 class GatewayOperator(ABC):
@@ -73,7 +72,7 @@ class GatewayOperator(ABC):
             p.join()
         self.processes = []
 
-    def worker_loop(self, worker_id: int, *args):
+    def worker_loop(self, worker_id: int, **kwargs):
         self.worker_id = worker_id
         while not self.exit_flags[worker_id].is_set() and not self.error_event.is_set():
             try:
@@ -85,7 +84,7 @@ class GatewayOperator(ABC):
                     continue
 
                 # process chunk
-                succ = self.process(chunk_req, *args)
+                succ = self.process(chunk_req, **kwargs)
 
                 # place in output queue
                 if succ:
@@ -114,7 +113,7 @@ class GatewayOperator(ABC):
         pass
 
     @abstractmethod
-    def process(self, chunk_req: ChunkRequest, **args):
+    def process(self, chunk_req: ChunkRequest, **kwargs):
         pass
 
 
@@ -122,7 +121,7 @@ class GatewayWaitReciever(GatewayOperator):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def process(self, chunk_req: ChunkRequest):
+    def process(self, chunk_req: ChunkRequest, **kwargs):
         chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id)
         if not os.path.exists(chunk_file_path):  # chunk still not downloaded, re-queue
             print("Chunk not downloaded yet, re-queueing", chunk_req.chunk.chunk_id, chunk_file_path)
@@ -167,7 +166,7 @@ class GatewaySender(GatewayOperator):
 
         # SSL context
         if use_tls:
-            self.ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+            self.ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)  # type: ignore
             self.ssl_context.check_hostname = False
             self.ssl_context.verify_mode = ssl.CERT_NONE
             logger.info(f"Using {str(ssl.OPENSSL_VERSION)}")
@@ -235,10 +234,9 @@ class GatewaySender(GatewayOperator):
         return sock
 
     # send chunks to other instances
-    def process(self, chunk_req: ChunkRequest, dst_host: str):
+    def process(self, chunk_req: ChunkRequest, dst_host: str, **kwargs):
         """Send list of chunks to gateway server, pipelining small chunks together into a single socket stream."""
         # notify server of upcoming ChunkRequests
-
         logger.debug(f"[sender:{self.worker_id}] Sending chunk ID {chunk_req.chunk.chunk_id} to IP {dst_host}")
 
         chunk_ids = [chunk_req.chunk.chunk_id]
@@ -330,8 +328,7 @@ class GatewayRandomDataGen(GatewayOperator):
         super().__init__(handle, region, input_queue, output_queue, error_event, error_queue, chunk_store, n_processes)
         self.size_mb = size_mb
 
-    def process(self, chunk_req: ChunkRequest):
-
+    def process(self, chunk_req: ChunkRequest, **kwargs):
         # wait until enough space available
         fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
         size_bytes = int(self.size_mb * MB)
@@ -357,10 +354,8 @@ class GatewayRandomDataGen(GatewayOperator):
         # os.system(f"fallocate -l {size_bytes} {fpath}")
         # file_size = os.path.getsize(fpath)
         # assert file_size == size_bytes, f"File {fpath} has size {file_size} but should be {size_bytes} - chunk store remaining size: {self.chunk_store.remaining_bytes()}"
-
-        print(f"Wrote chunk {chunk_req.chunk.chunk_id} with size {file_size} to {fpath}")
+        print(f"Wrote chunk {chunk_req.chunk.chunk_id} to {fpath}")
         chunk_req.chunk.chunk_length_bytes = os.path.getsize(fpath)
-
         return True
 
 
@@ -378,7 +373,7 @@ class GatewayWriteLocal(GatewayOperator):
     ):
         super().__init__(handle, region, input_queue, output_queue, error_event, error_queue, chunk_store, n_processes)
 
-    def process(self, chunk_req: ChunkRequest):
+    def process(self, chunk_req: ChunkRequest, **kwargs):
         # do nothing (already written locally)
         return True
 
@@ -393,9 +388,9 @@ class GatewayObjStoreOperator(GatewayOperator):
         error_event,
         error_queue: GatewayQueue,
         n_processes: int = 1,
-        chunk_store: ChunkStore = None,
-        bucket_name: str = None,
-        bucket_region: str = None,
+        chunk_store: Optional[ChunkStore] = None,
+        bucket_name: Optional[str] = None,
+        bucket_region: Optional[str] = None,
     ):
         super().__init__(handle, region, input_queue, output_queue, error_event, error_queue, chunk_store, n_processes)
         self.bucket_name = bucket_name
@@ -428,9 +423,9 @@ class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
         error_event,
         error_queue: GatewayQueue,
         n_processes: int = 32,
-        chunk_store: ChunkStore = None,
-        bucket_name: str = None,
-        bucket_region: str = None,
+        chunk_store: Optional[ChunkStore] = None,
+        bucket_name: Optional[str] = None,
+        bucket_region: Optional[str] = None,
     ):
         super().__init__(
             handle, region, input_queue, output_queue, error_event, error_queue, n_processes, chunk_store, bucket_name, bucket_region
@@ -486,17 +481,17 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         error_event,
         error_queue: GatewayQueue,
         n_processes: int = 32,
-        chunk_store: ChunkStore = None,
-        bucket_name: str = None,
-        bucket_region: str = None,
+        chunk_store: Optional[ChunkStore] = None,
+        bucket_name: Optional[str] = None,
+        bucket_region: Optional[str] = None,
     ):
         super().__init__(
             handle, region, input_queue, output_queue, error_event, error_queue, n_processes, chunk_store, bucket_name, bucket_region
         )
 
-    def process(self, chunk_req: ChunkRequest):
+    def process(self, chunk_req: ChunkRequest, **kwargs):
         fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
-        print("writing", chunk_req.chunk.dest_key, self.bucket_name, self.bucket_region, chunk_req.chunk.chunk_size)
+        print("writing", chunk_req.chunk.dest_key, self.bucket_name, self.bucket_region, chunk_req.chunk.chunk_length_bytes)
         logger.debug(
             f"[obj_store:{self.worker_id}] Start upload {chunk_req.chunk.chunk_id} to {self.bucket_name}, key {chunk_req.chunk.dest_key}"
         )
