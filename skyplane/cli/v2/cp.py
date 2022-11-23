@@ -10,7 +10,6 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils.definitions import GB
 from skyplane.utils.path import parse_path
 from skyplane.utils import logger
-from skyplane.utils.timer import Timer
 
 
 def cp(
@@ -74,13 +73,14 @@ def cp(
                 small_transfer_status = cli.transfer_cp_small(src, dst, recursive)
                 if small_transfer_status:
                     return 0
+            # confirm transfer
+            if not cli.confirm_transfer(dp, 5, ask_to_confirm_transfer=not confirm):
+                return 1
             dp.provision(spinner=True)
-            with Timer() as t:
-                tracker = dp.run_async()
-                reporter = SimpleReporter(tracker)
-                while reporter.update():
-                    time.sleep(1)
-            print_stats_completed(t.elapsed, (tracker.query_bytes_dispatched() / GB * 8) / t.elapsed)
+            tracker = dp.run_async()
+            reporter = SimpleReporter(tracker)
+            while reporter.update():
+                time.sleep(1)
 
         if not dp.provisioned:
             typer.secho("Deprovisioned dataplane!", fg="yellow")

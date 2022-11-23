@@ -7,7 +7,7 @@ import typer
 import skyplane
 from skyplane.api.transfer_job import CopyJob
 from skyplane.cli.cli_impl.cp_replicate_fallback import replicate_onprem_cp_cmd, replicate_small_cp_cmd
-from skyplane.cli.common import to_api_config, print_stats_completed
+from skyplane.cli.common import to_api_config, print_stats_completed, console
 from skyplane.cli.usage.client import UsageClient
 from skyplane.config_paths import cloud_config
 from skyplane.replicate.replicator_client import TransferStats
@@ -62,6 +62,35 @@ class SkyplaneCLI:
         logger.fs.debug(f"Using dataplane: {dp}")
         return dp
 
+    def confirm_transfer(self, dp: skyplane.Dataplane, query_n: int = 5, ask_to_confirm_transfer=True) -> bool:
+        """Prompts the user to confirm their transfer by querying the first query_n files from the TransferJob"""
+        if not len(dp.jobs_to_dispatch) > 0:
+            typer.secho("No jobs to dispatch.")
+            return False
+        job = dp.jobs_to_dispatch[0]
+        transfer_pair_gen = job.gen_transfer_pairs()
+        console.print(
+            f"\n[bold yellow]Transfer preview: will transfer objects from {dp.src_region_tag} to {dp.dst_region_tag}[/bold yellow]"
+        )
+        for _ in range(query_n):
+            try:
+                src_obj, dst_obj = next(transfer_pair_gen)
+                console.print(f"    [bright_black][bold]{src_obj.key}[/bold] => [bold]{dst_obj.key}[/bold][/bright_black]")
+            except StopIteration:
+                break
+        if ask_to_confirm_transfer:
+            if typer.confirm("Continue?", default=True):
+                logger.fs.debug("User confirmed transfer")
+                console.print(
+                    "[bold green]Transfer starting[/bold green] (Tip: Enable auto-confirmation with `skyplane config set autoconfirm true`)"
+                )
+                console.print("")
+                return True
+            else:
+                logger.fs.error("Transfer cancelled by user.")
+                console.print("[bold][red]Transfer cancelled by user.[/red][/bold]")
+                raise typer.Abort()
+
     def estimate_small_transfer(self, dp: skyplane.Dataplane, size_threshold_bytes: float, query_n: int = 1000) -> bool:
         """Estimates if the transfer is small by querying up to `query_n` files from the TransferJob. If it exceeds
         the file size limit, then it will fall back to the cloud CLIs."""
@@ -72,7 +101,7 @@ class SkyplaneCLI:
             return False
         transfer_pair_gen = job.gen_transfer_pairs()
         total_size = 0
-        for i in range(query_n):
+        for _ in range(query_n):
             generator_exhuausted = False
             try:
                 src_obj, _ = next(transfer_pair_gen)
