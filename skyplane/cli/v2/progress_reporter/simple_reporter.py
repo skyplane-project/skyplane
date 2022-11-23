@@ -4,6 +4,7 @@ from skyplane.cli.common import print_stats_completed
 from skyplane.utils.definitions import GB
 from skyplane.utils.timer import Timer
 
+
 class SimpleReporter:
     def __init__(self, tracker: TransferProgressTracker):
         self.tracker = tracker

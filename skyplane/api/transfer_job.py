@@ -135,7 +135,7 @@ class Chunker:
                 rprint(f"\n:x: [bold red]In order to transfer objects using a prefix, you must use the --recursive or -r flag.[/bold red]")
                 rprint(f"[yellow]If you meant to transfer a single object, pass the full source object key.[/yellow]")
                 rprint(f"[bright_black]Try running: [bold]skyplane {' '.join(sys.argv[1:])} --recursive[/bold][/bright_black]")
-                raise exceptions.MissingObjectException("Encountered a recursive transfer without the --recursive flag.")
+                raise exceptions.MissingObjectException("Encountered a recursive transfer without the --recursive flag.") from None
         else:
             if source_prefix == "" or source_prefix == "/":
                 if dest_prefix == "" or dest_prefix == "/":

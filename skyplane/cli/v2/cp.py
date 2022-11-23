@@ -1,8 +1,11 @@
 import time
+import traceback
 
 import typer
 
-from skyplane.cli.common import print_header
+import skyplane
+from skyplane.api.usage import UsageClient
+from skyplane.cli.common import print_header, console
 from skyplane.cli.v2.cli_impl import SkyplaneCLI
 from skyplane.cli.v2.progress_reporter.simple_reporter import SimpleReporter
 from skyplane.config_paths import cloud_config, config_path
@@ -74,13 +77,19 @@ def cp(
                 if small_transfer_status:
                     return 0
             # confirm transfer
-            if not cli.confirm_transfer(dp, 5, ask_to_confirm_transfer=not confirm):
+            try:
+                if not cli.confirm_transfer(dp, 5, ask_to_confirm_transfer=not confirm):
+                    return 1
+                dp.provision(spinner=True)
+                tracker = dp.run_async()
+                reporter = SimpleReporter(tracker)
+                while reporter.update():
+                    time.sleep(1)
+            except skyplane.exceptions.SkyplaneException as e:
+                console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+                console.print(e.pretty_print_str())
+                UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
                 return 1
-            dp.provision(spinner=True)
-            tracker = dp.run_async()
-            reporter = SimpleReporter(tracker)
-            while reporter.update():
-                time.sleep(1)
 
         if not dp.provisioned:
             typer.secho("Deprovisioned dataplane!", fg="yellow")

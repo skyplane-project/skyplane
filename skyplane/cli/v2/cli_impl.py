@@ -67,17 +67,24 @@ class SkyplaneCLI:
         if not len(dp.jobs_to_dispatch) > 0:
             typer.secho("No jobs to dispatch.")
             return False
-        job = dp.jobs_to_dispatch[0]
+        job: CopyJob = dp.jobs_to_dispatch[0]  # type: ignore
         transfer_pair_gen = job.gen_transfer_pairs()
         console.print(
             f"\n[bold yellow]Transfer preview: will transfer objects from {dp.src_region_tag} to {dp.dst_region_tag}[/bold yellow]"
         )
-        for _ in range(query_n):
-            try:
-                src_obj, dst_obj = next(transfer_pair_gen)
-                console.print(f"    [bright_black][bold]{src_obj.key}[/bold] => [bold]{dst_obj.key}[/bold][/bright_black]")
-            except StopIteration:
-                break
+        # show spinner
+        with console.status("[bright_black]Querying objects...[/bright_black]", spinner="dots"):
+            obj_pairs = []
+            for _ in range(query_n):
+                try:
+                    obj_pairs.append(next(transfer_pair_gen))
+                except StopIteration:
+                    break
+        if len(obj_pairs) == 0:
+            typer.secho("No objects to transfer.")
+            return False
+        for src_obj, dst_obj in obj_pairs:
+            console.print(f"    [bright_black][bold]{src_obj.key}[/bold] => [bold]{dst_obj.key}[/bold][/bright_black]")
         if ask_to_confirm_transfer:
             if typer.confirm("Continue?", default=True):
                 logger.fs.debug("User confirmed transfer")
