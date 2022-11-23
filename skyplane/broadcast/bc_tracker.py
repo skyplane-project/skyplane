@@ -1,8 +1,4 @@
-import functools
-import json
 import time
-from datetime import datetime
-from threading import Thread
 
 import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional, Set
@@ -13,7 +9,6 @@ from skyplane.chunk import ChunkRequest, ChunkState
 from skyplane.utils import logger, imports
 from skyplane.utils.fn import do_parallel
 from skyplane.api.usage.client import UsageClient
-from skyplane.utils.definitions import GB
 from skyplane.api.impl.tracker import TransferProgressTracker
 
 if TYPE_CHECKING:

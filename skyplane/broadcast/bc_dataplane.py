@@ -1,17 +1,12 @@
-import json
-import os
 import threading
 import functools
-from collections import defaultdict, Counter
-from functools import partial
+from collections import Counter
 
-import nacl.secret
-import nacl.utils
 import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from skyplane import compute
-from skyplane.api.dataplane import Dataplane, DataplaneAutoDeprovision
+from skyplane.api.dataplane import Dataplane
 from skyplane.api.transfer_config import TransferConfig
 from skyplane.replicate.replication_plan import ReplicationTopologyGateway
 
@@ -34,8 +29,7 @@ from skyplane.broadcast.gateway.gateway_program import (
 )
 
 from skyplane.utils import logger
-from skyplane.utils.definitions import gateway_docker_image
-from skyplane.utils.fn import PathLike, do_parallel
+from skyplane.utils.fn import PathLike
 
 
 if TYPE_CHECKING:
