@@ -77,7 +77,6 @@ jobs:
     env:
       STRATEGY_UUID: itest-d-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - uses: actions/checkout@v1
       - name: Install poetry
         run: pipx install poetry
       - name: Set up Python 3.10
@@ -85,24 +84,17 @@ jobs:
         with:
           python-version: "3.10"
           cache: "poetry"
-      - name: Set Poetry config
-        run: |
-          poetry config virtualenvs.in-project false
-          poetry config virtualenvs.path ~/.virtualenvs
-      - name: Install Dependencies
-        run: |
-          poetry install -E gateway -E solver -E aws -E azure -E gcp
-          poetry run pip install -r requirements-dev.txt
-        if: steps.cache.outputs.cache-hit != 'true'
+      - name: Install skyplane from pypi
+        run: pip install skyplane[aws,azure,gcp]
       - id: 'auth'
         uses: 'google-github-actions/auth@v0'
         with:
           credentials_json: '${{ secrets.GCP_CREDENTIALS_JSON }}'
       - name: Skyplane init
         run: |
-          poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
-          poetry run skyplane init -y --disable-config-azure
-          poetry run skyplane config set usage_stats false
+          skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
+          skyplane init -y --disable-config-azure
+          skyplane config set usage_stats false
       - name: Deprovision
         run: poetry run skyplane deprovision
       - name: Cleanup GCP service account
