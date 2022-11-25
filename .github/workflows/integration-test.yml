@@ -94,7 +94,7 @@ jobs:
           skyplane init -y --disable-config-azure
           skyplane config set usage_stats false
       - name: Deprovision
-        run: poetry run skyplane deprovision
+        run: skyplane deprovision
       - name: Cleanup GCP service account
         if: always()
         run: gcloud iam service-accounts delete --quiet ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
