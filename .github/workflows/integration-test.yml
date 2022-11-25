@@ -77,13 +77,11 @@ jobs:
     env:
       STRATEGY_UUID: itest-d-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - name: Install poetry
-        run: pipx install poetry
+      - uses: actions/checkout@v1
       - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
-          cache: "poetry"
       - name: Install skyplane from pypi
         run: pip install skyplane[aws,azure,gcp]
       - id: 'auth'
@@ -96,7 +94,7 @@ jobs:
           skyplane init -y --disable-config-azure
           skyplane config set usage_stats false
       - name: Deprovision
-        run: poetry run skyplane deprovision
+        run: skyplane deprovision
       - name: Cleanup GCP service account
         if: always()
         run: gcloud iam service-accounts delete --quiet ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
