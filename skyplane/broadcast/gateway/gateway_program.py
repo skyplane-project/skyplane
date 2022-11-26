@@ -1,6 +1,6 @@
-from typing import Optional, List
 import json
 from collections import defaultdict
+from typing import Optional, List
 
 
 class GatewayOperator:
