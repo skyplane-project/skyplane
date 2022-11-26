@@ -32,9 +32,15 @@ def delete_role(role_name, policy_arn, batch_policy_arn):
     print("Deleted role", role_name)
 
 def create_iam_role(src_region, dst_regions):
+    """ 
+    Create IAM policies for continual replication and batch replication, and attach to a single policy. 
+    The policies are applied to all the destination region buckets and source region bucket. 
+    """
+
     client = boto3.client("iam")
     bucket_names = [bucket_handle(region.split(":")[1]) for region in [src_region] + dst_regions]
-
+ 
+    # S3 batch job policy 
     batch_policy = {
         "Version": "2012-10-17",
         "Statement": [
@@ -81,6 +87,8 @@ def create_iam_role(src_region, dst_regions):
             }
         ]
     }
+
+    # S3 replication rule policy 
     policy = {
         "Version": "2012-10-17",
         "Statement": [
@@ -110,6 +118,7 @@ def create_iam_role(src_region, dst_regions):
         ]
     }
 
+    # create policies 
     role_name = f"skyplane-bucket-replication-role-{int(time.time())}"
     policy_name = f"skyplane-bucket-replication-policy-{int(time.time())}"
 
@@ -127,7 +136,7 @@ def create_iam_role(src_region, dst_regions):
     batch_policy_arn = response["Policy"]["Arn"]
     print("Created batch policy ARN", batch_policy_arn)
  
-
+    # allow assume role for s3 and batch
     assume_role_policy_document = {
         "Version": "2012-10-17",
         "Statement": [
@@ -147,7 +156,7 @@ def create_iam_role(src_region, dst_regions):
             }
         ]
     }
-
+    # create role 
     resp = client.create_role(
         RoleName=role_name, 
         AssumeRolePolicyDocument=json.dumps(assume_role_policy_document)
@@ -155,22 +164,22 @@ def create_iam_role(src_region, dst_regions):
     role_arn = resp["Role"]["Arn"]
     print("Created role", role_name, role_arn)
 
-    time.sleep(5)
+    time.sleep(5) # wait for role to finish creating 
+
+    # attach policies to role 
     response = client.attach_role_policy(RoleName=role_name, PolicyArn=policy_arn)
     response = client.attach_role_policy(RoleName=role_name, PolicyArn=batch_policy_arn)
-
-    response = client.get_role(
-        RoleName=role_name
-    )
 
     return role_name, role_arn, policy_arn, batch_policy_arn
 
 def write_source_data(src_region, target_data, directory): 
+    """
+    Use AWS CLI to copy data from target data directory into bucket 
+    """
     bucket_name = bucket_handle(src_region.split(":")[1])
     sync_command = f"aws s3 sync {target_data} s3://{bucket_name}/{directory}/"
     print("Syncing data to source bucket", sync_command)
     os.system(sync_command)
-
 
 def main(argv):
 
@@ -189,7 +198,7 @@ def main(argv):
 
         if not bucket.bucket_exists():
             print(f"Bucket {bucket_name} does not exist, creating it")
-            bucket.create_bucket()
+            bucket.create_bucket(region)
             print(f"Created bucket {bucket_name} in {region}")
 
         buckets[region] = bucket
@@ -276,6 +285,8 @@ def main(argv):
             FLAGS.target_data, f"s3://{src_bucket}/{experiment_name}", recursive=True
         )
         print("Waiting for data to copy to source bucket...")
+
+        # TODO: make this async, and as chunk complete, send them to the broadcast dataplane 
         dp.run()
 
         # wait for copy at destinations
@@ -304,8 +315,6 @@ def main(argv):
     delete_role(role_name, policy_arn, batch_policy_arn)
     delete_policy(policy_arn)
     delete_policy(batch_policy_arn)
-
-
 
 
 if __name__ == '__main__':
