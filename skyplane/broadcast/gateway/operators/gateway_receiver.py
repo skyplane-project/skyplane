@@ -8,14 +8,21 @@ from contextlib import closing
 from multiprocessing import Event, Process, Value, Queue
 from typing import Optional, Tuple
 
+import lz4.frame
 import nacl.secret
 
-from skyplane.broadcast.gateway.cert import generate_self_signed_certificate
-from skyplane.broadcast.gateway.chunk_store import ChunkStore
+from skyplane import MB
 from skyplane.chunk import WireProtocolHeader
+from skyplane.gateway.cert import generate_self_signed_certificate
+from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.utils import logger
-from skyplane.utils.definitions import MB
 from skyplane.utils.timer import Timer
+
+from skyplane.gateway.gateway_queue import GatewayQueue
+
+from skyplane.chunk import ChunkRequest, ChunkState
+
+from typing import Dict
 
 
 class GatewayReceiver:
@@ -135,7 +142,7 @@ class GatewayReceiver:
         assert len(self.server_processes) == 0
 
     def stop_workers(self):
-        self.stop_servers()
+        self.stop_servers(self)
 
     def recv_chunks(self, conn: socket.socket, addr: Tuple[str, int]):
         server_port = conn.getsockname()[1]
@@ -153,9 +160,7 @@ class GatewayReceiver:
             # should_decompress = chunk_header.is_compressed and chunk_request.dst_region == self.region
 
             # wait for space
-            # TODO: implement same fix as for gen_data
             while self.chunk_store.remaining_bytes() < chunk_header.data_len * self.max_pending_chunks:
-                logger.debug(f"[reciever] Chunk store full, waiting before recieving more chunks")
                 time.sleep(0.1)
 
             # get data
@@ -166,6 +171,7 @@ class GatewayReceiver:
                 with self.chunk_store.get_chunk_file_path(chunk_header.chunk_id).open("wb") as f:
                     socket_data_len = chunk_header.data_len
                     chunk_received_size = 0
+                    chunk_received_size_decompressed = 0
                     to_write = bytearray(socket_data_len)
                     to_write_view = memoryview(to_write)
                     while socket_data_len > 0:
