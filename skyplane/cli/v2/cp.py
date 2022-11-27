@@ -82,9 +82,6 @@ def cp(
                     return 1
                 dp.provision(spinner=True)
                 tracker = dp.run_async()
-                reporter = SimpleReporter(tracker)
-                while reporter.update():
-                    time.sleep(1)
             except skyplane.exceptions.SkyplaneException as e:
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e.pretty_print_str())
