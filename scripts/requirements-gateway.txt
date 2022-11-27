@@ -22,8 +22,3 @@ flask
 lz4
 pyopenssl
 werkzeug
-# broadcast dependencies 
-networkx
-# numpy
-# pandas
-# cvxpy
