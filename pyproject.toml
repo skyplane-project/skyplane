@@ -63,7 +63,7 @@ gcp = ["google-api-python-client", "google-auth", "google-cloud-compute", "googl
 all = ["boto3", "azure-identity", "azure-mgmt-authorization", "azure-mgmt-compute", "azure-mgmt-network", "azure-mgmt-resource", "azure-mgmt-storage", "azure-mgmt-subscription", "azure-storage-blob", "google-api-python-client", "google-auth", "google-cloud-compute", "google-cloud-storage"]
 gateway = ["flask", "lz4", "pynacl", "pyopenssl", "werkzeug"]
 solver = ["cvxpy", "graphviz", "matplotlib", "numpy"]
-broadcast = ["networkx"]
+broadcast = ["networkx", "numpy", "pandas", "cvxpy", "graphviz", "matplotlib"]
 
 [tool.poetry.dev-dependencies]
 pytest = ">=6.0.0"

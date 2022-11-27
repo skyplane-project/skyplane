@@ -150,7 +150,9 @@ class Provisioner:
             private_ips = [s.private_ip() for t, s in results if t.cloud_provider == "gcp"]
             authorize_ip_jobs = []
             if aws_provisioned:
-                authorize_ip_jobs.extend([partial(self.aws.add_ips_to_security_group, r, public_ips) for r in set(aws_regions)])
+                # set it to None for broadcast
+                authorize_ip_jobs.extend([partial(self.aws.add_ips_to_security_group, r, None) for r in set(aws_regions)])
+                # authorize_ip_jobs.extend([partial(self.aws.add_ips_to_security_group, r, public_ips) for r in set(aws_regions)])
             if gcp_provisioned:
 
                 def authorize_gcp_gateways():

@@ -18,9 +18,10 @@ __all__ = [
     # API
     "SkyplaneClient",
     "Dataplane",
+    "TransferConfig",
+    # Broadcast API
     "SkyplaneBroadcastClient",
     "BroadcastDataplane",
-    "TransferConfig",
     "AWSConfig",
     "AzureConfig",
     "GCPConfig",

@@ -72,7 +72,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
         try:
             for job_uuid, job in self.jobs.items():
                 logger.fs.debug(f"[TransferProgressTracker] Dispatching job {job.uuid}")
-                self.job_chunk_requests[job_uuid] = list(job.dispatch(self.dataplane, transfer_config=self.transfer_config))
+                self.job_chunk_requests[job_uuid] = list(job.broadcast_dispatch(self.dataplane, transfer_config=self.transfer_config))
 
                 for dst_region in self.dst_regions:
                     self.dst_job_pending_chunk_ids[dst_region][job_uuid] = set(

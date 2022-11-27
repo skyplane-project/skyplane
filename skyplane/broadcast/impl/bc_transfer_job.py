@@ -25,7 +25,6 @@ from skyplane.api.impl.chunker import batch_generator, tail_generator
 from skyplane.broadcast.impl.bc_chunker import BCChunker
 from skyplane.api.impl.path import parse_path
 from skyplane.api.transfer_config import TransferConfig
-from skyplane.broadcast.chunk import ChunkRequest
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
@@ -67,6 +66,9 @@ class BCTransferJob(TransferJob):
             for dst_iface in self.dst_ifaces.values():
                 dst_iface.set_requester_bool(True)
 
+    def broadcast_dispatch(self, dataplane: "BroadcastDataplane", **kwargs) -> Generator[ChunkRequest, None, None]:
+        raise NotImplementedError("Broadcast Dispatch not implemented")
+
     def _transfer_pair_generator(self) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
         """Query source region and return list of objects to transfer. Return a random pair for any destination"""
         # NOTE: do additional checking across destination
@@ -87,7 +89,7 @@ class BCCopyJob(BCTransferJob):
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         return super().__post_init__()
 
-    def dispatch(
+    def broadcast_dispatch(
         self, dataplane: "BroadcastDataplane", transfer_config: TransferConfig, dispatch_batch_size: int = 64
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways."""
