@@ -11,7 +11,6 @@ from pprint import pprint
 import networkx as nx
 import pandas as pd
 import numpy as np
-import cvxpy as cp
 
 from skyplane.utils import logger
 from skyplane.broadcast import __root__
@@ -285,6 +284,9 @@ class BroadcastHSTPlanner(BroadcastPlanner):
 
 
 class BroadcastILPSolverPlanner(BroadcastPlanner):
+
+    import cvxpy as cp
+
     def __init__(
         self,
         src_provider: str,
@@ -322,6 +324,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
 
     @staticmethod
     def choose_solver():
+
         try:
             import gurobipy as _grb  # pytype: disable=import-error
 

@@ -24,6 +24,6 @@ pyopenssl
 werkzeug
 # broadcast dependencies 
 networkx
-# numpy
-# pandas
+numpy
+pandas
 # cvxpy
