@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Optional, List
 from skyplane.api.client import tmp_log_dir
 from skyplane.api.usage.client import get_clientid
 from skyplane.broadcast.bc_dataplane import BroadcastDataplane
-from skyplane.broadcast.bc_planner import BroadcastDirectPlanner, BroadcastMDSTPlanner, BroadcastHSTPlanner, BroadcastILPSolverPlanner
 from skyplane.api.impl.provisioner import Provisioner
 from skyplane.api.transfer_config import TransferConfig
 from skyplane.utils import logger
@@ -17,6 +16,9 @@ if TYPE_CHECKING:
 
 
 class SkyplaneBroadcastClient:
+    
+    from skyplane.broadcast.bc_planner import BroadcastDirectPlanner, BroadcastMDSTPlanner, BroadcastHSTPlanner, BroadcastILPSolverPlanner
+
     def __init__(
         self,
         aws_config: Optional["AWSConfig"] = None,

@@ -285,7 +285,6 @@ class BroadcastHSTPlanner(BroadcastPlanner):
 
 class BroadcastILPSolverPlanner(BroadcastPlanner):
 
-    import cvxpy as cp
 
     def __init__(
         self,
@@ -324,6 +323,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
 
     @staticmethod
     def choose_solver():
+        import cvxpy as cp
 
         try:
             import gurobipy as _grb  # pytype: disable=import-error
@@ -371,7 +371,12 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         # TODO: the generated topo itself is not used, but the networkx graph contains all information needed to generate gateway programs
         return self.get_topo_from_nxgraph(solution.problem.num_partitions, solution.problem.gbyte_to_transfer, result_g)
 
-    def plan(self, solver=cp.GUROBI, solver_verbose=False, save_lp_path=None) -> BroadcastReplicationTopology:
+    def plan(self, solver=None, solver_verbose=False, save_lp_path=None) -> BroadcastReplicationTopology:
+
+        import cvxpy as cp
+        if solver is None: 
+            solver = cp.GUROBI
+        
         problem = self.problem
 
         # OPTION1: use the graph with only source and destination nodes
