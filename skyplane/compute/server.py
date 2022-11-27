@@ -348,13 +348,14 @@ class Server:
             self.upload_file(write_json_path, f"/tmp/{filename}")
             docker_envs["GATEWAY_PROGRAM_FILE"] = f"/pkg/data/{filename}"
             docker_run_flags += f" -v /tmp/{filename}:/pkg/data/{filename}"
+            gateway_daemon_cmd = f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/broadcast/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
+        else: 
+            # not use broadcast gateway programs, pass in outgoing ports
+            gateway_daemon_cmd = f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
+            gateway_daemon_cmd += f" --outgoing-ports '{json.dumps(outgoing_ports)}'"
 
         docker_run_flags += " " + " ".join(f"--env {k}={v}" for k, v in docker_envs.items())
-        gateway_daemon_cmd = f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
 
-        # not use broadcast gateway programs, pass in outgoing ports
-        if gateway_programs is None:
-            gateway_daemon_cmd += f" --outgoing-ports '{json.dumps(outgoing_ports)}'"
 
         gateway_daemon_cmd += f" --region {self.region_tag} {'--use-compression' if use_compression else ''}"
         gateway_daemon_cmd += f" {'--disable-e2ee' if e2ee_key_bytes is None else ''}"
