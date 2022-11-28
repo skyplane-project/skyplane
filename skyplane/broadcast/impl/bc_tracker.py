@@ -174,10 +174,12 @@ class BCTransferProgressTracker(TransferProgressTracker):
                 continue
 
             is_complete_rec = (
-                lambda row: row["state"] == ChunkState.upload_complete
+                lambda row: row["state"] == ChunkState.complete
                 and row["instance"] in [s.instance for s in sinks]
                 and row["region"] in [s.region for s in sinks]
             )
+            print("CHUNK STATE", log_df[log_df.apply(lambda row: row["region"] in [s.region for s in sinks])]["state"].tolist())
+            print("Num complete", log_df.apply(is_complete_rec, axis=1).sum())
             sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
             completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region"].unique()) == set(sink_regions))
             completed_chunk_ids = completed_status[completed_status].index

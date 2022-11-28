@@ -27,7 +27,9 @@ class BroadcastPlanner:
         num_connections: int,
         num_partitions: int,
         gbyte_to_transfer: float,
-        cost_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "cost.csv",
+        #cost_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "cost.csv",
+        #tp_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "throughput.csv",
+        cost_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "cost_old.csv",
         tp_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "throughput.csv",
     ):
 
@@ -140,7 +142,13 @@ class BroadcastDirectPlanner(BroadcastPlanner):
         dsts = [f"{p}:{r}" for p, r in zip(self.dst_providers, self.dst_regions)]
 
         for dst in dsts:
-            cost_of_edge = self.G[src][dst]["cost"]
+            if src == dst: 
+                cost_of_edge = 0
+            else:  
+                try:
+                    cost_of_edge = self.G[src][dst]["cost"]
+                except Exception as e:
+                    raise ValueError(f"Missing cost edge {src}->{dst}")
             direct_graph.add_edge(src, dst, partitions=[str(i) for i in list(range(self.num_partitions))], cost=cost_of_edge)
 
         for node in direct_graph.nodes:

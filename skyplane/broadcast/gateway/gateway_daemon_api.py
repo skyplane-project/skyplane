@@ -96,7 +96,7 @@ class GatewayDaemonAPI(threading.Thread):
 
                 # if terminal operator, then mark a chunk completion
                 if handle in self.terminal_operators[elem["partition"]] and state == ChunkState.complete.name:
-                    self.chunk_completions[elem["chunk_id"]].append(handle)
+                    self.chunk_completions[chunk_id].append(handle)
 
                 # if all terminal operators complete, then mark chunk complete
                 if self.chunk_status.get(chunk_id, None) != ChunkState.complete.name and len(self.chunk_completions[chunk_id]) == len(
@@ -121,7 +121,7 @@ class GatewayDaemonAPI(threading.Thread):
                 else:
                     if elem["state"] == ChunkState.complete.name:
                         print(
-                            f"[gateway_api] chunk {chunk_id}: not complete "
+                            f"[gateway_api] After {handle}, chunk {chunk_id}: not complete "
                             + f"operators {self.chunk_completions[chunk_id]} have uploaded "
                             + f"out of {self.terminal_operators[elem['partition']]}"
                         )

@@ -132,7 +132,7 @@ class GatewayDaemon:
                 output_queue = create_output_queue(op)
                 if output_queue is None:
                     # track what opeartors need to complete processing the chunk
-                    self.terminal_operators[partition_id].append(op["handle"])
+                    self.terminal_operators[partition_id].append(handle)
 
                 # create operators
                 if op["op_type"] == "receive":

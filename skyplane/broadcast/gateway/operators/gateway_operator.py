@@ -92,7 +92,8 @@ class GatewayOperator(ABC):
 
                 # place in output queue
                 if succ:
-                    logger.info(f"[{self.handle}:{self.worker_id}] Placing chunk {chunk_req.chunk.chunk_id} in downstream queue")
+                    print(f"[{self.handle}:{self.worker_id}] Placing chunk {chunk_req.chunk.chunk_id} in downstream queue")
+                    print(self.handle)
                     self.chunk_store.log_chunk_state(chunk_req, ChunkState.complete, operator_handle=self.handle, worker_id=worker_id)
                     if self.output_queue is not None:
                         self.output_queue.put(chunk_req)
