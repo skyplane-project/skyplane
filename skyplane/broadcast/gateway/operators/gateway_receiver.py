@@ -11,14 +11,14 @@ from typing import Optional, Tuple
 import lz4.frame
 import nacl.secret
 
-from skyplane import MB
+from skyplane.utils.definitions import MB
 from skyplane.chunk import WireProtocolHeader
-from skyplane.gateway.cert import generate_self_signed_certificate
-from skyplane.gateway.chunk_store import ChunkStore
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
 
-from skyplane.gateway.gateway_queue import GatewayQueue
+from skyplane.broadcast.gateway.gateway_queue import GatewayQueue
+from skyplane.broadcast.gateway.cert import generate_self_signed_certificate
+from skyplane.broadcast.gateway.chunk_store import ChunkStore
 
 from skyplane.chunk import ChunkRequest, ChunkState
 

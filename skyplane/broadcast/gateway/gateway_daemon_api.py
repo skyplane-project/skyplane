@@ -12,8 +12,8 @@ from flask import Flask, jsonify, request
 from werkzeug.serving import make_server
 
 from skyplane.chunk import ChunkRequest, ChunkState
-from skyplane.gateway.chunk_store import ChunkStore
-from skyplane.gateway.operators.gateway_receiver import GatewayReceiver
+from skyplane.broadcast.gateway.chunk_store import ChunkStore
+from skyplane.broadcast.gateway.operators.gateway_receiver import GatewayReceiver
 from skyplane.utils import logger
 
 
@@ -87,7 +87,7 @@ class GatewayDaemonAPI(threading.Thread):
                 try:
                     elem = self.chunk_store.chunk_status_queue.get(timeout=timeout)
                 except Empty:
-                    print("[gateway_api] Chunk status queue empty, no more updates")
+                    #print("[gateway_api] Chunk status queue empty, no more updates")
                     break
 
                 handle = elem["handle"]

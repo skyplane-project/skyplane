@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 from skyplane.chunk import ChunkRequest, ChunkState
 from skyplane.utils import logger
 
-from skyplane.gateway.gateway_queue import GatewayQueue
+from skyplane.broadcast.gateway.gateway_queue import GatewayQueue
 
 
 class ChunkStore:

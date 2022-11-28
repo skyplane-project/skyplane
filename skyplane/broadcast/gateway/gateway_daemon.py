@@ -13,15 +13,14 @@ from pathlib import Path
 from threading import BoundedSemaphore
 from typing import Dict, List
 
-from skyplane import MB
+from skyplane.utils.definitions import MB
 from skyplane.chunk import ChunkState
-from skyplane.gateway.chunk_store import ChunkStore
-from skyplane.gateway.gateway_daemon_api import GatewayDaemonAPI
 from skyplane.utils import logger
 
-from skyplane.gateway.gateway_queue import GatewayQueue, GatewayANDQueue
-
-from skyplane.gateway.operators.gateway_operator import (
+from skyplane.broadcast.gateway.gateway_queue import GatewayQueue, GatewayANDQueue
+from skyplane.broadcast.gateway.chunk_store import ChunkStore
+from skyplane.broadcast.gateway.gateway_daemon_api import GatewayDaemonAPI
+from skyplane.broadcast.gateway.operators.gateway_operator import (
     GatewaySender,
     GatewayRandomDataGen,
     GatewayWriteLocal,
@@ -29,7 +28,7 @@ from skyplane.gateway.operators.gateway_operator import (
     GatewayObjStoreWriteOperator,
     GatewayWaitReciever,
 )
-from skyplane.gateway.operators.gateway_receiver import GatewayReceiver
+from skyplane.broadcast.gateway.operators.gateway_receiver import GatewayReceiver
 
 from queue import Empty
 from collections import defaultdict
@@ -45,6 +44,9 @@ class GatewayDaemon:
         # read gateway program
         gateway_program_path = Path(os.environ["GATEWAY_PROGRAM_FILE"]).expanduser()
         gateway_program = json.load(open(gateway_program_path, "r"))
+
+        print("starting gateway daemon", gateway_program_path)
+        pprint(gateway_program)
 
         self.use_tls = use_tls
 
@@ -220,6 +222,7 @@ class GatewayDaemon:
             partition = str(partition)
 
             # create initial queue for partition
+            print(f"Addining partition {partition}")
             self.chunk_store.add_partition(partition)
 
             create_gateway_operators_helper(
