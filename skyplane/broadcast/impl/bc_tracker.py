@@ -154,6 +154,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
 
         assert len(sink_regions) == 1  # BC: only monitor one sink region in this call
 
+        # any of the jobs of this region is not complete 
         while any(
             [len(self.dst_job_pending_chunk_ids[dst_region][job_uuid]) > 0 for job_uuid in self.dst_job_pending_chunk_ids[dst_region]]
         ):
@@ -180,6 +181,10 @@ class BCTransferProgressTracker(TransferProgressTracker):
             sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
             completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region"].unique()) == set(sink_regions))
             completed_chunk_ids = completed_status[completed_status].index
+            print(f"Log df: {log_df}")
+            print(f"Sink status df: {sink_status_df}")
+            print(f"complete status: {completed_status}")
+            print(f"Region: {dst_region}, complete chunk ids: {completed_chunk_ids}")
 
             # update job_complete_chunk_ids and job_pending_chunk_ids
             for job_uuid, job in self.jobs.items():
@@ -208,10 +213,11 @@ class BCTransferProgressTracker(TransferProgressTracker):
         if len(self.job_chunk_requests) == 0:
             return None
         bytes_remaining_per_job = {}
-        for job_uuid in self.dst_job_pending_chunk_ids.keys():
-            bytes_remaining_per_job[job_uuid] = []
-            # job_uuid --> [dst1_remaining_bytes, dst2_remaining_bytes, ...]
-            for dst_region in self.dst_regions:
+        for dst_region in self.dst_regions:
+            print("dst region: ", dst_region)
+            for job_uuid in self.dst_job_pending_chunk_ids[dst_region].keys():
+                bytes_remaining_per_job[job_uuid] = []
+                # job_uuid --> [dst1_remaining_bytes, dst2_remaining_bytes, ...]
                 bytes_remaining_per_job[job_uuid].append(
                     sum(
                         [
@@ -222,6 +228,5 @@ class BCTransferProgressTracker(TransferProgressTracker):
                     )
                 )
         logger.fs.debug(f"[TransferProgressTracker] Bytes remaining per job: {bytes_remaining_per_job}")
-
         # return the max remaining byte among dsts for each job
         return sum([max(li) for li in bytes_remaining_per_job.values()])
