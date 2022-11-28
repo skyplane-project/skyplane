@@ -16,15 +16,14 @@ from abc import ABC, abstractmethod
 
 from skyplane.config_paths import cloud_config
 from skyplane.utils.definitions import MB
-from skyplane.chunk import ChunkRequest
 from skyplane.utils import logger
 from skyplane.utils.retry import retry_backoff
 from skyplane.utils.timer import Timer
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 
+from skyplane.broadcast.chunk import ChunkRequest, ChunkState
 from skyplane.broadcast.gateway.gateway_queue import GatewayQueue
 from skyplane.broadcast.gateway.chunk_store import ChunkStore
-from skyplane.chunk import ChunkState
 
 
 class GatewayOperator(ABC):

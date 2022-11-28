@@ -86,7 +86,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
             UsageClient.log_exception("dispatch job", e, args, self.dataplane.src_region_tag, ":", session_start_timestamp_ms)
             raise e
 
-        def monitor_single_dst_helper(dst_region, dst_region_tag):
+        def monitor_single_dst_helper(dst_region):
             start_time = int(time.time())
             try:
                 self.monitor_transfer(dst_region)
@@ -97,13 +97,13 @@ class BCTransferProgressTracker(TransferProgressTracker):
                     reformat_err,
                     args,
                     self.dataplane.src_region_tag,
-                    dst_region_tag,
+                    dst_region,
                     session_start_timestamp_ms,
                 )
                 raise err
             except Exception as e:
                 UsageClient.log_exception(
-                    "monitor transfer", e, args, self.dataplane.src_region_tag, dst_region_tag, session_start_timestamp_ms
+                    "monitor transfer", e, args, self.dataplane.src_region_tag, dst_region, session_start_timestamp_ms
                 )
                 raise e
             end_time = int(time.time())
@@ -114,7 +114,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
                     job.finalize()
             except Exception as e:
                 UsageClient.log_exception(
-                    "finalize job", e, args, self.dataplane.src_region_tag, dst_region_tag, session_start_timestamp_ms
+                    "finalize job", e, args, self.dataplane.src_region_tag, dst_region, session_start_timestamp_ms
                 )
                 raise e
 
@@ -123,7 +123,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
                     logger.fs.debug(f"[TransferProgressTracker] Verifying job {job.uuid}")
                     job.verify()
             except Exception as e:
-                UsageClient.log_exception("verify job", e, args, self.dataplane.src_region_tag, dst_region_tag, session_start_timestamp_ms)
+                UsageClient.log_exception("verify job", e, args, self.dataplane.src_region_tag, dst_region, session_start_timestamp_ms)
                 raise e
 
             # transfer successfully completed
@@ -132,12 +132,13 @@ class BCTransferProgressTracker(TransferProgressTracker):
                 "total_runtime_s": end_time - start_time,
                 "throughput_gbits": self.calculate_size() / (end_time - start_time),
             }
-            UsageClient.log_transfer(transfer_stats, args, self.dataplane.src_region_tag, dst_region_tag, session_start_timestamp_ms)
+            UsageClient.log_transfer(transfer_stats, args, self.dataplane.src_region_tag, dst_region, session_start_timestamp_ms)
             return transfer_stats
 
         # Record only the transfer time per destination
         e2e_start_time = int(time.time())
         results = []
+        print("dest", self.dst_regions)
         with ThreadPoolExecutor(max_workers=8) as executor:
             future_list = [executor.submit(monitor_single_dst_helper, dst) for dst in self.dst_regions]
             for future in as_completed(future_list):
@@ -148,7 +149,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
     @imports.inject("pandas")
     def monitor_transfer(pd, self, dst_region):
         # todo implement transfer monitoring to update job_complete_chunk_ids and job_pending_chunk_ids while the transfer is in progress
-        sinks = {n for n in self.topology.sink_instances() if n.region == dst_region}
+        sinks = {n for n in self.dataplane.topology.sink_instances() if n.region == dst_region}
         sink_regions = {dst_region}
 
         assert len(sink_regions) == 1  # BC: only monitor one sink region in this call

@@ -11,10 +11,10 @@ from typing import Optional, Tuple
 import nacl.secret
 
 from skyplane.utils.definitions import MB
-from skyplane.chunk import WireProtocolHeader
 from skyplane.utils import logger
 from skyplane.utils.timer import Timer
 
+from skyplane.broadcast.chunk import WireProtocolHeader
 from skyplane.broadcast.gateway.cert import generate_self_signed_certificate
 from skyplane.broadcast.gateway.chunk_store import ChunkStore
 

@@ -5,9 +5,9 @@ from os import PathLike
 from pathlib import Path
 from typing import Dict, Optional
 
-from skyplane.chunk import ChunkRequest, ChunkState
 from skyplane.utils import logger
 
+from skyplane.broadcast.chunk import ChunkRequest, ChunkState
 from skyplane.broadcast.gateway.gateway_queue import GatewayQueue
 
 
@@ -66,4 +66,4 @@ class ChunkStore:
         return int(subprocess.check_output(["df", "-k", "--output=avail", self.chunk_dir]).decode().strip().split()[-1]) * 1024
 
     def get_chunk_file_path(self, chunk_id: str) -> Path:
-        return self.chunk_dir / f"{chunk_id:05d}.chunk"
+        return self.chunk_dir / f"{chunk_id}.chunk"
