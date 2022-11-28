@@ -1,12 +1,9 @@
 import subprocess
-import os
-from collections import defaultdict
 from datetime import datetime
-from multiprocessing import Manager, Queue
+from multiprocessing import Queue
 from os import PathLike
 from pathlib import Path
-from queue import Empty
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 from skyplane.chunk import ChunkRequest, ChunkState
 from skyplane.utils import logger
@@ -66,5 +63,5 @@ class ChunkStore:
     def remaining_bytes(self):
         return int(subprocess.check_output(["df", "-k", "--output=avail", self.chunk_dir]).decode().strip().split()[-1]) * 1024
 
-    def get_chunk_file_path(self, chunk_id: int) -> Path:
+    def get_chunk_file_path(self, chunk_id: str) -> Path:
         return self.chunk_dir / f"{chunk_id:05d}.chunk"

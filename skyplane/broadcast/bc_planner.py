@@ -141,7 +141,7 @@ class BroadcastDirectPlanner(BroadcastPlanner):
 
         for dst in dsts:
             cost_of_edge = self.G[src][dst]["cost"]
-            direct_graph.add_edge(src, dst, partitions=list(range(self.num_partitions)), cost=cost_of_edge)
+            direct_graph.add_edge(src, dst, partitions=[str(i) for i in list(range(self.num_partitions))], cost=cost_of_edge)
 
         for node in direct_graph.nodes:
             direct_graph.nodes[node]["num_vms"] = self.num_instances
@@ -179,7 +179,7 @@ class BroadcastMDSTPlanner(BroadcastPlanner):
         for edge in list(opt_DST.edges()):
             s, d = edge[0], edge[1]
             cost_of_edge = self.G[s][d]["cost"]
-            MDST_graph.add_edge(s, d, partitions=list(range(self.num_partitions)), cost=cost_of_edge)
+            MDST_graph.add_edge(s, d, partitions=[str(i) for i in list(range(self.num_partitions))], cost=cost_of_edge)
 
         for node in MDST_graph.nodes:
             MDST_graph.nodes[node]["num_vms"] = self.num_instances
@@ -265,7 +265,9 @@ class BroadcastHSTPlanner(BroadcastPlanner):
                         l = line.split()
                         src_r, dst_r = id_to_name[int(l[1])], id_to_name[int(l[2])]
                         cost_of_edge = self.G[src_r][dst_r]["cost"]
-                        di_stree_graph.add_edge(src_r, dst_r, partitions=list(range(self.num_partitions)), cost=cost_of_edge)
+                        di_stree_graph.add_edge(
+                            src_r, dst_r, partitions=[str(i) for i in list(range(self.num_partitions))], cost=cost_of_edge
+                        )
 
             for node in di_stree_graph.nodes:
                 di_stree_graph.nodes[node]["num_vms"] = self.num_instances
@@ -284,8 +286,6 @@ class BroadcastHSTPlanner(BroadcastPlanner):
 
 
 class BroadcastILPSolverPlanner(BroadcastPlanner):
-
-
     def __init__(
         self,
         src_provider: str,
@@ -348,7 +348,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         result_g = nx.DiGraph()  # solution nx graph
         for i in range(result.shape[0]):
             edge = solution.var_edges[i]
-            partitions = [partition_i for partition_i in range(result.shape[1]) if result[i][partition_i] > 0.5]
+            partitions = [str(partition_i) for partition_i in range(result.shape[1]) if result[i][partition_i] > 0.5]
 
             if len(partitions) == 0:
                 continue
@@ -374,9 +374,10 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
     def plan(self, solver=None, solver_verbose=False, save_lp_path=None) -> BroadcastReplicationTopology:
 
         import cvxpy as cp
-        if solver is None: 
+
+        if solver is None:
             solver = cp.GUROBI
-        
+
         problem = self.problem
 
         # OPTION1: use the graph with only source and destination nodes

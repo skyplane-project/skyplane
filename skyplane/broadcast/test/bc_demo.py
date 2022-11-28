@@ -1,49 +1,33 @@
 import time
 
 import skyplane
+from skyplane.broadcast.bc_client import SkyplaneBroadcastClient
 
 if __name__ == "__main__":
-    client = skyplane.SkyplaneBroadcastClient(aws_config=skyplane.AWSConfig())
+    client = SkyplaneBroadcastClient(aws_config=skyplane.AWSConfig())
     print(f"Log dir: {client.log_dir}/client.log")
     dp = client.broadcast_dataplane(
         src_cloud_provider="aws",
-        src_region="ap-northeast-2",
+        src_region="us-east-1",
         dst_cloud_providers=["aws", "aws"],
-        dst_regions=["ap-south-1", "us-east-1"],
+        dst_regions=["us-west-1", "us-west-2"],
         n_vms=1,
         # gbyte_to_transfer=32 NOTE: might need to fix the calculation of topo.cost_per_gb until real data is passed
     )
-    # dp = client.broadcast_dataplane(
-    #     src_cloud_provider="aws",
-    #     src_region="us-east-1",
-    #     dst_cloud_providers=["aws"],
-    #     dst_regions=["us-west-1"],
-    #     n_vms=1,
-    #     # gbyte_to_transfer=32 NOTE: might need to fix the calculation of topo.cost_per_gb until real data is passed
-    # )
 
     with dp.auto_deprovision():
         # NOTE: need to queue copy first, then provision
         # NOTE: otherwise can't upload gateway programs to the gateways, don't know the bucket name and object name
 
-        source_file = "s3://sarah-skylark-ap-northeast-2/medium_file.txt"
-        dest1_file = "s3://broadcast-experiment-ap-south-1/medium_file.txt"
-        dest2_file = "s3://broadcast-experiment-us-east-1/medium_file.txt"
-
+        source_file = "s3://awsbucketsky/chunk_0"
+        dest1_file = "s3://awsbucketsky2/chunk_0"
+        dest2_file = "s3://awsbucketsky3/chunk_0"
 
         dp.queue_copy(
-            source_file, 
-            [
-                dest1_file, 
-                dest2_file
-            ],
+            source_file,
+            [dest1_file, dest2_file],
             recursive=False,
         )
-        # dp.queue_copy(
-        #     "s3://awsbucketsky/chunk_0",
-        #     ["s3://awsbucketsky2/chunk_0"],
-        #     recursive=False,
-        # )
         dp.provision(spinner=True)
         tracker = dp.run_async()
 
