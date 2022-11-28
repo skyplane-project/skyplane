@@ -349,10 +349,12 @@ class Server:
             docker_envs["GATEWAY_PROGRAM_FILE"] = f"/pkg/data/{filename}"
             docker_run_flags += f" -v /tmp/{filename}:/pkg/data/{filename}"
             gateway_daemon_cmd = f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/broadcast/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
+            print("has gateway program", gateway_daemon_cmd)
         else: 
             # not use broadcast gateway programs, pass in outgoing ports
             gateway_daemon_cmd = f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
             gateway_daemon_cmd += f" --outgoing-ports '{json.dumps(outgoing_ports)}'"
+            print("no gateway program", gateway_daemon_cmd)
 
         docker_run_flags += " " + " ".join(f"--env {k}={v}" for k, v in docker_envs.items())
 
