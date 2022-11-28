@@ -272,8 +272,6 @@ class BroadcastDataplane(Dataplane):
         if authorize_ssh_pub_key:
             gateway_server.copy_public_key(authorize_ssh_pub_key)
 
-        print("Broadcast start gateway")
-
         gateway_server.start_gateway(
             {},  # don't need setup arguments here to pass as outgoing_ports
             gateway_programs=self.current_gw_programs,  # NOTE: BC pass in gateway programs

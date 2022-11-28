@@ -1,5 +1,4 @@
-from multiprocessing import Queue, Manager
-import copy
+from multiprocessing import Queue
 
 
 class GatewayQueue:

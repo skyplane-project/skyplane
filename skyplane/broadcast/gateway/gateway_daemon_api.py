@@ -66,7 +66,7 @@ class GatewayDaemonAPI(threading.Thread):
         # chunk status log
         self.state_update_lock = threading.Lock()
         self.chunk_status: Dict[int, str] = {}  # TODO: maintain as chunk_status_log is dumped
-        self.chunk_requests: Dict[int, ChunkRequest] = {}
+        self.chunk_requests: Dict[str, ChunkRequest] = {}
         self.sender_compressed_sizes: Dict[str, Tuple[int, int]] = {}  # TODO: maintain as chunks are completed
         self.chunk_status_log: List[Dict] = []
         self.chunk_completions = defaultdict(list)
@@ -87,7 +87,7 @@ class GatewayDaemonAPI(threading.Thread):
                 try:
                     elem = self.chunk_store.chunk_status_queue.get(timeout=timeout)
                 except Empty:
-                    #print("[gateway_api] Chunk status queue empty, no more updates")
+                    # print("[gateway_api] Chunk status queue empty, no more updates")
                     break
 
                 handle = elem["handle"]
@@ -120,7 +120,7 @@ class GatewayDaemonAPI(threading.Thread):
                         )
                 else:
                     if elem["state"] == ChunkState.complete.name:
-                       print(
+                        print(
                             f"[gateway_api] chunk {chunk_id}: not complete "
                             + f"operators {self.chunk_completions[chunk_id]} have uploaded "
                             + f"out of {self.terminal_operators[elem['partition']]}"
