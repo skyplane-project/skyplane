@@ -248,6 +248,10 @@ class BroadcastDataplane(Dataplane):
 
             gateway_programs[node] = node_gateway_program
 
+
+        for node, region in gateway_programs.items(): 
+            print("region: ", node)
+            print(region.to_json())
         return gateway_programs
 
     def _start_gateway(

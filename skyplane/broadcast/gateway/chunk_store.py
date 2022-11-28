@@ -38,6 +38,8 @@ class ChunkStore:
 
     def add_chunk_request(self, chunk_request: ChunkRequest, state: ChunkState = ChunkState.registered):
         """Enqueue new chunk request from Gateway API"""
+        if chunk_request.chunk.partition_id not in self.chunk_requests:
+            raise ValueError(f"Partition {chunk_request.chunk.partition_id} does not exist - was the gateway program loaded?")
         self.chunk_requests[chunk_request.chunk.partition_id].put(chunk_request)
         self.log_chunk_state(chunk_request, state)
 
