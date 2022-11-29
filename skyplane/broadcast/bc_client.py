@@ -58,7 +58,7 @@ class SkyplaneBroadcastClient:
         n_vms: int = 1,
         num_connections: int = 32,
         num_partitions: int = 2,
-        gbyte_to_transfer: float = 10,
+        gbyte_to_transfer: float = 1,
         target_time: float = 100,
     ) -> BroadcastDataplane:
         # TODO: did not change the data plan yet
@@ -113,5 +113,7 @@ class SkyplaneBroadcastClient:
 
         topo = planner.plan()
         logger.fs.info(f"[SkyplaneClient.direct_dataplane] Topology: {topo.to_json()}")
+        print(f"\nAlgorithm: {type}")
+        print(f"Solution: {topo.nx_graph.edges.data()}")
 
         return BroadcastDataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)

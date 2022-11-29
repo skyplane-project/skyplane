@@ -13,6 +13,7 @@ if __name__ == "__main__":
         dst_regions=["us-west-1", "us-west-2"],
         # dst_regions=["ap-south-1", "us-east-2"],
         n_vms=1,
+        type="MDST"
         # gbyte_to_transfer=32 NOTE: might need to fix the calculation of topo.cost_per_gb until real data is passed
     )
 

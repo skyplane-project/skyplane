@@ -173,6 +173,12 @@ class BCTransferProgressTracker(TransferProgressTracker):
             pprint(i)
             print()
 
+        size_of_transfer = self.calculate_size(list(self.dst_regions)[0])
+        cost_per_gb = self.dataplane.topology.cost_per_gb
+        print(f"Cost per gb: ${round(cost_per_gb, 4)}")
+        print(f"GB transferred: ${round(size_of_transfer, 8)}GB")
+        print(f"Total cost: ${round(cost_per_gb * size_of_transfer, 8)}\n")
+
         # write chunk status
         print(f"Writing chunk profiles to {self.transfer_dir}/chunk_status_df.csv")
         chunk_status_df = pd.DataFrame(self._query_chunk_status())

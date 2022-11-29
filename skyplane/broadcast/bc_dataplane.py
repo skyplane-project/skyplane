@@ -293,7 +293,6 @@ class BroadcastDataplane(Dataplane):
         dsts: List[str],
         recursive: bool = False,
     ) -> str:
-        print("dsts:", dsts)
         job = BCCopyJob(src, dsts[0], recursive, dst_paths=dsts, requester_pays=self.transfer_config.requester_pays)
         logger.fs.debug(f"[SkyplaneClient] Queued copy job {job}")
         self.jobs_to_dispatch.append(job)
