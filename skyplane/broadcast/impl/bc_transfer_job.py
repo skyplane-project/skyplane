@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 
 import urllib3
-from typing import Generator, TYPE_CHECKING, Tuple, Optional
+from typing import Generator, Optional, TYPE_CHECKING, Tuple
 
 from skyplane import exceptions
 from skyplane.utils.path import parse_path
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 class BCTransferJob(TransferJob):
     # TODO: might just use multiple TransferJob
     src_path: str
-    dst_path: str
+    dst_path: str  # NOTE: should be None, not used
     recursive: bool = False
     dst_paths: list = field(default_factory=list)
     requester_pays: bool = False
@@ -64,6 +64,13 @@ class BCTransferJob(TransferJob):
     def broadcast_dispatch(self, dataplane: "BroadcastDataplane", **kwargs) -> Generator[ChunkRequest, None, None]:
         raise NotImplementedError("Broadcast Dispatch not implemented")
 
+    def bc_finalize(self, dst_region: str):
+        raise NotImplementedError("Broadcast finalize not implemented")
+
+    def bc_verify(self, dst_region: str):
+        """Verifies the transfer completed, otherwise raises TransferFailedException."""
+        raise NotImplementedError("Broadcast verify not implemented")
+
 
 @dataclass
 class BCCopyJob(BCTransferJob):
@@ -78,7 +85,7 @@ class BCCopyJob(BCTransferJob):
     def gen_transfer_pairs(self, chunker: Optional[BCChunker] = None) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
         """Generate transfer pairs for the transfer job."""
         if chunker is None:  # used for external access to transfer pair list
-            chunker = BCChunker(self.src_iface, self.dst_iface, TransferConfig())
+            chunker = BCChunker(self.src_iface, list(self.dst_ifaces.values()), TransferConfig())
         yield from chunker.transfer_pair_generator(
             self.src_prefix, self.dst_prefix, self.recursive, self._pre_filter_fn, self._post_filter_fn
         )
@@ -90,7 +97,7 @@ class BCCopyJob(BCTransferJob):
         dispatch_batch_size: int = 64,
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways."""
-        chunker = BCChunker(self.src_iface, self.dst_iface, transfer_config, dataplane.topology.num_partitions)
+        chunker = BCChunker(self.src_iface, list(self.dst_ifaces.values()), transfer_config, dataplane.topology.num_partitions)
         transfer_pair_generator = self.gen_transfer_pairs(chunker)
         gen_transfer_list = chunker.tail_generator(transfer_pair_generator, self.transfer_list)
         chunks = chunker.chunk(gen_transfer_list)
@@ -127,12 +134,21 @@ class BCCopyJob(BCTransferJob):
                 self.multipart_transfer_list.extend(chunker.multipart_upload_requests[n_multiparts:updated_len])
                 n_multiparts = updated_len
 
-    def finalize(self):
+    def bc_finalize(self, dst_region: str):
         groups = defaultdict(list)
+
         for req in self.multipart_transfer_list:
-            if "region" not in req or "bucket" not in req:
-                raise Exception(f"Invalid multipart upload request: {req}")
-            groups[(req["region"], req["bucket"])].append(req)
+            if "dest_ifaces" not in req or "region_to_upload_id" not in req:
+                raise Exception(f"Invalid broadcast multipart upload request: {req}")
+
+            dest_iface_list = [d for d in req["dest_ifaces"] if d.region_tag() == dst_region]
+            for dest_iface in dest_iface_list:
+                region = dest_iface.region_tag()
+                bucket = dest_iface.bucket()
+                upload_id = req["region_to_upload_id"][region]
+                one_req = dict(upload_id=upload_id, key=req["key"], parts=req["parts"], region=region, bucket=bucket)
+                groups[(region, bucket)].append(one_req)
+
         for key, group in groups.items():
             region, bucket = key
             batch_len = max(1, len(group) // 128)
@@ -145,11 +161,14 @@ class BCCopyJob(BCTransferJob):
 
             do_parallel(complete_fn, batches, n=-1)
 
-    def verify(self):
-        dst_keys = {dst_o.key: src_o for src_o, dst_o in self.transfer_list}
+    def bc_verify(self, dst_region: str):
         # NOTE: assume dst keys are the same across destinations?
-        for dst_iface in self.dst_ifaces.values():
-            for obj in dst_iface.list_objects(self.dst_prefixes[dst_iface.bucket()]):
+        dst_keys = {dst_o.key: src_o for src_o, dst_o in self.transfer_list}
+        dest_iface_list = [d for d in self.dst_ifaces.values() if d.region_tag() == dst_region]
+
+        for dest_iface in dest_iface_list:
+            dest_iface.region_tag()
+            for obj in dest_iface.list_objects(self.dst_prefixes[dest_iface.bucket()]):
                 # check metadata (src.size == dst.size) && (src.modified <= dst.modified)
                 src_obj = dst_keys.get(obj.key)
                 if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:

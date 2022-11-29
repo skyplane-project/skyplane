@@ -497,13 +497,20 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         )
 
         obj_store_interface = self.get_obj_store_interface(self.bucket_region, self.bucket_name)
+
+        if chunk_req.chunk.region_to_upload_id is not None and self.bucket_region in chunk_req.chunk.region_to_upload_id:
+            # extract multi-part upload-id
+            upload_id = chunk_req.chunk.region_to_upload_id[self.bucket_region]
+        else:
+            upload_id = chunk_req.chunk.upload_id
+
         retry_backoff(
             partial(
                 obj_store_interface.upload_object,
                 fpath,
                 chunk_req.chunk.dest_key,
                 chunk_req.chunk.part_number,
-                chunk_req.chunk.upload_id,
+                upload_id,
                 check_md5=chunk_req.chunk.md5_hash,
             ),
             max_retries=4,

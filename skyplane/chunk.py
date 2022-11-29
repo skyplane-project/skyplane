@@ -24,6 +24,7 @@ class Chunk:
     file_offset_bytes: Optional[int] = None
     part_number: Optional[int] = None
     upload_id: Optional[str] = None
+    region_to_upload_id: Optional[Dict[str, str]] = None  # for broadcast multipart upload
 
     def to_wire_header(self, n_chunks_left_on_socket: int, wire_length: int, is_compressed: bool = False):
         return WireProtocolHeader(

@@ -132,7 +132,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
             try:
                 for job in self.jobs.values():
                     logger.fs.debug(f"[TransferProgressTracker] Finalizing job {job.uuid}")
-                    job.finalize()
+                    job.bc_finalize(dst_region)
             except Exception as e:
                 UsageClient.log_exception("finalize job", e, args, self.dataplane.src_region_tag, dst_region, session_start_timestamp_ms)
                 raise e
@@ -140,7 +140,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
             try:
                 for job in self.jobs.values():
                     logger.fs.debug(f"[TransferProgressTracker] Verifying job {job.uuid}")
-                    job.verify()
+                    job.bc_verify(dst_region)
             except Exception as e:
                 UsageClient.log_exception("verify job", e, args, self.dataplane.src_region_tag, dst_region, session_start_timestamp_ms)
                 raise e
@@ -166,7 +166,6 @@ class BCTransferProgressTracker(TransferProgressTracker):
             e2e_end_time = time.time()
         print(f"End to end time: {round(e2e_end_time - e2e_start_time, 4)}s\n")
         print(f"Transfer result:")
-
         from pprint import pprint
 
         for i in results:
