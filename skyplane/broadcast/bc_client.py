@@ -29,7 +29,7 @@ class SkyplaneBroadcastClient:
         self.aws_auth = aws_config.make_auth_provider() if aws_config else None
         self.azure_auth = azure_config.make_auth_provider() if azure_config else None
         self.gcp_auth = gcp_config.make_auth_provider() if gcp_config else None
-        self.transfer_config = transfer_config if transfer_config else TransferConfig(multipart_enabled=False)
+        self.transfer_config = transfer_config if transfer_config else TransferConfig(multipart_enabled=True)  # NOTE: enable multipart
         self.log_dir = (
             tmp_log_dir / "transfer_logs" / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}-{uuid.uuid4().hex[:8]}"
             if log_dir is None

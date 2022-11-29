@@ -63,6 +63,7 @@ class BCChunker(Chunker):
 
         # start chunking threads
         if self.transfer_config.multipart_enabled:
+            print("Enable multi-part transfer")
             for _ in range(self.concurrent_multipart_chunk_threads):
                 t = threading.Thread(
                     target=self._run_multipart_chunk_thread,

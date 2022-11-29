@@ -1,6 +1,7 @@
 import time
 
 import urllib3
+import pandas as pd
 from typing import TYPE_CHECKING, Dict, List, Optional, Set
 
 from skyplane import exceptions
@@ -11,7 +12,8 @@ from skyplane.utils.fn import do_parallel
 from skyplane.api.usage import UsageClient
 from skyplane.api.tracker import TransferProgressTracker
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from skyplane.utils.definitions import GB
+from skyplane.utils.definitions import GB, tmp_log_dir
+from datetime import datetime
 
 if TYPE_CHECKING:
     from skyplane.broadcast.impl.bc_transfer_job import BCTransferJob
@@ -47,6 +49,10 @@ class BCTransferProgressTracker(TransferProgressTracker):
 
         # http_pool
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
+
+        # store the chunk status log
+        self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.transfer_dir.mkdir(exist_ok=True, parents=True)
 
     def __str__(self):
         return f"TransferProgressTracker({self.dataplane}, {self.jobs})"
@@ -166,6 +172,11 @@ class BCTransferProgressTracker(TransferProgressTracker):
         for i in results:
             pprint(i)
             print()
+
+        # write chunk status
+        print(f"Writing chunk profiles to {self.transfer_dir}/chunk_status_df.csv")
+        chunk_status_df = pd.DataFrame(self._query_chunk_status())
+        (self.transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
 
     @imports.inject("pandas")
     def monitor_transfer(pd, self, dst_region):
