@@ -27,8 +27,8 @@ class BroadcastPlanner:
         num_connections: int,
         num_partitions: int,
         gbyte_to_transfer: float,
-        #cost_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "cost.csv",
-        #tp_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "throughput.csv",
+        # cost_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "cost.csv",
+        # tp_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "throughput.csv",
         cost_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "cost_old.csv",
         tp_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "throughput.csv",
     ):
@@ -142,9 +142,9 @@ class BroadcastDirectPlanner(BroadcastPlanner):
         dsts = [f"{p}:{r}" for p, r in zip(self.dst_providers, self.dst_regions)]
 
         for dst in dsts:
-            if src == dst: 
+            if src == dst:
                 cost_of_edge = 0
-            else:  
+            else:
                 try:
                     cost_of_edge = self.G[src][dst]["cost"]
                 except Exception as e:

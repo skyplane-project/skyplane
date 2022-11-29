@@ -19,8 +19,6 @@ from skyplane.broadcast.gateway.cert import generate_self_signed_certificate
 from skyplane.broadcast.gateway.chunk_store import ChunkStore
 
 
-
-
 class GatewayReceiver:
     def __init__(
         self,

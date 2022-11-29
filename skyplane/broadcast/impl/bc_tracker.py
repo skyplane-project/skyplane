@@ -113,9 +113,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
                     logger.fs.debug(f"[TransferProgressTracker] Finalizing job {job.uuid}")
                     job.finalize()
             except Exception as e:
-                UsageClient.log_exception(
-                    "finalize job", e, args, self.dataplane.src_region_tag, dst_region, session_start_timestamp_ms
-                )
+                UsageClient.log_exception("finalize job", e, args, self.dataplane.src_region_tag, dst_region, session_start_timestamp_ms)
                 raise e
 
             try:
@@ -153,7 +151,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
 
         assert len(sink_regions) == 1  # BC: only monitor one sink region in this call
 
-        # any of the jobs of this region is not complete 
+        # any of the jobs of this region is not complete
         while any(
             [len(self.dst_job_pending_chunk_ids[dst_region][job_uuid]) > 0 for job_uuid in self.dst_job_pending_chunk_ids[dst_region]]
         ):

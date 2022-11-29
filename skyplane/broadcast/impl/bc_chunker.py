@@ -74,7 +74,7 @@ class BCChunker(Chunker):
                     partition_id=str(idx % self.num_partitions),
                     chunk_id=uuid.uuid4().hex,
                     chunk_length_bytes=src_obj.size,
-                ) 
+                )
 
             if self.transfer_config.multipart_enabled:
                 # drain multipart chunk queue and yield with updated chunk IDs
