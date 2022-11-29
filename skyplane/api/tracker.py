@@ -73,9 +73,8 @@ class TransferProgressTracker(Thread):
                 self.job_chunk_requests[job_uuid] = {}
                 self.job_pending_chunk_ids[job_uuid] = set()
                 self.job_complete_chunk_ids[job_uuid] = set()
-                chunks_dispatched = []
                 for cr in job.dispatch(self.dataplane, transfer_config=self.transfer_config):
-                    chunks_dispatched.append(cr.chunk)
+                    chunks_dispatched = [cr.chunk]
                     self.job_chunk_requests[job_uuid][cr.chunk.chunk_id] = cr
                     self.job_pending_chunk_ids[job_uuid].add(cr.chunk.chunk_id)
                     self.progress_reporter.on_chunk_dispatched(chunks_dispatched)

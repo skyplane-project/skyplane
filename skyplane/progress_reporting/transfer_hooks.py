@@ -82,7 +82,6 @@ class ProgressBarTransferHook(TransferHook):
 
     def on_dispatch_end(self):
         self.spinner.stop()
-        self.spinner.console.print(f"Dispatched {self.chunks_dispatched} chunks")
         self.pbar = Progress(
             SpinnerColumn(),
             TextColumn("Transfer progress{task.description}"),
