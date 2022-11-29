@@ -5,7 +5,7 @@ from typing import Generator, Tuple, TypeVar
 import uuid
 
 from skyplane.api.transfer_config import TransferConfig
-from skyplane.broadcast.chunk import Chunk, ChunkRequest
+from skyplane.chunk import Chunk, ChunkRequest
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils.definitions import MB
 from skyplane.api.impl.chunker import Chunker

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Set
 
 from skyplane import exceptions
 from skyplane.api.transfer_config import TransferConfig
-from skyplane.broadcast.chunk import ChunkRequest, ChunkState
+from skyplane.chunk import ChunkRequest, ChunkState
 from skyplane.utils import logger, imports
 from skyplane.utils.fn import do_parallel
 from skyplane.api.usage.client import UsageClient
@@ -178,9 +178,9 @@ class BCTransferProgressTracker(TransferProgressTracker):
                 and row["instance"] in [s.instance for s in sinks]
                 and row["region"] in [s.region for s in sinks]
             )
-            print("CHUNK STATE", log_df[log_df.apply(lambda row: row["region"] in [s.region for s in sinks])]["state"].tolist())
-            print("Num complete", log_df.apply(is_complete_rec, axis=1).sum())
+            print("Num complete:", log_df.apply(is_complete_rec, axis=1).sum())
             sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
+
             completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region"].unique()) == set(sink_regions))
             completed_chunk_ids = completed_status[completed_status].index
             print(f"Log df: {log_df}")

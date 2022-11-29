@@ -3,7 +3,7 @@ from typing import List, Optional, Tuple, Set
 
 import networkx as nx
 
-from skyplane.broadcast.chunk import ChunkRequest
+from skyplane.chunk import ChunkRequest
 from skyplane.obj_store.object_store_interface import ObjectStoreObject
 from skyplane.replicate.replication_plan import (
     ReplicationTopology,

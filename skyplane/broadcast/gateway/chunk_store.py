@@ -7,7 +7,7 @@ from typing import Dict, Optional
 
 from skyplane.utils import logger
 
-from skyplane.broadcast.chunk import ChunkRequest, ChunkState
+from skyplane.chunk import ChunkRequest, ChunkState
 from skyplane.broadcast.gateway.gateway_queue import GatewayQueue
 
 
