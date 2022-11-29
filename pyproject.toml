@@ -46,6 +46,9 @@ graphviz = { version = ">=0.15", optional = true }
 matplotlib = { version = ">=3.0.0", optional = true }
 numpy = { version = ">=1.19.0", optional = true }
 
+# broadcast dependencies
+networkx = { version = ">=2.5", optional = true }
+
 # gateway dependencies
 flask = { version = "^2.1.2", optional = true }
 lz4 = { version = "^4.0.0", optional = true }
@@ -60,6 +63,7 @@ gcp = ["google-api-python-client", "google-auth", "google-cloud-compute", "googl
 all = ["boto3", "azure-identity", "azure-mgmt-authorization", "azure-mgmt-compute", "azure-mgmt-network", "azure-mgmt-resource", "azure-mgmt-storage", "azure-mgmt-subscription", "azure-storage-blob", "google-api-python-client", "google-auth", "google-cloud-compute", "google-cloud-storage"]
 gateway = ["flask", "lz4", "pynacl", "pyopenssl", "werkzeug"]
 solver = ["cvxpy", "graphviz", "matplotlib", "numpy"]
+broadcast = ["networkx", "numpy", "pandas", "cvxpy", "graphviz", "matplotlib"]
 
 [tool.poetry.dev-dependencies]
 pytest = ">=6.0.0"

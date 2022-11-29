@@ -10,12 +10,13 @@ from typing import Optional, Tuple
 
 import nacl.secret
 
+from skyplane.utils.definitions import MB
+from skyplane.utils import logger
+from skyplane.utils.timer import Timer
+
+from skyplane.chunk import WireProtocolHeader
 from skyplane.broadcast.gateway.cert import generate_self_signed_certificate
 from skyplane.broadcast.gateway.chunk_store import ChunkStore
-from skyplane.chunk import WireProtocolHeader
-from skyplane.utils import logger
-from skyplane.utils.definitions import MB
-from skyplane.utils.timer import Timer
 
 
 class GatewayReceiver:
@@ -28,8 +29,8 @@ class GatewayReceiver:
         error_queue: Queue,
         recv_block_size=4 * MB,
         max_pending_chunks=1,
-        use_tls: bool = True,
-        use_compression: bool = True,
+        use_tls: Optional[bool] = True,
+        use_compression: Optional[bool] = True,
         e2ee_key_bytes: Optional[bytes] = None,
     ):
 
@@ -153,9 +154,7 @@ class GatewayReceiver:
             # should_decompress = chunk_header.is_compressed and chunk_request.dst_region == self.region
 
             # wait for space
-            # TODO: implement same fix as for gen_data
             while self.chunk_store.remaining_bytes() < chunk_header.data_len * self.max_pending_chunks:
-                logger.debug(f"[reciever] Chunk store full, waiting before recieving more chunks")
                 time.sleep(0.1)
 
             # get data

@@ -47,6 +47,9 @@ class TransferConfig:
     autoterminate_minutes: int = 15
     requester_pays: bool = False
 
+    # randomly generate data or not
+    random_chunk_size_mb: Optional[float] = None
+
     # gateway settings
     use_bbr: bool = True
     use_compression: bool = True

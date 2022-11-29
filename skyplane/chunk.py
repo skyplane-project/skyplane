@@ -14,8 +14,8 @@ class Chunk:
     dest_key: str  # human readable path where object is stored
     chunk_id: str
     chunk_length_bytes: int
+    partition_id: Optional[str] = None  # for broadcast
     mime_type: Optional[str] = None
-    partition: Optional[str] = None
 
     # checksum
     md5_hash: Optional[bytes] = None  # 128 bits
@@ -24,6 +24,7 @@ class Chunk:
     file_offset_bytes: Optional[int] = None
     part_number: Optional[int] = None
     upload_id: Optional[str] = None
+    region_to_upload_id: Optional[Dict[str, str]] = None  # for broadcast multipart upload
 
     def to_wire_header(self, n_chunks_left_on_socket: int, wire_length: int, is_compressed: bool = False):
         return WireProtocolHeader(
@@ -81,6 +82,10 @@ class ChunkState(Enum):
     upload_in_progress = auto()
     upload_complete = auto()
     failed = auto()
+
+    queued = auto()
+    in_progress = auto()
+    complete = auto()
 
     @staticmethod
     def from_str(s: str):

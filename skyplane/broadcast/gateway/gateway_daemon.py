@@ -1,31 +1,31 @@
 import argparse
+from pprint import pprint
 import atexit
 import json
 import os
 import signal
 import sys
-import time
-from collections import defaultdict
 from multiprocessing import Event, Queue
 from os import PathLike
 from pathlib import Path
-from pprint import pprint
-from typing import Dict
+from typing import Dict, List
 
-from skyplane.broadcast.gateway.chunk_store import ChunkStore
-from skyplane.broadcast.gateway.gateway_daemon_api import GatewayDaemonAPI
-from skyplane.broadcast.gateway.gateway_queue import GatewayANDQueue, GatewayORQueue
-from skyplane.broadcast.gateway.operators.gateway_operator import (
-    GatewayWaitReciever,
-    GatewayObjStoreReadOperator,
-    GatewayRandomDataGen,
-    GatewaySender,
-    GatewayObjStoreWriteOperator,
-    GatewayWriteLocal,
-)
-from skyplane.broadcast.gateway.operators.gateway_receiver import GatewayReceiver
 from skyplane.utils import logger
 
+from skyplane.broadcast.gateway.gateway_queue import GatewayQueue, GatewayANDQueue
+from skyplane.broadcast.gateway.chunk_store import ChunkStore
+from skyplane.broadcast.gateway.gateway_daemon_api import GatewayDaemonAPI
+from skyplane.broadcast.gateway.operators.gateway_operator import (
+    GatewaySender,
+    GatewayRandomDataGen,
+    GatewayWriteLocal,
+    GatewayObjStoreReadOperator,
+    GatewayObjStoreWriteOperator,
+    GatewayWaitReciever,
+)
+from skyplane.broadcast.gateway.operators.gateway_receiver import GatewayReceiver
+
+from collections import defaultdict
 
 # TODO: add default partition ID to main
 # create gateway broadcast
@@ -44,7 +44,8 @@ class GatewayDaemon:
         gateway_program_path = Path(os.environ["GATEWAY_PROGRAM_FILE"]).expanduser()
         gateway_program = json.load(open(gateway_program_path, "r"))
 
-        print(gateway_program)
+        print("starting gateway daemon", gateway_program_path)
+        pprint(gateway_program)
 
         self.use_tls = use_tls
 
@@ -69,7 +70,6 @@ class GatewayDaemon:
         self.operators = self.create_gateway_operators(gateway_program["_plan"])
 
         # single gateway reciever
-        print("create gateway reciever")
         self.gateway_receiver = GatewayReceiver(
             "reciever",
             region=region,
@@ -97,12 +97,11 @@ class GatewayDaemon:
 
         def create_output_queue(operator: Dict):
             # create output data queue
-            print("DETERMINING OUTPUT QUEUE", operator["children"])
             if len(operator["children"]) == 0:
                 return None
             if operator["children"][0]["op_type"] == "mux_and":
                 return GatewayANDQueue()
-            return GatewayORQueue()
+            return GatewayQueue()
 
         def get_child_operators(operator):
             if len(operator["children"]) == 0:
@@ -111,21 +110,29 @@ class GatewayDaemon:
                 return operator["children"][0]["children"]
             return operator["children"]
 
-        def create_gateway_operators_helper(input_queue, program: Dict, partition_id: str):
-            print("OPERATORS", operators)
+        def create_gateway_operators_helper(input_queue, program: List[Dict], partition_id: str):
             for op in program:
 
-                handle = op["handle"]
+                handle = op["op_type"] + "_" + op["handle"]
                 input_queue.register_handle(handle)
-                print("INPUT QUEUE", input_queue, input_queue.get_handles())
+
+                # get child operators
+                child_operators = get_child_operators(op)
+
+                if op["op_type"] == "mux_or":
+                    # parent must have been mux_and
+                    assert isinstance(input_queue, GatewayANDQueue), f"Parent must have been mux_and {handle}, instead was {input_queue}"
+
+                    input_queue = input_queue.get_handle_queue(handle)
+                    # recurse to children with single queue
+                    create_gateway_operators_helper(input_queue, child_operators, partition_id)
+                    continue
+
                 # create output data queue
                 output_queue = create_output_queue(op)
                 if output_queue is None:
                     # track what opeartors need to complete processing the chunk
-                    self.terminal_operators[partition_id].append(op["handle"])
-
-                # get child operators
-                child_operators = get_child_operators(op)
+                    self.terminal_operators[partition_id].append(handle)
 
                 # create operators
                 if op["op_type"] == "receive":
@@ -177,7 +184,7 @@ class GatewayDaemon:
                         use_tls=self.use_tls,
                         use_compression=False,  # operator["compress"],
                         e2ee_key_bytes=self.e2ee_key_bytes,
-                        n_processes=op["num_connections"],
+                        n_processes=32,  # op["num_connections"],
                     )
                 elif op["op_type"] == "write_object_store":
                     operators[handle] = GatewayObjStoreWriteOperator(
@@ -207,7 +214,6 @@ class GatewayDaemon:
                 # recursively create for child operators
                 create_gateway_operators_helper(output_queue, child_operators, partition_id)
 
-        print("GATEWAY PROGRAM")
         pprint(gateway_program)
 
         # create operator tree for each partition
@@ -215,6 +221,7 @@ class GatewayDaemon:
             partition = str(partition)
 
             # create initial queue for partition
+            print(f"Addining partition {partition}")
             self.chunk_store.add_partition(partition)
 
             create_gateway_operators_helper(
@@ -243,45 +250,8 @@ class GatewayDaemon:
 
         logger.info("[gateway_daemon] Starting daemon loop")
         try:
-            print(self.operators)
             while not exit_flag.is_set() and not self.error_event.is_set():
-
-                print("pull queue...")
                 self.api_server.pull_chunk_status_queue()
-                # pull from chunk requests queue
-                # print("running gateway daemon... nothing to do")
-                # while True:
-                #    try:
-                #        chunk_req = self.chunk_store.chunk_requests.get_nowait()
-                #    except Empty:
-                #        break
-
-                #    print("registered chunk", chunk_req.chunk.chunk_id, "partition", chunk_req.chunk.partition_id)
-                #    partition_id = str(chunk_req.chunk.partition_id)
-                #    if partition_id not in self.partition_queues:
-                #        print(partition_id)
-                #        print(list(self.partition_queues.keys()))
-                #        raise ValueError(f"Partition {partition_id} does not exist in {list(self.partition_queues.keys())}")
-
-                #    # queue the chunk if it needs to be
-                #    if self.push_chunks[partition_id]:
-                #        self.partition_queues[partition_id].put(chunk_req)
-
-                #    print("listeners", self.partition_queues[partition_id].get_handles())
-                #    for handle in self.partition_queues[partition_id].get_handles():
-                #        print(self.operators[handle])
-
-                # Check self.completed queue for chunks which have been processed by all operators
-                # for partition, queue in self.completed.items():
-                #    for chunk_req in queue.get_all():
-                #        # unlink chunk that has finished processing
-                #        chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id)
-                #        chunk_file_path.unlink()
-                #        self.chunk_store.state_finish_upload(chunk_req.chunk.chunk_id)
-                #        logger.info(f"Finished processing chunk: {chunk_req.chunk.chunk_id}, partition: {chunk_req.chunk.partition_id}")
-
-                time.sleep(0.1)  # yield
-
         except Exception as e:
             self.error_queue.put(e)
             self.error_event.set()
