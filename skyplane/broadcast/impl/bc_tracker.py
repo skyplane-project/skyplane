@@ -138,7 +138,6 @@ class BCTransferProgressTracker(TransferProgressTracker):
         # Record only the transfer time per destination
         e2e_start_time = int(time.time())
         results = []
-        print("dest", self.dst_regions)
         with ThreadPoolExecutor(max_workers=8) as executor:
             future_list = [executor.submit(monitor_single_dst_helper, dst) for dst in self.dst_regions]
             for future in as_completed(future_list):
@@ -178,15 +177,9 @@ class BCTransferProgressTracker(TransferProgressTracker):
                 and row["instance"] in [s.instance for s in sinks]
                 and row["region"] in [s.region for s in sinks]
             )
-            print("Num complete:", log_df.apply(is_complete_rec, axis=1).sum())
             sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
-
             completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region"].unique()) == set(sink_regions))
             completed_chunk_ids = completed_status[completed_status].index
-            print(f"Log df: {log_df}")
-            print(f"Sink status df: {sink_status_df}")
-            print(f"complete status: {completed_status}")
-            print(f"Region: {dst_region}, complete chunk ids: {completed_chunk_ids}")
 
             # update job_complete_chunk_ids and job_pending_chunk_ids
             for job_uuid, job in self.jobs.items():
@@ -216,7 +209,6 @@ class BCTransferProgressTracker(TransferProgressTracker):
             return None
         bytes_remaining_per_job = {}
         for dst_region in self.dst_regions:
-            print("dst region: ", dst_region)
             for job_uuid in self.dst_job_pending_chunk_ids[dst_region].keys():
                 bytes_remaining_per_job[job_uuid] = []
                 # job_uuid --> [dst1_remaining_bytes, dst2_remaining_bytes, ...]
