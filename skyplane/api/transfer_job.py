@@ -331,7 +331,7 @@ class CopyJob(TransferJob):
         self,
         dataplane: "Dataplane",
         transfer_config: TransferConfig,
-        dispatch_batch_size: int = 64,
+        dispatch_batch_size: int = 1000,
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways."""
         chunker = Chunker(self.src_iface, self.dst_iface, transfer_config)
@@ -345,8 +345,11 @@ class CopyJob(TransferJob):
             src_gateways = dataplane.source_gateways()
             bytes_dispatched = [0] * len(src_gateways)
             n_multiparts = 0
+            start = time.time()
             for batch in chunker.batch_generator(chunk_requests, dispatch_batch_size):
-                logger.fs.debug(f"Queried {len(batch)} chunks in {t.elapsed:.2f} seconds")
+                end = time.time()
+                logger.fs.debug(f"Queried {len(batch)} chunks in {end - start:.2f} seconds")
+                start = time.time()
                 min_idx = bytes_dispatched.index(min(bytes_dispatched))
                 server = src_gateways[min_idx]
                 n_bytes = sum([cr.chunk.chunk_length_bytes for cr in batch])
