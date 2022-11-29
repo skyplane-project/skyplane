@@ -7,12 +7,10 @@ from threading import Thread
 import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional, Set
 
-from rich.pretty import pprint
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
 from skyplane import exceptions
 from skyplane.api.config import TransferConfig
 from skyplane.chunk import ChunkRequest, ChunkState
-from skyplane.cli.common import print_stats_completed, console
+from skyplane.progress_reporting.transfer_hooks import TransferHook, EmptyTransferHook
 from skyplane.utils import logger, imports
 from skyplane.utils.definitions import tmp_log_dir
 from skyplane.utils.fn import do_parallel
@@ -24,13 +22,17 @@ if TYPE_CHECKING:
 
 
 class TransferProgressTracker(Thread):
-    def __init__(self, dataplane, jobs: List["TransferJob"], transfer_config: TransferConfig):
+    def __init__(self, dataplane, jobs: List["TransferJob"], transfer_config: TransferConfig, progress_reporter: TransferHook):
         super().__init__()
         self.dataplane = dataplane
         self.jobs = {job.uuid: job for job in jobs}
         self.transfer_config = transfer_config
         self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
         self.transfer_dir.mkdir(exist_ok=True, parents=True)
+        if (progress_reporter is None):
+            self.progress_reporter = EmptyTransferHook()
+        else:
+            self.progress_reporter = progress_reporter
 
         # log job details
         logger.fs.debug(f"[TransferProgressTracker] Using dataplane {dataplane}")
@@ -66,21 +68,22 @@ class TransferProgressTracker(Thread):
         }
         session_start_timestamp_ms = int(time.time() * 1000)
         try:
-            with Progress(SpinnerColumn(), TextColumn("Querying chunk requests"), transient=True) as progress:
-                progress.add_task("", total=None)
-                for job_uuid, job in self.jobs.items():
-                    logger.fs.debug(f"[TransferProgressTracker] Dispatching job {job.uuid}")
-                    self.job_chunk_requests[job_uuid] = list(job.dispatch(self.dataplane, transfer_config=self.transfer_config))
-                    self.job_pending_chunk_ids[job_uuid] = set([cr.chunk.chunk_id for cr in self.job_chunk_requests[job_uuid]])
-                    self.job_complete_chunk_ids[job_uuid] = set()
-                    logger.fs.debug(
-                        f"[TransferProgressTracker] Job {job.uuid} dispatched with {len(self.job_chunk_requests[job_uuid])} chunk requests"
-                    )
+            for job_uuid, job in self.jobs.items():
+                logger.fs.debug(f"[TransferProgressTracker] Dispatching job {job.uuid}")
+                self.job_chunk_requests[job_uuid] = list(job.dispatch(self.dataplane, transfer_config=self.transfer_config))
+                self.job_pending_chunk_ids[job_uuid] = set([cr.chunk.chunk_id for cr in self.job_chunk_requests[job_uuid]])
+                self.job_complete_chunk_ids[job_uuid] = set()
+                self.progress_reporter.on_chunk_dispatched(self.job_chunk_requests)
+                logger.fs.debug(
+                    f"[TransferProgressTracker] Job {job.uuid} dispatched with {len(self.job_chunk_requests[job_uuid])} chunk requests"
+                )
         except Exception as e:
             UsageClient.log_exception(
                 "dispatch job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
             )
             raise e
+        
+        self.progress_reporter.on_dispatch_end()
 
         # Record only the transfer time
         start_time = int(time.time())
@@ -129,76 +132,53 @@ class TransferProgressTracker(Thread):
             "total_runtime_s": end_time - start_time,
             "throughput_gbits": self.query_bytes_dispatched() / (end_time - start_time) / GB * 8,
         }
-        print_stats_completed(total_runtime_s=transfer_stats["total_runtime_s"], throughput_gbits=transfer_stats["throughput_gbits"])
+        self.progress_reporter.on_transfer_end(transfer_stats)
         UsageClient.log_transfer(
             transfer_stats, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
         )
-
-    def copy_log(self, instance):
-        instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
-        pprint(f"Copying gateway std out files to gateway_{instance.uuid()}.stdout")
-        instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
-        pprint(f"Copying gateway std err files to gateway_{instance.uuid()}.stderr")
-        instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 
     @imports.inject("pandas")
     def monitor_transfer(pd, self):
         # todo implement transfer monitoring to update job_complete_chunk_ids and job_pending_chunk_ids while the transfer is in progress
         sinks = self.dataplane.topology.sink_instances()
         sink_regions = set([sink.region for sink in sinks])
-        bytes_remaining = self.query_bytes_remaining()
-        with Progress(
-                SpinnerColumn(),
-                TextColumn("Transfer progress{task.description}"),
-                BarColumn(),
-                DownloadColumn(binary_units=True),
-                TransferSpeedColumn(),
-                TimeRemainingColumn(),
-            ) as progress:
-            copy_task = progress.add_task("", total=bytes_remaining)
-            while any([len(self.job_pending_chunk_ids[job_uuid]) > 0 for job_uuid in self.job_pending_chunk_ids]):
-                # refresh shutdown status by running noop
-                do_parallel(lambda i: i.run_command("echo 1"), self.dataplane.bound_nodes.values(), n=-1)
+        while any([len(self.job_pending_chunk_ids[job_uuid]) > 0 for job_uuid in self.job_pending_chunk_ids]):
+            # refresh shutdown status by running noop
+            do_parallel(lambda i: i.run_command("echo 1"), self.dataplane.bound_nodes.values(), n=-1)
 
-                # check for errors and exit if there are any (while setting debug flags)
-                errors = self.dataplane.check_error_logs()
-                if any(errors.values()):
-                    logger.warning("Copying gateway logs...")
-                    do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=-1)
-                    self.errors = errors
-                    pprint(errors)
-                    raise exceptions.SkyplaneGatewayException("Transfer failed with errors", errors)
+            # check for errors and exit if there are any (while setting debug flags)
+            errors = self.dataplane.check_error_logs()
+            if any(errors.values()):
+                logger.warning("Copying gateway logs...")
+                do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=-1)
+                self.errors = errors
+                raise exceptions.SkyplaneGatewayException("Transfer failed with errors", errors)
 
-                log_df = pd.DataFrame(self._query_chunk_status())
-                if log_df.empty:
-                    logger.warning("No chunk status log entries yet")
-                    time.sleep(0.05)
-                    continue
-
-                is_complete_rec = (
-                    lambda row: row["state"] == ChunkState.upload_complete
-                    and row["instance"] in [s.instance for s in sinks]
-                    and row["region"] in [s.region for s in sinks]
-                )
-                sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
-                completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region"].unique()) == set(sink_regions))
-                completed_chunk_ids = completed_status[completed_status].index
-
-                # update job_complete_chunk_ids and job_pending_chunk_ids
-                for job_uuid, job in self.jobs.items():
-                    job_complete_chunk_ids = set(chunk_id for chunk_id in completed_chunk_ids if self._chunk_to_job_map[chunk_id] == job_uuid)
-                    self.job_complete_chunk_ids[job_uuid] = self.job_complete_chunk_ids[job_uuid].union(job_complete_chunk_ids)
-                    self.job_pending_chunk_ids[job_uuid] = self.job_pending_chunk_ids[job_uuid].difference(job_complete_chunk_ids)
-
-                bytes_transferred = self.query_bytes_dispatched()
-                progress.update(
-                    copy_task,
-                    description=f" (Completed {len(completed_chunk_ids)} chunks)",
-                    completed=bytes_transferred,
-                )
-
-                # sleep
+            log_df = pd.DataFrame(self._query_chunk_status())
+            if log_df.empty:
+                logger.warning("No chunk status log entries yet")
                 time.sleep(0.05)
+                continue
+
+            is_complete_rec = (
+                lambda row: row["state"] == ChunkState.upload_complete
+                and row["instance"] in [s.instance for s in sinks]
+                and row["region"] in [s.region for s in sinks]
+            )
+            sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
+            completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region"].unique()) == set(sink_regions))
+            completed_chunk_ids = completed_status[completed_status].index
+
+            # update job_complete_chunk_ids and job_pending_chunk_ids
+            for job_uuid, job in self.jobs.items():
+                job_complete_chunk_ids = set(chunk_id for chunk_id in completed_chunk_ids if self._chunk_to_job_map[chunk_id] == job_uuid)
+                self.job_complete_chunk_ids[job_uuid] = self.job_complete_chunk_ids[job_uuid].union(job_complete_chunk_ids)
+                self.job_pending_chunk_ids[job_uuid] = self.job_pending_chunk_ids[job_uuid].difference(job_complete_chunk_ids)
+
+            self.progress_reporter.on_chunk_completed(self.job_chunk_requests, self.job_complete_chunk_ids)
+            
+            # sleep
+            time.sleep(0.05)
 
     @property
     @functools.lru_cache(maxsize=1)

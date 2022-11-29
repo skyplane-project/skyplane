@@ -13,6 +13,7 @@ from skyplane import compute
 from skyplane.api.tracker import TransferProgressTracker
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
+from skyplane.progress_reporting.transfer_hooks import TransferHook
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
 from skyplane.utils.definitions import gateway_docker_image
@@ -223,17 +224,17 @@ class Dataplane:
         self.jobs_to_dispatch.append(job)
         return job.uuid
 
-    def run_async(self) -> TransferProgressTracker:
+    def run_async(self, progress_reporter: TransferHook = None) -> TransferProgressTracker:
         if not self.provisioned:
             logger.error("Dataplane must be pre-provisioned. Call dataplane.provision() before starting a transfer")
-        tracker = TransferProgressTracker(self, self.jobs_to_dispatch, self.transfer_config)
+        tracker = TransferProgressTracker(self, self.jobs_to_dispatch, self.transfer_config, progress_reporter)
         self.pending_transfers.append(tracker)
         tracker.start()
         logger.fs.info(f"[SkyplaneClient] Started async transfer with {len(self.jobs_to_dispatch)} jobs")
         self.jobs_to_dispatch = []
         return tracker
 
-    def run(self):
-        tracker = self.run_async()
+    def run(self, progress_reporter: TransferHook = None):
+        tracker = self.run_async(progress_reporter)
         logger.fs.debug(f"[SkyplaneClient] Waiting for transfer to complete")
         tracker.join()

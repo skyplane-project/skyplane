@@ -7,9 +7,9 @@ import skyplane
 from skyplane.api.usage import UsageClient
 from skyplane.cli.common import print_header, console
 from skyplane.cli.v2.cli_impl import SkyplaneCLI
-from skyplane.cli.v2.progress_reporter.simple_reporter import SimpleReporter
 from skyplane.config_paths import cloud_config, config_path
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
+from skyplane.progress_reporting.transfer_hooks import ProgressBarTransferHook
 from skyplane.utils.definitions import GB
 from skyplane.utils.path import parse_path
 from skyplane.utils import logger
@@ -81,7 +81,7 @@ def cp(
                 if not cli.confirm_transfer(dp, 5, ask_to_confirm_transfer=not confirm):
                     return 1
                 dp.provision(spinner=True)
-                tracker = dp.run_async()
+                tracker = dp.run_async(ProgressBarTransferHook())
             except skyplane.exceptions.SkyplaneException as e:
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e.pretty_print_str())
