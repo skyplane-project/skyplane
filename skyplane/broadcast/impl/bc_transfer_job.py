@@ -9,7 +9,7 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface, Obje
 from skyplane.api.impl.chunker import batch_generator, tail_generator
 from skyplane.api.impl.transfer_job import TransferJob
 from skyplane.api.transfer_config import TransferConfig
-from skyplane.broadcast.chunk import ChunkRequest
+from skyplane.chunk import ChunkRequest
 import uuid
 
 import json

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Set
 
 from skyplane import exceptions
 from skyplane.api.transfer_config import TransferConfig
-from skyplane.broadcast.chunk import ChunkRequest, ChunkState
+from skyplane.chunk import ChunkRequest, ChunkState
 from skyplane.utils import logger, imports
 from skyplane.utils.fn import do_parallel
 from skyplane.api.usage.client import UsageClient
@@ -86,7 +86,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
             UsageClient.log_exception("dispatch job", e, args, self.dataplane.src_region_tag, ":", session_start_timestamp_ms)
             raise e
 
-        def monitor_single_dst_helper(dst_region, dst_region_tag):
+        def monitor_single_dst_helper(dst_region):
             start_time = int(time.time())
             try:
                 self.monitor_transfer(dst_region)
@@ -97,13 +97,13 @@ class BCTransferProgressTracker(TransferProgressTracker):
                     reformat_err,
                     args,
                     self.dataplane.src_region_tag,
-                    dst_region_tag,
+                    dst_region,
                     session_start_timestamp_ms,
                 )
                 raise err
             except Exception as e:
                 UsageClient.log_exception(
-                    "monitor transfer", e, args, self.dataplane.src_region_tag, dst_region_tag, session_start_timestamp_ms
+                    "monitor transfer", e, args, self.dataplane.src_region_tag, dst_region, session_start_timestamp_ms
                 )
                 raise e
             end_time = int(time.time())
@@ -114,7 +114,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
                     job.finalize()
             except Exception as e:
                 UsageClient.log_exception(
-                    "finalize job", e, args, self.dataplane.src_region_tag, dst_region_tag, session_start_timestamp_ms
+                    "finalize job", e, args, self.dataplane.src_region_tag, dst_region, session_start_timestamp_ms
                 )
                 raise e
 
@@ -123,7 +123,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
                     logger.fs.debug(f"[TransferProgressTracker] Verifying job {job.uuid}")
                     job.verify()
             except Exception as e:
-                UsageClient.log_exception("verify job", e, args, self.dataplane.src_region_tag, dst_region_tag, session_start_timestamp_ms)
+                UsageClient.log_exception("verify job", e, args, self.dataplane.src_region_tag, dst_region, session_start_timestamp_ms)
                 raise e
 
             # transfer successfully completed
@@ -132,7 +132,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
                 "total_runtime_s": end_time - start_time,
                 "throughput_gbits": self.calculate_size() / (end_time - start_time),
             }
-            UsageClient.log_transfer(transfer_stats, args, self.dataplane.src_region_tag, dst_region_tag, session_start_timestamp_ms)
+            UsageClient.log_transfer(transfer_stats, args, self.dataplane.src_region_tag, dst_region, session_start_timestamp_ms)
             return transfer_stats
 
         # Record only the transfer time per destination
@@ -148,11 +148,12 @@ class BCTransferProgressTracker(TransferProgressTracker):
     @imports.inject("pandas")
     def monitor_transfer(pd, self, dst_region):
         # todo implement transfer monitoring to update job_complete_chunk_ids and job_pending_chunk_ids while the transfer is in progress
-        sinks = {n for n in self.topology.sink_instances() if n.region == dst_region}
+        sinks = {n for n in self.dataplane.topology.sink_instances() if n.region == dst_region}
         sink_regions = {dst_region}
 
         assert len(sink_regions) == 1  # BC: only monitor one sink region in this call
 
+        # any of the jobs of this region is not complete 
         while any(
             [len(self.dst_job_pending_chunk_ids[dst_region][job_uuid]) > 0 for job_uuid in self.dst_job_pending_chunk_ids[dst_region]]
         ):
@@ -172,7 +173,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
                 continue
 
             is_complete_rec = (
-                lambda row: row["state"] == ChunkState.upload_complete
+                lambda row: row["state"] == ChunkState.complete
                 and row["instance"] in [s.instance for s in sinks]
                 and row["region"] in [s.region for s in sinks]
             )
@@ -207,10 +208,10 @@ class BCTransferProgressTracker(TransferProgressTracker):
         if len(self.job_chunk_requests) == 0:
             return None
         bytes_remaining_per_job = {}
-        for job_uuid in self.dst_job_pending_chunk_ids.keys():
-            bytes_remaining_per_job[job_uuid] = []
-            # job_uuid --> [dst1_remaining_bytes, dst2_remaining_bytes, ...]
-            for dst_region in self.dst_regions:
+        for dst_region in self.dst_regions:
+            for job_uuid in self.dst_job_pending_chunk_ids[dst_region].keys():
+                bytes_remaining_per_job[job_uuid] = []
+                # job_uuid --> [dst1_remaining_bytes, dst2_remaining_bytes, ...]
                 bytes_remaining_per_job[job_uuid].append(
                     sum(
                         [
@@ -221,6 +222,5 @@ class BCTransferProgressTracker(TransferProgressTracker):
                     )
                 )
         logger.fs.debug(f"[TransferProgressTracker] Bytes remaining per job: {bytes_remaining_per_job}")
-
         # return the max remaining byte among dsts for each job
         return sum([max(li) for li in bytes_remaining_per_job.values()])

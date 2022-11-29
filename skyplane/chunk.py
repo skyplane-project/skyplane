@@ -81,6 +81,10 @@ class ChunkState(Enum):
     upload_complete = auto()
     failed = auto()
 
+    queued = auto()
+    in_progress = auto()
+    complete = auto()
+
     @staticmethod
     def from_str(s: str):
         return ChunkState[s.lower()]
