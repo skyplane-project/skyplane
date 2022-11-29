@@ -3,16 +3,14 @@ import time
 import skyplane
 
 if __name__ == "__main__":
-
-    source_file = "s3://sarah-skylark-ap-northeast-2/medium_file.txt"
-    dest_file = "s3://broadcast-experiment-ap-south-1/medium_file.txt"
-
     client = skyplane.SkyplaneClient(aws_config=skyplane.AWSConfig())
     print(f"Log dir: {client.log_dir}/client.log")
-    dp = client.dataplane("aws", "us-east-1", "aws", "us-west-1", n_vms=1)
+    dp = client.dataplane("aws", "us-east-1", "aws", "us-east-2", n_vms=1)
     with dp.auto_deprovision():
         dp.provision(spinner=True)
-        dp.queue_copy(source_file, dest_file, recursive=False)
+        dp.queue_copy(
+            "s3://skycamp-demo-src/synset_labels.txt", "s3://skycamp-demo-us-east-2/imagenet-bucket/synset_labels.txt", recursive=False
+        )
         tracker = dp.run_async()
 
         # monitor the transfer
