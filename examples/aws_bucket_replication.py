@@ -1,11 +1,17 @@
 import boto3
+from tqdm import tqdm 
+import pandas as pd
 import skyplane
 import os
 import time
 import json
 
-from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.obj_store.s3_interface import S3Interface
+
+import logging # Logging Configuration
+fmt = '%(asctime)s [%(levelname)s] [%(module)s] - %(message)s'
+logging.basicConfig(format=fmt, datefmt='%m/%d/%Y %I:%M:%S')
+logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
 from absl import app
 from absl import flags
@@ -181,12 +187,17 @@ def write_source_data(src_region, target_data, directory):
     print("Syncing data to source bucket", sync_command)
     os.system(sync_command)
 
+
+
+
 def main(argv):
 
     src_region = FLAGS.src_region
     dst_regions = list(FLAGS.dst_regions)
+    directory = "test_replication"
     experiment_name = f"aws_replication_{int(time.time())}"
     print("Destinations:", dst_regions)
+
     
     buckets = {}
 
@@ -196,18 +207,24 @@ def main(argv):
         bucket_name = bucket_handle(region)
         bucket = S3Interface(bucket_name)
 
-        if not bucket.bucket_exists():
-            print(f"Bucket {bucket_name} does not exist, creating it")
-            bucket.create_bucket(region)
-            print(f"Created bucket {bucket_name} in {region}")
-
+        bucket.create_bucket(region)
+        print(f"Created bucket {bucket_name} in {region}")
         buckets[region] = bucket
+
+        # clear bucket 
+        print("Deleting bucket versions...")
+        s3 = boto3.resource('s3', region_name=region)
+        response = s3.Bucket(bucket_name).object_versions.delete()
+
+        # set object versioning
+        print("Setting object versioning...")
         response = bucket._s3_client(region).put_bucket_versioning(
             Bucket=bucket_name,
             VersioningConfiguration={
                 'Status': 'Enabled'
             }
         )
+
         print(f"Enabled bucket versioning for {bucket_name}")
 
 
@@ -221,11 +238,12 @@ def main(argv):
     rules = []
     for dst_region in dst_regions:
         dest_name = bucket_handle(dst_region.split(":")[1])
-        print("destination:", f"arn:aws:s3:::{dest_name}")
+        print("destination:", f"arn:aws:s3:::{dest_name}", "priority:", dst_regions.index(dst_region))
         rules.append(
             {
+                'ID': dst_region,
                 'Priority': dst_regions.index(dst_region),
-                'Filter': {'Prefix': f'{experiment_name}/'},
+                'Filter': {'Prefix': f'{directory}/'},
                 'Status': 'Enabled',
                 #'ExistingObjectReplication': {
                 #    'Status': 'Enabled'
@@ -261,7 +279,7 @@ def main(argv):
             }
         )
     except Exception as e:
-        delete_role(role_name, policy_arn)
+        delete_role(role_name, policy_arn, batch_policy_arn)
         delete_policy(policy_arn)
         delete_policy(batch_policy_arn)
         print("Error creating replication rule", e) 
@@ -276,13 +294,13 @@ def main(argv):
     client = skyplane.SkyplaneClient(aws_config=skyplane.AWSConfig())
     print(f"Log dir: {client.log_dir}/client.log")
 
-    dp = client.dataplane("aws", target_data_region, "aws", src_region, n_vms=4) # TODO: pass in target_throughput that we also pass to broadcast?
+    dp = client.dataplane("aws", target_data_region, "aws", src_region, n_vms=6) # TODO: pass in target_throughput that we also pass to broadcast?
     with dp.auto_deprovision():
 
         # copy data with skyplane to source bucket
         dp.provision(spinner=True)
         dp.queue_copy(
-            FLAGS.target_data, f"s3://{src_bucket}/{experiment_name}", recursive=True
+            FLAGS.target_data, f"s3://{src_bucket}/{directory}", recursive=True
         )
         print("Waiting for data to copy to source bucket...")
 
@@ -290,7 +308,7 @@ def main(argv):
         dp.run()
 
         # wait for copy at destinations
-        target_objects = list(buckets[src_region].list_objects(prefix=experiment_name))
+        target_objects = list(buckets[src_region].list_objects(prefix=directory))
         print(f"Waiting for len(target_objects) to replicate", experiment_name)
         num_src = len(target_objects)
         # TODO: replace with better monitoring
@@ -298,7 +316,7 @@ def main(argv):
             completed = 0
             for region, bucket in buckets.items(): 
                 if region == src_region: continue 
-                objs = list(bucket.list_objects(prefix=experiment_name))
+                objs = list(bucket.list_objects(prefix=directory))
                 num_dest = len(objs)
                 print(f"{region}: Object replicated = {len(objs)} / {len(target_objects)}")
                 if num_dest == num_src: 
@@ -311,6 +329,44 @@ def main(argv):
 
             time.sleep(1)
 
+    # write results 
+    results = []
+    src_objs = list(buckets[src_region].list_objects(prefix=directory))
+    for region, bucket in buckets.items():
+        print(region)
+        if region == src_region: continue
+        dest_objs = list(bucket.list_objects(prefix=directory))
+
+        for src_obj, dest_obj in zip(src_objs, dest_objs):
+            assert src_obj.size == dest_obj.size
+            results.append({
+                "name": src_obj.key,
+                "src_last_modified": src_obj.last_modified,
+                "dest_last_modified": dest_obj.last_modified,
+                "size": src_obj.size,
+                "src_region": src_region, 
+                "dest_region": region
+            })
+    df = pd.DataFrame(results)
+    df.to_csv(f"{experiment_name}.csv")
+    print(f"{experiment_name}.csv")
+
+
+    #for src_obj in tqdm(buckets[src_region].list_objects(prefix=directory)):
+    #    for region, bucket in buckets.items(): 
+    #        if region == src_region: 
+    #            continue 
+
+    #        metadata = bucket.get_obj_metadata(src_obj.key)
+    #        results.append({
+    #            "name": src_obj.key,
+    #            "src_last_modified": src_obj.last_modified,
+    #            "dest_last_modified": metadata["LastModified"],
+    #            "size": metadata["ContentLength"],
+    #            "src_region": src_region, 
+    #            "dest_region": region
+    #        }) 
+    #        print(metadata)
     # cleanup IAM roles and policies 
     delete_role(role_name, policy_arn, batch_policy_arn)
     delete_policy(policy_arn)
