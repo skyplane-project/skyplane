@@ -16,13 +16,12 @@ from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, Te
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from skyplane import exceptions, compute
-from skyplane.api.client import tmp_log_dir
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.replicate.profiler import status_df_to_traceevent
 from skyplane.replicate.replication_plan import ReplicationJob, ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
-from skyplane.utils.definitions import MB, GB, gateway_docker_image
+from skyplane.utils.definitions import MB, GB, gateway_docker_image, tmp_log_dir
 from skyplane.utils.fn import PathLike, do_parallel
 from skyplane.utils.timer import Timer
 
