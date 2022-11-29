@@ -5,15 +5,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional, List
 
 from skyplane.api.client import tmp_log_dir
-from skyplane.api.usage.client import get_clientid
+from skyplane.api.client import get_clientid
 from skyplane.broadcast.bc_dataplane import BroadcastDataplane
 from skyplane.broadcast.bc_planner import BroadcastDirectPlanner, BroadcastMDSTPlanner, BroadcastHSTPlanner, BroadcastILPSolverPlanner
-from skyplane.api.impl.provisioner import Provisioner
-from skyplane.api.transfer_config import TransferConfig
+from skyplane.api.provision.provisioner import Provisioner
+from skyplane.api.config import TransferConfig
 from skyplane.utils import logger
 
 if TYPE_CHECKING:
-    from skyplane.api.auth_config import AWSConfig, AzureConfig, GCPConfig
+    from skyplane.api.config import AWSConfig, AzureConfig, GCPConfig
 
 
 class SkyplaneBroadcastClient:

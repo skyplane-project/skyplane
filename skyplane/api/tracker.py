@@ -8,24 +8,21 @@ import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional, Set
 
 from skyplane import exceptions
-from skyplane.api.transfer_config import TransferConfig
+from skyplane.api.config import TransferConfig
 from skyplane.chunk import ChunkRequest, ChunkState
 from skyplane.utils import logger, imports
 from skyplane.utils.fn import do_parallel
-from skyplane.api.usage.client import UsageClient
+from skyplane.api.usage import UsageClient
 from skyplane.utils.definitions import GB
 
 if TYPE_CHECKING:
-    from skyplane.api.impl.transfer_job import TransferJob
+    from skyplane.api.transfer_job import TransferJob
 
 
 class TransferProgressTracker(Thread):
     def __init__(self, dataplane, jobs: List["TransferJob"], transfer_config: TransferConfig):
         super().__init__()
         self.dataplane = dataplane
-        self.type_list = set([job.type for job in jobs])
-        self.recursive_list = set([str(job.recursive) for job in jobs])
-
         self.jobs = {job.uuid: job for job in jobs}
         self.transfer_config = transfer_config
 
@@ -51,10 +48,9 @@ class TransferProgressTracker(Thread):
     def run(self):
         src_cloud_provider = self.dataplane.src_region_tag.split(":")[0]
         dst_cloud_provider = self.dataplane.dst_region_tag.split(":")[0]
-
         args = {
-            "cmd": ",".join(self.type_list),
-            "recursive": ",".join(self.recursive_list),
+            "cmd": ",".join([job.__class__.__name__ for job in self.jobs.values()]),
+            "recursive": ",".join([str(job.recursive) for job in self.jobs.values()]),
             "multipart": self.transfer_config.multipart_enabled,
             "instances_per_region": self.dataplane.max_instances,
             "src_instance_type": getattr(self.transfer_config, f"{src_cloud_provider}_instance_class"),

@@ -181,7 +181,7 @@ class Server:
         self.auto_shutdown_timeout_minutes = None
         self.run_command("(kill -9 $(cat /tmp/autoshutdown.pid) && rm -f /tmp/autoshutdown.pid) || true")
 
-    def wait_for_ssh_ready(self, timeout=120, interval=0.25) -> bool:
+    def wait_for_ssh_ready(self, timeout=120, interval=0.25):
         def is_up():
             try:
                 ip = self.public_ip()

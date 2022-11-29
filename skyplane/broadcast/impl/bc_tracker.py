@@ -4,13 +4,14 @@ import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional, Set
 
 from skyplane import exceptions
-from skyplane.api.transfer_config import TransferConfig
+from skyplane.api.config import TransferConfig
 from skyplane.chunk import ChunkRequest, ChunkState
 from skyplane.utils import logger, imports
 from skyplane.utils.fn import do_parallel
-from skyplane.api.usage.client import UsageClient
-from skyplane.api.impl.tracker import TransferProgressTracker
+from skyplane.api.usage import UsageClient
+from skyplane.api.tracker import TransferProgressTracker
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from skyplane.utils.definitions import GB
 
 if TYPE_CHECKING:
     from skyplane.broadcast.impl.bc_transfer_job import BCTransferJob
@@ -50,6 +51,20 @@ class BCTransferProgressTracker(TransferProgressTracker):
     def __str__(self):
         return f"TransferProgressTracker({self.dataplane}, {self.jobs})"
 
+    def calculate_size(self, dst_region):
+        if len(self.job_chunk_requests) == 0:
+            return 0
+        bytes_total_per_job = {}
+        for job_uuid in self.dst_job_complete_chunk_ids[dst_region].keys():
+            bytes_total_per_job[job_uuid] = sum(
+                [
+                    cr.chunk.chunk_length_bytes
+                    for cr in self.job_chunk_requests[job_uuid]
+                    if cr.chunk.chunk_id in self.dst_job_complete_chunk_ids[dst_region][job_uuid]
+                ]
+            )
+        return sum(bytes_total_per_job.values()) / GB
+
     def run(self):
         src_cloud_provider = self.dataplane.src_region_tag.split(":")[0]
         dst_cloud_providers = [dst_region_tag.split(":")[0] for dst_region_tag in self.dataplane.dst_region_tags]
@@ -87,7 +102,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
             raise e
 
         def monitor_single_dst_helper(dst_region):
-            start_time = int(time.time())
+            start_time = time.time()
             try:
                 self.monitor_transfer(dst_region)
             except exceptions.SkyplaneGatewayException as err:
@@ -106,7 +121,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
                     "monitor transfer", e, args, self.dataplane.src_region_tag, dst_region, session_start_timestamp_ms
                 )
                 raise e
-            end_time = int(time.time())
+            end_time = time.time()
 
             try:
                 for job in self.jobs.values():
@@ -124,24 +139,33 @@ class BCTransferProgressTracker(TransferProgressTracker):
                 UsageClient.log_exception("verify job", e, args, self.dataplane.src_region_tag, dst_region, session_start_timestamp_ms)
                 raise e
 
+            runtime_s = end_time - start_time
             # transfer successfully completed
             transfer_stats = {
                 "dst_region": dst_region,
-                "total_runtime_s": end_time - start_time,
-                "throughput_gbits": self.calculate_size() / (end_time - start_time),
+                "total_runtime_s": round(runtime_s, 4),
+                "throughput_gbits": round(self.calculate_size(dst_region) * 8 / runtime_s, 4),
             }
             UsageClient.log_transfer(transfer_stats, args, self.dataplane.src_region_tag, dst_region, session_start_timestamp_ms)
             return transfer_stats
 
         # Record only the transfer time per destination
-        e2e_start_time = int(time.time())
+
         results = []
-        with ThreadPoolExecutor(max_workers=8) as executor:
+        with ThreadPoolExecutor(max_workers=100) as executor:
+            e2e_start_time = time.time()
             future_list = [executor.submit(monitor_single_dst_helper, dst) for dst in self.dst_regions]
             for future in as_completed(future_list):
                 results.append(future.result())
-        e2e_end_time = int(time.time())
-        print("End to end broadcast transfer time: ", e2e_end_time - e2e_start_time)
+            e2e_end_time = time.time()
+        print(f"End to end time: {round(e2e_end_time - e2e_start_time, 4)}s\n")
+        print(f"Transfer result:")
+
+        from pprint import pprint
+
+        for i in results:
+            pprint(i)
+            print()
 
     @imports.inject("pandas")
     def monitor_transfer(pd, self, dst_region):

@@ -1,14 +1,14 @@
 import threading
 from queue import Queue
 
-from typing import Generator, Tuple, TypeVar
+from typing import Callable, Generator, Optional, Tuple, TypeVar
 import uuid
 
-from skyplane.api.transfer_config import TransferConfig
+from skyplane.api.config import TransferConfig
 from skyplane.chunk import Chunk, ChunkRequest
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils.definitions import MB
-from skyplane.api.impl.chunker import Chunker
+from skyplane.api.transfer_job import Chunker
 
 T = TypeVar("T")
 
@@ -24,6 +24,16 @@ class BCChunker(Chunker):
     ):
         super().__init__(src_iface, dest_iface, transfer_config, concurrent_multipart_chunk_threads)
         self.num_partitions = num_partitions
+
+    def transfer_pair_generator(
+        self,
+        src_prefix: str,
+        dst_prefix: str,
+        recursive: bool,
+        prefilter_fn: Optional[Callable[[ObjectStoreObject], bool]] = None,
+        postfilter_fn: Optional[Callable[[ObjectStoreObject, ObjectStoreObject], bool]] = None,
+    ) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
+        return super().transfer_pair_generator(src_prefix, dst_prefix, recursive, prefilter_fn, postfilter_fn)
 
     def to_bc_chunk_requests(self, gen_in: Generator[Chunk, None, None]) -> Generator[ChunkRequest, None, None]:
         """Converts a generator of chunks to a generator of chunk requests."""
@@ -55,7 +65,7 @@ class BCChunker(Chunker):
         if self.transfer_config.multipart_enabled:
             for _ in range(self.concurrent_multipart_chunk_threads):
                 t = threading.Thread(
-                    target=self.multipart_chunk_thread,
+                    target=self._run_multipart_chunk_thread,
                     args=(multipart_exit_event, multipart_send_queue, multipart_chunk_queue),
                     daemon=False,
                 )

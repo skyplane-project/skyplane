@@ -54,7 +54,7 @@ class Provisioner:
         self.gcp = compute.GCPCloudProvider(auth=self.gcp_auth)
 
     def init_global(self, aws: bool = True, azure: bool = True, gcp: bool = True):
-        logger.fs.info(f"[Provisioner.init_global] Initializing global resources for {aws=}, {azure=}, {gcp=}")
+        logger.fs.info(f"[Provisioner.init_global] Initializing global resources for aws={aws}, azure={azure}, gcp={gcp}")
         jobs = []
         if aws:
             jobs.append(partial(self.aws.setup_global, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
@@ -130,7 +130,7 @@ class Provisioner:
             do_parallel(
                 self.aws.setup_region, list(set(aws_regions)), spinner=spinner, spinner_persist=False, desc="Configuring AWS regions"
             )
-            logger.fs.info(f"[Provisioner.provision] Configured AWS regions {aws_regions=}")
+            logger.fs.info(f"[Provisioner.provision] Configured AWS regions {aws_regions}")
 
         # provision VMs
         logger.fs.info(f"[Provisioner.provision] Provisioning {len(provision_tasks)} VMs")
@@ -150,9 +150,7 @@ class Provisioner:
             private_ips = [s.private_ip() for t, s in results if t.cloud_provider == "gcp"]
             authorize_ip_jobs = []
             if aws_provisioned:
-                # set it to None for broadcast
-                authorize_ip_jobs.extend([partial(self.aws.add_ips_to_security_group, r, None) for r in set(aws_regions)])
-                # authorize_ip_jobs.extend([partial(self.aws.add_ips_to_security_group, r, public_ips) for r in set(aws_regions)])
+                authorize_ip_jobs.extend([partial(self.aws.add_ips_to_security_group, r, public_ips) for r in set(aws_regions)])
             if gcp_provisioned:
 
                 def authorize_gcp_gateways():
@@ -168,8 +166,8 @@ class Provisioner:
                 spinner_persist=False,
                 desc="Authorizing gateways with firewalls",
             )
-            logger.fs.info(f"[Provisioner.provision] Authorized AWS gateways with firewalls: {public_ips=}")
-            logger.fs.info(f"[Provisioner.provision] Authorized GCP gateways with firewalls: {public_ips=}, {private_ips=}")
+            logger.fs.info(f"[Provisioner.provision] Authorized AWS gateways with firewalls: {public_ips}")
+            logger.fs.info(f"[Provisioner.provision] Authorized GCP gateways with firewalls: {public_ips}, {private_ips}")
 
         for task in provision_tasks:
             self.pending_provisioner_tasks.remove(task)
@@ -191,7 +189,7 @@ class Provisioner:
             if idx_to_del:
                 del self.provisioned_vms[idx_to_del]
             else:
-                logger.fs.warning(f"[Provisioner.deprovision] Could not find {server} in {self.provisioned_vms=}")
+                logger.fs.warning(f"[Provisioner.deprovision] Could not find {server} in {self.provisioned_vms}")
             if server in self.temp_nodes:
                 self.temp_nodes.remove(server)
             logger.fs.info(f"[Provisioner.deprovision] Terminated {server}")
@@ -220,10 +218,10 @@ class Provisioner:
             if aws_deprovisioned:
                 aws_regions = set([s.region() for s in servers if s.provider == "aws"])
                 jobs.extend([partial(self.aws.remove_ips_from_security_group, r, public_ips) for r in set(aws_regions)])
-                logger.fs.info(f"[Provisioner.deprovision] Deauthorizing AWS gateways with firewalls: {public_ips=}")
+                logger.fs.info(f"[Provisioner.deprovision] Deauthorizing AWS gateways with firewalls: {public_ips}")
             if gcp_deprovisioned:
                 jobs.extend([partial(self.gcp.remove_gateway_rule, rule) for rule in self.gcp_firewall_rules])
-                logger.fs.info(f"[Provisioner.deprovision] Deauthorizing GCP gateways with firewalls: {self.gcp_firewall_rules=}")
+                logger.fs.info(f"[Provisioner.deprovision] Deauthorizing GCP gateways with firewalls: {self.gcp_firewall_rules}")
             do_parallel(
                 lambda fn: fn(), jobs, n=max_jobs, spinner=spinner, spinner_persist=False, desc="Deauthorizing gateways from firewalls"
             )

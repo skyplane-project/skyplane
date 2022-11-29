@@ -6,8 +6,8 @@ import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from skyplane import compute
-from skyplane.api.dataplane import Dataplane
-from skyplane.api.transfer_config import TransferConfig
+from skyplane.api.provision.dataplane import Dataplane
+from skyplane.api.config import TransferConfig
 from skyplane.replicate.replication_plan import ReplicationTopologyGateway
 
 from skyplane.broadcast.impl.bc_tracker import BCTransferProgressTracker
@@ -32,7 +32,7 @@ from skyplane.utils.fn import PathLike
 
 
 if TYPE_CHECKING:
-    from skyplane.api.impl.provisioner import Provisioner
+    from skyplane.api.provision.provisioner import Provisioner
 
 
 class BroadcastDataplane(Dataplane):

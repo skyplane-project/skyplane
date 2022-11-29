@@ -38,6 +38,7 @@ class Chunk:
         return Chunk(**d)
 
 
+# TODO: remove ChunkRequest abstraction (only need chunks)
 @dataclass
 class ChunkRequest:
     """A ChunkRequest stores all local state in the Gateway pertaining to a ChunkRequest."""

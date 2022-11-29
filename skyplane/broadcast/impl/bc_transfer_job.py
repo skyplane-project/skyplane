@@ -1,14 +1,12 @@
 from dataclasses import dataclass, field
 
 import urllib3
-from typing import Generator, TYPE_CHECKING, Tuple
+from typing import Generator, TYPE_CHECKING, Tuple, Optional
 
 from skyplane import exceptions
-from skyplane.api.impl.path import parse_path
-from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
-from skyplane.api.impl.chunker import batch_generator, tail_generator
-from skyplane.api.impl.transfer_job import TransferJob
-from skyplane.api.transfer_config import TransferConfig
+from skyplane.utils.path import parse_path
+from skyplane.api.transfer_job import TransferJob
+from skyplane.api.config import TransferConfig
 from skyplane.chunk import ChunkRequest
 import uuid
 
@@ -20,14 +18,11 @@ from dataclasses import dataclass, field
 import urllib3
 from typing import Generator, Tuple, TYPE_CHECKING
 
-from skyplane import exceptions
-from skyplane.api.impl.chunker import batch_generator, tail_generator
 from skyplane.broadcast.impl.bc_chunker import BCChunker
-from skyplane.api.impl.path import parse_path
-from skyplane.api.transfer_config import TransferConfig
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
+from skyplane.utils.timer import Timer
 
 if TYPE_CHECKING:
     from skyplane.broadcast.bc_dataplane import BroadcastDataplane
@@ -69,15 +64,6 @@ class BCTransferJob(TransferJob):
     def broadcast_dispatch(self, dataplane: "BroadcastDataplane", **kwargs) -> Generator[ChunkRequest, None, None]:
         raise NotImplementedError("Broadcast Dispatch not implemented")
 
-    def _transfer_pair_generator(self) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
-        """Query source region and return list of objects to transfer. Return a random pair for any destination"""
-        # NOTE: do additional checking across destination
-        for dst_iface in self.dst_ifaces.values():
-            if not dst_iface.bucket_exists():
-                raise exceptions.MissingBucketException(f"Destination bucket {dst_iface.path()} does not exist or is not readable.")
-
-        return super()._transfer_pair_generator()
-
 
 @dataclass
 class BCCopyJob(BCTransferJob):
@@ -89,45 +75,57 @@ class BCCopyJob(BCTransferJob):
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         return super().__post_init__()
 
+    def gen_transfer_pairs(self, chunker: Optional[BCChunker] = None) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
+        """Generate transfer pairs for the transfer job."""
+        if chunker is None:  # used for external access to transfer pair list
+            chunker = BCChunker(self.src_iface, self.dst_iface, TransferConfig())
+        yield from chunker.transfer_pair_generator(
+            self.src_prefix, self.dst_prefix, self.recursive, self._pre_filter_fn, self._post_filter_fn
+        )
+
     def broadcast_dispatch(
-        self, dataplane: "BroadcastDataplane", transfer_config: TransferConfig, dispatch_batch_size: int = 64
+        self,
+        dataplane: "BroadcastDataplane",
+        transfer_config: TransferConfig,
+        dispatch_batch_size: int = 64,
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways."""
         chunker = BCChunker(self.src_iface, self.dst_iface, transfer_config, dataplane.topology.num_partitions)
-        n_multiparts = 0
-        gen_transfer_list = tail_generator(self._transfer_pair_generator(), self.transfer_list)
+        transfer_pair_generator = self.gen_transfer_pairs(chunker)
+        gen_transfer_list = chunker.tail_generator(transfer_pair_generator, self.transfer_list)
         chunks = chunker.chunk(gen_transfer_list)
-        chunk_requests = chunker.to_bc_chunk_requests(chunks)
-        batches = batch_generator(chunk_requests, dispatch_batch_size)
-        src_gateways = dataplane.source_gateways()
-        bytes_dispatched = [0] * len(src_gateways)
-        start = time.time()
-        for batch in batches:
-            end = time.time()
-            logger.fs.debug(f"Queried {len(batch)} chunks in {end - start:.2f} seconds")
-            min_idx = bytes_dispatched.index(min(bytes_dispatched))
-            server = src_gateways[min_idx]
-            n_bytes = sum([cr.chunk.chunk_length_bytes for cr in batch])
-            bytes_dispatched[min_idx] += n_bytes
-            start = time.time()
-            reply = self.http_pool.request(
-                "POST",
-                f"{server.gateway_api_url}/api/v1/chunk_requests",
-                body=json.dumps([c.as_dict() for c in batch]).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-            )
-            end = time.time()
-            if reply.status != 200:
-                raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
-            logger.fs.debug(
-                f"Dispatched {len(batch)} chunk requests to {server.instance_name()} ({n_bytes} bytes) in {end - start:.2f} seconds"
-            )
-            yield from batch
+        chunk_requests = chunker.to_chunk_requests(chunks)
 
-            # copy new multipart transfers to the multipart transfer list
-            updated_len = len(chunker.multipart_upload_requests)
-            self.multipart_transfer_list.extend(chunker.multipart_upload_requests[n_multiparts:updated_len])
-            n_multiparts = updated_len
+        # dispatch chunk requests
+        with Timer() as t:
+            src_gateways = dataplane.source_gateways()
+            bytes_dispatched = [0] * len(src_gateways)
+            n_multiparts = 0
+            for batch in chunker.batch_generator(chunk_requests, dispatch_batch_size):
+                logger.fs.debug(f"Queried {len(batch)} chunks in {t.elapsed:.2f} seconds")
+                min_idx = bytes_dispatched.index(min(bytes_dispatched))
+                server = src_gateways[min_idx]
+                n_bytes = sum([cr.chunk.chunk_length_bytes for cr in batch])
+                bytes_dispatched[min_idx] += n_bytes
+                start = time.time()
+                reply = self.http_pool.request(
+                    "POST",
+                    f"{server.gateway_api_url}/api/v1/chunk_requests",
+                    body=json.dumps([c.as_dict() for c in batch]).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                )
+                end = time.time()
+                if reply.status != 200:
+                    raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
+                logger.fs.debug(
+                    f"Dispatched {len(batch)} chunk requests to {server.instance_name()} ({n_bytes} bytes) in {end - start:.2f} seconds"
+                )
+                yield from batch
+
+                # copy new multipart transfers to the multipart transfer list
+                updated_len = len(chunker.multipart_upload_requests)
+                self.multipart_transfer_list.extend(chunker.multipart_upload_requests[n_multiparts:updated_len])
+                n_multiparts = updated_len
 
     def finalize(self):
         groups = defaultdict(list)
