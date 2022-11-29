@@ -42,7 +42,7 @@ class TransferProgressTracker(Thread):
         logger.fs.debug(f"[TransferProgressTracker] Transfer config: {transfer_config}")
 
         # transfer state
-        self.job_chunk_requests: Dict[str, List[ChunkRequest]] = {}
+        self.job_chunk_requests: Dict[str, Dict[str, ChunkRequest]] = {}
         self.job_pending_chunk_ids: Dict[str, Set[str]] = {}
         self.job_complete_chunk_ids: Dict[str, Set[str]] = {}
         self.errors: Optional[Dict[str, List[str]]] = None
@@ -70,10 +70,15 @@ class TransferProgressTracker(Thread):
         try:
             for job_uuid, job in self.jobs.items():
                 logger.fs.debug(f"[TransferProgressTracker] Dispatching job {job.uuid}")
-                self.job_chunk_requests[job_uuid] = list(job.dispatch(self.dataplane, transfer_config=self.transfer_config))
-                self.job_pending_chunk_ids[job_uuid] = set([cr.chunk.chunk_id for cr in self.job_chunk_requests[job_uuid]])
+                self.job_chunk_requests[job_uuid] = {}
+                self.job_pending_chunk_ids[job_uuid] = set()
                 self.job_complete_chunk_ids[job_uuid] = set()
-                self.progress_reporter.on_chunk_dispatched(self.job_chunk_requests)
+                chunks_dispatched = []
+                for cr in job.dispatch(self.dataplane, transfer_config=self.transfer_config):
+                    chunks_dispatched.append(cr.chunk)
+                    self.job_chunk_requests[job_uuid][cr.chunk.chunk_id] = cr
+                    self.job_pending_chunk_ids[job_uuid].add(cr.chunk.chunk_id)
+                    self.progress_reporter.on_chunk_dispatched(chunks_dispatched)
                 logger.fs.debug(
                     f"[TransferProgressTracker] Job {job.uuid} dispatched with {len(self.job_chunk_requests[job_uuid])} chunk requests"
                 )
@@ -172,10 +177,15 @@ class TransferProgressTracker(Thread):
             # update job_complete_chunk_ids and job_pending_chunk_ids
             for job_uuid, job in self.jobs.items():
                 job_complete_chunk_ids = set(chunk_id for chunk_id in completed_chunk_ids if self._chunk_to_job_map[chunk_id] == job_uuid)
+                new_chunk_ids = (
+                    self.job_complete_chunk_ids[job_uuid].union(job_complete_chunk_ids).difference(self.job_complete_chunk_ids[job_uuid])
+                )
+                completed_chunks = []
+                for id in new_chunk_ids:
+                    completed_chunks.append(self.job_chunk_requests[job_uuid][id].chunk)
+                self.progress_reporter.on_chunk_completed(completed_chunks)
                 self.job_complete_chunk_ids[job_uuid] = self.job_complete_chunk_ids[job_uuid].union(job_complete_chunk_ids)
                 self.job_pending_chunk_ids[job_uuid] = self.job_pending_chunk_ids[job_uuid].difference(job_complete_chunk_ids)
-
-            self.progress_reporter.on_chunk_completed(self.job_chunk_requests, self.job_complete_chunk_ids)
 
             # sleep
             time.sleep(0.05)
@@ -183,7 +193,7 @@ class TransferProgressTracker(Thread):
     @property
     @functools.lru_cache(maxsize=1)
     def _chunk_to_job_map(self):
-        return {cr.chunk.chunk_id: job_uuid for job_uuid, crs in self.job_chunk_requests.items() for cr in crs}
+        return {chunk_id: job_uuid for job_uuid, cr_dict in self.job_chunk_requests.items() for chunk_id in cr_dict.keys()}
 
     def _query_chunk_status(self):
         def get_chunk_status(args):
@@ -219,7 +229,7 @@ class TransferProgressTracker(Thread):
             bytes_remaining_per_job[job_uuid] = sum(
                 [
                     cr.chunk.chunk_length_bytes
-                    for cr in self.job_chunk_requests[job_uuid]
+                    for cr in self.job_chunk_requests[job_uuid].values()
                     if cr.chunk.chunk_id in self.job_pending_chunk_ids[job_uuid]
                 ]
             )
@@ -234,7 +244,7 @@ class TransferProgressTracker(Thread):
             bytes_total_per_job[job_uuid] = sum(
                 [
                     cr.chunk.chunk_length_bytes
-                    for cr in self.job_chunk_requests[job_uuid]
+                    for cr in self.job_chunk_requests[job_uuid].values()
                     if cr.chunk.chunk_id in self.job_complete_chunk_ids[job_uuid]
                 ]
             )
