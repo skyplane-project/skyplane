@@ -29,7 +29,7 @@ class TransferProgressTracker(Thread):
         self.transfer_config = transfer_config
         self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
         self.transfer_dir.mkdir(exist_ok=True, parents=True)
-        if (progress_reporter is None):
+        if progress_reporter is None:
             self.progress_reporter = EmptyTransferHook()
         else:
             self.progress_reporter = progress_reporter
@@ -82,7 +82,7 @@ class TransferProgressTracker(Thread):
                 "dispatch job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
             )
             raise e
-        
+
         self.progress_reporter.on_dispatch_end()
 
         # Record only the transfer time
@@ -176,7 +176,7 @@ class TransferProgressTracker(Thread):
                 self.job_pending_chunk_ids[job_uuid] = self.job_pending_chunk_ids[job_uuid].difference(job_complete_chunk_ids)
 
             self.progress_reporter.on_chunk_completed(self.job_chunk_requests, self.job_complete_chunk_ids)
-            
+
             # sleep
             time.sleep(0.05)
 
