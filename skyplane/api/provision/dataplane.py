@@ -203,6 +203,7 @@ class Dataplane:
                 self.provisioned = False
 
     def check_error_logs(self) -> Dict[str, List[str]]:
+        """Get the error log from remote gateways if there is any error."""
         def get_error_logs(args):
             _, instance = args
             reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/errors")
@@ -220,9 +221,11 @@ class Dataplane:
         return DataplaneAutoDeprovision(self)
 
     def source_gateways(self) -> List[compute.Server]:
+        """Returns a list of source gateway nodes"""
         return [self.bound_nodes[n] for n in self.topology.source_instances()] if self.provisioned else []
 
     def sink_gateways(self) -> List[compute.Server]:
+        """Returns a list of sink gateway nodes"""
         return [self.bound_nodes[n] for n in self.topology.sink_instances()] if self.provisioned else []
 
     def queue_copy(
@@ -231,6 +234,17 @@ class Dataplane:
         dst: str,
         recursive: bool = False,
     ) -> str:
+        """
+        Add a copy job to job list.
+        Return the uuid of the job.
+        
+        :param src: Source prefix to copy from
+        :type src: str
+        :param dst: The destination of the transfer
+        :type dst: str
+        :param recursive: If true, will copy objects at folder prefix recursively (default: False)
+        :type recursive: bool
+        """
         job = CopyJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
         logger.fs.debug(f"[SkyplaneClient] Queued copy job {job}")
         self.jobs_to_dispatch.append(job)
@@ -242,12 +256,24 @@ class Dataplane:
         dst: str,
         recursive: bool = False,
     ) -> str:
+        """
+        Add a sync job to job list.
+        Return the uuid of the job.
+        
+        :param src: Source prefix to copy from
+        :type src: str
+        :param dst: The destination of the transfer
+        :type dst: str
+        :param recursive: If true, will copy objects at folder prefix recursively (default: False)
+        :type recursive: bool
+        """
         job = SyncJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
         logger.fs.debug(f"[SkyplaneClient] Queued sync job {job}")
         self.jobs_to_dispatch.append(job)
         return job.uuid
 
     def run_async(self) -> TransferProgressTracker:
+        """Start the transfer asynchronously. The main thread will not be blocked."""
         if not self.provisioned:
             logger.error("Dataplane must be pre-provisioned. Call dataplane.provision() before starting a transfer")
         tracker = TransferProgressTracker(self, self.jobs_to_dispatch, self.transfer_config)
@@ -258,6 +284,7 @@ class Dataplane:
         return tracker
 
     def run(self):
+        """Start the transfer in the main thread. Wait until the transfer is complete."""
         tracker = self.run_async()
         logger.fs.debug(f"[SkyplaneClient] Waiting for transfer to complete")
         tracker.join()

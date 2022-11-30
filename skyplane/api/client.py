@@ -70,7 +70,7 @@ class SkyplaneClient:
         :type src: str
         :param dst: The destination of the transfer
         :type dst: str
-        :param recursive: If true, will copy objects at folder prefix recursively
+        :param recursive: If true, will copy objects at folder prefix recursively (default: False)
         :type recursive: bool
         :param num_vms: The maximum number of instances to use per region (default: 1)
         :type num_vms: int

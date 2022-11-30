@@ -27,6 +27,7 @@ class ProvisionerTask:
 
 
 class Provisioner:
+    """Launches a single VM provisioning job."""
     def __init__(
         self,
         aws_auth: Optional[compute.AWSAuthentication] = None,
