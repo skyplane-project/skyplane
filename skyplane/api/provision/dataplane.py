@@ -70,6 +70,22 @@ class Dataplane:
         max_jobs: int = 16,
         spinner: bool = False,
     ):
+        """
+        Provision the transfer gateways.
+        
+        :param allow_firewall: Whether to apply firewall rules in the gatweway network (default: True)
+        :type allow_firewall: bool
+        :param gateway_docker_image: Docker image token in github
+        :type gateway_docker_image: str
+        :param gateway_log_dir: path to the log directory in the remote gatweways
+        :type gateway_log_dir: PathLike
+        :param authorize_ssh_pub_key: authorization ssh key to the remote gateways
+        :type authorize_ssh_pub_key: str
+        :param max_jobs: maximum number of provision jobs to launch concurrently (default: 16)
+        :type max_jobs: int
+        :param spinner: Whether to show the spinner during the job (default: False)
+        :type spinner: bool
+        """
         with self.provisioning_lock:
             if self.provisioned:
                 logger.error("Cannot provision dataplane, already provisioned!")
@@ -160,6 +176,14 @@ class Dataplane:
         do_parallel(lambda fn: fn(), jobs, n=-1, spinner=spinner, spinner_persist=spinner, desc="Starting gateway container on VMs")
 
     def deprovision(self, max_jobs: int = 64, spinner: bool = False):
+        """
+        Deprovision the remote gateways
+        
+        :param max_jobs: maximum number of jobs to deprovision the remote gateways (default: 64)
+        :type max_jobs: int
+        :param spinner: Whether to show the spinner during the job (default: False)
+        :type spinner: bool
+        """
         with self.provisioning_lock:
             if not self.provisioned:
                 logger.fs.warning("Attempting to deprovision dataplane that is not provisioned, this may be from auto_deprovision.")
