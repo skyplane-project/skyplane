@@ -1,4 +1,3 @@
-import time
 import traceback
 
 import typer
@@ -9,10 +8,9 @@ from skyplane.cli.common import print_header, console
 from skyplane.cli.v2.cli_impl import SkyplaneCLI
 from skyplane.config_paths import cloud_config, config_path
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
-from skyplane.progress_reporting.transfer_hooks import ProgressBarTransferHook
+from skyplane.cli.v2.progress_bar import ProgressBarTransferHook
 from skyplane.utils.definitions import GB
 from skyplane.utils.path import parse_path
-from skyplane.utils import logger
 
 
 def cp(

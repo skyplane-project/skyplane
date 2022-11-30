@@ -1,6 +1,7 @@
 import functools
 import json
 import time
+from abc import ABC
 from datetime import datetime
 from threading import Thread
 
@@ -9,8 +10,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Set
 
 from skyplane import exceptions
 from skyplane.api.config import TransferConfig
-from skyplane.chunk import ChunkRequest, ChunkState
-from skyplane.progress_reporting.transfer_hooks import TransferHook, EmptyTransferHook
+from skyplane.chunk import ChunkRequest, ChunkState, Chunk
 from skyplane.utils import logger, imports
 from skyplane.utils.definitions import tmp_log_dir
 from skyplane.utils.fn import do_parallel
@@ -19,6 +19,49 @@ from skyplane.utils.definitions import GB
 
 if TYPE_CHECKING:
     from skyplane.api.transfer_job import TransferJob
+
+
+class TransferHook(ABC):
+    def on_dispatch_start(self):
+        raise NotImplementedError()
+
+    def on_chunk_dispatched(self, chunks: List[Chunk]):
+        raise NotImplementedError()
+
+    def on_dispatch_end(self):
+        raise NotImplementedError()
+
+    def on_chunk_completed(self, chunks: List[Chunk]):
+        raise NotImplementedError()
+
+    def on_transfer_end(self, transfer_stats):
+        raise NotImplementedError()
+
+    def on_transfer_error(self, error):
+        raise NotImplementedError()
+
+
+class EmptyTransferHook(TransferHook):
+    def __init__(self):
+        return
+
+    def on_dispatch_start(self):
+        return
+
+    def on_chunk_dispatched(self, chunks: List[Chunk]):
+        return
+
+    def on_dispatch_end(self):
+        return
+
+    def on_chunk_completed(self, chunks: List[Chunk]):
+        return
+
+    def on_transfer_end(self, transfer_stats):
+        return
+
+    def on_transfer_error(self, error):
+        return
 
 
 class TransferProgressTracker(Thread):

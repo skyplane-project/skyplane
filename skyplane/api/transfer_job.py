@@ -28,7 +28,7 @@ from skyplane.utils.path import parse_path
 from skyplane.utils.timer import Timer
 
 if TYPE_CHECKING:
-    from skyplane.api.provision.dataplane import Dataplane
+    from skyplane.api.dataplane import Dataplane
 
 T = TypeVar("T")
 

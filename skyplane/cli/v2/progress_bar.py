@@ -1,55 +1,15 @@
-from abc import ABC
-from typing import Dict, List, Set
+import skyplane
+from typing import List
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
 from skyplane import exceptions
 from skyplane.chunk import Chunk
 from skyplane.cli.common import console, print_stats_completed
 
 
-class TransferHook(ABC):
-    def on_dispatch_start(self):
-        raise NotImplementedError()
-
-    def on_chunk_dispatched(self, chunks: List[Chunk]):
-        raise NotImplementedError()
-
-    def on_dispatch_end(self):
-        raise NotImplementedError()
-
-    def on_chunk_completed(self, chunks: List[Chunk]):
-        raise NotImplementedError()
-
-    def on_transfer_end(self, transfer_stats):
-        raise NotImplementedError()
-
-    def on_transfer_error(self, error):
-        raise NotImplementedError()
-
-
-class EmptyTransferHook(TransferHook):
-    def __init__(self):
-        return
-
+class ProgressBarTransferHook(skyplane.TransferHook):
     def on_dispatch_start(self):
         return
 
-    def on_chunk_dispatched(self, chunks: List[Chunk]):
-        return
-
-    def on_dispatch_end(self):
-        return
-
-    def on_chunk_completed(self, chunks: List[Chunk]):
-        return
-
-    def on_transfer_end(self, transfer_stats):
-        return
-
-    def on_transfer_error(self, error):
-        return
-
-
-class ProgressBarTransferHook(TransferHook):
     def __init__(self):
         # start spinner
         self.spinner = Progress(
@@ -57,11 +17,10 @@ class ProgressBarTransferHook(TransferHook):
             TextColumn("Dispatching chunks..."),
             BarColumn(),
             DownloadColumn(binary_units=True),
-            TransferSpeedColumn(),
-            TimeRemainingColumn(),
             transient=True,
         )
         self.pbar = None
+        self.transfer_task = None
         self.chunks_dispatched = 0
         self.chunks_completed = 0
         self.bytes_dispatched = 0
@@ -77,8 +36,7 @@ class ProgressBarTransferHook(TransferHook):
             self.bytes_dispatched += sum([chunk.chunk_length_bytes for chunk in chunks])
             self.chunks_dispatched += len(chunks)
         # rerender spinners
-        self.spinner.update(self.dispatch_task, completed=self.bytes_dispatched)
-        self.spinner.refresh()
+        self.spinner.update(self.dispatch_task, total=self.bytes_dispatched)
 
     def on_dispatch_end(self):
         self.spinner.stop()
@@ -100,9 +58,7 @@ class ProgressBarTransferHook(TransferHook):
         else:
             self.chunks_completed += len(chunks)
             self.bytes_completed += sum([chunk.chunk_length_bytes for chunk in chunks])
-        # update bytes_completed
         self.pbar.update(self.transfer_task, completed=self.bytes_completed)
-        self.pbar.refresh()
 
     def on_transfer_end(self, transfer_stats):
         self.pbar.stop()

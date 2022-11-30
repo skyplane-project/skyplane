@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from skyplane.api.config import TransferConfig
-from skyplane.api.provision.dataplane import Dataplane
-from skyplane.api.provision.provisioner import Provisioner
+from skyplane.api.dataplane import Dataplane
+from skyplane.api.provisioner import Provisioner
 from skyplane.api.usage import get_clientid
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.planner.planner import DirectPlanner
