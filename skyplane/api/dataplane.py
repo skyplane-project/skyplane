@@ -223,17 +223,17 @@ class Dataplane:
         self.jobs_to_dispatch.append(job)
         return job.uuid
 
-    def run_async(self, progress_reporter: Optional[TransferHook] = None) -> TransferProgressTracker:
+    def run_async(self, hooks: Optional[TransferHook] = None) -> TransferProgressTracker:
         if not self.provisioned:
             logger.error("Dataplane must be pre-provisioned. Call dataplane.provision() before starting a transfer")
-        tracker = TransferProgressTracker(self, self.jobs_to_dispatch, self.transfer_config, progress_reporter)
+        tracker = TransferProgressTracker(self, self.jobs_to_dispatch, self.transfer_config, hooks)
         self.pending_transfers.append(tracker)
         tracker.start()
         logger.fs.info(f"[SkyplaneClient] Started async transfer with {len(self.jobs_to_dispatch)} jobs")
         self.jobs_to_dispatch = []
         return tracker
 
-    def run(self, progress_reporter: Optional[TransferHook] = None):
-        tracker = self.run_async(progress_reporter)
+    def run(self, hooks: Optional[TransferHook] = None):
+        tracker = self.run_async(hooks)
         logger.fs.debug(f"[SkyplaneClient] Waiting for transfer to complete")
         tracker.join()

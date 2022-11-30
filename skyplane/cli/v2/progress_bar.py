@@ -4,6 +4,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, Downlo
 from skyplane import exceptions
 from skyplane.chunk import Chunk
 from skyplane.cli.common import console, print_stats_completed
+from skyplane.utils.definitions import format_bytes
 
 
 class ProgressBarTransferHook(skyplane.TransferHook):
@@ -14,7 +15,7 @@ class ProgressBarTransferHook(skyplane.TransferHook):
         # start spinner
         self.spinner = Progress(
             SpinnerColumn(),
-            TextColumn("Dispatching chunks..."),
+            TextColumn("Dispatching chunks...{task.description}"),
             BarColumn(),
             DownloadColumn(binary_units=True),
             transient=True,
@@ -35,8 +36,8 @@ class ProgressBarTransferHook(skyplane.TransferHook):
         else:
             self.bytes_dispatched += sum([chunk.chunk_length_bytes for chunk in chunks])
             self.chunks_dispatched += len(chunks)
-        # rerender spinners
-        self.spinner.update(self.dispatch_task, total=self.bytes_dispatched)
+        # rerender spinners with updated text "Dispatching chunks (~{format_bytes(self.bytes_dispatched)} dispatched)"
+        self.spinner.update(self.dispatch_task, description=f" (~{format_bytes(self.bytes_dispatched)} dispatched)")
 
     def on_dispatch_end(self):
         self.spinner.stop()

@@ -12,6 +12,7 @@ from skyplane.cli.usage.client import UsageClient
 from skyplane.config_paths import cloud_config
 from skyplane.replicate.replicator_client import TransferStats
 from skyplane.utils import logger
+from skyplane.utils.definitions import format_bytes
 
 
 class SkyplaneCLI:
@@ -74,9 +75,9 @@ class SkyplaneCLI:
             f"\n[bold yellow]Transfer preview: will transfer objects from {dp.src_region_tag} to {dp.dst_region_tag}[/bold yellow]"
         )
         # show spinner
-        with console.status("[bright_black]Querying objects...[/bright_black]", spinner="dots"):
+        with console.status(f"[bright_black]Querying first {query_n} objects...[/bright_black]", spinner="dots"):
             obj_pairs = []
-            for _ in range(query_n):
+            for _ in range(query_n + 1):
                 try:
                     obj_pairs.append(next(transfer_pair_gen))
                 except StopIteration:
@@ -84,8 +85,10 @@ class SkyplaneCLI:
         if len(obj_pairs) == 0:
             typer.secho("No objects to transfer.")
             return False
-        for src_obj, dst_obj in obj_pairs:
-            console.print(f"    [bright_black][bold]{src_obj.key}[/bold] => [bold]{dst_obj.key}[/bold][/bright_black]")
+        for src_obj, dst_obj in obj_pairs[:query_n]:
+            console.print(f"  [bright_black][bold]{src_obj.full_path()}[/bold] => [bold]{dst_obj.full_path()}[/bold] ({format_bytes(src_obj.size)})[/bright_black]")
+        if len(obj_pairs) > query_n:
+            console.print(f"  [bright_black]...[/bright_black]")
         if ask_to_confirm_transfer:
             if typer.confirm("Continue?", default=True):
                 logger.fs.debug("User confirmed transfer")
