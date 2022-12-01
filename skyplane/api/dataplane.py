@@ -10,16 +10,16 @@ import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 from skyplane import compute
-from skyplane.api.tracker import TransferProgressTracker
+from skyplane.api.tracker import TransferProgressTracker, TransferHook
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
-from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationTopologyGateway
+from skyplane.planner.topology import ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
 from skyplane.utils.definitions import gateway_docker_image
 from skyplane.utils.fn import PathLike, do_parallel
 
 if TYPE_CHECKING:
-    from skyplane.api.provision.provisioner import Provisioner
+    from skyplane.api.provisioner import Provisioner
 
 
 class DataplaneAutoDeprovision:
@@ -30,7 +30,7 @@ class DataplaneAutoDeprovision:
         return self.dataplane
 
     def __exit__(self, exc_type, exc_value, exc_tb):
-        logger.error("Deprovisioning dataplane")
+        logger.fs.warning("Deprovisioning dataplane")
         self.dataplane.deprovision()
 
 
@@ -166,7 +166,7 @@ class Dataplane:
             # wait for tracker tasks
             try:
                 for task in self.pending_transfers:
-                    logger.warning(f"Before deprovisioning, waiting for jobs to finish: {list(task.jobs.keys())}")
+                    logger.fs.warning(f"Before deprovisioning, waiting for jobs to finish: {list(task.jobs.keys())}")
                     task.join()
             except KeyboardInterrupt:
                 logger.warning("Interrupted while waiting for transfers to finish, deprovisioning anyway.")
@@ -216,24 +216,23 @@ class Dataplane:
         self,
         src: str,
         dst: str,
-        recursive: bool = False,
     ) -> str:
-        job = SyncJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
+        job = SyncJob(src, dst, recursive=True, requester_pays=self.transfer_config.requester_pays)
         logger.fs.debug(f"[SkyplaneClient] Queued sync job {job}")
         self.jobs_to_dispatch.append(job)
         return job.uuid
 
-    def run_async(self) -> TransferProgressTracker:
+    def run_async(self, hooks: Optional[TransferHook] = None) -> TransferProgressTracker:
         if not self.provisioned:
             logger.error("Dataplane must be pre-provisioned. Call dataplane.provision() before starting a transfer")
-        tracker = TransferProgressTracker(self, self.jobs_to_dispatch, self.transfer_config)
+        tracker = TransferProgressTracker(self, self.jobs_to_dispatch, self.transfer_config, hooks)
         self.pending_transfers.append(tracker)
         tracker.start()
         logger.fs.info(f"[SkyplaneClient] Started async transfer with {len(self.jobs_to_dispatch)} jobs")
         self.jobs_to_dispatch = []
         return tracker
 
-    def run(self):
-        tracker = self.run_async()
+    def run(self, hooks: Optional[TransferHook] = None):
+        tracker = self.run_async(hooks)
         logger.fs.debug(f"[SkyplaneClient] Waiting for transfer to complete")
         tracker.join()

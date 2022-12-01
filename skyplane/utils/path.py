@@ -1,10 +1,11 @@
 import re
 from pathlib import Path
+from typing import Optional, Tuple
 
 from skyplane.utils import logger
 
 
-def parse_path(path: str):
+def parse_path(path: str) -> Tuple[str, Optional[str], Optional[str]]:
     def is_plausible_local_path(path_test: str):
         path_test = Path(path_test)
         if path_test.exists():

@@ -115,13 +115,6 @@ def replicate_small_sync_cmd(src, dst) -> Optional[str]:
         return None
 
 
-def get_usage_gbits(path):
-    if os.path.isdir(path):
-        return get_dir_size(path)
-    else:
-        return os.path.getsize(path)
-
-
 def get_dir_size(path):
     total = 0
     with os.scandir(path) as it:
