@@ -164,7 +164,10 @@ class GCPCloudProvider(CloudProvider):
             ],
             "serviceAccounts": [{"email": "default", "scopes": ["https://www.googleapis.com/auth/cloud-platform"]}],
             "metadata": {
-                "items": [{"key": "enable-oslogin", "value": "false"}, {"key": "ssh-keys", "value": f"{gcp_vm_uname}:{self.key_manager.get_public_key(self.key_name).read_text()}\n"}]
+                "items": [
+                    {"key": "enable-oslogin", "value": "false"},
+                    {"key": "ssh-keys", "value": f"{gcp_vm_uname}:{self.key_manager.get_public_key(self.key_name).read_text()}\n"},
+                ]
             },
             "scheduling": {"onHostMaintenance": "TERMINATE", "automaticRestart": False},
             "deletionProtection": False,
