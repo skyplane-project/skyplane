@@ -1,5 +1,3 @@
-from ctypes import Union
-from functools import lru_cache
 import json
 import math
 import queue
@@ -27,7 +25,6 @@ from skyplane.utils import logger
 from skyplane.utils.definitions import MB
 from skyplane.utils.fn import do_parallel
 from skyplane.utils.path import parse_path
-from skyplane.utils.timer import Timer
 
 if TYPE_CHECKING:
     from skyplane.api.dataplane import Dataplane

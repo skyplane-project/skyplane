@@ -10,8 +10,8 @@ Available keys:
 
 import typer
 
-from skyplane.cli.common import console
-from skyplane.cli.usage.client import UsageClient
+from skyplane.cli.impl.common import console
+from skyplane.api.usage import UsageClient
 from skyplane.config_paths import config_path, cloud_config
 
 app = typer.Typer(name="skyplane-config")

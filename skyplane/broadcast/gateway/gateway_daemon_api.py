@@ -195,7 +195,7 @@ class GatewayDaemonAPI(threading.Thread):
             out = {}
             for chunk_id, chunk_state in self.chunk_status.items():
                 if state is None or chunk_state == state:
-                    chunk_req = self.chunk_requests[chunk_id]
+                    self.chunk_requests[chunk_id]
                     out[chunk_id] = make_chunk_req_payload(chunk_id)
             return out
 
