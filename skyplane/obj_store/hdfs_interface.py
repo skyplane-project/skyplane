@@ -1,44 +1,75 @@
-import os
+from functools import lru_cache
 from pyarrow import fs
 from dataclasses import dataclass
-from skyplane.obj_store.file_system_interface import FileSystemInterface, LocalFile
-from typing import Iterator, List, Optional, Tuple
+from typing import Iterator, List, Optional
+from skyplane.exceptions import NoSuchObjectException
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 
 
 @dataclass
-class HDFSFile(LocalFile):
-    path: str
-    size: Optional[int] = None
-    last_modified: Optional[str] = None
-    file_format: Optional[str] = None
+class HDFSFile(ObjectStoreObject):
+    def full_path(self):
+        return f"hdfs://{self.key}"
 
 
-class HDFSInterface(FileSystemInterface):
+class HDFSInterface(ObjectStoreInterface):
     def __init__(self, path, port=8020):
-        self.path = path
+        self.hdfs_path = path
         self.port = port
         self.hdfs = fs.HadoopFileSystem(host=self.path, port=self.port, extra_conf={"dfs.permissions.enabled": "false"})
 
     def path(self) -> str:
-        return self.path
+        return self.hdfs_path
 
-    def list_files(self, prefix="") -> Iterator[HDFSFile]:
+    def list_objects(self, prefix="") -> Iterator[HDFSFile]:
         fileSelector = fs.FileSelector(prefix=prefix, recursive=True)
         response = self.hdfs.get_file_info(fileSelector)
         for file in response:
-            yield HDFSFile(path=file.path, size=file.size, last_modified=file.mtime)
+            yield HDFSFile(key=file.path, size=file.size, last_modified=file.mtime)
 
-    def get_file_size(self, file_name) -> int:
-        fileSelector = fs.FileSelector(prefix=file_name, recursive=False)
-        return self.hdfs.get_file_info(fileSelector)[0].size
+    def exists(self, obj_name: str):
+        try:
+            self.get_obj_metadata(obj_name)
+            return True
+        except NoSuchObjectException:
+            return False
 
-    def get_file_last_modified(self, file_name):
-        fileSelector = fs.FileSelector(prefix=file_name, recursive=False)
-        return self.hdfs.get_file_info(fileSelector)[0].mtime
+    def get_obj_size(self, obj_name) -> int:
+        return self.get_obj_metadata(obj_name).size
 
-    def delete_files(self, paths: List[str]):
-        for path in paths:
-            self.hdfs.delete_file(path)
+    def get_obj_last_modified(self, obj_name):
+        return self.get_obj_metadata(obj_name).mtime
+
+    def delete_objects(self, keys: List[str]):
+        for key in keys:
+            self.hdfs.delete_file(key)
+
+    def download_file(
+        self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5: bool = False
+    ):
+        with self.hdfs.open_input_stream(src_object_name) as f1:
+            with open(dst_file_path, "wb+" if write_at_offset else "wb") as f2:
+                f1.seek(offset_bytes if write_at_offset else 0)
+                b = f1.read(nbytes=size_bytes)
+                while b:
+                    f2.write(b)
+                    b = f1.read(nbytes=size_bytes)
+        return None, None
+
+    def upload_file(
+        self,
+        src_file_path,
+        dst_object_name,
+        part_number=None,
+        upload_id=None,
+        check_md5: Optional[bytes] = None,
+        mime_type: Optional[str] = None,
+    ):
+        with open(src_file_path, "wb") as f1:
+            with self.hdfs.open_output_stream(dst_object_name) as f2:
+                b = f1.read()
+                f2.write(b)
+        return None, None
 
     def read_file(self, file_name):
         with self.hdfs.open_input_stream(file_name) as f:
@@ -47,3 +78,11 @@ class HDFSInterface(FileSystemInterface):
     def write_file(self, file_name, data):
         with self.hdfs.open_output_stream(file_name) as f:
             f.write(data)
+
+    @lru_cache(maxsize=1024)
+    def get_obj_metadata(self, obj_name) -> fs.FileInfo:
+        response = self.hdfs.get_file_info(obj_name)
+        if response.type is fs.FileType.NotFound:
+            raise NoSuchObjectException(f"Object {obj_name} not found")
+        else:
+            return response
