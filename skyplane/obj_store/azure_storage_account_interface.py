@@ -2,6 +2,7 @@ from functools import lru_cache
 
 from skyplane import exceptions, compute
 from skyplane.utils import logger, imports
+from skyplane.config_paths import cloud_config
 
 
 class AzureStorageAccountInterface:
@@ -22,7 +23,12 @@ class AzureStorageAccountInterface:
 
     @property
     def azure_region(self):
-        return self.storage_account_obj().location
+        """Return the Azure region of the storage account. If the user doesn't have access to the storage account location, return 'unknown'."""
+        try:
+            return self.storage_account_obj().location
+        except Exception as e:  # user does not have "Storage Account Contributor" role on the storage account
+            logger.exception(e)
+            return cloud_config.get_flag("default_azure_region")
 
     @property
     def storage_management_client(self):
