@@ -1,8 +1,9 @@
 import os
 import time
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 import typer
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
 import skyplane
 from skyplane.api.config import TransferConfig
@@ -13,7 +14,7 @@ from skyplane.cli.cli_impl.cp_replicate_fallback import (
     replicate_small_cp_cmd,
     replicate_small_sync_cmd,
 )
-from skyplane.cli.common import to_api_config, print_stats_completed, console
+from skyplane.cli.common import console, print_stats_completed, to_api_config
 from skyplane.cli.usage.client import UsageClient
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import cloud_config
@@ -126,7 +127,7 @@ class SkyplaneCLI:
             typer.secho("No jobs to dispatch.")
             return False
         transfer_pair_gen = dp.jobs_to_dispatch[0].gen_transfer_pairs()  # type: ignore
-        console.print(f"\n[bold yellow]Will transfer objects from {dp.src_region_tag} to {dp.dst_region_tag}[/bold yellow]")
+        console.print(f"[bold yellow]Will transfer objects from {dp.src_region_tag} to {dp.dst_region_tag}[/bold yellow]")
         sorted_counts = sorted(dp.topology.per_region_count().items(), key=lambda x: x[0])
         console.print(
             f"  [bold][blue]VMs to provision:[/blue][/bold] [bright_black]{', '.join(f'{c}x {r}' for r, c in sorted_counts)}[/bright_black]"
@@ -136,7 +137,13 @@ class SkyplaneCLI:
                 f"  [bold][blue]Estimated egress cost:[/blue][/bold] [bright_black]${dp.topology.cost_per_gb:,.2f}/GB[/bright_black]"
             )
         # show spinner
-        with console.status(f"[bright_black]Querying first {query_n} objects...[/bright_black]", spinner="dots"):
+        with Progress(
+            TextColumn(" "),
+            SpinnerColumn(),
+            TextColumn(f"[bright_black]Querying objects for transfer...[/bright_black]"),
+            transient=True,
+        ) as progress:
+            progress.add_task("", total=None)
             obj_pairs = []
             for _ in range(query_n + 1):
                 try:

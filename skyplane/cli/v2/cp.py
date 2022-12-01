@@ -133,6 +133,7 @@ def sync(
         return 0 if cli.transfer_sync_onprem(src, dst) else 1
     elif provider_src in ("aws", "gcp", "azure") and provider_dst in ("aws", "gcp", "azure"):
         # todo support ILP solver params
+        print()
         dp = cli.make_dataplane(
             solver_type=solver,
             n_vms=max_instances,
@@ -147,6 +148,7 @@ def sync(
                 if small_transfer_status:
                     return 0
             try:
+                console.print("[yellow]Note: sync must query the destination bucket to diff objects. This may take a while.[/yellow]")
                 if not cli.confirm_transfer(dp, 5, ask_to_confirm_transfer=not confirm):
                     return 1
                 dp.provision(spinner=True)
