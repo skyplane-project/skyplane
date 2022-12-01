@@ -216,9 +216,8 @@ class Dataplane:
         self,
         src: str,
         dst: str,
-        recursive: bool = False,
     ) -> str:
-        job = SyncJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
+        job = SyncJob(src, dst, requester_pays=self.transfer_config.requester_pays)
         logger.fs.debug(f"[SkyplaneClient] Queued sync job {job}")
         self.jobs_to_dispatch.append(job)
         return job.uuid

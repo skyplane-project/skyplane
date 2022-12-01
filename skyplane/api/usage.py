@@ -49,10 +49,9 @@ USAGE_STATS_DISABLED_MESSAGE = "Usage stats collection is disabled."
 
 
 def get_clientid():
-    path = host_uuid_path
     config = configparser.ConfigParser()
-    if path.exists():
-        config.read(os.path.expanduser(path))
+    if host_uuid_path.exists():
+        config.read(os.path.expanduser(host_uuid_path))
     id = uuid.UUID(int=uuid.getnode()).hex
     if "client" not in config:
         config.add_section("client")
@@ -61,7 +60,7 @@ def get_clientid():
         config.set("client", "anon_clientid", id)
     else:
         return config.get("client", "anon_clientid")
-    with path.open("w") as f:
+    with host_uuid_path.open("w") as f:
         config.write(f)
     return id
 

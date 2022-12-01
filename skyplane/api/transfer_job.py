@@ -154,13 +154,27 @@ class Chunker:
                     src_path_after_prefix = src_path_after_prefix[1:] if src_path_after_prefix.startswith("/") else src_path_after_prefix
                     return join(dest_prefix, src_path_after_prefix)
 
+    def enrich_dest_objs(
+        self, transfer_pairs: Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None], dest_prefix: str
+    ) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
+        """
+        For skyplane sync, we enrich dest obj metadata with our existing dest obj metadata from the dest bucket following a query.
+        """
+        logger.fs.debug(f"Querying objects in {self.dest_iface.bucket()}")
+        logger.warning("Querying objects in destination bucket to compute sync. This may take a while.")
+        found_dest_objs = {obj.key: obj for obj in self.dest_iface.list_objects(dest_prefix)}
+        for src_obj, dest_obj in transfer_pairs:
+            if dest_obj.key in found_dest_objs:
+                dest_obj.size = found_dest_objs[dest_obj.key].size
+                dest_obj.last_modified = found_dest_objs[dest_obj.key].last_modified
+            yield src_obj, dest_obj
+
     def transfer_pair_generator(
         self,
         src_prefix: str,
         dst_prefix: str,
         recursive: bool,
         prefilter_fn: Optional[Callable[[ObjectStoreObject], bool]] = None,
-        postfilter_fn: Optional[Callable[[ObjectStoreObject, ObjectStoreObject], bool]] = None,
     ) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
         """Query source region and return list of objects to transfer."""
         if not self.src_iface.bucket_exists():
@@ -189,10 +203,8 @@ class Chunker:
                     dest_obj = GCSObject(dest_provider, self.dest_iface.bucket(), dest_key)
                 else:
                     raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
-
-                if postfilter_fn is None or postfilter_fn(obj, dest_obj):
-                    yield obj, dest_obj
-                    n_objs += 1
+                n_objs += 1
+                yield obj, dest_obj
 
         if n_objs == 0:
             logger.error("Specified object does not exist.\n")
@@ -301,11 +313,6 @@ class TransferJob(ABC):
         """Optionally filter source objects before they are transferred."""
         return True
 
-    @classmethod
-    def _post_filter_fn(cls, src_obj: ObjectStoreObject, dest_obj: ObjectStoreObject) -> bool:
-        """Optionally filter objects by comparing the source and destination objects."""
-        return True
-
 
 @dataclass
 class CopyJob(TransferJob):
@@ -323,9 +330,7 @@ class CopyJob(TransferJob):
         """Generate transfer pairs for the transfer job."""
         if chunker is None:  # used for external access to transfer pair list
             chunker = Chunker(self.src_iface, self.dst_iface, TransferConfig())
-        yield from chunker.transfer_pair_generator(
-            self.src_prefix, self.dst_prefix, self.recursive, self._pre_filter_fn, self._post_filter_fn
-        )
+        yield from chunker.transfer_pair_generator(self.src_prefix, self.dst_prefix, self.recursive, self._pre_filter_fn)
 
     def dispatch(
         self,
@@ -405,12 +410,30 @@ class CopyJob(TransferJob):
 
 @dataclass
 class SyncJob(CopyJob):
+    recursive: bool = True
+
     def __post_init__(self):
         return super().__post_init__()
 
     def estimate_cost(self):
         raise NotImplementedError()
 
+    def gen_transfer_pairs(self, chunker: Optional[Chunker] = None) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
+        """Generate transfer pairs for the transfer job."""
+        if chunker is None:  # used for external access to transfer pair list
+            chunker = Chunker(self.src_iface, self.dst_iface, TransferConfig())
+        transfer_pair_gen = chunker.transfer_pair_generator(self.src_prefix, self.dst_prefix, self.recursive, self._pre_filter_fn)
+        for src_obj, dest_obj in chunker.enrich_dest_objs(transfer_pair_gen, self.dst_prefix):
+            if self._post_filter_fn(src_obj, dest_obj):
+                yield src_obj, dest_obj
+
     @classmethod
     def _post_filter_fn(cls, src_obj: ObjectStoreObject, dest_obj: ObjectStoreObject) -> bool:
-        return not dest_obj.exists or (src_obj.last_modified > dest_obj.last_modified or src_obj.size != dest_obj.size)
+        result = not dest_obj.exists or (src_obj.last_modified > dest_obj.last_modified or src_obj.size != dest_obj.size)
+        if not result:
+            logger.fs.debug(f"Skipping {src_obj.key} because it already exists in the destination")
+        else:
+            logger.fs.debug(
+                f"Syncing {src_obj.key}; source modified {src_obj.last_modified} and size {src_obj.size} vs dest modified {dest_obj.last_modified} and size {dest_obj.size}"
+            )
+        return result

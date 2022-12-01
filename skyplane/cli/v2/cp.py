@@ -59,7 +59,6 @@ def cp(
             return 1
         return 0 if cli.transfer_cp_onprem(src, dst, recursive) else 1
     elif provider_src in ("aws", "gcp", "azure") and provider_dst in ("aws", "gcp", "azure"):
-        # transfer via Skyplane's API
         # todo support ILP solver params
         dp = cli.make_dataplane(
             solver_type=solver,
@@ -74,7 +73,6 @@ def cp(
                 small_transfer_status = cli.transfer_cp_small(src, dst, recursive)
                 if small_transfer_status:
                     return 0
-            # confirm transfer
             try:
                 if not cli.confirm_transfer(dp, 5, ask_to_confirm_transfer=not confirm):
                     return 1
@@ -85,6 +83,80 @@ def cp(
                 console.print(e.pretty_print_str())
                 UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
                 return 1
+        if dp.provisioned:
+            typer.secho("Dataplane is not deprovisioned! Run `skyplane deprovision` to force deprovision VMs.", fg="red")
 
-        if not dp.provisioned:
-            typer.secho("Deprovisioned dataplane!", fg="yellow")
+
+def sync(
+    src: str,
+    dst: str,
+    debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
+    multipart: bool = typer.Option(cloud_config.get_flag("multipart_enabled"), help="If true, will use multipart uploads."),
+    # transfer flags
+    confirm: bool = typer.Option(cloud_config.get_flag("autoconfirm"), "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
+    max_instances: int = typer.Option(cloud_config.get_flag("max_instances"), "--max-instances", "-n", help="Number of gateways"),
+    max_connections: int = typer.Option(
+        cloud_config.get_flag("num_connections"), "--max-connections", help="Number of connections per gateway"
+    ),
+    # todo - add solver params once API supports it
+    # solver
+    solver: str = typer.Option("direct", "--solver", help="Solver to use for transfer"),
+):
+    print_header()
+    provider_src, bucket_src, path_src = parse_path(src)
+    provider_dst, bucket_dst, path_dst = parse_path(dst)
+    src_region_tag = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src).region_tag()
+    dst_region_tag = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst).region_tag()
+    args = {
+        "cmd": "sync",
+        "recursive": True,
+        "debug": debug,
+        "multipart": multipart,
+        "confirm": confirm,
+        "max_instances": max_instances,
+        "max_connections": max_connections,
+        "solver": solver,
+    }
+
+    cli = SkyplaneCLI(src_region_tag=src_region_tag, dst_region_tag=dst_region_tag, args=args)
+    if not cli.check_config():
+        typer.secho(
+            f"Skyplane configuration file is not valid. Please reset your config by running `rm {config_path}` and then rerunning `skyplane init` to fix.",
+            fg="red",
+        )
+        return 1
+
+    if provider_src in ("local", "hdfs", "nfs") or provider_dst in ("local", "hdfs", "nfs"):
+        if provider_src == "hdfs" or provider_dst == "hdfs":
+            typer.secho("HDFS is not supported yet.", fg="red")
+            return 1
+        return 0 if cli.transfer_sync_onprem(src, dst) else 1
+    elif provider_src in ("aws", "gcp", "azure") and provider_dst in ("aws", "gcp", "azure"):
+        # todo support ILP solver params
+        dp = cli.make_dataplane(
+            solver_type=solver,
+            n_vms=max_instances,
+            n_connections=max_connections,
+        )
+        with dp.auto_deprovision():
+            dp.queue_sync(src, dst)
+            if cloud_config.get_flag("native_cmd_enabled") and cli.estimate_small_transfer(
+                dp, cloud_config.get_flag("native_cmd_threshold_gb") * GB
+            ):
+                small_transfer_status = cli.transfer_sync_small(src, dst)
+                if small_transfer_status:
+                    return 0
+            try:
+                if not cli.confirm_transfer(dp, 5, ask_to_confirm_transfer=not confirm):
+                    return 1
+                dp.provision(spinner=True)
+                # print a rocket emoji to indicate that the transfer is in progress
+                console.print("[blue]:rocket: Launching transfer to VMs![/blue]")
+                dp.run_async(ProgressBarTransferHook())
+            except skyplane.exceptions.SkyplaneException as e:
+                console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+                console.print(e.pretty_print_str())
+                UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
+                return 1
+        if dp.provisioned:
+            typer.secho("Dataplane is not deprovisioned! Run `skyplane deprovision` to force deprovision VMs.", fg="red")
