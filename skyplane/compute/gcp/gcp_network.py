@@ -88,7 +88,7 @@ class GCPNetwork:
             }
             op = compute.firewalls().insert(project=self.auth.project_id, body=body).execute()
             self.auth.wait_for_operation_to_complete("global", op["name"])
-            logger.fs.debug(f"Creating firewall rule {rule_name} with {body=}")
+            logger.fs.debug(f"Creating firewall rule {rule_name} with {body}")
 
     @imports.inject("googleapiclient.errors", pip_extra="gcp")
     def delete_firewall_rule(errors, self, rule_name: str):

@@ -73,7 +73,7 @@ class GCPCloudProvider(CloudProvider):
 
     @classmethod
     def get_transfer_cost(cls, src_key, dst_key, premium_tier=True):
-        assert src_key.startswith("aws:")
+        assert src_key.startswith("gcp:")
         return GCPPricing.get_transfer_cost(src_key, dst_key, premium_tier)
 
     def get_instance_list(self, region) -> List[GCPServer]:
@@ -129,7 +129,7 @@ class GCPCloudProvider(CloudProvider):
     ) -> GCPServer:
         assert not region.startswith("gcp:"), "Region should be GCP region"
         if name is None:
-            name = f"skyplane-gcp-{str(uuid.uuid4()).replace('-', '')}"
+            name = f"skyplane-gcp-{str(uuid.uuid4().hex[:8])}"
         compute = self.auth.get_gcp_client()
 
         if instance_os == "ubuntu":

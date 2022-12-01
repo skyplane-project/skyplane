@@ -1,19 +1,20 @@
 import uuid
 from datetime import datetime
 from pathlib import Path
-
 from typing import TYPE_CHECKING, Optional
 
-from skyplane.api.dataplane import Dataplane
-from skyplane.api.impl.path import parse_path
-from skyplane.api.impl.planner import DirectPlanner
-from skyplane.api.impl.provisioner import Provisioner
-from skyplane.api.transfer_config import TransferConfig
+from skyplane.api.config import TransferConfig
+from skyplane.api.provision.dataplane import Dataplane
+from skyplane.api.provision.provisioner import Provisioner
+from skyplane.api.usage import get_clientid
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
+from skyplane.planner.planner import DirectPlanner
 from skyplane.utils import logger
+from skyplane.utils.definitions import tmp_log_dir
+from skyplane.utils.path import parse_path
 
 if TYPE_CHECKING:
-    from skyplane.api.auth_config import AWSConfig, AzureConfig, GCPConfig
+    from skyplane.api.config import AWSConfig, AzureConfig, GCPConfig, TransferConfig
 
 
 class SkyplaneClient:
@@ -25,12 +26,13 @@ class SkyplaneClient:
         transfer_config: Optional[TransferConfig] = None,
         log_dir: Optional[str] = None,
     ):
+        self.clientid = get_clientid()
         self.aws_auth = aws_config.make_auth_provider() if aws_config else None
         self.azure_auth = azure_config.make_auth_provider() if azure_config else None
         self.gcp_auth = gcp_config.make_auth_provider() if gcp_config else None
         self.transfer_config = transfer_config if transfer_config else TransferConfig()
         self.log_dir = (
-            tmp_log_dir / "transfer_logs" / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}-{uuid.uuid4()}"
+            tmp_log_dir / "transfer_logs" / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}-{uuid.uuid4().hex[:8]}"
             if log_dir is None
             else Path(log_dir)
         )
@@ -40,7 +42,7 @@ class SkyplaneClient:
         logger.open_log_file(self.log_dir / "client.log")
 
         self.provisioner = Provisioner(
-            host_uuid=uuid.UUID(int=uuid.getnode()).hex,
+            host_uuid=self.clientid,
             aws_auth=self.aws_auth,
             azure_auth=self.azure_auth,
             gcp_auth=self.gcp_auth,
@@ -84,9 +86,6 @@ class SkyplaneClient:
             )
             topo = planner.plan()
             logger.fs.info(f"[SkyplaneClient.direct_dataplane] Topology: {topo.to_json()}")
-            return Dataplane(topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
+            return Dataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
         else:
             raise NotImplementedError(f"Dataplane type {type} not implemented")
-
-
-tmp_log_dir = Path("/tmp/skyplane")

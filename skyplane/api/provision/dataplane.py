@@ -1,7 +1,7 @@
 import json
 import os
 import threading
-from collections import defaultdict
+from collections import defaultdict, Counter
 from functools import partial
 
 import nacl.secret
@@ -10,16 +10,16 @@ import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 from skyplane import compute
-from skyplane.api.impl.tracker import TransferProgressTracker
-from skyplane.api.impl.transfer_job import CopyJob, SyncJob, TransferJob
-from skyplane.api.transfer_config import TransferConfig
+from skyplane.api.tracker import TransferProgressTracker
+from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
+from skyplane.api.config import TransferConfig
 from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
 from skyplane.utils.definitions import gateway_docker_image
 from skyplane.utils.fn import PathLike, do_parallel
 
 if TYPE_CHECKING:
-    from skyplane.api.impl.provisioner import Provisioner
+    from skyplane.api.provision.provisioner import Provisioner
 
 
 class DataplaneAutoDeprovision:
@@ -39,11 +39,17 @@ class Dataplane:
 
     def __init__(
         self,
+        clientid: str,
         topology: ReplicationTopology,
         provisioner: "Provisioner",
         transfer_config: TransferConfig,
     ):
+        self.clientid = clientid
         self.topology = topology
+        self.src_region_tag = self.topology.source_region()
+        self.dst_region_tag = self.topology.sink_region()
+        regions = Counter([node.region for node in self.topology.gateway_nodes])
+        self.max_instances = int(regions[max(regions, key=regions.get)])
         self.provisioner = provisioner
         self.transfer_config = transfer_config
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
@@ -105,7 +111,7 @@ class Dataplane:
             for node in self.topology.gateway_nodes:
                 instance = servers_by_region[node.region].pop()
                 self.bound_nodes[node] = instance
-            logger.fs.debug(f"[Dataplane.provision] {self.bound_nodes=}")
+            logger.fs.debug(f"[Dataplane.provision] bound_nodes = {self.bound_nodes}")
             gateway_bound_nodes = self.bound_nodes.copy()
 
             # start gateways
@@ -144,7 +150,7 @@ class Dataplane:
             )
 
         # todo: move server.py:start_gateway here
-        logger.fs.info(f"Using {gateway_docker_image=}")
+        logger.fs.info(f"Using docker image {gateway_docker_image}")
         e2ee_key_bytes = nacl.utils.random(nacl.secret.SecretBox.KEY_SIZE)
 
         jobs = []

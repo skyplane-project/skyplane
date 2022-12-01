@@ -2,7 +2,7 @@ from importlib.resources import path
 
 import typer
 
-from skyplane.replicate.solver import ThroughputSolver
+from skyplane.planner.solver import ThroughputSolver
 
 
 def util_grid_throughput(

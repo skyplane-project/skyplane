@@ -1,4 +1,4 @@
-from skyplane.api.impl.path import parse_path
+from skyplane.utils.path import parse_path
 
 
 def test_parse_path():

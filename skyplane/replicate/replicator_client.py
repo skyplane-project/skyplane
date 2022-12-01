@@ -16,13 +16,12 @@ from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, Te
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from skyplane import exceptions, compute
-from skyplane.api.client import tmp_log_dir
 from skyplane.chunk import Chunk, ChunkRequest, ChunkState
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.replicate.profiler import status_df_to_traceevent
 from skyplane.replicate.replication_plan import ReplicationJob, ReplicationTopology, ReplicationTopologyGateway, HttpReplicationJob
 from skyplane.utils import logger
-from skyplane.utils.definitions import MB, GB, gateway_docker_image
+from skyplane.utils.definitions import MB, GB, gateway_docker_image, tmp_log_dir
 from skyplane.utils.fn import PathLike, do_parallel
 from skyplane.utils.timer import Timer
 
@@ -368,7 +367,6 @@ class ReplicatorClient:
             n_objs = 0
             chunks = []
             multipart_pairs = []
-            idx = 0
             for (src_object, dest_object) in job.transfer_pairs:
                 progress.update(prepare_task, description=f": Creating list of chunks for transfer ({n_objs}/{len(job.transfer_pairs)})")
                 n_objs += 1
@@ -377,13 +375,12 @@ class ReplicatorClient:
                         Chunk(
                             src_key=src_object.key,
                             dest_key=dest_object.key,
-                            chunk_id=idx,
+                            chunk_id=uuid.uuid4().hex,
                             file_offset_bytes=0,
                             chunk_length_bytes=job.random_chunk_size_mb * MB,
                             mime_type=dest_object.mime_type,
                         )
                     )
-                    idx += 1
                 elif multipart_enabled and src_object.size > multipart_min_threshold_mb * MB:
                     # transfer entire object
                     multipart_pairs.append((src_object, dest_object))
@@ -391,13 +388,12 @@ class ReplicatorClient:
                     chunk = Chunk(
                         src_key=src_object.key,
                         dest_key=dest_object.key,
-                        chunk_id=idx,
+                        chunk_id=uuid.uuid4().hex,
                         file_offset_bytes=0,
                         chunk_length_bytes=src_object.size,
                         mime_type=dest_object.mime_type,
                     )
                     chunks.append(chunk)
-                    idx += 1
 
             # initiate multipart transfers in parallel
             if not job.random_chunk_size_mb:
@@ -440,7 +436,7 @@ class ReplicatorClient:
                             Chunk(
                                 src_key=src_object.key,
                                 dest_key=dest_object.key,
-                                chunk_id=idx,
+                                chunk_id=uuid.uuid4().hex,
                                 file_offset_bytes=offset,
                                 chunk_length_bytes=file_size_bytes,
                                 part_number=part_num,
@@ -450,7 +446,6 @@ class ReplicatorClient:
                         )
                         parts.append(part_num)
 
-                        idx += 1
                         part_num += 1
                         offset += chunk_size_bytes
                     # add multipart upload request
@@ -849,7 +844,7 @@ class ReplicatorClient:
                     chunk_status_df = self.get_chunk_status_log_df()
                     (self.transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
                     traceevent = status_df_to_traceevent(chunk_status_df)
-                    profile_out = self.transfer_dir / f"traceevent_{uuid.uuid4()}.json"
+                    profile_out = self.transfer_dir / f"traceevent_{uuid.uuid4().hex[:8]}.json"
                     profile_out.parent.mkdir(parents=True, exist_ok=True)
                     profile_out.write_text(json.dumps(traceevent))
                     # write socket profiles
