@@ -1,7 +1,6 @@
-import subprocess
 from functools import partial
+from typing import Optional
 
-import typer
 from rich.console import Console
 
 from skyplane import compute
@@ -21,35 +20,13 @@ def print_header():
     console.print(f"[bright_black]{header}[/bright_black]\n")
 
 
-def print_stats_completed(total_runtime_s, throughput_gbits):
+def print_stats_completed(total_runtime_s: float, throughput_gbits: Optional[float]):
     console.print(f"\n:white_check_mark: [bold green]Transfer completed successfully[/bold green]")
     runtime_line = f"[white]Transfer runtime:[/white] [bright_black]{total_runtime_s:.2f}s[/bright_black]"
-    throughput_line = f"[white]Throughput:[/white] [bright_black]{throughput_gbits:.2f}Gbps[/bright_black]"
-    console.print(f"{runtime_line}, {throughput_line}")
-
-
-def check_ulimit(hard_limit=1024 * 1024):
-    # Get the current fs.file-max limit
-    check_hard_limit = ["sysctl", "--values", "fs.file-max"]
-    try:
-        fs_hard_limit = subprocess.check_output(check_hard_limit)
-    except subprocess.CalledProcessError:
-        typer.secho(f"Failed to get fs.file-max limit", fg="yellow")
-        return
-    current_limit_hard = int(fs_hard_limit.decode("UTF-8"))
-
-    # check/update fs.file-max limit
-    if current_limit_hard < hard_limit:
-        typer.secho(
-            f"Warning: file limit is set to {current_limit_hard}, which is less than the recommended minimum of {hard_limit}",
-            fg="red",
-            err=True,
-        )
-        increase_ulimit = ["sudo", "sysctl", "-w", f"fs.file-max={hard_limit}"]
-        typer.secho(f"Run the following command to increase the hard file limit to the recommended number ({hard_limit}):", fg="yellow")
-        typer.secho(f"    {' '.join(increase_ulimit)}", fg="yellow")
-    else:
-        typer.secho(f"File limit greater than recommended minimum of {hard_limit}.", fg="blue")
+    throughput_line = (
+        f", [white]Throughput:[/white] [bright_black]{throughput_gbits:.2f}Gbps[/bright_black]" if throughput_gbits is not None else ""
+    )
+    console.print(f"{runtime_line}{throughput_line}")
 
 
 def query_instances():
