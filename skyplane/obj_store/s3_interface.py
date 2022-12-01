@@ -56,8 +56,14 @@ class S3Interface(ObjectStoreInterface):
         return self._cached_s3_clients[region]
 
     @imports.inject("botocore.exceptions", pip_extra="aws")
-    def bucket_exists(botocore_exceptions, self):
-        s3_client = self._s3_client("us-east-1")
+    def bucket_exists(botocore_exceptions, self, region=None):
+        if region is None: # use current bucket region is available
+            try:
+                region = self.aws_region
+            except exceptions.MissingBucketException:
+                region = "us-east-1"
+
+        s3_client = self._s3_client(region)
         try:
             requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
             s3_client.list_objects_v2(Bucket=self.bucket_name, MaxKeys=1, **requester_pays)
@@ -69,7 +75,7 @@ class S3Interface(ObjectStoreInterface):
 
     def create_bucket(self, aws_region):
         s3_client = self._s3_client(aws_region)
-        if not self.bucket_exists():
+        if not self.bucket_exists(aws_region):
             if aws_region == "us-east-1":
                 s3_client.create_bucket(Bucket=self.bucket_name)
             else:

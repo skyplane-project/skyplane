@@ -84,6 +84,8 @@ class GatewayOperator(ABC):
                 except queue.Empty:
                     continue
 
+                print(f"[{self.handle}:{self.worker_id}] Got chunk {chunk_req.chunk.chunk_id}")
+
                 # TODO: status logging
                 self.chunk_store.log_chunk_state(chunk_req, ChunkState.in_progress, operator_handle=self.handle, worker_id=worker_id)
 
@@ -96,7 +98,10 @@ class GatewayOperator(ABC):
                     print(self.handle)
                     self.chunk_store.log_chunk_state(chunk_req, ChunkState.complete, operator_handle=self.handle, worker_id=worker_id)
                     if self.output_queue is not None:
+                        print(f"[{self.handle}:{self.worker_id}] Output queue is not None - not a terminal operator")
                         self.output_queue.put(chunk_req)
+                    else:
+                        print(f"[{self.handle}:{self.worker_id}] Output queue is None - terminal operator")
                 else:
                     # failed to process - re-queue
                     time.sleep(0.1)
@@ -454,7 +459,7 @@ class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
                 chunk_req.chunk.chunk_length_bytes,
                 generate_md5=True,
             ),
-            max_retries=4,
+            max_retries=32, # TODO: fix this - not a good solution
         )
 
         # update md5sum for chunk requests
@@ -513,7 +518,7 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
                 upload_id,
                 check_md5=chunk_req.chunk.md5_hash,
             ),
-            max_retries=4,
+            max_retries=32,
         )
         logger.debug(f"[obj_store:{self.worker_id}] Uploaded {chunk_req.chunk.chunk_id} to {self.bucket_name}")
         return True

@@ -1,4 +1,5 @@
 import boto3
+import concurrent.futures
 from tqdm import tqdm 
 import pandas as pd
 import skyplane
@@ -16,13 +17,16 @@ logging.getLogger("werkzeug").setLevel(logging.ERROR)
 from absl import app
 from absl import flags
 
+from skyplane.utils.fn import do_parallel
+
 FLAGS = flags.FLAGS
 flags.DEFINE_string("src_region", None, "Source region")
 flags.DEFINE_spaceseplist("dst_regions", None, "Destination regions")
 flags.DEFINE_string("target_data", None, "Target data directory specified by S3 URI")
 
 def bucket_handle(region): 
-    return f"broadcast-experiment-{region}"
+    #return f"broadcast-experiment-{region}"
+    return f"broadcast-{region}"
 
 def delete_policy(policy_arn):
     client = boto3.client("iam")
@@ -201,32 +205,50 @@ def main(argv):
     
     buckets = {}
 
-    # create temporary bucket for each region 
-    for region in [src_region] + dst_regions: 
-        region = region.split(":")[1]
-        bucket_name = bucket_handle(region)
-        bucket = S3Interface(bucket_name)
 
-        bucket.create_bucket(region)
-        print(f"Created bucket {bucket_name} in {region}")
+    #with concurrent.futures.ProcessPoolExecutor() as executor:
+    # create temporary bucket for each region 
+    def setup_bucket(region):
+        try:
+            region = region.split(":")[1]
+            bucket_name = bucket_handle(region)
+            bucket = S3Interface(bucket_name)
+
+            bucket.create_bucket(region)
+            print(f"Created bucket {bucket_name} in {region}")
+            #buckets[region] = bucket
+
+            # clear bucket 
+            print("Deleting bucket versions...")
+            s3 = boto3.resource('s3', region_name=region)
+            response = s3.Bucket(bucket_name).object_versions.delete()
+
+            # set object versioning
+            print("Setting object versioning...")
+            response = bucket._s3_client(region).put_bucket_versioning(
+                Bucket=bucket_name,
+                VersioningConfiguration={
+                    'Status': 'Enabled'
+                }
+            )
+            print(f"Enabled bucket versioning for {bucket_name}")
+            return bucket
+        except Exception as e:
+            print(e)
+
+    for region, bucket in do_parallel(setup_bucket, dst_regions + [src_region]): 
+        region = region.split(":")[1]
         buckets[region] = bucket
 
-        # clear bucket 
-        print("Deleting bucket versions...")
-        s3 = boto3.resource('s3', region_name=region)
-        response = s3.Bucket(bucket_name).object_versions.delete()
 
-        # set object versioning
-        print("Setting object versioning...")
-        response = bucket._s3_client(region).put_bucket_versioning(
-            Bucket=bucket_name,
-            VersioningConfiguration={
-                'Status': 'Enabled'
-            }
-        )
-
-        print(f"Enabled bucket versioning for {bucket_name}")
-
+    #futures = []
+    #for region in [src_region] + dst_regions: 
+    #    #futures.append(executor.submit(setup_bucket, region))
+    #    print("future", region)
+    #print("waiting", futures)
+    #concurrent.futures.wait(futures)
+    #results = [f.result() for f in futures]
+    #print(results)
 
     # put replication policy 
     src_name = bucket_handle(src_region.split(":")[1])
@@ -294,62 +316,114 @@ def main(argv):
     client = skyplane.SkyplaneClient(aws_config=skyplane.AWSConfig())
     print(f"Log dir: {client.log_dir}/client.log")
 
-    dp = client.dataplane("aws", target_data_region, "aws", src_region, n_vms=6) # TODO: pass in target_throughput that we also pass to broadcast?
+    dp = client.dataplane("aws", target_data_region, "aws", src_region, n_vms=8) # TODO: pass in target_throughput that we also pass to broadcast?
     with dp.auto_deprovision():
 
         # copy data with skyplane to source bucket
         dp.provision(spinner=True)
         dp.queue_copy(
-            FLAGS.target_data, f"s3://{src_bucket}/{directory}", recursive=True
+            FLAGS.target_data, f"s3://{src_bucket}/{directory}", recursive=False
         )
         print("Waiting for data to copy to source bucket...")
 
         # TODO: make this async, and as chunk complete, send them to the broadcast dataplane 
+        start_transfer = time.time()
         dp.run()
+        end_transfer = time.time()
+
+        # TODO: write custom broadcast dataplane that has replicate-random -> bucket (i.e. data generation)
 
         # wait for copy at destinations
         target_objects = list(buckets[src_region].list_objects(prefix=directory))
         print(f"Waiting for len(target_objects) to replicate", experiment_name)
         num_src = len(target_objects)
         # TODO: replace with better monitoring
+        completed = {}
         while True: 
-            completed = 0
-            for region, bucket in buckets.items(): 
-                if region == src_region: continue 
+            # TODO: create seperate thread to approximate the replication time 
+            #completed = 0
+            #for region, bucket in buckets.items(): 
+            #    if region == src_region: continue 
+
+            def is_completed(region_bucket): 
+                region, bucket = region_bucket
+                bucket = buckets[region]
                 objs = list(bucket.list_objects(prefix=directory))
                 num_dest = len(objs)
                 print(f"{region}: Object replicated = {len(objs)} / {len(target_objects)}")
                 if num_dest == num_src: 
-                    completed += 1
-
-            if completed == len(list(buckets.keys())) - 1:
-                print("All replication completed!")
-                break 
+                    return True 
+                return False
 
 
-            time.sleep(1)
+            just_completed = do_parallel(is_completed, [(region, bucket) for region, bucket in buckets.items() if region != src_region])
+            for (region, bucket), done in just_completed:
+                if done and region not in completed: 
+                    completed[region] = time.time()
+            print(just_completed)
+            print(completed)
+
+            if len(list(completed.keys())) == len(dst_regions): 
+                break
+
+        results = [] 
+        for region, complete_time in completed.items():
+            results.append({
+                "src_region": src_region,
+                "dst_region": region,
+                "complete_time": complete_time, 
+                "start_time": start_transfer,
+                "end_time": end_transfer,
+            })
+        pd.DataFrame(results).to_csv(f"{experiment_name}.csv")
+        print(f"{experiment_name}.csv")
+
+        
+        
+            #futures = []
+            #for region, bucket in buckets.items():
+            #    if region == src_region: 
+            #        continue 
+            #    futures.append(executor.submit(setup_bucket, region))
+            #completed = concurrent.futures.wait(futures)
+            #if all(completed):
+            #    print("all completed")
+            #    break
+
+
+            #with concurrent.futures.ProcessPoolExecutor() as executor:
+            #    completed = executor.map(is_completed, [r for r in buckets.keys() if r != src_region])
+            #    print(completed, buckets.keys())
+            #    if all(completed): 
+            #        print("all completed")
+            #        break
+
+            #if completed == len(list(buckets.keys())) - 1:
+            #    print("All replication completed!")
+            #    break 
+
 
     # write results 
-    results = []
-    src_objs = list(buckets[src_region].list_objects(prefix=directory))
-    for region, bucket in buckets.items():
-        print(region)
-        if region == src_region: continue
-        dest_objs = list(bucket.list_objects(prefix=directory))
+    #results = []
+    #src_objs = list(buckets[src_region].list_objects(prefix=directory))
+    #for region, bucket in buckets.items():
+    #    print(region)
+    #    if region == src_region: continue
+    #    dest_objs = list(bucket.list_objects(prefix=directory))
 
-        for src_obj, dest_obj in zip(src_objs, dest_objs):
-            assert src_obj.size == dest_obj.size
-            results.append({
-                "name": src_obj.key,
-                "src_last_modified": src_obj.last_modified,
-                "dest_last_modified": dest_obj.last_modified,
-                "size": src_obj.size,
-                "src_region": src_region, 
-                "dest_region": region
-            })
-    df = pd.DataFrame(results)
-    df.to_csv(f"{experiment_name}.csv")
-    print(f"{experiment_name}.csv")
+    #    for src_obj, dest_obj in zip(src_objs, dest_objs):
+    #        assert src_obj.size == dest_obj.size
+    #        results.append({
+    #            "name": src_obj.key,
+    #            "src_last_modified": src_obj.last_modified,
+    #            "dest_last_modified": dest_obj.last_modified,
+    #            "size": src_obj.size,
+    #            "src_region": src_region, 
+    #            "dest_region": region
+    #        })
+    #df = pd.DataFrame(results)
+    #df.to_csv(f"{experiment_name}.csv")
+    #print(f"{experiment_name}.csv")
 
 
     #for src_obj in tqdm(buckets[src_region].list_objects(prefix=directory)):

@@ -4,13 +4,23 @@ import skyplane
 from skyplane.broadcast.bc_client import SkyplaneBroadcastClient
 
 if __name__ == "__main__":
+    src_region="ap-east-1"
+    dst_regions=[
+        "ap-southeast-2", 
+        "ap-south-1", 
+        "ap-northeast-3", 
+        "ap-northeast-2", 
+        "ap-northeast-1"
+    ]
+ 
     client = SkyplaneBroadcastClient(aws_config=skyplane.AWSConfig(), multipart_enabled=True)
     print(f"Log dir: {client.log_dir}/client.log")
     dp = client.broadcast_dataplane(
         src_cloud_provider="aws",
-        src_region="us-east-1",
+        src_region=src_region,
+        #type="ILP",
         dst_cloud_providers=["aws", "aws"],
-        dst_regions=["us-west-2", "us-west-1"],
+        dst_regions=dst_regions,
         # dst_regions=["ap-south-1", "us-east-2"],
         n_vms=1
         # gbyte_to_transfer=32 NOTE: can probably remove this argument
@@ -24,14 +34,15 @@ if __name__ == "__main__":
         # dest1_file = "s3://broadcast-experiment-ap-south-1/chunks"
         # dest2_file = "s3://broadcast-experiment-us-east-2/chunks/"
 
-        source_file = "s3://awsbucketsky/bigann_learn.bvecs.gz"
-        dest1_file = "s3://awsbucketsky2/bigann_learn.bvecs.gz"
-        dest2_file = "s3://awsbucketsky3/bigann_learn.bvecs.gz"
+        source_file = f"s3://broadcast-experiment-{src_region}/test_replication/"
+        dest_files = [f"s3://broadcast-experiment-{d}/test_replication/" for d in dst_regions]
+        print(source_file)
+        print(dest_files)
 
         dp.queue_copy(
-            source_file,
-            [dest1_file, dest2_file],
-            recursive=False,
+            source_file, 
+            dest_files,
+            recursive=True,
         )
         dp.provision(allow_firewall=False, spinner=True)
         tracker = dp.run_async()
