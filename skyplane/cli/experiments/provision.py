@@ -1,12 +1,26 @@
 from functools import partial
-
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterable, List
+from typing import Optional, Tuple
 
 from skyplane import compute
-from skyplane.replicate.replicator_client import refresh_instance_list
 from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
 from skyplane.utils.timer import Timer
+
+
+def refresh_instance_list(
+    provider: compute.CloudProvider, region_list: Iterable[str] = (), instance_filter=None, n=-1
+) -> Dict[str, List[compute.Server]]:
+    if instance_filter is None:
+        instance_filter = {"tags": {"skyplane": "true"}}
+    results = do_parallel(
+        lambda region: provider.get_matching_instances(region=region, **instance_filter),
+        region_list,
+        spinner=True,
+        n=n,
+        desc="Querying clouds for active instances",
+    )
+    return {r: ilist for r, ilist in results if ilist}
 
 
 def provision(
