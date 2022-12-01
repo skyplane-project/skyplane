@@ -1,3 +1,4 @@
+from functools import lru_cache
 import json
 import math
 import queue
@@ -285,14 +286,33 @@ class TransferJob(ABC):
     requester_pays: bool = False
     uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
 
-    def __post_init__(self):
-        provider_src, bucket_src, self.src_prefix = parse_path(self.src_path)
-        provider_dst, bucket_dst, self.dst_prefix = parse_path(self.dst_path)
-        self.src_iface = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src)
-        self.dst_iface = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst)
+    @property
+    @lru_cache(maxsize=1)
+    def src_prefix(self) -> Optional[str]:
+        return parse_path(self.src_path)[2]
+
+    @property
+    @lru_cache(maxsize=1)
+    def src_iface(self) -> ObjectStoreInterface:
+        provider_src, bucket_src, _ = parse_path(self.src_path)
+        iface = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src)
         if self.requester_pays:
-            self.src_iface.set_requester_bool(True)
-            self.dst_iface.set_requester_bool(True)
+            iface.set_requester_bool(True)
+        return iface
+
+    @property
+    @lru_cache(maxsize=1)
+    def dst_prefix(self) -> Optional[str]:
+        return parse_path(self.dst_path)[2]
+
+    @property
+    @lru_cache(maxsize=1)
+    def dst_iface(self) -> ObjectStoreInterface:
+        provider_dst, bucket_dst, _ = parse_path(self.dst_path)
+        iface = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst)
+        if self.requester_pays:
+            iface.set_requester_bool(True)
+        return iface
 
     def dispatch(self, dataplane: "Dataplane", **kwargs) -> Generator[ChunkRequest, None, None]:
         raise NotImplementedError("Dispatch not implemented")
@@ -319,9 +339,10 @@ class CopyJob(TransferJob):
     transfer_list: list = field(default_factory=list)  # transfer list for later verification
     multipart_transfer_list: list = field(default_factory=list)
 
-    def __post_init__(self):
-        self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
-        return super().__post_init__()
+    @property
+    @lru_cache(maxsize=1)
+    def http_pool(self):
+        return urllib3.PoolManager(retries=urllib3.Retry(total=3))
 
     def estimate_cost(self):
         raise NotImplementedError()
@@ -410,11 +431,6 @@ class CopyJob(TransferJob):
 
 @dataclass
 class SyncJob(CopyJob):
-    recursive: bool = True
-
-    def __post_init__(self):
-        return super().__post_init__()
-
     def estimate_cost(self):
         raise NotImplementedError()
 
