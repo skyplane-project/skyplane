@@ -265,7 +265,7 @@ class Chunker:
         the thread will add a sentinel value to the queue.
         """
         sentinel = object()
-        queue: Queue[Union[T, object]] = Queue(maxsize=buffer_size)
+        queue = Queue(maxsize=buffer_size)
 
         def prefetch():
             for item in gen_in:
