@@ -1,4 +1,5 @@
 import time
+from pprint import pprint
 
 import urllib3
 import pandas as pd
@@ -183,6 +184,13 @@ class BCTransferProgressTracker(TransferProgressTracker):
         chunk_status_df = pd.DataFrame(self._query_chunk_status())
         (self.transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
 
+    def copy_log(self, instance):
+        instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
+        pprint(f"Copying gateway std out files to gateway_{instance.uuid()}.stdout")
+        instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
+        pprint(f"Copying gateway std err files to gateway_{instance.uuid()}.stderr")
+        instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
+
     @imports.inject("pandas")
     def monitor_transfer(pd, self, dst_region):
         # todo implement transfer monitoring to update job_complete_chunk_ids and job_pending_chunk_ids while the transfer is in progress
@@ -202,6 +210,10 @@ class BCTransferProgressTracker(TransferProgressTracker):
             errors = self.dataplane.check_error_logs()
             if any(errors.values()):
                 self.errors = errors
+                logger.warning("Copying gateway logs...")
+                do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=-1)
+                self.errors = errors
+                pprint(errors)
                 raise exceptions.SkyplaneGatewayException("Transfer failed with errors", errors)
 
             log_df = pd.DataFrame(self._query_chunk_status())
