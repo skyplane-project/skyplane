@@ -9,6 +9,7 @@ import requests
 from typing import Iterator, List, Optional, Tuple
 
 from skyplane import exceptions, compute
+from skyplane.config_paths import cloud_config
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger
@@ -48,20 +49,24 @@ class GCSInterface(ObjectStoreInterface):
 
         # load bucket from GCS client
         bucket = None
+        default_region = cloud_config.get_flag("gcp_default_region")
         try:
             bucket = self._gcs_client.lookup_bucket(self.bucket_name)
         except Exception as e:
             # does not have storage.buckets.get access to the Google Cloud Storage bucket
             if "access to the Google Cloud Storage bucket" in str(e):
                 logger.warning(
-                    f"No access to the Google Cloud Storage bucket '{self.bucket_name}', assuming bucket is in the 'us-central1-a' zone"
+                    f"No access to the Google Cloud Storage bucket '{self.bucket_name}', assuming bucket is in the '{default_region}' zone"
                 )
-                return "us-central1-a"
+                return default_region
             raise
         if bucket is None:
             raise exceptions.MissingBucketException(f"GCS bucket {self.bucket_name} does not exist")
         else:
-            return map_region_to_zone(bucket.location.lower())
+            loc = bucket.location.lower()
+            if default_region.startswith(loc):
+                loc = default_region
+            return map_region_to_zone(loc)
 
     def region_tag(self):
         return "gcp:" + self.gcp_region

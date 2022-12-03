@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from skyplane.api.config import TransferConfig
-from skyplane.api.provision.dataplane import Dataplane
-from skyplane.api.provision.provisioner import Provisioner
+from skyplane.api.dataplane import Dataplane
+from skyplane.api.provisioner import Provisioner
 from skyplane.api.usage import get_clientid
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.planner.planner import DirectPlanner
@@ -97,9 +97,9 @@ class SkyplaneClient:
         src_region: str,
         dst_cloud_provider: str,
         dst_region: str,
-        type: str = "direct",
+        solver_type: str = "direct",
         n_vms: int = 1,
-        num_connections: int = 32,
+        n_connections: int = 32,
     ) -> Dataplane:
         """
         Create a dataplane and calculates the transfer topology.
@@ -116,20 +116,13 @@ class SkyplaneClient:
         :type type: str
         :param num_vms: The maximum number of instances to use per region (default: 1)
         :type num_vms: int
-        :param num_connections: The maximum number of connections to use in topology per region (default: 32)
-        :type num_connections: int
+        :param n_connections: The maximum number of connections to use in topology per region (default: 32)
+        :type n_connections: int
         """
-        if type == "direct":
-            planner = DirectPlanner(
-                src_cloud_provider,
-                src_region,
-                dst_cloud_provider,
-                dst_region,
-                n_vms,
-                num_connections,
-            )
+        if solver_type == "direct":
+            planner = DirectPlanner(src_cloud_provider, src_region, dst_cloud_provider, dst_region, n_vms, n_connections)
             topo = planner.plan()
             logger.fs.info(f"[SkyplaneClient.direct_dataplane] Topology: {topo.to_json()}")
             return Dataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
         else:
-            raise NotImplementedError(f"Dataplane type {type} not implemented")
+            raise NotImplementedError(f"Dataplane type {solver_type} not implemented")

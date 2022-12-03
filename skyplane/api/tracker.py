@@ -1,6 +1,7 @@
 import functools
 import json
 import time
+from abc import ABC
 from datetime import datetime
 from threading import Thread
 
@@ -9,8 +10,9 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Set
 
 from skyplane import exceptions
 from skyplane.api.config import TransferConfig
-from skyplane.chunk import ChunkRequest, ChunkState
+from skyplane.chunk import ChunkRequest, ChunkState, Chunk
 from skyplane.utils import logger, imports
+from skyplane.utils.definitions import tmp_log_dir
 from skyplane.utils.fn import do_parallel
 from skyplane.api.usage import UsageClient
 from skyplane.utils.definitions import GB
@@ -19,12 +21,61 @@ if TYPE_CHECKING:
     from skyplane.api.transfer_job import TransferJob
 
 
+class TransferHook(ABC):
+    def on_dispatch_start(self):
+        raise NotImplementedError()
+
+    def on_chunk_dispatched(self, chunks: List[Chunk]):
+        raise NotImplementedError()
+
+    def on_dispatch_end(self):
+        raise NotImplementedError()
+
+    def on_chunk_completed(self, chunks: List[Chunk]):
+        raise NotImplementedError()
+
+    def on_transfer_end(self, transfer_stats):
+        raise NotImplementedError()
+
+    def on_transfer_error(self, error):
+        raise NotImplementedError()
+
+
+class EmptyTransferHook(TransferHook):
+    def __init__(self):
+        return
+
+    def on_dispatch_start(self):
+        return
+
+    def on_chunk_dispatched(self, chunks: List[Chunk]):
+        return
+
+    def on_dispatch_end(self):
+        return
+
+    def on_chunk_completed(self, chunks: List[Chunk]):
+        return
+
+    def on_transfer_end(self, transfer_stats):
+        return
+
+    def on_transfer_error(self, error):
+        return
+
+
 class TransferProgressTracker(Thread):
-    def __init__(self, dataplane, jobs: List["TransferJob"], transfer_config: TransferConfig):
+    def __init__(self, dataplane, jobs: List["TransferJob"], transfer_config: TransferConfig, hooks: TransferHook):
         super().__init__()
         self.dataplane = dataplane
         self.jobs = {job.uuid: job for job in jobs}
         self.transfer_config = transfer_config
+        self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.transfer_dir.mkdir(exist_ok=True, parents=True)
+        if hooks is None:
+            self.hooks = EmptyTransferHook()
+        else:
+            self.hooks = hooks
 
         # log job details
         logger.fs.debug(f"[TransferProgressTracker] Using dataplane {dataplane}")
@@ -34,7 +85,7 @@ class TransferProgressTracker(Thread):
         logger.fs.debug(f"[TransferProgressTracker] Transfer config: {transfer_config}")
 
         # transfer state
-        self.job_chunk_requests: Dict[str, List[ChunkRequest]] = {}
+        self.job_chunk_requests: Dict[str, Dict[str, ChunkRequest]] = {}
         self.job_pending_chunk_ids: Dict[str, Set[str]] = {}
         self.job_complete_chunk_ids: Dict[str, Set[str]] = {}
         self.errors: Optional[Dict[str, List[str]]] = None
@@ -60,11 +111,20 @@ class TransferProgressTracker(Thread):
         }
         session_start_timestamp_ms = int(time.time() * 1000)
         try:
+            # pre-dispatch chunks to begin pre-buffering chunks
+            cr_streams = {
+                job_uuid: job.dispatch(self.dataplane, transfer_config=self.transfer_config) for job_uuid, job in self.jobs.items()
+            }
             for job_uuid, job in self.jobs.items():
                 logger.fs.debug(f"[TransferProgressTracker] Dispatching job {job.uuid}")
-                self.job_chunk_requests[job_uuid] = list(job.dispatch(self.dataplane, transfer_config=self.transfer_config))
-                self.job_pending_chunk_ids[job_uuid] = set([cr.chunk.chunk_id for cr in self.job_chunk_requests[job_uuid]])
+                self.job_chunk_requests[job_uuid] = {}
+                self.job_pending_chunk_ids[job_uuid] = set()
                 self.job_complete_chunk_ids[job_uuid] = set()
+                for cr in cr_streams[job_uuid]:
+                    chunks_dispatched = [cr.chunk]
+                    self.job_chunk_requests[job_uuid][cr.chunk.chunk_id] = cr
+                    self.job_pending_chunk_ids[job_uuid].add(cr.chunk.chunk_id)
+                    self.hooks.on_chunk_dispatched(chunks_dispatched)
                 logger.fs.debug(
                     f"[TransferProgressTracker] Job {job.uuid} dispatched with {len(self.job_chunk_requests[job_uuid])} chunk requests"
                 )
@@ -73,6 +133,8 @@ class TransferProgressTracker(Thread):
                 "dispatch job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
             )
             raise e
+
+        self.hooks.on_dispatch_end()
 
         # Record only the transfer time
         start_time = int(time.time())
@@ -119,8 +181,9 @@ class TransferProgressTracker(Thread):
         # transfer successfully completed
         transfer_stats = {
             "total_runtime_s": end_time - start_time,
-            "throughput_gbits": self.calculate_size() / (end_time - start_time),
+            "throughput_gbits": self.query_bytes_dispatched() / (end_time - start_time) / GB * 8,
         }
+        self.hooks.on_transfer_end(transfer_stats)
         UsageClient.log_transfer(
             transfer_stats, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
         )
@@ -137,6 +200,8 @@ class TransferProgressTracker(Thread):
             # check for errors and exit if there are any (while setting debug flags)
             errors = self.dataplane.check_error_logs()
             if any(errors.values()):
+                logger.warning("Copying gateway logs...")
+                do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=-1)
                 self.errors = errors
                 raise exceptions.SkyplaneGatewayException("Transfer failed with errors", errors)
 
@@ -158,6 +223,13 @@ class TransferProgressTracker(Thread):
             # update job_complete_chunk_ids and job_pending_chunk_ids
             for job_uuid, job in self.jobs.items():
                 job_complete_chunk_ids = set(chunk_id for chunk_id in completed_chunk_ids if self._chunk_to_job_map[chunk_id] == job_uuid)
+                new_chunk_ids = (
+                    self.job_complete_chunk_ids[job_uuid].union(job_complete_chunk_ids).difference(self.job_complete_chunk_ids[job_uuid])
+                )
+                completed_chunks = []
+                for id in new_chunk_ids:
+                    completed_chunks.append(self.job_chunk_requests[job_uuid][id].chunk)
+                self.hooks.on_chunk_completed(completed_chunks)
                 self.job_complete_chunk_ids[job_uuid] = self.job_complete_chunk_ids[job_uuid].union(job_complete_chunk_ids)
                 self.job_pending_chunk_ids[job_uuid] = self.job_pending_chunk_ids[job_uuid].difference(job_complete_chunk_ids)
 
@@ -167,7 +239,7 @@ class TransferProgressTracker(Thread):
     @property
     @functools.lru_cache(maxsize=1)
     def _chunk_to_job_map(self):
-        return {cr.chunk.chunk_id: job_uuid for job_uuid, crs in self.job_chunk_requests.items() for cr in crs}
+        return {chunk_id: job_uuid for job_uuid, cr_dict in self.job_chunk_requests.items() for chunk_id in cr_dict.keys()}
 
     def _query_chunk_status(self):
         def get_chunk_status(args):
@@ -203,14 +275,14 @@ class TransferProgressTracker(Thread):
             bytes_remaining_per_job[job_uuid] = sum(
                 [
                     cr.chunk.chunk_length_bytes
-                    for cr in self.job_chunk_requests[job_uuid]
+                    for cr in self.job_chunk_requests[job_uuid].values()
                     if cr.chunk.chunk_id in self.job_pending_chunk_ids[job_uuid]
                 ]
             )
         logger.fs.debug(f"[TransferProgressTracker] Bytes remaining per job: {bytes_remaining_per_job}")
         return sum(bytes_remaining_per_job.values())
 
-    def calculate_size(self):
+    def query_bytes_dispatched(self):
         if len(self.job_chunk_requests) == 0:
             return 0
         bytes_total_per_job = {}
@@ -218,8 +290,8 @@ class TransferProgressTracker(Thread):
             bytes_total_per_job[job_uuid] = sum(
                 [
                     cr.chunk.chunk_length_bytes
-                    for cr in self.job_chunk_requests[job_uuid]
+                    for cr in self.job_chunk_requests[job_uuid].values()
                     if cr.chunk.chunk_id in self.job_complete_chunk_ids[job_uuid]
                 ]
             )
-        return sum(bytes_total_per_job.values()) / GB
+        return sum(bytes_total_per_job.values())

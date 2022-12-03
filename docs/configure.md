@@ -28,12 +28,15 @@ Skyplane comes with a variety of knobs to tune to adjust performance or change h
 * Instance provisioning configuration
     * `aws_instance_class`: AWS instance class to use for provisioning. (default m5.8xlarge)
     * `aws_use_spot_instances`: If set, AWS will use spot instances instead of on-demand instances. (default False)
+    * `aws_default_region`: AWS region to use for provisioning. (default us-east-1)
     * `azure_instance_class`: Azure instance class to use for provisioning. (default Standard_D32_v4)
     * `azure_use_spot_instances`: If set, Azure will use spot instances instead of on-demand instances. (default False)
+    * `azure_default_region`: Azure region to use for provisioning. (default eastus)
     * `gcp_instance_class`: GCP instance class to use for provisioning. (default n2-standard-32)
     * `gcp_use_premium_network`: If set, will provision VMs on GCP's premium network tier. (default True)
     * `gcp_service_account_name`: GCP service account name to use for provisioning. (default skyplane-manual)
     * `gcp_use_spot_instances`: If set, GCP will use spot instances instead of on-demand instances. (default False)
+    * `gcp_default_region`: GCP region to use for provisioning. (default us-central1-a)
 ```
 
 ## Increasing performance of transfers via paralllelism
