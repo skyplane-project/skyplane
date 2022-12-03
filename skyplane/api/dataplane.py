@@ -44,6 +44,16 @@ class Dataplane:
         provisioner: "Provisioner",
         transfer_config: TransferConfig,
     ):
+        """
+        :param clientid: the uuid of the local host to create the dataplane
+        :type clientid: str
+        :param topology: the calculated topology during the transfer
+        :type topology: ReplicationTopology
+        :param provisioner: the provisioner to launch the VMs
+        :type provisioner: Provisioner
+        :param transfer_config: the configuration during the transfer
+        :type transfer_config: TransferConfig
+        """
         self.clientid = clientid
         self.topology = topology
         self.src_region_tag = self.topology.source_region()
@@ -73,7 +83,7 @@ class Dataplane:
         """
         Provision the transfer gateways.
         
-        :param allow_firewall: Whether to apply firewall rules in the gatweway network (default: True)
+        :param allow_firewall: whether to apply firewall rules in the gatweway network (default: True)
         :type allow_firewall: bool
         :param gateway_docker_image: Docker image token in github
         :type gateway_docker_image: str
@@ -83,7 +93,7 @@ class Dataplane:
         :type authorize_ssh_pub_key: str
         :param max_jobs: maximum number of provision jobs to launch concurrently (default: 16)
         :type max_jobs: int
-        :param spinner: Whether to show the spinner during the job (default: False)
+        :param spinner: whether to show the spinner during the job (default: False)
         :type spinner: bool
         """
         with self.provisioning_lock:
@@ -273,7 +283,11 @@ class Dataplane:
 
 
     def run_async(self, hooks: Optional[TransferHook] = None) -> TransferProgressTracker:
-        """Start the transfer asynchronously. The main thread will not be blocked."""
+        """Start the transfer asynchronously. The main thread will not be blocked.
+        
+        :param hooks: Tracks the status of the transfer
+        :type hooks: TransferHook
+        """
         if not self.provisioned:
             logger.error("Dataplane must be pre-provisioned. Call dataplane.provision() before starting a transfer")
         tracker = TransferProgressTracker(self, self.jobs_to_dispatch, self.transfer_config, hooks)
@@ -285,7 +299,11 @@ class Dataplane:
 
 
     def run(self, hooks: Optional[TransferHook] = None):
-        """Start the transfer in the main thread. Wait until the transfer is complete."""
+        """Start the transfer in the main thread. Wait until the transfer is complete.
+        
+        :param hooks: Tracks the status of the transfer
+        :type hooks: TransferHook
+        """
         tracker = self.run_async(hooks)
         logger.fs.debug(f"[SkyplaneClient] Waiting for transfer to complete")
         tracker.join()
