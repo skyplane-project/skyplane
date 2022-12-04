@@ -47,6 +47,7 @@ class AzureCloudProvider(CloudProvider):
         lookup_dict = {
             "oceania": {"australiaeast", "australiacentral", "australiasoutheast", "australiacentral2"},
             "asia": {
+                "qatarcentral",
                 "eastasia",
                 "japaneast",
                 "japanwest",
