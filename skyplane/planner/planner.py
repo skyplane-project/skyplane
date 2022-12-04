@@ -1,5 +1,5 @@
 from skyplane import compute
-from skyplane.replicate.replication_plan import ReplicationTopology
+from skyplane.planner.topology import ReplicationTopology
 
 
 class Planner:

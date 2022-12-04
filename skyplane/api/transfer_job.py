@@ -25,10 +25,9 @@ from skyplane.utils import logger
 from skyplane.utils.definitions import MB
 from skyplane.utils.fn import do_parallel
 from skyplane.utils.path import parse_path
-from skyplane.utils.timer import Timer
 
 if TYPE_CHECKING:
-    from skyplane.api.provision.dataplane import Dataplane
+    from skyplane.api.dataplane import Dataplane
 
 T = TypeVar("T")
 
@@ -37,12 +36,12 @@ class Chunker:
     def __init__(
         self,
         src_iface: ObjectStoreInterface,
-        dest_iface: ObjectStoreInterface,
+        dst_iface: ObjectStoreInterface,
         transfer_config: TransferConfig,
         concurrent_multipart_chunk_threads: int = 64,
     ):
         self.src_iface = src_iface
-        self.dest_iface = dest_iface
+        self.dst_iface = dst_iface
         self.transfer_config = transfer_config
         self.multipart_upload_requests = []
         self.concurrent_multipart_chunk_threads = concurrent_multipart_chunk_threads
@@ -51,8 +50,8 @@ class Chunker:
         self, exit_event: threading.Event, in_queue: "Queue[Tuple[ObjectStoreObject, ObjectStoreObject]]", out_queue: "Queue[Chunk]",
     ):
         """Chunks large files into many small chunks."""
-        region = self.dest_iface.region_tag()
-        bucket = self.dest_iface.bucket()
+        region = self.dst_iface.region_tag()
+        bucket = self.dst_iface.bucket()
         while not exit_event.is_set():
             try:
                 input_data = in_queue.get(block=False, timeout=0.1)
@@ -62,7 +61,7 @@ class Chunker:
             # get source and destination object and then compute number of chunks
             src_object, dest_object = input_data
             mime_type = self.src_iface.get_obj_mime_type(src_object.key)
-            upload_id = self.dest_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
+            upload_id = self.dst_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
             chunk_size_bytes = int(self.transfer_config.multipart_chunk_size_mb * MB)
             num_chunks = math.ceil(src_object.size / chunk_size_bytes)
             if num_chunks > self.transfer_config.multipart_max_chunks:
@@ -95,9 +94,9 @@ class Chunker:
     def to_chunk_requests(self, gen_in: Generator[Chunk, None, None]) -> Generator[ChunkRequest, None, None]:
         """Converts a generator of chunks to a generator of chunk requests."""
         src_region = self.src_iface.region_tag()
-        dest_region = self.dest_iface.region_tag()
+        dest_region = self.dst_iface.region_tag()
         src_bucket = self.src_iface.bucket()
-        dest_bucket = self.dest_iface.bucket()
+        dest_bucket = self.dst_iface.bucket()
         for chunk in gen_in:
             yield ChunkRequest(
                 chunk=chunk,
@@ -132,7 +131,7 @@ class Chunker:
                 rprint(f"\n:x: [bold red]In order to transfer objects using a prefix, you must use the --recursive or -r flag.[/bold red]")
                 rprint(f"[yellow]If you meant to transfer a single object, pass the full source object key.[/yellow]")
                 rprint(f"[bright_black]Try running: [bold]skyplane {' '.join(sys.argv[1:])} --recursive[/bold][/bright_black]")
-                raise exceptions.MissingObjectException("Encountered a recursive transfer without the --recursive flag.")
+                raise exceptions.MissingObjectException("Encountered a recursive transfer without the --recursive flag.") from None
         else:
             if source_prefix == "" or source_prefix == "/":
                 if dest_prefix == "" or dest_prefix == "/":
@@ -157,13 +156,12 @@ class Chunker:
         dst_prefix: str,
         recursive: bool,
         prefilter_fn: Optional[Callable[[ObjectStoreObject], bool]] = None,
-        postfilter_fn: Optional[Callable[[ObjectStoreObject, ObjectStoreObject], bool]] = None,
     ) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
         """Query source region and return list of objects to transfer."""
         if not self.src_iface.bucket_exists():
             raise exceptions.MissingBucketException(f"Source bucket {self.src_iface.path()} does not exist or is not readable.")
-        if not self.dest_iface.bucket_exists():
-            raise exceptions.MissingBucketException(f"Destination bucket {self.dest_iface.path()} does not exist or is not readable.")
+        if not self.dst_iface.bucket_exists():
+            raise exceptions.MissingBucketException(f"Destination bucket {self.dst_iface.path()} does not exist or is not readable.")
 
         # query all source region objects
         logger.fs.debug(f"Querying objects in {self.src_iface.path()}")
@@ -177,19 +175,17 @@ class Chunker:
                     raise e from None
 
                 # make destination object
-                dest_provider, dest_region = self.dest_iface.region_tag().split(":")
+                dest_provider, dest_region = self.dst_iface.region_tag().split(":")
                 if dest_provider == "aws":
-                    dest_obj = S3Object(dest_provider, self.dest_iface.bucket(), dest_key)
+                    dest_obj = S3Object(dest_provider, self.dst_iface.bucket(), dest_key)
                 elif dest_provider == "azure":
-                    dest_obj = AzureBlobObject(dest_provider, self.dest_iface.bucket(), dest_key)
+                    dest_obj = AzureBlobObject(dest_provider, self.dst_iface.bucket(), dest_key)
                 elif dest_provider == "gcp":
-                    dest_obj = GCSObject(dest_provider, self.dest_iface.bucket(), dest_key)
+                    dest_obj = GCSObject(dest_provider, self.dst_iface.bucket(), dest_key)
                 else:
                     raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
-
-                if postfilter_fn is None or postfilter_fn(obj, dest_obj):
-                    yield obj, dest_obj
-                    n_objs += 1
+                n_objs += 1
+                yield obj, dest_obj
 
         if n_objs == 0:
             logger.error("Specified object does not exist.\n")
@@ -252,6 +248,31 @@ class Chunker:
             yield batch
 
     @staticmethod
+    def prefetch_generator(gen_in: Generator[T, None, None], buffer_size: int) -> Generator[T, None, None]:
+        """
+        Prefetches from generator while handing StopIteration to ensure items yield immediately.
+
+        Start a thread to prefetch items from the generator and put them in a queue. Upon StopIteration,
+        the thread will add a sentinel value to the queue.
+        """
+        sentinel = object()
+        queue = Queue(maxsize=buffer_size)
+
+        def prefetch():
+            for item in gen_in:
+                queue.put(item)
+            queue.put(sentinel)
+
+        thread = threading.Thread(target=prefetch, daemon=True)
+        thread.start()
+
+        while True:
+            item = queue.get()
+            if item is sentinel:
+                break
+            yield item
+
+    @staticmethod
     def tail_generator(gen_in: Generator[T, None, None], out_list: List[T]) -> Generator[T, None, None]:
         """Tails generator while handling StopIteration"""
         for item in gen_in:
@@ -267,14 +288,33 @@ class TransferJob(ABC):
     requester_pays: bool = False
     uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
 
-    def __post_init__(self):
-        provider_src, bucket_src, self.src_prefix = parse_path(self.src_path)
-        provider_dst, bucket_dst, self.dst_prefix = parse_path(self.dst_path)
-        self.src_iface = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src)
-        self.dst_iface = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst)
-        if self.requester_pays:
-            self.src_iface.set_requester_bool(True)
-            self.dst_iface.set_requester_bool(True)
+    @property
+    def src_prefix(self) -> Optional[str]:
+        if not hasattr(self, "_src_prefix"):
+            self._src_prefix = parse_path(self.src_path)[2]
+        return self._src_prefix
+
+    @property
+    def src_iface(self) -> ObjectStoreInterface:
+        if not hasattr(self, "_src_iface"):
+            provider_src, bucket_src, _ = parse_path(self.src_path)
+            self._src_iface = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src)
+            if self.requester_pays:
+                self._src_iface.set_requester_bool(True)
+        return self._src_iface
+
+    @property
+    def dst_prefix(self) -> Optional[str]:
+        if not hasattr(self, "_dst_prefix"):
+            self._dst_prefix = parse_path(self.dst_path)[2]
+        return self._dst_prefix
+
+    @property
+    def dst_iface(self) -> ObjectStoreInterface:
+        if not hasattr(self, "_dst_iface"):
+            provider_dst, bucket_dst, _ = parse_path(self.dst_path)
+            self._dst_iface = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst)
+        return self._dst_iface
 
     def dispatch(self, dataplane: "Dataplane", **kwargs) -> Generator[ChunkRequest, None, None]:
         raise NotImplementedError("Dispatch not implemented")
@@ -295,20 +335,17 @@ class TransferJob(ABC):
         """Optionally filter source objects before they are transferred."""
         return True
 
-    @classmethod
-    def _post_filter_fn(cls, src_obj: ObjectStoreObject, dest_obj: ObjectStoreObject) -> bool:
-        """Optionally filter objects by comparing the source and destination objects."""
-        return True
-
 
 @dataclass
 class CopyJob(TransferJob):
     transfer_list: list = field(default_factory=list)  # transfer list for later verification
     multipart_transfer_list: list = field(default_factory=list)
 
-    def __post_init__(self):
-        self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
-        return super().__post_init__()
+    @property
+    def http_pool(self):
+        if not hasattr(self, "_http_pool"):
+            self._http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
+        return self._http_pool
 
     def estimate_cost(self):
         raise NotImplementedError()
@@ -317,12 +354,13 @@ class CopyJob(TransferJob):
         """Generate transfer pairs for the transfer job."""
         if chunker is None:  # used for external access to transfer pair list
             chunker = Chunker(self.src_iface, self.dst_iface, TransferConfig())
-        yield from chunker.transfer_pair_generator(
-            self.src_prefix, self.dst_prefix, self.recursive, self._pre_filter_fn, self._post_filter_fn
-        )
+        yield from chunker.transfer_pair_generator(self.src_prefix, self.dst_prefix, self.recursive, self._pre_filter_fn)
 
     def dispatch(
-        self, dataplane: "Dataplane", transfer_config: TransferConfig, dispatch_batch_size: int = 64,
+        self,
+        dataplane: "Dataplane",
+        transfer_config: TransferConfig,
+        dispatch_batch_size: int = 1000,
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways."""
         chunker = Chunker(self.src_iface, self.dst_iface, transfer_config)
@@ -330,37 +368,42 @@ class CopyJob(TransferJob):
         gen_transfer_list = chunker.tail_generator(transfer_pair_generator, self.transfer_list)
         chunks = chunker.chunk(gen_transfer_list)
         chunk_requests = chunker.to_chunk_requests(chunks)
+        batches = chunker.batch_generator(
+            chunker.prefetch_generator(chunk_requests, buffer_size=dispatch_batch_size * 32), batch_size=dispatch_batch_size
+        )
 
         # dispatch chunk requests
-        with Timer() as t:
-            src_gateways = dataplane.source_gateways()
-            bytes_dispatched = [0] * len(src_gateways)
-            n_multiparts = 0
-            for batch in chunker.batch_generator(chunk_requests, dispatch_batch_size):
-                logger.fs.debug(f"Queried {len(batch)} chunks in {t.elapsed:.2f} seconds")
-                min_idx = bytes_dispatched.index(min(bytes_dispatched))
-                server = src_gateways[min_idx]
-                n_bytes = sum([cr.chunk.chunk_length_bytes for cr in batch])
-                bytes_dispatched[min_idx] += n_bytes
-                start = time.time()
-                reply = self.http_pool.request(
-                    "POST",
-                    f"{server.gateway_api_url}/api/v1/chunk_requests",
-                    body=json.dumps([c.as_dict() for c in batch]).encode("utf-8"),
-                    headers={"Content-Type": "application/json"},
-                )
-                end = time.time()
-                if reply.status != 200:
-                    raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
-                logger.fs.debug(
-                    f"Dispatched {len(batch)} chunk requests to {server.instance_name()} ({n_bytes} bytes) in {end - start:.2f} seconds"
-                )
-                yield from batch
+        src_gateways = dataplane.source_gateways()
+        bytes_dispatched = [0] * len(src_gateways)
+        n_multiparts = 0
+        start = time.time()
+        for batch in batches:
+            end = time.time()
+            logger.fs.debug(f"Queried {len(batch)} chunks in {end - start:.2f} seconds")
+            start = time.time()
+            min_idx = bytes_dispatched.index(min(bytes_dispatched))
+            server = src_gateways[min_idx]
+            n_bytes = sum([cr.chunk.chunk_length_bytes for cr in batch])
+            bytes_dispatched[min_idx] += n_bytes
+            start = time.time()
+            reply = self.http_pool.request(
+                "POST",
+                f"{server.gateway_api_url}/api/v1/chunk_requests",
+                body=json.dumps([c.as_dict() for c in batch]).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+            )
+            end = time.time()
+            if reply.status != 200:
+                raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
+            logger.fs.debug(
+                f"Dispatched {len(batch)} chunk requests to {server.instance_name()} ({n_bytes} bytes) in {end - start:.2f} seconds"
+            )
+            yield from batch
 
-                # copy new multipart transfers to the multipart transfer list
-                updated_len = len(chunker.multipart_upload_requests)
-                self.multipart_transfer_list.extend(chunker.multipart_upload_requests[n_multiparts:updated_len])
-                n_multiparts = updated_len
+            # copy new multipart transfers to the multipart transfer list
+            updated_len = len(chunker.multipart_upload_requests)
+            self.multipart_transfer_list.extend(chunker.multipart_upload_requests[n_multiparts:updated_len])
+            n_multiparts = updated_len
 
     def finalize(self):
         groups = defaultdict(list)
@@ -393,11 +436,33 @@ class CopyJob(TransferJob):
 
 @dataclass
 class SyncJob(CopyJob):
-    def __post_init__(self):
-        return super().__post_init__()
-
     def estimate_cost(self):
         raise NotImplementedError()
+
+    def gen_transfer_pairs(self, chunker: Optional[Chunker] = None) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
+        """Generate transfer pairs for the transfer job."""
+        if chunker is None:  # used for external access to transfer pair list
+            chunker = Chunker(self.src_iface, self.dst_iface, TransferConfig())
+        transfer_pair_gen = chunker.transfer_pair_generator(self.src_prefix, self.dst_prefix, self.recursive, self._pre_filter_fn)
+        # enrich destination objects with metadata
+        for src_obj, dest_obj in self._enrich_dest_objs(transfer_pair_gen, self.dst_prefix):
+            if self._post_filter_fn(src_obj, dest_obj):
+                yield src_obj, dest_obj
+
+    def _enrich_dest_objs(
+        self, transfer_pairs: Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None], dest_prefix: str
+    ) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
+        """
+        For skyplane sync, we enrich dest obj metadata with our existing dest obj metadata from the dest bucket following a query.
+        """
+        logger.fs.debug(f"Querying objects in {self.dst_iface.bucket()}")
+        if not hasattr(self, "_found_dest_objs"):
+            self._found_dest_objs = {obj.key: obj for obj in self.dst_iface.list_objects(dest_prefix)}
+        for src_obj, dest_obj in transfer_pairs:
+            if dest_obj.key in self._found_dest_objs:
+                dest_obj.size = self._found_dest_objs[dest_obj.key].size
+                dest_obj.last_modified = self._found_dest_objs[dest_obj.key].last_modified
+            yield src_obj, dest_obj
 
     @classmethod
     def _post_filter_fn(cls, src_obj: ObjectStoreObject, dest_obj: ObjectStoreObject) -> bool:

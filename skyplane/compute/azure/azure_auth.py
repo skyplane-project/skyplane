@@ -45,21 +45,6 @@ class AzureAuthentication:
     def subscription_id(self) -> Optional[str]:
         return self.config.azure_subscription_id
 
-    def wait_for_valid_token(self):
-        """It takes several seconds for the client secret to register. This method waits for the client secret to appear."""
-
-        def try_login():
-            self._credential = None
-            try:
-                logging.disable(logging.WARNING)  # disable Azure logging, we have our own
-                list(self.get_subscription_client().subscriptions.list_locations(subscription_id=self.subscription_id))
-                logging.disable(logging.NOTSET)
-                return True
-            except:
-                return False
-
-        wait_for(try_login, desc="Wait for Azure roles to propagate", timeout=200)
-
     def save_region_config(self):
         if self.config.azure_enabled == False:
             self.clear_region_config()
