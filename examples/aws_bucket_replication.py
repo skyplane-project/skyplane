@@ -322,7 +322,7 @@ def main(argv):
         # copy data with skyplane to source bucket
         dp.provision(spinner=True)
         dp.queue_copy(
-            FLAGS.target_data, f"s3://{src_bucket}/{directory}", recursive=False
+            FLAGS.target_data, f"s3://{src_bucket}/{directory}", recursive=True
         )
         print("Waiting for data to copy to source bucket...")
 
