@@ -248,11 +248,11 @@ class Dataplane:
         Add a copy job to job list.
         Return the uuid of the job.
         
-        :param src: Source prefix to copy from
+        :param src: source prefix to copy from
         :type src: str
-        :param dst: The destination of the transfer
+        :param dst: the destination of the transfer
         :type dst: str
-        :param recursive: If true, will copy objects at folder prefix recursively (default: False)
+        :param recursive: if true, will copy objects at folder prefix recursively (default: False)
         :type recursive: bool
         """
         job = CopyJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
