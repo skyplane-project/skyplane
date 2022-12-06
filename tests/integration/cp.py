@@ -70,7 +70,7 @@ def run(src_region, dest_region, n_files=1, file_size_mb=1, multipart=True):
         multipart=multipart,
         confirm=True,
         max_instances=1,
-        solve=False,
+        solver=False,
         solver_target_tput_per_vm_gbits=None,
     )
 
