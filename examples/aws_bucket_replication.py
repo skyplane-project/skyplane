@@ -26,7 +26,7 @@ flags.DEFINE_string("target_data", None, "Target data directory specified by S3 
 
 def bucket_handle(region): 
     #return f"broadcast-experiment-{region}"
-    return f"broadcast-{region}"
+    return f"imagenet-broadcast-{region}"
 
 def delete_policy(policy_arn):
     client = boto3.client("iam")
@@ -209,11 +209,11 @@ def main(argv):
     #with concurrent.futures.ProcessPoolExecutor() as executor:
     # create temporary bucket for each region 
     def setup_bucket(region):
-        try:
-            region = region.split(":")[1]
-            bucket_name = bucket_handle(region)
-            bucket = S3Interface(bucket_name)
+        region = region.split(":")[1]
+        bucket_name = bucket_handle(region)
+        bucket = S3Interface(bucket_name)
 
+        try:
             bucket.create_bucket(region)
             print(f"Created bucket {bucket_name} in {region}")
             #buckets[region] = bucket
@@ -232,12 +232,14 @@ def main(argv):
                 }
             )
             print(f"Enabled bucket versioning for {bucket_name}")
-            return bucket
         except Exception as e:
-            print(e)
+            print("ERROR", e)
+
+        return bucket
 
     for region, bucket in do_parallel(setup_bucket, dst_regions + [src_region]): 
         region = region.split(":")[1]
+        assert bucket is not None, f"Bucket is none {region}"
         buckets[region] = bucket
 
 
