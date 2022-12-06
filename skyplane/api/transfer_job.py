@@ -34,6 +34,7 @@ T = TypeVar("T")
 
 class Chunker:
     """class that chunks the original files and makes the chunk requests"""
+
     def __init__(
         self,
         src_iface: ObjectStoreInterface,
@@ -107,7 +108,7 @@ class Chunker:
 
     def to_chunk_requests(self, gen_in: Generator[Chunk, None, None]) -> Generator[ChunkRequest, None, None]:
         """Converts a generator of chunks to a generator of chunk requests.
-        
+
         :param gen_in: generator that generates chunk requests
         :type gen_in: Generator
         """
@@ -133,7 +134,7 @@ class Chunker:
         Users invoke a transfer via the CLI; aws s3 cp s3://bucket/source_prefix s3://bucket/dest_prefix.
         The CLI will query the object store for all objects in the source prefix and map them to the
         destination prefix using this function.
-        
+
         :param source_prefix: source bucket folder prefix
         :type source_prefix: string
         :param source_key: source file key to map in the folder prefix
@@ -185,7 +186,7 @@ class Chunker:
         prefilter_fn: Optional[Callable[[ObjectStoreObject], bool]] = None,
     ) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
         """Query source region and return list of objects to transfer.
-        
+
         :param src_prefix: source bucket folder prefix
         :type src_prefix: string
         :param dst_prefix: destination bucket folder prefix
@@ -232,7 +233,7 @@ class Chunker:
         self, transfer_pair_generator: Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]
     ) -> Generator[Chunk, None, None]:
         """Break transfer list into chunks.
-        
+
         :param transfer_pair_generator: generator of pairs of objects to transfer
         :type transfer_pair_generator: Generator
         """
@@ -282,7 +283,7 @@ class Chunker:
     @staticmethod
     def batch_generator(gen_in: Generator[T, None, None], batch_size: int) -> Generator[List[T], None, None]:
         """Batches generator, while handling StopIteration
-        
+
         :param gen_in: generator that generates chunk requests
         :type gen_in: Generator
         """
@@ -301,7 +302,7 @@ class Chunker:
         Prefetches from generator while handing StopIteration to ensure items yield immediately.
         Start a thread to prefetch items from the generator and put them in a queue. Upon StopIteration,
         the thread will add a sentinel value to the queue.
-        
+
         :param gen_in: generator that generates chunk requests
         :type gen_in: Generator
         :param buffer_size: maximum size of the buffer to temporarily store the generators
@@ -327,7 +328,7 @@ class Chunker:
     @staticmethod
     def tail_generator(gen_in: Generator[T, None, None], out_list: List[T]) -> Generator[T, None, None]:
         """Tails generator while handling StopIteration
-        
+
         :param gen_in: generator that generates chunk requests
         :type gen_in: Generator
         :param out_list: list of tail generators
@@ -342,7 +343,7 @@ class Chunker:
 class TransferJob(ABC):
     """
     transfer job with transfer configurations
-    
+
     :param src_path: source full path
     :type src_path: str
     :param dst_path: destination full path
@@ -360,7 +361,6 @@ class TransferJob(ABC):
     recursive: bool = False
     requester_pays: bool = False
     uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
-
 
     @property
     def src_prefix(self) -> Optional[str]:
@@ -413,7 +413,7 @@ class TransferJob(ABC):
     @classmethod
     def _pre_filter_fn(cls, obj: ObjectStoreObject) -> bool:
         """Optionally filter source objects before they are transferred.
-        
+
         :param obj: source object to be transferred
         :type obj: ObjectStoreObject
         """
@@ -423,17 +423,16 @@ class TransferJob(ABC):
 @dataclass
 class CopyJob(TransferJob):
     """copy job that copies the source objects to the destination
-    
+
     :param transfer_list: transfer list for later verification
     :type transfer_list: list
     :param multipart_transfer_list: multipart transfer list for later verification
     :type multipart_transfer_list: list
     """
-    
+
     transfer_list: list = field(default_factory=list)
     multipart_transfer_list: list = field(default_factory=list)
 
-    
     @property
     def http_pool(self):
         """http connection pool"""
@@ -446,7 +445,7 @@ class CopyJob(TransferJob):
 
     def gen_transfer_pairs(self, chunker: Optional[Chunker] = None) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
         """Generate transfer pairs for the transfer job.
-        
+
         :param chunker: chunker that makes the chunk requests
         :type chunker: Chunker
         """
@@ -461,7 +460,7 @@ class CopyJob(TransferJob):
         dispatch_batch_size: int = 1000,
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways.
-        
+
         :param dataplane: dataplane that starts the transfer job
         :type dataplane: Dataplane
         :param transfer_config: the configuration during the transfer
@@ -545,12 +544,13 @@ class CopyJob(TransferJob):
 @dataclass
 class SyncJob(CopyJob):
     """sync job that copies the source objects that does not exist in the destination bucket to the destination"""
+
     def estimate_cost(self):
         raise NotImplementedError()
 
     def gen_transfer_pairs(self, chunker: Optional[Chunker] = None) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
         """Generate transfer pairs for the transfer job.
-        
+
         :param chunker: chunker that makes the chunk requests
         :type chunker: Chunker
         """
@@ -567,7 +567,7 @@ class SyncJob(CopyJob):
     ) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
         """
         For skyplane sync, we enrich dest obj metadata with our existing dest obj metadata from the dest bucket following a query.
-        
+
         :param transfer_pairs: generator of transfer pairs
         :type transfer_pairs: Generator
         """
@@ -583,7 +583,7 @@ class SyncJob(CopyJob):
     @classmethod
     def _post_filter_fn(cls, src_obj: ObjectStoreObject, dest_obj: ObjectStoreObject) -> bool:
         """Optionally filter destination objects after they are transferred.
-        
+
         :param src_obj: source object to be transferred
         :type src_obj: ObjectStoreObject
         :param dest_obj: destination object transferred

@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
 class TransferHook(ABC):
     """Hook that shows transfer related stats"""
+
     def on_dispatch_start(self):
         """Starting the dispatch job"""
         raise NotImplementedError()
@@ -50,6 +51,7 @@ class TransferHook(ABC):
 
 class EmptyTransferHook(TransferHook):
     """Empty transfer hook that does nothing"""
+
     def __init__(self):
         return
 
@@ -74,6 +76,7 @@ class EmptyTransferHook(TransferHook):
 
 class TransferProgressTracker(Thread):
     """Tracks transfer progress in one tranfer session"""
+
     def __init__(self, dataplane, jobs: List["TransferJob"], transfer_config: TransferConfig, hooks: TransferHook):
         """
         :param dataplane: dataplane that starts the transfer

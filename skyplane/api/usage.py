@@ -313,7 +313,7 @@ class UsageClient:
 
     def write_usage_data(self, data: UsageStatsToReport, dir_path: Optional[Path] = None):
         """Write the usage data to the directory.
-        
+
         :param data: data to report
         :type data: UsageStatsToReport
         :param dir_path: the path to the directory to write usage data
@@ -334,7 +334,7 @@ class UsageClient:
 
     def report_usage_data(self, type: str, data: UsageStatsToReport, path: Path) -> None:
         """Report the usage data to the usage server.
-        
+
         :param type: the type of usage stats to report
         :type type: str
         :param data: data to report

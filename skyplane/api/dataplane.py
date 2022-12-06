@@ -82,7 +82,7 @@ class Dataplane:
     ):
         """
         Provision the transfer gateways.
-        
+
         :param allow_firewall: whether to apply firewall rules in the gatweway network (default: True)
         :type allow_firewall: bool
         :param gateway_docker_image: Docker image token in github
@@ -188,7 +188,7 @@ class Dataplane:
     def deprovision(self, max_jobs: int = 64, spinner: bool = False):
         """
         Deprovision the remote gateways
-        
+
         :param max_jobs: maximum number of jobs to deprovision the remote gateways (default: 64)
         :type max_jobs: int
         :param spinner: Whether to show the spinner during the job (default: False)
@@ -214,6 +214,7 @@ class Dataplane:
 
     def check_error_logs(self) -> Dict[str, List[str]]:
         """Get the error log from remote gateways if there is any error."""
+
         def get_error_logs(args):
             _, instance = args
             reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/errors")
@@ -247,7 +248,7 @@ class Dataplane:
         """
         Add a copy job to job list.
         Return the uuid of the job.
-        
+
         :param src: source prefix to copy from
         :type src: str
         :param dst: the destination of the transfer
@@ -268,7 +269,7 @@ class Dataplane:
         """
         Add a sync job to job list.
         Return the uuid of the job.
-        
+
         :param src: Source prefix to copy from
         :type src: str
         :param dst: The destination of the transfer
@@ -281,10 +282,9 @@ class Dataplane:
         self.jobs_to_dispatch.append(job)
         return job.uuid
 
-
     def run_async(self, hooks: Optional[TransferHook] = None) -> TransferProgressTracker:
         """Start the transfer asynchronously. The main thread will not be blocked.
-        
+
         :param hooks: Tracks the status of the transfer
         :type hooks: TransferHook
         """
@@ -297,10 +297,9 @@ class Dataplane:
         self.jobs_to_dispatch = []
         return tracker
 
-
     def run(self, hooks: Optional[TransferHook] = None):
         """Start the transfer in the main thread. Wait until the transfer is complete.
-        
+
         :param hooks: Tracks the status of the transfer
         :type hooks: TransferHook
         """

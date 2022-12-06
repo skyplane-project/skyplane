@@ -13,7 +13,7 @@ from skyplane.utils.timer import Timer
 @dataclass
 class ProvisionerTask:
     """Dataclass to track a single VM provisioning job.
-    
+
     :param cloud_provider: the name of the cloud provider to provision gateways
     :type cloud_provider: str
     :param region: the name of the cloud region to provision gateways
@@ -44,6 +44,7 @@ class ProvisionerTask:
 
 class Provisioner:
     """Launches a single VM provisioning job."""
+
     def __init__(
         self,
         aws_auth: Optional[compute.AWSAuthentication] = None,
@@ -83,7 +84,7 @@ class Provisioner:
     def init_global(self, aws: bool = True, azure: bool = True, gcp: bool = True):
         """
         Initialize the global cloud providers by configuring with credentials
-        
+
         :param aws: whether to configure aws (default: True)
         :type aws: bool
         :param azure: whether to configure azure (default: True)
@@ -113,7 +114,7 @@ class Provisioner:
     ):
         """
         Add a provision task
-        
+
         :param cloud_provider: the name of the cloud provider to provision gateways
         :type cloud_provider: str
         :param region: the name of the cloud region to provision gateways
@@ -137,7 +138,7 @@ class Provisioner:
     def get_node(self, uuid: str) -> compute.Server:
         """
         Returns a provisioned VM
-        
+
         :param uuid: the uuid of the provision task
         :type uuid: str
         """
@@ -174,7 +175,7 @@ class Provisioner:
 
     def provision(self, authorize_firewall: bool = True, max_jobs: int = 16, spinner: bool = False) -> List[str]:
         """Provision the VMs in the pending_provisioner_tasks list. Returns UUIDs of provisioned VMs.
-        
+
         :param authorize_firewall: whether to add authorization firewall to the remote gateways (default: True)
         :type authorize_firewall: bool
         :param max_jobs: maximum number of provision jobs to launch concurrently (default: 16)
@@ -243,7 +244,7 @@ class Provisioner:
 
     def deprovision(self, deauthorize_firewall: bool = True, max_jobs: int = 64, spinner: bool = False):
         """Deprovision all nodes. Returns UUIDs of deprovisioned VMs.
-        
+
         :param deauthorize_firewall: whether to remove authorization firewall to the remote gateways (default: True)
         :type deauthorize_firewall: bool
         :param max_jobs: maximum number of deprovision jobs to launch concurrently (default: 64)
