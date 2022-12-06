@@ -267,6 +267,9 @@ def cp(
     # todo - add solver params once API supports it
     # solver
     solver: str = typer.Option("direct", "--solver", help="Solver to use for transfer"),
+    solver_target_tput_per_vm_gbits: Optional[float] = typer.Option(
+        None, "--solver-target-tput-per-vm-gbits", help="Target throughput per VM in Gbits"
+    ),
 ):
     """
     `cp` copies a file or folder from one location to another. If the source is on an object store,

@@ -66,7 +66,6 @@ def run(src_region, dest_region, n_files=1, file_size_mb=1, multipart=True):
         map_path(src_region, src_bucket_name, src_prefix),
         map_path(dest_region, dest_bucket_name, dest_prefix),
         recursive=True,
-        reuse_gateways=False,
         debug=False,
         multipart=multipart,
         confirm=True,
