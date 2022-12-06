@@ -340,12 +340,6 @@ class Chunker:
 
 @dataclass
 class TransferJob(ABC):
-    src_path: str
-    dst_path: str
-    recursive: bool = False
-    requester_pays: bool = False
-    uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
-
     """
     transfer job with transfer configurations
     
@@ -360,6 +354,14 @@ class TransferJob(ABC):
     :param uuid: the uuid of one single transfer job
     :type uuid: str
     """
+
+    src_path: str
+    dst_path: str
+    recursive: bool = False
+    requester_pays: bool = False
+    uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
+
+
     @property
     def src_prefix(self) -> Optional[str]:
         """Return the source prefix"""
@@ -420,9 +422,6 @@ class TransferJob(ABC):
 
 @dataclass
 class CopyJob(TransferJob):
-    transfer_list: list = field(default_factory=list)
-    multipart_transfer_list: list = field(default_factory=list)
-
     """copy job that copies the source objects to the destination
     
     :param transfer_list: transfer list for later verification
@@ -430,6 +429,11 @@ class CopyJob(TransferJob):
     :param multipart_transfer_list: multipart transfer list for later verification
     :type multipart_transfer_list: list
     """
+    
+    transfer_list: list = field(default_factory=list)
+    multipart_transfer_list: list = field(default_factory=list)
+
+    
     @property
     def http_pool(self):
         """http connection pool"""
@@ -540,6 +544,7 @@ class CopyJob(TransferJob):
 
 @dataclass
 class SyncJob(CopyJob):
+    """sync job that copies the source objects that does not exist in the destination bucket to the destination"""
     def estimate_cost(self):
         raise NotImplementedError()
 

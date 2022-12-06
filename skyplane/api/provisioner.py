@@ -12,15 +12,6 @@ from skyplane.utils.timer import Timer
 
 @dataclass
 class ProvisionerTask:
-
-    cloud_provider: str
-    region: str
-    vm_type: str
-    spot: bool = False
-    autoterminate_minutes: Optional[int] = None
-    tags: Dict[str, str] = field(default_factory=dict)
-    uuid: str = field(default_factory=lambda: str(uuid.uuid4()))
-    
     """Dataclass to track a single VM provisioning job.
     
     :param cloud_provider: the name of the cloud provider to provision gateways
@@ -38,6 +29,14 @@ class ProvisionerTask:
     :param uuid: the uuid of the local host that requests the provision task
     :type uuid: str
     """
+
+    cloud_provider: str
+    region: str
+    vm_type: str
+    spot: bool = False
+    autoterminate_minutes: Optional[int] = None
+    tags: Dict[str, str] = field(default_factory=dict)
+    uuid: str = field(default_factory=lambda: str(uuid.uuid4()))
 
     def __hash__(self):
         return uuid.UUID(self.uuid).int

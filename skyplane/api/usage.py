@@ -49,6 +49,7 @@ USAGE_STATS_DISABLED_MESSAGE = "Usage stats collection is disabled."
 
 
 def get_clientid():
+    """return the anonymized client id"""
     config = configparser.ConfigParser()
     if host_uuid_path.exists():
         config.read(os.path.expanduser(host_uuid_path))
@@ -312,11 +313,13 @@ class UsageClient:
 
     def write_usage_data(self, data: UsageStatsToReport, dir_path: Optional[Path] = None):
         """Write the usage data to the directory.
-        Params:
-            data: Data to report
-            dir_path: The path to the directory to write usage data.
-        Return:
-            destination: The absolute path of the usage data json file.
+        
+        :param data: data to report
+        :type data: UsageStatsToReport
+        :param dir_path: the path to the directory to write usage data
+        :type dir_path: Path
+        :return: the absolute path of the usage data json file
+        :rtype: Path
         """
         if dir_path is None:
             client_id_path = self.client_id if self.client_id else "unknown"
@@ -331,10 +334,13 @@ class UsageClient:
 
     def report_usage_data(self, type: str, data: UsageStatsToReport, path: Path) -> None:
         """Report the usage data to the usage server.
-        Params:
-            data: Data to report.
-        Raises:
-            requests.HTTPError if requests fails.
+        
+        :param type: the type of usage stats to report
+        :type type: str
+        :param data: data to report
+        :type data: UsageStatsToReport
+        :param path: path to temporarily store the usage data
+        :type path: Path
         """
 
         prom_labels = {"type": type, "environment": "api"}
