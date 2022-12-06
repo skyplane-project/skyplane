@@ -43,9 +43,11 @@ class BCChunker(Chunker):
             src_object, dest_object = input_data
             mime_type = self.src_iface.get_obj_mime_type(src_object.key)
 
-            region_to_upload_id = {}
+            region_bucketkey_to_upload_id = {}
             for dest_iface in self.dest_ifaces:
-                region_to_upload_id[dest_iface.region_tag()] = dest_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
+                region_bucketkey_to_upload_id[
+                    dest_iface.region_tag() + ":" + dest_iface.bucket() + ":" + dest_object.key
+                ] = dest_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
 
             chunk_size_bytes = int(self.transfer_config.multipart_chunk_size_mb * MB)
             num_chunks = math.ceil(src_object.size / chunk_size_bytes)
@@ -69,7 +71,6 @@ class BCChunker(Chunker):
                     partition_id=str(part_num % self.num_partitions),
                     chunk_length_bytes=file_size_bytes,
                     part_number=part_num,
-                    region_to_upload_id=region_to_upload_id,
                 )
                 offset += file_size_bytes
                 parts.append(part_num)
@@ -79,7 +80,12 @@ class BCChunker(Chunker):
             # maintain multipart upload requests for multiple regions
             # Dict[region] = upload id for this region
             self.multipart_upload_requests.append(
-                dict(key=dest_object.key, parts=parts, region_to_upload_id=region_to_upload_id, dest_ifaces=self.dest_ifaces)
+                dict(
+                    key=dest_object.key,
+                    parts=parts,
+                    region_bucketkey_to_upload_id=region_bucketkey_to_upload_id,
+                    dest_ifaces=self.dest_ifaces,
+                )
             )
             # print("Multipart_uplaod_request:", self.multipart_upload_requests)
 

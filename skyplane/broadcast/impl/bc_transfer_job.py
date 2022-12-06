@@ -138,14 +138,14 @@ class BCCopyJob(BCTransferJob):
         groups = defaultdict(list)
 
         for req in self.multipart_transfer_list:
-            if "dest_ifaces" not in req or "region_to_upload_id" not in req:
+            if "dest_ifaces" not in req or "region_bucketkey_to_upload_id" not in req:
                 raise Exception(f"Invalid broadcast multipart upload request: {req}")
 
             dest_iface_list = [d for d in req["dest_ifaces"] if d.region_tag() == dst_region]
             for dest_iface in dest_iface_list:
                 region = dest_iface.region_tag()
                 bucket = dest_iface.bucket()
-                upload_id = req["region_to_upload_id"][region]
+                upload_id = req["region_bucketkey_to_upload_id"][region + ":" + bucket + ":" + req["key"]]
                 one_req = dict(upload_id=upload_id, key=req["key"], parts=req["parts"], region=region, bucket=bucket)
                 groups[(region, bucket)].append(one_req)
 
