@@ -56,7 +56,9 @@ class IBMCloudAuthentication:
             res = ibm_vpc_client.list_regions()
             for region in res.result['regions']:
                 if region['status'] == 'available':
-                    region_list.append(region['name'])
+                    zones = ibm_vpc_client.list_region_zones(region['name'])
+                    for zone in zones.result['zones']:
+                        region_list.append(zone['region']['name'], zone['name'], zone['href'], zone['status'])
             f.write("\n".join(region_list))
 
     def clear_region_config(self):
