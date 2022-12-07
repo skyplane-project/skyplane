@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class BCTransferJob(TransferJob):
+class BCTransferJob():
     # TODO: might just use multiple TransferJob
     src_path: str
     dst_path: str  # NOTE: should be None, not used
@@ -40,7 +40,9 @@ class BCTransferJob(TransferJob):
     type: str = ""
 
     def __post_init__(self):
-        provider_src, bucket_src, self.src_prefix = parse_path(self.src_path)
+        print("Parse src: ", parse_path(self.src_path))
+        provider_src, bucket_src, src_prefix = parse_path(self.src_path)
+        self.src_prefix = src_prefix
         self.src_iface = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src)
         self.src_bucket = bucket_src
         self.src_region = self.src_iface.region_tag()
@@ -71,6 +73,10 @@ class BCTransferJob(TransferJob):
         """Verifies the transfer completed, otherwise raises TransferFailedException."""
         raise NotImplementedError("Broadcast verify not implemented")
 
+    @classmethod
+    def _pre_filter_fn(cls, obj: ObjectStoreObject) -> bool:
+        """Optionally filter source objects before they are transferred."""
+        return True
 
 @dataclass
 class BCCopyJob(BCTransferJob):
@@ -87,14 +93,14 @@ class BCCopyJob(BCTransferJob):
         if chunker is None:  # used for external access to transfer pair list
             chunker = BCChunker(self.src_iface, list(self.dst_ifaces.values()), TransferConfig())
         yield from chunker.transfer_pair_generator(
-            self.src_prefix, self.dst_prefix, self.recursive, self._pre_filter_fn, self._post_filter_fn
+            self.src_prefix, self.dst_prefix, self.recursive, self._pre_filter_fn
         )
 
     def broadcast_dispatch(
         self,
         dataplane: "BroadcastDataplane",
         transfer_config: TransferConfig,
-        dispatch_batch_size: int = 64,
+        dispatch_batch_size: int = 1000,
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways."""
         chunker = BCChunker(self.src_iface, list(self.dst_ifaces.values()), transfer_config, dataplane.topology.num_partitions)
@@ -104,35 +110,78 @@ class BCCopyJob(BCTransferJob):
         chunk_requests = chunker.to_chunk_requests(chunks)
 
         # dispatch chunk requests
-        with Timer() as t:
-            src_gateways = dataplane.source_gateways()
-            bytes_dispatched = [0] * len(src_gateways)
-            n_multiparts = 0
-            for batch in chunker.batch_generator(chunk_requests, dispatch_batch_size):
-                logger.fs.debug(f"Queried {len(batch)} chunks in {t.elapsed:.2f} seconds")
-                min_idx = bytes_dispatched.index(min(bytes_dispatched))
-                server = src_gateways[min_idx]
-                n_bytes = sum([cr.chunk.chunk_length_bytes for cr in batch])
-                bytes_dispatched[min_idx] += n_bytes
+        batches = chunker.batch_generator(
+            chunker.prefetch_generator(chunk_requests, buffer_size=dispatch_batch_size * 32), batch_size=dispatch_batch_size
+        )
+
+        src_gateways = dataplane.source_gateways()
+        bytes_dispatched = [0] * len(src_gateways)
+        n_multiparts = 0
+        start = time.time()
+        for batch in batches:
+            end = time.time()
+            logger.fs.debug(f"Queried {len(batch)} chunks in {end - start:.2f} seconds")
+            start = time.time()
+            min_idx = bytes_dispatched.index(min(bytes_dispatched))
+            server = src_gateways[min_idx]
+            n_bytes = sum([cr.chunk.chunk_length_bytes for cr in batch])
+            bytes_dispatched[min_idx] += n_bytes
+            start = time.time()
+            reply = self.http_pool.request(
+                "POST",
+                f"{server.gateway_api_url}/api/v1/chunk_requests",
+                body=json.dumps([c.as_dict() for c in batch]).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+            )
+            end = time.time()
+            if reply.status != 200:
+                raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
+            logger.fs.debug(
+                f"Dispatched {len(batch)} chunk requests to {server.instance_name()} ({n_bytes} bytes) in {end - start:.2f} seconds"
+            )
+            yield from batch
+
+            # copy new multipart transfers to the multipart transfer list
+            print("Chunker mapping for upload ids:", chunker.all_mappings_for_upload_ids)
+            
+            updated_len = len(chunker.multipart_upload_requests)
+            self.multipart_transfer_list.extend(chunker.multipart_upload_requests[n_multiparts:updated_len])
+            n_multiparts = updated_len
+        
+        def dispatch_id_maps_to_dst():
+            # NOTE: update the upload ids in each dest gateways --> chunker.all_mappings_for_upload_ids
+            dst_servers = dataplane.sink_gateways() 
+            for dst_server in dst_servers:
+                construct_mappings = {}
+                dst_region_tag = dst_server.region_tag
+                print(f"Dst region tag: ", dst_region_tag)
+
+                for mapping in chunker.all_mappings_for_upload_ids:
+                    for key, value in mapping.items():
+                        # print(f"mapping: {key}, {value}")
+                        if key.startswith(dst_region_tag):
+                            construct_mappings[key] = value
+
+                print("Construct mappings: ")
+                from pprint import pprint
+                pprint(construct_mappings)
+
+                print("Json encode: ", json.dumps(construct_mappings).encode("utf-8"))
+                
                 start = time.time()
                 reply = self.http_pool.request(
                     "POST",
-                    f"{server.gateway_api_url}/api/v1/chunk_requests",
-                    body=json.dumps([c.as_dict() for c in batch]).encode("utf-8"),
+                    f"{dst_server.gateway_api_url}/api/v1/upload_id_maps",
+                    body=json.dumps(construct_mappings).encode("utf-8"),
                     headers={"Content-Type": "application/json"},
                 )
                 end = time.time()
+                # TODO: assume that only destination nodes would write to the obj store
                 if reply.status != 200:
-                    raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
-                logger.fs.debug(
-                    f"Dispatched {len(batch)} chunk requests to {server.instance_name()} ({n_bytes} bytes) in {end - start:.2f} seconds"
-                )
-                yield from batch
+                    raise Exception(f"Failed to update upload ids to the dst gateway {dst_server.instance_name()}, constructed mappings for {dst_region_tag}: {construct_mappings}")
+                logger.fs.debug(f"Upload ids to dst gateway {dst_server.instance_name()} in {end - start:.2f} seconds")
 
-                # copy new multipart transfers to the multipart transfer list
-                updated_len = len(chunker.multipart_upload_requests)
-                self.multipart_transfer_list.extend(chunker.multipart_upload_requests[n_multiparts:updated_len])
-                n_multiparts = updated_len
+        dispatch_id_maps_to_dst()
 
     def bc_finalize(self, dst_region: str):
         groups = defaultdict(list)
@@ -183,8 +232,20 @@ class BCCopyJob(BCTransferJob):
 class BCSyncJob(BCCopyJob):
     type: str = "sync"
 
-    def __post_init__(self):
-        return super().__post_init__()
+    def estimate_cost(self): 
+        raise NotImplementedError()
+
+    def gen_transfer_pairs(self, chunker: Optional[BCChunker] = None) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
+        """Generate transfer pairs for the transfer job."""
+        raise NotImplementedError("Broadcast Sync Job get_transfer_pairs not implemented")
+
+    def _enrich_dest_objs(
+        self, transfer_pairs: Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None], dest_prefix: str
+    ) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
+        """
+        For skyplane sync, we enrich dest obj metadata with our existing dest obj metadata from the dest bucket following a query.
+        """
+        raise NotImplementedError("Broadcast Sync Job_enrich_dest_objs not implemented")
 
     @classmethod
     def _post_filter_fn(cls, src_obj: ObjectStoreObject, dest_obj: ObjectStoreObject) -> bool:

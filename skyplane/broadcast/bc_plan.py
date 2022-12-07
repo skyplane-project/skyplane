@@ -5,7 +5,7 @@ import networkx as nx
 
 from skyplane.chunk import ChunkRequest
 from skyplane.obj_store.object_store_interface import ObjectStoreObject
-from skyplane.replicate.replication_plan import (
+from skyplane.planner.topology import (
     ReplicationTopology,
     ReplicationTopologyNode,
     ReplicationTopologyGateway,

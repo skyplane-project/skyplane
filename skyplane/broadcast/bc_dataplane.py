@@ -6,10 +6,10 @@ import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from skyplane import compute
-from skyplane.api.provision.dataplane import Dataplane
+from skyplane.api.dataplane import Dataplane
 from skyplane.api.config import TransferConfig
-from skyplane.replicate.replication_plan import ReplicationTopologyGateway
-
+from skyplane.planner.topology import ReplicationTopology, ReplicationTopologyGateway
+from skyplane.api.tracker import TransferHook
 from skyplane.broadcast.impl.bc_tracker import BCTransferProgressTracker
 from skyplane.broadcast.impl.bc_transfer_job import BCCopyJob, BCSyncJob, BCTransferJob
 
@@ -32,7 +32,7 @@ from skyplane.utils.fn import PathLike
 
 
 if TYPE_CHECKING:
-    from skyplane.api.provision.provisioner import Provisioner
+    from skyplane.api.provisioner import Provisioner
 
 
 class BroadcastDataplane(Dataplane):
@@ -214,6 +214,7 @@ class BroadcastDataplane(Dataplane):
 
         # NOTE: assume all transfer object share the same (src, dsts)? might not be correct
         one_transfer_job = self.jobs_to_dispatch[0]
+        print("one transfer job: ", one_transfer_job)
         if not self.transfer_config.random_chunk_size_mb:
             src_obj_store = (one_transfer_job.src_bucket, one_transfer_job.src_region)
 
@@ -227,7 +228,8 @@ class BroadcastDataplane(Dataplane):
             src_obj_store = None
             dsts_obj_store_map = None
             gen_random_data = True
-
+        
+        print("dst obj store map: ", dsts_obj_store_map)
         for node in solution_graph.nodes:
             node_gateway_program = GatewayProgram()
             for i in range(num_partitions):
@@ -294,7 +296,7 @@ class BroadcastDataplane(Dataplane):
         recursive: bool = False,
     ) -> str:
         job = BCCopyJob(src, dsts[0], recursive, dst_paths=dsts, requester_pays=self.transfer_config.requester_pays)
-        logger.fs.debug(f"[SkyplaneClient] Queued copy job {job}")
+        logger.fs.debug(f"[SkyplaneBroadcastClient] Queued copy job {job}")
         self.jobs_to_dispatch.append(job)
         return job.uuid
 
@@ -305,16 +307,21 @@ class BroadcastDataplane(Dataplane):
         recursive: bool = False,
     ) -> str:
         job = BCSyncJob(src, dsts[0], recursive, dst_paths=dsts, requester_pays=self.transfer_config.requester_pays)
-        logger.fs.debug(f"[SkyplaneClient] Queued sync job {job}")
+        logger.fs.debug(f"[SkyplaneBroadcastClient] Queued sync job {job}")
         self.jobs_to_dispatch.append(job)
         return job.uuid
 
-    def run_async(self) -> BCTransferProgressTracker:
+    def run_async(self, hooks: Optional[TransferHook] = None) -> BCTransferProgressTracker:
         if not self.provisioned:
             logger.error("Dataplane must be pre-provisioned. Call dataplane.provision() before starting a transfer")
-        tracker = BCTransferProgressTracker(self, self.jobs_to_dispatch, self.transfer_config)
+        tracker = BCTransferProgressTracker(self, self.jobs_to_dispatch, self.transfer_config, hooks)
         self.pending_transfers.append(tracker)
         tracker.start()
-        logger.fs.info(f"[SkyplaneClient] Started async transfer with {len(self.jobs_to_dispatch)} jobs")
+        logger.fs.info(f"[SkyplaneBroadcastClient] Started async transfer with {len(self.jobs_to_dispatch)} jobs")
         self.jobs_to_dispatch = []
         return tracker
+
+    def run(self, hooks: Optional[TransferHook] = None):
+        tracker = self.run_async(hooks)
+        logger.fs.debug(f"[SkyplaneBroadcastClient] Waiting for transfer to complete")
+        tracker.join()

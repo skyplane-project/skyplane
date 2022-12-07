@@ -8,7 +8,7 @@ import sys
 from multiprocessing import Event, Queue
 from os import PathLike
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from skyplane.utils import logger
 
@@ -24,7 +24,6 @@ from skyplane.broadcast.gateway.operators.gateway_operator import (
     GatewayWaitReciever,
 )
 from skyplane.broadcast.gateway.operators.gateway_receiver import GatewayReceiver
-
 from collections import defaultdict
 
 # TODO: add default partition ID to main
@@ -84,7 +83,7 @@ class GatewayDaemon:
 
         # API server
         self.api_server = GatewayDaemonAPI(
-            self.chunk_store, self.gateway_receiver, self.error_event, self.error_queue, self.terminal_operators
+            self.chunk_store, self.gateway_receiver, self.error_event, self.error_queue, terminal_operators=self.terminal_operators
         )
         self.api_server.start()
         atexit.register(self.api_server.shutdown)

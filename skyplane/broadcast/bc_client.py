@@ -8,7 +8,7 @@ from skyplane.api.client import tmp_log_dir
 from skyplane.api.client import get_clientid
 from skyplane.broadcast.bc_dataplane import BroadcastDataplane
 from skyplane.broadcast.bc_planner import BroadcastDirectPlanner, BroadcastMDSTPlanner, BroadcastHSTPlanner, BroadcastILPSolverPlanner
-from skyplane.api.provision.provisioner import Provisioner
+from skyplane.api.provisioner import Provisioner
 from skyplane.api.config import TransferConfig
 from skyplane.utils import logger
 
@@ -31,6 +31,7 @@ class SkyplaneBroadcastClient:
         self.azure_auth = azure_config.make_auth_provider() if azure_config else None
         self.gcp_auth = gcp_config.make_auth_provider() if gcp_config else None
         self.transfer_config = transfer_config if transfer_config else TransferConfig(multipart_enabled=multipart_enabled)
+        print("transfer config: ", transfer_config)
         self.log_dir = (
             tmp_log_dir / "transfer_logs" / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}-{uuid.uuid4().hex[:8]}"
             if log_dir is None

@@ -11,7 +11,7 @@ from skyplane.chunk import ChunkRequest, ChunkState
 from skyplane.utils import logger, imports
 from skyplane.utils.fn import do_parallel
 from skyplane.api.usage import UsageClient
-from skyplane.api.tracker import TransferProgressTracker
+from skyplane.api.tracker import TransferProgressTracker, TransferHook
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from skyplane.utils.definitions import GB, tmp_log_dir
 from datetime import datetime
@@ -21,8 +21,8 @@ if TYPE_CHECKING:
 
 
 class BCTransferProgressTracker(TransferProgressTracker):
-    def __init__(self, dataplane, jobs: List["BCTransferJob"], transfer_config: TransferConfig):
-        super().__init__(dataplane, jobs, transfer_config)
+    def __init__(self, dataplane, jobs: List["BCTransferJob"], transfer_config: TransferConfig, hooks: TransferHook):
+        super().__init__(dataplane, jobs, transfer_config, hooks)
 
         self.dataplane = dataplane
         self.type_list = set([job.type for job in jobs])
@@ -210,7 +210,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
             errors = self.dataplane.check_error_logs()
             if any(errors.values()):
                 self.errors = errors
-                logger.warning("Copying gateway logs...")
+                logger.warning("Copying gateway logs")
                 do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=-1)
                 self.errors = errors
                 pprint(errors)

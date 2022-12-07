@@ -28,6 +28,7 @@ class BCChunker(Chunker):
         self.num_partitions = num_partitions
         self.dest_ifaces = dest_ifaces
         self.multipart_upload_requests = []
+        self.all_mappings_for_upload_ids = []
 
     def _run_multipart_chunk_thread(
         self, exit_event: threading.Event, in_queue: "Queue[Tuple[ObjectStoreObject, ObjectStoreObject]]", out_queue: "Queue[Chunk]"
@@ -87,7 +88,7 @@ class BCChunker(Chunker):
                     dest_ifaces=self.dest_ifaces,
                 )
             )
-            # print("Multipart_uplaod_request:", self.multipart_upload_requests)
+            self.all_mappings_for_upload_ids.append(region_bucketkey_to_upload_id)
 
     def chunk(
         self, transfer_pair_generator: Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]
@@ -103,7 +104,6 @@ class BCChunker(Chunker):
 
         # start chunking threads
         if self.transfer_config.multipart_enabled:
-            print("Enable multi-part transfer")
             for _ in range(self.concurrent_multipart_chunk_threads):
                 t = threading.Thread(
                     target=self._run_multipart_chunk_thread,
@@ -120,13 +120,17 @@ class BCChunker(Chunker):
                 # dummy dst_obj
                 multipart_send_queue.put((src_obj, dst_obj))
             else:
-                yield Chunk(
-                    src_key=src_obj.key,
-                    dest_key=dst_obj.key,
-                    partition_id=str(idx % self.num_partitions),
-                    chunk_id=uuid.uuid4().hex,
-                    chunk_length_bytes=src_obj.size,
-                )
+                # Ignore the pair of folders 
+                if src_obj.size == 0:
+                    assert dst_obj.size is None 
+                else:
+                    yield Chunk(
+                        src_key=src_obj.key,
+                        dest_key=dst_obj.key,
+                        partition_id=str(idx % self.num_partitions),
+                        chunk_id=uuid.uuid4().hex,
+                        chunk_length_bytes=src_obj.size,
+                    )
 
             if self.transfer_config.multipart_enabled:
                 # drain multipart chunk queue and yield with updated chunk IDs

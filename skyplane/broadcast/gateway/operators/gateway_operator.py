@@ -494,6 +494,7 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         super().__init__(
             handle, region, input_queue, output_queue, error_event, error_queue, n_processes, chunk_store, bucket_name, bucket_region
         )
+        self.chunk_store = chunk_store
 
     def process(self, chunk_req: ChunkRequest):
         fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
@@ -502,6 +503,12 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         )
 
         obj_store_interface = self.get_obj_store_interface(self.bucket_region, self.bucket_name)
+        key_to_upload_id = self.bucket_region + ":" + self.bucket_name + ":" + chunk_req.chunk.dest_key
+        print(f"TYPE: {type(self.chunk_store.get_upload_ids_map())}")
+        print(f"id of operator chunk store: {id(self.chunk_store)}")
+        logger.debug(f"[obj_store:{self.worker_id}] key {key_to_upload_id}, map: {self.chunk_store.get_upload_ids_map()}")
+
+        upload_id = self.chunk_store.get_upload_ids_map()[key_to_upload_id]
 
         retry_backoff(
             partial(
@@ -509,7 +516,7 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
                 fpath,
                 chunk_req.chunk.dest_key,
                 chunk_req.chunk.part_number,
-                chunk_req.chunk.upload_id, # TODO: need to have a region+":"+bucket+":"+key mapping to upload ids
+                upload_id,
                 check_md5=chunk_req.chunk.md5_hash,
             ),
             max_retries=32,

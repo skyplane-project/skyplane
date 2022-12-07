@@ -188,6 +188,7 @@ class Chunker:
                 else:
                     raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
                 n_objs += 1
+                logger.fs.debug(f"Yield: {obj}, {dest_obj}")
                 yield obj, dest_obj
 
         if n_objs == 0:

@@ -29,6 +29,7 @@ class GatewayDaemonAPI(threading.Thread):
     * POST /api/v1/chunk_requests - adds a new chunk request
     * PUT /api/v1/chunk_requests/<chunk_id> - updates chunk request
     * GET /api/v1/chunk_status_log - returns list of chunk status log entries
+    * POST /api/v1/upload_id_maps - post a json which contains mapping of region:bucket:key to upload id to each server
     """
 
     def __init__(
@@ -37,6 +38,7 @@ class GatewayDaemonAPI(threading.Thread):
         gateway_receiver: GatewayReceiver,
         error_event,
         error_queue: Queue,
+        upload_ids_map: Optional[Dict[str, str]] = None, 
         terminal_operators: Optional[Dict[str, List[str]]] = None,
         host="0.0.0.0",
         port=8081,
@@ -70,6 +72,9 @@ class GatewayDaemonAPI(threading.Thread):
         self.sender_compressed_sizes: Dict[str, Tuple[int, int]] = {}  # TODO: maintain as chunks are completed
         self.chunk_status_log: List[Dict] = []
         self.chunk_completions = defaultdict(list)
+
+        # upload id mappings 
+        self.upload_ids_map = upload_ids_map
 
         # socket profiles
         # TODO: actually fill these out
@@ -264,6 +269,14 @@ class GatewayDaemonAPI(threading.Thread):
             for i in range(n_entries):
                 status_log_copy.append(self.chunk_status_log[i])
             return jsonify({"chunk_status_log": status_log_copy})
+
+        # post the upload ids mapping
+        @app.route("/api/v1/upload_id_maps", methods=["POST"])
+        def update_upload_ids_mapping():
+            self.upload_ids_map = (request.json)
+            print(f"[gateway_api] Gateway add upload IDs mapping {self.upload_ids_map}")
+            print(f"[gateway_api] id of chunk store: {id(self.chunk_store)}")
+            return jsonify({"status": "ok"})
 
     def register_error_routes(self, app):
         @app.route("/api/v1/errors", methods=["GET"])

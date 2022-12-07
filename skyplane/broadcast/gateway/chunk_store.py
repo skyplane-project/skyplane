@@ -16,6 +16,8 @@ class ChunkStore:
         self.chunk_dir = Path(chunk_dir)
         self.chunk_dir.mkdir(parents=True, exist_ok=True)
 
+        self.region_key_upload_id_mappings: Dict[str, str] = {}
+
         # delete existing chunks
         for chunk_file in self.chunk_dir.glob("*.chunk"):
             logger.warning(f"Deleting existing chunk file {chunk_file}")
@@ -26,6 +28,12 @@ class ChunkStore:
 
         # queue of chunk status updates coming from operators (passed to gateway API)
         self.chunk_status_queue: Queue[Dict] = Queue()
+
+    def set_upload_ids_map(self, maps: Dict[str, str]):
+        self.region_key_upload_id_mappings.update(maps)
+
+    def get_upload_ids_map(self):
+        return self.region_key_upload_id_mappings
 
     def add_partition(self, partition_id: str):
         """Create a queue for this partition."""
