@@ -4,21 +4,15 @@ import skyplane
 from skyplane.broadcast.bc_client import SkyplaneBroadcastClient
 
 if __name__ == "__main__":
-    src_region="ap-east-1"
-    dst_regions=[
-        "ap-southeast-2", 
-        "ap-south-1", 
-        "ap-northeast-3", 
-        "ap-northeast-2", 
-        "ap-northeast-1"
-    ]
- 
+    src_region = "ap-east-1"
+    dst_regions = ["ap-southeast-2", "ap-south-1", "ap-northeast-3", "ap-northeast-2", "ap-northeast-1"]
+
     client = SkyplaneBroadcastClient(aws_config=skyplane.AWSConfig(), multipart_enabled=True)
     print(f"Log dir: {client.log_dir}/client.log")
     dp = client.broadcast_dataplane(
         src_cloud_provider="aws",
         src_region=src_region,
-        #type="ILP",
+        # type="ILP",
         dst_cloud_providers=["aws", "aws"],
         dst_regions=dst_regions,
         # dst_regions=["ap-south-1", "us-east-2"],
@@ -40,7 +34,7 @@ if __name__ == "__main__":
         print(dest_files)
 
         dp.queue_copy(
-            source_file, 
+            source_file,
             dest_files,
             recursive=True,
         )

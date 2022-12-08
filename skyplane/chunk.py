@@ -23,8 +23,7 @@ class Chunk:
     # multi-part upload/download info
     file_offset_bytes: Optional[int] = None
     part_number: Optional[int] = None
-    upload_id: Optional[str] = None
-    region_to_upload_id: Optional[Dict[str, str]] = None  # for broadcast multipart upload
+    upload_id: Optional[str] = None # TODO: can remove this if the upload id is assigned at the gateway
 
     def to_wire_header(self, n_chunks_left_on_socket: int, wire_length: int, is_compressed: bool = False):
         return WireProtocolHeader(

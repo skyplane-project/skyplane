@@ -60,7 +60,7 @@ class S3Interface(ObjectStoreInterface):
 
     @imports.inject("botocore.exceptions", pip_extra="aws")
     def bucket_exists(botocore_exceptions, self, region=None):
-        if region is None: # use current bucket region is available
+        if region is None:  # use current bucket region is available
             try:
                 region = self.aws_region
             except exceptions.MissingBucketException:
