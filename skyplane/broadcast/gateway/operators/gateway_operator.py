@@ -441,26 +441,37 @@ class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
     def process(self, chunk_req: ChunkRequest, **args):
         fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
         # wait for free space
-        while self.chunk_store.remaining_bytes() < chunk_req.chunk.chunk_length_bytes * self.n_processes:
-            time.sleep(0.1)
-
         logger.debug(f"[{self.handle}:{self.worker_id}] Start download {chunk_req.chunk.chunk_id} from {self.bucket_name}")
 
         obj_store_interface = self.get_obj_store_interface(self.bucket_region, self.bucket_name)
 
         if self.src_requester_pays:
             obj_store_interface.set_requester_bool(True)
-        md5sum = retry_backoff(
-            partial(
-                obj_store_interface.download_object,
-                chunk_req.chunk.src_key,
-                fpath,
-                chunk_req.chunk.file_offset_bytes,
-                chunk_req.chunk.chunk_length_bytes,
-                generate_md5=True,
-            ),
-            max_retries=32,  # TODO: fix this - not a good solution
-        )
+
+        #while self.chunk_store.remaining_bytes() < chunk_req.chunk.chunk_length_bytes * self.n_processes:
+        #    time.sleep(0.1)
+
+        
+        while True: 
+            #if self.chunk_store.remaining_bytes() < chunk_req.chunk.chunk_length_bytes * self.n_processes:
+            #    time.sleep(0.1) 
+            #    continue
+            try:
+                md5sum = retry_backoff(
+                    partial(
+                        obj_store_interface.download_object,
+                        chunk_req.chunk.src_key,
+                        fpath,
+                        chunk_req.chunk.file_offset_bytes,
+                        chunk_req.chunk.chunk_length_bytes,
+                        generate_md5=True,
+                    ),
+                    max_retries=1,  # TODO: fix this - not a good solution
+                )
+                break
+            except Exception as e:
+                print("Failed", e)
+                time.sleep(0.1)
 
         # update md5sum for chunk requests
         # TODO: create checksum operator
@@ -532,7 +543,7 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
                 upload_id,
                 check_md5=chunk_req.chunk.md5_hash,
             ),
-            max_retries=32,
+            max_retries=1,
         )
         logger.debug(f"[obj_store:{self.worker_id}] Uploaded {chunk_req.chunk.chunk_id} to {self.bucket_name}")
         return True

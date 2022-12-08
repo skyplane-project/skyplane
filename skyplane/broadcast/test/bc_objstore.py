@@ -16,7 +16,7 @@ if __name__ == "__main__":
         # type="ILP",
         dst_cloud_providers=["aws", "aws"],
         dst_regions=dst_regions,
-        n_vms=1,
+        n_vms=2,
     )
 
     with dp.auto_deprovision():
