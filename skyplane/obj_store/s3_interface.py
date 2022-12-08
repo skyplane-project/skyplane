@@ -225,6 +225,7 @@ class S3Interface(ObjectStoreInterface):
                     break
                 all_parts += response["Parts"]
         all_parts = sorted(all_parts, key=lambda d: d["PartNumber"])
+        print("Multipart upload: ", {"Parts": [{"PartNumber": p["PartNumber"], "ETag": p["ETag"]} for p in all_parts]})
         response = s3_client.complete_multipart_upload(
             UploadId=upload_id,
             Bucket=self.bucket_name,

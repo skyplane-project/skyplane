@@ -228,8 +228,8 @@ class BroadcastDataplane(Dataplane):
             src_obj_store = None
             dsts_obj_store_map = None
             gen_random_data = True
-        
-        print("dst obj store map: ", dsts_obj_store_map)
+
+        # print("dst obj store map: ", dsts_obj_store_map)
         for node in solution_graph.nodes:
             node_gateway_program = GatewayProgram()
             for i in range(num_partitions):

@@ -4,14 +4,14 @@ from pprint import pprint
 import urllib3
 import pandas as pd
 from typing import TYPE_CHECKING, Dict, List, Optional, Set
-
+import functools
 from skyplane import exceptions
 from skyplane.api.config import TransferConfig
 from skyplane.chunk import ChunkRequest, ChunkState
 from skyplane.utils import logger, imports
 from skyplane.utils.fn import do_parallel
 from skyplane.api.usage import UsageClient
-from skyplane.api.tracker import TransferProgressTracker, TransferHook
+from skyplane.api.tracker import TransferProgressTracker, TransferHook, EmptyTransferHook
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from skyplane.utils.definitions import GB, tmp_log_dir
 from datetime import datetime
@@ -39,7 +39,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
         logger.fs.debug(f"[TransferProgressTracker] Transfer config: {transfer_config}")
 
         # transfer state
-        self.job_chunk_requests: Dict[str, List[ChunkRequest]] = {}
+        self.job_chunk_requests: Dict[str, Dict[str, ChunkRequest]] = {}
 
         # each job can have multiple destination
         self.dst_regions = set([sink.region for sink in self.dataplane.topology.sink_instances()])
@@ -66,7 +66,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
             bytes_total_per_job[job_uuid] = sum(
                 [
                     cr.chunk.chunk_length_bytes
-                    for cr in self.job_chunk_requests[job_uuid]
+                    for cr in self.job_chunk_requests[job_uuid].values()
                     if cr.chunk.chunk_id in self.dst_job_complete_chunk_ids[dst_region][job_uuid]
                 ]
             )
@@ -92,21 +92,36 @@ class BCTransferProgressTracker(TransferProgressTracker):
         }
         session_start_timestamp_ms = int(time.time() * 1000)
         try:
+            # pre-dispatch chunks to begin pre-buffering chunks
+            cr_streams = {
+                job_uuid: job.broadcast_dispatch(self.dataplane, transfer_config=self.transfer_config)
+                for job_uuid, job in self.jobs.items()
+            }
             for job_uuid, job in self.jobs.items():
                 logger.fs.debug(f"[TransferProgressTracker] Dispatching job {job.uuid}")
-                self.job_chunk_requests[job_uuid] = list(job.broadcast_dispatch(self.dataplane, transfer_config=self.transfer_config))
+
+                self.job_chunk_requests[job_uuid] = {}
+
+                job_pending_chunk_ids = set()
+                for cr in cr_streams[job_uuid]:
+                    chunks_dispatched = [cr.chunk]
+                    self.job_chunk_requests[job_uuid][cr.chunk.chunk_id] = cr
+                    job_pending_chunk_ids.add(cr.chunk.chunk_id)
+                    self.hooks.on_chunk_dispatched(chunks_dispatched)
 
                 for dst_region in self.dst_regions:
-                    self.dst_job_pending_chunk_ids[dst_region][job_uuid] = set(
-                        [cr.chunk.chunk_id for cr in self.job_chunk_requests[job_uuid]]
-                    )
                     self.dst_job_complete_chunk_ids[dst_region][job_uuid] = set()
-                    logger.fs.debug(
-                        f"[TransferProgressTracker] Job {job.uuid} dispatched with {len(self.job_chunk_requests[job_uuid])} chunk requests"
-                    )
+                    self.dst_job_pending_chunk_ids[dst_region][job_uuid] = set()
+
+                    self.dst_job_pending_chunk_ids[dst_region][job_uuid].update([i for i in job_pending_chunk_ids])
+
+                logger.fs.debug(f"[TransferProgressTracker] Job {job.uuid} dispatched with {len(self.job_chunk_requests[job_uuid])}")
+
         except Exception as e:
             UsageClient.log_exception("dispatch job", e, args, self.dataplane.src_region_tag, ":", session_start_timestamp_ms)
             raise e
+
+        self.hooks.on_dispatch_end()
 
         def monitor_single_dst_helper(dst_region):
             start_time = time.time()
@@ -191,6 +206,11 @@ class BCTransferProgressTracker(TransferProgressTracker):
         pprint(f"Copying gateway std err files to gateway_{instance.uuid()}.stderr")
         instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 
+    @property
+    @functools.lru_cache(maxsize=None)
+    def _chunk_to_job_map(self):
+        return {chunk_id: job_uuid for job_uuid, cr_dict in self.job_chunk_requests.items() for chunk_id in cr_dict.keys()}
+
     @imports.inject("pandas")
     def monitor_transfer(pd, self, dst_region):
         # todo implement transfer monitoring to update job_complete_chunk_ids and job_pending_chunk_ids while the transfer is in progress
@@ -209,7 +229,6 @@ class BCTransferProgressTracker(TransferProgressTracker):
             # check for errors and exit if there are any (while setting debug flags)
             errors = self.dataplane.check_error_logs()
             if any(errors.values()):
-                self.errors = errors
                 logger.warning("Copying gateway logs")
                 do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=-1)
                 self.errors = errors
@@ -234,12 +253,31 @@ class BCTransferProgressTracker(TransferProgressTracker):
             # update job_complete_chunk_ids and job_pending_chunk_ids
             for job_uuid, job in self.jobs.items():
                 job_complete_chunk_ids = set(chunk_id for chunk_id in completed_chunk_ids if self._chunk_to_job_map[chunk_id] == job_uuid)
+
+                # print("Completed chunk ids: ", job_complete_chunk_ids)
+
+                # TODO: this is wrong, should wait until these chunks finish
+                new_chunk_ids = (
+                    self.dst_job_complete_chunk_ids[dst_region][job_uuid]
+                    .union(job_complete_chunk_ids)
+                    .difference(self.dst_job_complete_chunk_ids[dst_region][job_uuid])
+                )
+                completed_chunks = []
+                for id in new_chunk_ids:
+                    completed_chunks.append(self.job_chunk_requests[job_uuid][id].chunk)
+                self.hooks.on_chunk_completed(completed_chunks)
+
                 self.dst_job_complete_chunk_ids[dst_region][job_uuid] = self.dst_job_complete_chunk_ids[dst_region][job_uuid].union(
                     job_complete_chunk_ids
                 )
                 self.dst_job_pending_chunk_ids[dst_region][job_uuid] = self.dst_job_pending_chunk_ids[dst_region][job_uuid].difference(
                     job_complete_chunk_ids
                 )
+                # print(f"Complete chunk id for {dst_region} and {job_uuid}: ", self.dst_job_complete_chunk_ids[dst_region][job_uuid])
+                # print(f"Pending chunk id for {dst_region} and {job_uuid}: ", self.dst_job_pending_chunk_ids[dst_region][job_uuid])
+
+            # TODO: FIX THIS, can't call it from the outside script as it gets stuck
+            print(f"{(self.query_bytes_remaining() / (2 ** 30)):.5f}GB left")
 
             # sleep
             time.sleep(0.05)
@@ -261,12 +299,12 @@ class BCTransferProgressTracker(TransferProgressTracker):
         for dst_region in self.dst_regions:
             for job_uuid in self.dst_job_pending_chunk_ids[dst_region].keys():
                 bytes_remaining_per_job[job_uuid] = []
-                # job_uuid --> [dst1_remaining_bytes, dst2_remaining_bytes, ...]
+                # job_uuid --> List[dst1_remaining_bytes, dst2_remaining_bytes, ...]
                 bytes_remaining_per_job[job_uuid].append(
                     sum(
                         [
                             cr.chunk.chunk_length_bytes
-                            for cr in self.job_chunk_requests[job_uuid]
+                            for cr in self.job_chunk_requests[job_uuid].values()
                             if cr.chunk.chunk_id in self.dst_job_pending_chunk_ids[dst_region][job_uuid]
                         ]
                     )

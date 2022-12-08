@@ -7,7 +7,7 @@ from multiprocessing import Queue
 from queue import Empty
 from traceback import TracebackException
 from typing import Dict, List, Tuple, Optional
-
+import json
 from flask import Flask, jsonify, request
 from werkzeug.serving import make_server
 
@@ -38,7 +38,7 @@ class GatewayDaemonAPI(threading.Thread):
         gateway_receiver: GatewayReceiver,
         error_event,
         error_queue: Queue,
-        upload_ids_map: Optional[Dict[str, str]] = None, 
+        upload_ids_map: Optional[Dict[str, str]] = None,
         terminal_operators: Optional[Dict[str, List[str]]] = None,
         host="0.0.0.0",
         port=8081,
@@ -72,9 +72,6 @@ class GatewayDaemonAPI(threading.Thread):
         self.sender_compressed_sizes: Dict[str, Tuple[int, int]] = {}  # TODO: maintain as chunks are completed
         self.chunk_status_log: List[Dict] = []
         self.chunk_completions = defaultdict(list)
-
-        # upload id mappings 
-        self.upload_ids_map = upload_ids_map
 
         # socket profiles
         # TODO: actually fill these out
@@ -273,9 +270,13 @@ class GatewayDaemonAPI(threading.Thread):
         # post the upload ids mapping
         @app.route("/api/v1/upload_id_maps", methods=["POST"])
         def update_upload_ids_mapping():
-            self.upload_ids_map = (request.json)
-            print(f"[gateway_api] Gateway add upload IDs mapping {self.upload_ids_map}")
-            print(f"[gateway_api] id of chunk store: {id(self.chunk_store)}")
+            logging.debug(f"[gateway_api] Recieved id mapping request {request.json}")
+            upload_id_file_path = self.chunk_store.get_upload_id_map_path()
+
+            with upload_id_file_path.open("w") as f:
+                f.write(json.dumps(request.json))
+
+            print(f"[gateway_api] Gateway add upload IDs to {upload_id_file_path}")
             return jsonify({"status": "ok"})
 
     def register_error_routes(self, app):

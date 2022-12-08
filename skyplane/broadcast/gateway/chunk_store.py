@@ -73,5 +73,8 @@ class ChunkStore:
     def remaining_bytes(self):
         return int(subprocess.check_output(["df", "-k", "--output=avail", self.chunk_dir]).decode().strip().split()[-1]) * 1024
 
+    def get_upload_id_map_path(self) -> Path:
+        return self.chunk_dir / f"upload_id_map.json"
+
     def get_chunk_file_path(self, chunk_id: str) -> Path:
         return self.chunk_dir / f"{chunk_id}.chunk"

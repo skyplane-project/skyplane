@@ -15,7 +15,7 @@ if __name__ == "__main__":
         # type="ILP",
         dst_cloud_providers=["aws", "aws"],
         dst_regions=dst_regions,
-        n_vms=1
+        n_vms=1,
     )
 
     with dp.auto_deprovision():
@@ -26,8 +26,12 @@ if __name__ == "__main__":
         # dest1_file = "s3://broadcast-experiment-ap-south-1/chunks"
         # dest2_file = "s3://broadcast-experiment-us-east-2/chunks/"
 
-        source_file = "s3://skyplane-broadcast/OPT-66B/"
-        dest_files = ["s3://awsbucketsky2/OPT-66B/", "s3://awsbucketsky3/OPT-66B/"]
+        # source_file = "s3://skyplane-broadcast/OPT-66B/"
+        # dest_files = ["s3://awsbucketsky2/OPT-66B/", "s3://awsbucketsky3/OPT-66B/"]
+
+        # Able to transfer 2 9.1GB data now
+        source_file = "s3://awsbucketsky/test_multipart/"
+        dest_files = ["s3://awsbucketsky2/test_multipart/", "s3://awsbucketsky3/test_multipart/"]
 
         print(source_file)
         print(dest_files)

@@ -21,9 +21,10 @@ class Chunk:
     md5_hash: Optional[bytes] = None  # 128 bits
 
     # multi-part upload/download info
+    multi_part: Optional[bool] = False
     file_offset_bytes: Optional[int] = None
     part_number: Optional[int] = None
-    upload_id: Optional[str] = None # TODO: for broadcast, this is not used 
+    upload_id: Optional[str] = None  # TODO: for broadcast, this is not used
 
     def to_wire_header(self, n_chunks_left_on_socket: int, wire_length: int, is_compressed: bool = False):
         return WireProtocolHeader(

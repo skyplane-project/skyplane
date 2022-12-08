@@ -503,12 +503,25 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         )
 
         obj_store_interface = self.get_obj_store_interface(self.bucket_region, self.bucket_name)
-        key_to_upload_id = self.bucket_region + ":" + self.bucket_name + ":" + chunk_req.chunk.dest_key
-        print(f"TYPE: {type(self.chunk_store.get_upload_ids_map())}")
-        print(f"id of operator chunk store: {id(self.chunk_store)}")
-        logger.debug(f"[obj_store:{self.worker_id}] key {key_to_upload_id}, map: {self.chunk_store.get_upload_ids_map()}")
 
-        upload_id = self.chunk_store.get_upload_ids_map()[key_to_upload_id]
+        if chunk_req.chunk.multi_part:
+            key_to_upload_id = self.bucket_region + ":" + self.bucket_name + ":" + chunk_req.chunk.dest_key
+            logger.debug(f"[obj_store:{self.worker_id}] key {key_to_upload_id}, multi-part is enabled")
+
+            map_file_path = self.chunk_store.get_upload_id_map_path()
+            if not os.path.exists(map_file_path):
+                logger.debug(f"[obj_store:{self.worker_id}]: map path {map_file_path} does not exists")
+                return False
+
+            with open(map_file_path, "rb") as f:
+                upload_ids_map = json.load(f)
+
+            # logger.debug(f"[obj_store:{self.worker_id}] all upload id map: {upload_ids_map}")
+            upload_id = str(upload_ids_map[key_to_upload_id])
+            logger.debug(f"[obj_store:{self.worker_id}] key {key_to_upload_id}, map to upload id: {upload_id}, type: {type(upload_id)}")
+
+        else:
+            upload_id = None
 
         retry_backoff(
             partial(

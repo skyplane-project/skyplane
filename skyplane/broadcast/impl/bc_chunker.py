@@ -72,6 +72,7 @@ class BCChunker(Chunker):
                     partition_id=str(part_num % self.num_partitions),
                     chunk_length_bytes=file_size_bytes,
                     part_number=part_num,
+                    multi_part=True,
                 )
                 offset += file_size_bytes
                 parts.append(part_num)
@@ -89,6 +90,7 @@ class BCChunker(Chunker):
                 )
             )
             self.all_mappings_for_upload_ids.append(region_bucketkey_to_upload_id)
+            # print("Multipart upload request: ", self.multipart_upload_requests)
 
     def chunk(
         self, transfer_pair_generator: Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]
@@ -120,9 +122,9 @@ class BCChunker(Chunker):
                 # dummy dst_obj
                 multipart_send_queue.put((src_obj, dst_obj))
             else:
-                # Ignore the pair of folders 
+                # Ignore the pair of folders
                 if src_obj.size == 0:
-                    assert dst_obj.size is None 
+                    assert dst_obj.size is None
                 else:
                     yield Chunk(
                         src_key=src_obj.key,
