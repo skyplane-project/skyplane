@@ -82,7 +82,8 @@ class ChunkStore:
             return remaining_bytes
         except Exception as e:
             raw_output = subprocess.check_output(["df", "-k", "--output=avail", self.chunk_dir]).decode().strip()
-            assert False, f"{str(e)}: failed to parse {raw_output}"
+            print(f"{str(e)}: failed to parse {raw_output}")
+            return 0
 
     def get_upload_id_map_path(self) -> Path:
         return self.chunk_dir / f"upload_id_map.json"
