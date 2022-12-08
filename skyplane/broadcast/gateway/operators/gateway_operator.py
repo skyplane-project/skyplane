@@ -451,7 +451,8 @@ class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
         #while self.chunk_store.remaining_bytes() < chunk_req.chunk.chunk_length_bytes * self.n_processes:
         #    time.sleep(0.1)
 
-        
+       
+        assert chunk_req.chunk.chunk_length_bytes > 0, f"Cannot have size 0 chunk {chunk_req.chunk}"
         while True: 
             #if self.chunk_store.remaining_bytes() < chunk_req.chunk.chunk_length_bytes * self.n_processes:
             #    time.sleep(0.1) 
@@ -468,7 +469,14 @@ class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
                     ),
                     max_retries=1,  # TODO: fix this - not a good solution
                 )
-                break
+
+                # ensure properly downloaded
+                file_size = os.path.getsize(fpath)
+                if file_size == chunk_req.chunk.chunk_length_bytes:
+                    break
+                else: 
+                    print("error wrong downloaded size", chunk.chunk_length_bytes, file_size)
+         
             except Exception as e:
                 print("Failed", e)
                 time.sleep(0.1)

@@ -201,6 +201,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
         (self.transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
 
     def copy_log(self, instance):
+        print("COPY DATA TO", self.transfer_dir  + f"gateway_{instance.uuid()}.stdout")
         instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
         pprint(f"Copying gateway std out files to gateway_{instance.uuid()}.stdout")
         instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
@@ -281,13 +282,22 @@ class BCTransferProgressTracker(TransferProgressTracker):
                 # print(f"Pending chunk id for {dst_region} and {job_uuid}: ", self.dst_job_pending_chunk_ids[dst_region][job_uuid])
 
             # TODO: FIX THIS, can't call it from the outside script as it gets stuck
-            bytes_remaining, bytes_remaining_dict = self.query_bytes_remaining()
-            print(f"MAX: {( bytes_remaining / (2 ** 30)):.5f}GB left")
-            print(f"Remaining bytes per destination (GB): ")
+            try:
+                bytes_remaining, bytes_remaining_dict = self.query_bytes_remaining()
+                print(f"MAX: {( bytes_remaining / (2 ** 30)):.5f}GB left")
+                print(f"Remaining bytes per destination (GB): ")
 
-            for key, value in bytes_remaining_dict.items():
-                bytes_remaining_dict[key] = [round(v / (2 ** 30), 5) for v in value]
-            pprint(bytes_remaining_dict)
+                for key, value in bytes_remaining_dict.items():
+                    bytes_remaining_dict[key] = [round(v / (2 ** 30), 5) for v in value]
+                pprint(bytes_remaining_dict)
+            except Exception as e:
+                print(e)
+                print("copying gateway logs")
+                logger.warning("Copying gateway logs")
+                do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=-1)
+                self.errors = errors
+                pprint(errors)
+                raise exceptions.SkyplaneGatewayException("Transfer failed with errors", errors)
 
             # sleep
             time.sleep(0.05)
@@ -332,4 +342,3 @@ class BCTransferProgressTracker(TransferProgressTracker):
             for job_uuid in self.dst_job_complete_chunk_ids[dst].keys():
                 bytes_remaining_per_dst[dst].append(bytes_remaining_per_job[job_uuid][i])
 
-        return sum([max(li) for li in bytes_remaining_per_job.values()]), bytes_remaining_per_dst

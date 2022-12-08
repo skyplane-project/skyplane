@@ -27,9 +27,7 @@ from skyplane.broadcast.gateway.operators.gateway_receiver import GatewayReceive
 from collections import defaultdict
 
 # TODO: add default partition ID to main
-# create gateway broadcast
-
-
+# create gateway br
 class GatewayDaemon:
     def __init__(
         self,

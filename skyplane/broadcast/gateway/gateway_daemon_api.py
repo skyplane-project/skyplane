@@ -95,6 +95,10 @@ class GatewayDaemonAPI(threading.Thread):
                 state = elem["state"]
                 chunk_id = elem["chunk_id"]
 
+                if self.chunk_status[chunk_id] == ChunkState.complete.name:
+                    assert not os.path.exists(chunk_file_path), f"Chunk path still exists even though completed {chunk_file_path}"
+                    continue
+
                 # if terminal operator, then mark a chunk completion
                 if handle in self.terminal_operators[elem["partition"]] and state == ChunkState.complete.name:
                     self.chunk_completions[chunk_id].append(handle)
