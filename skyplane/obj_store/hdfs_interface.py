@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Iterator, List, Optional
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
+import mimetypes
 
 
 @dataclass
@@ -16,7 +17,7 @@ class HDFSInterface(ObjectStoreInterface):
     def __init__(self, path, port=8020):
         self.hdfs_path = path
         self.port = port
-        self.hdfs = fs.HadoopFileSystem(host=self.path, port=self.port, extra_conf={"dfs.permissions.enabled": "false"})
+        self.hdfs = fs.HadoopFileSystem(host=self.hdfs_path, port=self.port, user="hadoop", extra_conf={"dfs.permissions.enabled": "false"})
 
     def path(self) -> str:
         return self.hdfs_path
@@ -33,18 +34,36 @@ class HDFSInterface(ObjectStoreInterface):
             return True
         except NoSuchObjectException:
             return False
+        
+    def region_tag(self) -> str:
+        return ""
 
+    def bucket(self) -> str:
+        return ""
+        
+    def create_bucket(self, region_tag: str):
+        return None
+
+    def delete_bucket(self):
+        return None
+
+    def bucket_exists(self) -> bool:
+        return True
+    
     def get_obj_size(self, obj_name) -> int:
         return self.get_obj_metadata(obj_name).size
 
     def get_obj_last_modified(self, obj_name):
         return self.get_obj_metadata(obj_name).mtime
-
+    
+    def get_obj_mime_type(self, obj_name):
+        return mimetypes.guess_type(obj_name)[0]
+    
     def delete_objects(self, keys: List[str]):
         for key in keys:
             self.hdfs.delete_file(key)
 
-    def download_file(
+    def download_object(
         self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5: bool = False
     ):
         with self.hdfs.open_input_stream(src_object_name) as f1:
@@ -56,7 +75,7 @@ class HDFSInterface(ObjectStoreInterface):
                     b = f1.read(nbytes=size_bytes)
         return None, None
 
-    def upload_file(
+    def upload_object(
         self,
         src_file_path,
         dst_object_name,
