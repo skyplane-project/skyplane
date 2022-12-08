@@ -15,20 +15,20 @@ class LocalFile:
 
     @property
     def exists(self):
-        return os.access(self.path, os.F_OK)
-    
+        raise NotImplementedError()
+
     def write_permissions(self):
-        return os.access(self.path, os.W_OK)
+        raise NotImplementedError()
 
     def real_path(self):
-        return os.path.realpath(self.path)
+        raise NotImplementedError()
 
 
 class FileSystemInterface:
     def path(self) -> str:
         raise NotImplementedError()
 
-    def list_files(self, prefix="") -> Iterator[ObjectStoreObject]:
+    def list_files(self, prefix="") -> Iterator[LocalFile]:
         raise NotImplementedError()
 
     def get_file_size(self, file_name) -> int:
@@ -53,3 +53,13 @@ class FileSystemInterface:
     def complete_multipart_upload(self, dst_object_name: str, upload_id: str) -> None:
         raise ValueError("Multipart uploads not supported")
 
+    @staticmethod
+    def create(fs: str, fs: str, path: str, port: int = None):
+        if fs.startswith("hdfs"):
+            from skyplane.obj_store.hdfs_interface import HDFSInterface
+
+            return HDFSInterface(path, port)
+        else:
+            from skyplane.obj_store.posix_file_interface import POSIXInterface
+
+            return POSIXInterface(path)
