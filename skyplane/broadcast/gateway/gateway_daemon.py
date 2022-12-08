@@ -89,7 +89,22 @@ class GatewayDaemon:
         atexit.register(self.api_server.shutdown)
         logger.info(f"[gateway_daemon] API started at {self.api_server.url}")
 
-    def create_gateway_operators(self, gateway_program: Dict):
+    def print_operator_graph(self):
+        def print_operator_graph_helper(partition, queue: GatewayQueue, prefix: str):
+            if queue is None:
+                return
+            print(f"{prefix} {partition}: Input queue:", queue, "handles:", queue.get_handles())
+            for handle in queue.get_handles():
+                print(f"{prefix} {partition}: Operator {handle}")
+                # TODO: causes error sometimes for mux_or
+                next_queue = self.operators[handle].output_queue
+                print_operator_graph_helper(partition, next_queue, prefix + "--")
+
+        for partition, queue in self.chunk_store.chunk_requests.items():
+            print(f"Partition {partition}, {queue}")
+            print_operator_graph_helper(partition, queue, "")
+
+	def create_gateway_operators(self, gateway_program: Dict):
         """Create a gateway plan from a gateway program"""
 
         operators = {}
@@ -98,6 +113,7 @@ class GatewayDaemon:
             # create output data queue
             if len(operator["children"]) == 0:
                 return None
+            print("get output queue", operator["op_type"], operator["children"][0]["op_type"])
             if operator["children"][0]["op_type"] == "mux_and":
                 return GatewayANDQueue()
             return GatewayQueue()
@@ -113,6 +129,7 @@ class GatewayDaemon:
             for op in program:
 
                 handle = op["op_type"] + "_" + op["handle"]
+                print(f"Input queue {input_queue}, adding handle {handle} (current handles {input_queue.get_handles()}")
                 input_queue.register_handle(handle)
 
                 # get child operators
@@ -120,15 +137,18 @@ class GatewayDaemon:
 
                 if op["op_type"] == "mux_or":
                     # parent must have been mux_and
-                    assert isinstance(input_queue, GatewayANDQueue), f"Parent must have been mux_and {handle}, instead was {input_queue}"
+                    assert isinstance(
+                        input_queue, GatewayANDQueue
+                    ), f"Parent must have been mux_and {handle}, instead was {input_queue} {gateway_program}"
 
-                    input_queue = input_queue.get_handle_queue(handle)
                     # recurse to children with single queue
-                    create_gateway_operators_helper(input_queue, child_operators, partition_id)
+                    create_gateway_operators_helper(input_queue.get_handle_queue(handle), child_operators, partition_id)
                     continue
 
                 # create output data queue
                 output_queue = create_output_queue(op)
+                print(f"Input queue {input_queue} handle {handle}: created output queue {output_queue}")
+                print(f"Input queue {input_queue} handle {handle}: has children {child_operators}")
                 if output_queue is None:
                     # track what opeartors need to complete processing the chunk
                     self.terminal_operators[partition_id].append(handle)
@@ -220,8 +240,16 @@ class GatewayDaemon:
             partition = str(partition)
 
             # create initial queue for partition
-            print(f"Addining partition {partition}")
-            self.chunk_store.add_partition(partition)
+            if program[0]["op_type"] == "mux_and":
+                queue = GatewayANDQueue()
+                print(f"First operator is mux_and: queue {queue}")
+                assert len(program) == 1, f"mux_and cannot have siblings"
+                self.chunk_store.add_partition(partition, queue)
+                program = program[0]["children"]
+            else:
+                queue = GatewayQueue()
+                print(f"First operator is ", program[0], "queue", queue)
+                self.chunk_store.add_partition(partition, queue)
 
             create_gateway_operators_helper(
                 self.chunk_store.chunk_requests[partition],  # incoming chunk requests for partition
