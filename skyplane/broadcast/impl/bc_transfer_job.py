@@ -50,6 +50,7 @@ class BCTransferJob:
         self.dst_regions, self.dst_ifaces, self.dst_prefixes = {}, {}, {}  # bucket_dst --> dst_region
         for dst_path in self.dst_paths:
             provider_dst, bucket_dst, dst_prefix = parse_path(dst_path)
+            print(f"Provider dst: {provider_dst}, bucket dst: {bucket_dst}, dst_prefix: {dst_prefix}")
             self.dst_ifaces[bucket_dst] = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst)
             self.dst_prefixes[bucket_dst] = dst_prefix
             self.dst_regions[bucket_dst] = self.dst_ifaces[bucket_dst].region_tag()
@@ -212,19 +213,21 @@ class BCCopyJob(BCTransferJob):
 
             do_parallel(complete_fn, batches, n=-1)
 
-    def bc_verify(self, dst_region: str):
+    def bc_verify(self, dst_region: str): 
         # NOTE: assume dst keys are the same across destinations?
-        dst_keys = {dst_o.key: src_o for src_o, dst_o in self.transfer_list}
-        dest_iface_list = [d for d in self.dst_ifaces.values() if d.region_tag() == dst_region]
+        dst_keys = {dst_o.key: src_o for src_o, dst_o in self.transfer_list if src_o.size != 0}
+        print("[verify] Dst keys: ", dst_keys)
+
+        dest_iface_list = set(d for d in self.dst_ifaces.values() if d.region_tag() == dst_region)
 
         for dest_iface in dest_iface_list:
-            dest_iface.region_tag()
             for obj in dest_iface.list_objects(self.dst_prefixes[dest_iface.bucket()]):
                 # check metadata (src.size == dst.size) && (src.modified <= dst.modified)
                 src_obj = dst_keys.get(obj.key)
                 if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:
                     del dst_keys[obj.key]
             if dst_keys:
+                print("[verify] object verification failed: ", [obj.key for obj in dst_keys.values()])
                 raise exceptions.TransferFailedException(
                     f"{len(dst_keys)} objects failed verification", [obj.key for obj in dst_keys.values()]
                 )

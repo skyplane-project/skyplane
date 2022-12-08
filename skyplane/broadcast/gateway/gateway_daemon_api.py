@@ -38,7 +38,6 @@ class GatewayDaemonAPI(threading.Thread):
         gateway_receiver: GatewayReceiver,
         error_event,
         error_queue: Queue,
-        upload_ids_map: Optional[Dict[str, str]] = None,
         terminal_operators: Optional[Dict[str, List[str]]] = None,
         host="0.0.0.0",
         port=8081,

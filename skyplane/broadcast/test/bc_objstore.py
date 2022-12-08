@@ -5,8 +5,10 @@ from skyplane.broadcast.bc_client import SkyplaneBroadcastClient
 
 if __name__ == "__main__":
     src_region = "us-east-1"
-    #dst_regions = ["us-west-1", "us-west-2"]
-    dst_regions = ["ap-east-1", "ap-northeast-1"]
+    # dst_regions = ["ap-southeast-2", "ap-south-1", "ap-northeast-3", "ap-northeast-2", "ap-northeast-1"] 
+    dst_regions = ["ap-northeast-3", "ap-northeast-2"] 
+    # dst_regions = ["us-west-1", "us-west-2"]
+    # dst_regions = ["ap-east-1", "ap-northeast-1"]
 
     client = SkyplaneBroadcastClient(aws_config=skyplane.AWSConfig(), multipart_enabled=True)
     print(f"Log dir: {client.log_dir}/client.log")
@@ -14,6 +16,7 @@ if __name__ == "__main__":
         src_cloud_provider="aws",
         src_region=src_region,
         # type="ILP",
+        # dst_cloud_providers=["aws", "aws", "aws", "aws", "aws", "aws"],
         dst_cloud_providers=["aws", "aws"],
         dst_regions=dst_regions,
         n_vms=2,
@@ -30,12 +33,15 @@ if __name__ == "__main__":
         # source_file = "s3://skyplane-broadcast/OPT-66B/"
         # dest_files = ["s3://awsbucketsky2/OPT-66B/", "s3://awsbucketsky3/OPT-66B/"]
 
+        source_file = "s3://broadcast-exp1-ap-east-1/OPT-66B/"
+        dest_files = [f"s3://broadcast-exp1-{d}/OPT-66B/" for d in dst_regions]
+
         # Able to transfer 2 9.1GB data now
         #source_file = "s3://awsbucketsky/test_multipart/"
         #dest_files = ["s3://awsbucketsky2/test_multipart/", "s3://awsbucketsky3/test_multipart/"]
 
-        source_file = "s3://skyplane-broadcast/OPT-66B/"
-        dest_files = ["s3://broadcast-ap-east-1/OPT-66B/", "s3://broadcast-ap-northeast-1/OPT-66B/"]
+        # source_file = "s3://skyplane-broadcast/OPT-66B/"
+        # dest_files = ["s3://broadcast-ap-east-1/OPT-66B/", "s3://broadcast-ap-northeast-1/OPT-66B/"]
 
         print(source_file)
         print(dest_files)
@@ -58,14 +64,14 @@ if __name__ == "__main__":
                         print(f"Error on {ip}: {error}")
                 break
 
-            bytes_remaining = tracker.query_bytes_remaining()
+            bytes_remaining, _ = tracker.query_bytes_remaining()
             timestamp = time.strftime("%H:%M:%S", time.localtime())
             if bytes_remaining is None:
                 print(f"{timestamp} Transfer not yet started")
             elif bytes_remaining > 0:
                 print(f"{timestamp} {(bytes_remaining / (2 ** 30)):.5f}GB left")
             else:
-                break
+                break 
             time.sleep(1)
         tracker.join()
         print("Transfer complete!")
