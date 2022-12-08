@@ -228,7 +228,9 @@ class BCTransferProgressTracker(TransferProgressTracker):
 
             # check for errors and exit if there are any (while setting debug flags)
             errors = self.dataplane.check_error_logs()
+            print("ERRORS", errors)
             if any(errors.values()):
+                print("copying gateway logs")
                 logger.warning("Copying gateway logs")
                 do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=-1)
                 self.errors = errors

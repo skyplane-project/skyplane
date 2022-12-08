@@ -41,6 +41,12 @@ class ChunkStore:
             raise ValueError(f"Partition {partition_id} already exists")
         self.chunk_requests[partition_id] = GatewayQueue()
 
+    def add_partition(self, partition_id: str, queue: Optional[GatewayQueue]):
+        """Create a queue for this partition."""
+        if partition_id in self.chunk_requests:
+            raise ValueError(f"Partition {partition_id} already exists")
+        self.chunk_requests[partition_id] = queue
+
     def add_chunk_request(self, chunk_request: ChunkRequest, state: ChunkState = ChunkState.registered):
         """Enqueue new chunk request from Gateway API"""
         if chunk_request.chunk.partition_id not in self.chunk_requests:
@@ -71,7 +77,12 @@ class ChunkStore:
 
     # Memory space calculation
     def remaining_bytes(self):
-        return int(subprocess.check_output(["df", "-k", "--output=avail", self.chunk_dir]).decode().strip().split()[-1]) * 1024
+        try:
+            remaining_bytes = int(subprocess.check_output(["df", "-k", "--output=avail", self.chunk_dir]).decode().strip().split()[-1]) * 1024
+            return remaining_bytes
+        except Exception as e:
+            raw_output = subprocess.check_output(["df", "-k", "--output=avail", self.chunk_dir]).decode().strip()
+            assert False, f"{str(e)}: failed to parse {raw_output}"
 
     def get_upload_id_map_path(self) -> Path:
         return self.chunk_dir / f"upload_id_map.json"

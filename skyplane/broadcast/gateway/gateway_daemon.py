@@ -104,7 +104,8 @@ class GatewayDaemon:
             print(f"Partition {partition}, {queue}")
             print_operator_graph_helper(partition, queue, "")
 
-	def create_gateway_operators(self, gateway_program: Dict):
+
+    def create_gateway_operators(self, gateway_program: Dict):
         """Create a gateway plan from a gateway program"""
 
         operators = {}
