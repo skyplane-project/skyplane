@@ -14,10 +14,11 @@ class HDFSFile(ObjectStoreObject):
 
 
 class HDFSInterface(ObjectStoreInterface):
-    def __init__(self, path, port=8020):
-        self.hdfs_path = path
+    def __init__(self, host, path, port=8020):
+        self.host = host
         self.port = port
-        self.hdfs = fs.HadoopFileSystem(host=self.hdfs_path, port=self.port, user="hadoop", extra_conf={"dfs.permissions.enabled": "false"})
+        self.hdfs_path = path
+        self.hdfs = fs.HadoopFileSystem(host=f"{self.host}/{self.hdfs_path}", port=self.port, user="hadoop", extra_conf={"dfs.permissions.enabled": "false"})
 
     def path(self) -> str:
         return self.hdfs_path
@@ -73,7 +74,7 @@ class HDFSInterface(ObjectStoreInterface):
                 while b:
                     f2.write(b)
                     b = f1.read(nbytes=size_bytes)
-        return None, None
+        return self.get_obj_mime_type(src_object_name), None
 
     def upload_object(
         self,
@@ -88,7 +89,6 @@ class HDFSInterface(ObjectStoreInterface):
             with self.hdfs.open_output_stream(dst_object_name) as f2:
                 b = f1.read()
                 f2.write(b)
-        return None, None
 
     def read_file(self, file_name):
         with self.hdfs.open_input_stream(file_name) as f:
