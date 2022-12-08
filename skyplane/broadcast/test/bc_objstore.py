@@ -5,8 +5,8 @@ from skyplane.broadcast.bc_client import SkyplaneBroadcastClient
 
 if __name__ == "__main__":
     src_region = "us-east-1"
-    #dst_regions = ["us-west-1", "us-west-2"]
-    dst_regions = ["ap-east-1", "ap-northeast-1"]
+    dst_regions = ["us-west-1", "us-west-2"]
+    # dst_regions = ["ap-east-1", "ap-northeast-1"]
 
     client = SkyplaneBroadcastClient(aws_config=skyplane.AWSConfig(), multipart_enabled=True)
     print(f"Log dir: {client.log_dir}/client.log")
@@ -27,15 +27,15 @@ if __name__ == "__main__":
         # dest1_file = "s3://broadcast-experiment-ap-south-1/chunks"
         # dest2_file = "s3://broadcast-experiment-us-east-2/chunks/"
 
-        # source_file = "s3://skyplane-broadcast/OPT-66B/"
-        # dest_files = ["s3://awsbucketsky2/OPT-66B/", "s3://awsbucketsky3/OPT-66B/"]
+        source_file = "s3://skyplane-broadcast/OPT-66B/"
+        dest_files = ["s3://awsbucketsky2/OPT-66B/", "s3://awsbucketsky3/OPT-66B/"]
 
         # Able to transfer 2 9.1GB data now
         #source_file = "s3://awsbucketsky/test_multipart/"
         #dest_files = ["s3://awsbucketsky2/test_multipart/", "s3://awsbucketsky3/test_multipart/"]
 
-        source_file = "s3://skyplane-broadcast/OPT-66B/"
-        dest_files = ["s3://broadcast-ap-east-1/OPT-66B/", "s3://broadcast-ap-northeast-1/OPT-66B/"]
+        # source_file = "s3://skyplane-broadcast/OPT-66B/"
+        # dest_files = ["s3://broadcast-ap-east-1/OPT-66B/", "s3://broadcast-ap-northeast-1/OPT-66B/"]
 
         print(source_file)
         print(dest_files)

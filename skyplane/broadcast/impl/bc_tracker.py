@@ -145,6 +145,16 @@ class BCTransferProgressTracker(TransferProgressTracker):
                 raise e
             end_time = time.time()
 
+            runtime_s = end_time - start_time
+            # transfer successfully completed
+            transfer_stats = {
+                "dst_region": dst_region,
+                "total_runtime_s": round(runtime_s, 4),
+                "throughput_gbits": round(self.calculate_size(dst_region) * 8 / runtime_s, 4),
+            }
+            print("Individual transfer statistics")
+            pprint(transfer_stats)
+
             try:
                 for job in self.jobs.values():
                     logger.fs.debug(f"[TransferProgressTracker] Finalizing job {job.uuid}")
@@ -161,13 +171,6 @@ class BCTransferProgressTracker(TransferProgressTracker):
                 UsageClient.log_exception("verify job", e, args, self.dataplane.src_region_tag, dst_region, session_start_timestamp_ms)
                 raise e
 
-            runtime_s = end_time - start_time
-            # transfer successfully completed
-            transfer_stats = {
-                "dst_region": dst_region,
-                "total_runtime_s": round(runtime_s, 4),
-                "throughput_gbits": round(self.calculate_size(dst_region) * 8 / runtime_s, 4),
-            }
             UsageClient.log_transfer(transfer_stats, args, self.dataplane.src_region_tag, dst_region, session_start_timestamp_ms)
             return transfer_stats
 
@@ -182,8 +185,6 @@ class BCTransferProgressTracker(TransferProgressTracker):
             e2e_end_time = time.time()
         print(f"End to end time: {round(e2e_end_time - e2e_start_time, 4)}s\n")
         print(f"Transfer result:")
-        from pprint import pprint
-
         for i in results:
             pprint(i)
             print()
@@ -228,7 +229,8 @@ class BCTransferProgressTracker(TransferProgressTracker):
 
             # check for errors and exit if there are any (while setting debug flags)
             errors = self.dataplane.check_error_logs()
-            print("ERRORS", errors)
+            # print("ERRORS", errors)
+            
             if any(errors.values()):
                 print("copying gateway logs")
                 logger.warning("Copying gateway logs")
