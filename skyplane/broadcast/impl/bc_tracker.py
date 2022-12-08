@@ -281,7 +281,13 @@ class BCTransferProgressTracker(TransferProgressTracker):
                 # print(f"Pending chunk id for {dst_region} and {job_uuid}: ", self.dst_job_pending_chunk_ids[dst_region][job_uuid])
 
             # TODO: FIX THIS, can't call it from the outside script as it gets stuck
-            print(f"{(self.query_bytes_remaining() / (2 ** 30)):.5f}GB left")
+            bytes_remaining, bytes_remaining_dict = self.query_bytes_remaining()
+            print(f"MAX: {( bytes_remaining / (2 ** 30)):.5f}GB left")
+            print(f"Remaining bytes per destination (GB): ")
+
+            for key, value in bytes_remaining_dict.items():
+                bytes_remaining_dict[key] = [round(v / (2 ** 30), 5) for v in value]
+            pprint(bytes_remaining_dict)
 
             # sleep
             time.sleep(0.05)
@@ -299,20 +305,31 @@ class BCTransferProgressTracker(TransferProgressTracker):
     def query_bytes_remaining(self):
         if len(self.job_chunk_requests) == 0:
             return None
+
         bytes_remaining_per_job = {}
+        for job_uuid in self.jobs.keys():
+            bytes_remaining_per_job[job_uuid] = []
+
+        dst_order = []
         for dst_region in self.dst_regions:
+            dst_order.append(dst_region)
             for job_uuid in self.dst_job_pending_chunk_ids[dst_region].keys():
-                bytes_remaining_per_job[job_uuid] = []
                 # job_uuid --> List[dst1_remaining_bytes, dst2_remaining_bytes, ...]
-                bytes_remaining_per_job[job_uuid].append(
-                    sum(
-                        [
+                li_of_bytes = [
                             cr.chunk.chunk_length_bytes
                             for cr in self.job_chunk_requests[job_uuid].values()
                             if cr.chunk.chunk_id in self.dst_job_pending_chunk_ids[dst_region][job_uuid]
                         ]
-                    )
-                )
+                bytes_remaining_per_job[job_uuid].append(sum(li_of_bytes))
         logger.fs.debug(f"[TransferProgressTracker] Bytes remaining per job: {bytes_remaining_per_job}")
         # return the max remaining byte among dsts for each job
-        return sum([max(li) for li in bytes_remaining_per_job.values()])
+
+        # for each dst, there can be a list of bytes remaining 
+        bytes_remaining_per_dst = {}
+        for i in range(len(dst_order)):
+            dst = dst_order[i]
+            bytes_remaining_per_dst[dst] = []
+            for job_uuid in self.dst_job_complete_chunk_ids[dst].keys():
+                bytes_remaining_per_dst[dst].append(bytes_remaining_per_job[job_uuid][i])
+
+        return sum([max(li) for li in bytes_remaining_per_job.values()]), bytes_remaining_per_dst
