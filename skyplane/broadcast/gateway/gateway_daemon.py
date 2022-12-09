@@ -82,7 +82,12 @@ class GatewayDaemon:
 
         # API server
         self.api_server = GatewayDaemonAPI(
-            self.chunk_store, self.gateway_receiver, self.error_event, self.error_queue, terminal_operators=self.terminal_operators, num_required_terminal=self.num_required_terminal
+            self.chunk_store,
+            self.gateway_receiver,
+            self.error_event,
+            self.error_queue,
+            terminal_operators=self.terminal_operators,
+            num_required_terminal=self.num_required_terminal,
         )
         self.api_server.start()
         atexit.register(self.api_server.shutdown)
@@ -102,7 +107,6 @@ class GatewayDaemon:
         for partition, queue in self.chunk_store.chunk_requests.items():
             print(f"Partition {partition}, {queue}")
             print_operator_graph_helper(partition, queue, "")
-
 
     def create_gateway_operators(self, gateway_program: Dict):
         """Create a gateway plan from a gateway program"""
@@ -147,7 +151,7 @@ class GatewayDaemon:
 
                 # create output data queue
                 output_queue = create_output_queue(op)
-                if isinstance(output_queue, GatewayANDQueue): 
+                if isinstance(output_queue, GatewayANDQueue):
                     # update number of operations that must be completed
                     self.num_required_terminal[partition] = self.num_required_terminal[partition] - 1 + len(child_operators)
 

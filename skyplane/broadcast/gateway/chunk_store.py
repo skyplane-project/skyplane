@@ -78,7 +78,9 @@ class ChunkStore:
     # Memory space calculation
     def remaining_bytes(self):
         try:
-            remaining_bytes = int(subprocess.check_output(["df", "-k", "--output=avail", self.chunk_dir]).decode().strip().split()[-1]) * 1024
+            remaining_bytes = (
+                int(subprocess.check_output(["df", "-k", "--output=avail", self.chunk_dir]).decode().strip().split()[-1]) * 1024
+            )
             return remaining_bytes
         except Exception as e:
             raw_output = subprocess.check_output(["df", "-k", "--output=avail", self.chunk_dir]).decode().strip()

@@ -59,12 +59,24 @@ class SkyplaneBroadcastClient:
         type: str = "direct",
         n_vms: int = 1,
         num_connections: int = 32,
-        num_partitions: int = 2,
+        num_partitions: int = 10,
         gbyte_to_transfer: float = 1,
-        target_time: float = 100,
+
+        # ILP specific parameters 
+        target_time: float = 10,
+        filter_node: bool = False,
+        filter_edge: bool = False, 
+        solve_iterative: bool = False, 
+
+        # solve range (use aws/gcp/azure only nodes)
+        aws_only: bool = False, 
+        gcp_only: bool = False, 
+        azure_only: bool = False 
+
     ) -> BroadcastDataplane:
         # TODO: did not change the data plan yet
-        if type == "direct":
+        print(f"\nAlgorithm: {type}")
+        if type == "Ndirect":
             planner = BroadcastDirectPlanner(
                 src_cloud_provider,
                 src_region,
@@ -74,7 +86,11 @@ class SkyplaneBroadcastClient:
                 num_connections,
                 num_partitions,
                 gbyte_to_transfer,
+                aws_only=aws_only,
+                gcp_only=gcp_only,
+                azure_only=azure_only
             )
+            topo = planner.plan()
         elif type == "MDST":
             planner = BroadcastMDSTPlanner(
                 src_cloud_provider,
@@ -85,7 +101,11 @@ class SkyplaneBroadcastClient:
                 num_connections,
                 num_partitions,
                 gbyte_to_transfer,
+                aws_only=aws_only,
+                gcp_only=gcp_only,
+                azure_only=azure_only
             )
+            topo = planner.plan()
         elif type == "HST":
             # TODO: not usable now
             planner = BroadcastHSTPlanner(
@@ -97,7 +117,11 @@ class SkyplaneBroadcastClient:
                 num_connections,
                 num_partitions,
                 gbyte_to_transfer,
+                aws_only=aws_only,
+                gcp_only=gcp_only,
+                azure_only=azure_only
             )
+            topo = planner.plan()
         elif type == "ILP":
             planner = BroadcastILPSolverPlanner(
                 src_cloud_provider,
@@ -109,13 +133,16 @@ class SkyplaneBroadcastClient:
                 num_partitions,
                 gbyte_to_transfer,
                 target_time,  # target time budget
+                aws_only=aws_only,
+                gcp_only=gcp_only,
+                azure_only=azure_only
             )
+            topo = planner.plan(filter_edge=filter_edge, filter_node=filter_node, solve_iterative=solve_iterative, solver_verbose=True)
         else:
             raise NotImplementedError(f"Dataplane type {type} not implemented")
 
-        topo = planner.plan()
         logger.fs.info(f"[SkyplaneClient.direct_dataplane] Topology: {topo.to_json()}")
-        print(f"\nAlgorithm: {type}")
-        print(f"Solution: {topo.nx_graph.edges.data()}")
+        if type != "ILP":
+            print(f"Solution: {topo.nx_graph.edges.data()}")
 
         return BroadcastDataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)

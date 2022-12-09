@@ -98,7 +98,7 @@ class GatewayDaemonAPI(threading.Thread):
                 chunk_id = elem["chunk_id"]
                 partition = elem["partition"]
 
-                if chunk_id not in self.chunk_status: 
+                if chunk_id not in self.chunk_status:
                     self.chunk_status[chunk_id] = ChunkState.registered.name
 
                 if self.chunk_status[chunk_id] == ChunkState.complete.name:
@@ -110,7 +110,10 @@ class GatewayDaemonAPI(threading.Thread):
                     self.chunk_completions[chunk_id].append(handle)
 
                 # if all terminal operators complete, then mark chunk complete
-                if self.chunk_status.get(chunk_id, None) != ChunkState.complete.name and len(self.chunk_completions[chunk_id]) == self.num_required_terminal[partition]:
+                if (
+                    self.chunk_status.get(chunk_id, None) != ChunkState.complete.name
+                    and len(self.chunk_completions[chunk_id]) == self.num_required_terminal[partition]
+                ):
 
                     # TODO: set this somewhere else
                     self.chunk_status[chunk_id] = ChunkState.complete.name

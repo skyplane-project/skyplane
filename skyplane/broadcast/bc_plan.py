@@ -49,6 +49,8 @@ class BroadcastReplicationTopology(ReplicationTopology):
         num_partitions: int,
         edges: Optional[List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int, str]]] = None,
         cost_per_gb: Optional[float] = None,
+        tot_vms: Optional[int] = None, 
+        tot_vm_price_per_s: Optional[float] = None,
         default_max_conn_per_vm: Optional[int] = None,
     ):
 
@@ -63,6 +65,8 @@ class BroadcastReplicationTopology(ReplicationTopology):
         self.edges: List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int, str]] = edges or []
         self.nodes: Set[ReplicationTopologyNode] = set(k[0] for k in self.edges) | set(k[1] for k in self.edges)
         self.cost_per_gb: Optional[float] = cost_per_gb
+        self.tot_vm_price_per_s: Optional[float] = tot_vm_price_per_s
+        self.tot_vms: Optional[int] = tot_vms
         self.default_max_conn_per_vm: Optional[int] = default_max_conn_per_vm
 
     def get_outgoing_paths(self, src: ReplicationTopologyNode):

@@ -185,15 +185,27 @@ class BCTransferProgressTracker(TransferProgressTracker):
             e2e_end_time = time.time()
         print(f"End to end time: {round(e2e_end_time - e2e_start_time, 4)}s\n")
         print(f"Transfer result:")
+        tot_runtime = float('-inf')
         for i in results:
             pprint(i)
+            tot_runtime = max(tot_runtime, i["total_runtime_s"])
             print()
 
         size_of_transfer = self.calculate_size(list(self.dst_regions)[0])
         cost_per_gb = self.dataplane.topology.cost_per_gb
-        print(f"Cost per gb: ${round(cost_per_gb, 4)}")
-        print(f"GB transferred: ${round(size_of_transfer, 8)}GB")
-        print(f"Total cost: ${round(cost_per_gb * size_of_transfer, 8)}\n")
+        tot_egress_cost = round(cost_per_gb * size_of_transfer, 8)
+        tot_instance_cost = self.dataplane.topology.tot_vm_price_per_s * tot_runtime
+
+        print(f"GB transferred: ${round(size_of_transfer, 8)}GB\n")
+        print(f"Total runtime: {tot_runtime}s\n")
+        
+        print(f"Cost per gb: {round(cost_per_gb, 4)}")
+        print(f"Total egress cost: ${tot_egress_cost}")
+
+        print(f"Total # of vms: {self.dataplane.topology.tot_vms}")
+        print(f"Total instance cost: ${tot_instance_cost}")
+
+        print(f"Total cost: ${tot_egress_cost + tot_instance_cost}")
 
         # write chunk status
         print(f"Writing chunk profiles to {self.transfer_dir}/chunk_status_df.csv")
@@ -231,7 +243,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
             # check for errors and exit if there are any (while setting debug flags)
             errors = self.dataplane.check_error_logs()
             # print("ERRORS", errors)
-            
+
             if any(errors.values()):
                 print("copying gateway logs")
                 logger.warning("Copying gateway logs")
@@ -288,7 +300,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
                 print(f"Remaining bytes per destination (GB): ")
 
                 for key, value in bytes_remaining_dict.items():
-                    bytes_remaining_dict[key] = [round(v / (2 ** 30), 5) for v in value]
+                    bytes_remaining_dict[key] = [round(v / (2**30), 5) for v in value]
                 pprint(bytes_remaining_dict)
             except Exception as e:
                 print("ERROR", e)
@@ -326,15 +338,15 @@ class BCTransferProgressTracker(TransferProgressTracker):
             for job_uuid in self.dst_job_pending_chunk_ids[dst_region].keys():
                 # job_uuid --> List[dst1_remaining_bytes, dst2_remaining_bytes, ...]
                 li_of_bytes = [
-                            cr.chunk.chunk_length_bytes
-                            for cr in self.job_chunk_requests[job_uuid].values()
-                            if cr.chunk.chunk_id in self.dst_job_pending_chunk_ids[dst_region][job_uuid]
-                        ]
+                    cr.chunk.chunk_length_bytes
+                    for cr in self.job_chunk_requests[job_uuid].values()
+                    if cr.chunk.chunk_id in self.dst_job_pending_chunk_ids[dst_region][job_uuid]
+                ]
                 bytes_remaining_per_job[job_uuid].append(sum(li_of_bytes))
         logger.fs.debug(f"[TransferProgressTracker] Bytes remaining per job: {bytes_remaining_per_job}")
         # return the max remaining byte among dsts for each job
 
-        # for each dst, there can be a list of bytes remaining 
+        # for each dst, there can be a list of bytes remaining
         bytes_remaining_per_dst = {}
         for i in range(len(dst_order)):
             dst = dst_order[i]
@@ -342,5 +354,4 @@ class BCTransferProgressTracker(TransferProgressTracker):
             for job_uuid in self.dst_job_complete_chunk_ids[dst].keys():
                 bytes_remaining_per_dst[dst].append(bytes_remaining_per_job[job_uuid][i])
 
-        return sum([max(li) for li in bytes_remaining_per_job.values()]), bytes_remaining_per_dst
-
+        return sum([max(li, default=0) for li in bytes_remaining_per_job.values()]), bytes_remaining_per_dst

@@ -14,7 +14,9 @@ import numpy as np
 
 from skyplane.utils import logger
 from skyplane.broadcast import __root__
-
+import functools
+import colorama
+from colorama import Fore, Style
 
 class BroadcastPlanner:
     def __init__(
@@ -27,8 +29,11 @@ class BroadcastPlanner:
         num_connections: int,
         num_partitions: int,
         gbyte_to_transfer: float,
+        aws_only: bool,
+        gcp_only: bool,
+        azure_only: bool,
         cost_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "cost.csv",
-        tp_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "throughput.csv",
+        tp_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "whole_throughput_11_28.csv",
     ):
 
         self.src_provider = src_provider
@@ -45,10 +50,23 @@ class BroadcastPlanner:
         self.throughput = pd.read_csv(tp_grid_path)
         self.G = self.make_nx_graph(self.costs, self.throughput)
 
+        if aws_only:
+            self.G.remove_nodes_from([i for i in self.G.nodes if i.split(":")[0] == "gcp" or i.split(":")[0] == "azure"])
+        elif gcp_only: 
+            self.G.remove_nodes_from([i for i in self.G.nodes if i.split(":")[0] == "aws" or i.split(":")[0] == "azure"])
+        elif azure_only:
+            self.G.remove_nodes_from([i for i in self.G.nodes if i.split(":")[0] == "aws" or i.split(":")[0] == "gcp"])
+        else:
+            return 
+
+    @functools.lru_cache(maxsize=None)
+    def get_path_cost(self, src, dst, src_tier="PREMIUM", dst_tier="PREMIUM"):
+        from skyplane.compute.cloud_provider import CloudProvider
+
+        assert src_tier == "PREMIUM" and dst_tier == "PREMIUM"
+        return CloudProvider.get_transfer_cost(src, dst)
+
     def make_nx_graph(self, cost, throughput):
-        """
-        Create nx graph with cost and throughput information on the edge
-        """
         G = nx.DiGraph()
         for _, row in throughput.iterrows():
             if row["src_region"] == row["dst_region"]:
@@ -60,6 +78,13 @@ class BroadcastPlanner:
                 G[row["src"]][row["dest"]]["cost"] = row["cost"]
             else:
                 continue
+
+        # update the cost using skyplane.compute tools [i.e. in utils.py] (need to build the skyplane repo first)
+        for edge in G.edges.data():
+            if edge[-1]["cost"] is None:
+                edge[-1]["cost"] = self.get_path_cost(edge[0], edge[1])
+
+        assert all([edge[-1]["cost"] is not None for edge in G.edges.data()])
         return G
 
     def get_throughput_grid(self):
@@ -94,7 +119,6 @@ class BroadcastPlanner:
             partitions_on_edge = edge[-1]["partitions"]
             cost_egress += len(partitions_on_edge) * partition_size_in_GB * edge[-1]["cost"]
 
-            print(solution_graph.nodes.data())
             s_num_instances = solution_graph.nodes[s]["num_vms"]
             d_num_instances = solution_graph.nodes[d]["num_vms"]
 
@@ -108,8 +132,18 @@ class BroadcastPlanner:
             for i in range(solution_graph.nodes[dst_region]["num_vms"]):
                 topo.add_instance_objstore_edge(dst_region, i, dst_region, partition_ids)
 
+        tot_vm_price_per_s = 0 # total price per second 
+        tot_vms = 0 # total number of vms 
+        cost_map = {"gcp": 0.54, "aws": 0.54, "azure": 0.54} # cost per instance hours 
+
+        for node in solution_graph.nodes:
+            tot_vm_price_per_s += solution_graph.nodes[node]["num_vms"] * cost_map[node.split(":")[0]] / 3600
+            tot_vms += solution_graph.nodes[node]["num_vms"]
+ 
         # set networkx solution graph in topo
         topo.cost_per_gb = cost_egress / gbyte_to_transfer  # cost per gigabytes
+        topo.tot_vm_price_per_s = tot_vm_price_per_s
+        topo.tot_vms = tot_vms
         topo.default_max_conn_per_vm = self.num_connections
         return topo
 
@@ -128,9 +162,12 @@ class BroadcastDirectPlanner(BroadcastPlanner):
         num_connections: int,
         num_partitions: int,
         gbyte_to_transfer: float,
+        aws_only: bool,
+        gcp_only: bool,
+        azure_only: bool,
     ):
         super().__init__(
-            src_provider, src_region, dst_providers, dst_regions, num_instances, num_connections, num_partitions, gbyte_to_transfer
+            src_provider, src_region, dst_providers, dst_regions, num_instances, num_connections, num_partitions, gbyte_to_transfer, aws_only, gcp_only, azure_only
         )
 
     def plan(self) -> BroadcastReplicationTopology:
@@ -165,9 +202,12 @@ class BroadcastMDSTPlanner(BroadcastPlanner):
         num_connections: int,
         num_partitions: int,
         gbyte_to_transfer: float,
+        aws_only: bool,
+        gcp_only: bool,
+        azure_only: bool,
     ):
         super().__init__(
-            src_provider, src_region, dst_providers, dst_regions, num_instances, num_connections, num_partitions, gbyte_to_transfer
+            src_provider, src_region, dst_providers, dst_regions, num_instances, num_connections, num_partitions, gbyte_to_transfer, aws_only, gcp_only, azure_only
         )
 
     def plan(self) -> BroadcastReplicationTopology:
@@ -204,9 +244,12 @@ class BroadcastHSTPlanner(BroadcastPlanner):
         num_connections: int,
         num_partitions: int,
         gbyte_to_transfer: float,
+        aws_only: bool,
+        gcp_only: bool,
+        azure_only: bool,
     ):
         super().__init__(
-            src_provider, src_region, dst_providers, dst_regions, num_instances, num_connections, num_partitions, gbyte_to_transfer
+            src_provider, src_region, dst_providers, dst_regions, num_instances, num_connections, num_partitions, gbyte_to_transfer, aws_only, gcp_only, azure_only
         )
 
     def plan(self, hop_limit=3000) -> BroadcastReplicationTopology:
@@ -303,6 +346,10 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         num_partitions: int,
         gbyte_to_transfer: float,
         target_time: float,
+        aws_only: bool,
+        gcp_only: bool,
+        azure_only: bool,
+
     ):
         super().__init__(
             src_provider,
@@ -313,6 +360,9 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             num_connections=num_connections,
             num_partitions=num_partitions,
             gbyte_to_transfer=gbyte_to_transfer,
+            aws_only=aws_only, 
+            gcp_only=gcp_only, 
+            azure_only=azure_only
         )
 
         src = self.src_provider + ":" + self.src_region
@@ -375,9 +425,390 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
                 result_g.nodes[node]["num_vms"] = num_vms
 
         # TODO: the generated topo itself is not used, but the networkx graph contains all information needed to generate gateway programs
+        print(f"Solution # of edges: {len(result_g.edges)}, # of nodes: {len(result_g.nodes)}")
+        print("solution (edge): ", result_g.edges.data())
+        print()
+        print("solution (node):", result_g.nodes.data())
+        print()
         return self.get_topo_from_nxgraph(solution.problem.num_partitions, solution.problem.gbyte_to_transfer, result_g)
 
-    def plan(self, solver=None, solver_verbose=False, save_lp_path=None) -> BroadcastReplicationTopology:
+    def combine_partition_subgraphs(self, partition_g):
+        bg = nx.DiGraph()
+        for i in range(len(partition_g)):
+            for edge in partition_g[i].edges:
+                if edge[0] in bg and edge[1] in bg[edge[0]]:
+                    bg[edge[0]][edge[1]]["partitions"].append(i)
+                else:
+                    e = self.G[edge[0].split(",")[0]][edge[1].split(",")[0]]
+                    bg.add_edge(edge[0], edge[1], partitions=[i], cost=e["cost"], throughput=e["throughput"])
+
+            for node in partition_g[i].nodes:
+                if "num_vms" not in bg.nodes[node]:
+                    bg.nodes[node]["num_vms"] = 0
+                bg.nodes[node]["num_vms"] += partition_g[i].nodes[node]["num_vms"]
+
+        return bg
+
+    def total_broadcast_cost(self, bg):
+        cost = 0
+        for edge in bg.edges:
+            cost += len(bg[edge[0]][edge[1]]["partitions"]) * bg[edge[0]][edge[1]]["cost"]
+        return cost
+
+    def create_topo_graph(self, p, v, g, edges, nodes):
+        result = p
+        v_result = v
+        result_g = nx.DiGraph()
+
+        for i in range(result.shape[0]):
+            edge = edges[i]
+
+            if result[i] == 0:
+                continue
+            for vm in [0]:  # range(int(v_result[nodes.index(edge[0])])): # multiple VMs
+                result_g.add_edge(edge[0], edge[1], throughput=g[edge[0]][edge[1]]["throughput"], cost=g[edge[0]][edge[1]]["cost"])
+
+        remove_nodes = []  # number of vms is one but the
+        for i in range(len(v_result)):
+            num_vms = int(v_result[i])
+            if nodes[i] in result_g.nodes:
+                result_g.nodes[nodes[i]]["num_vms"] = num_vms
+            else:
+                # print(f"Nodes: {nodes[i]}, number of vms: {num_vms}, not in result_g") --> why would this happen
+                remove_nodes.append(nodes[i])
+
+        return result_g
+
+    def get_egress_ingress(self, g, nodes, edges, partition_size, p):
+
+        partition_size *= 8  # need to convert to gbits?
+
+        num_edges = len(edges)
+        egress = []
+        ingress = []
+        for node in nodes:
+
+            node_i = nodes.index(node)
+            # egress
+            i = np.zeros(num_edges)
+            for e in g.edges:
+                if e[0] == node:  # edge goes to dest
+                    i[edges.index(e)] = 1
+            egress.append(np.sum(i @ p) * partition_size)
+
+            # ingress
+            i = np.zeros(num_edges)
+            for e in g.edges:
+                if e[1] == node:
+                    i[edges.index(e)] = 1
+            ingress.append(np.sum(i @ p) * partition_size)
+
+        return egress, ingress
+
+    def solve_partition(
+        self,
+        g,
+        cost,
+        tp,
+        nodes,
+        edges,
+        egress_limit,
+        ingress_limit,
+        existing_vms,  # total number of existing VMs per region
+        existing_p,  # total number of partitions along each edge
+        existing_egress,  # total egress for each region
+        existing_ingress,  # total ingress for each region
+        source_v,
+        dest_v,
+        partition_size_gb,
+        instance_cost_s,
+        max_vm_per_region,
+        s,
+        remaining_data_size_gb,  # how much remaining data needs to be sent
+        filter_edge,  # whether to filter all except 1-hop
+    ):
+        import cvxpy as cp
+
+        num_edges = len(edges)
+        num_nodes = len(nodes)
+        num_dest = len(dest_v)
+
+        # indicator matrix (must be 2-D)
+        p = cp.Variable((num_edges), boolean=True)  # whether edge is carrying partition
+        n = cp.Variable((num_nodes), boolean=True)  # whether node transfers partition
+        f = cp.Variable((num_nodes, num_nodes + 1), integer=True)  # enforce flow conservation
+
+        v = cp.Variable((num_nodes), integer=True)  # number of VMs per region
+
+        # optimization problem (minimize sum of costs)
+        egress_cost = cp.sum(cost @ p) * partition_size_gb
+        instance_cost = cp.sum(v) * instance_cost_s * s  # NOTE(sl): adding instance cost every time?
+        obj = cp.Minimize(egress_cost + instance_cost)
+
+        constraints = []
+
+        # constraints on VM per region
+        for i in range(num_nodes):
+            constraints.append(v[i] <= max_vm_per_region - existing_vms[i])
+            constraints.append(v[i] >= 0)
+
+        # constraints to enforce flow between source/dest nodes
+        for i in range(num_nodes):
+            for j in range(num_nodes + 1):
+
+                if i != j:
+
+                    if j != num_nodes:
+                        edge = (nodes[i], nodes[j])
+
+                        constraints.append(f[i][j] <= p[edges.index(edge)] * num_dest)
+                        # p = 0 -> f <= 0
+                        # p = 1 -> f <= num_dest
+                        constraints.append(f[i][j] >= (p[edges.index(edge)] - 1) * (num_dest + 1) + 1)
+                        # p = 0 -> f >= -(num_dest)
+                        # p = 1 -> f >= 1
+
+                        constraints.append(f[i][j] == -f[j][i])
+
+                        # capacity constraint for special node
+                    else:
+                        if nodes[i] in dest_v:  # only connected to destination nodes
+                            constraints.append(f[i][j] <= 1)
+                        else:
+                            constraints.append(f[i][j] <= 0)
+                else:
+                    constraints.append(f[i][i] == 0)
+
+            # flow conservation
+            if nodes[i] != source_v and i != num_nodes + 1:
+                constraints.append(cp.sum(f[i]) == 0)
+
+        # source must have outgoing flow
+        constraints.append(cp.sum(f[nodes.index(source_v), :]) == num_dest)
+
+        # special node (connected to all destinations) must recieve all flow
+        constraints.append(cp.sum(f[:, -1]) == num_dest)
+
+        # node contained (or previously contained) if edge is contained
+        for edge in edges:
+            n0 = nodes.index(edge[0])
+            n1 = nodes.index(edge[1])
+            constraints.append(existing_vms[n0] + n[n0] >= cp.max(p[edges.index(edge)]))
+            constraints.append(existing_vms[n1] + n[n1] >= cp.max(p[edges.index(edge)]))
+
+        if filter_edge:
+            # hop limit = 2: either source is source node, and/or dest is terminal node
+            # all other edges must be 0
+            # alternative: filter edges to matchi this
+            for edge in edges:
+                if edge[0] != source_v and edge[1] not in dest_v:
+                    # cannot be in graph
+                    constraints.append(p[edges.index(edge)] == 0)
+
+        # throughput constraint
+        # TODO: update edge constraints
+        for edge_i in range(num_edges):
+            # constraints.append(cp.sum(p[edge_i]*partition_size_gb*8) <= s*tp[edge_i])
+            node_i = nodes.index(edge[0])
+            constraints.append(
+                cp.sum(p[edge_i] * partition_size_gb * 8) + cp.sum(existing_p[edge_i] * partition_size_gb * 8)
+                <= s * tp[edge_i] * (v[node_i] + existing_vms[node_i])
+            )
+
+        # instance limits
+        for node in nodes:
+
+            node_i = nodes.index(node)
+            # egress
+            i = np.zeros(num_edges)
+            for e in g.edges:
+                if e[0] == node:  # edge goes to dest
+                    i[edges.index(e)] = 1
+            constraints.append(
+                cp.sum(i @ p) * partition_size_gb * 8 + existing_egress[node_i]
+                <= s * egress_limit[node_i] * (v[node_i] + existing_vms[node_i])
+            )
+
+            if node == source_v:
+                # keep future solutions feasible by making sure source has enough remaining
+                # egress capacity to send remaining data
+                constraints.append(
+                    cp.sum(i @ p) * partition_size_gb * 8 + existing_egress[node_i]
+                    <= s * egress_limit[node_i] * (v[node_i] + existing_vms[node_i]) - remaining_data_size_gb * 8
+                )
+
+            # ingress
+            #
+            i = np.zeros(num_edges)
+            for e in g.edges:
+                if e[1] == node:  # edge goes to dest
+                    i[edges.index(e)] = 1
+            # keep future solutions feasible by making sure destinations have
+            # enough remaining ingress to recieve the remaining data
+            constraints.append(
+                cp.sum(i @ p) * partition_size_gb * 8 + existing_ingress[node_i]
+                <= s * ingress_limit[node_i] * (v[node_i] + existing_vms[node_i]) - remaining_data_size_gb * 8
+            )
+
+        prob = cp.Problem(obj, constraints)
+
+        cost = prob.solve(solver=cp.GUROBI, verbose=False)
+
+        if cost is None:
+            print("No solution feasible")
+
+        # NOTE: might not want to return the whole cost everytime, this looks wrong
+        return cost, p, n, f, v, egress_cost.value, instance_cost.value
+
+    def plan_iterative(
+        self, 
+        problem: BroadcastProblem, 
+        solver=None,
+        filter_node: bool = False,
+        filter_edge: bool = False,
+        solve_iterative: bool = False,
+        solver_verbose: bool = False,
+        save_lp_path: Optional[str] = None,
+    ) -> BroadcastReplicationTopology:
+        import cvxpy as cp
+
+        if solver is None:
+            solver = cp.GUROBI
+
+        # get graph
+        g = self.G
+
+        # node-approximation
+        if filter_node:
+            src_dst_li = [problem.src] + problem.dsts
+            sampled = [i for i in sample(list(self.G.nodes), 15) if i not in src_dst_li]
+            g = g.subgraph(src_dst_li + sampled).copy()
+            print(f"Filter node (only use): {src_dst_li + sampled}")
+
+        cost = np.array([e[2] for e in g.edges(data="cost")])
+        tp = np.array([e[2] for e in g.edges(data="throughput")])
+        edges = list(g.edges)
+        nodes = list(g.nodes)
+        source_v = problem.src
+        dest_v = problem.dsts
+        partition_size_gb = problem.gbyte_to_transfer / problem.num_partitions
+
+        dest_edges = [g.edges.index(e) for e in g.edges if e[1] == ""]
+        num_edges = len(g.edges)
+        num_nodes = len(nodes)
+        num_partitions = problem.num_partitions
+        num_dest = len(dest_v)
+        instance_cost_s = problem.cost_per_instance_hr / 3600
+        transfer_size_gb = problem.gbyte_to_transfer
+        max_vm_per_region = problem.instance_limit
+
+        print("Transfer size (GB):", transfer_size_gb)
+        print("Instance cost per second:", instance_cost_s)
+        print(f"Number partitions:", num_partitions)
+        print(f"Max VM per region:", max_vm_per_region)
+        print("Runtime:", problem.required_time_budget)
+
+        total_v = np.zeros(num_nodes)
+        total_p = np.zeros(num_edges)
+        total_egress = np.zeros(num_nodes)
+        total_ingress = np.zeros(num_nodes)
+        total_cost, total_egress_cost, total_instance_cost = 0, 0, 0
+        partition_g = []
+
+        spare_tp = [0] * num_edges
+        spare_egress_limit = [0] * num_nodes
+        spare_ingress_limit = [0] * num_nodes
+        sent_data_size = 0
+
+        egress_limit = []
+        ingress_limit = []
+        for node in g.nodes:
+            if "aws" in node:
+                egress_limit_gbps, ingress_limit_gbps = problem.aws_instance_throughput_limit
+            elif "gcp" in node:
+                egress_limit_gbps, ingress_limit_gbps = problem.gcp_instance_throughput_limit
+            elif "azure" in node:
+                egress_limit_gbps, ingress_limit_gbps = problem.azure_instance_throughput_limit
+            elif "cloudflare" in node:
+                egress_limit_gbps, ingress_limit_gbps = 1, 1
+            else:
+                raise ValueError("node is not correct")
+
+            egress_limit.append(egress_limit_gbps)
+            ingress_limit.append(ingress_limit_gbps)
+
+        partitions = range(num_partitions)
+        for partition in partitions:
+            print(f"Solving partition {partition}...")
+            remaining_data_size_gb = partition_size_gb * len(partitions) - sent_data_size - partition_size_gb
+            c_cost, c_p, c_n, c_f, c_v, egress_cost, instance_cost = self.solve_partition(
+                g,
+                cost,
+                tp,
+                nodes,
+                edges,
+                egress_limit,
+                ingress_limit,
+                existing_vms=total_v,
+                existing_p=total_p,
+                existing_egress=total_egress,
+                existing_ingress=total_ingress,
+                source_v=source_v,
+                dest_v=dest_v,
+                partition_size_gb=partition_size_gb,
+                instance_cost_s=instance_cost_s,
+                max_vm_per_region=max_vm_per_region,
+                s=problem.required_time_budget,  # time budget
+                remaining_data_size_gb=remaining_data_size_gb,
+                filter_edge=filter_edge,
+            )
+
+            print("Cost: ", c_cost)
+            # update state
+            sent_data_size += partition_size_gb
+            total_cost += c_cost
+            total_egress_cost += egress_cost
+            total_instance_cost += instance_cost
+            total_v = total_v + np.array(c_v.value)
+            total_p = total_p + np.array(c_p.value)
+            total_egress, total_ingress = self.get_egress_ingress(g, nodes, edges, partition_size_gb, total_p)
+
+            # append partition graph
+            partition_g.append(self.create_topo_graph(np.array(c_p.value), np.array(c_v.value), g, edges, nodes))
+
+        broadcast_g = self.combine_partition_subgraphs(partition_g)
+
+        actual_tot_instance_cost = 0
+        print()
+        for node in broadcast_g.nodes:
+            print(f"Node: {node}, num_vms: ", broadcast_g.nodes[node]["num_vms"])
+            actual_tot_instance_cost += broadcast_g.nodes[node]["num_vms"] * problem.required_time_budget * instance_cost_s
+
+        print("avg instance cost: ", problem.required_time_budget * instance_cost_s)
+        actual_tot_cost = total_egress_cost + actual_tot_instance_cost
+
+        print("Solver completes.\n")
+        print(f"{Fore.BLUE}Time budget = {Fore.YELLOW}{problem.required_time_budget}s{Style.RESET_ALL}")
+        print(
+            f"{Fore.BLUE}Calculated tput = {Fore.YELLOW}{round(transfer_size_gb * 8 / problem.required_time_budget, 4)} Gbps{Style.RESET_ALL}\n"
+        )
+        print(f"{Fore.BLUE}Egress cost = {Fore.YELLOW}${round(total_egress_cost, 4)}{Style.RESET_ALL}")
+        print(f"{Fore.BLUE}Actual instance cost = {Fore.YELLOW}${round(actual_tot_instance_cost, 4)}{Style.RESET_ALL}")
+        print(f"{Fore.BLUE}Total cost = {Fore.YELLOW}${round(actual_tot_cost, 4)}{Style.RESET_ALL}\n")
+
+        print(f"Solution (nodes): {broadcast_g.nodes.data()}\n")
+        print(f"Solution (edges): {broadcast_g.edges.data()}\n")
+        return self.get_topo_from_nxgraph(num_partitions, problem.gbyte_to_transfer, broadcast_g)
+
+    def plan(
+        self,
+        solver=None,
+        filter_node: bool = False,
+        filter_edge: bool = False,
+        solve_iterative: bool = False,
+        solver_verbose: bool = False,
+        save_lp_path: Optional[str] = None,
+    ) -> BroadcastReplicationTopology:
 
         import cvxpy as cp
 
@@ -386,22 +817,30 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
 
         problem = self.problem
 
-        # OPTION1: use the graph with only source and destination nodes
-        # g = self.G.subgraph([problem.src] + problem.dsts).copy()
-        # cost = np.array([e[2] for e in g.edges(data="cost")])
-        # tp = np.array([e[2] for e in g.edges(data="throughput")])
+        if solve_iterative:
+            return self.plan_iterative(problem, solver, filter_node, filter_edge, solver_verbose, save_lp_path)
 
-        # OPTION2: use the entire graph
         g = self.G
-        cost = self.get_cost_grid()
-        tp = self.get_throughput_grid()
+
+        # node-approximation
+        if filter_node:
+            src_dst_li = [problem.src] + problem.dsts
+            sampled = [i for i in sample(list(self.G.nodes), 15) if i not in src_dst_li]
+            g = g.subgraph(src_dst_li + sampled).copy()
+            print(f"Filter node (only use): {src_dst_li + sampled}")
+
+        cost = np.array([e[2] for e in g.edges(data="cost")])
+        tp = np.array([e[2] for e in g.edges(data="throughput")])
 
         edges = list(g.edges)
         nodes = list(g.nodes)
         num_edges, num_nodes = len(edges), len(nodes)
         num_dest = len(problem.dsts)
+        print(f"Num edges: {num_edges}, num nodes: {num_nodes}, num dest: {num_dest}, runtime budget: {problem.required_time_budget}s")
+
         partition_size_gb = problem.gbyte_to_transfer / problem.num_partitions
         partition_size_gbit = partition_size_gb * GBIT_PER_GBYTE
+        print("Partition size (gbit): ", partition_size_gbit)
 
         # define variables
         p = cp.Variable((num_edges, problem.num_partitions), boolean=True)  # whether edge is carrying partition
@@ -467,6 +906,17 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             constraints.append(n[nodes.index(edge[0])] >= cp.max(p[edges.index(edge)]))
             constraints.append(n[nodes.index(edge[1])] >= cp.max(p[edges.index(edge)]))
 
+        # edge approximation
+        if filter_edge:
+            # hop limit = 2: either source is source node, and/or dest is terminal node
+            # all other edges must be 0
+            # alternative: filter edges to matchi this
+            print("Filter edge")
+            for edge in edges:
+                if edge[0] != problem.src and edge[1] not in problem.dsts:
+                    # cannot be in graph
+                    constraints.append(p[edges.index(edge)] == 0)
+
         # throughput constraint
         for edge_i in range(num_edges):
             node_i = nodes.index(edge[0])
@@ -481,6 +931,8 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
                 ingress_limit_gbps, egress_limit_gbps = problem.gcp_instance_throughput_limit
             elif region == "azure":
                 ingress_limit_gbps, egress_limit_gbps = problem.azure_instance_throughput_limit
+            elif region == "cloudflare":  # TODO: not supported yet in the tput / cost graph
+                ingress_limit_gbps, egress_limit_gbps = 1, 1
 
             node_i = nodes.index(node)
             # egress
@@ -537,5 +989,5 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             solution = BroadcastSolution(problem=problem, is_feasible=False, extra_data=dict(status=prob.status))
 
         print("ILP solution: ")
-        pprint(solution.to_summary_dict())
+        # pprint(solution.to_summary_dict())
         return self.to_broadcast_replication_topology(solution)

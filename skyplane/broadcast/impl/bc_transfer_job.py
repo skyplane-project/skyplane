@@ -134,15 +134,9 @@ class BCCopyJob(BCTransferJob):
                     dst_region_tag = dst_server.region_tag
                     for mapping in chunker.all_mappings_for_upload_ids:
                         for key, value in mapping.items():
-                            # print(f"mapping: {key}, {value}")
                             if key.startswith(dst_region_tag):
                                 construct_mappings[key] = value
 
-                    # print("Construct mappings: ")
-                    # from pprint import pprint
-                    # pprint(construct_mappings)
-
-                    # print("Json encode: ", json.dumps(construct_mappings).encode("utf-8"))
                     start = time.time()
                     reply = self.http_pool.request(
                         "POST",
@@ -213,7 +207,7 @@ class BCCopyJob(BCTransferJob):
 
             do_parallel(complete_fn, batches, n=-1)
 
-    def bc_verify(self, dst_region: str): 
+    def bc_verify(self, dst_region: str):
         # NOTE: assume dst keys are the same across destinations?
         dst_keys = {dst_o.key: src_o for src_o, dst_o in self.transfer_list if src_o.size != 0}
         print("[verify] Dst keys: ", dst_keys)
