@@ -38,7 +38,8 @@ class GatewayDaemonAPI(threading.Thread):
         gateway_receiver: GatewayReceiver,
         error_event,
         error_queue: Queue,
-        terminal_operators: Optional[Dict[str, List[str]]] = None,
+        terminal_operators: Dict[str, List[str]],
+        num_required_terminal: Dict[str, int],
         host="0.0.0.0",
         port=8081,
     ):
@@ -49,6 +50,7 @@ class GatewayDaemonAPI(threading.Thread):
         self.error_event = error_event
         self.error_queue = error_queue
         self.terminal_operators = terminal_operators
+        self.num_required_terminal = num_required_terminal
         self.error_list: List[TracebackException] = []
         self.error_list_lock = threading.Lock()
 
@@ -94,6 +96,7 @@ class GatewayDaemonAPI(threading.Thread):
                 handle = elem["handle"]
                 state = elem["state"]
                 chunk_id = elem["chunk_id"]
+                partition = elem["partition"]
 
                 if chunk_id not in self.chunk_status: 
                     self.chunk_status[chunk_id] = ChunkState.registered.name
@@ -107,9 +110,8 @@ class GatewayDaemonAPI(threading.Thread):
                     self.chunk_completions[chunk_id].append(handle)
 
                 # if all terminal operators complete, then mark chunk complete
-                if self.chunk_status.get(chunk_id, None) != ChunkState.complete.name and len(self.chunk_completions[chunk_id]) == len(
-                    self.terminal_operators[elem["partition"]]
-                ):
+                if self.chunk_status.get(chunk_id, None) != ChunkState.complete.name and len(self.chunk_completions[chunk_id]) == self.num_required_terminal[partition]:
+
                     # TODO: set this somewhere else
                     self.chunk_status[chunk_id] = ChunkState.complete.name
 
@@ -129,10 +131,12 @@ class GatewayDaemonAPI(threading.Thread):
                 else:
                     if elem["state"] == ChunkState.complete.name:
                         print(
-                            f"[gateway_api] After {handle}, chunk {chunk_id}: not complete "
+                            f"[gateway_api] After {handle}, chunk {chunk_id}, partition {partition}: not complete "
                             + f"operators {self.chunk_completions[chunk_id]} have uploaded "
-                            + f"out of {self.terminal_operators[elem['partition']]}"
+                            + f"out of {self.terminal_operators}. "
+                            + f"Required completitions = {self.num_required_terminal[partition]}"
                         )
+
                     else:
                         print(f"[gateway_api] chunk {chunk_id}: state = {elem['state']}")
                 self.chunk_status_log.append(elem)
