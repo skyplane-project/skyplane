@@ -242,7 +242,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
 
             # check for errors and exit if there are any (while setting debug flags)
             errors = self.dataplane.check_error_logs()
-            # print("ERRORS", errors)
+            print("ERRORS", errors)
 
             if any(errors.values()):
                 print("copying gateway logs")
@@ -255,7 +255,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
             log_df = pd.DataFrame(self._query_chunk_status())
             if log_df.empty:
                 logger.warning("No chunk status log entries yet")
-                time.sleep(0.05)
+                time.sleep(10)
                 continue
 
             is_complete_rec = (
@@ -312,7 +312,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
                 raise exceptions.SkyplaneGatewayException("Transfer failed with errors", errors)
 
             # sleep
-            time.sleep(0.05)
+            time.sleep(30)
 
     @property
     def is_complete(self):

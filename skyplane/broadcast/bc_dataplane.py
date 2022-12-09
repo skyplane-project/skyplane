@@ -84,7 +84,7 @@ class BroadcastDataplane(Dataplane):
         obj_store: Optional[Tuple[str, str]] = None,
         dst_op: Optional[GatewayOperator] = None,
         gen_random_data: bool = False,
-        max_conn_per_vm: int = 128,
+        max_conn_per_vm: int = 256,
     ) -> bool:
         if dst_op is not None:
             receive_op = dst_op

@@ -58,7 +58,7 @@ class SkyplaneBroadcastClient:
         dst_regions: List[str],
         type: str = "direct",
         n_vms: int = 1,
-        num_connections: int = 32,
+        num_connections: int = 256,
         num_partitions: int = 10,
         gbyte_to_transfer: float = 1,
 

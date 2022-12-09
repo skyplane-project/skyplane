@@ -9,8 +9,8 @@ import argparse
 
 def start_transfer(args):
     src_region = "ap-east-1"
-    dst_regions = ["ap-southeast-2", "ap-south-1"]
-    # dst_regions = ["ap-southeast-2", "ap-south-1", "ap-northeast-3", "ap-northeast-2", "ap-northeast-1"]
+    # dst_regions = ["ap-southeast-2", "ap-south-1"]
+    dst_regions = ["ap-southeast-2", "ap-south-1", "ap-northeast-3", "ap-northeast-2", "ap-northeast-1"]
     # dst_regions = ["ap-northeast-3", "ap-northeast-2"]
     # dst_regions = ["us-west-1", "us-west-2"]
     # dst_regions = ["ap-east-1", "ap-northeast-1"]
@@ -94,7 +94,7 @@ def start_transfer(args):
                 print(f"{timestamp} {(bytes_remaining / (2 ** 30)):.5f}GB left")
             else:
                 break
-            time.sleep(1)
+            time.sleep(10)
         tracker.join()
         print("Transfer complete!")
 
