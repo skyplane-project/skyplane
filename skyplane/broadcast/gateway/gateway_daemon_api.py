@@ -95,6 +95,9 @@ class GatewayDaemonAPI(threading.Thread):
                 state = elem["state"]
                 chunk_id = elem["chunk_id"]
 
+                if chunk_id not in self.chunk_status: 
+                    self.chunk_status[chunk_id] = ChunkState.registered.name
+
                 if self.chunk_status[chunk_id] == ChunkState.complete.name:
                     assert not os.path.exists(chunk_file_path), f"Chunk path still exists even though completed {chunk_file_path}"
                     continue

@@ -201,7 +201,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
         (self.transfer_dir / "chunk_status_df.csv").write_text(chunk_status_df.to_csv(index=False))
 
     def copy_log(self, instance):
-        print("COPY DATA TO", str(self.transfer_dir) + f"gateway_{instance.uuid()}.stdout")
+        print("COPY DATA TO", str(self.transfer_dir) + f"/gateway_{instance.uuid()}.stdout")
         instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
         pprint(f"Copying gateway std out files to gateway_{instance.uuid()}.stdout")
         instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
@@ -291,7 +291,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
                     bytes_remaining_dict[key] = [round(v / (2 ** 30), 5) for v in value]
                 pprint(bytes_remaining_dict)
             except Exception as e:
-                print(e)
+                print("ERROR", e)
                 print("copying gateway logs")
                 logger.warning("Copying gateway logs")
                 do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=-1)
@@ -314,7 +314,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
 
     def query_bytes_remaining(self):
         if len(self.job_chunk_requests) == 0:
-            return None
+            return None, None
 
         bytes_remaining_per_job = {}
         for job_uuid in self.jobs.keys():
@@ -341,4 +341,6 @@ class BCTransferProgressTracker(TransferProgressTracker):
             bytes_remaining_per_dst[dst] = []
             for job_uuid in self.dst_job_complete_chunk_ids[dst].keys():
                 bytes_remaining_per_dst[dst].append(bytes_remaining_per_job[job_uuid][i])
+
+        return sum([max(li) for li in bytes_remaining_per_job.values()]), bytes_remaining_per_dst
 
