@@ -54,7 +54,7 @@ class FileSystemInterface:
         raise ValueError("Multipart uploads not supported")
 
     @staticmethod
-    def create(fs: str, fs: str, path: str, port: int = None):
+    def create(fs: str, path: str, port: int = None):
         if fs.startswith("hdfs"):
             from skyplane.obj_store.hdfs_interface import HDFSInterface
 

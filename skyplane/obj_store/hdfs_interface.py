@@ -1,4 +1,5 @@
 from functools import lru_cache
+import sys
 from pyarrow import fs
 from dataclasses import dataclass
 from typing import Iterator, List, Optional
@@ -14,7 +15,7 @@ class HDFSFile(ObjectStoreObject):
 
 
 class HDFSInterface(ObjectStoreInterface):
-    def __init__(self, host, path, port=8020):
+    def __init__(self, host, path="", port=8020):
         self.host = host
         self.port = port
         self.hdfs_path = path
@@ -69,7 +70,6 @@ class HDFSInterface(ObjectStoreInterface):
     ):
         with self.hdfs.open_input_stream(src_object_name) as f1:
             with open(dst_file_path, "wb+" if write_at_offset else "wb") as f2:
-                f1.seek(offset_bytes if write_at_offset else 0)
                 b = f1.read(nbytes=size_bytes)
                 while b:
                     f2.write(b)
@@ -85,16 +85,16 @@ class HDFSInterface(ObjectStoreInterface):
         check_md5: Optional[bytes] = None,
         mime_type: Optional[str] = None,
     ):
-        with open(src_file_path, "wb") as f1:
+        with open(src_file_path, "r") as f1:
             with self.hdfs.open_output_stream(dst_object_name) as f2:
                 b = f1.read()
                 f2.write(b)
 
-    def read_file(self, file_name):
+    def read_file(self, file_name, offset=0, length=sys.maxsize):
         with self.hdfs.open_input_stream(file_name) as f:
             return print(f.readall())
 
-    def write_file(self, file_name, data):
+    def write_file(self, file_name, data, offset=0):
         with self.hdfs.open_output_stream(file_name) as f:
             f.write(data)
 
