@@ -194,7 +194,8 @@ class Dataplane:
             return json.loads(reply.data.decode("utf-8"))["errors"]
 
         errors: Dict[str, List[str]] = {}
-        for (_, instance), result in do_parallel(get_error_logs, self.bound_nodes.items(), n=-1):
+        #for (_, instance), result in do_parallel(get_error_logs, self.bound_nodes.items(), n=-1):
+        for (_, instance), result in do_parallel(get_error_logs, self.bound_nodes.items(), n=1):
             errors[instance] = result
         return errors
 

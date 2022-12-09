@@ -19,7 +19,7 @@ def start_transfer(args):
     dst_cloud_providers = ["aws"] * len(dst_regions)
 
     source_file = "s3://skyplane-broadcast/OPT-66B/"
-    dest_files = [f"s3://broadcast-exp1-{d}/OPT-66B/" for d in dst_regions]
+    dest_files = [f"s3://broadcast-{d}/OPT-66B/" for d in dst_regions]
 
     print(source_file)
     print(dest_files)
