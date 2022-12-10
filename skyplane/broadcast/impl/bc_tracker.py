@@ -177,7 +177,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
         # Record only the transfer time per destination
 
         results = []
-        with ThreadPoolExecutor(max_workers=100) as executor:
+        with ThreadPoolExecutor(max_workers=len(self.dst_regions)) as executor:
             e2e_start_time = time.time()
             future_list = [executor.submit(monitor_single_dst_helper, dst) for dst in self.dst_regions]
             for future in as_completed(future_list):

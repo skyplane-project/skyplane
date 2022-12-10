@@ -129,7 +129,7 @@ class GatewayDaemon:
                 return operator["children"][0]["children"]
             return operator["children"]
 
-        def create_gateway_operators_helper(input_queue, program: List[Dict], partition_id: str):
+        def create_gateway_operators_helper(input_queue, program: List[Dict], partition_id: str, total_p = 0):
             for op in program:
 
                 handle = op["op_type"] + "_" + op["handle"]
@@ -146,7 +146,7 @@ class GatewayDaemon:
                     ), f"Parent must have been mux_and {handle}, instead was {input_queue} {gateway_program}"
 
                     # recurse to children with single queue
-                    create_gateway_operators_helper(input_queue.get_handle_queue(handle), child_operators, partition_id)
+                    create_gateway_operators_helper(input_queue.get_handle_queue(handle), child_operators, partition_id, total_p)
                     continue
 
                 # create output data queue
@@ -187,6 +187,7 @@ class GatewayDaemon:
                         bucket_name=op["bucket_name"],
                         bucket_region=op["bucket_region"],
                     )
+                    total_p += op["num_connections"]
                 elif op["op_type"] == "gen_data":
                     operators[handle] = GatewayRandomDataGen(
                         handle=handle,
@@ -211,8 +212,9 @@ class GatewayDaemon:
                         use_tls=self.use_tls,
                         use_compression=False,  # operator["compress"],
                         e2ee_key_bytes=self.e2ee_key_bytes,
-                        n_processes=32,  # op["num_connections"],
+                        n_processes=op["num_connections"],
                     )
+                    total_p += op["num_connections"]
                 elif op["op_type"] == "write_object_store":
                     operators[handle] = GatewayObjStoreWriteOperator(
                         handle=handle,
@@ -226,6 +228,7 @@ class GatewayDaemon:
                         bucket_name=op["bucket_name"],
                         bucket_region=op["bucket_region"],
                     )
+                    total_p += op["num_connections"]
                 elif op["op_type"] == "write_local":
                     operators[handle] = GatewayWriteLocal(
                         handle=handle,
@@ -239,11 +242,13 @@ class GatewayDaemon:
                 else:
                     raise ValueError(f"Unsupported op_type {op['op_type']}")
                 # recursively create for child operators
-                create_gateway_operators_helper(output_queue, child_operators, partition_id)
+                create_gateway_operators_helper(output_queue, child_operators, partition_id, total_p)
+            return total_p
 
         pprint(gateway_program)
 
         # create operator tree for each partition
+        total_p = 0
         for partition, program in gateway_program.items():
             partition = str(partition)
 
@@ -261,11 +266,13 @@ class GatewayDaemon:
                 self.chunk_store.add_partition(partition, queue)
                 self.num_required_terminal[partition] = 1
 
-            create_gateway_operators_helper(
+            total_p += create_gateway_operators_helper(
                 self.chunk_store.chunk_requests[partition],  # incoming chunk requests for partition
                 program,  # single partition program
                 partition,
+                0, 
             )
+        print("TOTAL NUMBER OF PROCESSES", total_p)
         return operators
 
     def run(self):
