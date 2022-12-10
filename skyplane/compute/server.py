@@ -335,7 +335,7 @@ class Server:
         if gateway_programs:
             for ip, program in gateway_programs.items():
                 print(ip)
-                pprint(program.to_dict())
+                pprint(program)
             
             region_tag = self.region_tag.replace(":", "_")
             filename = f"gateway_programs_{region_tag}.json"

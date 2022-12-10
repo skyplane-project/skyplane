@@ -5,12 +5,14 @@ from skyplane.broadcast.bc_client import SkyplaneBroadcastClient
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils.path import parse_path
 from skyplane.utils.definitions import GB
+from skyplane.utils.definitions import gateway_docker_image
 import argparse 
 
 def start_transfer(args):
-    src_region = "ap-east-1"
-    # dst_regions = ["ap-southeast-2", "ap-south-1"]
-    dst_regions = ["ap-southeast-2", "ap-south-1", "ap-northeast-3", "ap-northeast-2", "ap-northeast-1"]
+    # src_region = "ap-east-1"
+    src_region = "us-east-1"
+    dst_regions = ["ap-southeast-2", "ap-south-1"]
+    # dst_regions = ["ap-southeast-2", "ap-south-1", "ap-northeast-3", "ap-northeast-2", "ap-northeast-1"]
     # dst_regions = ["ap-northeast-3", "ap-northeast-2"]
     # dst_regions = ["us-west-1", "us-west-2"]
     # dst_regions = ["ap-east-1", "ap-northeast-1"]
@@ -18,8 +20,12 @@ def start_transfer(args):
     src_cloud_provider = "aws"
     dst_cloud_providers = ["aws"] * len(dst_regions)
 
+    # OPT model 
     source_file = "s3://skyplane-broadcast/OPT-66B/"
     dest_files = [f"s3://broadcast-{d}/OPT-66B/" for d in dst_regions]
+
+    # source_file = "s3://skyplane-broadcast/imagenet-images/"
+    # dest_files = [f"s3://broadcast-exp1-{d}/imagenet-images/" for d in dst_regions]
 
     print(source_file)
     print(dest_files)
@@ -32,6 +38,7 @@ def start_transfer(args):
 
             src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
             
+            print("Listing objects from the source bucket")
             src_objects = []
             for obj in src_client.list_objects(path_src):
                 src_objects.append(obj)
@@ -53,7 +60,7 @@ def start_transfer(args):
         type=args["algo"],
         n_vms=int(args["num_vms"]),
         num_partitions=int(args["num_partitions"]),
-        gbyte_to_transfer=transfer_size_gbytes, 
+        gbyte_to_transfer=transfer_size_gbytes,  # 171.78460 for image net 
         target_time=args["runtime_budget"], 
         filter_node=args["filter_node"],
         filter_edge=args["filter_edge"],

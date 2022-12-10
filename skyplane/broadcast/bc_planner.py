@@ -145,6 +145,7 @@ class BroadcastPlanner:
         topo.tot_vm_price_per_s = tot_vm_price_per_s
         topo.tot_vms = tot_vms
         topo.default_max_conn_per_vm = self.num_connections
+        topo.nx_graph = solution_graph
         return topo
 
     def plan(self) -> BroadcastReplicationTopology:

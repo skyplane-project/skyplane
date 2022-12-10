@@ -219,10 +219,14 @@ class GatewaySender(GatewayOperator):
         logger.info(f"[sender:{worker_id}] waiting for chunks to reach state 'downloaded'")
         wait_success = False
         for _ in range(60):
-            if wait_for_chunks():
-                wait_success = True
-                break
-            time.sleep(1)
+            try: 
+                if wait_for_chunks():
+                    wait_success = True
+                    break
+            except Exception as e:
+                logger.error(f"[Gateway Sender wait_for_chunks()] Exception: {e}")
+            
+            time.sleep(5) # originally 1 
         if not wait_success:
             raise Exception("Timed out waiting for chunks to reach state 'downloaded'")
         logger.info(f"[sender:{worker_id}] all chunks reached state 'downloaded'")
