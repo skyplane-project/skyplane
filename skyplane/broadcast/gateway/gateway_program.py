@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Tuple 
 import json
 from collections import defaultdict
 
@@ -98,14 +98,14 @@ class GatewayProgram:
         self._plan = defaultdict(list)
         self._ops = {}
 
-    def add_operators(self, ops: List[GatewayOperator], parent_op: Optional[GatewayOperator] = None, partition_id: Optional[str] = None):
+    def add_operators(self, ops: List[GatewayOperator], parent_op: Optional[GatewayOperator] = None, partition_id: Optional[Tuple] = None):
         ops_handles = []
         for op in ops:
             ops_handles.append(self.add_operator(op, parent_op, partition_id))
 
         return ops_handles
 
-    def add_operator(self, op: GatewayOperator, parent_op: Optional[GatewayOperator] = None, partition_id: Optional[str] = None):
+    def add_operator(self, op: GatewayOperator, parent_op: Optional[GatewayOperator] = None, partition_id: Optional[Tuple] = None):
         if not parent_op:  # root operation
             self._plan[partition_id].append(op)
         else:
