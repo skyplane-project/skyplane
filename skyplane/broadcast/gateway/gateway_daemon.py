@@ -65,7 +65,7 @@ class GatewayDaemon:
         # create gateway operators
         self.terminal_operators = defaultdict(list)  # track terminal operators per partition
         self.num_required_terminal = {}
-        self.operators = self.create_gateway_operators(gateway_program["_plan"])
+        self.operators = self.create_gateway_operators(gateway_program)
 
         # single gateway reciever
         self.gateway_receiver = GatewayReceiver(
@@ -129,7 +129,7 @@ class GatewayDaemon:
                 return operator["children"][0]["children"]
             return operator["children"]
 
-        def create_gateway_operators_helper(input_queue, program: List[Dict], partition_id: str, total_p = 0):
+        def create_gateway_operators_helper(input_queue, program: List[Dict], partition_ids: List[str], total_p = 0):
             for op in program:
 
                 handle = op["op_type"] + "_" + op["handle"]
@@ -146,20 +146,22 @@ class GatewayDaemon:
                     ), f"Parent must have been mux_and {handle}, instead was {input_queue} {gateway_program}"
 
                     # recurse to children with single queue
-                    create_gateway_operators_helper(input_queue.get_handle_queue(handle), child_operators, partition_id, total_p)
+                    create_gateway_operators_helper(input_queue.get_handle_queue(handle), child_operators, partition_ids, total_p)
                     continue
 
                 # create output data queue
                 output_queue = create_output_queue(op)
                 if isinstance(output_queue, GatewayANDQueue):
                     # update number of operations that must be completed
-                    self.num_required_terminal[partition] = self.num_required_terminal[partition] - 1 + len(child_operators)
+                    for partition in partition_ids:
+                        self.num_required_terminal[str(partition)] = self.num_required_terminal[str(partition)] - 1 + len(child_operators)
 
                 print(f"Input queue {input_queue} handle {handle}: created output queue {output_queue}")
                 print(f"Input queue {input_queue} handle {handle}: has children {child_operators}")
                 if output_queue is None:
                     # track what opeartors need to complete processing the chunk
-                    self.terminal_operators[partition_id].append(handle)
+                    for partition in partition_ids:
+                        self.terminal_operators[str(partition)].append(handle)
 
                 # create operators
                 if op["op_type"] == "receive":
@@ -242,34 +244,42 @@ class GatewayDaemon:
                 else:
                     raise ValueError(f"Unsupported op_type {op['op_type']}")
                 # recursively create for child operators
-                create_gateway_operators_helper(output_queue, child_operators, partition_id, total_p)
+                create_gateway_operators_helper(output_queue, child_operators, partition_ids, total_p)
             return total_p
 
         pprint(gateway_program)
 
         # create operator tree for each partition
         total_p = 0
-        for partition, program in gateway_program.items():
-            partition = str(partition)
+        for program_group in gateway_program:
+            partitions = program_group["partitions"]
+            program = program_group["value"]
 
+            print("partitions", partitions)
             # create initial queue for partition
             if program[0]["op_type"] == "mux_and":
                 queue = GatewayANDQueue()
                 print(f"First operator is mux_and: queue {queue}")
                 assert len(program) == 1, f"mux_and cannot have siblings"
-                self.chunk_store.add_partition(partition, queue)
                 program = program[0]["children"]
-                self.num_required_terminal[partition] = len(program)
+                for partition in partitions:
+                    self.num_required_terminal[str(partition)] = len(program)
             else:
                 queue = GatewayQueue()
                 print(f"First operator is ", program[0], "queue", queue)
-                self.chunk_store.add_partition(partition, queue)
-                self.num_required_terminal[partition] = 1
 
+                for partition in partitions:
+                    self.num_required_terminal[str(partition)] = 1
+
+            # link all partitions to same queue reference
+            for partition in partitions:
+                self.chunk_store.add_partition(str(partition), queue)
+ 
+            # create DAG for this partition group 
             total_p += create_gateway_operators_helper(
-                self.chunk_store.chunk_requests[partition],  # incoming chunk requests for partition
+                self.chunk_store.chunk_requests[str(partition)],  # incoming chunk requests for partition
                 program,  # single partition program
-                partition,
+                partitions,
                 0, 
             )
         print("TOTAL NUMBER OF PROCESSES", total_p)

@@ -306,7 +306,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
                 print("ERROR", e)
                 print("copying gateway logs")
                 logger.warning("Copying gateway logs")
-                do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=-1)
+                do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=1)
                 self.errors = errors
                 pprint(errors)
                 raise exceptions.SkyplaneGatewayException("Transfer failed with errors", errors)
