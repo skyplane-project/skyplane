@@ -221,6 +221,7 @@ class AWSCloudProvider(CloudProvider):
             current_subnet_id = 0
             for i in range(max_retries):
                 try:
+                    print("subnet", region, subnets[current_subnet_id])
                     instance = start_instance(subnets[current_subnet_id].id)
                     break
                 except exceptions.ClientError as e:

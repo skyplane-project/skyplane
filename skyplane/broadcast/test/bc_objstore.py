@@ -1,4 +1,5 @@
 import time
+from skyplane.obj_store.s3_interface import S3Interface
 
 import skyplane
 from skyplane.broadcast.bc_client import SkyplaneBroadcastClient
@@ -9,10 +10,13 @@ from skyplane.utils.definitions import gateway_docker_image
 import argparse 
 
 def start_transfer(args):
-    # src_region = "ap-east-1"
-    src_region = "us-east-1"
+    #src_region = "ap-east-1"
+    src_region = "af-south-1"
+    #src_region = "us-east-1"
     #dst_regions = ["ap-southeast-2", "ap-south-1"]
-    dst_regions = ["ap-southeast-2", "ap-south-1", "ap-northeast-3", "ap-northeast-3", "ap-northeast-1"]
+    #dst_regions = ["ap-southeast-2", "ap-south-1", "ap-east-1", "ap-southeast-1", "ap-northeast-3", "ap-northeast-2", "ap-northeast-1"]
+    #dst_regions = ["ap-south-1", "ap-east-1", "ap-southeast-1", "ap-northeast-3", "ap-northeast-1"]
+    dst_regions = ["ap-south-1", "ap-east-1", "ap-southeast-2", "ap-northeast-3", "ap-northeast-1"]
     # dst_regions = ["ap-northeast-3", "ap-northeast-2"]
     # dst_regions = ["us-west-1", "us-west-2"]
     # dst_regions = ["ap-east-1", "ap-northeast-1"]
@@ -21,11 +25,21 @@ def start_transfer(args):
     dst_cloud_providers = ["aws"] * len(dst_regions)
 
     # OPT model 
-    source_file = "s3://skyplane-broadcast/OPT-66B/"
-    dest_files = [f"s3://broadcast-{d}/OPT-66B/" for d in dst_regions]
+    #source_file = "s3://skyplane-broadcast/OPT-66B/"
+    source_file = f"s3://broadcast-opt-{src_region}/test_replication/"
+    dest_files = [f"s3://broadcast-opt-{d}/skyplane/" for d in dst_regions]
 
     # source_file = "s3://skyplane-broadcast/imagenet-images/"
     # dest_files = [f"s3://broadcast-exp1-{d}/imagenet-images/" for d in dst_regions]
+
+    # create bucket if it doesn't exist
+    for (region, bucket_path) in zip(dst_regions, dest_files): 
+        bucket_name = bucket_path.split("/")[2]
+        bucket = S3Interface(bucket_name)
+        try:
+            bucket.create_bucket(region)
+        except Exception as e: 
+            print(e)
 
     print(source_file)
     print(dest_files)

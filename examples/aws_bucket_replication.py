@@ -28,7 +28,7 @@ flags.DEFINE_string("target_data", None, "Target data directory specified by S3 
 
 def bucket_handle(region):
     # return f"broadcast-experiment-{region}"
-    return f"broadcast-{region}"
+    return f"broadcast-opt-{region}"
 
 
 def delete_policy(policy_arn):
