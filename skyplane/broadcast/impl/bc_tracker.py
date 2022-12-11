@@ -185,7 +185,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
             e2e_end_time = time.time()
         print(f"End to end time: {round(e2e_end_time - e2e_start_time, 4)}s\n")
         print(f"Transfer result:")
-        tot_runtime = float('-inf')
+        tot_runtime = float("-inf")
         for i in results:
             pprint(i)
             tot_runtime = max(tot_runtime, i["total_runtime_s"])
@@ -198,7 +198,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
 
         print(f"GB transferred: ${round(size_of_transfer, 8)}GB\n")
         print(f"Total runtime: {tot_runtime}s\n")
-        
+
         print(f"Cost per gb: {round(cost_per_gb, 4)}")
         print(f"Total egress cost: ${tot_egress_cost}")
 

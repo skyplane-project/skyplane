@@ -18,6 +18,7 @@ import functools
 import colorama
 from colorama import Fore, Style
 
+
 class BroadcastPlanner:
     def __init__(
         self,
@@ -52,12 +53,12 @@ class BroadcastPlanner:
 
         if aws_only:
             self.G.remove_nodes_from([i for i in self.G.nodes if i.split(":")[0] == "gcp" or i.split(":")[0] == "azure"])
-        elif gcp_only: 
+        elif gcp_only:
             self.G.remove_nodes_from([i for i in self.G.nodes if i.split(":")[0] == "aws" or i.split(":")[0] == "azure"])
         elif azure_only:
             self.G.remove_nodes_from([i for i in self.G.nodes if i.split(":")[0] == "aws" or i.split(":")[0] == "gcp"])
         else:
-            return 
+            return
 
     @functools.lru_cache(maxsize=None)
     def get_path_cost(self, src, dst, src_tier="PREMIUM", dst_tier="PREMIUM"):
@@ -132,14 +133,14 @@ class BroadcastPlanner:
             for i in range(solution_graph.nodes[dst_region]["num_vms"]):
                 topo.add_instance_objstore_edge(dst_region, i, dst_region, partition_ids)
 
-        tot_vm_price_per_s = 0 # total price per second 
-        tot_vms = 0 # total number of vms 
-        cost_map = {"gcp": 0.54, "aws": 0.54, "azure": 0.54} # cost per instance hours 
+        tot_vm_price_per_s = 0  # total price per second
+        tot_vms = 0  # total number of vms
+        cost_map = {"gcp": 0.54, "aws": 0.54, "azure": 0.54}  # cost per instance hours
 
         for node in solution_graph.nodes:
             tot_vm_price_per_s += solution_graph.nodes[node]["num_vms"] * cost_map[node.split(":")[0]] / 3600
             tot_vms += solution_graph.nodes[node]["num_vms"]
- 
+
         # set networkx solution graph in topo
         topo.cost_per_gb = cost_egress / gbyte_to_transfer  # cost per gigabytes
         topo.tot_vm_price_per_s = tot_vm_price_per_s
@@ -168,7 +169,17 @@ class BroadcastDirectPlanner(BroadcastPlanner):
         azure_only: bool,
     ):
         super().__init__(
-            src_provider, src_region, dst_providers, dst_regions, num_instances, num_connections, num_partitions, gbyte_to_transfer, aws_only, gcp_only, azure_only
+            src_provider,
+            src_region,
+            dst_providers,
+            dst_regions,
+            num_instances,
+            num_connections,
+            num_partitions,
+            gbyte_to_transfer,
+            aws_only,
+            gcp_only,
+            azure_only,
         )
 
     def plan(self) -> BroadcastReplicationTopology:
@@ -208,7 +219,17 @@ class BroadcastMDSTPlanner(BroadcastPlanner):
         azure_only: bool,
     ):
         super().__init__(
-            src_provider, src_region, dst_providers, dst_regions, num_instances, num_connections, num_partitions, gbyte_to_transfer, aws_only, gcp_only, azure_only
+            src_provider,
+            src_region,
+            dst_providers,
+            dst_regions,
+            num_instances,
+            num_connections,
+            num_partitions,
+            gbyte_to_transfer,
+            aws_only,
+            gcp_only,
+            azure_only,
         )
 
     def plan(self) -> BroadcastReplicationTopology:
@@ -250,7 +271,17 @@ class BroadcastHSTPlanner(BroadcastPlanner):
         azure_only: bool,
     ):
         super().__init__(
-            src_provider, src_region, dst_providers, dst_regions, num_instances, num_connections, num_partitions, gbyte_to_transfer, aws_only, gcp_only, azure_only
+            src_provider,
+            src_region,
+            dst_providers,
+            dst_regions,
+            num_instances,
+            num_connections,
+            num_partitions,
+            gbyte_to_transfer,
+            aws_only,
+            gcp_only,
+            azure_only,
         )
 
     def plan(self, hop_limit=3000) -> BroadcastReplicationTopology:
@@ -350,7 +381,6 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         aws_only: bool,
         gcp_only: bool,
         azure_only: bool,
-
     ):
         super().__init__(
             src_provider,
@@ -361,9 +391,9 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             num_connections=num_connections,
             num_partitions=num_partitions,
             gbyte_to_transfer=gbyte_to_transfer,
-            aws_only=aws_only, 
-            gcp_only=gcp_only, 
-            azure_only=azure_only
+            aws_only=aws_only,
+            gcp_only=gcp_only,
+            azure_only=azure_only,
         )
 
         src = self.src_provider + ":" + self.src_region
@@ -662,8 +692,8 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         return cost, p, n, f, v, egress_cost.value, instance_cost.value
 
     def plan_iterative(
-        self, 
-        problem: BroadcastProblem, 
+        self,
+        problem: BroadcastProblem,
         solver=None,
         filter_node: bool = False,
         filter_edge: bool = False,

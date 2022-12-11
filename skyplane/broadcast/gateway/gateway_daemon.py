@@ -129,7 +129,7 @@ class GatewayDaemon:
                 return operator["children"][0]["children"]
             return operator["children"]
 
-        def create_gateway_operators_helper(input_queue, program: List[Dict], partition_ids: List[str], total_p = 0):
+        def create_gateway_operators_helper(input_queue, program: List[Dict], partition_ids: List[str], total_p=0):
             for op in program:
 
                 handle = op["op_type"] + "_" + op["handle"]
@@ -274,13 +274,13 @@ class GatewayDaemon:
             # link all partitions to same queue reference
             for partition in partitions:
                 self.chunk_store.add_partition(str(partition), queue)
- 
-            # create DAG for this partition group 
+
+            # create DAG for this partition group
             total_p += create_gateway_operators_helper(
                 self.chunk_store.chunk_requests[str(partition)],  # incoming chunk requests for partition
                 program,  # single partition program
                 partitions,
-                0, 
+                0,
             )
         print("TOTAL NUMBER OF PROCESSES", total_p)
         return operators
