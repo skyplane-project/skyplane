@@ -297,7 +297,7 @@ class BroadcastDataplane(Dataplane):
             gateway_programs=self.current_gw_programs,  # NOTE: BC pass in gateway programs
             gateway_docker_image=gateway_docker_image,
             e2ee_key_bytes=e2ee_key_bytes if (self.transfer_config.use_e2ee and (am_source or am_sink)) else None,
-            use_bbr=self.transfer_config.use_bbr,
+            use_bbr=False, #self.transfer_config.use_bbr,
             use_compression=self.transfer_config.use_compression,
             use_socket_tls=self.transfer_config.use_socket_tls,
         )
