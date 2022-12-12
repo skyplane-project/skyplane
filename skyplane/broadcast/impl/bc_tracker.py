@@ -155,6 +155,16 @@ class BCTransferProgressTracker(TransferProgressTracker):
             print("Individual transfer statistics")
             pprint(transfer_stats)
 
+            size_of_transfer = self.calculate_size(dst_region)
+            cost_per_gb = self.dataplane.topology.cost_per_gb
+            tot_egress_cost = round(cost_per_gb * size_of_transfer, 8)
+
+            print(f"GB transferred: ${round(size_of_transfer, 8)}GB\n")
+            print(f"Cost per gb: {round(cost_per_gb, 4)}")
+            print(f"Total egress cost: ${tot_egress_cost}")
+            print(f"Total # of vms: {self.dataplane.topology.tot_vms}")
+            print(f"Total vm price per s: {self.dataplane.topology.tot_vm_price_per_s}")
+
             try:
                 for job in self.jobs.values():
                     logger.fs.debug(f"[TransferProgressTracker] Finalizing job {job.uuid}")
@@ -267,7 +277,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
             log_df = pd.DataFrame(self._query_chunk_status())
             if log_df.empty:
                 logger.warning("No chunk status log entries yet")
-                time.sleep(50)
+                time.sleep(10)
                 continue
 
             is_complete_rec = (
@@ -324,7 +334,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
                 raise exceptions.SkyplaneGatewayException("Transfer failed with errors", errors)
 
             # sleep
-            time.sleep(100)
+            time.sleep(30)
 
     @property
     def is_complete(self):

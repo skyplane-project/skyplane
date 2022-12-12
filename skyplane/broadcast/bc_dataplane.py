@@ -100,7 +100,7 @@ class BroadcastDataplane(Dataplane):
                 if gen_random_data:
                     receive_op = GatewayGenData(size_mb=self.transfer_config.random_chunk_size_mb)
                 else:
-                    receive_op = GatewayReceive()
+                    receive_op = GatewayReceive(max_pending_chunks=64)
             else:
                 receive_op = GatewayReadObjectStore(
                     bucket_name=obj_store[0], bucket_region=obj_store[1], num_connections=self.get_object_store_connection(region)
@@ -141,7 +141,8 @@ class BroadcastDataplane(Dataplane):
             tot_senders = sum([len(next_region_ips) for next_region_ips in region_to_ips_map.values()])
 
             for next_region, next_region_ips in region_to_ips_map.items():
-                num_connections = int(max_conn_per_vm / tot_senders)
+                # num_connections = int(max_conn_per_vm / tot_senders)
+                num_connections = 8
 
                 if (
                     next_region.split(":")[0] == region.split(":")[0] and region.split(":")[0] == "gcp"
@@ -172,7 +173,8 @@ class BroadcastDataplane(Dataplane):
             else:
                 ips = [ip for next_region_ips in region_to_ips_map.values() for ip in next_region_ips]
 
-            num_connections = int(max_conn_per_vm / len(ips))
+            # num_connections = int(max_conn_per_vm / len(ips))
+            num_connections = 8
             send_ops = [GatewaySend(ip, num_connections=num_connections, region=next_region) for ip in ips]
 
             # if num of gateways > 1, then connect to MUX_OR
@@ -188,7 +190,7 @@ class BroadcastDataplane(Dataplane):
     def add_dst_operator(
         self, solution_graph, bc_pg: GatewayProgram, region: str, partition_ids: List[int], obj_store: Optional[Tuple[str, str]] = None
     ):
-        receive_op = GatewayReceive()
+        receive_op = GatewayReceive(max_pending_chunks=64)
         bc_pg.add_operator(receive_op, partition_id=tuple(partition_ids))
 
         # write
