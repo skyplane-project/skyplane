@@ -129,7 +129,8 @@ class GatewayDaemon:
                 return operator["children"][0]["children"]
             return operator["children"]
 
-        def create_gateway_operators_helper(input_queue, program: List[Dict], partition_ids: List[str], total_p = 0):
+        def create_gateway_operators_helper(input_queue, program: List[Dict], partition_ids: List[str]):
+            total_p = 0
             for op in program:
 
                 handle = op["op_type"] + "_" + op["handle"]
@@ -146,7 +147,7 @@ class GatewayDaemon:
                     ), f"Parent must have been mux_and {handle}, instead was {input_queue} {gateway_program}"
 
                     # recurse to children with single queue
-                    create_gateway_operators_helper(input_queue.get_handle_queue(handle), child_operators, partition_ids, total_p)
+                    total_p += create_gateway_operators_helper(input_queue.get_handle_queue(handle), child_operators, partition_ids)
                     continue
 
                 # create output data queue
@@ -171,11 +172,12 @@ class GatewayDaemon:
                         region=self.region,
                         input_queue=input_queue,
                         output_queue=output_queue,
-                        n_processes=1,
+                        n_processes=1, # dummy wait thread, not actual reciever
                         chunk_store=self.chunk_store,
                         error_event=self.error_event,
                         error_queue=self.error_queue,
                     )
+                    total_p += 1
                 elif op["op_type"] == "read_object_store":
                     operators[handle] = GatewayObjStoreReadOperator(
                         handle=handle,
@@ -241,16 +243,16 @@ class GatewayDaemon:
                         error_event=self.error_event,
                         chunk_store=self.chunk_store,
                     )
+                    total_p += 1
                 else:
                     raise ValueError(f"Unsupported op_type {op['op_type']}")
                 # recursively create for child operators
-                create_gateway_operators_helper(output_queue, child_operators, partition_ids, total_p)
+                total_p += create_gateway_operators_helper(output_queue, child_operators, partition_ids)
             return total_p
 
         pprint(gateway_program)
 
         # create operator tree for each partition
-        total_p = 0
         for program_group in gateway_program:
             partitions = program_group["partitions"]
             program = program_group["value"]
@@ -274,13 +276,12 @@ class GatewayDaemon:
             # link all partitions to same queue reference
             for partition in partitions:
                 self.chunk_store.add_partition(str(partition), queue)
- 
-            # create DAG for this partition group 
-            total_p += create_gateway_operators_helper(
+
+            # create DAG for this partition group
+            total_p = create_gateway_operators_helper(
                 self.chunk_store.chunk_requests[str(partition)],  # incoming chunk requests for partition
                 program,  # single partition program
-                partitions,
-                0, 
+                partitions
             )
         print("TOTAL NUMBER OF PROCESSES", total_p)
         return operators

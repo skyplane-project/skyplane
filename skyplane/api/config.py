@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from typing import Optional
+from typing import Optional, List
 
 from skyplane import compute
 
@@ -42,13 +42,17 @@ class GCPConfig(AuthenticationConfig):
         return compute.GCPAuthentication(config=self)  # type: ignore
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True) 
 class TransferConfig:
     autoterminate_minutes: int = 15
     requester_pays: bool = False
 
-    # randomly generate data or not
+    # randomly generate data or not for broadcast 
+    gen_random_data: bool = False
     random_chunk_size_mb: Optional[float] = None
+    num_random_chunks: Optional[int] = None
+    src_region: Optional[str] = None
+    dst_regions: Optional[List[str]] = None
 
     # gateway settings
     use_bbr: bool = True

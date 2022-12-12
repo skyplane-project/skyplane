@@ -3,7 +3,7 @@ import functools
 from collections import Counter
 
 import urllib3
-import os 
+import os
 
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 from collections import defaultdict, Counter
@@ -15,7 +15,7 @@ from skyplane.api.tracker import TransferHook
 from skyplane.broadcast.impl.bc_tracker import BCTransferProgressTracker
 from skyplane.broadcast.impl.bc_transfer_job import BCCopyJob, BCSyncJob, BCTransferJob
 from skyplane.utils.definitions import gateway_docker_image
-from pprint import pprint 
+from pprint import pprint
 from skyplane.broadcast.bc_plan import BroadcastReplicationTopology
 from skyplane.broadcast.gateway.gateway_program import (
     GatewayProgram,
@@ -62,7 +62,7 @@ class BroadcastDataplane(Dataplane):
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         self.provisioning_lock = threading.Lock()
         self.provisioned = False
-        self.gateway_programs = None 
+        self.gateway_programs = None
 
         # pending tracker tasks
         self.jobs_to_dispatch: List[BCTransferJob] = []
@@ -98,7 +98,7 @@ class BroadcastDataplane(Dataplane):
         else:
             if obj_store is None:
                 if gen_random_data:
-                    receive_op = GatewayGenData(size_mb=self.job.random_chunk_size_mb)
+                    receive_op = GatewayGenData(size_mb=self.transfer_config.random_chunk_size_mb)
                 else:
                     receive_op = GatewayReceive()
             else:
@@ -185,7 +185,9 @@ class BroadcastDataplane(Dataplane):
         # print("Number of connections: ", num_connections)
         return True
 
-    def add_dst_operator(self, solution_graph, bc_pg: GatewayProgram, region: str, partition_ids: List[int], obj_store: Optional[Tuple[str, str]] = None):
+    def add_dst_operator(
+        self, solution_graph, bc_pg: GatewayProgram, region: str, partition_ids: List[int], obj_store: Optional[Tuple[str, str]] = None
+    ):
         receive_op = GatewayReceive()
         bc_pg.add_operator(receive_op, partition_id=tuple(partition_ids))
 
@@ -211,7 +213,7 @@ class BroadcastDataplane(Dataplane):
             self.add_operator_receive_send(bc_pg, region, partition_ids, dst_op=mux_and_op)
 
     def remap_keys(self, mapping):
-        return [{'partitions': k, 'value': v} for k, v in mapping.items()]
+        return [{"partitions": k, "value": v} for k, v in mapping.items()]
 
     @property
     @functools.lru_cache(maxsize=None)
@@ -227,7 +229,7 @@ class BroadcastDataplane(Dataplane):
 
         # NOTE: assume all transfer object share the same (src, dsts)? might not be correct
         one_transfer_job = self.jobs_to_dispatch[0]
-        if not self.transfer_config.random_chunk_size_mb:
+        if not self.transfer_config.gen_random_data:
             src_obj_store = (one_transfer_job.src_bucket, one_transfer_job.src_region)
 
             dsts_obj_store_map = {}
@@ -246,9 +248,12 @@ class BroadcastDataplane(Dataplane):
 
             partition_to_next_regions = {}
             for i in range(num_partitions):
-                partition_to_next_regions[i] = set([edge[1] for edge in solution_graph.out_edges(node, data=True) if i in edge[-1]["partitions"]])
+                partition_to_next_regions[i] = set(
+                    [edge[1] for edge in solution_graph.out_edges(node, data=True) if i in edge[-1]["partitions"]]
+                )
 
-            import collections 
+            import collections
+
             keys_per_set = collections.defaultdict(list)
             for key, value in partition_to_next_regions.items():
                 keys_per_set[frozenset(value)].append(key)
@@ -256,10 +261,12 @@ class BroadcastDataplane(Dataplane):
             list_of_partitions = list(keys_per_set.values())
 
             # source node: read from object store or generate random data, then forward data
-            for partitions in list_of_partitions: 
+            for partitions in list_of_partitions:
                 # print("Processing partitions: ", partitions)
                 if node == src:
-                    self.add_operator_receive_send(solution_graph, node_gateway_program, node, partitions, obj_store=src_obj_store, gen_random_data=gen_random_data)
+                    self.add_operator_receive_send(
+                        solution_graph, node_gateway_program, node, partitions, obj_store=src_obj_store, gen_random_data=gen_random_data
+                    )
 
                 # dst receive data, write to object store / write local (if obj_store=None), forward data if needed
                 elif node in dsts:
@@ -297,7 +304,7 @@ class BroadcastDataplane(Dataplane):
             gateway_programs=self.current_gw_programs,  # NOTE: BC pass in gateway programs
             gateway_docker_image=gateway_docker_image,
             e2ee_key_bytes=e2ee_key_bytes if (self.transfer_config.use_e2ee and (am_source or am_sink)) else None,
-            use_bbr=False, #self.transfer_config.use_bbr,
+            use_bbr=False,
             use_compression=self.transfer_config.use_compression,
             use_socket_tls=self.transfer_config.use_socket_tls,
         )
@@ -314,7 +321,20 @@ class BroadcastDataplane(Dataplane):
         dsts: List[str],
         recursive: bool = False,
     ) -> str:
-        job = BCCopyJob(src, dsts[0], recursive, dst_paths=dsts, requester_pays=self.transfer_config.requester_pays)
+        if len(src) != 0:
+            assert self.transfer_config.gen_random_data is False
+            job = BCCopyJob(
+                src,
+                dsts[0],
+                recursive,
+                dst_paths=dsts,
+                requester_pays=self.transfer_config.requester_pays,
+                transfer_config=self.transfer_config,
+            )
+        else:
+            assert self.transfer_config.gen_random_data is True
+            job = BCCopyJob("", "", False, [], requester_pays=self.transfer_config.requester_pays, transfer_config=self.transfer_config)
+
         logger.fs.debug(f"[SkyplaneBroadcastClient] Queued copy job {job}")
         self.jobs_to_dispatch.append(job)
         return job.uuid
@@ -325,7 +345,14 @@ class BroadcastDataplane(Dataplane):
         dsts: List[str],
         recursive: bool = False,
     ) -> str:
-        job = BCSyncJob(src, dsts[0], recursive, dst_paths=dsts, requester_pays=self.transfer_config.requester_pays)
+        job = BCSyncJob(
+            src,
+            dsts[0],
+            recursive,
+            dst_paths=dsts,
+            requester_pays=self.transfer_config.requester_pays,
+            transfer_config=self.transfer_config,
+        )
         logger.fs.debug(f"[SkyplaneBroadcastClient] Queued sync job {job}")
         self.jobs_to_dispatch.append(job)
         return job.uuid

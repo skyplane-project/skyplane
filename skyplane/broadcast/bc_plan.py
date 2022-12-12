@@ -49,7 +49,7 @@ class BroadcastReplicationTopology(ReplicationTopology):
         num_partitions: int,
         edges: Optional[List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int, str]]] = None,
         cost_per_gb: Optional[float] = None,
-        tot_vms: Optional[int] = None, 
+        tot_vms: Optional[int] = None,
         tot_vm_price_per_s: Optional[float] = None,
         default_max_conn_per_vm: Optional[int] = None,
     ):

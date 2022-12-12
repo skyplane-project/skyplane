@@ -333,10 +333,10 @@ class Server:
 
         # NOTE: (BC) upload gateway specification for this gateway
         if gateway_programs:
-            #for ip, program in gateway_programs.items():
+            # for ip, program in gateway_programs.items():
             #    print(ip)
             #    pprint(program.to_dict())
-            
+
             region_tag = self.region_tag.replace(":", "_")
             filename = f"gateway_programs_{region_tag}.json"
             write_json_dir = tmp_log_dir / "gw_programs"

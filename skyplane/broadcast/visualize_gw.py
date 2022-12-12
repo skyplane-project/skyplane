@@ -8,12 +8,14 @@ from random import randint
 from skyplane.utils import logger
 import functools
 
+
 @functools.lru_cache(maxsize=None)
 def get_path_cost(src, dst, src_tier="PREMIUM", dst_tier="PREMIUM"):
     from skyplane.compute.cloud_provider import CloudProvider
 
     assert src_tier == "PREMIUM" and dst_tier == "PREMIUM"
     return CloudProvider.get_transfer_cost(src, dst)
+
 
 def make_nx_graph(cost, throughput):
     G = nx.DiGraph()
