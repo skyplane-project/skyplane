@@ -248,7 +248,7 @@ class GatewayDaemonAPI(threading.Thread):
         # add a new chunk request with default state registered
         @app.route("/api/v1/chunk_requests", methods=["POST"])
         def add_chunk_request():
-            logging.debug(f"[gateway_api] Recieved chunk request {request.json}")
+            logging.info(f"[gateway_api] Recieved chunk request {request.json}")
             state_param = request.args.get("state", "registered")
             n_added = add_chunk_req(request.json, ChunkState.from_str(state_param))
             # TODO: Add to chunk manager queue

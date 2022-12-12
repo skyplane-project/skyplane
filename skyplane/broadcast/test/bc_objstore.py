@@ -10,10 +10,10 @@ import argparse
 
 
 def start_transfer(args):
-    # src_region = "ap-east-1"
-    src_region = "us-east-1"
-    dst_regions = ["ap-southeast-2", "ap-south-1"]
-    # dst_regions = ["ap-southeast-2", "ap-south-1", "ap-northeast-3", "ap-northeast-2", "ap-northeast-1"]
+    src_region = "ap-east-1"
+    # src_region = "us-east-1"
+    # dst_regions = ["ap-southeast-2", "ap-south-1"]
+    dst_regions = ["ap-southeast-2", "ap-south-1", "ap-northeast-3", "ap-northeast-2", "ap-northeast-1"]
     # dst_regions = ["ap-northeast-3", "ap-northeast-2"]
     # dst_regions = ["us-west-1", "us-west-2"]
     # dst_regions = ["ap-east-1", "ap-northeast-1"]
@@ -22,8 +22,11 @@ def start_transfer(args):
     dst_cloud_providers = ["aws"] * len(dst_regions)
 
     # OPT model
-    source_file = "s3://skyplane-broadcast/OPT-66B/"
-    dest_files = [f"s3://broadcast-{d}/OPT-66B/" for d in dst_regions]
+    # source_file = "s3://skyplane-broadcast/OPT-66B/"
+    # dest_files = [f"s3://broadcast-{d}/OPT-66B/" for d in dst_regions]
+
+    source_file = "s3://broadcast-exp1-ap-east-1/OPT-66B/"
+    dest_files = [f"s3://broadcast-exp1-{d}/OPT-66B/" for d in dst_regions]
 
     # source_file = "s3://skyplane-broadcast/imagenet-images/"
     # dest_files = [f"s3://broadcast-exp1-{d}/imagenet-images/" for d in dst_regions]

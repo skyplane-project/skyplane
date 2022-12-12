@@ -47,6 +47,7 @@ class SkyplaneBroadcastClient:
                 random_chunk_size_mb=random_chunk_size_mb,
                 src_region=src_region,
                 dst_regions=dst_regions,
+                use_bbr = False 
             )
         )
         print("transfer config: ", transfer_config)

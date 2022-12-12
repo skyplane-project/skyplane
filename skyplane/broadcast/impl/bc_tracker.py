@@ -172,6 +172,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
                 raise e
 
             UsageClient.log_transfer(transfer_stats, args, self.dataplane.src_region_tag, dst_region, session_start_timestamp_ms)
+
             return transfer_stats
 
         # Record only the transfer time per destination
@@ -179,9 +180,20 @@ class BCTransferProgressTracker(TransferProgressTracker):
         results = []
         with ThreadPoolExecutor(max_workers=len(self.dst_regions)) as executor:
             e2e_start_time = time.time()
-            future_list = [executor.submit(monitor_single_dst_helper, dst) for dst in self.dst_regions]
-            for future in as_completed(future_list):
-                results.append(future.result())
+            try: 
+                future_list = [executor.submit(monitor_single_dst_helper, dst) for dst in self.dst_regions]
+                for future in as_completed(future_list):
+                    results.append(future.result())
+            except Exception as e:
+                print("copying gateway logs")
+                logger.warning("Copying gateway logs")
+                do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=1)
+                raise e
+            finally:
+                print("copying gateway logs")
+                logger.warning("Copying gateway logs")
+                do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=1)
+
             e2e_end_time = time.time()
         print(f"End to end time: {round(e2e_end_time - e2e_start_time, 4)}s\n")
         print(f"Transfer result:")
@@ -242,7 +254,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
 
             # check for errors and exit if there are any (while setting debug flags)
             errors = self.dataplane.check_error_logs()
-            print("ERRORS", errors)
+            # print("ERRORS", errors)
 
             if any(errors.values()):
                 print("copying gateway logs")
@@ -255,7 +267,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
             log_df = pd.DataFrame(self._query_chunk_status())
             if log_df.empty:
                 logger.warning("No chunk status log entries yet")
-                time.sleep(10)
+                time.sleep(50)
                 continue
 
             is_complete_rec = (
@@ -312,7 +324,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
                 raise exceptions.SkyplaneGatewayException("Transfer failed with errors", errors)
 
             # sleep
-            time.sleep(30)
+            time.sleep(100)
 
     @property
     def is_complete(self):

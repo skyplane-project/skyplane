@@ -47,9 +47,9 @@ def replicate_random(
         d_regions.append(dst_region)
 
     # create transfer list
-    # 8,  80, 800,  1600,   3200, 4000,  8000(n_chunks)
-    # 0.5, 5,  50,   100,   200,   250,   500 (transfer siz2e in GB)
-    # 0.8, 8,  80,   160,   320,   400,   800 (seconds for ILP)
+    # 8,  80, 800,  1600,   3200, 4000, 4800    8000(n_chunks)
+    # 0.5, 5,  50,   100,   200,   250,  300     500 (transfer siz2e in GB)
+    # 0.8, 8,  80,   160,   320,   400,          800 (seconds for ILP)
 
     random_chunk_size_mb = 64
     transfer_size_gbytes = num_chunks * random_chunk_size_mb * MB / GB

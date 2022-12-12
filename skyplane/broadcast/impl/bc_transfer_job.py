@@ -111,7 +111,7 @@ class BCCopyJob(BCTransferJob):
         self,
         dataplane: "BroadcastDataplane",
         transfer_config: TransferConfig,
-        dispatch_batch_size: int = 1000,
+        dispatch_batch_size: int = 200,
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways."""
         if not transfer_config.gen_random_data:
@@ -223,23 +223,26 @@ class BCCopyJob(BCTransferJob):
             do_parallel(complete_fn, batches, n=-1)
 
     def bc_verify(self, dst_region: str):
-        # NOTE: assume dst keys are the same across destinations?
-        dst_keys = {dst_o.key: src_o for src_o, dst_o in self.transfer_list if src_o.size != 0}
-        print("[verify] Dst keys: ", dst_keys)
+        # only veryfiy when there's an object store connection
 
-        dest_iface_list = set(d for d in self.dst_ifaces.values() if d.region_tag() == dst_region)
+        if not self.transfer_config.gen_random_data: 
+            # NOTE: assume dst keys are the same across destinations?
+            dst_keys = {dst_o.key: src_o for src_o, dst_o in self.transfer_list if src_o.size != 0}
+            print("[verify] Dst keys: ", dst_keys)
 
-        for dest_iface in dest_iface_list:
-            for obj in dest_iface.list_objects(self.dst_prefixes[dest_iface.bucket()]):
-                # check metadata (src.size == dst.size) && (src.modified <= dst.modified)
-                src_obj = dst_keys.get(obj.key)
-                if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:
-                    del dst_keys[obj.key]
-            if dst_keys:
-                print("[verify] object verification failed: ", [obj.key for obj in dst_keys.values()])
-                raise exceptions.TransferFailedException(
-                    f"{len(dst_keys)} objects failed verification", [obj.key for obj in dst_keys.values()]
-                )
+            dest_iface_list = set(d for d in self.dst_ifaces.values() if d.region_tag() == dst_region)
+
+            for dest_iface in dest_iface_list:
+                for obj in dest_iface.list_objects(self.dst_prefixes[dest_iface.bucket()]):
+                    # check metadata (src.size == dst.size) && (src.modified <= dst.modified)
+                    src_obj = dst_keys.get(obj.key)
+                    if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:
+                        del dst_keys[obj.key]
+                if dst_keys:
+                    print("[verify] object verification failed: ", [obj.key for obj in dst_keys.values()])
+                    raise exceptions.TransferFailedException(
+                        f"{len(dst_keys)} objects failed verification", [obj.key for obj in dst_keys.values()]
+                    )
 
 
 @dataclass
