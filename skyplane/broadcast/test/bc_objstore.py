@@ -27,11 +27,11 @@ def start_transfer(args):
 
     # OPT model 
     #source_file = "s3://skyplane-broadcast/OPT-66B/"
-    source_file = f"s3://broadcast-opt-{src_region}/test_replication/"
-    dest_files = [f"s3://broadcast-opt-{d}/skyplane/" for d in dst_regions]
+    # source_file = f"s3://broadcast-opt-{src_region}/test_replication/"
+    # dest_files = [f"s3://broadcast-opt-{d}/skyplane/" for d in dst_regions]
 
-    #source_file = "s3://broadcast-exp1-ap-east-1/OPT-66B/"
-    #dest_files = [f"s3://broadcast-exp1-{d}/OPT-66B/" for d in dst_regions]
+    source_file = "s3://broadcast-exp1-ap-east-1/OPT-66B/"
+    dest_files = [f"s3://broadcast-exp1-{d}/OPT-66B/" for d in dst_regions]
 
     # source_file = "s3://skyplane-broadcast/imagenet-images/"
     # dest_files = [f"s3://broadcast-exp1-{d}/imagenet-images/" for d in dst_regions]

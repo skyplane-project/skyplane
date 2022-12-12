@@ -142,7 +142,7 @@ class BroadcastDataplane(Dataplane):
 
             for next_region, next_region_ips in region_to_ips_map.items():
                 # num_connections = int(max_conn_per_vm / tot_senders)
-                num_connections = 32
+                num_connections = 8
 
                 if (
                     next_region.split(":")[0] == region.split(":")[0] and region.split(":")[0] == "gcp"
@@ -174,7 +174,7 @@ class BroadcastDataplane(Dataplane):
                 ips = [ip for next_region_ips in region_to_ips_map.values() for ip in next_region_ips]
 
             # num_connections = int(max_conn_per_vm / len(ips))
-            num_connections = 32
+            num_connections = 8
             send_ops = [GatewaySend(ip, num_connections=num_connections, region=next_region) for ip in ips]
 
             # if num of gateways > 1, then connect to MUX_OR

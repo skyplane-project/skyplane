@@ -283,7 +283,7 @@ class GatewayDaemon:
                 program,  # single partition program
                 partitions
             )
-        print("TOTAL NUMBER OF PROCESSES", total_p)
+        # print("TOTAL NUMBER OF PROCESSES", total_p)
         return operators
 
     def run(self):
