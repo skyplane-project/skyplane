@@ -578,6 +578,12 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
 
         constraints = []
 
+        # dirty hack to ban some regions
+        print(nodes)
+        #for banned_node in ["aws:eu-south-2"]: 
+        #    i = nodes.index(banned_node)
+        #    constraints.append(v[i] == 1)
+
         # constraints on VM per region
         for i in range(num_nodes):
             constraints.append(v[i] <= max_vm_per_region - existing_vms[i])
@@ -715,6 +721,11 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             sampled = [i for i in sample(list(self.G.nodes), 15) if i not in src_dst_li]
             g = g.subgraph(src_dst_li + sampled).copy()
             print(f"Filter node (only use): {src_dst_li + sampled}")
+
+        # banned nodes
+        sampled = list(self.G.nodes)
+        sampled.remove("aws:eu-south-2")
+        g = g.subgraph(sampled).copy()
 
         cost = np.array([e[2] for e in g.edges(data="cost")])
         tp = np.array([e[2] for e in g.edges(data="throughput")])
