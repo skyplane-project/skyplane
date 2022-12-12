@@ -85,6 +85,7 @@ class Provisioner:
         return self.provisioned_vms[uuid]
 
     def _provision_task(self, task: ProvisionerTask):
+        print("provision", task.region)
         with Timer() as t:
             if task.cloud_provider == "aws":
                 assert self.aws.auth.enabled(), "AWS credentials not configured"
