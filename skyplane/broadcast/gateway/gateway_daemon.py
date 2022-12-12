@@ -43,6 +43,7 @@ class GatewayDaemon:
 
         print("starting gateway daemon", gateway_program_path)
         pprint(gateway_program)
+        assert len(gateway_program) > 0, f"Cannot have empty gateway program {gateway_program}"
 
         self.use_tls = use_tls
 
