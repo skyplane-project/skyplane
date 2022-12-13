@@ -14,7 +14,7 @@ with warnings.catch_warnings():
 from skyplane import exceptions
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.server import Server, ServerState, key_root
-from skyplane.utils import imports
+from skyplane.utils import imports, logger
 from skyplane.utils.cache import ignore_lru_cache
 
 
@@ -109,11 +109,14 @@ class AWSServer(Server):
             profile = iam.InstanceProfile(profile["Arn"].split("/")[-1])
 
             # remove all roles from instance profile
-            for role in profile.roles:
-                profile.remove_role(RoleName=role.name)
-
-            # delete instance profile
-            profile.delete()
+            try:
+                for role in profile.roles:
+                    profile.remove_role(RoleName=role.name)
+                # delete instance profile
+                profile.delete()
+            except Exception as e:
+                logger.warning(f"Failed to remove instance profile {profile.name}")
+                logger.exception(e)
 
         # delete instance
         self.get_boto3_instance_resource().terminate()
