@@ -587,7 +587,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
 
         # optimization problem (minimize sum of costs)
         egress_cost = cp.sum(cost @ p) * partition_size_gb
-        instance_cost = cp.sum(v) * instance_cost_s * s * 10000000  # NOTE(sl): adding instance cost every time?
+        instance_cost = cp.sum(v) * instance_cost_s * s 
         obj = cp.Minimize(egress_cost + instance_cost)
 
         constraints = []
