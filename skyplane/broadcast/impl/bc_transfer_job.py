@@ -230,7 +230,7 @@ class BCCopyJob(BCTransferJob):
     def bc_verify(self, dst_region: str):
         # only veryfiy when there's an object store connection
 
-        if not self.transfer_config.gen_random_data: 
+        if not self.transfer_config.gen_random_data:
             # NOTE: assume dst keys are the same across destinations?
             dst_keys = {dst_o.key: src_o for src_o, dst_o in self.transfer_list if src_o.size != 0}
             print("[verify] Dst keys: ", dst_keys)

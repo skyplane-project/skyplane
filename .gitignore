@@ -11,6 +11,9 @@ __pycache__/
 # C extensions
 *.so
 
+# experiment scripts
+*.sh
+
 # Distribution / packaging
 .Python
 log/

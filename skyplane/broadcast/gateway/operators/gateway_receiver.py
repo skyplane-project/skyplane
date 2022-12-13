@@ -40,7 +40,7 @@ class GatewayReceiver:
         self.error_event = error_event
         self.error_queue = error_queue
         self.recv_block_size = recv_block_size
-        self.max_pending_chunks = 64 #max_pending_chunks
+        self.max_pending_chunks = 64  # max_pending_chunks
         self.use_compression = use_compression
         if e2ee_key_bytes is None:
             self.e2ee_secretbox = None

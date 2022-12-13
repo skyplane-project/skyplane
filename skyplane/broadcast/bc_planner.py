@@ -469,15 +469,24 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         for i in range(len(partition_g)):
             for edge in partition_g[i].edges:
                 if edge[0] in bg and edge[1] in bg[edge[0]]:
-                    bg[edge[0]][edge[1]]["partitions"].append(i)
+                    bg[edge[0]][edge[1]]["partitions"].append(str(i))
                 else:
                     e = self.G[edge[0].split(",")[0]][edge[1].split(",")[0]]
                     bg.add_edge(edge[0], edge[1], partitions=[i], cost=e["cost"], throughput=e["throughput"])
 
-            for node in partition_g[i].nodes:
-                if "num_vms" not in bg.nodes[node]:
-                    bg.nodes[node]["num_vms"] = 0
-                bg.nodes[node]["num_vms"] += partition_g[i].nodes[node]["num_vms"]
+        for node in bg.nodes:
+            bg.nodes[node]["num_vms"] = 0
+            for i in range(len(partition_g)):
+                if node in partition_g[i].nodes:
+                    bg.nodes[node]["num_vms"] = max(partition_g[i].nodes[node]["num_vms"], bg.nodes[node]["num_vms"])
+
+        # for i in range(len(partition_g)):
+        #     for node in partition_g[i].nodes:
+        #         if node not in bg.nodes:
+        #             continue
+        #         if "num_vms" not in bg.nodes[node]:
+        #             bg.nodes[node]["num_vms"] = 0
+        #         bg.nodes[node]["num_vms"] += partition_g[i].nodes[node]["num_vms"]
 
         return bg
 
@@ -501,14 +510,18 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
                 result_g.add_edge(edge[0], edge[1], throughput=g[edge[0]][edge[1]]["throughput"], cost=g[edge[0]][edge[1]]["cost"])
 
         remove_nodes = []  # number of vms is one but the
+
         for i in range(len(v_result)):
             num_vms = int(v_result[i])
             if nodes[i] in result_g.nodes:
                 result_g.nodes[nodes[i]]["num_vms"] = num_vms
             else:
-                # print(f"Nodes: {nodes[i]}, number of vms: {num_vms}, not in result_g") --> why would this happen
-                remove_nodes.append(nodes[i])
+                result_g.add_node(nodes[i], num_vms=num_vms)
 
+        print("Edge: ", result_g.edges.data())
+        print("Node: ", result_g.nodes.data())
+        print("Num of node: ", len(result_g.nodes))
+        print("TOPO GRPAH RESULTS: ", v_result)
         return result_g
 
     def get_egress_ingress(self, g, nodes, edges, partition_size, p):
@@ -574,7 +587,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
 
         # optimization problem (minimize sum of costs)
         egress_cost = cp.sum(cost @ p) * partition_size_gb
-        instance_cost = cp.sum(v) * instance_cost_s * s  # NOTE(sl): adding instance cost every time?
+        instance_cost = cp.sum(v) * instance_cost_s * s * 10000000  # NOTE(sl): adding instance cost every time?
         obj = cp.Minimize(egress_cost + instance_cost)
 
         constraints = []
@@ -868,6 +881,8 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         g = self.G
 
         # node-approximation
+        from random import sample
+
         if filter_node:
             src_dst_li = [problem.src] + problem.dsts
             sampled = [i for i in sample(list(self.G.nodes), 15) if i not in src_dst_li]
