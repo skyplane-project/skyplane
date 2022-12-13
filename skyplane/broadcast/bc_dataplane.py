@@ -114,7 +114,7 @@ class BroadcastDataplane(Dataplane):
 
         # if no regions to forward data to
         if len(next_regions) == 0:
-            print(f"{region} has no next region to forward data to: {g.edges.data()}")
+            #print(f"{region} has no next region to forward data to: {g.edges.data()}")
             return False
 
         # region name --> ips in this region
@@ -280,6 +280,8 @@ class BroadcastDataplane(Dataplane):
                     self.add_operator_receive_send(solution_graph, node_gateway_program, node, partitions, obj_store=None)
 
             gateway_programs[node] = self.remap_keys(node_gateway_program.to_dict())
+            assert len(gateway_programs[node]) > 0, f"Empty gateway program {node}"
+            print("PROGRAM", gateway_programs[node])
 
         return gateway_programs
 
@@ -300,6 +302,8 @@ class BroadcastDataplane(Dataplane):
             gateway_server.init_log_files(gateway_log_dir)
         if authorize_ssh_pub_key:
             gateway_server.copy_public_key(authorize_ssh_pub_key)
+
+        print("current program", self.current_gw_programs)
 
         gateway_server.start_gateway(
             {},  # don't need setup arguments here to pass as outgoing_ports

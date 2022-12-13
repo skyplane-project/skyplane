@@ -43,6 +43,7 @@ class GatewayDaemon:
 
         print("starting gateway daemon", gateway_program_path)
         pprint(gateway_program)
+        assert len(gateway_program) > 0, f"Cannot have empty gateway program {gateway_program}"
 
         self.use_tls = use_tls
 
@@ -253,6 +254,7 @@ class GatewayDaemon:
         pprint(gateway_program)
 
         # create operator tree for each partition
+        total_p = 0
         for program_group in gateway_program:
             partitions = program_group["partitions"]
             program = program_group["value"]
@@ -278,7 +280,7 @@ class GatewayDaemon:
                 self.chunk_store.add_partition(str(partition), queue)
 
             # create DAG for this partition group
-            total_p = create_gateway_operators_helper(
+            total_p += create_gateway_operators_helper(
                 self.chunk_store.chunk_requests[str(partition)],  # incoming chunk requests for partition
                 program,  # single partition program
                 partitions
