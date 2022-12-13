@@ -474,19 +474,10 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
                     e = self.G[edge[0].split(",")[0]][edge[1].split(",")[0]]
                     bg.add_edge(edge[0], edge[1], partitions=[i], cost=e["cost"], throughput=e["throughput"])
 
-        for node in bg.nodes:
-            bg.nodes[node]["num_vms"] = 0
-            for i in range(len(partition_g)):
-                if node in partition_g[i].nodes:
-                    bg.nodes[node]["num_vms"] = max(partition_g[i].nodes[node]["num_vms"], bg.nodes[node]["num_vms"])
-
-        # for i in range(len(partition_g)):
-        #     for node in partition_g[i].nodes:
-        #         if node not in bg.nodes:
-        #             continue
-        #         if "num_vms" not in bg.nodes[node]:
-        #             bg.nodes[node]["num_vms"] = 0
-        #         bg.nodes[node]["num_vms"] += partition_g[i].nodes[node]["num_vms"]
+            for node in partition_g[i].nodes:
+                if "num_vms" not in bg.nodes[node]:
+                    bg.nodes[node]["num_vms"] = 0
+                bg.nodes[node]["num_vms"] += partition_g[i].nodes[node]["num_vms"]
 
         return bg
 
@@ -516,7 +507,8 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             if nodes[i] in result_g.nodes:
                 result_g.nodes[nodes[i]]["num_vms"] = num_vms
             else:
-                result_g.add_node(nodes[i], num_vms=num_vms)
+                # print(f"Nodes: {nodes[i]}, number of vms: {num_vms}, not in result_g") --> why would this happen
+                remove_nodes.append(nodes[i])
 
         print("Edge: ", result_g.edges.data())
         print("Node: ", result_g.nodes.data())
