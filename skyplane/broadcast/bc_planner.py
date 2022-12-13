@@ -1,4 +1,5 @@
 import os
+from random import sample
 import subprocess
 from pathlib import Path
 
@@ -682,10 +683,11 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
                     i[edges.index(e)] = 1
             # keep future solutions feasible by making sure destinations have
             # enough remaining ingress to recieve the remaining data
-            constraints.append(
-                cp.sum(i @ p) * partition_size_gb * 8 + existing_ingress[node_i]
-                <= s * ingress_limit[node_i] * (v[node_i] + existing_vms[node_i]) - remaining_data_size_gb * 8
-            )
+            if node in dest_v:
+                constraints.append(
+                    cp.sum(i @ p) * partition_size_gb * 8 + existing_ingress[node_i]
+                    <= s * ingress_limit[node_i] * (v[node_i] + existing_vms[node_i]) - remaining_data_size_gb * 8
+                )
 
         prob = cp.Problem(obj, constraints)
 
@@ -725,6 +727,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         # banned nodes
         sampled = list(self.G.nodes)
         sampled.remove("aws:eu-south-2")
+        sampled.remove("aws:eu-central-2")
         g = g.subgraph(sampled).copy()
 
         cost = np.array([e[2] for e in g.edges(data="cost")])
@@ -870,6 +873,12 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             sampled = [i for i in sample(list(self.G.nodes), 15) if i not in src_dst_li]
             g = g.subgraph(src_dst_li + sampled).copy()
             print(f"Filter node (only use): {src_dst_li + sampled}")
+
+        # banned nodes
+        sampled = list(self.G.nodes)
+        sampled.remove("aws:eu-south-2")
+        sampled.remove("aws:eu-central-2")
+        g = g.subgraph(sampled).copy()
 
         cost = np.array([e[2] for e in g.edges(data="cost")])
         tp = np.array([e[2] for e in g.edges(data="throughput")])
