@@ -2,7 +2,7 @@ from multiprocessing import Queue
 
 
 class GatewayQueue:
-    def __init__(self, maxsize=4000):
+    def __init__(self, maxsize=1000):
         self.q = Queue(maxsize)
         self.handles = []
 
@@ -21,9 +21,11 @@ class GatewayQueue:
     def get_handles(self):
         return self.handles
 
+    def size(self): 
+        return self.q.qsize()
 
 class GatewayANDQueue(GatewayQueue):
-    def __init__(self, maxsize=4000):
+    def __init__(self, maxsize=1000):
         self.q = {}
         self.maxsize = maxsize
 
@@ -40,6 +42,7 @@ class GatewayANDQueue(GatewayQueue):
     def put(self, chunk_req):
         # place chunk in all downstream operators queues
         for handle in self.q.keys():
+            print("add queue", handle, self.q[handle].size())
             # self.q[handle].put(copy.deepcopy(chunk_req))
             self.q[handle].put(chunk_req)
 

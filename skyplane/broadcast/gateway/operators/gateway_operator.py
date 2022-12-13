@@ -88,6 +88,7 @@ class GatewayOperator(ABC):
 
                 # TODO: status logging
                 self.chunk_store.log_chunk_state(chunk_req, ChunkState.in_progress, operator_handle=self.handle, worker_id=worker_id)
+                print(f"[{self.handle}:{self.worker_id}] Updated chunk state {chunk_req.chunk.chunk_id}")
 
                 # process chunk
                 succ = self.process(chunk_req, *args)
@@ -105,6 +106,7 @@ class GatewayOperator(ABC):
                 else:
                     # failed to process - re-queue
                     time.sleep(0.1)
+                    print(f"[{self.handle}:{self.worker_id}] Failed to process - re-queueing {chunk_req.chunk.chunk_id}")
                     self.input_queue.put(chunk_req)
 
             except Exception as e:
@@ -493,7 +495,7 @@ class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
 
             except Exception as e:
                 print("Failed", e)
-                time.sleep(0.1)
+                time.sleep(1)
 
         # update md5sum for chunk requests
         # TODO: create checksum operator

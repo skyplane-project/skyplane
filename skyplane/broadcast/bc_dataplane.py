@@ -77,7 +77,8 @@ class BroadcastDataplane(Dataplane):
     def get_object_store_connection(self, region: str):
         provider = region.split(":")[0]
         if provider == "aws" or provider == "gcp":
-            n_conn = 32
+            #n_conn = 32
+            n_conn = 16
         elif provider == "azure":
             n_conn = 24  # due to throttling limits from authentication
         return n_conn

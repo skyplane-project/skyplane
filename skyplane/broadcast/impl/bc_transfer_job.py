@@ -183,8 +183,10 @@ class BCCopyJob(BCTransferJob):
                 headers={"Content-Type": "application/json"},
             )
             end = time.time()
+            partitions = [cr.chunk.partition_id for cr in batch]
+            print("partitions", partitions)
             if reply.status != 200:
-                print("failed to dispatch") 
+                print(f"failed to dispatch {server.instance_name()}: {reply.data.decode('utf-8')}") 
                 print(server.instance_name())
                 print(server.public_ip())
                 time.sleep(100000)

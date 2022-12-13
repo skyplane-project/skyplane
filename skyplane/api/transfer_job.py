@@ -367,7 +367,7 @@ class CopyJob(TransferJob):
         self,
         dataplane: "Dataplane",
         transfer_config: TransferConfig,
-        dispatch_batch_size: int = 1000,
+        dispatch_batch_size: int = 100,
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways."""
         chunker = Chunker(self.src_iface, self.dst_iface, transfer_config)
@@ -393,6 +393,8 @@ class CopyJob(TransferJob):
             n_bytes = sum([cr.chunk.chunk_length_bytes for cr in batch])
             bytes_dispatched[min_idx] += n_bytes
             start = time.time()
+            parts = sum([cr.chunk.partition for cr in batch])
+            print(parts)
             reply = self.http_pool.request(
                 "POST",
                 f"{server.gateway_api_url}/api/v1/chunk_requests",
