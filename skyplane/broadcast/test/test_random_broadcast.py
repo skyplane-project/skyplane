@@ -51,12 +51,15 @@ def replicate_random(
     # 0.5, 5,  50,   100,   200,   250,  300     500 (transfer siz2e in GB)
     # 0.8, 8,  80,   160,   320,   400,          800 (seconds for ILP)
 
+    # 200 --> 3200 as the # of chunks
+    # 100 --> 1600 as the # of chunks
+
     random_chunk_size_mb = 64
     transfer_size_gbytes = num_chunks * random_chunk_size_mb * MB / GB
 
     client = SkyplaneBroadcastClient(
         aws_config=skyplane.AWSConfig(),
-        # all for transfer configs, might be better way to do this 
+        # all for transfer configs, might be better way to do this
         multipart_enabled=False,
         generate_random=True,
         num_random_chunks=num_chunks,

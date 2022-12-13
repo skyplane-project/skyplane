@@ -43,6 +43,7 @@ class GatewayDaemon:
 
         print("starting gateway daemon", gateway_program_path)
         pprint(gateway_program)
+        assert len(gateway_program) > 0, f"Cannot have empty gateway program {gateway_program}"
 
         self.use_tls = use_tls
 
@@ -172,7 +173,7 @@ class GatewayDaemon:
                         region=self.region,
                         input_queue=input_queue,
                         output_queue=output_queue,
-                        n_processes=1, # dummy wait thread, not actual reciever
+                        n_processes=1,  # dummy wait thread, not actual reciever
                         chunk_store=self.chunk_store,
                         error_event=self.error_event,
                         error_queue=self.error_queue,
@@ -282,7 +283,7 @@ class GatewayDaemon:
             total_p += create_gateway_operators_helper(
                 self.chunk_store.chunk_requests[str(partition)],  # incoming chunk requests for partition
                 program,  # single partition program
-                partitions
+                partitions,
             )
         # print("TOTAL NUMBER OF PROCESSES", total_p)
         return operators

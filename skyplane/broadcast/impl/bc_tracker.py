@@ -190,7 +190,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
         results = []
         with ThreadPoolExecutor(max_workers=len(self.dst_regions)) as executor:
             e2e_start_time = time.time()
-            try: 
+            try:
                 future_list = [executor.submit(monitor_single_dst_helper, dst) for dst in self.dst_regions]
                 for future in as_completed(future_list):
                     results.append(future.result())

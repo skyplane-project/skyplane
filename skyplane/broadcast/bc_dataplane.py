@@ -72,7 +72,7 @@ class BroadcastDataplane(Dataplane):
     def get_ips_in_region(self, region: str):
         public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.gateway_nodes if n.region == region]
         private_ips = [self.bound_nodes[n].private_ip() for n in self.topology.gateway_nodes if n.region == region]
-        return public_ips, public_ips
+        return public_ips, private_ips
 
     def get_object_store_connection(self, region: str):
         provider = region.split(":")[0]
@@ -92,7 +92,7 @@ class BroadcastDataplane(Dataplane):
         obj_store: Optional[Tuple[str, str]] = None,
         dst_op: Optional[GatewayReceive] = None,
         gen_random_data: bool = False,
-        max_conn_per_vm: int = 128,
+        max_conn_per_vm: int = 256,
     ) -> bool:
         if dst_op is not None:
             receive_op = dst_op
@@ -101,7 +101,7 @@ class BroadcastDataplane(Dataplane):
                 if gen_random_data:
                     receive_op = GatewayGenData(size_mb=self.transfer_config.random_chunk_size_mb)
                 else:
-                    receive_op = GatewayReceive(max_pending_chunks=64)
+                    receive_op = GatewayReceive()
             else:
                 receive_op = GatewayReadObjectStore(
                     bucket_name=obj_store[0], bucket_region=obj_store[1], num_connections=self.get_object_store_connection(region)
@@ -142,12 +142,12 @@ class BroadcastDataplane(Dataplane):
             tot_senders = sum([len(next_region_ips) for next_region_ips in region_to_ips_map.values()])
 
             for next_region, next_region_ips in region_to_ips_map.items():
-                # num_connections = int(max_conn_per_vm / tot_senders)
-                num_connections = 8
+                num_connections = int(max_conn_per_vm / tot_senders)
 
                 if (
                     next_region.split(":")[0] == region.split(":")[0] and region.split(":")[0] == "gcp"
                 ):  # gcp to gcp connection, use private ips
+                    print("GCP to GCP connection, should use private ips")
                     send_ops = [
                         GatewaySend(ip, num_connections=num_connections, region=next_region)
                         for ip in region_to_private_ips_map[next_region]
@@ -170,12 +170,12 @@ class BroadcastDataplane(Dataplane):
             next_region = list(region_to_ips_map.keys())[0]
 
             if next_region.split(":")[0] == region.split(":")[0] and region.split(":")[0] == "gcp":
+                print("GCP to GCP connection, should use private ips")
                 ips = [ip for next_region_ips in region_to_private_ips_map.values() for ip in next_region_ips]
             else:
                 ips = [ip for next_region_ips in region_to_ips_map.values() for ip in next_region_ips]
 
-            # num_connections = int(max_conn_per_vm / len(ips))
-            num_connections = 8
+            num_connections = int(max_conn_per_vm / len(ips))
             send_ops = [GatewaySend(ip, num_connections=num_connections, region=next_region) for ip in ips]
 
             # if num of gateways > 1, then connect to MUX_OR
@@ -191,7 +191,7 @@ class BroadcastDataplane(Dataplane):
     def add_dst_operator(
         self, solution_graph, bc_pg: GatewayProgram, region: str, partition_ids: List[int], obj_store: Optional[Tuple[str, str]] = None
     ):
-        receive_op = GatewayReceive(max_pending_chunks=64)
+        receive_op = GatewayReceive()
         bc_pg.add_operator(receive_op, partition_id=tuple(partition_ids))
 
         # write
@@ -281,6 +281,8 @@ class BroadcastDataplane(Dataplane):
                     self.add_operator_receive_send(solution_graph, node_gateway_program, node, partitions, obj_store=None)
 
             gateway_programs[node] = self.remap_keys(node_gateway_program.to_dict())
+            assert len(gateway_programs[node]) > 0, f"Empty gateway program {node}"
+            print("PROGRAM", gateway_programs[node])
 
         return gateway_programs
 
@@ -301,6 +303,8 @@ class BroadcastDataplane(Dataplane):
             gateway_server.init_log_files(gateway_log_dir)
         if authorize_ssh_pub_key:
             gateway_server.copy_public_key(authorize_ssh_pub_key)
+
+        print("current program", self.current_gw_programs)
 
         gateway_server.start_gateway(
             {},  # don't need setup arguments here to pass as outgoing_ports

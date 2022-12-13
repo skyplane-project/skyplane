@@ -1,4 +1,5 @@
 import os
+from random import sample
 import subprocess
 from pathlib import Path
 
@@ -142,6 +143,7 @@ class BroadcastPlanner:
             tot_vms += solution_graph.nodes[node]["num_vms"]
 
         # set networkx solution graph in topo
+        assert gbyte_to_transfer > 0
         topo.cost_per_gb = cost_egress / gbyte_to_transfer  # cost per gigabytes
         topo.tot_vm_price_per_s = tot_vm_price_per_s
         topo.tot_vms = tot_vms
@@ -468,10 +470,10 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         for i in range(len(partition_g)):
             for edge in partition_g[i].edges:
                 if edge[0] in bg and edge[1] in bg[edge[0]]:
-                    bg[edge[0]][edge[1]]["partitions"].append(i)
+                    bg[edge[0]][edge[1]]["partitions"].append(str(i))
                 else:
                     e = self.G[edge[0].split(",")[0]][edge[1].split(",")[0]]
-                    bg.add_edge(edge[0], edge[1], partitions=[i], cost=e["cost"], throughput=e["throughput"])
+                    bg.add_edge(edge[0], edge[1], partitions=[str(i)], cost=e["cost"], throughput=e["throughput"])
 
             for node in partition_g[i].nodes:
                 if "num_vms" not in bg.nodes[node]:
@@ -499,15 +501,22 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             for vm in [0]:  # range(int(v_result[nodes.index(edge[0])])): # multiple VMs
                 result_g.add_edge(edge[0], edge[1], throughput=g[edge[0]][edge[1]]["throughput"], cost=g[edge[0]][edge[1]]["cost"])
 
-        remove_nodes = []  # number of vms is one but the
+        remove_nodes = [] # number of vms is one but the 
         for i in range(len(v_result)):
             num_vms = int(v_result[i])
             if nodes[i] in result_g.nodes:
                 result_g.nodes[nodes[i]]["num_vms"] = num_vms
             else:
-                # print(f"Nodes: {nodes[i]}, number of vms: {num_vms}, not in result_g") --> why would this happen
+                # print(f"Nodes: {nodes[i]}, number of vms: {num_vms}, not in result_g") --> why would this happen 
                 remove_nodes.append(nodes[i])
 
+        print("Edge: ", result_g.edges.data())
+        print("Node: ", result_g.nodes.data())
+        print("Num of node: ", len(result_g.nodes))
+        print("TOPO GRPAH RESULTS: ", v_result)
+        
+        print(f"Create topo: {result_g.edges.data()}")
+        print(f"Create topo node: {result_g.nodes.data()}")
         return result_g
 
     def get_egress_ingress(self, g, nodes, edges, partition_size, p):
@@ -573,7 +582,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
 
         # optimization problem (minimize sum of costs)
         egress_cost = cp.sum(cost @ p) * partition_size_gb
-        instance_cost = cp.sum(v) * instance_cost_s * s  # NOTE(sl): adding instance cost every time?
+        instance_cost = cp.sum(v) * instance_cost_s * s 
         obj = cp.Minimize(egress_cost + instance_cost)
 
         constraints = []
@@ -682,10 +691,11 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
                     i[edges.index(e)] = 1
             # keep future solutions feasible by making sure destinations have
             # enough remaining ingress to recieve the remaining data
-            constraints.append(
-                cp.sum(i @ p) * partition_size_gb * 8 + existing_ingress[node_i]
-                <= s * ingress_limit[node_i] * (v[node_i] + existing_vms[node_i]) - remaining_data_size_gb * 8
-            )
+            if node in dest_v:
+                constraints.append(
+                    cp.sum(i @ p) * partition_size_gb * 8 + existing_ingress[node_i]
+                    <= s * ingress_limit[node_i] * (v[node_i] + existing_vms[node_i]) - remaining_data_size_gb * 8
+                )
 
         prob = cp.Problem(obj, constraints)
 
@@ -725,6 +735,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         # banned nodes
         sampled = list(self.G.nodes)
         sampled.remove("aws:eu-south-2")
+        sampled.remove("aws:eu-central-2")
         g = g.subgraph(sampled).copy()
 
         cost = np.array([e[2] for e in g.edges(data="cost")])
@@ -865,11 +876,19 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         g = self.G
 
         # node-approximation
+        from random import sample
+
         if filter_node:
             src_dst_li = [problem.src] + problem.dsts
             sampled = [i for i in sample(list(self.G.nodes), 15) if i not in src_dst_li]
             g = g.subgraph(src_dst_li + sampled).copy()
             print(f"Filter node (only use): {src_dst_li + sampled}")
+
+        # banned nodes
+        sampled = list(self.G.nodes)
+        sampled.remove("aws:eu-south-2")
+        sampled.remove("aws:eu-central-2")
+        g = g.subgraph(sampled).copy()
 
         cost = np.array([e[2] for e in g.edges(data="cost")])
         tp = np.array([e[2] for e in g.edges(data="throughput")])

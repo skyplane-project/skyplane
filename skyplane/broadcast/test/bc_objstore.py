@@ -12,10 +12,10 @@ import argparse
 
 def start_transfer(args):
     src_region = "ap-east-1"
-    #src_region = "af-south-1"
-    #src_region = "us-east-1"
-    #dst_regions = ["ap-south-1", "ap-east-1", "ap-southeast-1", "ap-northeast-3", "ap-northeast-1"]
-    #dst_regions = ["ap-south-1", "ap-east-1", "ap-southeast-2", "ap-northeast-3", "ap-northeast-1"]
+    # src_region = "af-south-1"
+    # src_region = "us-east-1"
+    # dst_regions = ["ap-south-1", "ap-east-1", "ap-southeast-1", "ap-northeast-3", "ap-northeast-1"]
+    # dst_regions = ["ap-south-1", "ap-east-1", "ap-southeast-2", "ap-northeast-3", "ap-northeast-1"]
 
     # dst_regions = ["ap-southeast-2", "ap-south-1"]
     dst_regions = ["ap-southeast-2", "ap-south-1", "ap-northeast-3", "ap-northeast-2", "ap-northeast-1"]
@@ -25,8 +25,8 @@ def start_transfer(args):
     src_cloud_provider = "aws"
     dst_cloud_providers = ["aws"] * len(dst_regions)
 
-    # OPT model 
-    #source_file = "s3://skyplane-broadcast/OPT-66B/"
+    # OPT model
+    # source_file = "s3://skyplane-broadcast/OPT-66B/"
     # source_file = f"s3://broadcast-opt-{src_region}/test_replication/"
     # dest_files = [f"s3://broadcast-opt-{d}/skyplane/" for d in dst_regions]
 
@@ -37,12 +37,12 @@ def start_transfer(args):
     # dest_files = [f"s3://broadcast-exp1-{d}/imagenet-images/" for d in dst_regions]
 
     # create bucket if it doesn't exist
-    for (region, bucket_path) in zip(dst_regions, dest_files): 
+    for (region, bucket_path) in zip(dst_regions, dest_files):
         bucket_name = bucket_path.split("/")[2]
         bucket = S3Interface(bucket_name)
         try:
             bucket.create_bucket(region)
-        except Exception as e: 
+        except Exception as e:
             print(e)
 
     print(source_file)

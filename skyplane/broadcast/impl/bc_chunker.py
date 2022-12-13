@@ -25,7 +25,7 @@ class BCChunker(Chunker):
         num_partitions: Optional[int] = 2,
         concurrent_multipart_chunk_threads: Optional[int] = 64,
     ):
-        # read/ write to object store 
+        # read/ write to object store
         if src_iface is not None:
             self.dest_iface = dest_ifaces[0]
             super().__init__(src_iface, self.dest_iface, transfer_config, concurrent_multipart_chunk_threads)
@@ -139,7 +139,7 @@ class BCChunker(Chunker):
             src_region = self.src_region
             dest_region = self.dst_regions[0]
             src_bucket = None
-            dest_bucket = None 
+            dest_bucket = None
             src_type = "random"
             dst_type = "save_local"
 
@@ -147,7 +147,7 @@ class BCChunker(Chunker):
             yield ChunkRequest(
                 chunk=chunk,
                 src_region=src_region,
-                src_random_size_mb=self.transfer_config.random_chunk_size_mb, 
+                src_random_size_mb=self.transfer_config.random_chunk_size_mb,
                 dst_region=dest_region,
                 src_object_store_bucket=src_bucket,
                 dst_object_store_bucket=dest_bucket,
