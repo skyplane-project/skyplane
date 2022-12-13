@@ -114,6 +114,7 @@ class BroadcastDataplane(Dataplane):
 
         # if no regions to forward data to
         if len(next_regions) == 0:
+            print(f"Region {region}, any id: {any_id}, partition ids: {partition_ids}, has no next region to forward data to: {g.out_edges(region, data=True)}")
             return False
 
         # region name --> ips in this region
@@ -250,7 +251,7 @@ class BroadcastDataplane(Dataplane):
             partition_to_next_regions = {}
             for i in range(num_partitions):
                 partition_to_next_regions[i] = set(
-                    [edge[1] for edge in solution_graph.out_edges(node, data=True) if i in edge[-1]["partitions"]]
+                    [edge[1] for edge in solution_graph.out_edges(node, data=True) if str(i) in edge[-1]["partitions"]]
                 )
 
             import collections
@@ -301,8 +302,6 @@ class BroadcastDataplane(Dataplane):
             gateway_server.init_log_files(gateway_log_dir)
         if authorize_ssh_pub_key:
             gateway_server.copy_public_key(authorize_ssh_pub_key)
-
-        print("current program", self.current_gw_programs)
 
         gateway_server.start_gateway(
             {},  # don't need setup arguments here to pass as outgoing_ports
