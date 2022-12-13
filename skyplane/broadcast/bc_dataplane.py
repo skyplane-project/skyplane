@@ -114,7 +114,6 @@ class BroadcastDataplane(Dataplane):
 
         # if no regions to forward data to
         if len(next_regions) == 0:
-            # print(f"{region} has no next region to forward data to: {g.edges.data()}")
             return False
 
         # region name --> ips in this region
