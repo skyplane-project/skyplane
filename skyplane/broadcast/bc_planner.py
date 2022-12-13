@@ -475,19 +475,10 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
                     e = self.G[edge[0].split(",")[0]][edge[1].split(",")[0]]
                     bg.add_edge(edge[0], edge[1], partitions=[str(i)], cost=e["cost"], throughput=e["throughput"])
 
-        for node in bg.nodes:
-            bg.nodes[node]["num_vms"] = 0
-            for i in range(len(partition_g)):
-                if node in partition_g[i].nodes:
-                    bg.nodes[node]["num_vms"] = max(partition_g[i].nodes[node]["num_vms"], bg.nodes[node]["num_vms"])
-
-        # for i in range(len(partition_g)):
-        #     for node in partition_g[i].nodes:
-        #         if node not in bg.nodes:
-        #             continue
-        #         if "num_vms" not in bg.nodes[node]:
-        #             bg.nodes[node]["num_vms"] = 0
-        #         bg.nodes[node]["num_vms"] += partition_g[i].nodes[node]["num_vms"]
+            for node in partition_g[i].nodes:
+                if "num_vms" not in bg.nodes[node]:
+                    bg.nodes[node]["num_vms"] = 0
+                bg.nodes[node]["num_vms"] += partition_g[i].nodes[node]["num_vms"]
 
         return bg
 
@@ -510,19 +501,22 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             for vm in [0]:  # range(int(v_result[nodes.index(edge[0])])): # multiple VMs
                 result_g.add_edge(edge[0], edge[1], throughput=g[edge[0]][edge[1]]["throughput"], cost=g[edge[0]][edge[1]]["cost"])
 
-        remove_nodes = []  # number of vms is one but the
-
+        remove_nodes = [] # number of vms is one but the 
         for i in range(len(v_result)):
             num_vms = int(v_result[i])
             if nodes[i] in result_g.nodes:
                 result_g.nodes[nodes[i]]["num_vms"] = num_vms
             else:
-                result_g.add_node(nodes[i], num_vms=num_vms)
+                # print(f"Nodes: {nodes[i]}, number of vms: {num_vms}, not in result_g") --> why would this happen 
+                remove_nodes.append(nodes[i])
 
         print("Edge: ", result_g.edges.data())
         print("Node: ", result_g.nodes.data())
         print("Num of node: ", len(result_g.nodes))
         print("TOPO GRPAH RESULTS: ", v_result)
+        
+        print(f"Create topo: {result_g.edges.data()}")
+        print(f"Create topo node: {result_g.nodes.data()}")
         return result_g
 
     def get_egress_ingress(self, g, nodes, edges, partition_size, p):
