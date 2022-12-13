@@ -143,6 +143,7 @@ class BroadcastPlanner:
             tot_vms += solution_graph.nodes[node]["num_vms"]
 
         # set networkx solution graph in topo
+        assert gbyte_to_transfer > 0
         topo.cost_per_gb = cost_egress / gbyte_to_transfer  # cost per gigabytes
         topo.tot_vm_price_per_s = tot_vm_price_per_s
         topo.tot_vms = tot_vms
