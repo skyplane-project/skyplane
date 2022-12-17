@@ -1,6 +1,7 @@
 from skyplane.compute.aws.aws_auth import AWSAuthentication
 from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 from skyplane.compute.aws.aws_server import AWSServer
+from skyplane.compute.ibmcloud.ibmcloud_server import IBMCloudServer
 from skyplane.compute.azure.azure_auth import AzureAuthentication
 from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 from skyplane.compute.azure.azure_server import AzureServer
@@ -19,6 +20,7 @@ __all__ = [
     "AWSAuthentication",
     "AWSCloudProvider",
     "AWSServer",
+    "IBMCloudServer",
     "AzureAuthentication",
     "AzureCloudProvider",
     "AzureServer",

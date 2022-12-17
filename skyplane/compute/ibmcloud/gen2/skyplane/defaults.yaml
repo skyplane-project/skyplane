@@ -1,0 +1,145 @@
+# An unique identifier for the head node and workers of this cluster.
+cluster_name: default
+
+# The maximum number of workers nodes to launch in addition to the head
+# node.
+max_workers: 0
+
+# The autoscaler will scale up the cluster faster with higher upscaling speed.
+# E.g., if the task requires adding more nodes then autoscaler will gradually
+# scale up the cluster in chunks of upscaling_speed*currently_running_nodes.
+# This number should be > 0.
+upscaling_speed: 1.0
+
+# This executes all commands on all nodes in the docker container,
+# and opens all the necessary ports to support the Ray cluster.
+# Empty string means disabled.
+docker: {}
+
+# If a node is idle for this many minutes, it will be removed.
+idle_timeout_minutes: 5
+
+# Cloud-provider specific configuration.
+provider:
+    type: external
+    module: vpc.node_provider.IBMVPCNodeProvider
+    endpoint: ""
+    zone_name: ""
+    iam_api_key: ""
+    use_hybrid_ips: True
+    cache_stopped_nodes: False
+
+# How Ray will authenticate with newly launched nodes.
+auth:
+    ssh_user: root
+    # you must specify paths to matching private and public key pair files
+    # use `ssh-keygen -t rsa -b 4096` to generate a new ssh key pair
+    ssh_private_key: ~/.ssh/id_rsa
+    # changes to this should match what is specified in file_mounts
+    #    ssh_public_key: ~/.ssh/id_rsa.pub
+
+# By default Ray creates a new private keypair, but you can also use your own.
+# If you do so, make sure to also set "KeyName" in the head and worker node
+# configurations below. This requires that you have added the key into the
+# project wide meta-data.
+#    ssh_private_key: /path/to/your/key.pem
+
+# Tell the autoscaler the allowed node types and the resources they provide.
+# The key is the name of the node type, which is just for debugging purposes.
+# The node config specifies the launch config and physical instance type.
+available_node_types:
+    ray_head_default:
+        # The minimum number of worker nodes of this type to launch.
+        # This number should be >= 0.
+        min_workers: 0
+        # The maximum number of worker nodes of this type to launch.
+        # This takes precedence over min_workers.
+        max_workers: 0
+        # The resources provided by this node type.
+        resources: {"CPU": 2}
+        # Provider-specific config for this node type, e.g. instance type
+        # For more documentation, see:
+        # https://cloud.ibm.com/docs/vpc
+        # Alternatively use interactive vpc-config tool to generate this configuration
+        node_config:
+            vpc_id: ""
+            resource_group_id: ""
+            security_group_id: ""
+            subnet_id: ""
+            key_id: ""
+            image_id: ""
+            instance_profile_name: ""
+            volume_tier_name: general-purpose
+
+# Specify the node type of the head node (as configured above).
+head_node_type: ray_head_default
+
+# Files or directories to copy to the head and worker nodes. The format is a
+# dictionary from REMOTE_PATH: LOCAL_PATH, e.g.
+file_mounts: {
+    #"/path2/on/remote/machine": "/path2/on/local/machine", # points to root folder of your local ray repository, e.g "/root/ray": "/home/kpavel/ray" 
+}
+
+# Files or directories to copy from the head node to the worker nodes. The format is a
+# list of paths. The same path on the head node will be copied to the worker node.
+# This behavior is a subset of the file_mounts behavior. In the vast majority of cases
+# you should just use file_mounts. Only use this if you know what you're doing!
+cluster_synced_files: []
+
+# Whether changes to directories in file_mounts or cluster_synced_files in the head node
+# should sync to the worker node continuously
+file_mounts_sync_continuously: False
+
+# Patterns for files to exclude when running rsync up or rsync down
+rsync_exclude: []
+
+# Pattern files to use for filtering out files when running rsync up or rsync down. The file is searched for
+# in the source directory and recursively through all subdirectories. For example, if .gitignore is provided
+# as a value, the behavior will match git's behavior for finding and using .gitignore files.
+rsync_filter: []
+
+# List of commands that will be run before `setup_commands`. If docker is
+# enabled, these commands will run outside the container and before docker
+# is setup.
+initialization_commands: []
+
+setup_commands:
+    # Note: if you're developing Ray, you probably want to create an AMI that
+    # has your Ray repo pre-cloned. Then, you can replace the pip installs
+    # below with a git checkout <your_sha> (and possibly a recompile).
+    # - echo 'export PATH="$HOME/anaconda3/envs/tensorflow_p36/bin:$PATH"' >> ~/.bashrc
+    # Install ray if not present
+    - sleep 30 && apt update && apt install python3.8 -y && curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && python3.8 get-pip.py
+    - test -d ~/.venv || (pip install virtualenv && virtualenv -p /usr/bin/python3.8 ~/.venv && echo source ~/.venv/bin/activate >> ~/.bashrc && echo "source ~/.venv/bin/activate" | cat - ~/.bashrc | tee ~/.bashrc)
+    - pip install ibm-vpc ibm_platform_services ibm_cloud_sdk_core ibm-vpc-ray-connector
+    - apt install libgl1-mesa-glx -y && pip install pandas tabulate gym tensorboardX dm_tree opencv-python starlette uvicorn transformers torch
+    - echo alias python=\'python3\'>>~/.bash_aliases
+    - pip install ray[default] ray[serve]
+
+# Custom commands that will be run on the head node after common setup.
+head_setup_commands: []
+
+# Custom commands that will be run on worker nodes after common setup.
+worker_setup_commands: []
+
+# Command to start ray on the head node. You don't need to change this.
+head_start_ray_commands:
+    - ray stop --force --verbose
+    - >-
+      ulimit -n 65536;
+      ray start
+      --head
+      --port=6379
+      --object-manager-port=8076
+      --autoscaling-config=~/ray_bootstrap_config.yaml
+      --dashboard-host=$RAY_HEAD_IP
+
+# Command to start ray on worker nodes. You don't need to change this.
+worker_start_ray_commands:
+    - ray stop --force --verbose
+    - >-
+      ulimit -n 65536;
+      ray start
+      --address=$RAY_HEAD_IP:6379
+      --object-manager-port=8076
+

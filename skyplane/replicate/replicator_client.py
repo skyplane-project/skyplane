@@ -70,6 +70,7 @@ class ReplicatorClient:
         aws_instance_class: Optional[str] = "m5.4xlarge",  # set to None to disable AWS
         azure_instance_class: Optional[str] = "Standard_D2_v5",  # set to None to disable Azure
         gcp_instance_class: Optional[str] = "n2-standard-16",  # set to None to disable GCP
+        ibmcloud_instance_class: Optional[str] = "cx2-2x4", # set to None to disable IBM Cloud
         gcp_use_premium_network: bool = True,
         host_uuid: Optional[str] = None,
     ):
@@ -79,6 +80,7 @@ class ReplicatorClient:
         self.aws_instance_class = aws_instance_class
         self.azure_instance_class = azure_instance_class
         self.gcp_instance_class = gcp_instance_class
+        self.ibmcloud_instance_class = ibmcloud_instance_class
         self.gcp_use_premium_network = gcp_use_premium_network
         self.host_uuid = host_uuid
 
@@ -86,6 +88,7 @@ class ReplicatorClient:
         self.aws = compute.AWSCloudProvider(key_prefix=f"skyplane-{host_uuid.replace('-', '') if host_uuid else ''}")
         self.azure = compute.AzureCloudProvider()
         self.gcp = compute.GCPCloudProvider()
+        self.ibmcloud = compute.IBMCloudProvider()
         self.gcp_firewall_name = f"skyplane-transfer-{uuid.uuid4().hex[:8]}"
         self.bound_nodes: Dict[ReplicationTopologyGateway, compute.Server] = {}
         self.temp_nodes: List[compute.Server] = []  # saving nodes that are not yet bound so they can be deprovisioned later
@@ -115,6 +118,7 @@ class ReplicatorClient:
         aws_regions_to_provision = [r for r in regions_to_provision if r.startswith("aws:")]
         azure_regions_to_provision = [r for r in regions_to_provision if r.startswith("azure:")]
         gcp_regions_to_provision = [r for r in regions_to_provision if r.startswith("gcp:")]
+        ibmcloud_regions_to_provision = [r for r in regions_to_provision if r.startswith("cos:")]
 
         assert (
             len(aws_regions_to_provision) == 0 or self.aws.auth.enabled()
@@ -125,6 +129,9 @@ class ReplicatorClient:
         assert (
             len(gcp_regions_to_provision) == 0 or self.gcp.auth.enabled()
         ), "GCP credentials not configured but job provisions GCP gateways"
+        assert (
+            len(ibmcloud_regions_to_provision) == 0 or self.ibmcloud.auth.enabled()
+        ), "IBM Cloud credentials not configured but job provisions IBM Cloud gateways"
 
         # reuse existing AWS instances
         if reuse_instances:
@@ -176,6 +183,22 @@ class ReplicatorClient:
             else:
                 current_gcp_instances = {}
 
+            if self.ibmcloud.auth.enabled():
+                ibmcloud_instance_filter = {
+                    "tags": {"skyplane": "true"},
+                    "instance_type": self.ibmcloud_instance_class,
+                    "state": [compute.ServerState.PENDING, compute.ServerState.RUNNING],
+                }
+                current_ibmcloud_instances = refresh_instance_list(
+                    self.ibmcloud, set([r.split(":")[1] for r in ibmcloud_regions_to_provision]), ibmcloud_instance_filter
+                )
+                for r, ilist in current_ibmcloud_instances.items():
+                    for _ in ilist:
+                        if f"cos:{r}" in ibmcloud_regions_to_provision:
+                            ibmcloud_regions_to_provision.remove(f"cos:{r}")
+            else:
+                current_ibmcloud_instances = {}
+
         # init clouds
         jobs = []
         if aws_regions_to_provision:
@@ -187,6 +210,9 @@ class ReplicatorClient:
             jobs.append(self.azure.set_up_resource_group)
         if gcp_regions_to_provision:
             jobs.append(self.gcp.setup_global)
+        if ibmcloud_regions_to_provision:
+            for r in set(ibmcloud_regions_to_provision):
+                jobs.append(partial(self.ibmcloud.setup_region, r.split(":")[1]))
         do_parallel(lambda fn: fn(), jobs, spinner=True, spinner_persist=True, desc="Initializing cloud keys")
 
         # provision instances
@@ -211,7 +237,15 @@ class ReplicatorClient:
                     self.gcp_instance_class,
                     use_spot_instances=gcp_use_spot_instances,
                     gcp_premium_network=self.gcp_use_premium_network,
-                    tags=tags,
+                    tags=tags
+                )
+            elif provider == "cos":
+                assert self.ibmcloud.auth.enabled()
+                tags["node-type"]="master"
+                tags["node-name"] = "skyplane-master"
+                for r in set(ibmcloud_regions_to_provision):
+                    server = self.ibmcloud.provision_instance(r.split(":")[1], self.ibmcloud_instance_class,
+                    tags=tags
                 )
             else:
                 raise NotImplementedError(f"Unknown provider {provider}")
@@ -222,7 +256,8 @@ class ReplicatorClient:
 
         results = do_parallel(
             provision_gateway_instance,
-            list(aws_regions_to_provision + azure_regions_to_provision + gcp_regions_to_provision),
+            list(aws_regions_to_provision + azure_regions_to_provision
+            + gcp_regions_to_provision + ibmcloud_regions_to_provision),
             spinner=True,
             spinner_persist=True,
             desc="Provisioning gateway instances",
@@ -230,7 +265,7 @@ class ReplicatorClient:
         instances_by_region = {
             r: [instance for instance_region, instance in results if instance_region == r] for r in set(regions_to_provision)
         }
-
+        print("instances by region")
         # add existing instances
         if reuse_instances:
             for r, ilist in current_aws_instances.items():
@@ -248,6 +283,12 @@ class ReplicatorClient:
                     instances_by_region[f"gcp:{r}"] = []
                 instances_by_region[f"gcp:{r}"].extend(ilist)
                 self.temp_nodes.extend(ilist)
+            for r, ilist in current_ibmcloud_instances.items():
+                if f"cos:{r}" not in instances_by_region:
+                    instances_by_region[f"cos:{r}"] = []
+                instances_by_region[f"cos:{r}"].extend(ilist)
+                self.temp_nodes.extend(ilist)
+
 
         # bind instances to nodes
         for node in self.topology.gateway_nodes:
@@ -309,6 +350,7 @@ class ReplicatorClient:
 
     def deprovision_gateways(self):
         # This is a good place to tear down Security Groups and the instance since this is invoked by CLI too.
+        print ("deprovision")
         def deprovision_gateway_instance(server: compute.Server):
             if server.instance_state() == compute.ServerState.RUNNING:
                 server.terminate_instance()
@@ -323,6 +365,9 @@ class ReplicatorClient:
         aws_jobs = [partial(self.aws.remove_ips_from_security_group, r.split(":")[1], public_ips) for r in set(aws_regions)]
         gcp_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("gcp:")]
         gcp_jobs = [partial(self.gcp.remove_gateway_rule, self.gcp_firewall_name)] if gcp_regions else []
+        cos_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("cos:")]
+        print (cos_regions)
+
         do_parallel(lambda fn: fn(), aws_jobs + gcp_jobs, desc="Removing firewall rules")
 
         # Terminate instances
@@ -348,12 +393,14 @@ class ReplicatorClient:
             "aws",
             "azure",
             "gcp",
-        ], f"Only AWS, Azure, and GCP are supported, but got {job.source_region}"
+            "cos",
+        ], f"Only AWS, Azure, IBM Cloud and GCP are supported, but got {job.source_region}"
         assert job.dest_region.split(":")[0] in [
             "aws",
             "azure",
             "gcp",
-        ], f"Only AWS, Azure, and GCP are supported, but got {job.dest_region}"
+            "cos",
+        ], f"Only AWS, Azure, IBM Cloud and GCP are supported, but got {job.dest_region}"
 
         with Progress(SpinnerColumn(), TextColumn("Preparing replication plan{task.description}"), transient=True) as progress:
             prepare_task = progress.add_task("", total=None)
@@ -597,10 +644,12 @@ class ReplicatorClient:
                 with Timer() as t:
                     while True:
                         # refresh shutdown status by running noop
+                        print ("1")
                         do_parallel(lambda i: i.run_command("echo 1"), self.bound_nodes.values(), n=-1)
-
+                        print ("2")
                         # check for errors and exit if there are any (while setting debug flags)
                         errors = self.check_error_logs()
+                        print (errors)
                         if any(errors.values()):
                             error = True
                             return TransferStats(monitor_status="error", total_runtime_s=t.elapsed, errors=errors)
@@ -610,7 +659,7 @@ class ReplicatorClient:
                             logger.warning("No chunk status log entries yet")
                             time.sleep(0.01 if show_spinner else 0.25)
                             continue
-
+                        print ("3")
                         is_complete_rec = (
                             lambda row: row["state"] == ChunkState.upload_complete
                             and row["instance"] in [s.instance for s in sinks]
@@ -621,6 +670,7 @@ class ReplicatorClient:
                             lambda x: set(x["region"].unique()) == set(sink_regions)
                         )
                         completed_chunk_ids = completed_status[completed_status].index
+                        print (completed_chunk_ids)
                         completed_bytes = sum(
                             [cr.chunk.chunk_length_bytes for cr in job.chunk_requests if cr.chunk.chunk_id in completed_chunk_ids]
                         )

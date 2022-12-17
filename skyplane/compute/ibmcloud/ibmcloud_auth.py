@@ -22,18 +22,27 @@ class IBMCloudAuthentication:
 
         self.user_agent = self.config.ibmcloud_useragent if self.config.ibmcloud_useragent is not None else 'skyplane-ibm'
 
+        self._ssh_credentials = {
+            'username': self.config.ibmcloud_ssh_user,
+            'key_filename': self.config.ibmcloud_ssh_key_filename
+        }
+
+
         self.config.ibmcloud_useragent
         if self.config.ibmcloud_access_id and self.config.ibmcloud_secret_key:
-            self.config_mode = "manual"
             self._access_key = self.config.ibmcloud_access_id
             self._secret_key = self.config.ibmcloud_secret_key
-        else:
-            self.config_mode = "iam_inferred"
-            self._access_key = None
-            self._secret_key = None
-            self.iam_key = self.config.ibmcloud_iam_key
+        if self.config.ibmcloud_iam_key:
+            self._iam_key = self.config.ibmcloud_iam_key
 
-    def __get_ibmcloud_endpoint(self, region, compute_backend = 'public'):
+    @imports.inject("ibm_cloud_sdk_core", pip_extra="ibmcloud")
+    def get_iam_authenticator(ibm_cloud_sdk_core, self):
+        from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
+        return IAMAuthenticator(self.config.ibmcloud_iam_key,
+                url=self.config.ibmcloud_iam_endpoint)
+
+
+    def get_ibmcloud_endpoint(self, region, compute_backend = 'public'):
         if (region is not None):
             endpoint = PUBLIC_ENDPOINT.format(region)
 
@@ -58,7 +67,9 @@ class IBMCloudAuthentication:
                 if region['status'] == 'available':
                     zones = ibm_vpc_client.list_region_zones(region['name'])
                     for zone in zones.result['zones']:
-                        region_list.append(zone['region']['name'], zone['name'], zone['href'], zone['status'])
+                        if zone['status'] == 'available':
+                            region_list.append("{},{},{},{}".format(
+                                zone['region']['name'], region['href'],zone['name'], zone['href']))
             f.write("\n".join(region_list))
 
     def clear_region_config(self):
@@ -71,45 +82,43 @@ class IBMCloudAuthentication:
             f = open(ibmcloud_config_path, "r")
         except FileNotFoundError:
             return []
-        region_list = []
+        region_list = {}
         for region in f.read().split("\n"):
-            region_list.append(region)
+            line = region.split(",")
+            if line[0] not in region_list:
+                region_list[line[0]] = {}
+                region_list[line[0]]['zones'] = []
+            region_list[line[0]]['href'] = line[1]
+            region_list[line[0]]['zones'].append({'zone_name':line[2], 'zone_href':line[3]})
+
         return region_list
 
     @property
     def access_key(self):
-        if self._access_key is None:
-            self._access_key, self._secret_key = self.infer_credentials()
         return self._access_key
 
     @property
+    def iam_api_key(self):
+        return self._iam_key
+
+    @property
+    def ssh_credentials(self):
+        return self._ssh_credentials
+
+    @property
+    def iam_endpoint(self):
+        return self.config.ibmcloud_iam_endpoint
+
+    @property
     def secret_key(self):
-        if self._secret_key is None:
-            self._access_key, self._secret_key = self.infer_credentials()
         return self._secret_key
 
     def enabled(self):
         return self.config.ibmcloud_enabled
 
-    @imports.inject("ibm_boto3", pip_extra="aws")
-    def infer_credentials(ibm_boto3, self):
-        # todo load temporary credentials from STS
-        cached_credential = getattr(self.__cached_credentials, "ibm_boto3_credential", None)
-        if cached_credential is None:
-            session = ibm_boto3.Session()
-            credentials = session.get_credentials()
-            if credentials:
-                credentials = credentials.get_frozen_credentials()
-                cached_credential = (credentials.access_key, credentials.secret_key)
-            setattr(self.__cached_credentials, "ibm_boto3_credential", cached_credential)
-        return cached_credential if cached_credential else (None, None)
-
     @imports.inject("ibm_boto3", pip_extra="ibmcloud")
     def get_boto3_session(ibm_boto3, self, cos_region: Optional[str] = None):
-        if self.config_mode == "manual":
-            return ibm_boto3.Session(aws_access_key_id=self.access_key, aws_secret_access_key=self.secret_key)
-        else:
-            return None
+        return ibm_boto3.Session(aws_access_key_id=self.access_key, aws_secret_access_key=self.secret_key)
 
     def get_boto3_resource(self, service_name, cos_region=None):
         return self.get_boto3_session().resource(service_name, region_name=cos_region)
@@ -129,5 +138,5 @@ class IBMCloudAuthentication:
             return self.get_boto3_session().client(service_name, config=client_config)
         else:
             return self.get_boto3_session().client(service_name,
-                endpoint_url = self.__get_ibmcloud_endpoint(cos_region),
+                endpoint_url = self.get_ibmcloud_endpoint(cos_region),
                 config = client_config)

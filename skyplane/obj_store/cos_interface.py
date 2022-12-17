@@ -17,10 +17,16 @@ class COSObject(ObjectStoreObject):
 
 
 class COSInterface(ObjectStoreInterface):
-    def __init__(self, bucket_name: str):
+    def __init__(self, bucket_name: str, region: str = None):
         self.auth = IBMCloudAuthentication()
         self.requester_pays = False
         self.bucket_name = bucket_name
+        self.region = region
+        if region is not None and 'cos:' in region:
+            self.region = region[4:]
+        print ('cos interface')
+        print (self.region)
+
         self._cached_cos_clients = {}
 
     def path(self):
@@ -29,7 +35,9 @@ class COSInterface(ObjectStoreInterface):
     @property
     @lru_cache(maxsize=1)
     def cos_region(self):
-        return self.auth.get_region()
+        if self.region is None or self.region == "infer":
+            return self.auth.get_region()
+        return self.region
 
     def region_tag(self):
         return "cos:" + self.cos_region
@@ -37,14 +45,14 @@ class COSInterface(ObjectStoreInterface):
     def set_requester_bool(self, requester: bool):
         self.requester_pays = requester
 
-    def _cos_client(self, region=None):
-        if region == None or region not in self._cached_cos_clients:
-            self._cached_cos_clients[region] = self.auth.get_boto3_client("s3", region)
-        return self._cached_cos_clients[region]
+    def _cos_client(self):
+        if self.cos_region not in self._cached_cos_clients:
+            self._cached_cos_clients[self.cos_region] = self.auth.get_boto3_client("s3", self.cos_region)
+        return self._cached_cos_clients[self.cos_region]
 
     @imports.inject("botocore.exceptions", pip_extra="ibmcloud")
     def bucket_exists(botocore_exceptions, self):
-        s3_client = self._cos_client(self.cos_region)
+        s3_client = self._cos_client()
         try:
             requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
             s3_client.list_objects_v2(Bucket=self.bucket_name, MaxKeys=1, **requester_pays)
@@ -66,7 +74,7 @@ class COSInterface(ObjectStoreInterface):
         self._s3_client().delete_bucket(Bucket=self.bucket_name)
 
     def list_objects(self, prefix="") -> Iterator[COSObject]:
-        paginator = self._cos_client(self.cos_region).get_paginator("list_objects_v2")
+        paginator = self._cos_client().get_paginator("list_objects_v2")
         requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
         page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix, **requester_pays)
         for page in page_iterator:
@@ -80,11 +88,11 @@ class COSInterface(ObjectStoreInterface):
             s3_client.delete_objects(Bucket=self.bucket_name, Delete={"Objects": [{"Key": k} for k in batch]})
 
     @lru_cache(maxsize=1024)
-    @imports.inject("botocore.exceptions", pip_extra="aws")
+    @imports.inject("botocore.exceptions", pip_extra="ibmcloud")
     def get_obj_metadata(botocore_exceptions, self, obj_name):
-        s3_client = self._s3_client()
+        cos_client = self._cos_client()
         try:
-            return s3_client.head_object(Bucket=self.bucket_name, Key=str(obj_name))
+            return cos_client.head_object(Bucket=self.bucket_name, Key=str(obj_name))
         except botocore_exceptions.ClientError as e:
             raise NoSuchObjectException(f"Object {obj_name} does not exist, or you do not have permission to access it") from e
 
@@ -93,6 +101,9 @@ class COSInterface(ObjectStoreInterface):
 
     def get_obj_last_modified(self, obj_name):
         return self.get_obj_metadata(obj_name)["LastModified"]
+
+    def get_obj_mime_type(self, obj_name):
+        return self.get_obj_metadata(obj_name)["ContentType"]
 
     def exists(self, obj_name):
         try:
@@ -170,7 +181,7 @@ class COSInterface(ObjectStoreInterface):
             raise
 
     def initiate_multipart_uploads(self, dst_object_names: List[str]) -> List[str]:
-        client = self._s3_client()
+        client = self._cos_client()
         upload_ids = []
         for dst_object_name in dst_object_names:
             assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
@@ -181,11 +192,24 @@ class COSInterface(ObjectStoreInterface):
                 raise exceptions.SkyplaneException(f"Failed to initiate multipart upload for {dst_object_name}: {response}")
         return upload_ids
 
+    def initiate_multipart_upload(self, dst_object_name: str, mime_type: Optional[str] = None) -> str:
+        client = self._cos_client()
+        assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
+        response = client.create_multipart_upload(
+            Bucket=self.bucket_name, Key=dst_object_name, **(dict(ContentType=mime_type) if mime_type else dict())
+        )
+        if "UploadId" in response:
+            return response["UploadId"]
+        else:
+            raise exceptions.SkyplaneException(f"Failed to initiate multipart upload for {dst_object_name}: {response}")
+
+
     def complete_multipart_upload(self, dst_object_name, upload_id):
-        s3_client = self._s3_client()
+        print ("complete multipart upload")
+        cos_client = self._cos_client()
         all_parts = []
         while True:
-            response = s3_client.list_parts(
+            response = cos_client.list_parts(
                 Bucket=self.bucket_name, Key=dst_object_name, MaxParts=100, UploadId=upload_id, PartNumberMarker=len(all_parts)
             )
             if "Parts" not in response:
@@ -195,7 +219,7 @@ class COSInterface(ObjectStoreInterface):
                     break
                 all_parts += response["Parts"]
         all_parts = sorted(all_parts, key=lambda d: d["PartNumber"])
-        response = s3_client.complete_multipart_upload(
+        response = cos_client.complete_multipart_upload(
             UploadId=upload_id,
             Bucket=self.bucket_name,
             Key=dst_object_name,

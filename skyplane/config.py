@@ -66,10 +66,10 @@ _DEFAULT_FLAGS = {
     "native_cmd_threshold_gb": 2,
 }
 
-def _get_value(section, key, config):
+def _get_value(section, key, config, default = None):
     if key in config[section]:
         return config.get(section, key)
-    return None
+    return default
 
 def _map_type(value, val_type):
     if val_type is bool:
@@ -88,6 +88,7 @@ class SkyplaneConfig:
     aws_enabled: bool
     azure_enabled: bool
     gcp_enabled: bool
+    ibmcloud_enabled:bool
     anon_clientid: str
     azure_principal_id: Optional[str] = None
     azure_subscription_id: Optional[str] = None
@@ -100,6 +101,8 @@ class SkyplaneConfig:
     ibmcloud_iam_endpoint: Optional[str] = None
     ibmcloud_useragent: Optional[str] = None
     ibmcloud_region: Optional[str] = None
+    ibmcloud_ssh_user: Optional[str] = None
+    ibmcloud_ssh_key_filename: Optional[str] = None
 
 
     @staticmethod
@@ -108,7 +111,7 @@ class SkyplaneConfig:
 
     @classmethod
     def default_config(cls) -> "SkyplaneConfig":
-        return cls(aws_enabled=False, azure_enabled=False, gcp_enabled=False, anon_clientid=cls.generate_machine_id())
+        return cls(aws_enabled=False, azure_enabled=False, gcp_enabled=False, ibmcloud_enabled=False, anon_clientid=cls.generate_machine_id())
 
     @classmethod
     def load_config(cls, path) -> "SkyplaneConfig":
@@ -150,8 +153,8 @@ class SkyplaneConfig:
                 gcp_enabled = config.getboolean("gcp", "gcp_enabled")
             if "project_id" in config["gcp"]:
                 gcp_project_id = config.get("gcp", "project_id")
-        ibmcloud_enabled = False
 
+        ibmcloud_enabled = False
         if "ibmcloud" in config:
             if "ibmcloud_enabled" in config["ibmcloud"]:
                 ibmcloud_enabled = config.getboolean("ibmcloud", "ibmcloud_enabled")
@@ -163,12 +166,16 @@ class SkyplaneConfig:
             ibmcloud_iam_endpoint = _get_value("ibmcloud", "ibmcloud_iam_endpoint", config)
             ibmcloud_useragent = _get_value("ibmcloud", "ibmcloud_useragent", config)
             ibmcloud_region = _get_value("ibmcloud", "ibmcloud_region", config)
+            ibmcloud_ssh_user =  _get_value("ibmcloud", "ibmclod_ssh_user", config, 'root')
+            ibmcloud_ssh_key_filename =  _get_value("ibmcloud", "ibmclod_ssh_key_filename",
+            config, '~/.ssh/id.rsa.default-ssh-key')
 
 
         skyplane_config = cls(
             aws_enabled=aws_enabled,
             azure_enabled=azure_enabled,
             gcp_enabled=gcp_enabled,
+            ibmcloud_enabled = ibmcloud_enabled,
             anon_clientid=anon_clientid,
             azure_principal_id=azure_principal_id,
             azure_subscription_id=azure_subscription_id,
@@ -180,7 +187,9 @@ class SkyplaneConfig:
             ibmcloud_iam_key=ibmcloud_iam_key,
             ibmcloud_iam_endpoint=ibmcloud_iam_endpoint,
             ibmcloud_useragent=ibmcloud_useragent,
-            ibmcloud_region=ibmcloud_region
+            ibmcloud_region=ibmcloud_region,
+            ibmcloud_ssh_user = ibmcloud_ssh_user,
+            ibmcloud_ssh_key_filename = ibmcloud_ssh_key_filename
         )
 
         if "flags" in config:
@@ -218,6 +227,10 @@ class SkyplaneConfig:
             config.set("ibmcloud", "ibmcloud_secret_key", self.ibmcloud_secret_key)
         if self.ibmcloud_region:
             config.set("ibmcloud", "ibmcloud_region", self.ibmcloud_region)
+        if self.ibmcloud_ssh_user:
+            config.set("ibmcloud", "ibmcloud_ssh_user", self.ibmcloud_ssh_user)
+        if self.ibmcloud_ssh_key_filename:
+            config.set("ibmcloud", "ibmcloud_ssh_key_filename", self.ibmcloud_ssh_key_filename)
 
         if "azure" not in config:
             config.add_section("azure")

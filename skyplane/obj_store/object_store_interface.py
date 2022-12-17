@@ -125,6 +125,6 @@ class ObjectStoreInterface:
         elif region_tag.startswith("cos"):
             from skyplane.obj_store.cos_interface import COSInterface
 
-            return COSInterface(bucket)
+            return COSInterface(bucket, region_tag)
         else:
             raise ValueError(f"Invalid region_tag {region_tag} - could not create interface")

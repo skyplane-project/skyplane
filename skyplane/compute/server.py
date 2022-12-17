@@ -281,6 +281,7 @@ class Server:
             assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
 
         desc_prefix = f"Starting gateway {self.uuid()}, host: {self.public_ip()}"
+        print (desc_prefix)
 
         # increase TCP connections, enable BBR optionally and raise file limits
         check_stderr(self.run_command(make_sysctl_tcp_tuning_command(cc="bbr" if use_bbr else "cubic")))
@@ -303,6 +304,7 @@ class Server:
         # pull docker image and start container
         with Timer() as t:
             retry_backoff(partial(self.pull_docker, gateway_docker_image), exception_class=RuntimeError)
+
         logger.fs.debug(f"{desc_prefix} docker pull in {t.elapsed}")
         logger.fs.debug(f"{desc_prefix}: Starting gateway container")
         docker_run_flags = f"-d --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024}"
@@ -337,6 +339,7 @@ class Server:
         docker_launch_cmd = (
             f'sudo docker run {docker_run_flags} --name skyplane_gateway {gateway_docker_image} /bin/bash -c "{escaped_gateway_daemon_cmd}"'
         )
+        print (docker_launch_cmd)
         logger.fs.info(f"{desc_prefix}: {docker_launch_cmd}")
         start_out, start_err = self.run_command(docker_launch_cmd)
         logger.fs.debug(desc_prefix + f": Gateway started {start_out.strip()}")
@@ -357,7 +360,7 @@ class Server:
                 status_val = json.loads(http_pool.request("GET", api_url).data.decode("utf-8"))
                 is_up = status_val.get("status") == "ok"
                 return is_up
-            except Exception:
+            except Exception as e:
                 return False
 
         try:
