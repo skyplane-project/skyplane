@@ -15,7 +15,7 @@ Skyplane is a tool for blazingly fast bulk data transfers between object stores 
 Skyplane is:
 1. 🔥 Blazing fast ([110x faster than AWS DataSync](https://skyplane.org/en/latest/benchmark.html))
 2. 🤑 Cheap (4x cheaper than rsync)
-3. 🌐 Universal (AWS, Azure and GCP)
+3. 🌐 Universal (AWS, Azure, IBM and GCP)
 
 You can use Skyplane to transfer data: 
 * between object stores within a cloud provider (e.g. AWS us-east-1 to AWS us-west-2)
@@ -29,6 +29,7 @@ Skyplane currently supports the following source and destination endpoints (any 
 | AWS S3             | :white_check_mark: | :white_check_mark: |
 | Google Storage     | :white_check_mark: | :white_check_mark: |
 | Azure Blob Storage | :white_check_mark: | :white_check_mark: |
+| IBM Cloud Object Storage | :white_check_mark: | :white_check_mark: |
 | Local Disk         | :white_check_mark: | (in progress)      |
 
 Skyplane is an actively developed project. It will have 🔪 SHARP EDGES 🔪. Please file an issue or ask the contributors via [the #help channel on our Slack](https://join.slack.com/t/skyplaneworkspace/shared_invite/zt-1cxmedcuc-GwIXLGyHTyOYELq7KoOl6Q) if you encounter bugs.
@@ -49,10 +50,11 @@ $ pip install skyplane[aws]
 # install support for other clouds as needed:
 #   $ pip install skyplane[azure]
 #   $ pip install skyplane[gcp]
+#   $ pip install skyplane[ibmcloud]
 #   $ pip install skyplane[all]
 ```
 
-Skyplane supports AWS, Azure, and GCP. You can install Skyplane with support for one or more of these clouds by specifying the corresponding extras. To install two out of three clouds, you can run `pip install skyplane[aws,azure]`.
+Skyplane supports AWS, Azure, IBM and GCP. You can install Skyplane with support for one or more of these clouds by specifying the corresponding extras. To install two out of three clouds, you can run `pip install skyplane[aws,azure]`.
 
 *GCP support on the M1 Mac*: If you are using an M1 Mac with the arm64 architecture and want to install GCP support for Skyplane, you will need to install as follows
 `GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 GRPC_PYTHON_BUILD_SYSTEM_ZLIB=1 pip install skyplane[aws,gcp]`
