@@ -71,7 +71,12 @@ $ pip install awscli
 $ pip install gcloud
 
 ---> For Azure:
-$ pip install azure
+$ p	ip install azure
+
+---> For IBM Cloud:
+$ Follow IBM Cloud and create an account with the resource group.
+Copy `/skyplane/compute/ibmcloud/ibm_credentials.yaml.template` into `~/.bluemix/ibm_credentials` and fill IBM IAM key and credentials to your IBM Cloud object storage 
+
 ```
 Once you have the CLI tools setup, log into each cloud provider's CLI:
 ```
@@ -83,6 +88,7 @@ $ gcloud auth application-default login
 
 ---> For Azure:
 $ az login
+
 ```
 After authenticating with each cloud provider, you can run `skyplane init` to create a configuration file for Skyplane.
 
