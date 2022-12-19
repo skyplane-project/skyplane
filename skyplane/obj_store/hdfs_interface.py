@@ -64,6 +64,7 @@ class HDFSInterface(ObjectStoreInterface):
     def delete_objects(self, keys: List[str]):
         for key in keys:
             self.hdfs.delete_file(key)
+        return True
 
     def download_object(
         self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5: bool = False
@@ -85,11 +86,11 @@ class HDFSInterface(ObjectStoreInterface):
         check_md5: Optional[bytes] = None,
         mime_type: Optional[str] = None,
     ):
-        with open(src_file_path, "r") as f1:
+        with open(src_file_path, "rb") as f1:
             with self.hdfs.open_output_stream(dst_object_name) as f2:
                 b = f1.read()
                 f2.write(b)
-
+                
     def read_file(self, file_name, offset=0, length=sys.maxsize):
         with self.hdfs.open_input_stream(file_name) as f:
             return print(f.readall())
