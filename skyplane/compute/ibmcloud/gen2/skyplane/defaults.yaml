@@ -103,43 +103,10 @@ rsync_filter: []
 # is setup.
 initialization_commands: []
 
-setup_commands:
-    # Note: if you're developing Ray, you probably want to create an AMI that
-    # has your Ray repo pre-cloned. Then, you can replace the pip installs
-    # below with a git checkout <your_sha> (and possibly a recompile).
-    # - echo 'export PATH="$HOME/anaconda3/envs/tensorflow_p36/bin:$PATH"' >> ~/.bashrc
-    # Install ray if not present
-    - sleep 30 && apt update && apt install python3.8 -y && curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && python3.8 get-pip.py
-    - test -d ~/.venv || (pip install virtualenv && virtualenv -p /usr/bin/python3.8 ~/.venv && echo source ~/.venv/bin/activate >> ~/.bashrc && echo "source ~/.venv/bin/activate" | cat - ~/.bashrc | tee ~/.bashrc)
-    - pip install ibm-vpc ibm_platform_services ibm_cloud_sdk_core ibm-vpc-ray-connector
-    - apt install libgl1-mesa-glx -y && pip install pandas tabulate gym tensorboardX dm_tree opencv-python starlette uvicorn transformers torch
-    - echo alias python=\'python3\'>>~/.bash_aliases
-    - pip install ray[default] ray[serve]
+setup_commands: []
 
 # Custom commands that will be run on the head node after common setup.
 head_setup_commands: []
 
 # Custom commands that will be run on worker nodes after common setup.
 worker_setup_commands: []
-
-# Command to start ray on the head node. You don't need to change this.
-head_start_ray_commands:
-    - ray stop --force --verbose
-    - >-
-      ulimit -n 65536;
-      ray start
-      --head
-      --port=6379
-      --object-manager-port=8076
-      --autoscaling-config=~/ray_bootstrap_config.yaml
-      --dashboard-host=$RAY_HEAD_IP
-
-# Command to start ray on worker nodes. You don't need to change this.
-worker_start_ray_commands:
-    - ray stop --force --verbose
-    - >-
-      ulimit -n 65536;
-      ray start
-      --address=$RAY_HEAD_IP:6379
-      --object-manager-port=8076
-
