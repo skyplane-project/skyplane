@@ -65,10 +65,13 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: ${{ steps.login-ecr-public.outputs.registry }}/${{ env.IMAGE_NAME }}
+          # tag as skyplane-ibm:latest
           tags: |
-            type=pep440,pattern={{version}}
-            type=schedule,pattern=nightly-{{date 'YYYYMMDD'}}
-            type=edge,branch=main
+            type=ref,event=branch
+            type=ref,event=pr
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=sha
 
       # Build and push Docker image with Buildx (don't push on PR)
       # https://github.com/docker/build-push-action
@@ -78,7 +81,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ibmcloud-support
+          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new
