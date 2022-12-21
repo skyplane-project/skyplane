@@ -22,7 +22,7 @@ flask
 lz4
 pyopenssl
 werkzeug
-yaml
+pyyaml
 ibm-platform-services
 ibm-watson
 ibm-cloud-sdk-core
