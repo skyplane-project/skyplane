@@ -9,7 +9,7 @@ def delete_config(config):
 
     # parse config
     if 'provider' in config:
-        from ibmcloud.gen2.skyplane import parse_config
+        from skyplane.compute.ibmcloud.gen2.skyplane import parse_config
     else:
         raise Exception('Config file not supported')
     

@@ -66,6 +66,10 @@ class IBMCloudProvider(CloudProvider):
             region_config['zones'][0]['zone_name'])
         self.regions_cloudprovider[region] = ibmcloud_provider
 
+    def teardown_region(self, region):
+        if region in self.regions_vpc:
+            delete_cluster(self.regions_vpc[region])
+
     def teardown_global(self):
         for region in self.regions_vpc:
             delete_cluster(self.regions_vpc[region])
