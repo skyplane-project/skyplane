@@ -58,6 +58,10 @@ jobs:
         with:
           registry-type: 'public'
 
+      - name: Install Dependencies  
+        run: |
+         pip install PyYAML
+
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
       - name: Extract Docker metadata
