@@ -27,3 +27,4 @@ ibm-platform-services
 ibm-watson
 ibm-cloud-sdk-core
 ibm-vpc
+inquirer
