@@ -2,7 +2,8 @@ import base64
 import hashlib
 import os
 from functools import lru_cache
-from typing import Iterator, List, Optional
+from typing import Iterator, List, Optional, Tuple
+
 
 from skyplane import exceptions
 from skyplane.compute.ibmcloud.ibmcloud_auth import IBMCloudAuthentication
@@ -121,20 +122,17 @@ class COSInterface(ObjectStoreInterface):
         write_at_offset=False,
         generate_md5=False,
         write_block_size=2**16,
-    ) -> Optional[bytes]:
+    ) -> Tuple[Optional[str], Optional[bytes]]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
 
         s3_client = self._cos_client()
         assert len(src_object_name) > 0, f"Source object name must be non-empty: '{src_object_name}'"
-
         args = {"Bucket": self.bucket_name, "Key": src_object_name}
-
-        if size_bytes:
+        assert not (offset_bytes and not size_bytes), f"Cannot specify {offset_bytes} without {size_bytes}"
+        if offset_bytes is not None and size_bytes is not None:
             args["Range"] = f"bytes={offset_bytes}-{offset_bytes + size_bytes - 1}"
-
         if self.requester_pays:
             args["RequestPayer"] = "requester"
-
         response = s3_client.get_object(**args)
 
         # write response data
@@ -151,7 +149,9 @@ class COSInterface(ObjectStoreInterface):
                 f.write(b)
                 b = response["Body"].read(write_block_size)
         response["Body"].close()
-        return m.digest() if generate_md5 else None
+        md5 = m.digest() if generate_md5 else None
+        mime_type = response["ContentType"]
+        return mime_type, md5
 
     @imports.inject("botocore.exceptions", pip_extra="ibmcloud")
     def upload_object(botocore_exceptions, self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None):
