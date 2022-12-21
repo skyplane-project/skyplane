@@ -63,7 +63,7 @@ class COSInterface(ObjectStoreInterface):
             raise e
 
     def create_bucket(self, aws_region):
-        s3_client = self._s3_client(aws_region)
+        s3_client = self._cos_client(aws_region)
         if not self.bucket_exists():
             if aws_region == "us-east-1":
                 s3_client.create_bucket(Bucket=self.bucket_name)
@@ -71,7 +71,7 @@ class COSInterface(ObjectStoreInterface):
                 s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": aws_region})
 
     def delete_bucket(self):
-        self._s3_client().delete_bucket(Bucket=self.bucket_name)
+        self._cos_client().delete_bucket(Bucket=self.bucket_name)
 
     def list_objects(self, prefix="") -> Iterator[COSObject]:
         paginator = self._cos_client().get_paginator("list_objects_v2")
@@ -82,7 +82,7 @@ class COSInterface(ObjectStoreInterface):
                 yield COSObject("cos", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"])
 
     def delete_objects(self, keys: List[str]):
-        s3_client = self._s3_client()
+        s3_client = self._cos_client()
         while keys:
             batch, keys = keys[:1000], keys[1000:]  # take up to 1000 keys at a time
             s3_client.delete_objects(Bucket=self.bucket_name, Delete={"Objects": [{"Key": k} for k in batch]})
@@ -124,7 +124,7 @@ class COSInterface(ObjectStoreInterface):
     ) -> Optional[bytes]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
 
-        s3_client = self._s3_client()
+        s3_client = self._cos_client()
         assert len(src_object_name) > 0, f"Source object name must be non-empty: '{src_object_name}'"
 
         args = {"Bucket": self.bucket_name, "Key": src_object_name}
@@ -153,10 +153,10 @@ class COSInterface(ObjectStoreInterface):
         response["Body"].close()
         return m.digest() if generate_md5 else None
 
-    @imports.inject("botocore.exceptions", pip_extra="aws")
+    @imports.inject("botocore.exceptions", pip_extra="ibmcloud")
     def upload_object(botocore_exceptions, self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None):
         dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
-        s3_client = self._s3_client()
+        s3_client = self._cos_client()
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
         b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
         checksum_args = dict(ContentMD5=b64_md5sum) if b64_md5sum else dict()
