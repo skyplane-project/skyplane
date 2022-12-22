@@ -7,6 +7,7 @@ from cryptography.utils import CryptographyDeprecationWarning
 from typing import Dict, Optional
 
 from skyplane.compute.aws.aws_key_manager import AWSKeyManager
+from skyplane.compute.ibmcloud.gen2.main import delete_cluster
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
@@ -22,7 +23,7 @@ from skyplane.utils.cache import ignore_lru_cache
 class IBMCloudServer(Server):
     """IBM Cloud Server class to support basic SSH operations"""
 
-    def __init__(self, ibmcloud_provider, region_tag, vsi_info, log_dir=None):
+    def __init__(self, ibmcloud_provider, region_tag, vsi_info, config_file, log_dir=None):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "cos"
         self.auth = IBMCloudAuthentication()
@@ -32,6 +33,7 @@ class IBMCloudServer(Server):
             self.instance_id = val['id']
             print (self.instance_id)
         self.vsi_info = vsi_info
+        self.config_file = config_file
         self.cos_region = self.region_tag.split(":")[1]
         key_filename_tmp = self.auth.ssh_credentials['key_filename']
         self.key_filename = os.path.abspath(os.path.expanduser(key_filename_tmp))
@@ -85,22 +87,7 @@ class IBMCloudServer(Server):
         return f"IBMCloudServer(region_tag={self.region_tag}, instance_id={self.instance_id})"
 
     def terminate_instance_impl(self):
-        iam = self.auth.get_boto3_resource("iam")
-
-        # get instance profile name that is associated with this instance
-        profile = self.get_boto3_instance_resource().iam_instance_profile
-        if profile:
-            profile = iam.InstanceProfile(profile["Arn"].split("/")[-1])
-
-            # remove all roles from instance profile
-            for role in profile.roles:
-                profile.remove_role(RoleName=role.name)
-
-            # delete instance profile
-            profile.delete()
-
-        # delete instance
-        self.get_boto3_instance_resource().terminate()
+        delete_cluster(self.config_file)
 
     def get_ssh_client_impl(self):
         client = paramiko.SSHClient()

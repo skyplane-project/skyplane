@@ -23,7 +23,6 @@ class IBMCloudProvider(CloudProvider):
         self.auth = IBMCloudAuthentication()
         self.regions_vpc = {}
         self.regions_cloudprovider = {}
-        self.regions_cloudprovider = {}
         self.provisioning_semaphore = BoundedSemaphore(16)
 
     @property
@@ -103,4 +102,4 @@ class IBMCloudProvider(CloudProvider):
         resp = self.regions_cloudprovider[region].create_node(
             config_dict['available_node_types']['ray_head_default']['node_config'], tags, 1)
         print ("Provision completed")
-        return IBMCloudServer(self.regions_cloudprovider[region], f"cos:{region}", resp)
+        return IBMCloudServer(self.regions_cloudprovider[region], f"cos:{region}", resp, self.regions_vpc[region])
