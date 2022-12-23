@@ -393,8 +393,6 @@ class CopyJob(TransferJob):
             n_bytes = sum([cr.chunk.chunk_length_bytes for cr in batch])
             bytes_dispatched[min_idx] += n_bytes
             start = time.time()
-            parts = sum([cr.chunk.partition for cr in batch])
-            print(parts)
             reply = self.http_pool.request(
                 "POST",
                 f"{server.gateway_api_url}/api/v1/chunk_requests",

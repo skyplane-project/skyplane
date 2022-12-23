@@ -29,12 +29,16 @@ class AWSAuthentication:
             return
         with aws_config_path.open("w") as f:
             region_list = []
+
+            # query regions
             describe_regions = boto3.client("ec2", region_name="us-east-1").describe_regions()
             for region in describe_regions["Regions"]:
                 if region["OptInStatus"] == "opt-in-not-required" or region["OptInStatus"] == "opted-in":
                     region_text = region["Endpoint"]
                     region_name = region_text[region_text.find(".") + 1 : region_text.find(".amazon")]
                     region_list.append(region_name)
+
+            # get VCPU limits
             f.write("\n".join(region_list))
 
     def clear_region_config(self):
@@ -95,6 +99,7 @@ class AWSAuthentication:
             return self.get_boto3_session().client(service_name)
         else:
             return self.get_boto3_session().client(service_name, region_name=aws_region)
+
 
     def get_azs_in_region(self, region):
         ec2 = self.get_boto3_client("ec2", region)

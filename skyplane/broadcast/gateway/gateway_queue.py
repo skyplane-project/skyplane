@@ -2,7 +2,7 @@ from multiprocessing import Queue
 
 
 class GatewayQueue:
-    def __init__(self, maxsize=1000):
+    def __init__(self, maxsize=10000):
         self.q = Queue(maxsize)
         self.handles = []
 
@@ -25,7 +25,7 @@ class GatewayQueue:
         return self.q.qsize()
 
 class GatewayANDQueue(GatewayQueue):
-    def __init__(self, maxsize=1000):
+    def __init__(self, maxsize=10000):
         self.q = {}
         self.maxsize = maxsize
 

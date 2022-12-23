@@ -78,7 +78,7 @@ class BroadcastDataplane(Dataplane):
         provider = region.split(":")[0]
         if provider == "aws" or provider == "gcp":
             #n_conn = 32
-            n_conn = 16
+            n_conn = 32
         elif provider == "azure":
             n_conn = 24  # due to throttling limits from authentication
         return n_conn
@@ -252,7 +252,7 @@ class BroadcastDataplane(Dataplane):
             partition_to_next_regions = {}
             for i in range(num_partitions):
                 partition_to_next_regions[i] = set(
-                    [edge[1] for edge in solution_graph.out_edges(node, data=True) if i in edge[-1]["partitions"]]
+                    [edge[1] for edge in solution_graph.out_edges(node, data=True) if str(i) in edge[-1]["partitions"]]
                 )
 
             import collections
@@ -282,7 +282,7 @@ class BroadcastDataplane(Dataplane):
 
             gateway_programs[node] = self.remap_keys(node_gateway_program.to_dict())
             assert len(gateway_programs[node]) > 0, f"Empty gateway program {node}"
-            print("PROGRAM", gateway_programs[node])
+            #print("PROGRAM", gateway_programs[node])
 
         return gateway_programs
 
@@ -304,7 +304,6 @@ class BroadcastDataplane(Dataplane):
         if authorize_ssh_pub_key:
             gateway_server.copy_public_key(authorize_ssh_pub_key)
 
-        print("current program", self.current_gw_programs)
 
         gateway_server.start_gateway(
             {},  # don't need setup arguments here to pass as outgoing_ports

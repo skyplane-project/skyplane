@@ -736,6 +736,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         sampled = list(self.G.nodes)
         sampled.remove("aws:eu-south-2")
         sampled.remove("aws:eu-central-2")
+        sampled.remove("aws:ca-central-1")
         g = g.subgraph(sampled).copy()
 
         cost = np.array([e[2] for e in g.edges(data="cost")])
