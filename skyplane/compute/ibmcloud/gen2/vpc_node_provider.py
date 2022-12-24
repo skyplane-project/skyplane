@@ -125,7 +125,7 @@ class IBMVPCNodeProvider():
                     logger.debug(f"Setting HEAD node tags {head_tags}")
                     self.set_node_tags(node[0]["id"], head_tags)
 
-    def __init__(self, iam_key, iam_endpoint, cluster_name, endpoint, zone_name, cache_stopped_nodes = True):
+    def __init__(self, iam_key, iam_endpoint, cluster_name, endpoint, zone_name, cluster_config, cache_stopped_nodes = True):
         """
         Args:
             provider_config (dict): containing the provider segment of the cluster's config file (see defaults.yaml).
@@ -133,6 +133,7 @@ class IBMVPCNodeProvider():
             cluster_name(str): value of cluster_name within the cluster's config file. 
 
         """
+        self.cluster_config = self._parse_config(cluster_config)
         self.cluster_name = cluster_name
         self.lock = threading.RLock()
         self.endpoint = endpoint
@@ -140,12 +141,6 @@ class IBMVPCNodeProvider():
         self.iam_key = iam_key
         self.iam_endpoint = iam_endpoint
 
-        print (self.endpoint)
-        #index = self.endpoint.find("/v1")
-        #region_index = self.endpoint.rfind("/")
-        #region = self.endpoint[region_index:]
-        #self.endpoint = self.endpoint[:index]
-        #print (self.endpoint)
         self.ibm_vpc_client = _get_vpc_client(
             self.endpoint, IAMAuthenticator(self.iam_key, url=self.iam_endpoint)
         )
@@ -159,11 +154,125 @@ class IBMVPCNodeProvider():
         # if cache_stopped_nodes == true, nodes will be stopped instead of deleted to accommodate future rise in demand  
         self.cache_stopped_nodes = cache_stopped_nodes
 
+    def _parse_config(self,config):
+        res = {'iam_api_key': config['provider']['iam_api_key']}
+
+        for available_node_type in config['available_node_types']:
+            res['vpc_id'] = config['available_node_types'][available_node_type]['node_config']['vpc_id']
+            res['key_id'] = config['available_node_types'][available_node_type]['node_config']['key_id']
+            res['subnet_id'] = config['available_node_types'][available_node_type]['node_config']['subnet_id']
+
+        res['endpoint'] = config['provider']['endpoint']
+
+        if 'iam_endpoint' in config['provider']:
+            res['iam_endpoint'] = config['provider']['iam_endpoint']
+
+        return res
+
+    def delete_vpc(self):
+        # find and delete all vpc vsis
+        instances_info = self.ibm_vpc_client.list_instances(vpc_id=self.cluster_config['vpc_id']).get_result()
+
+        for ins in instances_info['instances']:
+            # delete floating ips
+            print('Deleting instance {}'.format(ins['name']))
+
+            interface_id = ins['network_interfaces'][0]['id']
+            fips = self.ibm_vpc_client.list_instance_network_interface_floating_ips(
+                        ins['id'], interface_id).get_result()['floating_ips']
+            if fips:
+                fip = fips[0]['id']
+                self.ibm_vpc_client.delete_floating_ip(fip)
+
+            # delete instance
+            self.ibm_vpc_client.delete_instance(ins['id'])
+
+            attempt = int(5)
+            while attempt > 0:
+                if self.is_terminated(ins['id']):
+                    break;
+                time.sleep(5)
+                attempt = attempt - 1
+                print ("retry attempt {}".format(attempt))
+
+        # delete subnet
+        print('Deleting subnet')
+        attempt = int(5)
+        while (attempt > 0):
+            try:
+                self.ibm_vpc_client.delete_subnet(self.cluster_config['subnet_id'])
+            except ApiException as e:
+                if e.code == 404:
+                    break
+                if e.code == 409:
+                    time.sleep(10)
+                    attempt = attempt - 1
+                    print ("retry attempt {}".format(attempt))
+                else:
+                    raise e
+
+        # delete gateway?
+        gateways = self.ibm_vpc_client.list_public_gateways().get_result()
+        for gw in gateways['public_gateways']:
+            if gw['vpc']['id'] == self.cluster_config['vpc_id']:
+                print('Deleting gateway')
+                attempt = int(5)
+                while (attempt > 0):
+
+                    try:
+                        self.ibm_vpc_client.delete_public_gateway(gw['id'])
+                        gw_id = self.ibm_vpc_client.get_public_gateway(gw['id'])
+                    except ApiException as e:
+                        if e.code == 404:
+                            break
+                        else:
+                            time.sleep(5)
+                            attempt = attempt - 1
+                            print ("retry attempt {}".format(attempt))
+
+        print('Deleting ssh key')
+        attempt = int(5)
+        while (attempt > 0):
+            # delete ssh key
+            try:
+                self.ibm_vpc_client.delete_key(id=self.cluster_config['key_id'])
+            except ApiException as e:
+                if e.code == 404:
+                    break
+                else:
+                    time.sleep(5)
+                    attempt = attempt - 1
+                    print ("retry attempt {}".format(attempt))
+
+        # delete vpc
+        print('Deleting VPC')
+        try:
+            self.ibm_vpc_client.delete_vpc(self.cluster_config['vpc_id'])
+        except ApiException as e:
+            if e.code == 404:
+                pass
+            else:
+                raise e
+
     def _get_node_type(self, name):
         if f"{self.cluster_name}-{NODE_TYPE_MASTER}" in name:
             return NODE_TYPE_MASTER
         elif f"{self.cluster_name}-{NODE_TYPE_SLAVE}" in name:
             return NODE_TYPE_SLAVE
+
+    def list_nodes(self, prefix = None):
+        nodes = []
+        result = self.ibm_vpc_client.list_instances().get_result()
+        instances = result["instances"]
+        while result.get("next"):
+            start = result["next"]["href"].split("start=")[1]
+            result = self.ibm_vpc_client.list_instances(start=start).get_result()
+            instances.extend(result["instances"])
+
+        for instance in instances:
+            if prefix is not None and instance["name"].startswith(prefix):
+                nodes.append(instance)
+        return nodes
 
     def _get_nodes_by_tags(self, filters):
         """ 
@@ -292,14 +401,23 @@ class IBMVPCNodeProvider():
     def is_running(self, node_id):
         """returns whether a node is in status running"""
         with self.lock:
-            node = self._get_cached_node(node_id)
+            node = self.get_real_node(node_id)
             return node["status"] == "running"
+
+    def get_node_status(self, node_id):
+        """returns True if a node is either not recorded or not in any valid status."""
+        with self.lock:
+            try:
+                node = self.get_real_node(node_id)
+                return node["status"]
+            except Exception as e:
+                raise e
 
     def is_terminated(self, node_id):
         """returns True if a node is either not recorded or not in any valid status."""
         with self.lock:
             try:
-                node = self._get_cached_node(node_id)
+                node = self.get_real_node(node_id)
                 return node["status"] not in ["running", "starting", "pending"]
             except Exception:
                 return True
@@ -330,7 +448,7 @@ class IBMVPCNodeProvider():
     def external_ip(self, node_id, use_hybrid_ips = False):
         """returns head node's public ip. 
         if use_hybrid_ips==true in cluster's config file, returns the ip address of a node based on its 'Kind'."""
-        print ("vpc_node_provider - external ip")
+
         with self.lock:
             if use_hybrid_ips:
                 return self._get_hybrid_ip(node_id)
@@ -727,6 +845,20 @@ class IBMVPCNodeProvider():
         except Exception as e:
             logger.error(f"failed to get instance with id {node_id}")
             raise e
+
+    def get_real_node(self, node_id):
+        """Refresh and get info for this node, updating the cache."""
+        self.non_terminated_nodes({})  # Side effect: updates cache
+
+        try:
+            node = self.ibm_vpc_client.get_instance(node_id).get_result()
+            with self.lock:
+                self.cached_nodes[node_id] = node
+            return node
+        except Exception as e:
+            logger.error(f"failed to get instance with id {node_id}")
+            raise e
+
 
     def _get_cached_node(self, node_id):
         """Return node info from cache if possible, otherwise fetches it."""

@@ -6,9 +6,6 @@ import os
 from cryptography.utils import CryptographyDeprecationWarning
 from typing import Dict, Optional
 
-from skyplane.compute.aws.aws_key_manager import AWSKeyManager
-from skyplane.compute.ibmcloud.gen2.main import delete_cluster
-
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
     import paramiko
@@ -81,13 +78,13 @@ class IBMCloudServer(Server):
         return self.vsi_info['zone']['name']
 
     def instance_state(self):
-        return ServerState.from_aws_state(self.get_boto3_instance_resource().state["Name"])
+        return ServerState.from_ibmcloud_state(self.ibmcloud_provider.get_node_status(self.instance_id))
 
     def __repr__(self):
         return f"IBMCloudServer(region_tag={self.region_tag}, instance_id={self.instance_id})"
 
     def terminate_instance_impl(self):
-        delete_cluster(self.config_file)
+        self.ibmcloud_provider.delete_vpc()
 
     def get_ssh_client_impl(self):
         client = paramiko.SSHClient()

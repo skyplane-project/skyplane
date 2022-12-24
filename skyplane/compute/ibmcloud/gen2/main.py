@@ -25,11 +25,4 @@ def create_vpc(*args, **kwargs):
     print("=================================================")
 
     return output_file
-
-def delete_cluster(config_file_path):
-    config = None
-    with open(config_file_path) as f:
-        config = yaml.safe_load(f)
-        
-    delete_config(config)      
     

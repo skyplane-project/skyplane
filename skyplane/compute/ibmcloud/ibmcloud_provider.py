@@ -8,7 +8,7 @@ from typing import List, Optional
 from skyplane import exceptions as skyplane_exceptions
 from skyplane.compute.ibmcloud.ibmcloud_auth import IBMCloudAuthentication
 from skyplane.compute.ibmcloud.ibmcloud_server import IBMCloudServer
-from skyplane.compute.ibmcloud.gen2.main import create_vpc, delete_cluster
+from skyplane.compute.ibmcloud.gen2.main import create_vpc
 from skyplane.compute.ibmcloud.gen2.vpc_node_provider import IBMVPCNodeProvider
 from skyplane.compute.cloud_provider import CloudProvider
 from skyplane.utils import imports, logger
@@ -62,16 +62,17 @@ class IBMCloudProvider(CloudProvider):
         ibmcloud_provider = IBMVPCNodeProvider(self.auth.iam_api_key, self.auth.iam_endpoint, 
             'skyplane',
             config_dict['provider']['endpoint'],
-            region_config['zones'][0]['zone_name'])
+            region_config['zones'][0]['zone_name'],
+            config_dict)
         self.regions_cloudprovider[region] = ibmcloud_provider
 
     def teardown_region(self, region):
-        if region in self.regions_vpc:
-            delete_cluster(self.regions_vpc[region])
+        if region in self.regions_cloudprovider:
+            self.regions_cloudprovider[region].delete_vpc()
 
     def teardown_global(self):
-        for region in self.regions_vpc:
-            delete_cluster(self.regions_vpc[region])
+        for provider in self.regions_cloudprovider:
+            provider.delete_vpc()
 
     def add_ips_to_security_group(self, cos_region: str, ips: Optional[List[str]] = None):
         pass;

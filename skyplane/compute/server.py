@@ -66,6 +66,18 @@ class ServerState(Enum):
         }
         return mapping.get(aws_state, ServerState.UNKNOWN)
 
+    @staticmethod
+    def from_ibmcloud_state(ibmcloud_state):
+        mapping = {
+            "pending": ServerState.PENDING,
+            "running": ServerState.RUNNING,
+            "shutting-down": ServerState.TERMINATED,
+            "terminated": ServerState.TERMINATED,
+            "stopping": ServerState.SUSPENDED,
+            "stopped": ServerState.SUSPENDED,
+        }
+        return mapping.get(ibmcloud_state, ServerState.UNKNOWN)
+
 
 class Server:
     """Abstract server class to support basic SSH operations"""
