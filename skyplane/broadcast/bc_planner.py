@@ -501,20 +501,20 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             for vm in [0]:  # range(int(v_result[nodes.index(edge[0])])): # multiple VMs
                 result_g.add_edge(edge[0], edge[1], throughput=g[edge[0]][edge[1]]["throughput"], cost=g[edge[0]][edge[1]]["cost"])
 
-        remove_nodes = [] # number of vms is one but the 
+        remove_nodes = []  # number of vms is one but the
         for i in range(len(v_result)):
             num_vms = int(v_result[i])
             if nodes[i] in result_g.nodes:
                 result_g.nodes[nodes[i]]["num_vms"] = num_vms
             else:
-                # print(f"Nodes: {nodes[i]}, number of vms: {num_vms}, not in result_g") --> why would this happen 
+                # print(f"Nodes: {nodes[i]}, number of vms: {num_vms}, not in result_g") --> why would this happen
                 remove_nodes.append(nodes[i])
 
         print("Edge: ", result_g.edges.data())
         print("Node: ", result_g.nodes.data())
         print("Num of node: ", len(result_g.nodes))
         print("TOPO GRPAH RESULTS: ", v_result)
-        
+
         print(f"Create topo: {result_g.edges.data()}")
         print(f"Create topo node: {result_g.nodes.data()}")
         return result_g
@@ -582,14 +582,14 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
 
         # optimization problem (minimize sum of costs)
         egress_cost = cp.sum(cost @ p) * partition_size_gb
-        instance_cost = cp.sum(v) * instance_cost_s * s 
+        instance_cost = cp.sum(v) * instance_cost_s * s
         obj = cp.Minimize(egress_cost + instance_cost)
 
         constraints = []
 
         # dirty hack to ban some regions
         print(nodes)
-        #for banned_node in ["aws:eu-south-2"]: 
+        # for banned_node in ["aws:eu-south-2"]:
         #    i = nodes.index(banned_node)
         #    constraints.append(v[i] == 1)
 

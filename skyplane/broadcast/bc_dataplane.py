@@ -71,7 +71,11 @@ class BroadcastDataplane(Dataplane):
 
     def get_ips_in_region(self, region: str):
         public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.gateway_nodes if n.region == region]
-        private_ips = [self.bound_nodes[n].private_ip() for n in self.topology.gateway_nodes if n.region == region]
+        try:  # NOTE: Azure does not have private ips implemented
+            private_ips = [self.bound_nodes[n].private_ip() for n in self.topology.gateway_nodes if n.region == region]
+        except Exception as e:
+            private_ips = public_ips
+
         return public_ips, private_ips
 
     def get_object_store_connection(self, region: str):
@@ -115,7 +119,9 @@ class BroadcastDataplane(Dataplane):
 
         # if no regions to forward data to
         if len(next_regions) == 0:
-            #print(f"{region} has no next region to forward data to: {g.edges.data()}")
+            print(
+                f"Region {region}, any id: {any_id}, partition ids: {partition_ids}, has no next region to forward data to: {g.out_edges(region, data=True)}"
+            )
             return False
 
         # region name --> ips in this region
@@ -303,7 +309,6 @@ class BroadcastDataplane(Dataplane):
             gateway_server.init_log_files(gateway_log_dir)
         if authorize_ssh_pub_key:
             gateway_server.copy_public_key(authorize_ssh_pub_key)
-
 
         gateway_server.start_gateway(
             {},  # don't need setup arguments here to pass as outgoing_ports
