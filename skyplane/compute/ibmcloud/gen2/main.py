@@ -8,16 +8,15 @@ def create_vpc(*args, **kwargs):
     """A programmatic avenue to create configuration files. To be used externally by user."""
 
     _, output_file = verify_paths(None, None)
-    
+
     # now update base config with backend specific params
     base_config = load_config(*args, **kwargs)
-    
-    
+
     for module in MODULES:
-        print (module)
+        print(module)
         base_config = module(base_config).verify(base_config)
 
-    with open(output_file, 'w') as outfile:
+    with open(output_file, "w") as outfile:
         yaml.dump(base_config, outfile, default_flow_style=False)
 
     print("\n\n=================================================")
@@ -25,4 +24,3 @@ def create_vpc(*args, **kwargs):
     print("=================================================")
 
     return output_file
-    

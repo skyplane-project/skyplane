@@ -27,14 +27,13 @@ class IBMCloudServer(Server):
         self.ibmcloud_provider = ibmcloud_provider
         for key in vsi_info:
             val = vsi_info[key]
-            self.instance_id = val['id']
-            print (self.instance_id)
+            self.instance_id = val["id"]
+            print(self.instance_id)
         self.vsi_info = vsi_info
         self.config_file = config_file
         self.cos_region = self.region_tag.split(":")[1]
-        key_filename_tmp = self.auth.ssh_credentials['key_filename']
+        key_filename_tmp = self.auth.ssh_credentials["key_filename"]
         self.key_filename = os.path.abspath(os.path.expanduser(key_filename_tmp))
-
 
     @property
     @imports.inject("boto3", pip_extra="aws")
@@ -54,18 +53,18 @@ class IBMCloudServer(Server):
 
     @ignore_lru_cache()
     def private_ip(self) -> str:
-        return self.ibmcloud_provider.internal_ip(self.instance_id)['address']
+        return self.ibmcloud_provider.internal_ip(self.instance_id)["address"]
 
     @ignore_lru_cache()
     def instance_class(self) -> str:
-        return self.vsi_info['profile']['name']
+        return self.vsi_info["profile"]["name"]
 
     @ignore_lru_cache(ignored_value={})
     def tags(self) -> Dict[str, str]:
         tags = self.ibmcloud_provider.node_tags(self.instance_id)
-        print (tags)
+        print(tags)
         return tags
-        #return {tag["Key"]: tag["Value"] for tag in tags} if tags else {}
+        # return {tag["Key"]: tag["Value"] for tag in tags} if tags else {}
 
     @ignore_lru_cache()
     def instance_name(self) -> Optional[str]:
@@ -75,7 +74,7 @@ class IBMCloudServer(Server):
         return "PREMIUM"
 
     def region(self):
-        return self.vsi_info['zone']['name']
+        return self.vsi_info["zone"]["name"]
 
     def instance_state(self):
         return ServerState.from_ibmcloud_state(self.ibmcloud_provider.get_node_status(self.instance_id))
@@ -92,7 +91,7 @@ class IBMCloudServer(Server):
         try:
             client.connect(
                 self.public_ip(),
-                username=self.auth.ssh_credentials['username'],
+                username=self.auth.ssh_credentials["username"],
                 pkey=paramiko.RSAKey.from_private_key_file(self.key_filename),
                 look_for_keys=False,
                 allow_agent=False,
@@ -107,8 +106,7 @@ class IBMCloudServer(Server):
     def get_sftp_client(self):
         t = paramiko.Transport((self.public_ip(), 22))
 
-        t.connect(username=self.auth.ssh_credentials['username'], 
-            pkey=paramiko.RSAKey.from_private_key_file(self.key_filename))
+        t.connect(username=self.auth.ssh_credentials["username"], pkey=paramiko.RSAKey.from_private_key_file(self.key_filename))
         return paramiko.SFTPClient.from_transport(t)
 
     def open_ssh_tunnel_impl(self, remote_port):
@@ -119,7 +117,7 @@ class IBMCloudServer(Server):
         return sshtunnel.SSHTunnelForwarder(
             (self.public_ip(), 22),
             # ssh_username="ec2-user",
-            ssh_username=self.auth.ssh_credentials['username'],
+            ssh_username=self.auth.ssh_credentials["username"],
             ssh_pkey=str(self.key_filename),
             local_bind_address=("127.0.0.1", 0),
             remote_bind_address=("127.0.0.1", remote_port),

@@ -70,7 +70,7 @@ class ReplicatorClient:
         aws_instance_class: Optional[str] = "m5.4xlarge",  # set to None to disable AWS
         azure_instance_class: Optional[str] = "Standard_D2_v5",  # set to None to disable Azure
         gcp_instance_class: Optional[str] = "n2-standard-16",  # set to None to disable GCP
-        ibmcloud_instance_class: Optional[str] = "cx2-2x4", # set to None to disable IBM Cloud
+        ibmcloud_instance_class: Optional[str] = "cx2-2x4",  # set to None to disable IBM Cloud
         gcp_use_premium_network: bool = True,
         host_uuid: Optional[str] = None,
     ):
@@ -237,16 +237,14 @@ class ReplicatorClient:
                     self.gcp_instance_class,
                     use_spot_instances=gcp_use_spot_instances,
                     gcp_premium_network=self.gcp_use_premium_network,
-                    tags=tags
+                    tags=tags,
                 )
             elif provider == "cos":
                 assert self.ibmcloud.auth.enabled()
-                tags["node-type"]="master"
+                tags["node-type"] = "master"
                 tags["node-name"] = "skyplane-master"
                 for r in set(ibmcloud_regions_to_provision):
-                    server = self.ibmcloud.provision_instance(r.split(":")[1], self.ibmcloud_instance_class,
-                    tags=tags
-                )
+                    server = self.ibmcloud.provision_instance(r.split(":")[1], self.ibmcloud_instance_class, tags=tags)
             else:
                 raise NotImplementedError(f"Unknown provider {provider}")
             self.temp_nodes.append(server)
@@ -256,8 +254,7 @@ class ReplicatorClient:
 
         results = do_parallel(
             provision_gateway_instance,
-            list(aws_regions_to_provision + azure_regions_to_provision
-            + gcp_regions_to_provision + ibmcloud_regions_to_provision),
+            list(aws_regions_to_provision + azure_regions_to_provision + gcp_regions_to_provision + ibmcloud_regions_to_provision),
             spinner=True,
             spinner_persist=True,
             desc="Provisioning gateway instances",
@@ -287,7 +284,6 @@ class ReplicatorClient:
                     instances_by_region[f"cos:{r}"] = []
                 instances_by_region[f"cos:{r}"].extend(ilist)
                 self.temp_nodes.extend(ilist)
-
 
         # bind instances to nodes
         for node in self.topology.gateway_nodes:
@@ -349,7 +345,8 @@ class ReplicatorClient:
 
     def deprovision_gateways(self):
         # This is a good place to tear down Security Groups and the instance since this is invoked by CLI too.
-        print ("deprovision")
+        print("deprovision")
+
         def deprovision_gateway_instance(server: compute.Server):
             if server.instance_state() == compute.ServerState.RUNNING:
                 server.terminate_instance()
@@ -365,7 +362,7 @@ class ReplicatorClient:
         gcp_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("gcp:")]
         gcp_jobs = [partial(self.gcp.remove_gateway_rule, self.gcp_firewall_name)] if gcp_regions else []
         cos_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("cos:")]
-        print (cos_regions)
+        print(cos_regions)
 
         do_parallel(lambda fn: fn(), aws_jobs + gcp_jobs, desc="Removing firewall rules")
 

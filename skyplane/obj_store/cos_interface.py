@@ -23,7 +23,7 @@ class COSInterface(ObjectStoreInterface):
         self.requester_pays = False
         self.bucket_name = bucket_name
         self.region = region
-        if region is not None and 'cos:' in region:
+        if region is not None and "cos:" in region:
             self.region = region[4:]
 
         self._cached_cos_clients = {}
@@ -204,9 +204,8 @@ class COSInterface(ObjectStoreInterface):
         else:
             raise exceptions.SkyplaneException(f"Failed to initiate multipart upload for {dst_object_name}: {response}")
 
-
     def complete_multipart_upload(self, dst_object_name, upload_id):
-        print ("complete multipart upload")
+        print("complete multipart upload")
         cos_client = self._cos_client()
         all_parts = []
         while True:

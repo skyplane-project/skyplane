@@ -320,23 +320,25 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
     else:
         return disable_gcp_support()
 
+
 def load_ibmcloud_config(config: SkyplaneConfig, force_init: bool = False, non_interactive: bool = False) -> SkyplaneConfig:
     try:
         import ibm_boto3
-        HOME_DIR = os.path.expanduser('~')
-        CONFIG_DIR = os.path.join(HOME_DIR, '.bluemix')
-        CONFIG_FILE = os.path.join(CONFIG_DIR, 'ibm_credentials')
+
+        HOME_DIR = os.path.expanduser("~")
+        CONFIG_DIR = os.path.join(HOME_DIR, ".bluemix")
+        CONFIG_FILE = os.path.join(CONFIG_DIR, "ibm_credentials")
 
         def load_yaml_config(config_filename):
             import yaml
+
             try:
-                with open(config_filename, 'r') as config_file:
+                with open(config_filename, "r") as config_file:
                     data = yaml.safe_load(config_file)
             except FileNotFoundError:
                 data = {}
 
             return data
-
 
         def get_default_config_filename():
             """
@@ -344,11 +346,11 @@ def load_ibmcloud_config(config: SkyplaneConfig, force_init: bool = False, non_i
             then checks IBM_CONFIG_FILE environment variable
             then ~/.ibm/config
             """
-            if 'IBM_CONFIG_FILE' in os.environ:
-                config_filename = os.environ['IBM_CONFIG_FILE']
+            if "IBM_CONFIG_FILE" in os.environ:
+                config_filename = os.environ["IBM_CONFIG_FILE"]
 
             elif os.path.exists(".ibm_config"):
-                config_filename = os.path.abspath('.ibm_credentials')
+                config_filename = os.path.abspath(".ibm_credentials")
 
             else:
                 config_filename = CONFIG_FILE
@@ -358,50 +360,50 @@ def load_ibmcloud_config(config: SkyplaneConfig, force_init: bool = False, non_i
             return config_filename
 
         def load_config():
-            """ Load the configuration """
+            """Load the configuration"""
             config_data = None
             config_filename = get_default_config_filename()
             if config_filename:
                 config_data = load_yaml_config(config_filename)
             else:
                 # throw exception
-                raise Exception(f'IBM Config file not foud in {config_filename}')
+                raise Exception(f"IBM Config file not foud in {config_filename}")
 
             return config_data
 
     except ImportError:
         config.ibmcloud_enabled = False
-        typer.secho("    IBM Cloud support disabled because ibm_boto3 is not installed. Run `pip install skyplane[ibmcloud].`", fg="red", err=True)
+        typer.secho(
+            "    IBM Cloud support disabled because ibm_boto3 is not installed. Run `pip install skyplane[ibmcloud].`", fg="red", err=True
+        )
         return config
     if non_interactive or typer.confirm("    Do you want to configure IBM Cloud support in Skyplane?", default=True):
         ibm_config = load_config()
-        config.ibmcloud_useragent = ibm_config['user_agent'] if 'user_agent' in ibm_config else 'skyplane-ibm'
+        config.ibmcloud_useragent = ibm_config["user_agent"] if "user_agent" in ibm_config else "skyplane-ibm"
 
-        if 'iam' in ibm_config and 'ibm_iam_key' in ibm_config['iam']:
-            config.ibmcloud_iam_key = ibm_config['iam'].get('ibm_iam_key')
+        if "iam" in ibm_config and "ibm_iam_key" in ibm_config["iam"]:
+            config.ibmcloud_iam_key = ibm_config["iam"].get("ibm_iam_key")
 
-        if 'iam' in ibm_config and 'iam_endpoint' in ibm_config['iam']:
-            config.ibmcloud_iam_endpoint = ibm_config['iam'].get('iam_endpoint')
+        if "iam" in ibm_config and "iam_endpoint" in ibm_config["iam"]:
+            config.ibmcloud_iam_endpoint = ibm_config["iam"].get("iam_endpoint")
         else:
-            config.ibmcloud_iam_endpoint = 'https://iam.cloud.ibm.com'
+            config.ibmcloud_iam_endpoint = "https://iam.cloud.ibm.com"
 
-        if 'cos' in ibm_config and 'access_key' in ibm_config['cos']:
-            config.ibmcloud_access_id = ibm_config['cos']['access_key']
+        if "cos" in ibm_config and "access_key" in ibm_config["cos"]:
+            config.ibmcloud_access_id = ibm_config["cos"]["access_key"]
 
-        if 'cos' in ibm_config and 'secret_key' in ibm_config['cos']:
-            config.ibmcloud_secret_key = ibm_config['cos']['secret_key']
+        if "cos" in ibm_config and "secret_key" in ibm_config["cos"]:
+            config.ibmcloud_secret_key = ibm_config["cos"]["secret_key"]
 
-        if 'cos' in ibm_config and 'region' in ibm_config['cos']:
-            config.ibmcloud_region = ibm_config['cos']['region']
+        if "cos" in ibm_config and "region" in ibm_config["cos"]:
+            config.ibmcloud_region = ibm_config["cos"]["region"]
 
         if config.ibmcloud_api_key is not None or config.ibmcloud_access_id is not None:
             config.ibmcloud_enabled = True
 
         auth = compute.IBMCloudAuthentication(config=config)
         if config.ibmcloud_enabled:
-            typer.secho(
-                f"    Loaded COS credentials from the COS CLI ", fg="blue"
-            )
+            typer.secho(f"    Loaded COS credentials from the COS CLI ", fg="blue")
             config.ibmcloud_enabled = True
             auth.save_region_config(config)
             typer.secho(f"    COS region config file saved to {ibmcloud_config_path}", fg="blue")

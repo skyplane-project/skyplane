@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 def update_decorator(f):
     def foo(*args, **kwargs):
         result = f(*args, **kwargs)
-        update_config = getattr(args[0], 'update_config')
+        update_config = getattr(args[0], "update_config")
         if not result:
             return args[0].base_config
         if isinstance(result, tuple):
@@ -31,25 +31,30 @@ class ConfigBuilder:
     """
     Interface for building IBM Cloud config files for Ray
     """
-    iam_api_key, ibm_vpc_client, resource_service_client, resource_controller_service, compute_iam_endpoint, region = None, None, None, None, None, None
+
+    iam_api_key, ibm_vpc_client, resource_service_client, resource_controller_service, compute_iam_endpoint, region = (
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
 
     def __init__(self, base_config: Dict[str, Any]) -> None:
 
         self.defaults = {}
         if not ConfigBuilder.iam_api_key:
-            if 'ibm' in base_config and 'iam_api_key' in base_config['ibm']:
-                ConfigBuilder.iam_api_key = base_config['ibm']['iam_api_key']
-            elif 'provider' in base_config and 'iam_api_key' in base_config['provider']:
-                ConfigBuilder.iam_api_key = base_config['provider']['iam_api_key']
+            if "ibm" in base_config and "iam_api_key" in base_config["ibm"]:
+                ConfigBuilder.iam_api_key = base_config["ibm"]["iam_api_key"]
+            elif "provider" in base_config and "iam_api_key" in base_config["provider"]:
+                ConfigBuilder.iam_api_key = base_config["provider"]["iam_api_key"]
 
         if not ConfigBuilder.ibm_vpc_client and ConfigBuilder.iam_api_key:
             authenticator = IAMAuthenticator(ConfigBuilder.iam_api_key, url=ConfigBuilder.compute_iam_endpoint)
-            ConfigBuilder.ibm_vpc_client = VpcV1(
-                '2021-01-19', authenticator=authenticator)
-            ConfigBuilder.resource_service_client = ResourceManagerV2(
-                authenticator=authenticator)
-            ConfigBuilder.resource_controller_service = ResourceControllerV2(
-                authenticator=authenticator)
+            ConfigBuilder.ibm_vpc_client = VpcV1("2021-01-19", authenticator=authenticator)
+            ConfigBuilder.resource_service_client = ResourceManagerV2(authenticator=authenticator)
+            ConfigBuilder.resource_controller_service = ResourceControllerV2(authenticator=authenticator)
 
         self.init_clients(ConfigBuilder.iam_api_key, ConfigBuilder.compute_iam_endpoint)
 
@@ -60,7 +65,6 @@ class ConfigBuilder:
         self.ibm_vpc_client = ConfigBuilder.ibm_vpc_client
         self.resource_service_client = ResourceManagerV2(authenticator=authenticator)
         self.resource_controller_service = ResourceControllerV2(authenticator=authenticator)
-
 
     """Interacts with user to get all required parameters"""
 
@@ -83,22 +87,23 @@ class ConfigBuilder:
         :return: resources belonging to a specific resource group, filtered by provided resource_type
         """
 
-        if 'resource_group_id' not in CACHE:
+        if "resource_group_id" not in CACHE:
             self.select_resource_group()
 
         @spinner
         def _get_resources():
             res = self.resource_controller_service.list_resource_instances(
-                resource_group_id=CACHE['resource_group_id'], type=resource_type).get_result()
-            resource_instances = res['resources']
+                resource_group_id=CACHE["resource_group_id"], type=resource_type
+            ).get_result()
+            resource_instances = res["resources"]
 
-            while res['next_url']:
-                start = res['next_url'].split('start=')[1]
+            while res["next_url"]:
+                start = res["next_url"].split("start=")[1]
                 res = self.resource_controller_service.list_resource_instances(
-                    resource_group_id=CACHE['resource_group_id'], type=resource_type,
-                    start=start).get_result()
+                    resource_group_id=CACHE["resource_group_id"], type=resource_type, start=start
+                ).get_result()
 
-                resource_instances.extend(res['resources'])
+                resource_instances.extend(res["resources"])
             return resource_instances
 
         return _get_resources()
@@ -109,21 +114,21 @@ class ConfigBuilder:
 
         @spinner
         def get_resource_groups():
-            return self.resource_service_client.list_resource_groups().get_result()['resources']
+            return self.resource_service_client.list_resource_groups().get_result()["resources"]
 
         res_group_objects = get_resource_groups()
 
-        default = find_default(self.defaults, res_group_objects, id='resource_group_id')
+        default = find_default(self.defaults, res_group_objects, id="resource_group_id")
         res_group_obj = get_option_from_list("Select resource group", res_group_objects, default=default)
 
-        CACHE['resource_group_id'] = res_group_obj['id']  # cache group resource id for later use in storage
+        CACHE["resource_group_id"] = res_group_obj["id"]  # cache group resource id for later use in storage
 
-        return res_group_obj['id']
+        return res_group_obj["id"]
 
     def get_oauth_token(self):
-        """:returns a temporary authentication token required by various IBM cloud APIs """
+        """:returns a temporary authentication token required by various IBM cloud APIs"""
 
-        iam_token_manager = IAMTokenManager(apikey=self.base_config['ibm']['iam_api_key'], url=ConfigBuilder.compute_iam_endpoint)
+        iam_token_manager = IAMTokenManager(apikey=self.base_config["ibm"]["iam_api_key"], url=ConfigBuilder.compute_iam_endpoint)
         return iam_token_manager.get_token()
 
     @update_decorator
@@ -132,7 +137,6 @@ class ConfigBuilder:
 
 
 class Spinner(threading.Thread):
-
     def __init__(self, *args, **kwargs):
         super(Spinner, self).__init__(*args, **kwargs)
         self.sttop = False
@@ -146,13 +150,13 @@ class Spinner(threading.Thread):
     def run(self):
         while True:
             if self.stopped():
-                sys.stdout.write('\b')
+                sys.stdout.write("\b")
                 sys.stdout.flush()
                 return
 
-            for cursor in '\\|/-':
+            for cursor in "\\|/-":
                 time.sleep(0.1)
-                sys.stdout.write('\r{}'.format(cursor))
+                sys.stdout.write("\r{}".format(cursor))
                 sys.stdout.flush()
 
 
