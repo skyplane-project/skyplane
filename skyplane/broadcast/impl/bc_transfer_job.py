@@ -184,7 +184,7 @@ class BCCopyJob(BCTransferJob):
             )
             end = time.time()
             if reply.status != 200:
-                print("failed to dispatch") 
+                print("failed to dispatch")
                 print(server.instance_name())
                 print(server.public_ip())
                 time.sleep(100000)

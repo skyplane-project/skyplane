@@ -71,7 +71,11 @@ class BroadcastDataplane(Dataplane):
 
     def get_ips_in_region(self, region: str):
         public_ips = [self.bound_nodes[n].public_ip() for n in self.topology.gateway_nodes if n.region == region]
-        private_ips = [self.bound_nodes[n].private_ip() for n in self.topology.gateway_nodes if n.region == region]
+        try:  # NOTE: Azure does not have private ips implemented
+            private_ips = [self.bound_nodes[n].private_ip() for n in self.topology.gateway_nodes if n.region == region]
+        except Exception as e:
+            private_ips = public_ips
+
         return public_ips, private_ips
 
     def get_object_store_connection(self, region: str):
@@ -114,7 +118,9 @@ class BroadcastDataplane(Dataplane):
 
         # if no regions to forward data to
         if len(next_regions) == 0:
-            print(f"Region {region}, any id: {any_id}, partition ids: {partition_ids}, has no next region to forward data to: {g.out_edges(region, data=True)}")
+            print(
+                f"Region {region}, any id: {any_id}, partition ids: {partition_ids}, has no next region to forward data to: {g.out_edges(region, data=True)}"
+            )
             return False
 
         # region name --> ips in this region

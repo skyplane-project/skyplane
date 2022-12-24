@@ -37,8 +37,6 @@ def start_transfer(args):
     source_file = "s3://broadcast-exp1-ap-east-1/OPT-66B/"
     dest_files = [f"s3://broadcast-exp1-{d}/OPT-66B/" for d in dst_regions]
 
-
-
     # create bucket if it doesn't exist
     for (region, bucket_path) in zip(dst_regions, dest_files):
         bucket_name = bucket_path.split("/")[2]
