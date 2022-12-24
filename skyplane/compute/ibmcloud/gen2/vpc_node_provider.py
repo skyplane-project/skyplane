@@ -196,7 +196,6 @@ class IBMVPCNodeProvider():
                 print ("retry attempt {}".format(attempt))
 
         # delete subnet
-        print('Deleting subnet')
         attempt = int(5)
         while (attempt > 0):
             try:
@@ -215,7 +214,6 @@ class IBMVPCNodeProvider():
         gateways = self.ibm_vpc_client.list_public_gateways().get_result()
         for gw in gateways['public_gateways']:
             if gw['vpc']['id'] == self.cluster_config['vpc_id']:
-                print('Deleting gateway')
                 attempt = int(5)
                 while (attempt > 0):
 
@@ -230,7 +228,6 @@ class IBMVPCNodeProvider():
                             attempt = attempt - 1
                             print ("retry attempt {}".format(attempt))
 
-        print('Deleting ssh key')
         attempt = int(5)
         while (attempt > 0):
             # delete ssh key
@@ -245,7 +242,6 @@ class IBMVPCNodeProvider():
                     print ("retry attempt {}".format(attempt))
 
         # delete vpc
-        print('Deleting VPC')
         try:
             self.ibm_vpc_client.delete_vpc(self.cluster_config['vpc_id'])
         except ApiException as e:

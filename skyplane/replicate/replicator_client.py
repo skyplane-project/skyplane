@@ -265,7 +265,6 @@ class ReplicatorClient:
         instances_by_region = {
             r: [instance for instance_region, instance in results if instance_region == r] for r in set(regions_to_provision)
         }
-        print("instances by region")
         # add existing instances
         if reuse_instances:
             for r, ilist in current_aws_instances.items():
@@ -644,12 +643,9 @@ class ReplicatorClient:
                 with Timer() as t:
                     while True:
                         # refresh shutdown status by running noop
-                        print ("1")
                         do_parallel(lambda i: i.run_command("echo 1"), self.bound_nodes.values(), n=-1)
-                        print ("2")
                         # check for errors and exit if there are any (while setting debug flags)
                         errors = self.check_error_logs()
-                        print (errors)
                         if any(errors.values()):
                             error = True
                             return TransferStats(monitor_status="error", total_runtime_s=t.elapsed, errors=errors)
@@ -659,7 +655,6 @@ class ReplicatorClient:
                             logger.warning("No chunk status log entries yet")
                             time.sleep(0.01 if show_spinner else 0.25)
                             continue
-                        print ("3")
                         is_complete_rec = (
                             lambda row: row["state"] == ChunkState.upload_complete
                             and row["instance"] in [s.instance for s in sinks]
@@ -670,7 +665,6 @@ class ReplicatorClient:
                             lambda x: set(x["region"].unique()) == set(sink_regions)
                         )
                         completed_chunk_ids = completed_status[completed_status].index
-                        print (completed_chunk_ids)
                         completed_bytes = sum(
                             [cr.chunk.chunk_length_bytes for cr in job.chunk_requests if cr.chunk.chunk_id in completed_chunk_ids]
                         )

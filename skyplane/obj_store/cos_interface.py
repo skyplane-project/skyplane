@@ -25,8 +25,6 @@ class COSInterface(ObjectStoreInterface):
         self.region = region
         if region is not None and 'cos:' in region:
             self.region = region[4:]
-        print ('cos interface')
-        print (self.region)
 
         self._cached_cos_clients = {}
 

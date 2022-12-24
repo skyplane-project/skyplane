@@ -91,8 +91,6 @@ class IBMCloudProvider(CloudProvider):
         tags={"skyplane": "true"},
     ) -> IBMCloudServer:
          # provision VM in the region
-        print ("Provision VM")
-        print (self.regions_vpc)
         config_dict = None
         with open(self.regions_vpc[region]) as f:
             config_dict = yaml.safe_load(f)
@@ -102,5 +100,4 @@ class IBMCloudProvider(CloudProvider):
 
         resp = self.regions_cloudprovider[region].create_node(
             config_dict['available_node_types']['ray_head_default']['node_config'], tags, 1)
-        print ("Provision completed")
         return IBMCloudServer(self.regions_cloudprovider[region], f"cos:{region}", resp, self.regions_vpc[region])

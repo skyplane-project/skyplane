@@ -39,7 +39,6 @@ def delete_config(config):
     time.sleep(5)
     
     # delete subnet
-    print('Deleting subnet')
     try:
         ibm_vpc_client.delete_subnet(vpc_config['subnet_id'])
     except ApiException as e:
@@ -51,7 +50,6 @@ def delete_config(config):
         time.sleep(25)
 
     # delete gateway?
-    print('Deleting gateway')
     gateways = ibm_vpc_client.list_public_gateways().get_result()
     for gw in gateways['public_gateways']:
         if gw['vpc']['id'] == vpc_config['vpc_id']:
@@ -71,7 +69,6 @@ def delete_config(config):
         time.sleep(5)
     
     # delete vpc
-    print('Deleting VPC')
     try:
         ibm_vpc_client.delete_vpc(vpc_config['vpc_id'])
     except ApiException as e:

@@ -351,7 +351,6 @@ class Server:
         docker_launch_cmd = (
             f'sudo docker run {docker_run_flags} --name skyplane_gateway {gateway_docker_image} /bin/bash -c "{escaped_gateway_daemon_cmd}"'
         )
-        print (docker_launch_cmd)
         logger.fs.info(f"{desc_prefix}: {docker_launch_cmd}")
         start_out, start_err = self.run_command(docker_launch_cmd)
         logger.fs.debug(desc_prefix + f": Gateway started {start_out.strip()}")
