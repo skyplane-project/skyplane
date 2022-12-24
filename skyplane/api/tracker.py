@@ -91,7 +91,7 @@ class TransferProgressTracker(Thread):
         self.errors: Optional[Dict[str, List[str]]] = None
 
         # http_pool
-        self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
+        self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=9))
 
     def __str__(self):
         return f"TransferProgressTracker({self.dataplane}, {self.jobs})"
