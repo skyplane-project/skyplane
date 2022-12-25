@@ -1,6 +1,6 @@
 import os
 import subprocess
-from typing import Any, Dict
+from typing import Any, Dict, List
 from pathlib import Path
 
 import inquirer
@@ -118,7 +118,7 @@ class SshKeyConfig(ConfigBuilder):
         self.base_config = base_config
 
     @update_decorator
-    def run(self) -> Dict[str, Any]:
+    def run(self) -> List:
         @spinner
         def get_ssh_key_objects():
             return self.ibm_vpc_client.list_keys().get_result()["keys"]
@@ -138,7 +138,7 @@ class SshKeyConfig(ConfigBuilder):
         self.ssh_key_name = ssh_key_name
 
         # currently the user is hardcoded to root
-        return (ssh_key_id, ssh_key_path, "root")
+        return [ssh_key_id, ssh_key_path, "root"]
 
     @update_decorator
     def verify(self, base_config):
@@ -153,7 +153,9 @@ class SshKeyConfig(ConfigBuilder):
 
         def is_pair(id, ssh_key_filename):
             public_res = self.ibm_vpc_client.get_key(id).get_result()["public_key"].split(" ")[1]
+            # pytype: disable=wrong-arg-types
             private_res = subprocess.getoutput([f"ssh-keygen -y -f {ssh_key_filename} | cut -d' ' -f 2"])
+            # pytype: enable=wrong-arg-types
             return public_res == private_res
 
         # user specified both vpc key id and private key, just validate they are a pair
@@ -176,7 +178,9 @@ class SshKeyConfig(ConfigBuilder):
             if default_key:
                 self.ibm_vpc_client.delete_key(id=default_key["id"])
             # generate public key from private key
+            # pytype: disable=wrong-arg-types
             ssh_key_data = subprocess.getoutput([f"ssh-keygen -y -f {self.defaults['ssh_key_filename']} | cut -d' ' -f 2"])
+            # pytype: enable=wrong-arg-types
             response = self.ibm_vpc_client.create_key(
                 public_key=ssh_key_data, name=default_keyname, resource_group={"id": resource_group_id}, type="rsa"
             )

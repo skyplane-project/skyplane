@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import inquirer
 from skyplane.compute.ibmcloud.gen2.config_builder import ConfigBuilder, update_decorator, spinner
@@ -29,7 +29,7 @@ class VPCConfig(ConfigBuilder):
         return region
 
     @update_decorator
-    def run(self) -> Dict[str, Any]:
+    def run(self) -> List:
         region = self._get_region()
 
         vpc_obj, zone_obj = self._select_vpc(self.base_config, region)
@@ -47,7 +47,7 @@ class VPCConfig(ConfigBuilder):
         if not subnet_objects:
             raise f'Failed to find subnet for vpc {vpc_obj["name"]} in zone {zone_obj["name"]}'
 
-        return (vpc_obj, zone_obj, subnet_objects[0]["id"])
+        return [vpc_obj, zone_obj, subnet_objects[0]["id"]]
 
     def _build_security_group_rule_prototype_model(self, missing_rule, sg_id=None):
         direction, protocol, port = missing_rule.split("_")

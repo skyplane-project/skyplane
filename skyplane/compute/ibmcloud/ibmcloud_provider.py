@@ -30,19 +30,7 @@ class IBMCloudProvider(CloudProvider):
 
     @staticmethod
     def region_list() -> List[str]:
-        print("Region list")
-
-    @imports.inject("botocore.exceptions", pip_extra="ibmcloud")
-    def get_instance_list(exceptions, self, region: str) -> List[IBMCloudServer]:
-        ec2 = self.auth.get_boto3_resource("ec2", region)
-        valid_states = ["pending", "running", "stopped", "stopping"]
-        instances = ec2.instances.filter(Filters=[{"Name": "instance-state-name", "Values": valid_states}])
-        try:
-            instance_ids = [i.id for i in instances]
-        except exceptions.ClientError as e:
-            logger.error(f"error provisioning in {region}: {e}")
-            return []
-        return [IBMCloudServer(f"cos:{region}", i) for i in instance_ids]
+        return []
 
     def setup_global(self, iam_name: str = "skyplane_gateway", attach_policy_arn: Optional[str] = None):
         # Not sure this should execute something. We will create VPC per refion
@@ -73,8 +61,8 @@ class IBMCloudProvider(CloudProvider):
             self.regions_cloudprovider[region].delete_vpc()
 
     def teardown_global(self):
-        for provider in self.regions_cloudprovider:
-            provider.delete_vpc()
+        for region in self.regions_cloudprovider:
+            self.regions_cloudprovider[region].delete_vpc()
 
     def add_ips_to_security_group(self, cos_region: str, ips: Optional[List[str]] = None):
         pass

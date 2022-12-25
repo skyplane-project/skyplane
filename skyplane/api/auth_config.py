@@ -54,4 +54,6 @@ class IBMCloudConfig(AuthenticationConfig):
     ibmcloud_enabled: bool = False
 
     def make_auth_provider(self) -> compute.IBMCloudAuthentication:
+        # pytype: disable=attribute-error
         return compute.IBMCloudAuthentication(config=self)  # type: ignore
+        # pytype: enable=attribute-error        

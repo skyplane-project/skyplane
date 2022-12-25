@@ -23,6 +23,7 @@ import threading
 import time
 from pathlib import Path
 from uuid import uuid4
+from typing import Dict
 
 from ibm_cloud_sdk_core import ApiException
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
@@ -91,7 +92,7 @@ class IBMVPCNodeProvider:
                     self.ibm_vpc_client.get_instance(instance_id)
                     self.nodes_tags[instance_id] = instance_tags
                 except Exception as e:
-                    if e.message == "Instance not found":
+                    if str(e) == "Instance not found":
                         logger.error(
                             f"cached instance {instance_id} not found, \
                                 will be removed from cache"
@@ -309,7 +310,7 @@ class IBMVPCNodeProvider:
                     try:
                         nodes.append(self.ibm_vpc_client.get_instance(node_id).result)
                     except Exception as e:
-                        if e.message == "Instance not found":
+                        if str(e) == "Instance not found":
                             logger.error(f"failed to find vsi {node_id}, skipping")
                             continue
                         logger.error(f"failed to find instance {node_id}, raising")
@@ -612,7 +613,7 @@ class IBMVPCNodeProvider:
                         nodes.append(node)
             except Exception as e:
                 logger.warning(node_id)
-                if e.message == "Instance not found":
+                if str(e) == "Instance not found":
                     continue
                 raise e
         return nodes
@@ -653,7 +654,7 @@ class IBMVPCNodeProvider:
 
         return {instance["id"]: instance}
 
-    def create_node(self, base_config, tags, count) -> None:
+    def create_node(self, base_config, tags, count) -> Dict:
         """
         returns dict of {instance_id:instance_data} of nodes. creates 'count' number of nodes.
         if enabled in base_config, tries to re-run stopped nodes before creation of new instances.
@@ -676,7 +677,7 @@ class IBMVPCNodeProvider:
             stopped_nodes_dict = {n["id"]: n for n in stopped_nodes}
 
             if stopped_nodes:
-                logger.print(
+                logger.warning(
                     f"Reusing nodes {stopped_nodes_ids}. "
                     "To disable reuse, set `cache_stopped_nodes: False` "
                     "under `provider` in the cluster configuration."
@@ -777,7 +778,7 @@ class IBMVPCNodeProvider:
 
         try:
             if self.cache_stopped_nodes:
-                logger.print(
+                logger.info(
                     f"Stopping instance {node_id}. To terminate instead, "
                     "set `cache_stopped_nodes: False` "
                     "under `provider` in the cluster configuration"
@@ -785,7 +786,7 @@ class IBMVPCNodeProvider:
 
                 self.ibm_vpc_client.create_instance_action(node_id, "stop")
             else:
-                logger.print(f"Terminating instance {node_id}")
+                logger.info(f"Terminating instance {node_id}")
                 self._delete_node(node_id)
 
         except ApiException as e:

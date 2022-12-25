@@ -18,7 +18,7 @@ class COSObject(ObjectStoreObject):
 
 
 class COSInterface(ObjectStoreInterface):
-    def __init__(self, bucket_name: str, region: str = None):
+    def __init__(self, bucket_name: str, region: Optional[str]):
         self.auth = IBMCloudAuthentication()
         self.requester_pays = False
         self.bucket_name = bucket_name
@@ -44,8 +44,10 @@ class COSInterface(ObjectStoreInterface):
     def set_requester_bool(self, requester: bool):
         self.requester_pays = requester
 
-    def _cos_client(self):
-        if self.cos_region not in self._cached_cos_clients:
+    def _cos_client(self, cos_region: Optional[str] = None):
+        if cos_region is not None and cos_region not in self._cached_cos_clients:
+            self._cached_cos_clients[cos_region] = self.auth.get_boto3_client("s3", cos_region)
+        elif self.cos_region not in self._cached_cos_clients:
             self._cached_cos_clients[self.cos_region] = self.auth.get_boto3_client("s3", self.cos_region)
         return self._cached_cos_clients[self.cos_region]
 
