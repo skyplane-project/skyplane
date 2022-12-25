@@ -216,7 +216,7 @@ class IBMVPCNodeProvider:
 
                     try:
                         self.ibm_vpc_client.delete_public_gateway(gw["id"])
-                        gw_id = self.ibm_vpc_client.get_public_gateway(gw["id"])
+                        self.ibm_vpc_client.get_public_gateway(gw["id"])
                     except ApiException as e:
                         if e.code == 404:
                             break

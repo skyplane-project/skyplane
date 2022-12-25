@@ -323,7 +323,6 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
 
 def load_ibmcloud_config(config: SkyplaneConfig, force_init: bool = False, non_interactive: bool = False) -> SkyplaneConfig:
     try:
-        import ibm_boto3
 
         HOME_DIR = os.path.expanduser("~")
         CONFIG_DIR = os.path.join(HOME_DIR, ".bluemix")

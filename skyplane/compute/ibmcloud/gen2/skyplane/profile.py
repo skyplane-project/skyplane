@@ -1,5 +1,5 @@
 from typing import Any, Dict
-from skyplane.compute.ibmcloud.gen2.config_builder import ConfigBuilder, update_decorator, spinner
+from skyplane.compute.ibmcloud.gen2.config_builder import ConfigBuilder, update_decorator
 from skyplane.compute.ibmcloud.gen2.utils import find_obj
 
 

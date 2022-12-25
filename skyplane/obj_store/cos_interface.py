@@ -9,7 +9,7 @@ from skyplane import exceptions
 from skyplane.compute.ibmcloud.ibmcloud_auth import IBMCloudAuthentication
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
-from skyplane.utils import logger, imports
+from skyplane.utils import imports
 
 
 class COSObject(ObjectStoreObject):

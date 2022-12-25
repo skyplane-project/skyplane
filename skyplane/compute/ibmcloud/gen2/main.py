@@ -1,7 +1,6 @@
 import yaml
 from skyplane.compute.ibmcloud.gen2.utils import color_msg, Color, verify_paths
 from skyplane.compute.ibmcloud.gen2.skyplane import load_config, MODULES
-from skyplane.compute.ibmcloud.gen2 import delete_config
 
 
 def create_vpc(*args, **kwargs):

@@ -371,7 +371,7 @@ class Server:
                 status_val = json.loads(http_pool.request("GET", api_url).data.decode("utf-8"))
                 is_up = status_val.get("status") == "ok"
                 return is_up
-            except Exception as e:
+            except Exception:
                 return False
 
         try:
