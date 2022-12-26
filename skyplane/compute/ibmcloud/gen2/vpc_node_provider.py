@@ -16,7 +16,6 @@
 
 import concurrent.futures as cf
 import json
-import logging
 import re
 import socket
 import threading
@@ -28,14 +27,13 @@ from typing import Dict
 from ibm_cloud_sdk_core import ApiException
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 from ibm_vpc import VpcV1
+from skyplane.utils import logger
 
 NODE_TYPE_MASTER = "master"
 NODE_TYPE_SLAVE = "slave"
 TAG_NODE_NAME = "node-name"
 TAG_NODE_TYPE = "node-type"
 TAG_CLUSTER_NAME = "cluster-name"
-
-logger = logging.getLogger(__name__)
 
 INSTANCE_NAME_UUID_LEN = 8
 INSTANCE_NAME_MAX_LEN = 64
