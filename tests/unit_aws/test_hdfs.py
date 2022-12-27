@@ -3,11 +3,16 @@ from tests.interface_util import interface_test_framework
 from skyplane.utils.definitions import MB
 import boto3
 import uuid
+import os
 
 
 def test_hdfs():
     client = boto3.client("emr")
     try:
+        # create roles necessary for EMR
+        os.system("aws emr create-default-roles")
+
+        # create cluster
         cluster_name = uuid.uuid4().hex
         response = client.run_job_flow(
             Name=cluster_name,

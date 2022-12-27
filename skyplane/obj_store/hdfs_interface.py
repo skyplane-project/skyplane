@@ -30,7 +30,7 @@ class HDFSInterface(ObjectStoreInterface):
         fileSelector = fs.FileSelector(prefix=prefix, recursive=True)
         response = self.hdfs.get_file_info(fileSelector)
         for file in response:
-            yield HDFSFile(key=file.path, size=file.size, last_modified=file.mtime)
+            yield HDFSFile(provider="hdfs", bucket=self.host, key=file.path, size=file.size, last_modified=file.mtime)
 
     def exists(self, obj_name: str):
         try:
