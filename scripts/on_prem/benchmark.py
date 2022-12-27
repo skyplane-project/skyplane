@@ -11,6 +11,7 @@ GB = MB * 1024
 
 THREADS = 32
 
+
 def transfer_file(in_fs, in_path, out_fs, out_path, BATCH_SIZE, final):
     print("Starting transfer...")
     if out_fs is not None:
@@ -27,7 +28,7 @@ def transfer_file(in_fs, in_path, out_fs, out_path, BATCH_SIZE, final):
         curr = 0
         while curr < final:
             buf = in_file.read(BATCH_SIZE)
-            #print(f"Reading!{threading.get_ident()}", flush=True)
+            # print(f"Reading!{threading.get_ident()}", flush=True)
             curr += BATCH_SIZE
             if not buf:
                 break
@@ -74,6 +75,7 @@ def parallel_reads(args):
     new_hdfs = fs.HadoopFileSystem(host=hdfs, port=8020, extra_conf={"dfs.client.use.datanode.hostname": "false"})
     transfer_file(new_hdfs, f"/data/10GBdata.bin", None, f"data/10GBdata.bin", 128 * MB, final)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("HDFS", type=str, help="HDFS host")
@@ -84,30 +86,29 @@ if __name__ == "__main__":
     hdfs = fs.HadoopFileSystem(host=args.HDFS, port=8020, user="hadoop", extra_conf={"dfs.client.use.datanode.hostname": "false"})
     local = fs.LocalFileSystem()
     thread = args.threads
-    #setup_files_and_dirs(args.outdir, hdfs)
-    #transfer_local_to_hdfs(hdfs, local, args.outdir)
-    #transfer_hdfs_to_local(hdfs, local)
+    # setup_files_and_dirs(args.outdir, hdfs)
+    # transfer_local_to_hdfs(hdfs, local, args.outdir)
+    # transfer_hdfs_to_local(hdfs, local)
     arg = []
-    increment = 10*GB/THREADS
+    increment = 10 * GB / THREADS
     curr = 0
     multiprocessing.set_start_method("spawn")
-    #prepare args
+    # prepare args
     for i in range(THREADS):
         arg.append((args.HDFS, increment))
         curr += increment
-    if (thread):
-    #execute the threads
+    if thread:
+        # execute the threads
         with ThreadPoolExecutor(max_workers=THREADS) as p:
             before = time.time()
             future = [p.submit(parallel_reads, arg[i]) for i in range(THREADS)]
-            #p.map(parallel_reads, args)
+            # p.map(parallel_reads, args)
     else:
         with ProcessPoolExecutor(max_workers=THREADS) as p:
             before = time.time()
             future = [p.submit(parallel_reads, arg[i]) for i in range(THREADS)]
-            #print(future.result())
-            #p.map(example, args)
-
+            # print(future.result())
+            # p.map(example, args)
 
     print(f"Finished! Time:{time.time()-before}")
     """

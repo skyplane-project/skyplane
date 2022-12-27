@@ -19,7 +19,9 @@ class HDFSInterface(ObjectStoreInterface):
         self.host = host
         self.port = port
         self.hdfs_path = path
-        self.hdfs = fs.HadoopFileSystem(host=f"{self.host}/{self.hdfs_path}", port=self.port, user="hadoop", extra_conf={"dfs.permissions.enabled": "false"})
+        self.hdfs = fs.HadoopFileSystem(
+            host=f"{self.host}/{self.hdfs_path}", port=self.port, user="hadoop", extra_conf={"dfs.permissions.enabled": "false"}
+        )
 
     def path(self) -> str:
         return self.hdfs_path
@@ -36,13 +38,13 @@ class HDFSInterface(ObjectStoreInterface):
             return True
         except NoSuchObjectException:
             return False
-        
+
     def region_tag(self) -> str:
         return ""
 
     def bucket(self) -> str:
         return ""
-        
+
     def create_bucket(self, region_tag: str):
         return None
 
@@ -51,16 +53,16 @@ class HDFSInterface(ObjectStoreInterface):
 
     def bucket_exists(self) -> bool:
         return True
-    
+
     def get_obj_size(self, obj_name) -> int:
         return self.get_obj_metadata(obj_name).size
 
     def get_obj_last_modified(self, obj_name):
         return self.get_obj_metadata(obj_name).mtime
-    
+
     def get_obj_mime_type(self, obj_name):
         return mimetypes.guess_type(obj_name)[0]
-    
+
     def delete_objects(self, keys: List[str]):
         for key in keys:
             self.hdfs.delete_file(key)
@@ -90,7 +92,7 @@ class HDFSInterface(ObjectStoreInterface):
             with self.hdfs.open_output_stream(dst_object_name) as f2:
                 b = f1.read()
                 f2.write(b)
-                
+
     def read_file(self, file_name, offset=0, length=sys.maxsize):
         with self.hdfs.open_input_stream(file_name) as f:
             return print(f.readall())
