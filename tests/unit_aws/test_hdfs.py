@@ -12,6 +12,11 @@ def test_hdfs():
         # create roles necessary for EMR
         os.system("aws emr create-default-roles")
 
+        waiter = boto3.client("iam").get_waiter("role_exists")
+        waiter.wait(
+            RoleName="EMR_EC2_DefaultRole",
+        )
+
         # create cluster
         cluster_name = uuid.uuid4().hex
         response = client.run_job_flow(
