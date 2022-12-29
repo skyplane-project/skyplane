@@ -84,13 +84,23 @@ def get_nx_graph(path):
         for region in regions:
             # region = regions[0]
             region_p = data[region]
-            plans = region_p["_plan"]
-            partitions = [int(i) for i in list(plans.keys())]
-            # print("partitions: ", [int(i) for i in list(plans.keys())])
-            for pid in partitions:
-                p_plan = plans[str(pid)]
-                nx_g = plot_children(nx_g, start_node, region, p_plan, pid)
-            # break
+            print("Region: ", region)
+            pprint(region_p)
+
+            for partition_group in region_p: 
+                partitions = partition_group["partitions"]
+                p_plan = partition_group['value']
+                for pid in partitions: 
+                    nx_g = plot_children(nx_g, start_node, region, p_plan, pid)
+
+            #pprint(region_p)
+            #plans = region_p["_plan"]
+            #partitions = [int(i) for i in list(plans.keys())]
+            ## print("partitions: ", [int(i) for i in list(plans.keys())])
+            #for pid in partitions:
+            #    p_plan = plans[str(pid)]
+            #    nx_g = plot_children(nx_g, start_node, region, p_plan, pid)
+            ## break
 
         # print(partitions)
 
@@ -152,8 +162,8 @@ def networkx_to_graphviz(g, label="partition"):
 
 
 if __name__ == "__main__":
-    costs = pd.read_csv("profiles/cost.csv")
-    throughput = pd.read_csv("profiles/whole_throughput_11_28.csv")
+    costs = pd.read_csv("broadcast/profiles/cost.csv")
+    throughput = pd.read_csv("broadcast/profiles/old/whole_throughput_11_28.csv")
 
     color = []
     n = 100
@@ -166,7 +176,8 @@ if __name__ == "__main__":
     for i in range(len(nodes)):
         color_map[nodes[i]] = color[i]
 
-    plot_path = "/tmp/skyplane/gw_programs/gateway_programs_complete.json"
+    #plot_path = "/tmp/skyplane/gw_programs/gateway_programs_complete.json"
+    plot_path = "/Users/sarahwooders/repos/skyplane/old_gw_programs/gateway_programs_complete.json"
     add_nx_g = get_nx_graph(plot_path)
     h = networkx_to_graphviz(add_nx_g)
     h.view()
