@@ -137,11 +137,13 @@ class BCTransferProgressTracker(TransferProgressTracker):
                     dst_region,
                     session_start_timestamp_ms,
                 )
+                do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=-1)
                 raise err
             except Exception as e:
                 UsageClient.log_exception(
                     "monitor transfer", e, args, self.dataplane.src_region_tag, dst_region, session_start_timestamp_ms
                 )
+                do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=-1)
                 raise e
             end_time = time.time()
 

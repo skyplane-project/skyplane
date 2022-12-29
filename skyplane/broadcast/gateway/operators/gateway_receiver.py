@@ -40,7 +40,8 @@ class GatewayReceiver:
         self.error_event = error_event
         self.error_queue = error_queue
         self.recv_block_size = recv_block_size
-        self.max_pending_chunks = 64  # max_pending_chunks
+        self.max_pending_chunks = max_pending_chunks
+        print("Max pending chunks", self.max_pending_chunks)
         self.use_compression = use_compression
         if e2ee_key_bytes is None:
             self.e2ee_secretbox = None
@@ -141,6 +142,8 @@ class GatewayReceiver:
     def recv_chunks(self, conn: socket.socket, addr: Tuple[str, int]):
         server_port = conn.getsockname()[1]
         chunks_received = []
+        init_space = self.chunk_store.remaining_bytes()
+        print("Init space", init_space)
         while True:
             # receive header and write data to file
             logger.debug(f"[receiver:{server_port}] Blocking for next header")
@@ -155,6 +158,7 @@ class GatewayReceiver:
 
             # wait for space
             while self.chunk_store.remaining_bytes() < chunk_header.data_len * self.max_pending_chunks:
+                print(f"[receiver:{server_port}]: No remaining space with bytes {self.chunk_store.remaining_bytes()} data len {chunk_header.data_len} max pending {self.max_pending_chunks}, total space {init_space}")
                 time.sleep(0.1)
 
             # get data

@@ -68,6 +68,31 @@ class SkyplaneBroadcastClient:
             gcp_auth=self.gcp_auth,
         )
 
+
+    def networkx_to_graphviz(self, src, dsts, g, label='partitions'):
+        import graphviz as gv
+        """Convert `networkx` graph `g` to `graphviz.Digraph`.
+
+        @type g: `networkx.Graph` or `networkx.DiGraph`
+        @rtype: `graphviz.Digraph`
+        """
+        if g.is_directed():
+            h = gv.Digraph()
+        else:
+            h = gv.Graph()
+        for u, d in g.nodes(data=True):
+            #u = u.split(",")[0]
+            if u.split(",")[0] == src:
+                h.node(str(u.replace(":", " ")), fillcolor="red", style='filled')
+            elif u.split(",")[0] in dsts:
+                h.node(str(u.replace(":", " ")), fillcolor="green", style='filled')
+            h.node(str(u.replace(":", " ")))
+        for u, v, d in g.edges(data=True):
+            # print('edge', u, v, d)
+            h.edge(str(u.replace(":", " ")), str(v.replace(":", " ")), label=str(d[label]))
+        h.render(directory='solution', view=True)
+        return h
+
     # methods to create dataplane
     def broadcast_dataplane(
         self,
@@ -159,6 +184,9 @@ class SkyplaneBroadcastClient:
         logger.fs.info(f"[SkyplaneClient.direct_dataplane] Topology: {topo.to_json()}")
         if type != "ILP":
             print(f"Solution: {topo.nx_graph.edges.data()}")
+            print(topo.nx_graph.nodes)
+            print(src_region)
+            self.networkx_to_graphviz(f"{src_cloud_provider}:{src_region}", [f"{provider}:{region}" for provider, region in zip(dst_cloud_providers, dst_regions)], topo.nx_graph)
 
         print("Transfer src region: ", self.transfer_config.src_region)
         print("Transfer dst regions: ", self.transfer_config.dst_regions)

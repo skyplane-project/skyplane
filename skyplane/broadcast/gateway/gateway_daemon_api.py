@@ -140,8 +140,8 @@ class GatewayDaemonAPI(threading.Thread):
                             + f"Required completitions = {self.num_required_terminal[partition]}"
                         )
 
-                    else:
-                        print(f"[gateway_api] chunk {chunk_id}: state = {elem['state']}")
+                    #else:
+                    #    print(f"[gateway_api] chunk {chunk_id}: after {handle} state = {elem['state']}")
                 self.chunk_status_log.append(elem)
 
     def run(self):
