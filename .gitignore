@@ -12,6 +12,7 @@ __pycache__/
 *.so
 
 # experiment scripts
+solution/ 
 
 # Distribution / packaging
 .Python
