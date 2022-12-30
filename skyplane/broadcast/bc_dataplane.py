@@ -210,7 +210,7 @@ class BroadcastDataplane(Dataplane):
 
         g = solution_graph
         any_id = partition_ids[0]
-        next_regions = set([edge[1] for edge in g.out_edges(region, data=True) if any_id in edge[-1]["partitions"]])
+        next_regions = set([edge[1] for edge in g.out_edges(region, data=True) if str(any_id) in edge[-1]["partitions"]])
 
         # if no regions to forward data to, just write
         if len(next_regions) == 0:
@@ -219,7 +219,7 @@ class BroadcastDataplane(Dataplane):
             mux_and_op = GatewayMuxAnd()
             bc_pg.add_operator(mux_and_op, receive_op, partition_id=tuple(partition_ids))
             bc_pg.add_operator(write_op, mux_and_op, partition_id=tuple(partition_ids))
-            self.add_operator_receive_send(bc_pg, region, partition_ids, dst_op=mux_and_op)
+            self.add_operator_receive_send(solution_graph, bc_pg, region, partition_ids, dst_op=mux_and_op)
 
     def remap_keys(self, mapping):
         return [{"partitions": k, "value": v} for k, v in mapping.items()]
@@ -239,6 +239,7 @@ class BroadcastDataplane(Dataplane):
         max_instances = int(regions[max(regions, key=regions.get)])
  
         solution_graph = self.topology.nx_graph
+        # print("Solution graph: ", solution_graph.edges.data())
 
         num_partitions = self.topology.num_partitions
         src = self.src_region_tag
