@@ -19,7 +19,6 @@ import functools
 import colorama
 from colorama import Fore, Style
 
-
 class BroadcastPlanner:
     def __init__(
         self,
@@ -203,6 +202,21 @@ class BroadcastDirectPlanner(BroadcastPlanner):
         for node in direct_graph.nodes:
             direct_graph.nodes[node]["num_vms"] = self.num_instances
         return self.get_topo_from_nxgraph(self.num_partitions, self.gbyte_to_transfer, direct_graph)
+
+
+class BroadcastPlannerFromFile(BroadcastPlanner):
+
+    def __init__(self, filename: str, **kwargs):
+        self.filename = filename
+        super().__init__(**kwargs)
+
+    def plan(self) -> BroadcastReplicationTopology:
+        gw_program = json.load(open(self.filename))
+
+        # loop through region 
+
+        # loop hough operators with recieve or gen data -> collect (instace, region)
+        graph = nx.DiGraph()
 
 
 class BroadcastMDSTPlanner(BroadcastPlanner):

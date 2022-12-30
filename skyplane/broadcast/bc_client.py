@@ -93,6 +93,18 @@ class SkyplaneBroadcastClient:
         h.render(directory='solution', view=True)
         return h
 
+    def broadcast_dataplane_from_gateway_program(self, gateway_program_path: str) -> BroadcastDataplane: 
+        # load dataplane for existing gateway program 
+
+        return BroadcastDataplane(
+            clientid=self.clientid, 
+            gateway_program_path = gateway_program_path, 
+            provisioner=self.provisioner, 
+            transfer_config=self.transfer_config
+        )
+
+
+
     # methods to create dataplane
     def broadcast_dataplane(
         self,

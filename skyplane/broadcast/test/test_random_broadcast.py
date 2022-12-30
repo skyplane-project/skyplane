@@ -70,6 +70,9 @@ def replicate_random(
     print(f"Log dir: {client.log_dir}/client.log")
     print("Transfer size (in GB): ", transfer_size_gbytes)
 
+    # use existing gw program file 
+    #dp = client.broadcast_dataplane_from_gateway_program("/Users/sarahwooders/repos/skyplane/old_gw_programs/gateway_programs_complete.json")
+
     dp = client.broadcast_dataplane(
         src_cloud_provider=s_cloud_provider,
         src_region=s_region,

@@ -1,4 +1,5 @@
 import threading
+import json
 import functools
 from collections import Counter
 
@@ -47,22 +48,21 @@ class BroadcastDataplane(Dataplane):
     def __init__(
         self,
         clientid: str,
-        topology: BroadcastReplicationTopology,
         provisioner: "Provisioner",
         transfer_config: TransferConfig,
+        topology: Optional[BroadcastReplicationTopology] = None,
+        gateway_program_path: Optional[str] = None, 
     ):
         self.clientid = clientid
-        self.topology = topology
-        self.src_region_tag = self.topology.source_region()
-        self.dst_region_tags = self.topology.sink_regions()
-        regions = Counter([node.region for node in self.topology.gateway_nodes])
-        self.max_instances = int(regions[max(regions, key=regions.get)])
         self.provisioner = provisioner
         self.transfer_config = transfer_config
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         self.provisioning_lock = threading.Lock()
         self.provisioned = False
-        self.gateway_programs = None
+
+        # either set topology or gateway program 
+        self.gateway_program_path = gateway_program_path
+        self.topology = topology
 
         # pending tracker tasks
         self.jobs_to_dispatch: List[BCTransferJob] = []
@@ -227,6 +227,17 @@ class BroadcastDataplane(Dataplane):
     @property
     @functools.lru_cache(maxsize=None)
     def current_gw_programs(self):
+
+        if self.gateway_program_path is not None:
+            # return existing gateway program file
+            return json.load(open(self.gateway_program_path, "r"))
+
+        
+        src_region_tag = self.topology.source_region()
+        dst_region_tags = self.topology.sink_regions()
+        regions = Counter([node.region for node in self.topology.gateway_nodes])
+        max_instances = int(regions[max(regions, key=regions.get)])
+ 
         solution_graph = self.topology.nx_graph
 
         num_partitions = self.topology.num_partitions
