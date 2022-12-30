@@ -1,6 +1,5 @@
 import requests
 import re
-import os
 
 
 def get_ip() -> str:

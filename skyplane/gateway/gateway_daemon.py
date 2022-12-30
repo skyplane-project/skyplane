@@ -21,15 +21,14 @@ from skyplane.gateway.gateway_receiver import GatewayReceiver
 from skyplane.gateway.gateway_sender import GatewaySender
 from skyplane.utils import logger
 from skyplane.utils.definitions import MB
-from skyplane.utils.networking_tools import get_ip, get_cloud_region
 
 
 class GatewayDaemon:
     def __init__(
         self,
-        region: str = None,
         outgoing_ports: Dict[str, int],
         chunk_dir: PathLike,
+        region: str = None,
         max_incoming_ports=64,
         use_tls=True,
         use_compression=False,
