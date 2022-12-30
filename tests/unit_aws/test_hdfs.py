@@ -41,7 +41,6 @@ def test_hdfs():
         for cluster in clusters["Clusters"]:
             if cluster["Name"] == cluster_name:
                 clusterID = cluster["Id"]
-
         waiter = client.get_waiter("cluster_running")
         waiter.wait(
             ClusterId=clusterID,
@@ -49,11 +48,17 @@ def test_hdfs():
     except Exception as e:
         raise e
 
-    assert interface_test_framework("hdfs", clusterID, False, test_delete_bucket=True)
-
-    assert interface_test_framework("hdfs", clusterID, False, test_delete_bucket=True, file_size_mb=0)
+    print("Cluster created successfully. Testing interface...")
 
     try:
-        response = client.terminate_job_flows(JobFlowIds=[job_flow_id])
+        description = client.describe_cluster(ClusterId=clusterID)
+        cluster_description = description["Cluster"]
+        assert interface_test_framework("hdfs:emr", cluster_description["MasterPublicDnsName"], False, test_delete_bucket=True)
+
+        assert interface_test_framework(
+            "hdfs:emr", cluster_description["MasterPublicDnsName"], False, test_delete_bucket=True, file_size_mb=0
+        )
     except Exception as e:
         raise e
+    finally:
+        response = client.terminate_job_flows(JobFlowIds=[job_flow_id])
