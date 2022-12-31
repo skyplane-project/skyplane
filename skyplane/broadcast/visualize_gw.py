@@ -176,8 +176,8 @@ if __name__ == "__main__":
     for i in range(len(nodes)):
         color_map[nodes[i]] = color[i]
 
-    #plot_path = "/tmp/skyplane/gw_programs/gateway_programs_complete.json"
-    plot_path = "/Users/sarahwooders/repos/skyplane/old_gw_programs/gateway_programs_complete.json"
+    plot_path = "/tmp/skyplane/gw_programs/gateway_programs_complete.json"
+    #plot_path = "/Users/sarahwooders/repos/skyplane/old_gw_programs/gateway_programs_complete.json"
     add_nx_g = get_nx_graph(plot_path)
     h = networkx_to_graphviz(add_nx_g)
     h.view()

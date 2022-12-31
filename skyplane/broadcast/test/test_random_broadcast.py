@@ -54,7 +54,7 @@ def replicate_random(
     # 200 --> 3200 as the # of chunks
     # 100 --> 1600 as the # of chunks
 
-    random_chunk_size_mb = 8
+    random_chunk_size_mb = 64
     transfer_size_gbytes = num_chunks * random_chunk_size_mb * MB / GB
 
     client = SkyplaneBroadcastClient(

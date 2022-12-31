@@ -63,6 +63,11 @@ class BroadcastDataplane(Dataplane):
         # either set topology or gateway program 
         self.gateway_program_path = gateway_program_path
         self.topology = topology
+        self.src_region_tag = self.topology.source_region()
+        self.dst_region_tags = self.topology.sink_regions()
+        regions = Counter([node.region for node in self.topology.gateway_nodes])
+        self.max_instances = int(regions[max(regions, key=regions.get)])
+ 
 
         # pending tracker tasks
         self.jobs_to_dispatch: List[BCTransferJob] = []
@@ -233,11 +238,7 @@ class BroadcastDataplane(Dataplane):
             return json.load(open(self.gateway_program_path, "r"))
 
         
-        src_region_tag = self.topology.source_region()
-        dst_region_tags = self.topology.sink_regions()
-        regions = Counter([node.region for node in self.topology.gateway_nodes])
-        max_instances = int(regions[max(regions, key=regions.get)])
- 
+
         solution_graph = self.topology.nx_graph
         # print("Solution graph: ", solution_graph.edges.data())
 
