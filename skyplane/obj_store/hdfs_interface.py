@@ -100,6 +100,12 @@ class HDFSInterface(ObjectStoreInterface):
     def write_file(self, file_name, data, offset=0):
         with self.hdfs.open_output_stream(file_name) as f:
             f.write(data)
+    
+    def initiate_multipart_upload(self, dst_object_name: str, mime_type: Optional[str] = None) -> str:
+        raise NotImplementedError(f"Multipart upload is not supported for the POSIX file system.")
+    
+    def complete_multipart_upload(self, dst_object_name: str, upload_id: str) -> None:
+        raise NotImplementedError(f"Multipart upload is not supported for the POSIX file system.")
 
     @lru_cache(maxsize=1024)
     def get_obj_metadata(self, obj_name) -> fs.FileInfo:
