@@ -7,7 +7,7 @@ import os
 
 
 def test_hdfs():
-    client = boto3.client("emr")
+    client = boto3.client("emr", "us-east-1")
     try:
         # create roles necessary for EMR
         os.system("aws emr create-default-roles")
