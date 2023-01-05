@@ -29,8 +29,20 @@ class DataplaneAutoDeprovision:
     def __enter__(self):
         return self.dataplane
 
+    def copy_log(self, instance):
+        print("COPY DATA TO", str(self.dataplane.log_dir) + f"/gateway_{instance.uuid()}.stdout")
+        instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
+        print(f"Copying gateway std out files to gateway_{instance.uuid()}.stdout")
+        instance.download_file("/tmp/gateway.stdout", self.dataplane.log_dir / f"gateway_{instance.uuid()}.stdout")
+        print(f"Copying gateway std err files to gateway_{instance.uuid()}.stderr")
+        instance.download_file("/tmp/gateway.stderr", self.dataplane.log_dir / f"gateway_{instance.uuid()}.stderr")
+
+
     def __exit__(self, exc_type, exc_value, exc_tb):
         logger.fs.warning("Deprovisioning dataplane")
+        print("Starting deprovision")
+        # TODO: insert log copy here? 
+        do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=-1)
         self.dataplane.deprovision()
 
 
@@ -43,7 +55,9 @@ class Dataplane:
         topology: ReplicationTopology,
         provisioner: "Provisioner",
         transfer_config: TransferConfig,
+        log_dir: str, 
     ):
+        self.log_dir = log_dir
         self.clientid = clientid
         self.topology = topology
         self.src_region_tag = self.topology.source_region()

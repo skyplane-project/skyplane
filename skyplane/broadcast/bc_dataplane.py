@@ -49,10 +49,12 @@ class BroadcastDataplane(Dataplane):
         self,
         clientid: str,
         provisioner: "Provisioner",
+        log_dir: str, 
         transfer_config: TransferConfig,
         topology: Optional[BroadcastReplicationTopology] = None,
         gateway_program_path: Optional[str] = None, 
     ):
+        self.log_dir = log_dir
         self.clientid = clientid
         self.provisioner = provisioner
         self.transfer_config = transfer_config
@@ -318,8 +320,9 @@ class BroadcastDataplane(Dataplane):
         am_sink = gateway_node in self.topology.sink_instances()
 
         # start gateway
-        if gateway_log_dir:
-            gateway_server.init_log_files(gateway_log_dir)
+        #if sgateway_log_dir:
+        if self.log_dir:
+            gateway_server.init_log_files(self.log_dir)
         if authorize_ssh_pub_key:
             gateway_server.copy_public_key(authorize_ssh_pub_key)
 

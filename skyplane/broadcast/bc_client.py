@@ -1,4 +1,5 @@
 import uuid
+import json 
 from datetime import datetime
 from pathlib import Path
 
@@ -95,6 +96,11 @@ class SkyplaneBroadcastClient:
 
     def broadcast_dataplane_from_gateway_program(self, gateway_program_path: str) -> BroadcastDataplane: 
         # load dataplane for existing gateway program 
+
+        # create topology 
+        gw_program = json.load(open(gateway_program_path, "r"))
+    
+
 
         return BroadcastDataplane(
             clientid=self.clientid, 
@@ -203,4 +209,4 @@ class SkyplaneBroadcastClient:
         print("Transfer src region: ", self.transfer_config.src_region)
         print("Transfer dst regions: ", self.transfer_config.dst_regions)
 
-        return BroadcastDataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
+        return BroadcastDataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config, log_dir=self.log_dir)
