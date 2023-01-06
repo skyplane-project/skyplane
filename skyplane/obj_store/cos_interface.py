@@ -34,8 +34,11 @@ class COSInterface(ObjectStoreInterface):
     @property
     @lru_cache(maxsize=1)
     def cos_region(self):
+        # TODO: can we query the region of the bucket, rather than reading the config? 
         if self.region is None or self.region == "infer":
-            return self.auth.get_region()
+            print("get region", self.auth.get_region())
+            #return self.auth.get_region()
+            return "us-east"
         return self.region
 
     def region_tag(self):
@@ -54,6 +57,8 @@ class COSInterface(ObjectStoreInterface):
     @imports.inject("botocore.exceptions", pip_extra="ibmcloud")
     def bucket_exists(botocore_exceptions, self):
         s3_client = self._cos_client()
+        print("key", self.auth.access_key)
+        print("secret key", self.auth.secret_key)
         try:
             requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
             s3_client.list_objects_v2(Bucket=self.bucket_name, MaxKeys=1, **requester_pays)

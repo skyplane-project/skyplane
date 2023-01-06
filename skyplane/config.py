@@ -119,6 +119,7 @@ class SkyplaneConfig:
     @classmethod
     def load_config(cls, path) -> "SkyplaneConfig":
         """Load from a config file."""
+        print(path)
         path = Path(path)
         config = configparser.ConfigParser()
         if not path.exists():
