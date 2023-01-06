@@ -134,7 +134,7 @@ def cp(
         UsageClient.log_exception("cli_check_config", e, args, src_region_tag, dst_region_tag)
         return 1
 
-    if provider_src in ("local", "hdfs", "nfs") and provider_dst in ("aws", "gcp", "azure"):
+    if provider_src in ("local", "nfs") and provider_dst in ("aws", "gcp", "azure"):
         try:
             src_client = FileSystemInterface.create(provider_src, bucket_src, path_src)
             dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
@@ -201,7 +201,7 @@ def cp(
 
         # todo: verify checksums
 
-    elif provider_src in ("aws", "gcp", "azure") and provider_dst in ("aws", "gcp", "azure"):
+    elif provider_src in ("aws", "gcp", "azure", "hdfs") and provider_dst in ("aws", "gcp", "azure"):
         try:
             src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
             dst_client = ObjectStoreInterface.create(dst_region_tag, bucket_dst)
