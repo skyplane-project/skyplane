@@ -56,7 +56,7 @@ class GatewayDaemon:
             use_compression=use_compression,
             e2ee_key_bytes=e2ee_key_bytes,
         )
-        if provider in ("aws", "gcp", "azure"):
+        if provider in ("aws", "gcp", "azure", "hdfs"):
             self.gateway_sender = GatewaySender(
                 region,
                 self.chunk_store,
@@ -68,7 +68,7 @@ class GatewayDaemon:
                 e2ee_key_bytes=e2ee_key_bytes,
             )
         else:
-            self.gateway_sender = OnPremGatewaySender(
+            self.gateway_sender = GatewaySender(
                 None,
                 self.chunk_store,
                 self.error_event,
@@ -83,7 +83,7 @@ class GatewayDaemon:
             n_conn = 32
         elif provider == "azure":
             n_conn = 24  # due to throttling limits from authentication
-        elif provider == "hdsf":
+        elif provider == "hdfs":
             n_conn = 128  # Optimization: Check for resource utlization at http://<namenode>:50070
         self.obj_store_conn = GatewayObjStoreConn(self.chunk_store, self.error_event, self.error_queue, max_conn=n_conn)
 
