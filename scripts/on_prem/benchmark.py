@@ -14,6 +14,7 @@ THREADS = 32
 
 def transfer_file(in_fs, in_path, out_fs, out_path, BATCH_SIZE, final):
     print("Starting transfer...")
+    before = time.time()
     if out_fs is not None:
         with in_fs.open_input_stream(in_path) as in_file:
             with out_fs.open_output_stream(out_path) as out_file:
@@ -32,7 +33,7 @@ def transfer_file(in_fs, in_path, out_fs, out_path, BATCH_SIZE, final):
             curr += BATCH_SIZE
             if not buf:
                 break
-
+    print(f"Thread Finished. Time: {time.time()-before}")
 
 def setup_files_and_dirs(outdir, hdfs):
     # setup 10GB file
@@ -50,24 +51,24 @@ def cleanup_files_and_dirs(outdir, hdfs):
 
 def transfer_local_to_hdfs(hdfs, local, outdir):
     # 32/64/128/156 MBs
-    transfer_file(local, f"{outdir}/10GBdata.bin", hdfs, f"/data/10GBdata.bin", 32 * MB)
+    transfer_file(local, f"{outdir}/10GBdata.bin", hdfs, f"/data/10GBdata.bin", 32 * MB, 10*GB)
 
-    transfer_file(local, f"{outdir}/10GBdata.bin", hdfs, f"/data/10GBdata.bin", 64 * MB)
+    transfer_file(local, f"{outdir}/10GBdata.bin", hdfs, f"/data/10GBdata.bin", 64 * MB, 10*GB)
 
-    transfer_file(local, f"{outdir}/10GBdata.bin", hdfs, f"/data/10GBdata.bin", 128 * MB)
+    transfer_file(local, f"{outdir}/10GBdata.bin", hdfs, f"/data/10GBdata.bin", 128 * MB, 10*GB)
 
-    transfer_file(local, f"{outdir}/10GBdata.bin", hdfs, f"/data/10GBdata.bin", 156 * MB)
+    transfer_file(local, f"{outdir}/10GBdata.bin", hdfs, f"/data/10GBdata.bin", 156 * MB, 10*GB)
 
 
 def transfer_hdfs_to_local(hdfs, local, outdir):
     # 32/64/128/156 MBs
-    transfer_file(hdfs, f"/data/10GBdata.bin", local, f"{outdir}/10GBdata.bin", 32 * MB)
+    transfer_file(hdfs, f"/data/10GBdata.bin", local, f"{outdir}/10GBdata.bin", 32 * MB, 10*GB)
 
-    transfer_file(hdfs, f"/data/10GBdata.bin", local, f"{outdir}/10GBdata.bin", 64 * MB)
+    transfer_file(hdfs, f"/data/10GBdata.bin", local, f"{outdir}/10GBdata.bin", 64 * MB, 10*GB)
 
-    transfer_file(hdfs, f"/data/10GBdata.bin", local, f"{outdir}/10GBdata.bin", 128 * MB)
+    transfer_file(hdfs, f"/data/10GBdata.bin", local, f"{outdir}/10GBdata.bin", 128 * MB, 10*GB)
 
-    transfer_file(hdfs, f"/data/10GBdata.bin", local, f"{outdir}/10GBdata.bin", 156 * MB)
+    transfer_file(hdfs, f"/data/10GBdata.bin", local, f"{outdir}/10GBdata.bin", 156 * MB, 10*GB)
 
 
 def parallel_reads(args):
@@ -86,9 +87,9 @@ if __name__ == "__main__":
     hdfs = fs.HadoopFileSystem(host=args.HDFS, port=8020, user="hadoop", extra_conf={"dfs.client.use.datanode.hostname": "false"})
     local = fs.LocalFileSystem()
     thread = args.threads
-    # setup_files_and_dirs(args.outdir, hdfs)
-    # transfer_local_to_hdfs(hdfs, local, args.outdir)
-    # transfer_hdfs_to_local(hdfs, local)
+    #setup_files_and_dirs(args.outdir, hdfs)
+    transfer_local_to_hdfs(hdfs, local, args.outdir)
+    transfer_hdfs_to_local(hdfs, local)
     arg = []
     increment = 10 * GB / THREADS
     curr = 0

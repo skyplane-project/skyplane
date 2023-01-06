@@ -60,7 +60,7 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
     # check one object is in the bucket
     objs = list(interface.list_objects())
     assert len(objs) == 1, f"{len(objs)} objects in bucket, expected 1"
-    assert objs[0].key == obj_name, f"{objs[0].key} != {obj_name}"
+    assert obj_name in objs[0].key, f"{objs[0].key} != {obj_name}"
     assert objs[0].size == file_size_mb * MB, f"{objs[0].size} != {file_size_mb * MB}"
 
     interface.delete_objects([obj_name])

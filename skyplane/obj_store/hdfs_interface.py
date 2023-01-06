@@ -26,11 +26,13 @@ class HDFSInterface(ObjectStoreInterface):
     def path(self) -> str:
         return self.hdfs_path
 
-    def list_objects(self, prefix="") -> Iterator[HDFSFile]:
-        fileSelector = fs.FileSelector(prefix=prefix, recursive=True)
-        response = self.hdfs.get_file_info(fileSelector)
-        for file in response:
-            yield HDFSFile(provider="hdfs", bucket=self.host, key=file.path, size=file.size, last_modified=file.mtime)
+    def list_objects(self, prefix="/skyplane5") -> Iterator[HDFSFile]:
+        response = self.hdfs.get_file_info(fs.FileSelector(prefix, recursive=True))
+        if hasattr(response, "__len__") and (not isinstance(response, str)):
+            for file in response:
+                yield HDFSFile(provider="hdfs", bucket=self.host, key=file.path, size=file.size, last_modified=file.mtime)
+        else:
+            yield HDFSFile(provider="hdfs", bucket=self.host, key=response.path, size=response.size, last_modified=response.mtime)
 
     def exists(self, obj_name: str):
         try:
@@ -46,10 +48,10 @@ class HDFSInterface(ObjectStoreInterface):
         return ""
 
     def create_bucket(self, region_tag: str):
-        return None
+        self.hdfs.create_dir("/skyplane5")
 
     def delete_bucket(self):
-        return None
+        self.hdfs.delete_dir("/skyplane5")
 
     def bucket_exists(self) -> bool:
         return True
@@ -65,13 +67,13 @@ class HDFSInterface(ObjectStoreInterface):
 
     def delete_objects(self, keys: List[str]):
         for key in keys:
-            self.hdfs.delete_file(key)
+            self.hdfs.delete_file(f"/skyplane5/{key}")
         return True
 
     def download_object(
         self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5: bool = False
     ):
-        with self.hdfs.open_input_stream(src_object_name) as f1:
+        with self.hdfs.open_input_stream(f"/skyplane5/{src_object_name}") as f1:
             with open(dst_file_path, "wb+" if write_at_offset else "wb") as f2:
                 b = f1.read(nbytes=size_bytes)
                 while b:
@@ -89,7 +91,7 @@ class HDFSInterface(ObjectStoreInterface):
         mime_type: Optional[str] = None,
     ):
         with open(src_file_path, "rb") as f1:
-            with self.hdfs.open_output_stream(dst_object_name) as f2:
+            with self.hdfs.open_output_stream(f"/skyplane5/{dst_object_name}") as f2:
                 b = f1.read()
                 f2.write(b)
 
