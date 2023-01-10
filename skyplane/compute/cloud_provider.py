@@ -37,7 +37,13 @@ class CloudProvider:
             from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 
             return AzureCloudProvider.get_transfer_cost(src_key, dst_key, premium_tier)
+        elif src_provider == "cos": 
+
+            #from skyplane.compute.ibmcloud.ibmcloud_provider.py import IBMCloudProvider
+            #return IBMCloudProvider.get_transfer_cost(src_key, dst_key, premium_tier)
+            return 0
         else:
+            print(src_provider)
             raise NotImplementedError
 
     def get_instance_list(self, region) -> List[Server]:

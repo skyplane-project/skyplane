@@ -87,3 +87,12 @@ class IBMCloudProvider(CloudProvider):
             config_dict["available_node_types"]["ray_head_default"]["node_config"], tags, 1
         )
         return IBMCloudServer(self.regions_cloudprovider[region], f"cos:{region}", resp, self.regions_vpc[region])
+
+    @staticmethod
+    def get_transfer_cost(src_key, dst_key, premium_tier=True):
+        """Assumes <10TB transfer tier."""
+
+        # TODO: fix this 
+
+        return 0.02  
+ 

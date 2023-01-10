@@ -31,6 +31,11 @@ class IBMCloudAuthentication:
         if self.config.ibmcloud_iam_key:
             self._iam_key = self.config.ibmcloud_iam_key
 
+        print("access key", self._access_key)
+        print("iam key", self._iam_key)
+
+        print("auth", self._ssh_credentials)
+
     @imports.inject("ibm_cloud_sdk_core", pip_extra="ibmcloud")
     def get_iam_authenticator(ibm_cloud_sdk_core, self):
         from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
@@ -128,6 +133,7 @@ class IBMCloudAuthentication:
             read_timeout=CONN_READ_TIMEOUT,
             retries={"max_attempts": OBJ_REQ_RETRIES},
         )
+        print("User agent", self.user_agent)
 
         if cos_region is None:
             return self.get_boto3_session().client(service_name, config=client_config)

@@ -148,6 +148,9 @@ class Provisioner:
             public_ips = [s.public_ip() for _, s in results]
             # authorize access to private IPs for GCP VMs due to global VPC
             private_ips = [s.private_ip() for t, s in results if t.cloud_provider == "gcp"]
+
+            print("private", private_ips)
+            print("public", public_ips)
             authorize_ip_jobs = []
             if aws_provisioned:
                 authorize_ip_jobs.extend([partial(self.aws.add_ips_to_security_group, r, public_ips) for r in set(aws_regions)])

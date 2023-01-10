@@ -38,6 +38,8 @@ class COSInterface(ObjectStoreInterface):
         if self.region is None or self.region == "infer":
             print("get region", self.auth.get_region())
             #return self.auth.get_region()
+            if "4" in self.bucket_name: 
+                return "ca-tor"
             return "us-east"
         return self.region
 
