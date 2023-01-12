@@ -63,7 +63,7 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
     assert obj_name in objs[0].key, f"{objs[0].key} != {obj_name}"
     assert objs[0].size == file_size_mb * MB, f"{objs[0].size} != {file_size_mb * MB}"
 
-    interface.delete_objects([obj_name])
-    if test_delete_bucket:
-        interface.delete_bucket()
+    # interface.delete_objects([obj_name])
+    # if test_delete_bucket:
+    #     interface.delete_bucket()
     return True

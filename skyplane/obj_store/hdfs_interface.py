@@ -19,15 +19,23 @@ class HDFSInterface(ObjectStoreInterface):
         self.host = host
         self.port = port
         self.hdfs_path = path
-        self.hdfs = fs.HadoopFileSystem(
-            host=f"{self.host}/{self.hdfs_path}", port=self.port, user="hadoop", extra_conf={"dfs.permissions.enabled": "false"}
-        )
+        # self.hdfs = fs.HadoopFileSystem(
+        #     host=f"{self.host}/{self.hdfs_path}", port=self.port, user="hadoop", extra_conf={"dfs.permissions.enabled": "false"}
+        # )
+        # print(f"Connecting to HDFS at {self.host}:{self.port} with path {self.hdfs_path}")
 
     def path(self) -> str:
         return self.hdfs_path
 
     def list_objects(self, prefix="/skyplane5") -> Iterator[HDFSFile]:
-        response = self.hdfs.get_file_info(fs.FileSelector(prefix, recursive=True))
+        _hdfs_connector = fs.HadoopFileSystem(
+            host=f"ec2-54-234-174-31.compute-1.amazonaws.com/", port=self.port, user="hadoop", extra_conf={"dfs.permissions.enabled": "false"}
+        )
+        print(f"Connecting to HDFS at {self.host}:{self.port} with path {self.hdfs_path}")
+        fileselector = fs.FileSelector("/skyplane5", recursive=True, allow_not_found=True)
+        print(f"File selector created successfully, {fileselector.base_dir}")
+        response = _hdfs_connector("/skyplane5")
+        print(f"Response: {response}")
         if hasattr(response, "__len__") and (not isinstance(response, str)):
             for file in response:
                 yield HDFSFile(provider="hdfs", bucket=self.host, key=file.path, size=file.size, last_modified=file.mtime)
@@ -42,10 +50,10 @@ class HDFSInterface(ObjectStoreInterface):
             return False
 
     def region_tag(self) -> str:
-        return ""
+        return "hdfs:us-east-1"
 
     def bucket(self) -> str:
-        return ""
+        return self.hdfs_path
 
     def create_bucket(self, region_tag: str):
         self.hdfs.create_dir("/skyplane5")

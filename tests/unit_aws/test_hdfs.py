@@ -53,10 +53,10 @@ def test_hdfs():
     # try:
         # description = client.describe_cluster(ClusterId=clusterID)
         # cluster_description = description["Cluster"]
-    assert interface_test_framework("hdfs:emr", "ec2-44-204-170-248.compute-1.amazonaws.com", False, test_delete_bucket=True)
+    assert interface_test_framework("hdfs:emr", "ec2-54-234-174-31.compute-1.amazonaws.com", False, test_delete_bucket=True)
 
     assert interface_test_framework(
-        "hdfs:emr", "ec2-44-204-170-248.compute-1.amazonaws.com", False, test_delete_bucket=True, file_size_mb=0
+        "hdfs:emr", "ec2-54-234-174-31.compute-1.amazonaws.com", False, test_delete_bucket=True, file_size_mb=0
     )
     # except Exception as e:
     #     raise e
