@@ -166,7 +166,8 @@ class GatewayReceiver:
             # self.chunk_store.state_start_download(chunk_header.chunk_id, f"receiver:{self.worker_id}")
             logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} wire header length {chunk_header.data_len}")
             with Timer() as t:
-                with self.chunk_store.get_chunk_file_path(chunk_header.chunk_id).open("wb") as f:
+                fpath = self.chunk_store.get_chunk_file_path(chunk_header.chunk_id)
+                with fpath.open("wb") as f:
                     socket_data_len = chunk_header.data_len
                     chunk_received_size = 0
                     to_write = bytearray(socket_data_len)
@@ -184,7 +185,21 @@ class GatewayReceiver:
                             )
                         )
                     to_write = bytes(to_write)
-                    f.write(to_write)
+
+                    # try to write data until successful  
+                    while True: 
+                        try:
+                            f.write(to_write)
+
+                            # check size 
+                            file_size = os.path.getsize(fpath)
+                            if file_size == chunk_header.data_len:
+                                break
+                        except Exception as e: 
+                            print(e)
+                        
+                        print(f"[receiver:{server_port}]: No remaining space with bytes {self.chunk_store.remaining_bytes()} data len {chunk_header.data_len} max pending {self.max_pending_chunks}, total space {init_space}")
+                        time.sleep(1)
             assert (
                 socket_data_len == 0 and chunk_received_size == chunk_header.data_len
             ), f"Size mismatch: got {chunk_received_size} expected {chunk_header.data_len} and had {socket_data_len} bytes remaining"

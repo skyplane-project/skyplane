@@ -195,13 +195,13 @@ class TransferProgressTracker(Thread):
         sink_regions = set([sink.region for sink in sinks])
         while any([len(self.job_pending_chunk_ids[job_uuid]) > 0 for job_uuid in self.job_pending_chunk_ids]):
             # refresh shutdown status by running noop
-            do_parallel(lambda i: i.run_command("echo 1"), self.dataplane.bound_nodes.values(), n=-1)
+            do_parallel(lambda i: i.run_command("echo 1"), self.dataplane.bound_nodes.values(), n=8)
 
             # check for errors and exit if there are any (while setting debug flags)
             errors = self.dataplane.check_error_logs()
             if any(errors.values()):
                 logger.warning("Copying gateway logs...")
-                do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=-1)
+                do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=8)
                 self.errors = errors
                 raise exceptions.SkyplaneGatewayException("Transfer failed with errors", errors)
 
@@ -259,7 +259,7 @@ class TransferProgressTracker(Thread):
             return logs
 
         rows = []
-        for result in do_parallel(get_chunk_status, self.dataplane.bound_nodes.items(), n=-1, return_args=False):
+        for result in do_parallel(get_chunk_status, self.dataplane.bound_nodes.items(), n=8, return_args=False):
             rows.extend(result)
         return rows
 
