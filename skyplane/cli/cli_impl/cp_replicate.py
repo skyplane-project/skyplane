@@ -94,7 +94,8 @@ def generate_topology(
             topo.add_objstore_instance_edge(src_region, src_region, i)
             topo.add_instance_instance_edge(src_region, i, dst_region, i, num_connections)
             topo.add_instance_objstore_edge(dst_region, i, dst_region)
-        topo.cost_per_gb = compute.CloudProvider.get_transfer_cost(src_region, dst_region)
+        # topo.cost_per_gb = compute.CloudProvider.get_transfer_cost(src_region, dst_region)
+        topo.cost_per_gb = 1
         return topo
 
 

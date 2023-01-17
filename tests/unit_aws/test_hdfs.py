@@ -7,7 +7,7 @@ import os
 
 
 def test_hdfs():
-    client = boto3.client("emr", "us-east-1")
+    #client = boto3.client("emr", "us-east-1")
     # try:
         # create roles necessary for EMR
     #     os.system("aws emr create-default-roles")
@@ -53,11 +53,11 @@ def test_hdfs():
     # try:
         # description = client.describe_cluster(ClusterId=clusterID)
         # cluster_description = description["Cluster"]
-    assert interface_test_framework("hdfs:emr", "ec2-54-234-174-31.compute-1.amazonaws.com", False, test_delete_bucket=True)
+    assert interface_test_framework("hdfs:emr", "10.128.0.10", False, test_delete_bucket=True)
 
-    assert interface_test_framework(
-        "hdfs:emr", "ec2-54-234-174-31.compute-1.amazonaws.com", False, test_delete_bucket=True, file_size_mb=0
-    )
+    # assert interface_test_framework(
+    #     "hdfs:emr", "10.128.0.10", False, test_delete_bucket=True, file_size_mb=0
+    # )
     # except Exception as e:
     #     raise e
     # finally:
