@@ -7,7 +7,11 @@ Welcome to Skyplane API!
 
 Skyplane's ease of use and efficiency make it a popular choice among developers for handling data transfer across the cloud. With its API, developers can easily integrate Skyplane into their project pipelines and utilize the same functionality as the command line interface (CLI) such as copying and syncing, along with additional features exclusive to the API. This opens up new opportunities for the growth and application of Skyplane in the future.
 
-This API is still experimental, and your feedback is much appreciated in improving it!
+.. note::
+
+    This API is still experimental, and your feedback is much appreciated in improving it!
+
+.. image:: _static/api/overview.png
 
 Installing Skyplane
 ===================
@@ -72,6 +76,8 @@ Large-scale machine learning (ML) training typically includes a step for acquiri
 
 In many cases, datasets and virtual machines (VMs) are located in different regions. This can lead to slow data transfer speeds and high costs for data egress fees when using cloud provider tools, such as aws s3 cp, to download data to the VM's local disk. Skyplane offers a solution by allowing a fast and more cost-effective transfer of the dataset to an S3 bucket in the same region as the VM (e.g. US-West-2), with direct streaming of the data to the model without the need for downloading it to the local folder.
 
+.. image:: _static/api/imagenet.png
+
 This process is as simple as adding just two lines of code, similar to the demonstration of the Skyplane simple copy.
 
 .. code-block:: python
@@ -88,6 +94,8 @@ Airflow SkyplaneOperator
 ------------------------
 
 TODO
+
+.. image:: _static/api/airflow.png
 
 Contents
 ========
