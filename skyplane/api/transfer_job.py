@@ -414,6 +414,7 @@ class TransferJob(ABC):
     def _pre_filter_fn(cls, obj: ObjectStoreObject) -> bool:
         """Optionally filter source objects before they are transferred.
 
+        :meta private:
         :param obj: source object to be transferred
         :type obj: ObjectStoreObject
         """
@@ -568,6 +569,7 @@ class SyncJob(CopyJob):
         """
         For skyplane sync, we enrich dest obj metadata with our existing dest obj metadata from the dest bucket following a query.
 
+        :meta private:
         :param transfer_pairs: generator of transfer pairs
         :type transfer_pairs: Generator
         """

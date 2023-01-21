@@ -33,5 +33,4 @@
    skyplane.api.provisioner
    skyplane.api.tracker
    skyplane.api.transfer_job
-   skyplane.api.usage
 
