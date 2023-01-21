@@ -153,7 +153,7 @@ def generate_full_transferobjlist(
     """Query source region and return list of objects to transfer."""
     source_iface = src_client
     dest_iface = ObjectStoreInterface.create(dest_region, dest_bucket)
-    print(F"cp_replicate importes source_iface: {source_iface}")
+    print(f"cp_replicate importes source_iface: {source_iface}")
 
     requester_pays = cloud_config.get_flag("requester_pays")
     # if requester_pays:
@@ -176,7 +176,7 @@ def generate_full_transferobjlist(
     if not source_objs:
         logger.error("Specified object does not exist.\n")
         raise exceptions.MissingObjectException(f"No objects were found in the specified prefix {source_prefix} in {source_bucket}")
-    
+
     # map objects to destination object paths
     for source_obj in source_objs:
         try:

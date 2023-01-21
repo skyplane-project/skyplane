@@ -210,7 +210,9 @@ def cp(
             if cloud_config.get_flag("requester_pays"):
                 src_client.set_requester_bool(True)
                 dst_client.set_requester_bool(True)
-            print(f"src_region_tag: {src_region_tag}, dst_region_tag: {dst_region_tag}, bucket_src: {bucket_src}, bucket_dst: {bucket_dst}, path_src: {path_src}, path_dst: {path_dst}")
+            print(
+                f"src_region_tag: {src_region_tag}, dst_region_tag: {dst_region_tag}, bucket_src: {bucket_src}, bucket_dst: {bucket_dst}, path_src: {path_src}, path_dst: {path_dst}"
+            )
             transfer_pairs = generate_full_transferobjlist(
                 src_region_tag, bucket_src, path_src, dst_region_tag, bucket_dst, path_dst, recursive=recursive, src_client=src_client
             )

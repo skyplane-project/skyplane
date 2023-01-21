@@ -125,6 +125,7 @@ class ObjectStoreInterface:
         elif region_tag.startswith("hdfs"):
             print(f"Creating HDFS interface for bucket {bucket}")
             from skyplane.obj_store.hdfs_interface import HDFSInterface
+
             print(f"attme0ting to create hdfs bucket {bucket}")
             return HDFSInterface(host=bucket)
         else:
