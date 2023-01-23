@@ -62,8 +62,8 @@ class ILPSolverPlanner(Planner):
 
     def plan(self) -> ReplicationTopology:
         problem = ThroughputProblem(
-            src=self.src_region,
-            dst=self.dst_region,
+            src=f"{self.src_provider}:{self.src_region}",
+            dst=f"{self.dst_provider}:{self.dst_region}",
             required_throughput_gbits=self.solver_required_throughput_gbits,
             gbyte_to_transfer=1,
             instance_limit=self.max_instances,
@@ -72,6 +72,8 @@ class ILPSolverPlanner(Planner):
         with path("skyplane.data", "throughput.csv") as solver_throughput_grid:
             tput = ThroughputSolverILP(solver_throughput_grid)
         solution = tput.solve_min_cost(problem, solver=ThroughputSolverILP.choose_solver(), save_lp_path=None)
+        if not solution.is_feasible:
+            raise ValueError("ILP solver failed to find a solution, try solving with fewer constraints")
         topo, _ = tput.to_replication_topology(solution)
         return topo
 

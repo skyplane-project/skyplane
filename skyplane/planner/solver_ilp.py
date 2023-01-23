@@ -7,19 +7,11 @@ from skyplane.utils import logger
 class ThroughputSolverILP(ThroughputSolver):
     @staticmethod
     def choose_solver():
-        try:
-            import gurobipy as _grb  # pytype: disable=import-error
-
-            return cp.GUROBI
-        except ImportError:
-            try:
-                import cylp as _cylp  # pytype: disable=import-error
-
-                logger.fs.warning("Gurobi not installed, using CoinOR instead.")
-                return cp.CBC
-            except ImportError:
-                logger.fs.warning("Gurobi and CoinOR not installed, using GLPK instead.")
-                return cp.GLPK
+        installed = cp.installed_solvers()
+        order = ["GUROBI", "CBC", "GLPK_MI"]
+        for package in order:
+            if package in installed:
+                return getattr(cp, package)
 
     def solve_min_cost(self, p: ThroughputProblem, solver=cp.GLPK, solver_verbose=False, save_lp_path=None) -> ThroughputSolution:
         regions = self.get_regions()
