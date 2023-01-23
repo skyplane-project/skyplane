@@ -1,4 +1,5 @@
-from os import path
+from importlib.resources import path
+
 from skyplane import compute
 from skyplane.planner.solver import ThroughputProblem
 from skyplane.planner.solver_ilp import ThroughputSolverILP
