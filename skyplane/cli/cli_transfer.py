@@ -267,7 +267,7 @@ def cp(
     # todo - add solver params once API supports it
     # solver
     solver: str = typer.Option("direct", "--solver", help="Solver to use for transfer"),
-    solver_required_throughput_gbits: float = typer.Option(1, "--tput", "-t", help="Required throughput to be solved for")
+    solver_required_throughput_gbits: float = typer.Option(1, "--tput", "-t", help="Required throughput to be solved for"),
 ):
     """
     `cp` copies a file or folder from one location to another. If the source is on an object store,
@@ -380,7 +380,7 @@ def sync(
     # todo - add solver params once API supports it
     # solver
     solver: str = typer.Option("direct", "--solver", help="Solver to use for transfer"),
-    solver_required_throughput_gbits: float = typer.Option(1, "--tput", "-t", help="Required throughput to be solved for")
+    solver_required_throughput_gbits: float = typer.Option(1, "--tput", "-t", help="Required throughput to be solved for"),
 ):
     """
     'sync` synchronizes files or folders from one location to another. If the source is on an object store,

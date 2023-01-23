@@ -44,7 +44,16 @@ class DirectPlanner(Planner):
 
 
 class ILPSolverPlanner(Planner):
-    def __init__(self, src_provider: str, src_region, dst_provider: str, dst_region: str, max_instances: int, max_connections: int, required_throughput_gbits: float):
+    def __init__(
+        self,
+        src_provider: str,
+        src_region,
+        dst_provider: str,
+        dst_region: str,
+        max_instances: int,
+        max_connections: int,
+        required_throughput_gbits: float,
+    ):
         self.max_instances = max_instances
         self.max_connections = max_connections
         self.solver_required_throughput_gbits = required_throughput_gbits
@@ -61,15 +70,22 @@ class ILPSolverPlanner(Planner):
 
         with path("skyplane.data", "throughput.csv") as solver_throughput_grid:
             tput = ThroughputSolverILP(solver_throughput_grid)
-        solution = tput.solve_min_cost(
-            problem, solver=ThroughputSolverILP.choose_solver(), save_lp_path=None
-        )
+        solution = tput.solve_min_cost(problem, solver=ThroughputSolverILP.choose_solver(), save_lp_path=None)
         topo, _ = tput.to_replication_topology(solution)
         return topo
 
 
 class RONSolverPlanner(Planner):
-    def __init__(self, src_provider: str, src_region, dst_provider: str, dst_region: str, max_instances: int, max_connections: int, required_throughput_gbits: float):
+    def __init__(
+        self,
+        src_provider: str,
+        src_region,
+        dst_provider: str,
+        dst_region: str,
+        max_instances: int,
+        max_connections: int,
+        required_throughput_gbits: float,
+    ):
         self.max_instances = max_instances
         self.max_connections = max_connections
         self.solver_required_throughput_gbits = required_throughput_gbits

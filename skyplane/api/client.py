@@ -72,7 +72,7 @@ class SkyplaneClient:
         dst_cloud_provider: str,
         dst_region: str,
         solver_type: str = "direct",
-        solver_required_throughput_gbits: float=1,
+        solver_required_throughput_gbits: float = 1,
         n_vms: int = 1,
         n_connections: int = 32,
     ) -> Dataplane:
@@ -82,12 +82,16 @@ class SkyplaneClient:
             logger.fs.info(f"[SkyplaneClient.direct_dataplane] Topology: {topo.to_json()}")
             return Dataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
         elif solver_type == "ILP":
-            planner = ILPSolverPlanner(src_cloud_provider, src_region, dst_cloud_provider, dst_region, n_vms, n_connections, solver_required_throughput_gbits)
+            planner = ILPSolverPlanner(
+                src_cloud_provider, src_region, dst_cloud_provider, dst_region, n_vms, n_connections, solver_required_throughput_gbits
+            )
             topo = planner.plan()
             logger.fs.info(f"[SkyplaneClient.ilp_dataplane] Topology: {topo.to_json()}")
             return Dataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
         elif solver_type == "RON":
-            planner = RONSolverPlanner(src_cloud_provider, src_region, dst_cloud_provider, dst_region, n_vms, n_connections, solver_required_throughput_gbits)
+            planner = RONSolverPlanner(
+                src_cloud_provider, src_region, dst_cloud_provider, dst_region, n_vms, n_connections, solver_required_throughput_gbits
+            )
             topo = planner.plan()
             logger.fs.info(f"[SkyplaneClient.ron_dataplane] Topology: {topo.to_json()}")
             return Dataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
