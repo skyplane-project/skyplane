@@ -93,8 +93,6 @@ This process is as simple as adding just two lines of code, similar to the demon
 Airflow SkyplaneOperator
 ------------------------
 
-TODO
-
 .. image:: _static/api/airflow.png
 
 Contents

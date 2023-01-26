@@ -3,29 +3,10 @@
 
 .. automodule:: skyplane.api
 
-   
-   
-   
-
-   
-   
-   
-
-   
-   
-   
-
-   
-   
-   
-
-
-
 .. rubric:: Modules
 
 .. autosummary::
    :toctree:
-   :recursive:
 
    skyplane.api.client
    skyplane.api.config
