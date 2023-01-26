@@ -101,4 +101,6 @@ Contents
 ========
 
 .. toctree::
+    :maxdepth: 2
+
     _api/skyplane.api
