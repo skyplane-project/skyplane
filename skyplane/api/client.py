@@ -1,20 +1,20 @@
 import uuid
 from datetime import datetime
 from pathlib import Path
-
 from typing import TYPE_CHECKING, Optional
 
-from skyplane.api.usage.client import get_clientid
+from skyplane.api.config import TransferConfig
 from skyplane.api.dataplane import Dataplane
-from skyplane.api.impl.path import parse_path
-from skyplane.api.impl.planner import DirectPlanner
-from skyplane.api.impl.provisioner import Provisioner
-from skyplane.api.transfer_config import TransferConfig
+from skyplane.api.provisioner import Provisioner
+from skyplane.api.usage import get_clientid
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
+from skyplane.planner.planner import DirectPlanner
 from skyplane.utils import logger
+from skyplane.utils.definitions import tmp_log_dir
+from skyplane.utils.path import parse_path
 
 if TYPE_CHECKING:
-    from skyplane.api.auth_config import AWSConfig, AzureConfig, GCPConfig
+    from skyplane.api.config import AWSConfig, AzureConfig, GCPConfig, TransferConfig
 
 
 class SkyplaneClient:
@@ -71,25 +71,14 @@ class SkyplaneClient:
         src_region: str,
         dst_cloud_provider: str,
         dst_region: str,
-        type: str = "direct",
+        solver_type: str = "direct",
         n_vms: int = 1,
-        num_connections: int = 32,
+        n_connections: int = 32,
     ) -> Dataplane:
-        # print(self.clientid)
-        if type == "direct":
-            planner = DirectPlanner(
-                src_cloud_provider,
-                src_region,
-                dst_cloud_provider,
-                dst_region,
-                n_vms,
-                num_connections,
-            )
+        if solver_type == "direct":
+            planner = DirectPlanner(src_cloud_provider, src_region, dst_cloud_provider, dst_region, n_vms, n_connections)
             topo = planner.plan()
             logger.fs.info(f"[SkyplaneClient.direct_dataplane] Topology: {topo.to_json()}")
             return Dataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
         else:
-            raise NotImplementedError(f"Dataplane type {type} not implemented")
-
-
-tmp_log_dir = Path("/tmp/skyplane")
+            raise NotImplementedError(f"Dataplane type {solver_type} not implemented")

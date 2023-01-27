@@ -8,6 +8,7 @@ from typing import Iterator, List, Optional, Tuple
 from skyplane import exceptions, compute
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
+from skyplane.config_paths import cloud_config
 from skyplane.utils import logger, imports
 
 
@@ -30,13 +31,15 @@ class S3Interface(ObjectStoreInterface):
     @lru_cache(maxsize=1)
     def aws_region(self):
         s3_client = self.auth.get_boto3_client("s3")
+        default_region = cloud_config.get_flag("aws_default_region")
         try:
+            # None means us-east-1 for legacy reasons
             region = s3_client.get_bucket_location(Bucket=self.bucket_name).get("LocationConstraint", "us-east-1")
-            return region if region is not None else "us-east-1"
+            return region if region is not None else default_region
         except Exception as e:
             if "An error occurred (AccessDenied) when calling the GetBucketLocation operation" in str(e):
-                logger.warning(f"Bucket location {self.bucket_name} is not public. Assuming region is us-east-1.")
-                return "us-east-1"
+                logger.warning(f"Bucket location {self.bucket_name} is not public. Assuming region is {default_region}")
+                return default_region
             logger.warning(f"Specified bucket {self.bucket_name} does not exist, got AWS error: {e}")
             raise exceptions.MissingBucketException(f"S3 bucket {self.bucket_name} does not exist") from e
 
@@ -136,7 +139,7 @@ class S3Interface(ObjectStoreInterface):
         s3_client = self._s3_client()
         assert len(src_object_name) > 0, f"Source object name must be non-empty: '{src_object_name}'"
         args = {"Bucket": self.bucket_name, "Key": src_object_name}
-        assert not (offset_bytes and not size_bytes), f"Cannot specify {offset_bytes=} without {size_bytes=}"
+        assert not (offset_bytes and not size_bytes), f"Cannot specify {offset_bytes} without {size_bytes}"
         if offset_bytes is not None and size_bytes is not None:
             args["Range"] = f"bytes={offset_bytes}-{offset_bytes + size_bytes - 1}"
         if self.requester_pays:
