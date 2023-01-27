@@ -22,6 +22,7 @@ from skyplane.api.usage import UsageClient
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import cloud_config, config_path
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
+from skyplane.obj_store.file_system_interface import FileSystemInterface
 from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 from skyplane.utils import logger
 from skyplane.utils.definitions import GB, format_bytes
@@ -320,18 +321,27 @@ def cp(
         )
         return 1
 
-    if provider_src in ("local", "hdfs", "nfs") or provider_dst in ("local", "hdfs", "nfs"):
-        if provider_src == "hdfs" or provider_dst == "hdfs":
-            typer.secho("HDFS is not supported yet.", fg="red")
-            return 1
-        return 0 if cli.transfer_cp_onprem(src, dst, recursive) else 1
-    elif provider_src in ("aws", "gcp", "azure") and provider_dst in ("aws", "gcp", "azure"):
+    dp = cli.make_dataplane(
+        solver_type=solver,
+        n_vms=max_instances,
+        n_connections=max_connections,
+    )
+    
+    if provider_src in ("local", "nfs") and provider_dst in ("aws", "gcp", "azure"):
+        with dp.auto_deprovision():
+            try:
+                if not cli.confirm_transfer(dp, 5, ask_to_confirm_transfer=not confirm):
+                    return 1
+                dp.provision(spinner=True)
+                dp.run(ProgressBarTransferHook())
+            except skyplane.exceptions.SkyplaneException as e:
+                console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+                console.print(e.pretty_print_str())
+                UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
+                return 1
+        #return 0 if cli.transfer_cp_onprem(src, dst, recursive) else 1
+    elif provider_src in ("aws", "gcp", "azure", "hdfs") and provider_dst in ("aws", "gcp", "azure"):
         # todo support ILP solver params
-        dp = cli.make_dataplane(
-            solver_type=solver,
-            n_vms=max_instances,
-            n_connections=max_connections,
-        )
         with dp.auto_deprovision():
             dp.queue_copy(src, dst, recursive=recursive)
             if cloud_config.get_flag("native_cmd_enabled") and cli.estimate_small_transfer(
