@@ -12,7 +12,23 @@ from skyplane.utils.timer import Timer
 
 @dataclass
 class ProvisionerTask:
-    """Dataclass to track a single VM provisioning job."""
+    """Dataclass to track a single VM provisioning job.
+
+    :param cloud_provider: the name of the cloud provider to provision gateways
+    :type cloud_provider: str
+    :param region: the name of the cloud region to provision gateways
+    :type region: str
+    :param vm_type: the type of VMs to provision in that cloud region
+    :type vm_type: str
+    :param spot: whether to use the spot instances
+    :type spot: bool
+    :param autoterminate_minutes: terminate the VMs after this amount of time (default: None)
+    :type autoterminate_minutes: int
+    :param tags: a list of tags with identifications such as hostid
+    :type tags: dict
+    :param uuid: the uuid of the local host that requests the provision task
+    :type uuid: str
+    """
 
     cloud_provider: str
     region: str
@@ -27,6 +43,8 @@ class ProvisionerTask:
 
 
 class Provisioner:
+    """Launches a single VM provisioning job."""
+
     def __init__(
         self,
         aws_auth: Optional[compute.AWSAuthentication] = None,
@@ -34,6 +52,16 @@ class Provisioner:
         gcp_auth: Optional[compute.GCPAuthentication] = None,
         host_uuid: Optional[str] = None,
     ):
+        """
+        :param aws_auth: authentication information for aws
+        :type aws_auth: compute.AWSAuthentication
+        :param azure_auth: authentication information for azure
+        :type azure_auth: compute.AzureAuthentication
+        :param gcp_auth: authentication information for gcp
+        :type gcp_auth: compute.GCPAuthentication
+        :param host_uuid: the uuid of the local host that requests the provision task
+        :type host_uuid: string
+        """
         self.aws_auth = aws_auth
         self.azure_auth = azure_auth
         self.gcp_auth = gcp_auth
@@ -54,6 +82,16 @@ class Provisioner:
         self.gcp = compute.GCPCloudProvider(auth=self.gcp_auth)
 
     def init_global(self, aws: bool = True, azure: bool = True, gcp: bool = True):
+        """
+        Initialize the global cloud providers by configuring with credentials
+
+        :param aws: whether to configure aws (default: True)
+        :type aws: bool
+        :param azure: whether to configure azure (default: True)
+        :type azure: bool
+        :param gcp: whether to configure gcp (default: True)
+        :type gcp: bool
+        """
         logger.fs.info(f"[Provisioner.init_global] Initializing global resources for aws={aws}, azure={azure}, gcp={gcp}")
         jobs = []
         if aws:
@@ -74,6 +112,22 @@ class Provisioner:
         autoterminate_minutes: Optional[int] = None,
         tags: Optional[Dict[str, str]] = None,
     ):
+        """
+        Add a provision task
+
+        :param cloud_provider: the name of the cloud provider to provision gateways
+        :type cloud_provider: str
+        :param region: the name of the cloud region to provision gateways
+        :type region: str
+        :param vm_type: the type of VMs to provision in that cloud region
+        :type vm_type: str
+        :param spot: whether to use the spot instances
+        :type spot: bool
+        :param autoterminate_minutes: terminate the VMs after this amount of time (default: None)
+        :type autoterminate_minutes: int
+        :param tags: a list of tags with identifications such as hostid
+        :type tags: dict
+        """
         if tags is None:
             tags = {"skyplane": "true", "skyplaneclientid": self.host_uuid} if self.host_uuid else {"skyplane": "true"}
         task = ProvisionerTask(cloud_provider, region, vm_type, spot, autoterminate_minutes, tags)
@@ -82,6 +136,12 @@ class Provisioner:
         return task.uuid
 
     def get_node(self, uuid: str) -> compute.Server:
+        """
+        Returns a provisioned VM
+
+        :param uuid: the uuid of the provision task
+        :type uuid: str
+        """
         return self.provisioned_vms[uuid]
 
     def _provision_task(self, task: ProvisionerTask):
@@ -114,7 +174,15 @@ class Provisioner:
         return server
 
     def provision(self, authorize_firewall: bool = True, max_jobs: int = 16, spinner: bool = False) -> List[str]:
-        """Provision the VMs in the pending_provisioner_tasks list. Returns UUIDs of provisioned VMs."""
+        """Provision the VMs in the pending_provisioner_tasks list. Returns UUIDs of provisioned VMs.
+
+        :param authorize_firewall: whether to add authorization firewall to the remote gateways (default: True)
+        :type authorize_firewall: bool
+        :param max_jobs: maximum number of provision jobs to launch concurrently (default: 16)
+        :type max_jobs: int
+        :param spinner: whether to show the spinner during the job (default: False)
+        :type spinner: bool
+        """
         if not self.pending_provisioner_tasks:
             return []
 
@@ -175,7 +243,15 @@ class Provisioner:
         return [task.uuid for task in provision_tasks]
 
     def deprovision(self, deauthorize_firewall: bool = True, max_jobs: int = 64, spinner: bool = False):
-        """Deprovision all nodes. Returns UUIDs of deprovisioned VMs."""
+        """Deprovision all nodes. Returns UUIDs of deprovisioned VMs.
+
+        :param deauthorize_firewall: whether to remove authorization firewall to the remote gateways (default: True)
+        :type deauthorize_firewall: bool
+        :param max_jobs: maximum number of deprovision jobs to launch concurrently (default: 64)
+        :type max_jobs: int
+        :param spinner: whether to show the spinner during the job (default: False)
+        :type spinner: bool
+        """
         if not self.provisioned_vms and not self.temp_nodes:
             return []
 
