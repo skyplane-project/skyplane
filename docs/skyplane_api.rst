@@ -93,6 +93,8 @@ This process is as simple as adding just two lines of code, similar to the demon
 Airflow SkyplaneOperator
 ------------------------
 
+Skyplane can be easily incorporated into an Airflow DAG using a SkyplaneOperator, which can be utilized in data transfer tasks, such as replacing the S3toGCSOperator. The following example demonstrates a data analytics workflow where data is transferred from S3 to GCS to build a BigQuery dataset and then used in a PySpark data analysis job.
+
 .. image:: _static/api/airflow.png
 
 Contents
