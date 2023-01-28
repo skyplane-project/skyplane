@@ -217,7 +217,7 @@ class SkyplaneCLI:
                 console.print("[bold][red]Transfer cancelled by user.[/red][/bold]")
                 raise typer.Abort()
         else:
-            console.print("[green]Transfer starting[/bold]")
+            console.print("[green]Transfer starting[/green]")
             return True
 
     def estimate_small_transfer(self, dp: skyplane.Dataplane, size_threshold_bytes: float, query_n: int = 1000) -> bool:
