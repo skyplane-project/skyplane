@@ -2,8 +2,6 @@ from importlib.resources import path
 
 from skyplane import compute
 from skyplane.planner.solver import ThroughputProblem
-from skyplane.planner.solver_ilp import ThroughputSolverILP
-from skyplane.planner.solver_ron import ThroughputSolverRON
 from skyplane.planner.topology import ReplicationTopology
 
 
@@ -61,6 +59,8 @@ class ILPSolverPlanner(Planner):
         super().__init__(src_provider, src_region, dst_provider, dst_region)
 
     def plan(self) -> ReplicationTopology:
+        from skyplane.planner.solver_ilp import ThroughputSolverILP
+
         problem = ThroughputProblem(
             src=f"{self.src_provider}:{self.src_region}",
             dst=f"{self.dst_provider}:{self.dst_region}",
@@ -95,6 +95,8 @@ class RONSolverPlanner(Planner):
         super().__init__(src_provider, src_region, dst_provider, dst_region)
 
     def plan(self) -> ReplicationTopology:
+        from skyplane.planner.solver_ron import ThroughputSolverRON
+
         problem = ThroughputProblem(
             src=self.src_region,
             dst=self.dst_region,
