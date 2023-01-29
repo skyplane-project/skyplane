@@ -61,9 +61,8 @@ Contents
    :maxdepth: 2
    :caption: Package documentation
 
+   skyplane_api
    skyplane_cli
-   skyplane_cli_internal
-   skyplane_internal
 
 .. toctree::
    :caption: Community 

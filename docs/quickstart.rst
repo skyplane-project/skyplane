@@ -9,12 +9,12 @@ We're ready to install Skyplane. It's as easy as:
 .. code-block:: bash
 
    ---> Install skyplane from PyPI:
-   $ pip install skyplane[aws]
+   $ pip install "skyplane[aws]"
 
    # install support for other clouds as needed:
-   #   $ pip install skyplane[azure]
-   #   $ pip install skyplane[gcp]
-   #   $ pip install skyplane[all]
+   #   $ pip install "skyplane[azure]"
+   #   $ pip install "skyplane[gcp]"
+   #   $ pip install "skyplane[all]"
 
 .. dropdown for M1 Macbook users
 .. note::

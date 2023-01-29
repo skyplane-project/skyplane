@@ -67,10 +67,10 @@ class GatewayDaemon:
             e2ee_key_bytes=e2ee_key_bytes,
         )
         provider = region.split(":")[0]
-        if provider == "aws" or provider == "gcp":
-            n_conn = 32
-        elif provider == "azure":
+        if provider == "azure":
             n_conn = 24  # due to throttling limits from authentication
+        else:
+            n_conn = 32
         self.obj_store_conn = GatewayObjStoreConn(self.chunk_store, self.error_event, self.error_queue, max_conn=n_conn)
 
         # Download thread pool

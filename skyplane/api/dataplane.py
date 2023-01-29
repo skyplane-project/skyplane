@@ -10,16 +10,16 @@ import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 from skyplane import compute
-from skyplane.api.impl.tracker import TransferProgressTracker
-from skyplane.api.impl.transfer_job import CopyJob, SyncJob, TransferJob
-from skyplane.api.transfer_config import TransferConfig
-from skyplane.replicate.replication_plan import ReplicationTopology, ReplicationTopologyGateway
+from skyplane.api.tracker import TransferProgressTracker, TransferHook
+from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
+from skyplane.api.config import TransferConfig
+from skyplane.planner.topology import ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
 from skyplane.utils.definitions import gateway_docker_image
 from skyplane.utils.fn import PathLike, do_parallel
 
 if TYPE_CHECKING:
-    from skyplane.api.impl.provisioner import Provisioner
+    from skyplane.api.provisioner import Provisioner
 
 
 class DataplaneAutoDeprovision:
@@ -30,7 +30,7 @@ class DataplaneAutoDeprovision:
         return self.dataplane
 
     def __exit__(self, exc_type, exc_value, exc_tb):
-        logger.error("Deprovisioning dataplane")
+        logger.fs.warning("Deprovisioning dataplane")
         self.dataplane.deprovision()
 
 
@@ -44,6 +44,16 @@ class Dataplane:
         provisioner: "Provisioner",
         transfer_config: TransferConfig,
     ):
+        """
+        :param clientid: the uuid of the local host to create the dataplane
+        :type clientid: str
+        :param topology: the calculated topology during the transfer
+        :type topology: ReplicationTopology
+        :param provisioner: the provisioner to launch the VMs
+        :type provisioner: Provisioner
+        :param transfer_config: the configuration during the transfer
+        :type transfer_config: TransferConfig
+        """
         self.clientid = clientid
         self.topology = topology
         self.src_region_tag = self.topology.source_region()
@@ -70,6 +80,22 @@ class Dataplane:
         max_jobs: int = 16,
         spinner: bool = False,
     ):
+        """
+        Provision the transfer gateways.
+
+        :param allow_firewall: whether to apply firewall rules in the gatweway network (default: True)
+        :type allow_firewall: bool
+        :param gateway_docker_image: Docker image token in github
+        :type gateway_docker_image: str
+        :param gateway_log_dir: path to the log directory in the remote gatweways
+        :type gateway_log_dir: PathLike
+        :param authorize_ssh_pub_key: authorization ssh key to the remote gateways
+        :type authorize_ssh_pub_key: str
+        :param max_jobs: maximum number of provision jobs to launch concurrently (default: 16)
+        :type max_jobs: int
+        :param spinner: whether to show the spinner during the job (default: False)
+        :type spinner: bool
+        """
         with self.provisioning_lock:
             if self.provisioned:
                 logger.error("Cannot provision dataplane, already provisioned!")
@@ -160,13 +186,21 @@ class Dataplane:
         do_parallel(lambda fn: fn(), jobs, n=-1, spinner=spinner, spinner_persist=spinner, desc="Starting gateway container on VMs")
 
     def deprovision(self, max_jobs: int = 64, spinner: bool = False):
+        """
+        Deprovision the remote gateways
+
+        :param max_jobs: maximum number of jobs to deprovision the remote gateways (default: 64)
+        :type max_jobs: int
+        :param spinner: Whether to show the spinner during the job (default: False)
+        :type spinner: bool
+        """
         with self.provisioning_lock:
             if not self.provisioned:
                 logger.fs.warning("Attempting to deprovision dataplane that is not provisioned, this may be from auto_deprovision.")
             # wait for tracker tasks
             try:
                 for task in self.pending_transfers:
-                    logger.warning(f"Before deprovisioning, waiting for jobs to finish: {list(task.jobs.keys())}")
+                    logger.fs.warning(f"Before deprovisioning, waiting for jobs to finish: {list(task.jobs.keys())}")
                     task.join()
             except KeyboardInterrupt:
                 logger.warning("Interrupted while waiting for transfers to finish, deprovisioning anyway.")
@@ -179,6 +213,8 @@ class Dataplane:
                 self.provisioned = False
 
     def check_error_logs(self) -> Dict[str, List[str]]:
+        """Get the error log from remote gateways if there is any error."""
+
         def get_error_logs(args):
             _, instance = args
             reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/errors")
@@ -196,9 +232,11 @@ class Dataplane:
         return DataplaneAutoDeprovision(self)
 
     def source_gateways(self) -> List[compute.Server]:
+        """Returns a list of source gateway nodes"""
         return [self.bound_nodes[n] for n in self.topology.source_instances()] if self.provisioned else []
 
     def sink_gateways(self) -> List[compute.Server]:
+        """Returns a list of sink gateway nodes"""
         return [self.bound_nodes[n] for n in self.topology.sink_instances()] if self.provisioned else []
 
     def queue_copy(
@@ -207,6 +245,17 @@ class Dataplane:
         dst: str,
         recursive: bool = False,
     ) -> str:
+        """
+        Add a copy job to job list.
+        Return the uuid of the job.
+
+        :param src: source prefix to copy from
+        :type src: str
+        :param dst: the destination of the transfer
+        :type dst: str
+        :param recursive: if true, will copy objects at folder prefix recursively (default: False)
+        :type recursive: bool
+        """
         job = CopyJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
         logger.fs.debug(f"[SkyplaneClient] Queued copy job {job}")
         self.jobs_to_dispatch.append(job)
@@ -216,24 +265,44 @@ class Dataplane:
         self,
         src: str,
         dst: str,
-        recursive: bool = False,
     ) -> str:
-        job = SyncJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
+        """
+        Add a sync job to job list.
+        Return the uuid of the job.
+
+        :param src: Source prefix to copy from
+        :type src: str
+        :param dst: The destination of the transfer
+        :type dst: str
+        :param recursive: If true, will copy objects at folder prefix recursively (default: False)
+        :type recursive: bool
+        """
+        job = SyncJob(src, dst, recursive=True, requester_pays=self.transfer_config.requester_pays)
         logger.fs.debug(f"[SkyplaneClient] Queued sync job {job}")
         self.jobs_to_dispatch.append(job)
         return job.uuid
 
-    def run_async(self) -> TransferProgressTracker:
+    def run_async(self, hooks: Optional[TransferHook] = None) -> TransferProgressTracker:
+        """Start the transfer asynchronously. The main thread will not be blocked.
+
+        :param hooks: Tracks the status of the transfer
+        :type hooks: TransferHook
+        """
         if not self.provisioned:
             logger.error("Dataplane must be pre-provisioned. Call dataplane.provision() before starting a transfer")
-        tracker = TransferProgressTracker(self, self.jobs_to_dispatch, self.transfer_config)
+        tracker = TransferProgressTracker(self, self.jobs_to_dispatch, self.transfer_config, hooks)
         self.pending_transfers.append(tracker)
         tracker.start()
         logger.fs.info(f"[SkyplaneClient] Started async transfer with {len(self.jobs_to_dispatch)} jobs")
         self.jobs_to_dispatch = []
         return tracker
 
-    def run(self):
-        tracker = self.run_async()
+    def run(self, hooks: Optional[TransferHook] = None):
+        """Start the transfer in the main thread. Wait until the transfer is complete.
+
+        :param hooks: Tracks the status of the transfer
+        :type hooks: TransferHook
+        """
+        tracker = self.run_async(hooks)
         logger.fs.debug(f"[SkyplaneClient] Waiting for transfer to complete")
         tracker.join()
