@@ -1,29 +1,20 @@
 from __future__ import annotations
-
-import os
-import warnings
+import time
 
 import skyplane
-from typing import TYPE_CHECKING, Sequence
 
-from airflow.models import BaseOperator
-from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from airflow.providers.google.cloud.hooks.gcs import GCSHook
-from skyplane import SkyplaneClient, SkyplaneAuth
-
-if TYPE_CHECKING:
-    from airflow.utils.context import Context
+from airflow.models import BaseOperator  # type: ignore
 
 
 class SkyplaneOperator(BaseOperator):
-    template_fields: Sequence[str] = (
-        src_provider,
-        src_bucket,
-        src_region,
-        dst_provider,
-        dst_bucket,
-        dst_region,
-        config_path,
+    template_fields = (
+        "src_provider",
+        "src_bucket",
+        "src_region",
+        "dst_provider",
+        "dst_bucket",
+        "dst_region",
+        "config_path",
     )
 
     def __init__(
@@ -47,19 +38,15 @@ class SkyplaneOperator(BaseOperator):
         self.config_path = config_path
 
 
-def execute(self, context: Context):
-    aws_config, gcp_config, azure_config = SkyplaneAuth.load_from_config_file(self.config_path)
-    client = SkyplaneClient(aws_config=aws_config, gcp_config=gcp_config, azure_config=azure_config)
+def execute(self, context):
+    aws_config, gcp_config, azure_config = skyplane.SkyplaneAuth.load_from_config_file(self.config_path)
+    client = skyplane.SkyplaneClient(aws_config=aws_config, gcp_config=gcp_config, azure_config=azure_config)
     dp = client.dataplane(self.src_provider, self.src_region, self.dst_provider, self.dst_region, n_vms=1)
     with dp.auto_deprovision():
         dp.provision()
-
         dp.queue_copy(self.src_bucket, self.dst_bucket, recursive=True)
-
-        # launch the transfer in a background thread
         tracker = dp.run_async()
-
-        reporter = SimpleReporter(tracker)
+        reporter = skyplane.SimpleReporter(tracker)
 
     # monitor the transfer
     while reporter.update():

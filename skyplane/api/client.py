@@ -22,9 +22,9 @@ class SkyplaneClient:
 
     def __init__(
         self,
-        aws_config: Optional["AWSConfig"] = None,
-        azure_config: Optional["AzureConfig"] = None,
-        gcp_config: Optional["GCPConfig"] = None,
+        aws_config: Optional['AWSConfig'] = None,
+        azure_config: Optional['AzureConfig'] = None,
+        gcp_config: Optional['GCPConfig'] = None,
         transfer_config: Optional[TransferConfig] = None,
         log_dir: Optional[str] = None,
     ):
