@@ -14,6 +14,7 @@ from skyplane import SkyplaneClient, SkyplaneAuth
 if TYPE_CHECKING:
     from airflow.utils.context import Context
 
+
 class SkyplaneOperator(BaseOperator):
     template_fields: Sequence[str] = (
         src_provider,
@@ -24,10 +25,10 @@ class SkyplaneOperator(BaseOperator):
         dst_region,
         config_path,
     )
+
     def __init__(
         self,
-        *
-        src_provider: str,
+        *src_provider: str,
         src_bucket: str,
         src_region: str,
         dst_provider: str,
@@ -45,20 +46,21 @@ class SkyplaneOperator(BaseOperator):
         self.dst_region = dst_region
         self.config_path = config_path
 
+
 def execute(self, context: Context):
-        aws_config, gcp_config, azure_config = SkyplaneAuth.load_from_config_file(self.config_path)
-        client = SkyplaneClient(aws_config=aws_config, gcp_config=gcp_config, azure_config=azure_config)
-        dp = client.dataplane(self.src_provider, self.src_region, self.dst_provider, self.dst_region, n_vms=1)
-        with dp.auto_deprovision():
-            dp.provision()
+    aws_config, gcp_config, azure_config = SkyplaneAuth.load_from_config_file(self.config_path)
+    client = SkyplaneClient(aws_config=aws_config, gcp_config=gcp_config, azure_config=azure_config)
+    dp = client.dataplane(self.src_provider, self.src_region, self.dst_provider, self.dst_region, n_vms=1)
+    with dp.auto_deprovision():
+        dp.provision()
 
-            dp.queue_copy(self.src_bucket, self.dst_bucket, recursive=True)
+        dp.queue_copy(self.src_bucket, self.dst_bucket, recursive=True)
 
-            # launch the transfer in a background thread
-            tracker = dp.run_async()
+        # launch the transfer in a background thread
+        tracker = dp.run_async()
 
-            reporter = SimpleReporter(tracker)
+        reporter = SimpleReporter(tracker)
 
-        # monitor the transfer
-        while reporter.update():
-            time.sleep(1)
+    # monitor the transfer
+    while reporter.update():
+        time.sleep(1)
