@@ -1,5 +1,6 @@
 import os
 import signal
+import sys
 import time
 import traceback
 from dataclasses import dataclass
@@ -17,7 +18,7 @@ from skyplane.cli.impl.cp_replicate_fallback import (
     replicate_small_cp_cmd,
     replicate_small_sync_cmd,
 )
-from skyplane.cli.impl.common import print_header, console, print_stats_completed
+from skyplane.cli.impl.common import print_header, console, print_stats_completed, register_exception_handler
 from skyplane.api.usage import UsageClient
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import cloud_config, config_path
@@ -268,6 +269,7 @@ def cp(
     # todo - add solver params once API supports it
     # solver
     solver: str = typer.Option("direct", "--solver", help="Solver to use for transfer"),
+    solver_required_throughput_gbits: float = typer.Option(1, "--tput", "-t", help="Required throughput to be solved for in Gbps"),
 ):
     """
     `cp` copies a file or folder from one location to another. If the source is on an object store,
@@ -297,6 +299,8 @@ def cp(
     :param solver: The solver to use for the transfer (default: direct)
     :type solver: str
     """
+    if not debug:
+        register_exception_handler()
     print_header()
     provider_src, bucket_src, path_src = parse_path(src)
     provider_dst, bucket_dst, path_dst = parse_path(dst)
@@ -342,6 +346,12 @@ def cp(
         # return 0 if cli.transfer_cp_onprem(src, dst, recursive) else 1
     elif provider_src in ("aws", "gcp", "azure", "hdfs") and provider_dst in ("aws", "gcp", "azure"):
         # todo support ILP solver params
+        dp = cli.make_dataplane(
+            solver_type=solver,
+            solver_required_throughput_gbits=solver_required_throughput_gbits,
+            n_vms=max_instances,
+            n_connections=max_connections,
+        )
         with dp.auto_deprovision():
             dp.queue_copy(src, dst, recursive=recursive)
             if cloud_config.get_flag("native_cmd_enabled") and cli.estimate_small_transfer(
@@ -388,6 +398,7 @@ def sync(
     # todo - add solver params once API supports it
     # solver
     solver: str = typer.Option("direct", "--solver", help="Solver to use for transfer"),
+    solver_required_throughput_gbits: float = typer.Option(1, "--tput", "-t", help="Required throughput to be solved for"),
 ):
     """
     'sync` synchronizes files or folders from one location to another. If the source is on an object store,
@@ -419,6 +430,8 @@ def sync(
     :param solver: The solver to use for the transfer (default: direct)
     :type solver: str
     """
+    if not debug:
+        register_exception_handler()
     print_header()
     provider_src, bucket_src, path_src = parse_path(src)
     provider_dst, bucket_dst, path_dst = parse_path(dst)
@@ -453,6 +466,7 @@ def sync(
         print()
         dp = cli.make_dataplane(
             solver_type=solver,
+            solver_required_throughput_gbits=solver_required_throughput_gbits,
             n_vms=max_instances,
             n_connections=max_connections,
         )

@@ -60,7 +60,7 @@ autodoc_default_options = {
     # Make sure that any autodoc declarations show the right members
     "members": True,
     "inherited-members": True,
-    "private-members": True,
+    "private-members": False,
     "show-inheritance": True,
 }
 autosummary_generate = True  # Make _autosummary files and include them
