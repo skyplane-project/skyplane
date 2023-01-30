@@ -326,7 +326,7 @@ def cp(
         n_vms=max_instances,
         n_connections=max_connections,
     )
-    
+
     if provider_src in ("local", "nfs") and provider_dst in ("aws", "gcp", "azure"):
         with dp.auto_deprovision():
             try:
@@ -339,7 +339,7 @@ def cp(
                 console.print(e.pretty_print_str())
                 UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
                 return 1
-        #return 0 if cli.transfer_cp_onprem(src, dst, recursive) else 1
+        # return 0 if cli.transfer_cp_onprem(src, dst, recursive) else 1
     elif provider_src in ("aws", "gcp", "azure", "hdfs") and provider_dst in ("aws", "gcp", "azure"):
         # todo support ILP solver params
         with dp.auto_deprovision():

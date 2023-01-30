@@ -2,6 +2,8 @@ from dataclasses import dataclass
 
 from typing import Iterator, List, Optional, Tuple
 
+import logger
+
 
 @dataclass
 class ObjectStoreObject:
@@ -123,10 +125,10 @@ class ObjectStoreInterface:
             return AzureBlobInterface(storage_account, container)
 
         elif region_tag.startswith("hdfs"):
-            print(f"Creating HDFS interface for bucket {bucket}")
+            logger.fs.debug(f"Creating HDFS interface for bucket {bucket}")
             from skyplane.obj_store.hdfs_interface import HDFSInterface
 
-            print(f"attme0ting to create hdfs bucket {bucket}")
+            logger.fs.debug(f"attempting to create hdfs bucket {bucket}")
             return HDFSInterface(host=bucket)
         else:
             raise ValueError(f"Invalid region_tag {region_tag} - could not create interface")

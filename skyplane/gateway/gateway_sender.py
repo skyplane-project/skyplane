@@ -27,7 +27,7 @@ class GatewaySender:
         error_event,
         error_queue: Queue,
         outgoing_ports: Dict[str, int],
-        region: str = "",
+        region: Optional[str] = None,
         use_tls: bool = True,
         use_compression: bool = True,
         e2ee_key_bytes: Optional[bytes] = None,

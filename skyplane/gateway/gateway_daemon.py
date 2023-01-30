@@ -56,28 +56,19 @@ class GatewayDaemon:
             use_compression=use_compression,
             e2ee_key_bytes=e2ee_key_bytes,
         )
-        if provider in ("aws", "gcp", "azure", "hdfs"):
-            self.gateway_sender = GatewaySender(
-                region,
-                self.chunk_store,
-                self.error_event,
-                self.error_queue,
-                outgoing_ports=outgoing_ports,
-                use_tls=use_tls,
-                use_compression=use_compression,
-                e2ee_key_bytes=e2ee_key_bytes,
-            )
-        else:
-            self.gateway_sender = GatewaySender(
-                None,
-                self.chunk_store,
-                self.error_event,
-                self.error_queue,
-                outgoing_ports=outgoing_ports,
-                use_tls=use_tls,
-                use_compression=use_compression,
-                e2ee_key_bytes=e2ee_key_bytes,
-            )
+        region = region if provider in ("aws", "gcp", "azure", "hdfs") else None
+
+        self.gateway_sender = GatewaySender(
+            region,
+            self.chunk_store,
+            self.error_event,
+            self.error_queue,
+            outgoing_ports=outgoing_ports,
+            use_tls=use_tls,
+            use_compression=use_compression,
+            e2ee_key_bytes=e2ee_key_bytes,
+        )
+
         provider = region.split(":")[0]
         if provider == "azure":
             n_conn = 24  # due to throttling limits from authentication
