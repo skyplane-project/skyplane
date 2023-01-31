@@ -124,9 +124,9 @@ class BCTransferProgressTracker(TransferProgressTracker):
         self.hooks.on_dispatch_end()
 
         def monitor_single_dst_helper(dst_region):
-            start_time = time.time()
+            # start_time = time.time()
             try:
-                self.monitor_transfer(dst_region)
+                runtime_s = self.monitor_transfer(dst_region)
             except exceptions.SkyplaneGatewayException as err:
                 reformat_err = Exception(err.pretty_print_str()[37:])
                 UsageClient.log_exception(
@@ -145,9 +145,9 @@ class BCTransferProgressTracker(TransferProgressTracker):
                 )
                 do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=-1)
                 raise e
-            end_time = time.time()
+            # end_time = time.time()
 
-            runtime_s = end_time - start_time
+            # runtime_s = end_time - start_time
             # transfer successfully completed
             transfer_stats = {
                 "dst_region": dst_region,
@@ -254,7 +254,8 @@ class BCTransferProgressTracker(TransferProgressTracker):
         # todo implement transfer monitoring to update job_complete_chunk_ids and job_pending_chunk_ids while the transfer is in progress
         sinks = {n for n in self.dataplane.topology.sink_instances() if n.region == dst_region}
         sink_regions = {dst_region}
-
+        runtime_s = 0 
+        
         assert len(sink_regions) == 1  # BC: only monitor one sink region in this call
 
         # any of the jobs of this region is not complete
@@ -290,6 +291,8 @@ class BCTransferProgressTracker(TransferProgressTracker):
             sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
             completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region"].unique()) == set(sink_regions))
             completed_chunk_ids = completed_status[completed_status].index
+
+            runtime_s = (sink_status_df.time.max() - log_df.time.min()).total_seconds()
 
             # update job_complete_chunk_ids and job_pending_chunk_ids
             for job_uuid, job in self.jobs.items():
@@ -337,6 +340,8 @@ class BCTransferProgressTracker(TransferProgressTracker):
 
             # sleep
             time.sleep(30)
+
+        return runtime_s
 
     @property
     def is_complete(self):
