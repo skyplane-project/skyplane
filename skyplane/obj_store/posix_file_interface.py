@@ -1,3 +1,4 @@
+from functools import lru_cache
 import os
 import sys
 from dataclasses import dataclass
@@ -20,32 +21,41 @@ class POSIXInterface(ObjectStoreInterface):
     """Defines a file system interface for POSIX compliant FS."""
 
     def __init__(self, path=""):
-        self.path = path
+        self.dir_path = path
 
     def path(self) -> str:
         """Returns the path to the file system."""
-        return self.path
+        return self.dir_path
 
     def list_objects(self, prefix="") -> Iterator[POSIXFile]:
         """Lists all objects in the file system."""
-        for root, dirs, files in os.walk(self.path):
-            for file in files:
-                full_path = os.path.join(root, file)
-                yield POSIXFile(
-                    provider="posix",
-                    bucket=self.path,
-                    key=full_path,
-                    size=os.path.getsize(full_path),
-                    last_modified=os.path.getmtime(full_path),
-                )
+        if os.path.isfile(self.dir_path):
+            yield POSIXFile(
+                provider="posix",
+                bucket=self.dir_path,
+                key=self.dir_path,
+                size=os.path.getsize(self.dir_path),
+                last_modified=os.path.getmtime(self.dir_path),
+            )
+        else:
+            for root, dirs, files in os.walk(self.dir_path):
+                for file in files:
+                    full_path = os.path.join(root, file)
+                    yield POSIXFile(
+                        provider="posix",
+                        bucket=self.dir_path,
+                        key=full_path,
+                        size=os.path.getsize(full_path),
+                        last_modified=os.path.getmtime(full_path),
+                    )
 
     def exists(self, obj_name: str):
         """Checks if the object exists."""
         return os.path.exists(obj_name)
 
     def region_tag(self) -> str:
-        return ""
-
+        return "gcp:us-central1-a"
+    
     def bucket(self) -> str:
         return ""
 

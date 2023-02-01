@@ -304,8 +304,16 @@ def cp(
     print_header()
     provider_src, bucket_src, path_src = parse_path(src)
     provider_dst, bucket_dst, path_dst = parse_path(dst)
-    src_region_tag = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src).region_tag()
-    dst_region_tag = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst).region_tag()
+    if provider_src in ("local", "nfs"):
+        src_region_tag = FileSystemInterface.create(f"{provider_src}:infer", path_src).region_tag()
+    else:
+        src_region_tag = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src).region_tag()
+        
+    if provider_dst in ("local", "nfs"):
+        dst_region_tag = FileSystemInterface.create(f"{provider_dst}:infer", path_dst).region_tag()
+    else:
+        dst_region_tag = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst).region_tag()
+
     args = {
         "cmd": "cp",
         "recursive": recursive,
@@ -329,10 +337,12 @@ def cp(
         solver_type=solver,
         n_vms=max_instances,
         n_connections=max_connections,
+        solver_required_throughput_gbits=solver_required_throughput_gbits,
     )
 
     if provider_src in ("local", "nfs") and provider_dst in ("aws", "gcp", "azure"):
         with dp.auto_deprovision():
+            dp.queue_copy(src, dst, recursive=recursive)
             try:
                 if not cli.confirm_transfer(dp, 5, ask_to_confirm_transfer=not confirm):
                     return 1

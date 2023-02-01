@@ -18,6 +18,7 @@ from skyplane import exceptions
 from skyplane.api.config import TransferConfig
 from skyplane.chunk import Chunk, ChunkRequest
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
+from skyplane.obj_store.file_system_interface import FileSystemInterface
 from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.obj_store.s3_interface import S3Object
@@ -37,8 +38,8 @@ class Chunker:
 
     def __init__(
         self,
-        src_iface: ObjectStoreInterface,
-        dst_iface: ObjectStoreInterface,
+        src_iface: ObjectStoreObject or FileSystemInterface,
+        dst_iface: ObjectStoreObject or FileSystemInterface,
         transfer_config: TransferConfig,
         concurrent_multipart_chunk_threads: int = 64,
     ):
@@ -370,13 +371,16 @@ class TransferJob(ABC):
         return self._src_prefix
 
     @property
-    def src_iface(self) -> ObjectStoreInterface:
+    def src_iface(self) -> ObjectStoreInterface or FileSystemInterface:
         """Return the source object store interface"""
         if not hasattr(self, "_src_iface"):
-            provider_src, bucket_src, _ = parse_path(self.src_path)
-            self._src_iface = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src)
-            if self.requester_pays:
-                self._src_iface.set_requester_bool(True)
+            provider_src, bucket_src, path_src = parse_path(self.src_path)
+            if provider_src in ("local", "nfs"):
+                self._src_iface = FileSystemInterface.create(f"{provider_src}:infer", path_src)
+            else:
+                self._src_iface = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src)
+                if self.requester_pays:
+                    self._src_iface.set_requester_bool(True)
         return self._src_iface
 
     @property
@@ -444,13 +448,14 @@ class CopyJob(TransferJob):
     def estimate_cost(self):
         raise NotImplementedError()
 
-    def gen_transfer_pairs(self, chunker: Optional[Chunker] = None) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
+    def gen_transfer_pairs(self, chunker: Optional[Chunker] = None) -> Generator[Tuple[ObjectStoreObject or FileSystemInterface, ObjectStoreObject or FileSystemInterface], None, None]:
         """Generate transfer pairs for the transfer job.
 
         :param chunker: chunker that makes the chunk requests
         :type chunker: Chunker
         """
         if chunker is None:  # used for external access to transfer pair list
+            logger.fs.debug("Generating transfer pairs for external access, {} -> {}".format(self.src_iface, self.dst_iface))
             chunker = Chunker(self.src_iface, self.dst_iface, TransferConfig())
         yield from chunker.transfer_pair_generator(self.src_prefix, self.dst_prefix, self.recursive, self._pre_filter_fn)
 
@@ -549,7 +554,7 @@ class SyncJob(CopyJob):
     def estimate_cost(self):
         raise NotImplementedError()
 
-    def gen_transfer_pairs(self, chunker: Optional[Chunker] = None) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
+    def gen_transfer_pairs(self, chunker: Optional[Chunker] = None) -> Generator[Tuple[ObjectStoreObject or FileSystemInterface, ObjectStoreObject or FileSystemInterface], None, None]:
         """Generate transfer pairs for the transfer job.
 
         :param chunker: chunker that makes the chunk requests
