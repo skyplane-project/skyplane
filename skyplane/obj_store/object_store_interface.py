@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from typing import Iterator, List, Optional, Tuple
 
-import logger
+from skyplane.utils import logger
 
 
 @dataclass
