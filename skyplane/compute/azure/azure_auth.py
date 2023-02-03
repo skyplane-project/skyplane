@@ -42,7 +42,6 @@ class AzureAuthentication:
                         exclude_visual_studio_code_credential=True,
                     )
                 else:
-                    print(self.config)
                     return DefaultAzureCredential(
                         managed_identity_client_id=self.config.azure_client_id
                         if isinstance(self.config, SkyplaneConfig)
