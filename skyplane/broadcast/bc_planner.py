@@ -747,11 +747,11 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             print(f"Filter node (only use): {src_dst_li + sampled}")
 
         # banned nodes
-        sampled = list(self.G.nodes)
-        sampled.remove("aws:eu-south-2")
-        sampled.remove("aws:eu-central-2")
-        sampled.remove("aws:ca-central-1")
-        g = g.subgraph(sampled).copy()
+        # sampled = list(self.G.nodes)
+        # sampled.remove("aws:eu-south-2")
+        # sampled.remove("aws:eu-central-2")
+        # sampled.remove("aws:ca-central-1")
+        # g = g.subgraph(sampled).copy()
 
         cost = np.array([e[2] for e in g.edges(data="cost")])
         tp = np.array([e[2] for e in g.edges(data="throughput")])
@@ -900,10 +900,11 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             print(f"Filter node (only use): {src_dst_li + sampled}")
 
         # banned nodes
-        sampled = list(self.G.nodes)
-        sampled.remove("aws:eu-south-2")
-        sampled.remove("aws:eu-central-2")
-        g = g.subgraph(sampled).copy()
+        # NOTE: why do we do this? 
+        # sampled = list(self.G.nodes)
+        # sampled.remove("aws:eu-south-2")
+        # sampled.remove("aws:eu-central-2")
+        # g = g.subgraph(sampled).copy()
 
         cost = np.array([e[2] for e in g.edges(data="cost")])
         tp = np.array([e[2] for e in g.edges(data="throughput")])

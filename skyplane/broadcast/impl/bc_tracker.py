@@ -15,6 +15,7 @@ from skyplane.api.tracker import TransferProgressTracker, TransferHook, EmptyTra
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from skyplane.utils.definitions import GB, tmp_log_dir
 from datetime import datetime
+from colorama import Fore, Style
 
 if TYPE_CHECKING:
     from skyplane.broadcast.impl.bc_transfer_job import BCTransferJob
@@ -207,29 +208,37 @@ class BCTransferProgressTracker(TransferProgressTracker):
                 do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=1)
 
             e2e_end_time = time.time()
-        print(f"End to end time: {round(e2e_end_time - e2e_start_time, 4)}s\n")
+        print(f"End to end experiment time: {round(e2e_end_time - e2e_start_time, 4)}s\n")
         print(f"Transfer result:")
-        tot_runtime = float("-inf")
+        overall_runtime_s = float("-inf")
         for i in results:
             pprint(i)
-            tot_runtime = max(tot_runtime, i["total_runtime_s"])
+            overall_runtime_s = max(overall_runtime_s, i["total_runtime_s"])
             print()
 
         size_of_transfer = self.calculate_size(list(self.dst_regions)[0])
+        overall_tput_gbps = size_of_transfer * 8 / overall_runtime_s 
+
         cost_per_gb = self.dataplane.topology.cost_per_gb
         tot_egress_cost = round(cost_per_gb * size_of_transfer, 8)
-        tot_instance_cost = self.dataplane.topology.tot_vm_price_per_s * tot_runtime
+        tot_instance_cost = self.dataplane.topology.tot_vm_price_per_s * overall_runtime_s
 
-        print(f"GB transferred: ${round(size_of_transfer, 8)}GB\n")
-        print(f"Total runtime: {tot_runtime}s\n")
+        print(f"{Fore.BLUE}\n---> Aggregate result (runtime & tput) {Style.RESET_ALL}")
+        print(f"{Fore.BLUE}transferred size = {Fore.YELLOW}{round(size_of_transfer, 8)}GB")
+        print(f"{Fore.BLUE}overall runtime = {Fore.YELLOW}{round(overall_runtime_s, 4)} s{Style.RESET_ALL}")
+        print(f"{Fore.BLUE}overall throughput = {Fore.YELLOW}{round(overall_tput_gbps, 4)} Gbps{Style.RESET_ALL}\n")
 
-        print(f"Cost per gb: {round(cost_per_gb, 4)}")
-        print(f"Total egress cost: ${tot_egress_cost}")
+        print(f"{Fore.BLUE}\n---> Aggregate result (cost) {Style.RESET_ALL}")
+        print(f"{Fore.BLUE}total # of vms = {Fore.YELLOW}{self.dataplane.topology.tot_vms}{Style.RESET_ALL}")
+        print(f"{Fore.BLUE}total egress cost = {Fore.YELLOW}$ {tot_egress_cost}{Style.RESET_ALL}")
+        print(f"{Fore.BLUE}total instance cost = {Fore.YELLOW}$ {tot_instance_cost}{Style.RESET_ALL}")
+        print(f"{Fore.BLUE}total cost = {Fore.YELLOW}$ {tot_egress_cost + tot_instance_cost}{Style.RESET_ALL}\n")
 
-        print(f"Total # of vms: {self.dataplane.topology.tot_vms}")
-        print(f"Total instance cost: ${tot_instance_cost}")
-
-        print(f"Total cost: ${tot_egress_cost + tot_instance_cost}")
+        # print(f"Cost per gb: {round(cost_per_gb, 4)}")
+        # print(f"Total egress cost: ${tot_egress_cost}")
+        # print(f"Total # of vms: {self.dataplane.topology.tot_vms}")
+        # print(f"Total instance cost: ${tot_instance_cost}")
+        # print(f"Total cost: ${tot_egress_cost + tot_instance_cost}")
 
         # write chunk status
         print(f"Writing chunk profiles to {self.transfer_dir}/chunk_status_df.csv")
