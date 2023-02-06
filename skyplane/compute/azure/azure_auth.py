@@ -15,9 +15,7 @@ from skyplane.utils.fn import do_parallel, wait_for
 
 class AzureAuthentication:
     def __init__(self, config: Optional[SkyplaneConfig] = None):
-        self.config = (
-            config if config is not None else SkyplaneConfig.load_config(config_path)
-        )
+        self.config = config if config is not None else SkyplaneConfig.load_config(config_path)
         self._credential = None
 
     @property
@@ -30,9 +28,7 @@ class AzureAuthentication:
         if self._credential is None:
             if is_gateway_env:
                 print("Configured managed identity credential.")
-                return ManagedIdentityCredential(
-                    client_id=self.config.azure_umi_client_id
-                )
+                return ManagedIdentityCredential(client_id=self.config.azure_umi_client_id)
             else:
                 if query_which_cloud() != "azure":
                     return DefaultAzureCredential(
@@ -60,9 +56,7 @@ class AzureAuthentication:
             self.clear_region_config()
             return
         region_list = []
-        for location in self.get_subscription_client().subscriptions.list_locations(
-            subscription_id=self.subscription_id
-        ):
+        for location in self.get_subscription_client().subscriptions.list_locations(subscription_id=self.subscription_id):
             region_list.append(location.name)
         with azure_config_path.open("w") as f:
             f.write("\n".join(region_list))
@@ -70,9 +64,7 @@ class AzureAuthentication:
 
         def get_skus(region):
             valid_skus = []
-            for sku in client.resource_skus.list(
-                filter="location eq '{}'".format(region)
-            ):
+            for sku in client.resource_skus.list(filter="location eq '{}'".format(region)):
                 if len(sku.restrictions) == 0:
                     valid_skus.append(sku.name)
             return set(valid_skus)
@@ -109,9 +101,7 @@ class AzureAuthentication:
         try:
             f = open(azure_sku_path, "r")
         except FileNotFoundError:
-            print(
-                "     Azure SKU data has not been chaced! Run skyplane init to remedy this!"
-            )
+            print("     Azure SKU data has not been chaced! Run skyplane init to remedy this!")
             return dict()
 
         return json.load(f)
@@ -129,12 +119,7 @@ class AzureAuthentication:
             return os.environ["AZURE_SUBSCRIPTION_ID"]
         else:
             try:
-                return (
-                    subprocess.check_output(["az", "account", "show", "--query", "id"])
-                    .decode("utf-8")
-                    .replace('"', "")
-                    .strip()
-                )
+                return subprocess.check_output(["az", "account", "show", "--query", "id"]).decode("utf-8").replace('"', "").strip()
             except subprocess.CalledProcessError:
                 return None
 
@@ -157,23 +142,17 @@ class AzureAuthentication:
     def get_network_client(NetworkManagementClient, self):
         return NetworkManagementClient(self.credential, self.subscription_id)
 
-    @imports.inject(
-        "azure.mgmt.authorization.AuthorizationManagementClient", pip_extra="azure"
-    )
+    @imports.inject("azure.mgmt.authorization.AuthorizationManagementClient", pip_extra="azure")
     def get_authorization_client(AuthorizationManagementClient, self):
         # set API version to avoid UnsupportedApiVersionForRoleDefinitionHasDataActions error
-        return AuthorizationManagementClient(
-            self.credential, self.subscription_id, api_version="2018-01-01-preview"
-        )
+        return AuthorizationManagementClient(self.credential, self.subscription_id, api_version="2018-01-01-preview")
 
     @imports.inject("azure.mgmt.storage.StorageManagementClient", pip_extra="azure")
     def get_storage_management_client(StorageManagementClient, self):
         return StorageManagementClient(self.credential, self.subscription_id)
 
     @imports.inject("azure.storage.blob.ContainerClient", pip_extra="azure")
-    def get_container_client(
-        ContainerClient, self, account_url: str, container_name: str
-    ):
+    def get_container_client(ContainerClient, self, account_url: str, container_name: str):
         return ContainerClient(account_url, container_name, credential=self.credential)
 
     @imports.inject("azure.storage.blob.BlobServiceClient", pip_extra="azure")
