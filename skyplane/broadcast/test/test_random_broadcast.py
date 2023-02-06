@@ -32,7 +32,7 @@ def replicate_random(
     debug: bool = typer.Option(True, help="If true, will write debug information to debug directory."),
     confirm: bool = typer.Option(cloud_config.get_flag("autoconfirm"), "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
     # solver
-    algo: str = typer.Option("Ndirect", "--algo", "-a", help="Algorithm selected from [MDST, HST, ILP]"),
+    algo: str = typer.Option("Ndirect", "--algo", "-a", help="Algorithm selected from [MDST, HST, ILP, SPIDER]"),
     solver_target_time_budget: float = typer.Option(
         10, "--time-budget", "-s", help="Solver option for ILP: Required time budget in seconds"
     ),
@@ -48,7 +48,7 @@ def replicate_random(
 
     # create transfer list
     # 8,  80, 800,  1600,   3200, 4000, 4800    8000(n_chunks)
-    # 0.5, 5,  50,   100,   200,   250,  300     500 (transfer siz2e in GB)
+    # 0.5, 5,  50,   100,   200,   250,  300     500 (transfer size in GB)
     # 0.8, 8,  80,   160,   320,   400,          800 (seconds for ILP)
 
     # 200 --> 3200 as the # of chunks

@@ -111,7 +111,7 @@ class BCCopyJob(BCTransferJob):
         self,
         dataplane: "BroadcastDataplane",
         transfer_config: TransferConfig,
-        dispatch_batch_size: int = 200,
+        dispatch_batch_size: int = 128, # need to change it back later 
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways."""
         if not transfer_config.gen_random_data:

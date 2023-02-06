@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Optional, List
 from skyplane.api.client import tmp_log_dir
 from skyplane.api.client import get_clientid
 from skyplane.broadcast.bc_dataplane import BroadcastDataplane
-from skyplane.broadcast.bc_planner import BroadcastDirectPlanner, BroadcastMDSTPlanner, BroadcastHSTPlanner, BroadcastILPSolverPlanner
+from skyplane.broadcast.bc_planner import BroadcastDirectPlanner, BroadcastMDSTPlanner, BroadcastHSTPlanner, BroadcastILPSolverPlanner, BroadcastSpiderPlanner
 from skyplane.api.provisioner import Provisioner
 from skyplane.api.config import TransferConfig
 from skyplane.utils import logger
@@ -165,8 +165,22 @@ class SkyplaneBroadcastClient:
             )
             topo = planner.plan()
         elif type == "HST":
-            # TODO: not usable now
             planner = BroadcastHSTPlanner(
+                src_cloud_provider,
+                src_region,
+                dst_cloud_providers,
+                dst_regions,
+                n_vms,
+                num_connections,
+                num_partitions,
+                gbyte_to_transfer,
+                aws_only=aws_only,
+                gcp_only=gcp_only,
+                azure_only=azure_only,
+            )
+            topo = planner.plan()
+        elif type == "SPIDER":
+            planner = BroadcastSpiderPlanner(
                 src_cloud_provider,
                 src_region,
                 dst_cloud_providers,
