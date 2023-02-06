@@ -9,7 +9,7 @@ def test_dataproc():
 
     cluster_name = "skyplane-dataproc-test"
     region = "us-central1"
-    project_id ="skyplane-hailey-373919"
+    project_id =""
 
     
     # Create a client with the endpoint set to the desired cluster region.
