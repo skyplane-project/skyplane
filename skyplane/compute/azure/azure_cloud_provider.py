@@ -180,7 +180,7 @@ class AzureCloudProvider(CloudProvider):
         compute_client = self.auth.get_compute_client()
         server_list = []
         for vm in compute_client.virtual_machines.list(AzureServer.resource_group_name):
-            if vm.tags.get("skyplane", None) == "true" and AzureServer.is_valid_vm_name(vm.name) and vm.location == region:
+            if vm.tags and vm.tags.get("skyplane", None) == "true" and AzureServer.is_valid_vm_name(vm.name) and vm.location == region:
                 name = AzureServer.base_name_from_vm_name(vm.name)
                 s = AzureServer(name)
                 if s.is_valid():
