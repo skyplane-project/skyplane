@@ -65,7 +65,6 @@ class ChunkStore:
     # Chunk management
     ###
     def add_chunk_request(self, chunk_request: ChunkRequest, state: ChunkState = ChunkState.registered):
-
         self.chunk_requests[chunk_request.chunk.partition].put(chunk_request)
         # TODO: consider adding to partition queues here?
 

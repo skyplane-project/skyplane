@@ -32,7 +32,6 @@ class GatewayReceiver:
         use_compression: bool = True,
         e2ee_key_bytes: Optional[bytes] = None,
     ):
-
         self.handle = handle
         self.region = region
         self.chunk_store = chunk_store
