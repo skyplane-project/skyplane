@@ -322,3 +322,8 @@ class TransferProgressTracker(Thread):
                 ]
             )
         return sum(bytes_total_per_job.values())
+
+    def copy_log(self, instance):
+        instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
+        instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
+        instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")

@@ -114,7 +114,6 @@ class GatewayDaemon:
         def create_gateway_operators_helper(input_queue, program: Dict, partition_id: str):
             print("OPERATORS", operators)
             for op in program:
-
                 handle = op["handle"]
                 input_queue.register_handle(handle)
                 print("INPUT QUEUE", input_queue, input_queue.get_handles())
@@ -245,7 +244,6 @@ class GatewayDaemon:
         try:
             print(self.operators)
             while not exit_flag.is_set() and not self.error_event.is_set():
-
                 print("pull queue...")
                 self.api_server.pull_chunk_status_queue()
                 # pull from chunk requests queue

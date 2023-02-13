@@ -22,3 +22,5 @@ flask
 lz4
 pyopenssl
 werkzeug
+numpy
+pandas

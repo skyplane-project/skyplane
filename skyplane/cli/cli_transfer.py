@@ -56,7 +56,9 @@ class SkyplaneCLI:
         self.args = args
         self.aws_config, self.azure_config, self.gcp_config = self.to_api_config(skyplane_config or cloud_config)
         self.transfer_config = self.make_transfer_config(skyplane_config or cloud_config)
-        self.client = skyplane.SkyplaneClient(aws_config=self.aws_config, azure_config=self.azure_config, gcp_config=self.gcp_config)
+        self.client = skyplane.SkyplaneClient(
+            aws_config=self.aws_config, azure_config=self.azure_config, gcp_config=self.gcp_config, transfer_config=self.transfer_config
+        )
         typer.secho(f"Using Skyplane version {skyplane.__version__}", fg="bright_black")
         typer.secho(f"Logging to: {self.client.log_dir / 'client.log'}", fg="bright_black")
 
