@@ -159,7 +159,6 @@ class SkyVPCConfig(VPCConfig):
     def __init__(self, base_config: Dict[str, Any]) -> None:
         super().__init__(base_config)
 
-        self.vpc_name = "skyplane-vpc"
         self.sg_rules = REQUIRED_RULES
 
         if base_config.get("available_node_types"):

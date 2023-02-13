@@ -31,6 +31,3 @@ class FloatingIpConfig(ConfigBuilder):
                 self.base_config["available_node_types"]["ray_head_default"]["node_config"]["head_ip"] = head_ip
 
         return self.base_config
-
-    def create_default(self):
-        NotImplementedError("This backend doesn't support it yet")

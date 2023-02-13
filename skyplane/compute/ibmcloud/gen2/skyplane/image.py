@@ -39,12 +39,3 @@ class SkyImageConfig(ConfigBuilder):
             image_obj = next((obj for obj in image_objects if "ibm-ubuntu-20-04-" in obj["name"]), None)
 
         return image_obj["id"], image_obj["minimum_provisioned_size"], image_obj["owner_type"] == "user"
-
-    @update_decorator
-    def create_default(self):
-        image_objects = self.ibm_vpc_client.list_images().get_result()["images"]
-
-        image_obj = next((image for image in image_objects if "ibm-ubuntu-20-04-" in image["name"]), None)
-
-        print(f'Selected \033[92mUbuntu\033[0m 20.04 VM image, {image_obj["name"]}')
-        return image_obj["id"], image_obj["minimum_provisioned_size"], image_obj["owner_type"] == "user"
