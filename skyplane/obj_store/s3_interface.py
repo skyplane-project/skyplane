@@ -27,6 +27,7 @@ class S3Interface(ObjectStoreInterface):
     def path(self):
         return f"s3://{self.bucket_name}"
 
+
     @property
     @lru_cache(maxsize=1)
     def aws_region(self):
@@ -83,12 +84,14 @@ class S3Interface(ObjectStoreInterface):
                 s3_client.create_bucket(Bucket=self.bucket_name)
             else:
                 s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": aws_region})
+        else: 
+            print("bucket already exists", aws_region, self.bucket_name)
 
     def delete_bucket(self):
         self._s3_client().delete_bucket(Bucket=self.bucket_name)
 
-    def list_objects(self, prefix="") -> Iterator[S3Object]:
-        paginator = self._s3_client().get_paginator("list_objects_v2")
+    def list_objects(self, prefix="", region=None) -> Iterator[S3Object]:
+        paginator = self._s3_client(region).get_paginator("list_objects_v2")
         requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
         page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix, **requester_pays)
         for page in page_iterator:

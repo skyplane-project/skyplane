@@ -34,14 +34,16 @@ def start_transfer(args):
     # dest_files = [f"s3://broadcast-opt-{d}/test_replication/" for d in dst_regions]
 
     # source_file = "s3://skyplane-broadcast/imagenet-images/"
-    source_file = "s3://broadcast-exp1-ap-east-1/OPT-66B/"
-    dest_files = [f"s3://broadcast-exp1-{d}/OPT-66B/" for d in dst_regions]
+    #source_file = "s3://broadcast-exp3-ap-east-1/OPT-66B/"
+    source_file = "s3://broadcast-opt-ap-east-1/test_replication/"
+    dest_files = [f"s3://broadcast-exp3-{d}/OPT-66B/" for d in dst_regions]
 
     # create bucket if it doesn't exist
-    for (region, bucket_path) in zip(dst_regions, dest_files):
+    for (region, bucket_path) in zip([src_region] + dst_regions, [source_file] + dest_files):
         bucket_name = bucket_path.split("/")[2]
         bucket = S3Interface(bucket_name)
         try:
+            print("Create bucket", region)
             bucket.create_bucket(region)
         except Exception as e:
             print(e)
@@ -53,13 +55,13 @@ def start_transfer(args):
     if src_cloud_provider in ["aws", "gcp", "azure"] and [d in ["aws", "gcp", "azure"] for d in dst_cloud_providers]:
         try:
             provider_src, bucket_src, path_src = parse_path(source_file)
-            src_region_tag = f"{provider_src}:infer"
+            src_region_tag = f"{provider_src}:{src_region}"
 
             src_client = ObjectStoreInterface.create(src_region_tag, bucket_src)
 
-            print("Listing objects from the source bucket")
+            print(f"Listing objects from the source bucket {src_region}")
             src_objects = []
-            for obj in src_client.list_objects(path_src):
+            for obj in src_client.list_objects(path_src, src_region):
                 src_objects.append(obj)
             transfer_size_gbytes = sum([obj.size for obj in src_objects]) / GB
 
