@@ -22,9 +22,9 @@ class CloudProvider:
     @staticmethod
     @functools.lru_cache(maxsize=None)
     def get_transfer_cost(src_key, dst_key, premium_tier=True):
-        if src_key == dst_key:
-            return 0.0
         src_provider, _ = src_key.split(":")
+        if src_key == dst_key or src_provider == "cos":
+            return 0.0
         if src_provider == "aws":
             from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 
