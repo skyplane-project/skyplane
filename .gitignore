@@ -13,6 +13,7 @@ __pycache__/
 
 # experiment scripts
 solution/ 
+out/
 
 # Distribution / packaging
 .Python

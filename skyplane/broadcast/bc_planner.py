@@ -12,10 +12,10 @@ from pprint import pprint
 import networkx as nx
 import pandas as pd
 import numpy as np
-
 from skyplane.utils import logger
 from skyplane.broadcast import __root__
 import functools
+import random 
 import colorama
 from colorama import Fore, Style
 
@@ -34,7 +34,7 @@ class BroadcastPlanner:
         gcp_only: bool,
         azure_only: bool,
         cost_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "cost.csv",
-        tp_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "whole_throughput_11_28.csv",
+        tp_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "throughput.csv",
     ):
 
         self.src_provider = src_provider
@@ -49,7 +49,7 @@ class BroadcastPlanner:
         # need to input cost_grid and tp_grid
         self.costs = pd.read_csv(cost_grid_path)
         self.throughput = pd.read_csv(tp_grid_path)
-        self.G = self.make_nx_graph(self.costs, self.throughput)
+        self.G = self.make_nx_graph(self.costs, self.throughput, num_instances)
 
         if aws_only:
             self.G.remove_nodes_from([i for i in self.G.nodes if i.split(":")[0] == "gcp" or i.split(":")[0] == "azure"])
@@ -67,12 +67,12 @@ class BroadcastPlanner:
         assert src_tier == "PREMIUM" and dst_tier == "PREMIUM"
         return CloudProvider.get_transfer_cost(src, dst)
 
-    def make_nx_graph(self, cost, throughput):
+    def make_nx_graph(self, cost, throughput, num_instances=1):
         G = nx.DiGraph()
         for _, row in throughput.iterrows():
             if row["src_region"] == row["dst_region"]:
                 continue
-            G.add_edge(row["src_region"], row["dst_region"], cost=None, throughput=row["throughput_sent"] / 1e9)
+            G.add_edge(row["src_region"], row["dst_region"], cost=None, throughput=num_instances * row["throughput_sent"] / 1e9)
 
         for _, row in cost.iterrows():
             if row["src"] in G and row["dest"] in G[row["src"]]:
@@ -80,7 +80,7 @@ class BroadcastPlanner:
             else:
                 continue
 
-        # update the cost using skyplane.compute tools [i.e. in utils.py] (need to build the skyplane repo first)
+        # update the cost using skyplane.compute tools if not in cost.csv [i.e. in utils.py] 
         for edge in G.edges.data():
             if edge[-1]["cost"] is None:
                 edge[-1]["cost"] = self.get_path_cost(edge[0], edge[1])
@@ -381,6 +381,246 @@ class BroadcastHSTPlanner(BroadcastPlanner):
         os.remove(param_loc)
         return self.get_topo_from_nxgraph(self.num_partitions, self.gbyte_to_transfer, solution_graph)
 
+class BroadcastSpiderPlanner(BroadcastPlanner):
+    def __init__(
+        self,
+        src_provider: str,
+        src_region,
+        dst_providers: List[str],
+        dst_regions: List[str],
+        num_instances: int,
+        num_connections: int,
+        num_partitions: int,
+        gbyte_to_transfer: float,
+        aws_only: bool,
+        gcp_only: bool,
+        azure_only: bool,
+    ):
+        super().__init__(
+            src_provider,
+            src_region,
+            dst_providers,
+            dst_regions,
+            num_instances,
+            num_connections,
+            num_partitions,
+            gbyte_to_transfer,
+            aws_only,
+            gcp_only,
+            azure_only,
+        )
+
+        self.eg_lims = {
+            "aws": 5 * num_instances,
+            "gcp": 7 * num_instances,
+            "azure": 16 * num_instances,
+        }
+        self.in_lims = {
+            "aws": 10 * num_instances,
+            "gcp": 16 * num_instances,
+            "azure": 16 * num_instances,
+        }
+
+    def evaluate(self, tree_set, bw, num_vms, num_partitions, data_vol=1):
+        print()
+        print("-" * 10 + " Evaluate\n")
+
+        makespan = data_vol * 8 / sum(bw)
+        cost_per_instance_hr = 0.54
+
+        import math         
+        def split(my_list, weight_list):
+            sublists = []
+            prev_index = 0
+            for weight in weight_list:
+                next_index = prev_index + math.ceil( (len(my_list) * weight) )
+
+                sublists.append(my_list[prev_index : next_index] )
+                prev_index = next_index
+
+            return sublists
+
+        partitions = list(range(num_partitions))
+        output_partitions = split(partitions, [b / sum(bw) for b in bw])
+        print(f"Bw: {bw}, split: {output_partitions}")
+
+        from itertools import islice
+        egress_cost = 0
+        complete_tree = nx.DiGraph()
+
+        for i in range(len(tree_set)):
+            if len(output_partitions[i]) == 0:
+                continue # not assigning any partition to this tree 
+
+            egress_cost += sum([edge[-1]["cost"] for edge in tree_set[i].edges.data()]) * data_vol * bw[i] / sum(bw)
+
+            # give each tree the output partitions
+            for edge in tree_set[i].edges.data():
+                src, dst = edge[0], edge[1]
+                complete_tree.add_edge(
+                    src, dst, partitions=output_partitions[i], throughput=self.G[src][dst]["throughput"], cost=self.G[src][dst]["cost"]
+                )
+
+            print("Tree cost: ", sum([edge[-1]["cost"] for edge in tree_set[i].edges.data()]) * data_vol * (bw[i] / sum(bw)))
+
+        for node in complete_tree.nodes:
+            complete_tree.nodes[node]["num_vms"] = num_vms
+
+        print(f"SPIDER solution (tree node): ", complete_tree.nodes.data())
+        print(f"SPIDER solution (tree edge): ", complete_tree.edges.data())
+
+        instance_cost = len(tree_set[0].nodes) * num_vms * (cost_per_instance_hr / 3600) * makespan
+        tot_cost = egress_cost + instance_cost
+
+        print(f"{Fore.BLUE}Data vol = {Fore.YELLOW}{round(data_vol, 4)} GB or {round(data_vol*8, 4)} Gbits{Style.RESET_ALL}\n")
+        print(f"{Fore.BLUE}Bandwidth of each tree = {Fore.YELLOW}{[round(i, 4) for i in bw]}{Style.RESET_ALL}\n")
+        print(f"{Fore.BLUE}Total runtime = {Fore.YELLOW}{round(makespan, 4)} s{Style.RESET_ALL}")
+        print(f"{Fore.BLUE}Total throughput = {Fore.YELLOW}{round(sum(bw), 4)} Gbps{Style.RESET_ALL}\n")
+        print(f"{Fore.BLUE}Total egress cost (per GB) = {Fore.YELLOW}${round(egress_cost, 4)}{Style.RESET_ALL}")
+        print(f"{Fore.BLUE}Total instance cost = {Fore.YELLOW}${round(instance_cost, 4)}{Style.RESET_ALL}")
+        print(f"{Fore.BLUE}Total cost = {Fore.YELLOW}${round(tot_cost, 4)}{Style.RESET_ALL}")
+
+        # return sum(bw), makespan, tot_cost, complete_tree
+        return complete_tree
+
+    def validate_tree_set(self, tree_set, src, dsts, bw, egress_limits, ingress_limits, ro=[]):
+        for tree in tree_set:
+            assert len(tree.nodes) >= 1 + len(dsts)
+            assert len(tree.edges) == len(tree.nodes) - 1
+            for node in [src] + dsts:
+                if not tree.has_node(node):
+                    return False
+                # assert(tree.has_node(node))
+        for node in [src] + dsts + ro:
+            sum_egress, sum_ingress = 0, 0
+            for i in range(len(tree_set)):
+                sum_egress += len(tree_set[i].out_edges(node)) * bw[i]
+                sum_ingress += len(tree_set[i].in_edges(node)) * bw[i]
+            if not sum_egress <= egress_limits[node.split(":")[0]]:
+                return False
+            assert sum_ingress <= ingress_limits[node.split(":")[0]]
+
+        print("Pass validation")
+        return True
+
+    def SPIDER(self, h, src, dsts, egress_limits, ingress_limits, elim_set=None):
+        import copy
+        N = set([src] + dsts)  # set of nodes that each tree must span
+        Tree_set = []  # output: a set of trees
+        bw = []  # list of bandwidth for each tree
+
+        if elim_set is None:
+            elim_set = {node: egress_limits[node.split(":")[0]] for node in h.nodes}  # egress limit for each node in the graph
+            ilim_set = {node: ingress_limits[node.split(":")[0]] for node in h.nodes}
+
+        while True:
+            CurrentTree = nx.DiGraph()  # constructed tree
+            InTree = {src}  # nodes of constructed tree
+            CurrentTreeBottleneck = float("inf")  # bottleneck link
+            elim_copy = copy.deepcopy(elim_set)  # copy of egress limit
+            ilim_copy = copy.deepcopy(ilim_set)  # copy of ingress limit
+
+            while not N.issubset(InTree):
+                M_n, R_n = {}, {}
+                for n in InTree:
+                    # max outgoing bandwidth arc to nodes outside InTree
+                    out_edges = [edge for edge in list(h.out_edges(n)) if edge[1] not in InTree]
+                    out_edges_tput = [h[e[0]][e[1]]["throughput"] for e in out_edges]
+                    max_out_tput = max(out_edges_tput, default=0)
+
+                    if max_out_tput <= 0 or elim_copy[n] <= 0:
+                        continue
+
+                    M_n[n] = out_edges[out_edges_tput.index(max_out_tput)]
+
+                    if ilim_copy[M_n[n][1]] <= 0:
+                        M_n[n] = None
+                        continue
+
+                    R_n[n] = elim_copy[n] - min(max_out_tput, CurrentTreeBottleneck)
+
+                if len(R_n) == 0:  # all ineasible
+                    break
+
+                max_val_set = [i for i, j in R_n.items() if j == max(R_n.values())]
+
+                # pick node x with max_j{R_j}
+                random.shuffle(max_val_set)
+                x = sample(max_val_set, 1)[0]
+
+                # edge with max_j{b_xj}
+                Mx = M_n[x]
+                src_add, dst_add = Mx[0], Mx[1]
+                assert elim_copy[src_add] >= 0
+
+                # if add this edge to the tree, make sure that it won't exceed the egress limit
+                CurrentTreeBottleneck = min(
+                    [CurrentTreeBottleneck, elim_copy[src_add], ilim_copy[dst_add], h[src_add][dst_add]["throughput"]]
+                )
+
+                print("Current bottleneck: ", CurrentTreeBottleneck)
+                if (
+                    elim_set[src_add] - CurrentTreeBottleneck >= 0
+                    and ilim_set[dst_add] - CurrentTreeBottleneck >= 0
+                    and CurrentTreeBottleneck > 0
+                ):
+                    print(f"Add edge: {src_add}, {dst_add}\n")
+                    src_provider, dst_provider = src_add.split(":")[0], dst_add.split(":")[0]
+                    flow = min([h[src_add][dst_add]["throughput"], egress_limits[src_provider], ingress_limits[dst_provider]])
+                    CurrentTree.add_edge(src_add, dst_add, cost=h[src_add][dst_add]["cost"], throughput=flow)
+                    InTree.add(Mx[1])  # add dst of Mx to InTree list
+                    for node in CurrentTree.nodes:
+                        num_out_edges = len(CurrentTree.out_edges(node))
+                        num_in_edges = len(CurrentTree.in_edges(node))
+                        elim_copy[node] = elim_set[node] - CurrentTreeBottleneck * num_out_edges
+                        ilim_copy[node] = ilim_set[node] - CurrentTreeBottleneck * num_in_edges
+
+            if not CurrentTree.edges:
+                break
+
+            # reduce the bandwidth on all edges of the tree by amount of bottleneck bandwidth
+            bottleneck = CurrentTreeBottleneck
+            src_node = set()
+            dst_node = set()
+            for edge in CurrentTree.edges:
+                h[edge[0]][edge[1]]["throughput"] -= bottleneck
+                src_node.add(edge[0])
+                dst_node.add(edge[1])
+
+            # Extra check (capacity, tree nodes)
+            infeasible = any([elim_set[n] - bottleneck < 0 for n in src_node]) or len(CurrentTree.nodes) < 1 + len(dsts)
+            if not infeasible:
+                # print("Number of nodes: ", len(CurrentTree.nodes))
+                if self.validate_tree_set(Tree_set + [CurrentTree], src, dsts, bw + [bottleneck], egress_limits, ingress_limits):
+                    print("Feasible")
+                    print(f"Throughput of tree {len(Tree_set)} is: {bottleneck} Gbps\n")
+                    print("-" * 40)
+                    bw.append(bottleneck)
+                    Tree_set.append(CurrentTree)
+                    for n in src_node:
+                        elim_set[n] -= bottleneck
+                    for n in dst_node:
+                        ilim_set[n] -= bottleneck
+                else:
+                    print("Infeasible, ignore above\n")
+            else:
+                print("Infeasible, ignore above\n")
+                continue
+
+        return Tree_set, bw, h, elim_set
+
+    def plan(self) -> BroadcastReplicationTopology:
+        src = self.src_provider + ":" + self.src_region
+        dsts = [f"{p}:{r}" for p, r in zip(self.dst_providers, self.dst_regions)]
+
+        h = nx.DiGraph(self.G.copy().subgraph(dsts + [src]))
+        h.remove_edges_from(list(h.in_edges(src)) + list(nx.selfloop_edges(h)))
+        Tree_set, bw, h, elim_set = self.SPIDER(h, src, dsts, egress_limits=self.eg_lims, ingress_limits=self.in_lims)
+        Spider_graph = self.evaluate(
+            Tree_set, bw, self.num_instances, num_partitions=self.num_partitions, data_vol=1
+        )  
+
+        return self.get_topo_from_nxgraph(self.num_partitions, self.gbyte_to_transfer, Spider_graph)
 
 class BroadcastILPSolverPlanner(BroadcastPlanner):
     def __init__(
@@ -730,6 +970,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         solve_iterative: bool = False,
         solver_verbose: bool = False,
         save_lp_path: Optional[str] = None,
+        n_clusters: Optional[int] = 20
     ) -> BroadcastReplicationTopology:
         import cvxpy as cp
 
@@ -739,26 +980,70 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         # get graph
         g = self.G
 
+        source_v = problem.src
+        dest_v = problem.dsts
+
         # node-approximation
-        if filter_node:
-            src_dst_li = [problem.src] + problem.dsts
-            sampled = [i for i in sample(list(self.G.nodes), 15) if i not in src_dst_li]
-            g = g.subgraph(src_dst_li + sampled).copy()
-            print(f"Filter node (only use): {src_dst_li + sampled}")
+        if filter_node: 
+            from sklearn.cluster import KMeans
+
+            random.seed(10)
+            node_map, node_list = {}, list(g.nodes)
+            print("Number of nodes: ", len(node_list))
+            for node in node_list:
+                node_map[node] = []
+                for neighbor_node in node_list: 
+                    if node != neighbor_node: 
+                        node_map[node].append(g[node][neighbor_node]["cost"])
+                    else: 
+                        node_map[node].append(0) # cost to itself 
+                
+                for neighbor_node in node_list:
+                    if node != neighbor_node: 
+                        node_map[node].append(g[node][neighbor_node]["throughput"])
+                    else: 
+                        node_map[node].append(100) # tput to itself or throughput within a single region? 
+
+            np_node_map = np.array([li for li in node_map.values()])
+            print(f"node map: {np_node_map}, shape: {np_node_map.shape}")
+            print(f"Num cluster: {n_clusters}")
+            km = KMeans(n_clusters=n_clusters)
+            kmeans = km.fit_predict(np_node_map)
+            print("kmeans: ", kmeans)
+            print("labels:", list(km.labels_))
+
+            cluster_to_node_map = {}
+            labels = list(km.labels_)
+            for i in range(len(labels)):
+                label = labels[i]
+                if label not in cluster_to_node_map:
+                    cluster_to_node_map[label] = []
+                cluster_to_node_map[label].append(node_list[i])
+
+            print("CLSUTER TO NODE MAP: ")
+            pprint(cluster_to_node_map)
+
+            keep_node = []
+            for node_list in cluster_to_node_map.values():
+                keep_node.append(sample(node_list, 1)[0])
+
+            print(f"Keep node {len(keep_node)}: {keep_node}")
+            remove_nodes = [node for node in g.nodes if node not in keep_node + [source_v] + dest_v]
+            g.remove_nodes_from(remove_nodes)
+            print(f"Remove {len(remove_nodes)}: {remove_nodes}")
+            print(f"Remaining node length: {len(g.nodes)}, nodes: {g.nodes}")
 
         # banned nodes
-        #sampled = list(self.G.nodes)
-        #sampled.remove("aws:eu-south-2")
-        #sampled.remove("aws:eu-central-2")
-        #sampled.remove("aws:ca-central-1")
-        #g = g.subgraph(sampled).copy()
+        # sampled = list(self.G.nodes)
+        # sampled.remove("aws:eu-south-2")
+        # sampled.remove("aws:eu-central-2")
+        # sampled.remove("aws:ca-central-1")
+        # g = g.subgraph(sampled).copy()
 
         cost = np.array([e[2] for e in g.edges(data="cost")])
         tp = np.array([e[2] for e in g.edges(data="throughput")])
         edges = list(g.edges)
         nodes = list(g.nodes)
-        source_v = problem.src
-        dest_v = problem.dsts
         partition_size_gb = problem.gbyte_to_transfer / problem.num_partitions
 
         dest_edges = [g.edges.index(e) for e in g.edges if e[1] == ""]
@@ -876,6 +1161,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         solve_iterative: bool = False,
         solver_verbose: bool = False,
         save_lp_path: Optional[str] = None,
+        n_clusters: Optional[int] = 20
     ) -> BroadcastReplicationTopology:
 
         import cvxpy as cp
@@ -886,24 +1172,68 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         problem = self.problem
 
         if solve_iterative:
-            return self.plan_iterative(problem, solver, filter_node, filter_edge, solver_verbose, save_lp_path)
+            return self.plan_iterative(problem, solver, filter_node, filter_edge, solver_verbose, save_lp_path, n_clusters)
 
         g = self.G
+        source_v = problem.src
+        dest_v = problem.dsts
 
         # node-approximation
-        from random import sample
+        if filter_node: 
+            from sklearn.cluster import KMeans
 
-        if filter_node:
-            src_dst_li = [problem.src] + problem.dsts
-            sampled = [i for i in sample(list(self.G.nodes), 15) if i not in src_dst_li]
-            g = g.subgraph(src_dst_li + sampled).copy()
-            print(f"Filter node (only use): {src_dst_li + sampled}")
+            random.seed(10)
+            node_map, node_list = {}, list(g.nodes)
+            print("Number of nodes: ", len(node_list))
+            for node in node_list:
+                node_map[node] = []
+                for neighbor_node in node_list: 
+                    if node != neighbor_node: 
+                        node_map[node].append(g[node][neighbor_node]["cost"])
+                    else: 
+                        node_map[node].append(0) # cost to itself 
+                
+                for neighbor_node in node_list:
+                    if node != neighbor_node: 
+                        node_map[node].append(g[node][neighbor_node]["throughput"])
+                    else: 
+                        node_map[node].append(100) # tput to itself or throughput within a single region? 
+
+            np_node_map = np.array([li for li in node_map.values()])
+            print(f"node map: {np_node_map}, shape: {np_node_map.shape}")
+            print(f"Num cluster: {n_clusters}")
+            km = KMeans(n_clusters=n_clusters)
+            kmeans = km.fit_predict(np_node_map)
+            print("kmeans: ", kmeans)
+            print("labels:", list(km.labels_))
+
+            cluster_to_node_map = {}
+            labels = list(km.labels_)
+            for i in range(len(labels)):
+                label = labels[i]
+                if label not in cluster_to_node_map:
+                    cluster_to_node_map[label] = []
+                cluster_to_node_map[label].append(node_list[i])
+
+            print("CLSUTER TO NODE MAP: ")
+            pprint(cluster_to_node_map)
+
+            keep_node = []
+            for node_list in cluster_to_node_map.values():
+                keep_node.append(sample(node_list, 1)[0])
+
+            print(f"Keep node {len(keep_node)}: {keep_node}")
+            remove_nodes = [node for node in g.nodes if node not in keep_node + [source_v] + dest_v]
+            g.remove_nodes_from(remove_nodes)
+            print(f"Remove {len(remove_nodes)}: {remove_nodes}")
+            print(f"Remaining node length: {len(g.nodes)}, nodes: {g.nodes}")
 
         # banned nodes
-        #sampled = list(self.G.nodes)
-        #sampled.remove("aws:eu-south-2")
-        #sampled.remove("aws:eu-central-2")
-        #g = g.subgraph(sampled).copy()
+        # NOTE: why do we do this? 
+        # sampled = list(self.G.nodes)
+        # sampled.remove("aws:eu-south-2")
+        # sampled.remove("aws:eu-central-2")
+        # g = g.subgraph(sampled).copy()
 
         cost = np.array([e[2] for e in g.edges(data="cost")])
         tp = np.array([e[2] for e in g.edges(data="throughput")])

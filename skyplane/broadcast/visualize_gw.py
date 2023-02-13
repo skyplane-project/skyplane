@@ -163,7 +163,7 @@ def networkx_to_graphviz(g, label="partition"):
 
 if __name__ == "__main__":
     costs = pd.read_csv("broadcast/profiles/cost.csv")
-    throughput = pd.read_csv("broadcast/profiles/old/whole_throughput_11_28.csv")
+    throughput = pd.read_csv("broadcast/profiles/throughput.csv")
 
     color = []
     n = 100
