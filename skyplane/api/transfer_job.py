@@ -448,7 +448,9 @@ class CopyJob(TransferJob):
     def estimate_cost(self):
         raise NotImplementedError()
 
-    def gen_transfer_pairs(self, chunker: Optional[Chunker] = None) -> Generator[Tuple[ObjectStoreObject or FileSystemInterface, ObjectStoreObject or FileSystemInterface], None, None]:
+    def gen_transfer_pairs(
+        self, chunker: Optional[Chunker] = None
+    ) -> Generator[Tuple[ObjectStoreObject or FileSystemInterface, ObjectStoreObject or FileSystemInterface], None, None]:
         """Generate transfer pairs for the transfer job.
 
         :param chunker: chunker that makes the chunk requests
@@ -554,7 +556,9 @@ class SyncJob(CopyJob):
     def estimate_cost(self):
         raise NotImplementedError()
 
-    def gen_transfer_pairs(self, chunker: Optional[Chunker] = None) -> Generator[Tuple[ObjectStoreObject or FileSystemInterface, ObjectStoreObject or FileSystemInterface], None, None]:
+    def gen_transfer_pairs(
+        self, chunker: Optional[Chunker] = None
+    ) -> Generator[Tuple[ObjectStoreObject or FileSystemInterface, ObjectStoreObject or FileSystemInterface], None, None]:
         """Generate transfer pairs for the transfer job.
 
         :param chunker: chunker that makes the chunk requests
