@@ -26,6 +26,7 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 from skyplane.utils import logger
 from skyplane.utils.definitions import GB, format_bytes
+from skyplane.utils.fn import do_parallel
 from skyplane.utils.path import parse_path
 
 
