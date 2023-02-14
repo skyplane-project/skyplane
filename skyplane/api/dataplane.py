@@ -2,6 +2,7 @@ import json
 import os
 import threading
 from collections import defaultdict, Counter
+from datetime import datetime
 from functools import partial
 
 import nacl.secret
@@ -15,7 +16,7 @@ from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
 from skyplane.planner.topology import ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
-from skyplane.utils.definitions import gateway_docker_image
+from skyplane.utils.definitions import gateway_docker_image, tmp_log_dir
 from skyplane.utils.fn import PathLike, do_parallel
 
 if TYPE_CHECKING:
@@ -65,6 +66,8 @@ class Dataplane:
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         self.provisioning_lock = threading.Lock()
         self.provisioned = False
+        self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.transfer_dir.mkdir(exist_ok=True, parents=True)
 
         # pending tracker tasks
         self.jobs_to_dispatch: List[TransferJob] = []
@@ -238,6 +241,11 @@ class Dataplane:
     def sink_gateways(self) -> List[compute.Server]:
         """Returns a list of sink gateway nodes"""
         return [self.bound_nodes[n] for n in self.topology.sink_instances()] if self.provisioned else []
+
+    def copy_log(self, instance):
+        instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
+        instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
+        instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 
     def queue_copy(
         self,

@@ -354,7 +354,8 @@ def cp(
                 dp.run(ProgressBarTransferHook())
             except KeyboardInterrupt:
                 logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt)")
-                console.print("\n[bold red]Transfer cancelled by user. Exiting.[/bold red]")
+                console.print("\n[bold red]Transfer cancelled by user. Copying gateway logs and exiting.[/bold red]")
+                do_parallel(dp.copy_log, dp.bound_nodes.values(), n=-1)
                 force_deprovision(dp)
             except skyplane.exceptions.SkyplaneException as e:
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
