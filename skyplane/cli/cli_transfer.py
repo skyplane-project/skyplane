@@ -26,6 +26,7 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 from skyplane.utils import logger
 from skyplane.utils.definitions import GB, format_bytes
+from skyplane.utils.fn import do_parallel
 from skyplane.utils.path import parse_path
 
 
@@ -354,7 +355,8 @@ def cp(
                 dp.run(ProgressBarTransferHook())
             except KeyboardInterrupt:
                 logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt)")
-                console.print("\n[bold red]Transfer cancelled by user. Exiting.[/bold red]")
+                console.print("\n[bold red]Transfer cancelled by user. Copying gateway logs and exiting.[/bold red]")
+                do_parallel(dp.copy_log, dp.bound_nodes.values(), n=-1)
                 force_deprovision(dp)
             except skyplane.exceptions.SkyplaneException as e:
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
