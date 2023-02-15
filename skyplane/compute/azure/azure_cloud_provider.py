@@ -396,11 +396,14 @@ class AzureCloudProvider(CloudProvider):
                         "priority": "Spot" if use_spot_instances else "Regular",
                     }
                     if self.use_confidential_instances(vm_size):
-                        vm_params["security_profile"] = {"security_type": "ConfidentialVM", "uefi_settings": {"v_tpm_enabled": True}}
+                        vm_params["security_profile"] = {
+                            "security_type": "ConfidentialVM",
+                            "uefi_settings": {"v_tpm_enabled": True, "secure_boot_enabled": True},
+                        }
                         vm_params["storage_profile"]["os_disk"].update(
                             {
                                 "managed_disk": {
-                                    "security_profile": {"security_encryption_type": "VMGuestStateOnly"},
+                                    "security_profile": {"security_encryption_type": "DiskWithVMGuestState"},
                                 }
                             }
                         )
