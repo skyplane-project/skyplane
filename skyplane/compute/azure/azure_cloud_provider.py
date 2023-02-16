@@ -97,7 +97,7 @@ class AzureCloudProvider(CloudProvider):
         return "unknown"
 
     @staticmethod
-    def use_confidential_instances(instance_name: str) -> bool:
+    def is_confidential_instance_type(instance_name: str) -> bool:
         # Lists of confidential vms can be found here:
         # https://learn.microsoft.com/en-us/azure/confidential-computing/virtual-machine-solutions-amd#sizes
         # For example, `Standard_DC4ads_v5`, `Standard_EC64ads_v5` are confidential instances.
@@ -395,7 +395,7 @@ class AzureCloudProvider(CloudProvider):
                         # use spot instances if use_spot_instances is set
                         "priority": "Spot" if use_spot_instances else "Regular",
                     }
-                    if self.use_confidential_instances(vm_size):
+                    if self.is_confidential_instance_type(vm_size):
                         vm_params["security_profile"] = {
                             "security_type": "ConfidentialVM",
                             "uefi_settings": {"v_tpm_enabled": True, "secure_boot_enabled": True},
