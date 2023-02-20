@@ -69,7 +69,19 @@ class GCPAuthentication:
     def service_account_credentials(self):
         if self._service_credentials_file is None:
             self._service_account_email = self.create_service_account(self.service_account_name)
+
+            ## check number of existing keys
+            #keys = self.list_service_account_keys(self._service_account_email)
+            #if len(keys) >= 10: 
+            #    # delete keys (too many keys)
+            #    for key in keys:
+            #        print("deleting", key)
+            #        
+            #        self.delete_service_account_key(self._service_account_email, key["name"])
+
+            # create service key
             self._service_credentials_file = self.get_service_account_key(self._service_account_email)
+
         return self._service_credentials_file
 
     @property
@@ -116,26 +128,45 @@ class GCPAuthentication:
 
     @property
     def service_account_name(self):
+        # TODO: append skyplane cleint ID
         return self.config.get_flag("gcp_service_account_name")
+
+    @property
+    def service_account_key_path(self): 
+        if "GCP_SERVICE_ACCOUNT_FILE" in os.environ:
+            key_path = Path(os.environ["GCP_SERVICE_ACCOUNT_FILE"]).expanduser()
+        else:
+            # include project_id in path in case there are multiple service keys for multiple projects
+            key_path = key_root / "gcp" / self.project_id / "service_account_key.json"
+        return key_path
+
+    def get_service_account_key_path(self): 
+        return self.service_account_key_path
+
 
     def get_service_account_key(self, service_account_email):
         service = self.get_gcp_client(service_name="iam")
 
-        if "GCP_SERVICE_ACCOUNT_FILE" in os.environ:
-            key_path = Path(os.environ["GCP_SERVICE_ACCOUNT_FILE"]).expanduser()
-        else:
-            key_path = key_root / "gcp" / "service_account_key.json"
         # write key file
-        if not os.path.exists(key_path):
+        if not os.path.exists(self.service_account_key_path):
 
             # list existing keys
             keys = service.projects().serviceAccounts().keys().list(name="projects/-/serviceAccounts/" + service_account_email).execute()
 
             # cannot have more than 10 keys per service account
-            if len(keys["keys"]) >= 10:
-                raise ValueError(
-                    f"Service account {service_account_email} has too many keys. Make sure to copy keys to {key_path} or create a new service account."
-                )
+            if len(keys["keys"]) >= 10:                #raise ValueError(
+                #    f"Service account {service_account_email} has too many keys. Make sure to copy keys to {key_path} or create a new service account."
+                #)
+                print("Deleting keys, too many keys")
+                deleted_keys = 0
+                for key in keys["keys"]:
+                    try:    
+                        service.projects().serviceAccounts().keys().delete(name=key["name"]).execute()
+                        deleted_keys += 1
+                    except Exception as e:
+                        print(e) 
+                print("Deleted", deleted_keys, "keys")
+
 
             # create key
             key = (
@@ -147,11 +178,11 @@ class GCPAuthentication:
             )
 
             # create service key files
-            os.makedirs(os.path.dirname(key_path), exist_ok=True)
+            os.makedirs(os.path.dirname(self.service_account_key_path), exist_ok=True)
             json_key_file = base64.b64decode(key["privateKeyData"]).decode("utf-8")
-            open(key_path, "w").write(json_key_file)
+            open(self.service_account_key_path, "w").write(json_key_file)
 
-        return key_path
+        return self.service_account_key_path 
 
     def create_service_account(self, service_name):
         service = self.get_gcp_client(service_name="iam")

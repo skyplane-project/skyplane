@@ -3,6 +3,7 @@ import os
 import threading
 from collections import defaultdict, Counter
 from functools import partial
+from datetime import datetime
 
 import nacl.secret
 import nacl.utils
@@ -15,7 +16,7 @@ from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
 from skyplane.planner.topology import ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
-from skyplane.utils.definitions import gateway_docker_image
+from skyplane.utils.definitions import gateway_docker_image, tmp_log_dir    
 from skyplane.utils.fn import PathLike, do_parallel
 
 if TYPE_CHECKING:
@@ -51,6 +52,11 @@ class Dataplane:
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         self.provisioning_lock = threading.Lock()
         self.provisioned = False
+
+
+        # transfer logs 
+        self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.transfer_dir.mkdir(exist_ok=True, parents=True)
 
         # pending tracker tasks
         self.jobs_to_dispatch: List[TransferJob] = []
@@ -148,8 +154,21 @@ class Dataplane:
         logger.fs.debug(f"[Dataplane.provision] Starting gateways on {len(jobs)} servers")
         do_parallel(lambda fn: fn(), jobs, n=-1, spinner=spinner, spinner_persist=spinner, desc="Starting gateway container on VMs")
 
-    def deprovision(self, max_jobs: int = 64, spinner: bool = False):
+
+    def copy_gateway_logs(self):
+
+        def copy_log(instance):
+            instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
+            print(self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
+            instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
+            instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
+
+        do_parallel(copy_log, self.bound_nodes.values(), n=-1)
+
+    def deprovision(self, max_jobs: int = 64, spinner: bool = False, debug: bool = False):
         with self.provisioning_lock:
+            print("Copying gateway logs")
+            self.copy_gateway_logs()
             if not self.provisioned:
                 logger.fs.warning("Attempting to deprovision dataplane that is not provisioned, this may be from auto_deprovision.")
             # wait for tracker tasks

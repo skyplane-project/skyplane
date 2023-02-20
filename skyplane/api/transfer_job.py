@@ -69,6 +69,7 @@ class Chunker:
                 chunk_size_bytes = math.ceil(chunk_size_bytes / MB) * MB  # round to next largest mb
                 num_chunks = math.ceil(src_object.size / chunk_size_bytes)
 
+            assert num_chunks * chunk_size_bytes >= src_object.size
             # create chunks
             offset = 0
             part_num = 1
@@ -89,6 +90,8 @@ class Chunker:
                 parts.append(part_num)
                 part_num += 1
                 out_queue.put(chunk)
+                print(offset, chunk)
+
             self.multipart_upload_requests.append(dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket))
 
     def to_chunk_requests(self, gen_in: Generator[Chunk, None, None]) -> Generator[ChunkRequest, None, None]:
@@ -360,14 +363,16 @@ class CopyJob(TransferJob):
         self,
         dataplane: "Dataplane",
         transfer_config: TransferConfig,
-        dispatch_batch_size: int = 1000,
+        dispatch_batch_size: int = 100, # 6.4 GB worth of chunks
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways."""
+
         chunker = Chunker(self.src_iface, self.dst_iface, transfer_config)
         transfer_pair_generator = self.gen_transfer_pairs(chunker)
         gen_transfer_list = chunker.tail_generator(transfer_pair_generator, self.transfer_list)
         chunks = chunker.chunk(gen_transfer_list)
         chunk_requests = chunker.to_chunk_requests(chunks)
+
         batches = chunker.batch_generator(
             chunker.prefetch_generator(chunk_requests, buffer_size=dispatch_batch_size * 32), batch_size=dispatch_batch_size
         )
@@ -382,6 +387,7 @@ class CopyJob(TransferJob):
             logger.fs.debug(f"Queried {len(batch)} chunks in {end - start:.2f} seconds")
             start = time.time()
             min_idx = bytes_dispatched.index(min(bytes_dispatched))
+            print("Dispatching to", min_idx, src_gateways, bytes_dispatched, "num parts", n_multiparts)
             server = src_gateways[min_idx]
             n_bytes = sum([cr.chunk.chunk_length_bytes for cr in batch])
             bytes_dispatched[min_idx] += n_bytes
@@ -430,8 +436,12 @@ class CopyJob(TransferJob):
             src_obj = dst_keys.get(obj.key)
             if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:
                 del dst_keys[obj.key]
+            else: 
+                if src_obj: 
+                    print(f"Failed verification: {obj.size} {src_obj.size} {obj.last_modified} {src_obj.last_modified}")
         if dst_keys:
-            raise exceptions.TransferFailedException(f"{len(dst_keys)} objects failed verification", [obj.key for obj in dst_keys.values()])
+            failed_keys = [obj.key for obj in dst_keys.values()]
+            raise exceptions.TransferFailedException(f"{len(dst_keys)} objects failed verification {failed_keys}")
 
 
 @dataclass
