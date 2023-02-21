@@ -313,7 +313,7 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
             config.gcp_project_id = None
         elif not Path(gcp_config_path).is_file():
             typer.secho("    GCP region config missing! GCP will be reconfigured.", fg="red", err=True)
-            config.gcp_project_id = Nonejkj
+            config.gcp_project_id = None
 
         if config.gcp_project_id is not None:
             typer.secho("    GCP already configured! To reconfigure GCP, run `skyplane init --reinit-gcp`.", fg="blue")
