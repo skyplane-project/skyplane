@@ -4,6 +4,7 @@ import threading
 from collections import defaultdict, Counter
 from datetime import datetime
 from functools import partial
+from datetime import datetime
 
 import nacl.secret
 import nacl.utils
@@ -66,6 +67,10 @@ class Dataplane:
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         self.provisioning_lock = threading.Lock()
         self.provisioned = False
+        self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.transfer_dir.mkdir(exist_ok=True, parents=True)
+
+        # transfer logs
         self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
         self.transfer_dir.mkdir(exist_ok=True, parents=True)
 
@@ -188,6 +193,15 @@ class Dataplane:
         logger.fs.debug(f"[Dataplane.provision] Starting gateways on {len(jobs)} servers")
         do_parallel(lambda fn: fn(), jobs, n=-1, spinner=spinner, spinner_persist=spinner, desc="Starting gateway container on VMs")
 
+    def copy_gateway_logs(self):
+        # copy logs from all gateways in parallel
+        def copy_log(instance):
+            instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
+            instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
+            instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
+
+        do_parallel(copy_log, self.bound_nodes.values(), n=-1)
+
     def deprovision(self, max_jobs: int = 64, spinner: bool = False):
         """
         Deprovision the remote gateways
@@ -198,6 +212,10 @@ class Dataplane:
         :type spinner: bool
         """
         with self.provisioning_lock:
+            if debug:
+                logger.fs.info("Copying gateway logs to {self.transfer_dir}")
+                self.copy_gateway_logs()
+
             if not self.provisioned:
                 logger.fs.warning("Attempting to deprovision dataplane that is not provisioned, this may be from auto_deprovision.")
             # wait for tracker tasks

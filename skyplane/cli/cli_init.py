@@ -322,7 +322,7 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
 
         # check if GCP is enabled
         inferred_cred, inferred_project = compute.GCPAuthentication.get_adc_credential()
-        if inferred_cred is None or inferred_project is None:
+        if inferred_cred is None:  # or inferred_project is None:
             typer.secho("    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.", fg="red", err=True)
             typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red", err=True)
             return disable_gcp_support()
@@ -331,6 +331,7 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
             if non_interactive or typer.confirm("    GCP credentials found, do you want to enable GCP support in Skyplane?", default=True):
                 if not non_interactive:
                     config.gcp_project_id = typer.prompt("    Enter the GCP project ID", default=inferred_project)
+
                 else:
                     config.gcp_project_id = inferred_project
                 assert config.gcp_project_id is not None, "GCP project ID must not be None"
