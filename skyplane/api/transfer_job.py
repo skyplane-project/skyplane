@@ -93,7 +93,6 @@ class Chunker:
                 parts.append(part_num)
                 part_num += 1
                 out_queue.put(chunk)
-                print(offset, chunk)
 
             self.multipart_upload_requests.append(dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket))
 

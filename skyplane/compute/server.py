@@ -315,7 +315,6 @@ class Server:
 
             service_key_path = compute.GCPAuthentication().get_service_account_key_path()
             service_key_file = os.path.basename(service_key_path)
-            print(service_key_file)
             self.upload_file(service_key_path, f"/tmp/{service_key_file}")
             docker_envs["GCP_SERVICE_ACCOUNT_FILE"] = f"/pkg/data/{service_key_file}"
             docker_run_flags += f" -v /tmp/{service_key_file}:/pkg/data/{service_key_file}"

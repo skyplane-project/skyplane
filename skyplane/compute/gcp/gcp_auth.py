@@ -69,16 +69,6 @@ class GCPAuthentication:
     def service_account_credentials(self):
         if self._service_credentials_file is None:
             self._service_account_email = self.create_service_account(self.service_account_name)
-
-            ## check number of existing keys
-            # keys = self.list_service_account_keys(self._service_account_email)
-            # if len(keys) >= 10:
-            #    # delete keys (too many keys)
-            #    for key in keys:
-            #        print("deleting", key)
-            #
-            #        self.delete_service_account_key(self._service_account_email, key["name"])
-
             # create service key
             self._service_credentials_file = self.get_service_account_key(self._service_account_email)
 
@@ -153,18 +143,15 @@ class GCPAuthentication:
             keys = service.projects().serviceAccounts().keys().list(name="projects/-/serviceAccounts/" + service_account_email).execute()
 
             # cannot have more than 10 keys per service account
-            if len(keys["keys"]) >= 10:  # raise ValueError(
-                #    f"Service account {service_account_email} has too many keys. Make sure to copy keys to {key_path} or create a new service account."
-                # )
-                print("Deleting keys, too many keys")
+            if len(keys["keys"]) >= 10: 
+                logger.warning(f"Service account {service_account_email} has too many keys. Deleting stale keys to create new key.")
                 deleted_keys = 0
                 for key in keys["keys"]:
                     try:
                         service.projects().serviceAccounts().keys().delete(name=key["name"]).execute()
                         deleted_keys += 1
                     except Exception as e:
-                        print(e)
-                print("Deleted", deleted_keys, "keys")
+                        raise ValueError(f"Failed to delete key {key['name']}: {e}")
 
             # create key
             key = (
