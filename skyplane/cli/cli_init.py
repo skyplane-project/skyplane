@@ -103,7 +103,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         # check if az cli is installed
         if not shutil.which("az"):
             typer.secho(
-                "    Azure CLI not found, please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli",
+                "    Azure CLI not found, please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli. \n Then login with `az login`",
                 fg="red",
                 err=True,
             )
@@ -123,7 +123,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         out, err = subprocess.Popen("az --version".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
         if not out.decode("utf-8").startswith("azure-cli"):
             typer.secho(
-                "    Azure CLI not found, please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli",
+                "    Azure CLI not found, please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli. \n Then login with `az login`",
                 fg="red",
                 err=True,
             )
@@ -388,19 +388,28 @@ def init(
         cloud_config = SkyplaneConfig.default_config()
 
     # load AWS config
-    typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)
-    if not disable_config_aws:
-        cloud_config = load_aws_config(cloud_config, non_interactive=non_interactive)
+    if not (reinit_azure or reinit_gcp):
+        typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)
+        if not disable_config_aws:
+            cloud_config = load_aws_config(cloud_config, non_interactive=non_interactive)
 
     # load Azure config
-    typer.secho("\n(2) Configuring Azure:", fg="yellow", bold=True)
-    if not disable_config_azure:
-        cloud_config = load_azure_config(cloud_config, force_init=reinit_azure, non_interactive=non_interactive)
+    if not reinit_gcp:
+        if reinit_azure:
+            typer.secho("\nConfiguring Azure:", fg="yellow", bold=True)
+        else:
+            typer.secho("\n(2) Configuring Azure:", fg="yellow", bold=True)
+        if not disable_config_azure:
+            cloud_config = load_azure_config(cloud_config, force_init=reinit_azure, non_interactive=non_interactive)
 
     # load GCP config
-    typer.secho("\n(3) Configuring GCP:", fg="yellow", bold=True)
-    if not disable_config_gcp:
-        cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
+    if not reinit_azure:
+        if reinit_gcp:
+            typer.secho("\nConfiguring GCP:", fg="yellow", bold=True)
+        else:
+            typer.secho("\n(3) Configuring GCP:", fg="yellow", bold=True)
+        if not disable_config_gcp:
+            cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
 
     cloud_config.to_config_file(config_path)
     typer.secho(f"\nConfig file saved to {config_path}", fg="green")

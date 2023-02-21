@@ -1,5 +1,6 @@
 import os
 import signal
+import sys
 import time
 import traceback
 from dataclasses import dataclass
@@ -17,7 +18,7 @@ from skyplane.cli.impl.cp_replicate_fallback import (
     replicate_small_cp_cmd,
     replicate_small_sync_cmd,
 )
-from skyplane.cli.impl.common import print_header, console, print_stats_completed
+from skyplane.cli.impl.common import print_header, console, print_stats_completed, register_exception_handler
 from skyplane.api.usage import UsageClient
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import cloud_config, config_path
@@ -25,6 +26,7 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 from skyplane.utils import logger
 from skyplane.utils.definitions import GB, format_bytes
+from skyplane.utils.fn import do_parallel
 from skyplane.utils.path import parse_path
 
 
@@ -54,7 +56,9 @@ class SkyplaneCLI:
         self.args = args
         self.aws_config, self.azure_config, self.gcp_config = self.to_api_config(skyplane_config or cloud_config)
         self.transfer_config = self.make_transfer_config(skyplane_config or cloud_config)
-        self.client = skyplane.SkyplaneClient(aws_config=self.aws_config, azure_config=self.azure_config, gcp_config=self.gcp_config)
+        self.client = skyplane.SkyplaneClient(
+            aws_config=self.aws_config, azure_config=self.azure_config, gcp_config=self.gcp_config, transfer_config=self.transfer_config
+        )
         typer.secho(f"Using Skyplane version {skyplane.__version__}", fg="bright_black")
         typer.secho(f"Logging to: {self.client.log_dir / 'client.log'}", fg="bright_black")
 
@@ -267,6 +271,7 @@ def cp(
     # todo - add solver params once API supports it
     # solver
     solver: str = typer.Option("direct", "--solver", help="Solver to use for transfer"),
+    solver_required_throughput_gbits: float = typer.Option(1, "--tput", "-t", help="Required throughput to be solved for in Gbps"),
 ):
     """
     `cp` copies a file or folder from one location to another. If the source is on an object store,
@@ -296,6 +301,8 @@ def cp(
     :param solver: The solver to use for the transfer (default: direct)
     :type solver: str
     """
+    if not debug:
+        register_exception_handler()
     print_header()
     provider_src, bucket_src, path_src = parse_path(src)
     provider_dst, bucket_dst, path_dst = parse_path(dst)
@@ -329,6 +336,7 @@ def cp(
         # todo support ILP solver params
         dp = cli.make_dataplane(
             solver_type=solver,
+            solver_required_throughput_gbits=solver_required_throughput_gbits,
             n_vms=max_instances,
             n_connections=max_connections,
         )
@@ -347,7 +355,8 @@ def cp(
                 dp.run(ProgressBarTransferHook())
             except KeyboardInterrupt:
                 logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt)")
-                console.print("\n[bold red]Transfer cancelled by user. Exiting.[/bold red]")
+                console.print("\n[bold red]Transfer cancelled by user. Copying gateway logs and exiting.[/bold red]")
+                do_parallel(dp.copy_log, dp.bound_nodes.values(), n=-1)
                 force_deprovision(dp)
             except skyplane.exceptions.SkyplaneException as e:
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
@@ -378,6 +387,7 @@ def sync(
     # todo - add solver params once API supports it
     # solver
     solver: str = typer.Option("direct", "--solver", help="Solver to use for transfer"),
+    solver_required_throughput_gbits: float = typer.Option(1, "--tput", "-t", help="Required throughput to be solved for"),
 ):
     """
     'sync` synchronizes files or folders from one location to another. If the source is on an object store,
@@ -409,6 +419,8 @@ def sync(
     :param solver: The solver to use for the transfer (default: direct)
     :type solver: str
     """
+    if not debug:
+        register_exception_handler()
     print_header()
     provider_src, bucket_src, path_src = parse_path(src)
     provider_dst, bucket_dst, path_dst = parse_path(dst)
@@ -443,6 +455,7 @@ def sync(
         print()
         dp = cli.make_dataplane(
             solver_type=solver,
+            solver_required_throughput_gbits=solver_required_throughput_gbits,
             n_vms=max_instances,
             n_connections=max_connections,
         )

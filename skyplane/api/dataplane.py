@@ -2,6 +2,7 @@ import json
 import os
 import threading
 from collections import defaultdict, Counter
+from datetime import datetime
 from functools import partial
 from datetime import datetime
 
@@ -45,6 +46,16 @@ class Dataplane:
         provisioner: "Provisioner",
         transfer_config: TransferConfig,
     ):
+        """
+        :param clientid: the uuid of the local host to create the dataplane
+        :type clientid: str
+        :param topology: the calculated topology during the transfer
+        :type topology: ReplicationTopology
+        :param provisioner: the provisioner to launch the VMs
+        :type provisioner: Provisioner
+        :param transfer_config: the configuration during the transfer
+        :type transfer_config: TransferConfig
+        """
         self.clientid = clientid
         self.topology = topology
         self.src_region_tag = self.topology.source_region()
@@ -56,6 +67,8 @@ class Dataplane:
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         self.provisioning_lock = threading.Lock()
         self.provisioned = False
+        self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.transfer_dir.mkdir(exist_ok=True, parents=True)
 
         # transfer logs
         self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -75,6 +88,22 @@ class Dataplane:
         max_jobs: int = 16,
         spinner: bool = False,
     ):
+        """
+        Provision the transfer gateways.
+
+        :param allow_firewall: whether to apply firewall rules in the gatweway network (default: True)
+        :type allow_firewall: bool
+        :param gateway_docker_image: Docker image token in github
+        :type gateway_docker_image: str
+        :param gateway_log_dir: path to the log directory in the remote gatweways
+        :type gateway_log_dir: PathLike
+        :param authorize_ssh_pub_key: authorization ssh key to the remote gateways
+        :type authorize_ssh_pub_key: str
+        :param max_jobs: maximum number of provision jobs to launch concurrently (default: 16)
+        :type max_jobs: int
+        :param spinner: whether to show the spinner during the job (default: False)
+        :type spinner: bool
+        """
         with self.provisioning_lock:
             if self.provisioned:
                 logger.error("Cannot provision dataplane, already provisioned!")
@@ -173,7 +202,15 @@ class Dataplane:
 
         do_parallel(copy_log, self.bound_nodes.values(), n=-1)
 
-    def deprovision(self, max_jobs: int = 64, spinner: bool = False, debug: bool = True):
+    def deprovision(self, max_jobs: int = 64, spinner: bool = False):
+        """
+        Deprovision the remote gateways
+
+        :param max_jobs: maximum number of jobs to deprovision the remote gateways (default: 64)
+        :type max_jobs: int
+        :param spinner: Whether to show the spinner during the job (default: False)
+        :type spinner: bool
+        """
         with self.provisioning_lock:
             if debug:
                 logger.fs.info("Copying gateway logs to {self.transfer_dir}")
@@ -197,6 +234,8 @@ class Dataplane:
                 self.provisioned = False
 
     def check_error_logs(self) -> Dict[str, List[str]]:
+        """Get the error log from remote gateways if there is any error."""
+
         def get_error_logs(args):
             _, instance = args
             reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/errors")
@@ -214,10 +253,17 @@ class Dataplane:
         return DataplaneAutoDeprovision(self)
 
     def source_gateways(self) -> List[compute.Server]:
+        """Returns a list of source gateway nodes"""
         return [self.bound_nodes[n] for n in self.topology.source_instances()] if self.provisioned else []
 
     def sink_gateways(self) -> List[compute.Server]:
+        """Returns a list of sink gateway nodes"""
         return [self.bound_nodes[n] for n in self.topology.sink_instances()] if self.provisioned else []
+
+    def copy_log(self, instance):
+        instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
+        instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
+        instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 
     def queue_copy(
         self,
@@ -225,6 +271,17 @@ class Dataplane:
         dst: str,
         recursive: bool = False,
     ) -> str:
+        """
+        Add a copy job to job list.
+        Return the uuid of the job.
+
+        :param src: source prefix to copy from
+        :type src: str
+        :param dst: the destination of the transfer
+        :type dst: str
+        :param recursive: if true, will copy objects at folder prefix recursively (default: False)
+        :type recursive: bool
+        """
         job = CopyJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
         logger.fs.debug(f"[SkyplaneClient] Queued copy job {job}")
         self.jobs_to_dispatch.append(job)
@@ -235,12 +292,28 @@ class Dataplane:
         src: str,
         dst: str,
     ) -> str:
+        """
+        Add a sync job to job list.
+        Return the uuid of the job.
+
+        :param src: Source prefix to copy from
+        :type src: str
+        :param dst: The destination of the transfer
+        :type dst: str
+        :param recursive: If true, will copy objects at folder prefix recursively (default: False)
+        :type recursive: bool
+        """
         job = SyncJob(src, dst, recursive=True, requester_pays=self.transfer_config.requester_pays)
         logger.fs.debug(f"[SkyplaneClient] Queued sync job {job}")
         self.jobs_to_dispatch.append(job)
         return job.uuid
 
     def run_async(self, hooks: Optional[TransferHook] = None) -> TransferProgressTracker:
+        """Start the transfer asynchronously. The main thread will not be blocked.
+
+        :param hooks: Tracks the status of the transfer
+        :type hooks: TransferHook
+        """
         if not self.provisioned:
             logger.error("Dataplane must be pre-provisioned. Call dataplane.provision() before starting a transfer")
         tracker = TransferProgressTracker(self, self.jobs_to_dispatch, self.transfer_config, hooks)
@@ -251,6 +324,11 @@ class Dataplane:
         return tracker
 
     def run(self, hooks: Optional[TransferHook] = None):
+        """Start the transfer in the main thread. Wait until the transfer is complete.
+
+        :param hooks: Tracks the status of the transfer
+        :type hooks: TransferHook
+        """
         tracker = self.run_async(hooks)
         logger.fs.debug(f"[SkyplaneClient] Waiting for transfer to complete")
         tracker.join()

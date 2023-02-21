@@ -12,7 +12,6 @@ from skyplane import exceptions
 from skyplane.api.config import TransferConfig
 from skyplane.chunk import ChunkRequest, ChunkState, Chunk
 from skyplane.utils import logger, imports
-from skyplane.utils.definitions import tmp_log_dir
 from skyplane.utils.fn import do_parallel
 from skyplane.api.usage import UsageClient
 from skyplane.utils.definitions import GB
@@ -22,26 +21,36 @@ if TYPE_CHECKING:
 
 
 class TransferHook(ABC):
+    """Hook that shows transfer related stats"""
+
     def on_dispatch_start(self):
+        """Starting the dispatch job"""
         raise NotImplementedError()
 
     def on_chunk_dispatched(self, chunks: List[Chunk]):
+        """Dispatching data chunks to transfer"""
         raise NotImplementedError()
 
     def on_dispatch_end(self):
+        """Ending the dispatch job"""
         raise NotImplementedError()
 
     def on_chunk_completed(self, chunks: List[Chunk]):
+        """Chunks are all transferred"""
         raise NotImplementedError()
 
     def on_transfer_end(self, transfer_stats):
+        """Ending the transfer job"""
         raise NotImplementedError()
 
     def on_transfer_error(self, error):
+        """Showing the tranfer error if it fails"""
         raise NotImplementedError()
 
 
 class EmptyTransferHook(TransferHook):
+    """Empty transfer hook that does nothing"""
+
     def __init__(self):
         return
 
@@ -65,13 +74,24 @@ class EmptyTransferHook(TransferHook):
 
 
 class TransferProgressTracker(Thread):
+    """Tracks transfer progress in one tranfer session"""
+
     def __init__(self, dataplane, jobs: List["TransferJob"], transfer_config: TransferConfig, hooks: TransferHook):
+        """
+        :param dataplane: dataplane that starts the transfer
+        :type dataplane: Dataplane
+        :param jobs: list of transfer jobs launched in parallel
+        :type jobs: List
+        :param transfer_config: the configuration during the transfer
+        :type transfer_config: TransferConfig
+        :param hooks: the hook that shows transfer related stats
+        :type hooks: TransferHook
+        """
         super().__init__()
         self.dataplane = dataplane
         self.jobs = {job.uuid: job for job in jobs}
         self.transfer_config = transfer_config
-        self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.transfer_dir.mkdir(exist_ok=True, parents=True)
+
         if hooks is None:
             self.hooks = EmptyTransferHook()
         else:
@@ -97,6 +117,7 @@ class TransferProgressTracker(Thread):
         return f"TransferProgressTracker({self.dataplane}, {self.jobs})"
 
     def run(self):
+        """Dispatch and start the transfer jobs"""
         src_cloud_provider = self.dataplane.src_region_tag.split(":")[0]
         dst_cloud_provider = self.dataplane.dst_region_tag.split(":")[0]
         args = {
@@ -190,6 +211,7 @@ class TransferProgressTracker(Thread):
 
     @imports.inject("pandas")
     def monitor_transfer(pd, self):
+        """Monitor the tranfer by copying remote gateway logs and show transfer stats by hooks"""
         # todo implement transfer monitoring to update job_complete_chunk_ids and job_pending_chunk_ids while the transfer is in progress
         sinks = self.dataplane.topology.sink_instances()
         sink_regions = set([sink.region for sink in sinks])
@@ -265,9 +287,11 @@ class TransferProgressTracker(Thread):
 
     @property
     def is_complete(self):
+        """Return if the transfer is complete"""
         return all([len(self.job_pending_chunk_ids[job_uuid]) == 0 for job_uuid in self.jobs.keys()])
 
     def query_bytes_remaining(self):
+        """Query the total number of bytes remaining in all the transfer jobs"""
         if len(self.job_chunk_requests) == 0:
             return None
         bytes_remaining_per_job = {}
@@ -283,6 +307,7 @@ class TransferProgressTracker(Thread):
         return sum(bytes_remaining_per_job.values())
 
     def query_bytes_dispatched(self):
+        """Query the total number of bytes dispatched to chunks ready for transfer"""
         if len(self.job_chunk_requests) == 0:
             return 0
         bytes_total_per_job = {}

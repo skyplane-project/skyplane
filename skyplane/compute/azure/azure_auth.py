@@ -18,12 +18,18 @@ class AzureAuthentication:
         self._credential = None
 
     @property
-    @imports.inject("azure.identity.DefaultAzureCredential", "azure.identity.ManagedIdentityCredential", pip_extra="azure")
+    @imports.inject(
+        "azure.identity.DefaultAzureCredential",
+        "azure.identity.ManagedIdentityCredential",
+        pip_extra="azure",
+    )
     def credential(DefaultAzureCredential, ManagedIdentityCredential, self):
         if self._credential is None:
             if is_gateway_env:
                 print("Configured managed identity credential.")
-                return ManagedIdentityCredential(client_id=self.config.azure_client_id)
+                return ManagedIdentityCredential(
+                    client_id=self.config.azure_client_id if isinstance(self.config, SkyplaneConfig) else self.config.azure_umi_client_id
+                )
             else:
                 if query_which_cloud() != "azure":
                     return DefaultAzureCredential(
@@ -34,7 +40,9 @@ class AzureAuthentication:
                     )
                 else:
                     return DefaultAzureCredential(
-                        managed_identity_client_id=self.config.azure_client_id,
+                        managed_identity_client_id=self.config.azure_client_id
+                        if isinstance(self.config, SkyplaneConfig)
+                        else self.config.azure_umi_client_id,
                         exclude_powershell_credential=True,
                         exclude_visual_studio_code_credential=True,
                     )

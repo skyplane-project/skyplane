@@ -1,7 +1,12 @@
 from functools import partial
+import sys
 from typing import Optional
 
 from rich.console import Console
+from rich import print as rprint
+
+import typer
+import traceback as tb
 
 from skyplane import compute
 from skyplane.utils import logger
@@ -57,3 +62,19 @@ def query_instances():
     ):
         instances.extend(instance_list)
     return instances
+
+
+# pretty exception handler with rich
+def register_exception_handler():
+    def exception_handler(exception_type, exception, traceback, debug_hook=sys.excepthook):
+        # write full traceback infomation with locals to log file
+        logger.fs.error(f"Uncaught exception: {exception_type.__name__}: {exception}")
+        logger.fs.error("Traceback:\n" + "".join(tb.format_exception(exception_type, exception, traceback)))
+        rprint(f"[red][bold]Uncaught exception:[/bold] ({exception_type.__name__}) {exception}[/red]", file=sys.stderr)
+        typer.secho(
+            "Please check the log file for more information, and ensure to include it if reporting an issue on Github.",
+            fg=typer.colors.YELLOW,
+        )
+        sys.exit(1)
+
+    sys.excepthook = exception_handler
