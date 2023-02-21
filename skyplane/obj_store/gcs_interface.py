@@ -219,7 +219,11 @@ class GCSInterface(ObjectStoreInterface):
         # send XML api request
         headers = {"Content-MD5": b64_md5sum} if check_md5 else None
         response = self.send_xml_request(
-            dst_object_name, {"uploadId": upload_id, "partNumber": part_number}, "PUT", headers=headers, data=open(src_file_path, "rb"),
+            dst_object_name,
+            {"uploadId": upload_id, "partNumber": part_number},
+            "PUT",
+            headers=headers,
+            data=open(src_file_path, "rb"),
         )
 
         # check response
@@ -239,14 +243,13 @@ class GCSInterface(ObjectStoreInterface):
         next_part_number_marker = None
 
         # Parts in the list are ordered sequentially, and the XML API does not return lists longer than 1000 parts.
-        while True: 
+        while True:
             if next_part_number_marker is None:
                 response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "GET")
-            else: 
-                response = self.send_xml_request(dst_object_name, {"uploadId": upload_id, "part-number-marker": next_part_number_marker}, "GET")
-            print("part response", response.content)
-
-            open("part_response.xml", "wb").write(response.content)
+            else:
+                response = self.send_xml_request(
+                    dst_object_name, {"uploadId": upload_id, "part-number-marker": next_part_number_marker}, "GET"
+                )
 
             # build request xml tree
             tree = ElementTree.fromstring(response.content)
@@ -265,13 +268,10 @@ class GCSInterface(ObjectStoreInterface):
 
             is_truncated = tree.findall("ns:IsTruncated", ns)[0].text
             if is_truncated == "false":
-                print("Is not truncated")
                 break
-            else: 
+            else:
                 next_part_number_marker = tree.findall("ns:NextPartNumberMarker", ns)[0].text
-                print("Next part", next_part_number_marker)
 
-        print("Number parts", len(xml_data))
         xml_data = ElementTree.tostring(xml_data, encoding="utf-8", method="xml")
         xml_data = xml_data.replace(b"ns0:", b"")
 

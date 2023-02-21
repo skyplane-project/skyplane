@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 import subprocess
 
@@ -10,7 +9,7 @@ from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import config_path, azure_config_path, azure_sku_path
 from skyplane.utils import imports
 from skyplane.utils.definitions import is_gateway_env
-from skyplane.utils.fn import do_parallel, wait_for
+from skyplane.utils.fn import do_parallel
 
 
 class AzureAuthentication:

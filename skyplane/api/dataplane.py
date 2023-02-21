@@ -16,7 +16,7 @@ from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
 from skyplane.planner.topology import ReplicationTopology, ReplicationTopologyGateway
 from skyplane.utils import logger
-from skyplane.utils.definitions import gateway_docker_image, tmp_log_dir    
+from skyplane.utils.definitions import gateway_docker_image, tmp_log_dir
 from skyplane.utils.fn import PathLike, do_parallel
 
 if TYPE_CHECKING:
@@ -39,7 +39,11 @@ class Dataplane:
     """A Dataplane represents a concrete Skyplane network, including topology and VMs."""
 
     def __init__(
-        self, clientid: str, topology: ReplicationTopology, provisioner: "Provisioner", transfer_config: TransferConfig,
+        self,
+        clientid: str,
+        topology: ReplicationTopology,
+        provisioner: "Provisioner",
+        transfer_config: TransferConfig,
     ):
         self.clientid = clientid
         self.topology = topology
@@ -53,8 +57,7 @@ class Dataplane:
         self.provisioning_lock = threading.Lock()
         self.provisioned = False
 
-
-        # transfer logs 
+        # transfer logs
         self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
         self.transfer_dir.mkdir(exist_ok=True, parents=True)
 
@@ -93,11 +96,17 @@ class Dataplane:
 
             # initialize clouds
             self.provisioner.init_global(
-                aws=len(aws_nodes_to_provision) > 0, azure=len(azure_nodes_to_provision) > 0, gcp=len(gcp_nodes_to_provision) > 0,
+                aws=len(aws_nodes_to_provision) > 0,
+                azure=len(azure_nodes_to_provision) > 0,
+                gcp=len(gcp_nodes_to_provision) > 0,
             )
 
             # provision VMs
-            uuids = self.provisioner.provision(authorize_firewall=allow_firewall, max_jobs=max_jobs, spinner=spinner,)
+            uuids = self.provisioner.provision(
+                authorize_firewall=allow_firewall,
+                max_jobs=max_jobs,
+                spinner=spinner,
+            )
 
             # bind VMs to nodes
             servers = [self.provisioner.get_node(u) for u in uuids]
@@ -114,7 +123,8 @@ class Dataplane:
             self.provisioned = True
 
         def _start_gateway(
-            gateway_node: ReplicationTopologyGateway, gateway_server: compute.Server,
+            gateway_node: ReplicationTopologyGateway,
+            gateway_server: compute.Server,
         ):
             # map outgoing ports
             setup_args = {}
@@ -154,21 +164,21 @@ class Dataplane:
         logger.fs.debug(f"[Dataplane.provision] Starting gateways on {len(jobs)} servers")
         do_parallel(lambda fn: fn(), jobs, n=-1, spinner=spinner, spinner_persist=spinner, desc="Starting gateway container on VMs")
 
-
     def copy_gateway_logs(self):
-
+        # copy logs from all gateways in parallel
         def copy_log(instance):
             instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
-            print(self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
             instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
             instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 
         do_parallel(copy_log, self.bound_nodes.values(), n=-1)
 
-    def deprovision(self, max_jobs: int = 64, spinner: bool = False, debug: bool = False):
+    def deprovision(self, max_jobs: int = 64, spinner: bool = False, debug: bool = True):
         with self.provisioning_lock:
-            print("Copying gateway logs")
-            self.copy_gateway_logs()
+            if debug:
+                logger.fs.info("Copying gateway logs to {self.transfer_dir}")
+                self.copy_gateway_logs()
+
             if not self.provisioned:
                 logger.fs.warning("Attempting to deprovision dataplane that is not provisioned, this may be from auto_deprovision.")
             # wait for tracker tasks
@@ -181,7 +191,8 @@ class Dataplane:
                 raise
             finally:
                 self.provisioner.deprovision(
-                    max_jobs=max_jobs, spinner=spinner,
+                    max_jobs=max_jobs,
+                    spinner=spinner,
                 )
                 self.provisioned = False
 
@@ -208,7 +219,12 @@ class Dataplane:
     def sink_gateways(self) -> List[compute.Server]:
         return [self.bound_nodes[n] for n in self.topology.sink_instances()] if self.provisioned else []
 
-    def queue_copy(self, src: str, dst: str, recursive: bool = False,) -> str:
+    def queue_copy(
+        self,
+        src: str,
+        dst: str,
+        recursive: bool = False,
+    ) -> str:
         job = CopyJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
         logger.fs.debug(f"[SkyplaneClient] Queued copy job {job}")
         self.jobs_to_dispatch.append(job)

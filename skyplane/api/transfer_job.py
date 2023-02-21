@@ -47,7 +47,10 @@ class Chunker:
         self.concurrent_multipart_chunk_threads = concurrent_multipart_chunk_threads
 
     def _run_multipart_chunk_thread(
-        self, exit_event: threading.Event, in_queue: "Queue[Tuple[ObjectStoreObject, ObjectStoreObject]]", out_queue: "Queue[Chunk]",
+        self,
+        exit_event: threading.Event,
+        in_queue: "Queue[Tuple[ObjectStoreObject, ObjectStoreObject]]",
+        out_queue: "Queue[Chunk]",
     ):
         """Chunks large files into many small chunks."""
         region = self.dst_iface.region_tag()
@@ -220,7 +223,10 @@ class Chunker:
                 multipart_send_queue.put((src_obj, dst_obj))
             else:
                 yield Chunk(
-                    src_key=src_obj.key, dest_key=dst_obj.key, chunk_id=uuid.uuid4().hex, chunk_length_bytes=src_obj.size,
+                    src_key=src_obj.key,
+                    dest_key=dst_obj.key,
+                    chunk_id=uuid.uuid4().hex,
+                    chunk_length_bytes=src_obj.size,
                 )
 
             if self.transfer_config.multipart_enabled:
@@ -363,7 +369,7 @@ class CopyJob(TransferJob):
         self,
         dataplane: "Dataplane",
         transfer_config: TransferConfig,
-        dispatch_batch_size: int = 100, # 6.4 GB worth of chunks
+        dispatch_batch_size: int = 100,  # 6.4 GB worth of chunks
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways."""
 
@@ -387,7 +393,6 @@ class CopyJob(TransferJob):
             logger.fs.debug(f"Queried {len(batch)} chunks in {end - start:.2f} seconds")
             start = time.time()
             min_idx = bytes_dispatched.index(min(bytes_dispatched))
-            print("Dispatching to", min_idx, src_gateways, bytes_dispatched, "num parts", n_multiparts)
             server = src_gateways[min_idx]
             n_bytes = sum([cr.chunk.chunk_length_bytes for cr in batch])
             bytes_dispatched[min_idx] += n_bytes
@@ -436,9 +441,6 @@ class CopyJob(TransferJob):
             src_obj = dst_keys.get(obj.key)
             if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:
                 del dst_keys[obj.key]
-            else: 
-                if src_obj: 
-                    print(f"Failed verification: {obj.size} {src_obj.size} {obj.last_modified} {src_obj.last_modified}")
         if dst_keys:
             failed_keys = [obj.key for obj in dst_keys.values()]
             raise exceptions.TransferFailedException(f"{len(dst_keys)} objects failed verification {failed_keys}")

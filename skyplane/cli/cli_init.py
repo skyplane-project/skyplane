@@ -324,7 +324,7 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
         inferred_cred, inferred_project = compute.GCPAuthentication.get_adc_credential()
         print("inferred_cred", inferred_cred)
         print("infreferred_project", inferred_project)
-        if inferred_cred is None: # or inferred_project is None:
+        if inferred_cred is None:  # or inferred_project is None:
             typer.secho("    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.", fg="red", err=True)
             typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red", err=True)
             return disable_gcp_support()
