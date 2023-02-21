@@ -175,6 +175,7 @@ class GatewayDaemonAPI(threading.Thread):
         @app.route("/api/v1/chunk_requests", methods=["POST"])
         def add_chunk_request():
             state_param = request.args.get("state", "registered")
+            logger.info(f"Adding chunk request {request.json}")
             n_added = add_chunk_req(request.json, ChunkState.from_str(state_param))
             return jsonify({"status": "ok", "n_added": n_added})
 

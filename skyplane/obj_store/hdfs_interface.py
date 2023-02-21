@@ -20,21 +20,16 @@ class HDFSInterface(ObjectStoreInterface):
         self.port = port
         self.hdfs_path = path
         self.hdfs = fs.HadoopFileSystem(
-            host=f"{self.host}/{self.hdfs_path}", port=self.port, user="hadoop", extra_conf={"dfs.permissions.enabled": "false"}
-        )
+            host=f"{self.host}/{self.hdfs_path}", port=self.port)
         # print(f"Connecting to HDFS at {self.host}:{self.port} with path {self.hdfs_path}")
 
     def path(self) -> str:
         return self.hdfs_path
 
     def list_objects(self, prefix="/skyplane5") -> Iterator[HDFSFile]:
-        _hdfs_connector = fs.HadoopFileSystem(
-            host=f"10.128.0.10", port=self.port, user="hadoop", extra_conf={"dfs.permissions.enabled": "false"}
-        )
-        print(f"Connecting to HDFS at {self.host}:{self.port} with path {self.hdfs_path}")
         fileselector = fs.FileSelector("/skyplane5", recursive=True, allow_not_found=True)
         print(f"File selector created successfully, {fileselector.base_dir}")
-        response = _hdfs_connector.get_file_info(fileselector)
+        response = self.hdfs.get_file_info(fileselector)
         print(f"Response: {response}")
         if hasattr(response, "__len__") and (not isinstance(response, str)):
             for file in response:
@@ -50,7 +45,7 @@ class HDFSInterface(ObjectStoreInterface):
             return False
 
     def region_tag(self) -> str:
-        return "hdfs:us-east-1"
+        return "hdfs:us-central1-a"
 
     def bucket(self) -> str:
         return self.hdfs_path
