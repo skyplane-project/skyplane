@@ -21,10 +21,10 @@ class IBMCloudAuthentication:
             self.config = SkyplaneConfig.load_config(config_path)
 
         self.user_agent = self.config.ibmcloud_useragent if self.config.ibmcloud_useragent is not None else "skyplane-ibm"
+        self.ibmcloud_resource_group_id = self.config.ibmcloud_resource_group_id
 
         self._ssh_credentials = {"username": self.config.ibmcloud_ssh_user, "key_filename": self.config.ibmcloud_ssh_key_filename}
 
-        self.config.ibmcloud_useragent
         if self.config.ibmcloud_access_id and self.config.ibmcloud_secret_key:
             self._access_key = self.config.ibmcloud_access_id
             self._secret_key = self.config.ibmcloud_secret_key
@@ -114,9 +114,6 @@ class IBMCloudAuthentication:
 
     def get_boto3_resource(self, service_name, cos_region=None):
         return self.get_boto3_session().resource(service_name, region_name=cos_region)
-
-    def get_region(self):
-        return self.config.ibmcloud_region
 
     @imports.inject("ibm_boto3", "ibm_botocore", pip_extra="ibmcloud")
     def get_boto3_client(ibm_boto3, ibm_botocore, self, service_name, cos_region=None):

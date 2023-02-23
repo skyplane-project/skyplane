@@ -1,11 +1,11 @@
-import yaml
 from multiprocessing import BoundedSemaphore
 from typing import List, Optional
 
 from skyplane.compute.ibmcloud.ibmcloud_auth import IBMCloudAuthentication
 from skyplane.compute.ibmcloud.ibmcloud_server import IBMCloudServer
-from skyplane.compute.ibmcloud.gen2.main import create_vpc
-from skyplane.compute.ibmcloud.gen2.vpc_node_provider import IBMVPCNodeProvider
+from skyplane.compute.ibmcloud.ibm_gen2.vpc_backend import IBMVPCBackend
+from skyplane.compute.ibmcloud.ibm_gen2.config import load_config
+
 from skyplane.compute.cloud_provider import CloudProvider
 from skyplane.utils import imports
 
@@ -16,7 +16,6 @@ class IBMCloudProvider(CloudProvider):
         self.key_prefix = key_prefix
         self.auth = IBMCloudAuthentication()
         self.regions_vpc = {}
-        self.regions_cloudprovider = {}
         self.provisioning_semaphore = BoundedSemaphore(16)
 
     @property
@@ -33,31 +32,22 @@ class IBMCloudProvider(CloudProvider):
 
     def setup_region(self, region: str):
         # set up VPC per region? With net, subnets, floating ip, etc. ?
-        vpc_config_file = create_vpc(iam_api_key=self.auth.iam_api_key, region=region)
-        self.regions_vpc[region] = vpc_config_file
-        config_dict = None
-        with open(vpc_config_file) as f:
-            config_dict = yaml.safe_load(f)
-
-        # How to decide on the zone
-        region_config = self.auth.get_region_config()[region]
-        ibmcloud_provider = IBMVPCNodeProvider(
-            self.auth.iam_api_key,
-            self.auth.iam_endpoint,
-            "skyplane",
-            config_dict["provider"]["endpoint"],
-            region_config["zones"][0]["zone_name"],
-            config_dict,
-        )
-        self.regions_cloudprovider[region] = ibmcloud_provider
+        ibm_vpc_config = {
+            "ibm": {"iam_api_key": self.auth.iam_api_key, "user_agent": self.auth.user_agent},
+            "ibm_gen2": {"region": region, "resource_group_id": self.auth.ibmcloud_resource_group_id},
+        }
+        load_config(ibm_vpc_config)
+        ibm_vpc_backend = IBMVPCBackend(ibm_vpc_config["ibm_gen2"])
+        ibm_vpc_backend.init()
+        self.regions_vpc[region] = ibm_vpc_backend
 
     def teardown_region(self, region):
         if region in self.regions_cloudprovider:
-            self.regions_cloudprovider[region].delete_vpc()
+            self.regions_vpc[region].clean(all=True)
 
     def teardown_global(self):
         for region in self.regions_cloudprovider:
-            self.regions_cloudprovider[region].delete_vpc()
+            self.regions_vpc[region].clean(all=True)
 
     def add_ips_to_security_group(self, cos_region: str, ips: Optional[List[str]] = None):
         pass
@@ -76,14 +66,9 @@ class IBMCloudProvider(CloudProvider):
         tags={"skyplane": "true"},
     ) -> IBMCloudServer:
         # provision VM in the region
-        config_dict = None
-        with open(self.regions_vpc[region]) as f:
-            config_dict = yaml.safe_load(f)
 
         tags["node-type"] = "master"
         tags["node-name"] = "skyplane-master"
 
-        resp = self.regions_cloudprovider[region].create_node(
-            config_dict["available_node_types"]["ray_head_default"]["node_config"], tags, 1
-        )
-        return IBMCloudServer(self.regions_cloudprovider[region], f"cos:{region}", resp, self.regions_vpc[region])
+        instance_id, vsi = self.regions_vpc[region].create_vpc_instance()
+        return IBMCloudServer(self.regions_vpc[region], f"cos:{region}", instance_id, vsi)

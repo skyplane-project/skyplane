@@ -46,14 +46,13 @@ class GCPConfig(AuthenticationConfig):
 class IBMCloudConfig(AuthenticationConfig):
     ibmcloud_access_id: Optional[str] = None
     ibmcloud_secret_key: Optional[str] = None
-    ibmcloud_api_key: Optional[str] = None
     ibmcloud_iam_key: Optional[str] = None
     ibmcloud_iam_endpoint: Optional[str] = None
     ibmcloud_useragent: Optional[str] = None
-    ibmcloud_region: Optional[str] = None
+    ibmcloud_resource_group_id: Optional[str] = None
     ibmcloud_enabled: bool = False
 
     def make_auth_provider(self) -> compute.IBMCloudAuthentication:
         # pytype: disable=attribute-error
         return compute.IBMCloudAuthentication(config=self)  # type: ignore
-        # pytype: enable=attribute-error        
+        # pytype: enable=attribute-error

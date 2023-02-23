@@ -9,7 +9,8 @@ from skyplane import exceptions
 from skyplane.compute.ibmcloud.ibmcloud_auth import IBMCloudAuthentication
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
-from skyplane.utils import imports
+from skyplane.compute.ibmcloud.ibm_gen2.config import REGIONS
+from skyplane.utils import logger, imports
 
 
 class COSObject(ObjectStoreObject):
@@ -34,9 +35,17 @@ class COSInterface(ObjectStoreInterface):
     @property
     @lru_cache(maxsize=1)
     def cos_region(self):
-        if self.region is None or self.region == "infer":
-            return self.auth.get_region()
-        return self.region
+
+        for region in REGIONS:
+            s3_client = self.auth.get_boto3_client("s3", region)
+            try:
+                res = s3_client.get_bucket_location(Bucket=self.bucket_name)
+                return region
+            except s3_client.exceptions.NoSuchBucket:
+                pass
+
+        logger.warning(f"Specified bucket {self.bucket_name} does not exist")
+        raise exceptions.MissingBucketException(f"S3 bucket {self.bucket_name} does not exist")
 
     def region_tag(self):
         return "cos:" + self.cos_region
