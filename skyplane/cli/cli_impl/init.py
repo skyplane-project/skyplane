@@ -394,29 +394,26 @@ def load_ibmcloud_config(config: SkyplaneConfig, force_init: bool = False, non_i
         if "cos" in ibm_config and "secret_key" in ibm_config["cos"]:
             config.ibmcloud_secret_key = ibm_config["cos"]["secret_key"]
 
-        if "cos" in ibm_config and "region" in ibm_config["cos"]:
-            config.ibmcloud_region = ibm_config["cos"]["region"]
+        if "ibm" in ibm_config and "resource_group_id" in ibm_config["ibm"]:
+            config.ibmcloud_resource_group_id = ibm_config["ibm"]["resource_group_id"]
 
-        if config.ibmcloud_api_key is not None or config.ibmcloud_access_id is not None:
+        if config.ibmcloud_access_id is not None:
             config.ibmcloud_enabled = True
 
         auth = compute.IBMCloudAuthentication(config=config)
         if config.ibmcloud_enabled:
-            typer.secho(f"    Loaded COS credentials from the COS CLI ", fg="blue")
+            typer.secho(f"    Loaded IBM Cloud credentials ", fg="blue")
             config.ibmcloud_enabled = True
             auth.save_region_config(config)
-            typer.secho(f"    COS region config file saved to {ibmcloud_config_path}", fg="blue")
+            typer.secho(f"    IBM Cloud  config file saved to {ibmcloud_config_path}", fg="blue")
             return config
         else:
-            typer.secho(
-                "    COS credentials not found in boto3 session, please use the COS CLI to set them via `aws configure`", fg="red", err=True
-            )
-            typer.secho("    https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html", fg="red", err=True)
-            typer.secho("    Disabling AWS support", fg="blue")
+            typer.secho(f"    COS credentials not found {get_default_config_filename()}", fg="red", err=True)
+            typer.secho("    Disabling IBM Cloud support", fg="blue")
             if auth is not None:
                 auth.clear_region_config()
             return config
     else:
         config.cos_enabled = False
-        typer.secho("    Disabling COS support", fg="blue")
+        typer.secho("    Disabling IBM Cloud support", fg="blue")
         return config

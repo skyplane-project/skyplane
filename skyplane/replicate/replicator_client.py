@@ -345,7 +345,6 @@ class ReplicatorClient:
 
     def deprovision_gateways(self):
         # This is a good place to tear down Security Groups and the instance since this is invoked by CLI too.
-        print("deprovision")
 
         def deprovision_gateway_instance(server: compute.Server):
             if server.instance_state() == compute.ServerState.RUNNING:
@@ -362,7 +361,6 @@ class ReplicatorClient:
         gcp_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("gcp:")]
         gcp_jobs = [partial(self.gcp.remove_gateway_rule, self.gcp_firewall_name)] if gcp_regions else []
         cos_regions = [node.region for node in self.topology.gateway_nodes if node.region.startswith("cos:")]
-        print(cos_regions)
 
         do_parallel(lambda fn: fn(), aws_jobs + gcp_jobs, desc="Removing firewall rules")
 

@@ -98,11 +98,10 @@ class SkyplaneConfig:
     gcp_project_id: Optional[str] = None
     ibmcloud_access_id: Optional[str] = None
     ibmcloud_secret_key: Optional[str] = None
-    ibmcloud_api_key: Optional[str] = None
     ibmcloud_iam_key: Optional[str] = None
     ibmcloud_iam_endpoint: Optional[str] = None
     ibmcloud_useragent: Optional[str] = None
-    ibmcloud_region: Optional[str] = None
+    ibmcloud_resource_group_id: Optional[str] = None
     ibmcloud_ssh_user: Optional[str] = None
     ibmcloud_ssh_key_filename: Optional[str] = None
 
@@ -165,11 +164,10 @@ class SkyplaneConfig:
 
             ibmcloud_access_id = _get_value("ibmcloud", "ibmcloud_access_id", config)
             ibmcloud_secret_key = _get_value("ibmcloud", "ibmcloud_secret_key", config)
-            ibmcloud_api_key = _get_value("ibmcloud", "ibmcloud_api_key", config)
             ibmcloud_iam_key = _get_value("ibmcloud", "ibmcloud_iam_key", config)
             ibmcloud_iam_endpoint = _get_value("ibmcloud", "ibmcloud_iam_endpoint", config)
             ibmcloud_useragent = _get_value("ibmcloud", "ibmcloud_useragent", config)
-            ibmcloud_region = _get_value("ibmcloud", "ibmcloud_region", config)
+            ibmcloud_resource_group_id = _get_value("ibmcloud", "ibmcloud_resource_group_id", config)
             ibmcloud_ssh_user = _get_value("ibmcloud", "ibmclod_ssh_user", config, "root")
             ibmcloud_ssh_key_filename = _get_value("ibmcloud", "ibmclod_ssh_key_filename", config, "~/.ssh/id.rsa.default-ssh-key")
 
@@ -185,11 +183,10 @@ class SkyplaneConfig:
             gcp_project_id=gcp_project_id,
             ibmcloud_access_id=ibmcloud_access_id,
             ibmcloud_secret_key=ibmcloud_secret_key,
-            ibmcloud_api_key=ibmcloud_api_key,
             ibmcloud_iam_key=ibmcloud_iam_key,
             ibmcloud_iam_endpoint=ibmcloud_iam_endpoint,
             ibmcloud_useragent=ibmcloud_useragent,
-            ibmcloud_region=ibmcloud_region,
+            ibmcloud_resource_group_id=ibmcloud_resource_group_id,
             ibmcloud_ssh_user=ibmcloud_ssh_user,
             ibmcloud_ssh_key_filename=ibmcloud_ssh_key_filename,
         )
@@ -219,16 +216,14 @@ class SkyplaneConfig:
             config.set("ibmcloud", "ibmcloud_useragent", self.ibmcloud_useragent)
         if self.ibmcloud_access_id:
             config.set("ibmcloud", "ibmcloud_access_id", self.ibmcloud_access_id)
-        if self.ibmcloud_api_key:
-            config.set("ibmcloud", "ibmcloud_api_key", self.ibmcloud_api_key)
         if self.ibmcloud_iam_key:
             config.set("ibmcloud", "ibmcloud_iam_key", self.ibmcloud_iam_key)
         if self.ibmcloud_iam_endpoint:
             config.set("ibmcloud", "ibmcloud_iam_endpoint", self.ibmcloud_iam_endpoint)
         if self.ibmcloud_secret_key:
             config.set("ibmcloud", "ibmcloud_secret_key", self.ibmcloud_secret_key)
-        if self.ibmcloud_region:
-            config.set("ibmcloud", "ibmcloud_region", self.ibmcloud_region)
+        if self.ibmcloud_resource_group_id:
+            config.set("ibmcloud", "ibmcloud_resource_group_id", self.ibmcloud_resource_group_id)
         if self.ibmcloud_ssh_user:
             config.set("ibmcloud", "ibmcloud_ssh_user", self.ibmcloud_ssh_user)
         if self.ibmcloud_ssh_key_filename:

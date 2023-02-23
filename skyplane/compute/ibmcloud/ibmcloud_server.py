@@ -1,6 +1,5 @@
 import logging
 import warnings
-import os
 
 from cryptography.utils import CryptographyDeprecationWarning
 from typing import Dict, Optional
@@ -10,7 +9,6 @@ with warnings.catch_warnings():
     import paramiko
 
 from skyplane import exceptions
-from skyplane.compute.ibmcloud.ibmcloud_auth import IBMCloudAuthentication
 from skyplane.compute.server import Server, ServerState, key_root
 from skyplane.utils import imports
 from skyplane.utils.cache import ignore_lru_cache
@@ -19,26 +17,19 @@ from skyplane.utils.cache import ignore_lru_cache
 class IBMCloudServer(Server):
     """IBM Cloud Server class to support basic SSH operations"""
 
-    def __init__(self, ibmcloud_provider, region_tag, vsi_info, config_file, log_dir=None):
+    def __init__(self, vpc_backend, region_tag, instance_id, vsi, log_dir=None):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "cos"
-        self.auth = IBMCloudAuthentication()
-        self.ibmcloud_provider = ibmcloud_provider
-        for key in vsi_info:
-            val = vsi_info[key]
-            self.instance_id = val["id"]
-            print(self.instance_id)
-        self.vsi_info = vsi_info
-        self.config_file = config_file
+        self.vpc_backend = vpc_backend
+        self.instance_id = instance_id
+        self.vsi = vsi
         self.cos_region = self.region_tag.split(":")[1]
-        key_filename_tmp = self.auth.ssh_credentials["key_filename"]
-        self.key_filename = os.path.abspath(os.path.expanduser(key_filename_tmp))
 
     @property
-    @imports.inject("boto3", pip_extra="aws")
+    @imports.inject("boto3", pip_extra="ibmcloud")
     def boto3_session(boto3, self):
         if not hasattr(self, "_boto3_session"):
-            self._boto3_session = self._boto3_session = boto3.Session(region_name=self.aws_region)
+            self._boto3_session = self._boto3_session = boto3.Session(region_name=self.cos_region)
         return self._boto3_session
 
     def uuid(self):
@@ -47,16 +38,16 @@ class IBMCloudServer(Server):
     @ignore_lru_cache()
     def public_ip(self) -> str:
         # todo maybe eventually support VPC peering?
-        public_ip = self.ibmcloud_provider.external_ip(self.instance_id)
+        public_ip = self.vsi.public_ip
         return public_ip
 
     @ignore_lru_cache()
     def private_ip(self) -> str:
-        return self.ibmcloud_provider.internal_ip(self.instance_id)["address"]
+        return self.vsi.private_ip
 
     @ignore_lru_cache()
     def instance_class(self) -> str:
-        return self.vsi_info["profile"]["name"]
+        return self.vsi.instance_id
 
     @ignore_lru_cache(ignored_value={})
     def tags(self) -> Dict[str, str]:
@@ -67,22 +58,22 @@ class IBMCloudServer(Server):
 
     @ignore_lru_cache()
     def instance_name(self) -> Optional[str]:
-        return self.tags().get("Name", None)
+        return self.vsi.name
 
     def network_tier(self):
         return "PREMIUM"
 
     def region(self):
-        return self.vsi_info["zone"]["name"]
+        return self.vpc_backend.region
 
     def instance_state(self):
-        return ServerState.from_ibmcloud_state(self.ibmcloud_provider.get_node_status(self.instance_id))
+        return ServerState.from_ibmcloud_state(self.vpc_backend.get_node_status(self.instance_id))
 
     def __repr__(self):
         return f"IBMCloudServer(region_tag={self.region_tag}, instance_id={self.instance_id})"
 
     def terminate_instance_impl(self):
-        self.ibmcloud_provider.delete_vpc()
+        self.vpc_backend.clean(all=True)
 
     def get_ssh_client_impl(self):
         client = paramiko.SSHClient()
@@ -90,8 +81,8 @@ class IBMCloudServer(Server):
         try:
             client.connect(
                 self.public_ip(),
-                username=self.auth.ssh_credentials["username"],
-                pkey=paramiko.RSAKey.from_private_key_file(self.key_filename),
+                username=self.vsi.ssh_credentials["username"],
+                pkey=paramiko.RSAKey.from_private_key_file(self.vsi.ssh_credentials["key_filename"]),
                 look_for_keys=False,
                 allow_agent=False,
                 banner_timeout=200,
@@ -105,7 +96,10 @@ class IBMCloudServer(Server):
     def get_sftp_client(self):
         t = paramiko.Transport((self.public_ip(), 22))
 
-        t.connect(username=self.auth.ssh_credentials["username"], pkey=paramiko.RSAKey.from_private_key_file(self.key_filename))
+        t.connect(
+            username=self.vsi.ssh_credentials["username"],
+            pkey=paramiko.RSAKey.from_private_key_file(self.vsi.ssh_credentials["key_filename"]),
+        )
         return paramiko.SFTPClient.from_transport(t)
 
     def open_ssh_tunnel_impl(self, remote_port):
@@ -116,12 +110,12 @@ class IBMCloudServer(Server):
         return sshtunnel.SSHTunnelForwarder(
             (self.public_ip(), 22),
             # ssh_username="ec2-user",
-            ssh_username=self.auth.ssh_credentials["username"],
-            ssh_pkey=str(self.key_filename),
+            ssh_username=self.vsi.ssh_credentials["username"],
+            ssh_pkey=str(self.vsi.ssh_credentials["key_filename"]),
             local_bind_address=("127.0.0.1", 0),
             remote_bind_address=("127.0.0.1", remote_port),
         )
 
     def get_ssh_cmd(self):
         # return f"ssh -i {self.local_keyfile} ec2-user@{self.public_ip()}"
-        return f"ssh -i {self.key_filename} {self.auth.ssh_credentials['username']}@{self.public_ip()}"
+        return f"ssh -i {self.vsi.ssh_credentials['key_filename']} {self.vsi.ssh_credentials['username']}@{self.public_ip()}"
