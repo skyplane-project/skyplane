@@ -47,6 +47,7 @@ class GatewayObjStoreConn:
         if key not in self.obj_store_interfaces:
             logger.warning(f"[gateway_daemon] ObjectStoreInterface not cached for {key}")
             try:
+                logger.debug(f"[gateway_daemon] Creating ObjectStoreInterface for {key}")
                 self.obj_store_interfaces[key] = ObjectStoreInterface.create(region, bucket)
             except Exception as e:
                 raise ValueError(f"Failed to create obj store interface {str(e)}")

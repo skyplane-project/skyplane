@@ -26,9 +26,9 @@ from skyplane.utils.definitions import MB
 class GatewayDaemon:
     def __init__(
         self,
+        region: str,
         outgoing_ports: Dict[str, int],
         chunk_dir: PathLike,
-        region: str = None,
         max_inflight_chunks=64,
         use_tls=True,
         use_compression=False,
@@ -56,26 +56,23 @@ class GatewayDaemon:
             use_compression=use_compression,
             e2ee_key_bytes=e2ee_key_bytes,
         )
-        region = region if provider in ("aws", "gcp", "azure", "hdfs") else None
-
         self.gateway_sender = GatewaySender(
-            region,
             self.chunk_store,
             self.error_event,
             self.error_queue,
             outgoing_ports=outgoing_ports,
+            region=region,
             use_tls=use_tls,
             use_compression=use_compression,
             e2ee_key_bytes=e2ee_key_bytes,
         )
-
         provider = region.split(":")[0]
         if provider == "azure":
             n_conn = 24  # due to throttling limits from authentication
-        elif provider == "hdfs":
-            n_conn = 128  # Optimization: Check for resource utlization at http://<namenode>:50070
         else:
             n_conn = 32
+            
+        logger.info(f"[gateway_daemon] Using {n_conn} connections to object store")
         self.obj_store_conn = GatewayObjStoreConn(self.chunk_store, self.error_event, self.error_queue, max_conn=n_conn)
 
         # Download thread pool
@@ -106,10 +103,12 @@ class GatewayDaemon:
         signal.signal(signal.SIGTERM, exit_handler)
 
         logger.info("[gateway_daemon] Starting daemon loop")
+        logger.info(self.chunk_store.get_chunk_requests())
         try:
             while not exit_flag.is_set() and not self.error_event.is_set():
                 # queue object uploads and relays
                 for chunk_req in self.chunk_store.get_chunk_requests(ChunkState.downloaded):
+                    logger.info(f"[gateway_daemon] Chunk {chunk_req.src_region} is downloaded")
                     if self.region == chunk_req.dst_region and chunk_req.dst_type == "save_local":  # do nothing, save to ChunkStore
                         self.chunk_store.state_queue_upload(chunk_req.chunk.chunk_id)
                         self.chunk_store.state_start_upload(chunk_req.chunk.chunk_id, "save_local")
@@ -152,7 +151,8 @@ class GatewayDaemon:
 
                             self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
                             threading.Thread(target=fn, args=(chunk_req, size_mb)).start()
-                    elif self.region == chunk_req.src_region and chunk_req.src_type == "object_store":
+                    elif ((chunk_req.src_region.split(":")[0] in ("hdfs", "local") and self.region.split(":")[1] == chunk_req.src_region.split(":")[1]) or self.region == chunk_req.src_region) and chunk_req.src_type == "object_store":
+                        logger.info(f"[gateway_daemon] Chunk {chunk_req.src_region} is registered, {chunk_req}")
                         self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
                         self.obj_store_conn.queue_download_request(chunk_req)
                     elif self.region != chunk_req.src_region:  # do nothing, waiting for chunk to be be ready_to_upload

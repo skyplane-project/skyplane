@@ -105,6 +105,9 @@ class GCPCloudProvider(CloudProvider):
     @imports.inject("googleapiclient.errors", pip_extra="gcp")
     def authorize_gateways(errors, self, ips: List[str], rule_name: Optional[str] = None) -> str:
         firewall_name = f"skyplane-{uuid.uuid4().hex[:8]}" if rule_name is None else rule_name
+        #TODO: Remove after fixing onprem HDFS IP resolution
+        ips.append("10.128.0.0/9")
+        self.network.create_firewall_rule(f"allow-default-{uuid.uuid4().hex[:8]}", "0.0.0.0/0", ["0-65535"], ["tcp"])
         self.network.create_firewall_rule(firewall_name, ips, ["0-65535"], ["tcp", "udp", "icmp"])
         return firewall_name
 

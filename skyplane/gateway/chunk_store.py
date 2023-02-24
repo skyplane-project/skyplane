@@ -42,6 +42,7 @@ class ChunkStore:
         return self.chunk_status[chunk_id] if chunk_id in self.chunk_status else None
 
     def set_chunk_state(self, chunk_id: str, new_status: ChunkState, log_metadata: Optional[Dict] = None):
+        logger.info(f"Chunk {chunk_id} state transition {self.get_chunk_state(chunk_id)} -> {new_status}")
         self.chunk_status[chunk_id] = new_status
         rec = {"chunk_id": chunk_id, "state": new_status.name, "time": str(datetime.utcnow().isoformat())}
         if log_metadata is not None:
@@ -61,6 +62,7 @@ class ChunkStore:
     def state_queue_download(self, chunk_id: str):
         state = self.get_chunk_state(chunk_id)
         if state in [ChunkState.registered, ChunkState.download_queued]:
+            logger.info(f"Queuing download for chunk {chunk_id} (state={state}")
             self.set_chunk_state(chunk_id, ChunkState.download_queued)
         else:
             raise ValueError(f"Invalid transition queue_download from {state} (id={chunk_id})")
@@ -123,6 +125,7 @@ class ChunkStore:
         return self.chunk_requests[chunk_id]
 
     def add_chunk_request(self, chunk_request: ChunkRequest, state=ChunkState.registered):
+        logger.info(f"Add_chunk_request: Adding chunk request {chunk_request}")
         self.set_chunk_state(chunk_request.chunk.chunk_id, state)
         self.chunk_requests[chunk_request.chunk.chunk_id] = chunk_request
 

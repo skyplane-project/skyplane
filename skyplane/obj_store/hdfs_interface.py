@@ -1,5 +1,6 @@
 from functools import lru_cache
 import sys
+import os
 from pyarrow import fs
 from dataclasses import dataclass
 from typing import Iterator, List, Optional
@@ -7,34 +8,49 @@ from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 import mimetypes
 
+def _maybe_set_hadoop_classpath():
+    import subprocess
+
+    if 'hadoop' in os.environ.get('CLASSPATH', ''):
+        return
+
+    if 'HADOOP_HOME' in os.environ:
+        hadoop_bin = os.path.normpath(os.environ['HADOOP_HOME'])  +"/bin/"  #'{0}/bin/hadoop'.format(os.environ['HADOOP_HOME'])
+    else:
+        hadoop_bin = 'hadoop'
+
+    os.chdir(hadoop_bin)
+    hadoop_bin_exe = os.path.join(hadoop_bin, 'hadoop')
+    print(hadoop_bin_exe)
+    classpath = subprocess.check_output([hadoop_bin_exe, 'classpath', '--glob'])
+    os.environ['CLASSPATH'] = classpath.decode('utf-8')
+
+def resolve_hostnames():
+    os.system("cat /tmp/hostname >> /etc/hosts")
 
 @dataclass
 class HDFSFile(ObjectStoreObject):
     def full_path(self):
         return f"hdfs://{self.key}"
 
-
 class HDFSInterface(ObjectStoreInterface):
     def __init__(self, host, path="", port=8020):
         self.host = host
         self.port = port
-        self.hdfs_path = path
+        self.hdfs_path = host
+        _maybe_set_hadoop_classpath()
+        resolve_hostnames()
         self.hdfs = fs.HadoopFileSystem(
-            host=f"{self.host}/{self.hdfs_path}", port=self.port, user="hadoop", extra_conf={"dfs.permissions.enabled": "false"}
-        )
-        # print(f"Connecting to HDFS at {self.host}:{self.port} with path {self.hdfs_path}")
+            host=f"{self.host}/", port=self.port, user="hadoop", extra_conf={"dfs.permissions.enabled": "false", "dfs.client.use.datanode.hostname": "true", "dfs.datanode.use.datanode.hostname": "false"})
+        print(f"Connecting to HDFS at {self.host}:{self.port}")
 
     def path(self) -> str:
         return self.hdfs_path
 
     def list_objects(self, prefix="/skyplane5") -> Iterator[HDFSFile]:
-        _hdfs_connector = fs.HadoopFileSystem(
-            host=f"10.128.0.10", port=self.port, user="hadoop", extra_conf={"dfs.permissions.enabled": "false"}
-        )
-        print(f"Connecting to HDFS at {self.host}:{self.port} with path {self.hdfs_path}")
         fileselector = fs.FileSelector("/skyplane5", recursive=True, allow_not_found=True)
         print(f"File selector created successfully, {fileselector.base_dir}")
-        response = _hdfs_connector.get_file_info(fileselector)
+        response = self.hdfs.get_file_info(fileselector)
         print(f"Response: {response}")
         if hasattr(response, "__len__") and (not isinstance(response, str)):
             for file in response:
@@ -50,7 +66,7 @@ class HDFSInterface(ObjectStoreInterface):
             return False
 
     def region_tag(self) -> str:
-        return "hdfs:us-east-1"
+        return "hdfs:us-central1-a"
 
     def bucket(self) -> str:
         return self.hdfs_path
@@ -81,7 +97,7 @@ class HDFSInterface(ObjectStoreInterface):
     def download_object(
         self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5: bool = False
     ):
-        with self.hdfs.open_input_stream(f"/skyplane5/{src_object_name}") as f1:
+        with self.hdfs.open_input_stream(f"{src_object_name}") as f1:
             with open(dst_file_path, "wb+" if write_at_offset else "wb") as f2:
                 b = f1.read(nbytes=size_bytes)
                 while b:
@@ -99,7 +115,7 @@ class HDFSInterface(ObjectStoreInterface):
         mime_type: Optional[str] = None,
     ):
         with open(src_file_path, "rb") as f1:
-            with self.hdfs.open_output_stream(f"/skyplane5/{dst_object_name}") as f2:
+            with self.hdfs.open_output_stream(f"{dst_object_name}") as f2:
                 b = f1.read()
                 f2.write(b)
 

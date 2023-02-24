@@ -36,6 +36,10 @@ class CloudProvider:
             from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 
             return AzureCloudProvider.get_transfer_cost(src_key, dst_key, premium_tier)
+        elif src_provider == "hdfs":
+            from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
+
+            return GCPCloudProvider.get_transfer_cost(f"gcp:{_}", dst_key, premium_tier)
         else:
             raise NotImplementedError
 
