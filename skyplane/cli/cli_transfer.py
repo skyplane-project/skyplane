@@ -314,7 +314,7 @@ def cp(
         src_region_tag = FileSystemInterface.create(f"{provider_src}:infer", path_src).region_tag()
     else:
         src_region_tag = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src).region_tag()
-        
+
     if provider_dst in ("local", "nfs"):
         dst_region_tag = FileSystemInterface.create(f"{provider_dst}:infer", path_dst).region_tag()
     else:

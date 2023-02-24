@@ -55,7 +55,7 @@ class POSIXInterface(ObjectStoreInterface):
 
     def region_tag(self) -> str:
         return "gcp:us-central1-a"
-    
+
     def bucket(self) -> str:
         return ""
 
