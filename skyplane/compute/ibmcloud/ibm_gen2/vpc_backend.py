@@ -30,7 +30,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from skyplane.compute.ibmcloud.ibm_gen2.ssh_client import SSHClient
 from skyplane.compute.ibmcloud.ibm_gen2.constants import COMPUTE_CLI_MSG, CACHE_DIR
-from skyplane.compute.ibmcloud.ibm_gen2.utils import load_yaml_config, dump_yaml_config
+from skyplane.compute.ibmcloud.ibm_gen2.utils import load_yaml_config, dump_yaml_config, delete_yaml_config
 
 logger = logging.getLogger(__name__)
 
@@ -307,17 +307,6 @@ class IBMVPCBackend:
         """
         Creates a new floating IP address
         """
-        if "floating_ip_id" in self.config:
-            return
-
-        if "floating_ip_id" in self.vpc_data:
-            try:
-                self.vpc_cli.get_floating_ip(self.vpc_data["floating_ip_id"])
-                self.config["floating_ip"] = self.vpc_data["floating_ip"]
-                self.config["floating_ip_id"] = self.vpc_data["floating_ip_id"]
-                return
-            except ApiException:
-                pass
 
         floating_ip_data = None
 
@@ -336,10 +325,11 @@ class IBMVPCBackend:
             response = self.vpc_cli.create_floating_ip(floating_ip_prototype)
             floating_ip_data = response.result
 
-        self.config["floating_ip"] = floating_ip_data["address"]
-        self.config["floating_ip_id"] = floating_ip_data["id"]
+        floating_ip = floating_ip_data["address"]
+        floating_ip_id = floating_ip_data["id"]
+        return floating_ip, floating_ip_id
 
-    def create_vpc_instance(self):
+    def create_vpc_instance(self, public=False):
         """
         Creates the master VM insatnce
         """
@@ -350,9 +340,15 @@ class IBMVPCBackend:
             for image in self.vpc_cli.list_images().result["images"]:
                 if "ubuntu-22" in image["name"]:
                     self.config["image_id"] = image["id"]
+
         name = f"skyplane-ibm-vsi-{self.vpc_key}-{str(uuid.uuid4().hex[:8])}"
-        vsi = IBMVPCInstance(name, self.config, self.vpc_cli, public=True)
-        vsi.public_ip = self.config["floating_ip"]
+        vsi = IBMVPCInstance(name, self.config, self.vpc_cli, public)
+
+        floating_ip, floating_ip_id = self._create_floating_ip()
+        if public:
+            vsi.public_ip = floating_ip
+            vsi.floating_ip_id = floating_ip_id
+
         vsi.instance_id = None
         vsi.profile_name = self.config["master_profile_name"]
         vsi.delete_on_dismantle = False
@@ -389,16 +385,12 @@ class IBMVPCBackend:
         self._create_subnet()
         # Create a new gateway if not exists
         self._create_gateway()
-        # Create a new floating IP if not exists
-        self._create_floating_ip()
 
         self.vpc_data = {
             "instance_id": "0af1",
             "vpc_id": self.config["vpc_id"],
             "subnet_id": self.config["subnet_id"],
             "security_group_id": self.config["security_group_id"],
-            "floating_ip": self.config["floating_ip"],
-            "floating_ip_id": self.config["floating_ip_id"],
             "gateway_id": self.config["gateway_id"],
             "zone_name": self.config["zone_name"],
             "ssh_key_id": self.config["ssh_key_id"],
@@ -569,6 +561,8 @@ class IBMVPCBackend:
             self._delete_ssh_key()
             self._delete_vpc()
 
+        delete_yaml_config(self.vpc_data_filename)
+
     def clear(self, job_keys=None):
         """
         Delete all the workers
@@ -619,6 +613,7 @@ class IBMVPCInstance:
         self.delete_on_dismantle = self.config["delete_on_dismantle"]
         self.profile_name = self.config["worker_profile_name"]
 
+        self.vpc_cli =  None
         self.vpc_cli = ibm_vpc_client or self._create_vpc_client()
         self.public = public
 
@@ -627,6 +622,7 @@ class IBMVPCInstance:
         self.instance_data = None
         self.private_ip = None
         self.public_ip = None
+        self.floating_ip_id = None
         self.home_dir = "/root"
 
         self.ssh_credentials = {
@@ -653,7 +649,7 @@ class IBMVPCInstance:
         ibm_vpc_client.set_service_url(self.config["endpoint"] + "/v1")
 
         # decorate instance public methods with except/retry logic
-        decorate_instance(self.vpc_cli, vpc_retry_on_except)
+        decorate_instance(self.vpc_cli , vpc_retry_on_except)
 
         return ibm_vpc_client
 
@@ -786,13 +782,10 @@ class IBMVPCInstance:
 
         return resp.result
 
-    def _attach_floating_ip(self, instance):
+    def _attach_floating_ip(self, fip, fip_id, instance):
         """
-        Attach a floating IP address only if the VM is the master instance
+        Attach a floating IP address to VM
         """
-
-        fip = self.config["floating_ip"]
-        fip_id = self.config["floating_ip_id"]
 
         # logger.debug('Attaching floating IP {} to VM instance {}'.format(fip, instance['id']))
 
@@ -869,7 +862,7 @@ class IBMVPCInstance:
             self.start()
 
         if self.public and instance:
-            self._attach_floating_ip(instance)
+            self._attach_floating_ip(self.public_ip, self.floating_ip_id, instance)
 
         return self.instance_id
 

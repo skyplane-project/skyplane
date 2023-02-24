@@ -42,11 +42,11 @@ class IBMCloudProvider(CloudProvider):
         self.regions_vpc[region] = ibm_vpc_backend
 
     def teardown_region(self, region):
-        if region in self.regions_cloudprovider:
+        if region in self.regions_vpc:
             self.regions_vpc[region].clean(all=True)
 
     def teardown_global(self):
-        for region in self.regions_cloudprovider:
+        for region in self.regions_vpc:
             self.regions_vpc[region].clean(all=True)
 
     def add_ips_to_security_group(self, cos_region: str, ips: Optional[List[str]] = None):
