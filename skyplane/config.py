@@ -158,6 +158,14 @@ class SkyplaneConfig:
                 gcp_project_id = config.get("gcp", "project_id")
 
         ibmcloud_enabled = False
+        ibmcloud_access_id = None
+        ibmcloud_secret_key = None
+        ibmcloud_iam_key = None
+        ibmcloud_iam_endpoint = None
+        ibmcloud_useragent = None
+        ibmcloud_resource_group_id = None
+        ibmcloud_ssh_user = None
+        ibmcloud_ssh_key_filename = None
         if "ibmcloud" in config:
             if "ibmcloud_enabled" in config["ibmcloud"]:
                 ibmcloud_enabled = config.getboolean("ibmcloud", "ibmcloud_enabled")
