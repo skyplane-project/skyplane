@@ -45,6 +45,7 @@ RUN (echo 'net.ipv4.ip_local_port_range = 12000 65535' >> /etc/sysctl.conf) \
 
 # install gateway
 COPY scripts/requirements-gateway.txt /tmp/requirements-gateway.txt
+COPY scripts/hostname /tmp/hostname
 RUN --mount=type=cache,target=/root/.cache/pip pip3 install --no-cache-dir -r /tmp/requirements-gateway.txt && rm -r /tmp/requirements-gateway.txt
 
 WORKDIR /pkg
