@@ -1,4 +1,7 @@
+from importlib.resources import path
+
 from skyplane import compute
+from skyplane.planner.solver import ThroughputProblem
 from skyplane.planner.topology import ReplicationTopology
 
 
@@ -40,20 +43,70 @@ class DirectPlanner(Planner):
 
 
 class ILPSolverPlanner(Planner):
-    def __init__(self, src_provider: str, src_region, dst_provider: str, dst_region: str, max_instances: int, max_connections: int):
+    def __init__(
+        self,
+        src_provider: str,
+        src_region,
+        dst_provider: str,
+        dst_region: str,
+        max_instances: int,
+        max_connections: int,
+        required_throughput_gbits: float,
+    ):
         self.max_instances = max_instances
         self.max_connections = max_connections
+        self.solver_required_throughput_gbits = required_throughput_gbits
         super().__init__(src_provider, src_region, dst_provider, dst_region)
 
     def plan(self) -> ReplicationTopology:
-        raise NotImplementedError
+        from skyplane.planner.solver_ilp import ThroughputSolverILP
+
+        problem = ThroughputProblem(
+            src=f"{self.src_provider}:{self.src_region}",
+            dst=f"{self.dst_provider}:{self.dst_region}",
+            required_throughput_gbits=self.solver_required_throughput_gbits,
+            gbyte_to_transfer=1,
+            instance_limit=self.max_instances,
+        )
+
+        with path("skyplane.data", "throughput.csv") as solver_throughput_grid:
+            tput = ThroughputSolverILP(solver_throughput_grid)
+        solution = tput.solve_min_cost(problem, solver=ThroughputSolverILP.choose_solver(), save_lp_path=None)
+        if not solution.is_feasible:
+            raise ValueError("ILP solver failed to find a solution, try solving with fewer constraints")
+        topo, _ = tput.to_replication_topology(solution)
+        return topo
 
 
 class RONSolverPlanner(Planner):
-    def __init__(self, src_provider: str, src_region, dst_provider: str, dst_region: str, max_instances: int, max_connections: int):
+    def __init__(
+        self,
+        src_provider: str,
+        src_region,
+        dst_provider: str,
+        dst_region: str,
+        max_instances: int,
+        max_connections: int,
+        required_throughput_gbits: float,
+    ):
         self.max_instances = max_instances
         self.max_connections = max_connections
+        self.solver_required_throughput_gbits = required_throughput_gbits
         super().__init__(src_provider, src_region, dst_provider, dst_region)
 
     def plan(self) -> ReplicationTopology:
-        raise NotImplementedError
+        from skyplane.planner.solver_ron import ThroughputSolverRON
+
+        problem = ThroughputProblem(
+            src=self.src_region,
+            dst=self.dst_region,
+            required_throughput_gbits=self.solver_required_throughput_gbits,
+            gbyte_to_transfer=1,
+            instance_limit=self.max_instances,
+        )
+
+        with path("skyplane.data", "throughput.csv") as solver_throughput_grid:
+            tput = ThroughputSolverRON(solver_throughput_grid)
+        solution = tput.solve(problem)
+        topo, _ = tput.to_replication_topology(solution)
+        return topo

@@ -127,6 +127,8 @@ class AzureBlobInterface(ObjectStoreInterface):
         self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5=False
     ) -> Tuple[Optional[str], Optional[bytes]]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
+        if size_bytes is not None and offset_bytes is None:
+            offset_bytes = 0
         downloader = self.container_client.download_blob(
             src_object_name, offset=offset_bytes, length=size_bytes, max_concurrency=self.max_concurrency
         )

@@ -98,6 +98,17 @@ class AzureCloudProvider(CloudProvider):
         return "unknown"
 
     @staticmethod
+    def is_confidential_instance_type(instance_name: str) -> bool:
+        # Lists of confidential vms can be found here:
+        # https://learn.microsoft.com/en-us/azure/confidential-computing/virtual-machine-solutions-amd#sizes
+        # For example, `Standard_DC4ads_v5`, `Standard_EC64ads_v5` are confidential instances.
+        sz = instance_name.split("_")[1]
+        # remove the digits from the string
+        sz = re.sub(r"\d", "", sz)
+        if sz.upper() in {"DCAS", "DCADS", "ECAS", "ECADS"}:
+            return True
+
+    @staticmethod
     def lookup_valid_instance(region: str, instance_name: str) -> Optional[str]:
         sku_mapping = AzureAuthentication.get_sku_mapping()
         if instance_name in sku_mapping[region]:
@@ -181,7 +192,7 @@ class AzureCloudProvider(CloudProvider):
         compute_client = self.auth.get_compute_client()
         server_list = []
         for vm in compute_client.virtual_machines.list(AzureServer.resource_group_name):
-            if vm.tags.get("skyplane", None) == "true" and AzureServer.is_valid_vm_name(vm.name) and vm.location == region:
+            if vm.tags and vm.tags.get("skyplane", None) == "true" and AzureServer.is_valid_vm_name(vm.name) and vm.location == region:
                 name = AzureServer.base_name_from_vm_name(vm.name)
                 s = AzureServer(name)
                 if s.is_valid():
@@ -340,54 +351,73 @@ class AzureCloudProvider(CloudProvider):
         with Timer("Creating Azure VM"):
             with self.provisioning_semaphore:
                 try:
+                    vm_params = {
+                        "location": location,
+                        "tags": tags,
+                        "hardware_profile": {"vm_size": self.lookup_valid_instance(location, vm_size)},
+                        "storage_profile": {
+                            # "image_reference": {
+                            #     "publisher": "canonical",
+                            #     "offer": "0001-com-ubuntu-server-focal",
+                            #     "sku": "20_04-lts",
+                            #     "version": "latest",
+                            # },
+                            "image_reference": {
+                                "publisher": "microsoft-aks",
+                                "offer": "aks",
+                                "sku": "aks-engine-ubuntu-1804-202112",
+                                "version": "latest",
+                            },
+                            "os_disk": {"create_option": "FromImage", "delete_option": "Delete"},
+                        },
+                        "os_profile": {
+                            "computer_name": AzureServer.vm_name(name),
+                            "admin_username": uname,
+                            "linux_configuration": {
+                                "disable_password_authentication": True,
+                                "ssh": {"public_keys": [{"path": f"/home/{uname}/.ssh/authorized_keys", "key_data": pub_key}]},
+                            },
+                        },
+                        "network_profile": {"network_interfaces": [{"id": nic_result.id}]},
+                        # give VM managed identity w/ user assigned identity
+                        "identity": {
+                            "type": ResourceIdentityType.user_assigned,
+                            "user_assigned_identities": [
+                                {
+                                    # code from: https://github.com/ray-project/ray/pull/7080/files#diff-0f1bb1da82d112b850a85c1b7b1876e50efd5a7400c62a5c4de334f494d3bf46R222-R233
+                                    "key": f"/subscriptions/{cloud_config.azure_subscription_id}/resourceGroups/skyplane/providers/Microsoft.ManagedIdentity/userAssignedIdentities/skyplane_umi",
+                                    "value": {
+                                        "principal_id": cloud_config.azure_principal_id,
+                                        "client_id": cloud_config.azure_client_id,
+                                    },
+                                }
+                            ],
+                        },
+                        # use spot instances if use_spot_instances is set
+                        "priority": "Spot" if use_spot_instances else "Regular",
+                    }
+                    if self.is_confidential_instance_type(vm_size):
+                        vm_params["security_profile"] = {
+                            "security_type": "ConfidentialVM",
+                            "uefi_settings": {"v_tpm_enabled": True, "secure_boot_enabled": True},
+                        }
+                        vm_params["storage_profile"]["os_disk"].update(
+                            {
+                                "managed_disk": {
+                                    "security_profile": {"security_encryption_type": "DiskWithVMGuestState"},
+                                }
+                            }
+                        )
+                        vm_params["storage_profile"]["image_reference"] = {
+                            "publisher": "Canonical",
+                            "offer": "0001-com-ubuntu-confidential-vm-focal",
+                            "sku": "20_04-lts-cvm",
+                            "version": "latest",
+                        }
                     poller = compute_client.virtual_machines.begin_create_or_update(
                         resource_group,
                         AzureServer.vm_name(name),
-                        {
-                            "location": location,
-                            "tags": tags,
-                            "hardware_profile": {"vm_size": self.lookup_valid_instance(location, vm_size)},
-                            "storage_profile": {
-                                # "image_reference": {
-                                #     "publisher": "canonical",
-                                #     "offer": "0001-com-ubuntu-server-focal",
-                                #     "sku": "20_04-lts",
-                                #     "version": "latest",
-                                # },
-                                "image_reference": {
-                                    "publisher": "microsoft-aks",
-                                    "offer": "aks",
-                                    "sku": "aks-engine-ubuntu-1804-202112",
-                                    "version": "latest",
-                                },
-                                "os_disk": {"create_option": "FromImage", "delete_option": "Delete"},
-                            },
-                            "os_profile": {
-                                "computer_name": AzureServer.vm_name(name),
-                                "admin_username": uname,
-                                "linux_configuration": {
-                                    "disable_password_authentication": True,
-                                    "ssh": {"public_keys": [{"path": f"/home/{uname}/.ssh/authorized_keys", "key_data": pub_key}]},
-                                },
-                            },
-                            "network_profile": {"network_interfaces": [{"id": nic_result.id}]},
-                            # give VM managed identity w/ user assigned identity
-                            "identity": {
-                                "type": ResourceIdentityType.user_assigned,
-                                "user_assigned_identities": [
-                                    {
-                                        # code from: https://github.com/ray-project/ray/pull/7080/files#diff-0f1bb1da82d112b850a85c1b7b1876e50efd5a7400c62a5c4de334f494d3bf46R222-R233
-                                        "key": f"/subscriptions/{cloud_config.azure_subscription_id}/resourceGroups/skyplane/providers/Microsoft.ManagedIdentity/userAssignedIdentities/skyplane_umi",
-                                        "value": {
-                                            "principal_id": cloud_config.azure_principal_id,
-                                            "client_id": cloud_config.azure_client_id,
-                                        },
-                                    }
-                                ],
-                            },
-                            # use spot instances if use_spot_instances is set
-                            "priority": "Spot" if use_spot_instances else "Regular",
-                        },
+                        vm_params,
                     )
                     try:
                         vm_result = poller.result()

@@ -235,6 +235,10 @@ class ThroughputSolver:
         regions = self.get_regions()
         Edge = namedtuple("Edge", ["src_region", "src_instance_idx", "dst_region", "dst_instance_idx", "connections"])
 
+        # check is feasible
+        if not solution.is_feasible:
+            raise ValueError("Solution is not feasible")
+
         # compute connections to target per instance
         ninst = solution.var_instances_per_region
         average_egress_conns = [0 if ninst[i] == 0 else np.ceil(solution.var_conn[i, :].sum() / ninst[i]) for i in range(len(regions))]

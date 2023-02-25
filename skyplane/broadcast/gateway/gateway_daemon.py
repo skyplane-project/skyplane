@@ -24,7 +24,7 @@ from skyplane.broadcast.gateway.operators.gateway_operator import (
     GatewayWaitReciever,
 )
 from skyplane.broadcast.gateway.operators.gateway_receiver import GatewayReceiver
-from collections import defaultdict
+from skyplane.utils import logger
 
 # TODO: add default partition ID to main
 # create gateway br

@@ -41,3 +41,8 @@ Using the cloud provider's console, verify the bucket exists. If so, ensure that
 
 To enable support for requester pays buckets, run `skyplane config set requester_pays true`.
 ``` 
+
+# How can I switch between GCP projects? 
+We recommend re-setting GCP credentials locally by running `rm -r ~/.config/gcloud` then re-running `gcloud auth application-default login`. You can then set the project ID you want with `gcloud config set project <PROJECT_ID>`. Once you've updated authentication and the project, you can run `skyplane init --reinit-gcp'. 
+ 
+If you get a an error saying `Compute Engine API has not been used in project 507282715251 before or it is disabled`, wait a few minutes for the API enablement to take effect and re-run `skyplane init`.
