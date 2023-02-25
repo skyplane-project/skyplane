@@ -75,6 +75,7 @@ class GCSInterface(ObjectStoreInterface):
         return self.bucket_name
 
     def bucket_exists(self):
+        print("list client objects")
         iterator = self._gcs_client.list_blobs(self.bucket_name, page_size=1)
         try:
             next(iterator.pages, None)
@@ -102,7 +103,7 @@ class GCSInterface(ObjectStoreInterface):
     def delete_bucket(self):
         self._gcs_client.get_bucket(self.bucket_name).delete()
 
-    def list_objects(self, prefix="") -> Iterator[GCSObject]:
+    def list_objects(self, prefix="", region=None) -> Iterator[GCSObject]:
         blobs = self._gcs_client.list_blobs(self.bucket_name, prefix=prefix)
         for blob in blobs:
             yield GCSObject("gcs", self.bucket_name, blob.name, blob.size, blob.updated, mime_type=getattr(blob, "content_type", None))
