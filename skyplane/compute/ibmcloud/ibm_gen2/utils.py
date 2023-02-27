@@ -31,5 +31,5 @@ def dump_yaml_config(config_filename, data):
 
 def delete_yaml_config(config_filename):
 
-    if os.path.exists(os.path.dirname(config_filename)):
-        os.remove(os.path.dirname(config_filename))
+    if os.path.exists(config_filename):
+        os.remove(config_filename)
