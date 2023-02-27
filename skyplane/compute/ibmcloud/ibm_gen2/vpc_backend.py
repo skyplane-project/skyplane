@@ -329,7 +329,7 @@ class IBMVPCBackend:
         floating_ip_id = floating_ip_data["id"]
         return floating_ip, floating_ip_id
 
-    def create_vpc_instance(self, public=False):
+    def create_vpc_instance(self, public=True):
         """
         Creates the master VM insatnce
         """
