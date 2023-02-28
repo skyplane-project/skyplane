@@ -27,3 +27,9 @@ def dump_yaml_config(config_filename, data):
 
     with open(config_filename, "w") as config_file:
         yaml.dump(data, config_file, default_flow_style=False)
+
+
+def delete_yaml_config(config_filename):
+
+    if os.path.exists(config_filename):
+        os.remove(config_filename)
