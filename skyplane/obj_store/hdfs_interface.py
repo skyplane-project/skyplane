@@ -8,7 +8,7 @@ from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 import mimetypes
 
-def _maybe_set_hadoop_classpath():
+def test_and_set_hadoop_classpath():
     import subprocess
 
     if 'hadoop' in os.environ.get('CLASSPATH', ''):
@@ -38,7 +38,7 @@ class HDFSInterface(ObjectStoreInterface):
         self.host = host
         self.port = port
         self.hdfs_path = host
-        _maybe_set_hadoop_classpath()
+        test_and_set_hadoop_classpath()
         resolve_hostnames()
         self.hdfs = fs.HadoopFileSystem(
             host=f"{self.host}/", port=self.port, user="hadoop", extra_conf={"dfs.permissions.enabled": "false", "dfs.client.use.datanode.hostname": "true", "dfs.datanode.use.datanode.hostname": "false"})
