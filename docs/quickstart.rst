@@ -61,10 +61,10 @@ Now, you can initialize Skyplane with your desired cloud providers. Skyplane aut
    $ skyplane init
 
 
-Transferring Data
--------------------
+Transferring Data via Skyplane CLI
+------------------------------------
 
-We're ready to use Skyplane! Let's use `skyplane cp` to copy files from AWS to GCP:
+We're ready to use the Skyplane CLI! Let's use `skyplane cp` to copy files from AWS to GCP:
 
 .. code-block:: bash
 
@@ -77,3 +77,25 @@ To transfer only new objects, you can instead use `skyplane sync`:
 
    ---> Copy only diff
    $ skyplane sync s3://... gs://...
+
+Transferring Data via Skyplane API
+------------------------------------
+
+We can also leverage the power of the Skyplane API! To access Skyplane and its functions, you can import it in your Python code like this:
+
+.. code-block:: python
+
+    import skyplane
+
+To start a simple copy job using the Skyplane API, we simply create a SkyplaneClient and call `copy`:
+
+.. code-block:: python
+    :caption: Example of how to use API simple copy that automatically deprovisions the VMs
+
+    import skyplane
+
+    client = skyplane.SkyplaneClient(aws_config=skyplane.AWSConfig())
+    client.copy(src="s3://skycamp-demo-src/synset_labels.txt", dst="s3://skycamp-demo-us-east-2/imagenet-bucket/synset_labels.txt", recursive=False)
+
+.. note::
+   In this example, we use a defauly AWSConfig which infers AWS credentials from the environment.
