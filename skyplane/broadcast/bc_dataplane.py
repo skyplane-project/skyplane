@@ -297,6 +297,7 @@ class BroadcastDataplane(Dataplane):
 
                 # dst receive data, write to object store / write local (if obj_store=None), forward data if needed
                 elif node in dsts:
+                    print("dest obj", dsts_obj_store_map)
                     dst_obj_store = None if dsts_obj_store_map is None else dsts_obj_store_map[node]
                     self.add_dst_operator(solution_graph, node_gateway_program, node, partitions, obj_store=dst_obj_store)
 
@@ -322,6 +323,9 @@ class BroadcastDataplane(Dataplane):
         am_source = gateway_node in self.topology.source_instances()
         am_sink = gateway_node in self.topology.sink_instances()
 
+        import traceback
+        import sys
+
 
         try:
 
@@ -345,6 +349,8 @@ class BroadcastDataplane(Dataplane):
                 use_socket_tls=self.transfer_config.use_socket_tls,
             )
         except Exception as e: 
+            print(traceback.format_exc())
+            print(sys.exc_info()[2])
             print("ERROR: ", e)
 
     def source_gateways(self) -> List[compute.Server]:
