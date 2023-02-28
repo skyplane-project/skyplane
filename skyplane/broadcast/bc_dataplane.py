@@ -53,7 +53,9 @@ class BroadcastDataplane(Dataplane):
         transfer_config: TransferConfig,
         topology: Optional[BroadcastReplicationTopology] = None,
         gateway_program_path: Optional[str] = None, 
+        debug: bool = False,
     ):
+
         self.log_dir = log_dir
         self.clientid = clientid
         self.provisioner = provisioner
@@ -61,6 +63,7 @@ class BroadcastDataplane(Dataplane):
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         self.provisioning_lock = threading.Lock()
         self.provisioned = False
+        self.debug = debug
 
         # either set topology or gateway program 
         self.gateway_program_path = gateway_program_path
@@ -158,7 +161,7 @@ class BroadcastDataplane(Dataplane):
                 num_connections = int(max_conn_per_vm / tot_senders)
 
                 if (
-                    next_region.split(":")[0] == region.split(":")[0] and region.split(":")[0] == "gcp"
+                next_region.split(":")[0] == region.split(":")[0] and region.split(":")[0] == "gcp"
                 ):  # gcp to gcp connection, use private ips
                     print("GCP to GCP connection, should use private ips")
                     send_ops = [
@@ -319,22 +322,30 @@ class BroadcastDataplane(Dataplane):
         am_source = gateway_node in self.topology.source_instances()
         am_sink = gateway_node in self.topology.sink_instances()
 
-        # start gateway
-        #if sgateway_log_dir:
-        if self.log_dir:
-            gateway_server.init_log_files(self.log_dir)
-        if authorize_ssh_pub_key:
-            gateway_server.copy_public_key(authorize_ssh_pub_key)
 
-        gateway_server.start_gateway(
-            {},  # don't need setup arguments here to pass as outgoing_ports
-            gateway_programs=self.current_gw_programs,  # NOTE: BC pass in gateway programs
-            gateway_docker_image=gateway_docker_image,
-            e2ee_key_bytes=e2ee_key_bytes if (self.transfer_config.use_e2ee and (am_source or am_sink)) else None,
-            use_bbr=False,
-            use_compression=self.transfer_config.use_compression,
-            use_socket_tls=self.transfer_config.use_socket_tls,
-        )
+        try:
+
+            print("Gateway", gateway_docker_image)
+            #import pdb; pdb.set_trace()
+
+            # start gateway
+            #if sgateway_log_dir:
+            if self.log_dir:
+                gateway_server.init_log_files(self.log_dir)
+            if authorize_ssh_pub_key:
+                gateway_server.copy_public_key(authorize_ssh_pub_key)
+
+            gateway_server.start_gateway(
+                {},  # don't need setup arguments here to pass as outgoing_ports
+                gateway_programs=self.current_gw_programs,  # NOTE: BC pass in gateway programs
+                gateway_docker_image=gateway_docker_image,
+                e2ee_key_bytes=e2ee_key_bytes if (self.transfer_config.use_e2ee and (am_source or am_sink)) else None,
+                use_bbr=False,
+                use_compression=self.transfer_config.use_compression,
+                use_socket_tls=self.transfer_config.use_socket_tls,
+            )
+        except Exception as e: 
+            print("ERROR: ", e)
 
     def source_gateways(self) -> List[compute.Server]:
         return [self.bound_nodes[n] for n in self.topology.source_instances()] if self.provisioned else []

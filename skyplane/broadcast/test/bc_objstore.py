@@ -21,16 +21,23 @@ def start_transfer(args):
     # dst_regions = ["ap-southeast-2", "ap-south-1"]
     #dst_regions = ["ap-southeast-2", "ap-south-1", "ap-northeast-3", "ap-northeast-2", "ap-northeast-1"]
     # dst_regions = ["us-west-1", "us-west-2"]
-    # dst_regions = ["ap-east-1", "ap-northeast-1"]
 
-    src_region = "us-east1"
-    dst_regions = ["europe-southwest1", "us-west1", "us-west3", "europe-north1", "europe-west2", "asia-south1"]
+    #src_region = "us-east1"
 
-    src_cloud_provider = "gcp"
-    dst_cloud_providers = ["gcp"] * len(dst_regions)
-
-    source_file = "gs://skyplane-broadcast-datasets/OPT-66B/"
+    #dst_cloud_providers = ["gcp"] * len(dst_regions)
+    #dst_regions = ["europe-west3-a", "europe-west4-a", "us-west4-a", "europe-north1-a", "europe-west2-a"] #, "asia-south1-a"]
+    #dest_files = [f"gs://skyplane-broadcast-test-{d}/OPT-66B/" for d in dst_regions]
+    dst_regions = ["ap-east-1", "ap-northeast-1"]
+    dst_cloud_providers = ["aws"] * len(dst_regions)
     dest_files = [f"s3://skyplane-broadcast-test-{d}/OPT-66B/" for d in dst_regions]
+
+    src_cloud_provider = "aws"
+    src_region = "us-east-1"
+    source_file = "s3://laion-400m-dataset/"
+
+    #src_cloud_provider = "gcp"
+    #src_region = "us-west1-a"
+    #source_file = "gs://skyplane-broadcast-datasets/OPT-66B/"
 
     # OPT model
     # source_file = "s3://skyplane-broadcast/OPT-66B/"
@@ -54,11 +61,8 @@ def start_transfer(args):
             bucket = GCSInterface(bucket_name)
         else: 
             print("Unsupported cloud provider", bucket_path)
-        try:
-            print("Create bucket", region)
-            bucket.create_bucket(region)
-        except Exception as e:
-            print(e)
+        print("Create bucket", region, bucket_path)
+        bucket.create_bucket(region)
 
     print(source_file)
     print(dest_files)

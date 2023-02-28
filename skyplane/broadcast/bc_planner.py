@@ -49,6 +49,18 @@ class BroadcastPlanner:
         # need to input cost_grid and tp_grid
         self.costs = pd.read_csv(cost_grid_path)
         self.throughput = pd.read_csv(tp_grid_path)
+
+        ## remove subregion
+        #def remove_subregion(region):
+        #    print("region", region, region[-2:])
+        #    if region[-2:] == "-a" or region[-2:] == "-b" or region[-2:] == "-c":
+        #        return region[:-2]
+        #    return region 
+        #self.costs.src = self.costs.src.apply(lambda region: remove_subregion(region))
+        #self.costs.dest = self.costs.dest.apply(lambda region: remove_subregion(region))
+        #self.throughput.src_region = self.throughput.src_region.apply(lambda region: remove_subregion(region))
+        #self.throughput.dst_region = self.throughput.dst_region.apply(lambda region: remove_subregion(region))
+
         self.G = self.make_nx_graph(self.costs, self.throughput, num_instances)
 
         if aws_only:

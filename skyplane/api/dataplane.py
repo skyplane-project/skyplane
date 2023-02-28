@@ -58,10 +58,8 @@ class Dataplane:
         provisioner: "Provisioner",
         transfer_config: TransferConfig,
         log_dir: str, 
+        debug: bool = True,
     ):
-<<<<<<< HEAD
-        self.log_dir = log_dir
-=======
         """
         :param clientid: the uuid of the local host to create the dataplane
         :type clientid: str
@@ -72,7 +70,6 @@ class Dataplane:
         :param transfer_config: the configuration during the transfer
         :type transfer_config: TransferConfig
         """
->>>>>>> 25539e166769edfc172e2df3b3b78b80b83144fd
         self.clientid = clientid
         self.topology = topology
         self.src_region_tag = self.topology.source_region()
@@ -90,6 +87,7 @@ class Dataplane:
         # transfer logs
         self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
         self.transfer_dir.mkdir(exist_ok=True, parents=True)
+        self.debug = debug
 
         # pending tracker tasks
         self.jobs_to_dispatch: List[TransferJob] = []
@@ -196,7 +194,9 @@ class Dataplane:
             servers_by_region = defaultdict(list)
             for s in servers:
                 servers_by_region[s.region_tag].append(s)
+            print(servers_by_region)
             for node in self.topology.gateway_nodes:
+                print(node.region)
                 instance = servers_by_region[node.region].pop()
                 self.bound_nodes[node] = instance
             logger.fs.debug(f"[Dataplane.provision] bound_nodes = {self.bound_nodes}")
@@ -236,7 +236,7 @@ class Dataplane:
         :type spinner: bool
         """
         with self.provisioning_lock:
-            if debug:
+            if self.debug:
                 logger.fs.info("Copying gateway logs to {self.transfer_dir}")
                 self.copy_gateway_logs()
 
