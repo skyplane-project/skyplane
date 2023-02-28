@@ -21,7 +21,9 @@ class IBMCloudAuthentication:
             self.config = SkyplaneConfig.load_config(config_path)
 
         self.user_agent = self.config.ibmcloud_useragent if self.config.ibmcloud_useragent is not None else "skyplane-ibm"
-        self._ibmcloud_resource_group_id = self.config.ibmcloud_resource_group_id
+        #self._ibmcloud_resource_group_id = self.config.ibmcloud_resource_group_id
+        self._ibmcloud_resource_group_id = "0e64ce277c7c4b009a7b59a0c3e07180"
+
 
         self._ssh_credentials = {"username": self.config.ibmcloud_ssh_user, "key_filename": self.config.ibmcloud_ssh_key_filename}
 

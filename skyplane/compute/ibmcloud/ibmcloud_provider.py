@@ -71,4 +71,5 @@ class IBMCloudProvider(CloudProvider):
         tags["node-name"] = "skyplane-master"
 
         instance_id, vsi = self.regions_vpc[region].create_vpc_instance()
+        print("VSI", vsi)
         return IBMCloudServer(self.regions_vpc[region], f"cos:{region}", instance_id, vsi)

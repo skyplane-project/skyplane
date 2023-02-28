@@ -176,8 +176,11 @@ class SkyplaneConfig:
             ibmcloud_iam_endpoint = _get_value("ibmcloud", "ibmcloud_iam_endpoint", config)
             ibmcloud_useragent = _get_value("ibmcloud", "ibmcloud_useragent", config)
             ibmcloud_resource_group_id = _get_value("ibmcloud", "ibmcloud_resource_group_id", config)
+            print("get value", ibmcloud_resource_group_id)
             ibmcloud_ssh_user = _get_value("ibmcloud", "ibmclod_ssh_user", config, "root")
             ibmcloud_ssh_key_filename = _get_value("ibmcloud", "ibmclod_ssh_key_filename", config, "~/.ssh/id.rsa.default-ssh-key")
+
+        print("resource group id", ibmcloud_resource_group_id)
 
         skyplane_config = cls(
             aws_enabled=aws_enabled,
