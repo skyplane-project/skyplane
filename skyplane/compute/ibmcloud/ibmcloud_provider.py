@@ -27,7 +27,7 @@ class IBMCloudProvider(CloudProvider):
         return []
 
     def setup_global(self, iam_name: str = "skyplane_gateway", attach_policy_arn: Optional[str] = None):
-        # Not sure this should execute something. We will create VPC per refion
+        # Not sure this should execute something. We will create VPC per region
         pass
 
     def setup_region(self, region: str):
