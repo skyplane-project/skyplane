@@ -312,7 +312,6 @@ class Server:
 
         # copy service account files
         if self.provider == "gcp":
-
             service_key_path = compute.GCPAuthentication().get_service_account_key_path()
             service_key_file = os.path.basename(service_key_path)
             self.upload_file(service_key_path, f"/tmp/{service_key_file}")
