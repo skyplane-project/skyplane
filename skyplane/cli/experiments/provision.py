@@ -27,12 +27,15 @@ def provision(
     aws: compute.AWSCloudProvider,
     azure: compute.AzureCloudProvider,
     gcp: compute.GCPCloudProvider,
+    ibmcloud: compute.IBMCloudProvider,
     aws_regions_to_provision: List[str],
     azure_regions_to_provision: List[str],
     gcp_regions_to_provision: List[str],
+    ibmcloud_regions_to_provision: List[str],
     aws_instance_class: str,
     azure_instance_class: str,
     gcp_instance_class: str,
+    ibmcloud_instance_class: str,
     aws_instance_os: str = "ecs-aws-linux-2",
     gcp_instance_os: str = "cos",
     azure_instance_os: str = "ubuntu",
@@ -43,6 +46,7 @@ def provision(
     aws_instances = {}
     azure_instances = {}
     gcp_instances = {}
+    ibmcloud_instances = {}
 
     # TODO: It might be significantly faster to provision AWS, Azure, and GCP concurrently (e.g., using threads)
 
@@ -56,6 +60,10 @@ def provision(
         jobs.append(azure.set_up_resource_group)
     if gcp_regions_to_provision:
         jobs.append(gcp.setup_global)
+    if ibmcloud_regions_to_provision:
+        for r in set(ibmcloud_regions_to_provision):
+            jobs.append(partial(ibmcloud.setup_region, r.split(":")[1]))
+
     with Timer("Cloud SSH key initialization"):
         do_parallel(lambda fn: fn(), jobs)
 
@@ -145,6 +153,24 @@ def provision(
                 gcp_instances[region] = [result]
             gcp_instances = refresh_instance_list(gcp, gcp_regions_to_provision, gcp_instance_filter)
 
+    if len(ibmcloud_regions_to_provision) > 0:
+        logger.info(f"Provisioning IBM Cloud instances in {ibmcloud_regions_to_provision}")
+        ibmcloud_instance_filter = {
+            "tags": {"skyplane": "true"},
+            "instance_type": ibmcloud_instance_class,
+            "state": [compute.ServerState.PENDING, compute.ServerState.RUNNING],
+        }
+        do_parallel(aws.add_ips_to_security_group, ibmcloud_regions_to_provision, spinner=True, desc="Add IP to IBM Cloud security groups")
+        ibmcloud_instances = refresh_instance_list(ibmcloud, ibmcloud_regions_to_provision, ibmcloud_instance_filter)
+        missing_ibmcloud_regions = set(ibmcloud_regions_to_provision) - set(ibmcloud_instances.keys())
+        if missing_ibmcloud_regions:
+            logger.info(f"(IBM Cloud) provisioning missing regions: {missing_ibmcloud_regions}")
+            ibmcloud_provisioner = lambda r: ibmcloud.provision_instance(r, ibmcloud_instance_class)
+            results = do_parallel(ibmcloud_provisioner, missing_ibmcloud_regions, spinner=True, desc="provision IBM Cloud")
+            for region, result in results:
+                aws_instances[region] = [result]
+            aws_instances = refresh_instance_list(ibmcloud, ibmcloud_regions_to_provision, ibmcloud_instance_filter)
+
     # init log files
     def init(i: compute.Server):
         i.init_log_files(log_dir)
@@ -153,6 +179,7 @@ def provision(
         [i for ilist in aws_instances.values() for i in ilist]
         + [i for ilist in azure_instances.values() for i in ilist]
         + [i for ilist in gcp_instances.values() for i in ilist]
+        + [i for ilist in ibmcloud_instances.values() for i in ilist]
     )
     do_parallel(init, all_instances, spinner=True, desc="Provisioning init")
-    return aws_instances, azure_instances, gcp_instances  # pytype: disable=bad-return-type
+    return aws_instances, azure_instances, gcp_instances, ibmcloud_instances  # pytype: disable=bad-return-type

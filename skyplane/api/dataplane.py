@@ -111,6 +111,8 @@ class Dataplane:
             aws_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.nodes if n.region.startswith("aws:"))
             azure_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.nodes if n.region.startswith("azure:"))
             gcp_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.nodes if n.region.startswith("gcp:"))
+            ibmcloud_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.nodes if n.region.startswith("ibmcloud:"))
+            print (f"ibmcloud_nodes_to_provision  {ibmcloud_nodes_to_provision}")
 
             # create VMs from the topology
             for node in self.topology.gateway_nodes:
@@ -128,6 +130,7 @@ class Dataplane:
                 aws=len(aws_nodes_to_provision) > 0,
                 azure=len(azure_nodes_to_provision) > 0,
                 gcp=len(gcp_nodes_to_provision) > 0,
+                ibmcloud = len(ibmcloud_nodes_to_provision) > 0,
             )
 
             # provision VMs
@@ -211,6 +214,7 @@ class Dataplane:
         :param spinner: Whether to show the spinner during the job (default: False)
         :type spinner: bool
         """
+        debug = True
         with self.provisioning_lock:
             if debug:
                 logger.fs.info("Copying gateway logs to {self.transfer_dir}")

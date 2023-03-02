@@ -4,17 +4,17 @@ from typing import List, Optional
 from skyplane.compute.ibmcloud.ibmcloud_auth import IBMCloudAuthentication
 from skyplane.compute.ibmcloud.ibmcloud_server import IBMCloudServer
 from skyplane.compute.ibmcloud.ibm_gen2.vpc_backend import IBMVPCBackend
-from skyplane.compute.ibmcloud.ibm_gen2.config import load_config
+from skyplane.compute.ibmcloud.ibm_gen2.config import load_config, REGIONS
 
 from skyplane.compute.cloud_provider import CloudProvider
 from skyplane.utils import imports
 
 
 class IBMCloudProvider(CloudProvider):
-    def __init__(self, key_prefix: str = "skyplane"):
+    def __init__(self, key_prefix: str = "skyplane", auth: Optional[IBMCloudAuthentication] = None,):
         super().__init__()
         self.key_prefix = key_prefix
-        self.auth = IBMCloudAuthentication()
+        self.auth = auth if auth else IBMCloudAuthentication()
         self.regions_vpc = {}
         self.provisioning_semaphore = BoundedSemaphore(16)
 
@@ -24,7 +24,8 @@ class IBMCloudProvider(CloudProvider):
 
     @staticmethod
     def region_list() -> List[str]:
-        return []
+        return  REGIONS
+
 
     def setup_global(self, iam_name: str = "skyplane_gateway", attach_policy_arn: Optional[str] = None):
         # Not sure this should execute something. We will create VPC per region
@@ -71,4 +72,4 @@ class IBMCloudProvider(CloudProvider):
         tags["node-name"] = "skyplane-master"
 
         instance_id, vsi = self.regions_vpc[region].create_vpc_instance()
-        return IBMCloudServer(self.regions_vpc[region], f"cos:{region}", instance_id, vsi)
+        return IBMCloudServer(self.regions_vpc[region], f"ibmcloud:{region}", instance_id, vsi)

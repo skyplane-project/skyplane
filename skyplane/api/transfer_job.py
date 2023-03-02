@@ -21,6 +21,7 @@ from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.obj_store.s3_interface import S3Object
+from skyplane.obj_store.cos_interface import COSObject
 from skyplane.utils import logger
 from skyplane.utils.definitions import MB
 from skyplane.utils.fn import do_parallel
@@ -222,6 +223,8 @@ class Chunker:
                     dest_obj = AzureBlobObject(dest_provider, self.dst_iface.bucket(), dest_key)
                 elif dest_provider == "gcp":
                     dest_obj = GCSObject(dest_provider, self.dst_iface.bucket(), dest_key)
+                elif dest_provider == "ibmcloud":
+                    dest_obj = COSObject(dest_provider, self.dst_iface.bucket(), dest_key)
                 else:
                     raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
                 n_objs += 1

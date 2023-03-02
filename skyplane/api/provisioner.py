@@ -172,7 +172,7 @@ class Provisioner:
                     gcp_premium_network=False,
                     tags=task.tags,
                 )
-            elif task.cloud_provider == "ןibmcloud" :
+            elif task.cloud_provider == "ibmcloud" :
                 assert self.ibmcloud.auth.enabled(), "IBM Cloud credentials not configured"
                 server = self.ibmcloud.provision_instance(task.region, task.vm_type, tags=task.tags)
             else:

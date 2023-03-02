@@ -23,8 +23,6 @@ class IBMCloudAuthentication:
         self.user_agent = self.config.ibmcloud_useragent if self.config.ibmcloud_useragent is not None else "skyplane-ibm"
         self._ibmcloud_resource_group_id = self.config.ibmcloud_resource_group_id
 
-        self._ssh_credentials = {"username": self.config.ibmcloud_ssh_user, "key_filename": self.config.ibmcloud_ssh_key_filename}
-
         if self.config.ibmcloud_access_id and self.config.ibmcloud_secret_key:
             self._access_key = self.config.ibmcloud_access_id
             self._secret_key = self.config.ibmcloud_secret_key
@@ -92,10 +90,6 @@ class IBMCloudAuthentication:
     @property
     def iam_api_key(self):
         return self._iam_key
-
-    @property
-    def ssh_credentials(self):
-        return self._ssh_credentials
 
     @property
     def iam_endpoint(self):

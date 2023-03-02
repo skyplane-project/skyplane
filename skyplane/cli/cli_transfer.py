@@ -54,10 +54,11 @@ class SkyplaneCLI:
     def __init__(self, src_region_tag: str, dst_region_tag: str, args: Dict[str, Any], skyplane_config: Optional[SkyplaneConfig] = None):
         self.src_region_tag, self.dst_region_tag = src_region_tag, dst_region_tag
         self.args = args
-        self.aws_config, self.azure_config, self.gcp_config = self.to_api_config(skyplane_config or cloud_config)
+        self.aws_config, self.azure_config, self.gcp_config, self.ibmcloud_config = self.to_api_config(skyplane_config or cloud_config)
         self.transfer_config = self.make_transfer_config(skyplane_config or cloud_config)
         self.client = skyplane.SkyplaneClient(
-            aws_config=self.aws_config, azure_config=self.azure_config, gcp_config=self.gcp_config, transfer_config=self.transfer_config
+            aws_config=self.aws_config, azure_config=self.azure_config, gcp_config=self.gcp_config,
+            transfer_config=self.transfer_config, ibmcloud_config=self.ibmcloud_config
         )
         typer.secho(f"Using Skyplane version {skyplane.__version__}", fg="bright_black")
         typer.secho(f"Logging to: {self.client.log_dir / 'client.log'}", fg="bright_black")
@@ -66,13 +67,22 @@ class SkyplaneCLI:
         aws_config = AWSConfig(aws_enabled=config.aws_enabled)
         # todo: fix azure config support by collecting azure umi name and resource group and store in skyplane config
         gcp_config = GCPConfig(gcp_project_id=config.gcp_project_id, gcp_enabled=config.gcp_enabled)
+        ibmcloud_config = IBMCloudConfig(
+            ibmcloud_access_id = config.ibmcloud_access_id,
+            ibmcloud_secret_key = config.ibmcloud_secret_key,
+            ibmcloud_iam_key = config.ibmcloud_iam_key,
+            ibmcloud_iam_endpoint = config.ibmcloud_iam_endpoint,
+            ibmcloud_useragent = config.ibmcloud_useragent,
+            ibmcloud_resource_group_id = config.ibmcloud_resource_group_id,
+            ibmcloud_enabled = config.ibmcloud_enabled
+        )
         if not config.azure_resource_group or not config.azure_umi_name:
             typer.secho(
                 "Azure resource group and UMI name not configured correctly. Please reinit Azure with `skyplane init --reinit-azure`.",
                 fg=typer.colors.RED,
                 err=True,
             )
-            return aws_config, None, gcp_config
+            return aws_config, None, gcp_config, ibmcloud_config
         azure_config = AzureConfig(
             config.azure_subscription_id,
             config.azure_resource_group,
@@ -81,7 +91,7 @@ class SkyplaneCLI:
             config.azure_client_id,
             config.azure_enabled,
         )
-        return aws_config, azure_config, gcp_config
+        return aws_config, azure_config, gcp_config, ibmcloud_config
 
     def make_transfer_config(self, config: SkyplaneConfig) -> TransferConfig:
         intraregion = self.src_region_tag == self.dst_region_tag
@@ -98,6 +108,7 @@ class SkyplaneCLI:
             aws_instance_class=config.get_flag("aws_instance_class"),
             azure_instance_class=config.get_flag("azure_instance_class"),
             gcp_instance_class=config.get_flag("gcp_instance_class"),
+            ibmcloud_instance_class=config.get_flag("ibmcloud_instance_class"),
             gcp_use_premium_network=config.get_flag("gcp_use_premium_network"),
             multipart_enabled=config.get_flag("multipart_enabled"),
             multipart_threshold_mb=config.get_flag("multipart_min_threshold_mb"),
