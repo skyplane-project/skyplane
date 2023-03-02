@@ -139,12 +139,14 @@ class GatewayWaitReciever(GatewayOperator):
             return False
 
         # check to see if file is completed downloading
+        # Successfully recieved chunk 38400a29812142a486eaefcdebedf371, 161867776    0, 67108864
         with open(chunk_file_path, "rb") as f:
             data = f.read()
             if len(data) < chunk_req.chunk.chunk_length_bytes:
                 # download not complete
                 return False
-        print(f"[{self.handle}:{self.worker_id}] Successfully recieved chunk {chunk_req.chunk.chunk_id}")
+            assert len(data) == chunk_req.chunk.chunk_length_bytes, f"Downloaded chunk length does not match expected length: {len(data)}, {chunk_req.chunk.chunk_length_bytes}"
+        print(f"[{self.handle}:{self.worker_id}] Successfully recieved chunk {chunk_req.chunk.chunk_id}, {len(data)}, {chunk_req.chunk.chunk_length_bytes}")
         return True
 
 
