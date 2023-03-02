@@ -110,8 +110,6 @@ class SkyplaneConfig:
     ibmcloud_iam_endpoint: Optional[str] = None
     ibmcloud_useragent: Optional[str] = None
     ibmcloud_resource_group_id: Optional[str] = None
-    ibmcloud_ssh_user: Optional[str] = None
-    ibmcloud_ssh_key_filename: Optional[str] = None
 
     @staticmethod
     def generate_machine_id() -> str:
@@ -181,8 +179,6 @@ class SkyplaneConfig:
             ibmcloud_iam_endpoint = _get_value("ibmcloud", "ibmcloud_iam_endpoint", config)
             ibmcloud_useragent = _get_value("ibmcloud", "ibmcloud_useragent", config)
             ibmcloud_resource_group_id = _get_value("ibmcloud", "ibmcloud_resource_group_id", config)
-            ibmcloud_ssh_user = _get_value("ibmcloud", "ibmclod_ssh_user", config, "root")
-            ibmcloud_ssh_key_filename = _get_value("ibmcloud", "ibmclod_ssh_key_filename", config, "~/.ssh/id.rsa.default-ssh-key")
 
         skyplane_config = cls(
             aws_enabled=aws_enabled,
@@ -202,8 +198,6 @@ class SkyplaneConfig:
             ibmcloud_iam_endpoint=ibmcloud_iam_endpoint,
             ibmcloud_useragent=ibmcloud_useragent,
             ibmcloud_resource_group_id=ibmcloud_resource_group_id,
-            ibmcloud_ssh_user=ibmcloud_ssh_user,
-            ibmcloud_ssh_key_filename=ibmcloud_ssh_key_filename,
         )
 
         if "flags" in config:
@@ -239,10 +233,6 @@ class SkyplaneConfig:
             config.set("ibmcloud", "ibmcloud_secret_key", self.ibmcloud_secret_key)
         if self.ibmcloud_resource_group_id:
             config.set("ibmcloud", "ibmcloud_resource_group_id", self.ibmcloud_resource_group_id)
-        if self.ibmcloud_ssh_user:
-            config.set("ibmcloud", "ibmcloud_ssh_user", self.ibmcloud_ssh_user)
-        if self.ibmcloud_ssh_key_filename:
-            config.set("ibmcloud", "ibmcloud_ssh_key_filename", self.ibmcloud_ssh_key_filename)
 
         if "azure" not in config:
             config.add_section("azure")
