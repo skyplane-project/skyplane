@@ -515,7 +515,7 @@ def init(
             cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
 
     # load IBMCloud config
-    if reinit_ibmcloud:
+    if not reinit_ibmcloud:
         typer.secho("\n(4) Configuring IBM Cloud:", fg="yellow", bold=True)
         if not disable_config_ibmcloud:
             cloud_config = load_ibmcloud_config(cloud_config, force_init=reinit_ibmcloud, non_interactive=non_interactive)
