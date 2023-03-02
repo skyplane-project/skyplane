@@ -25,8 +25,6 @@ class IBMCloudAuthentication:
         self._ibmcloud_resource_group_id = "0e64ce277c7c4b009a7b59a0c3e07180"
 
 
-        self._ssh_credentials = {"username": self.config.ibmcloud_ssh_user, "key_filename": self.config.ibmcloud_ssh_key_filename}
-
         if self.config.ibmcloud_access_id and self.config.ibmcloud_secret_key:
             self._access_key = self.config.ibmcloud_access_id
             self._secret_key = self.config.ibmcloud_secret_key
@@ -100,10 +98,6 @@ class IBMCloudAuthentication:
     @property
     def iam_api_key(self):
         return self._iam_key
-
-    @property
-    def ssh_credentials(self):
-        return self._ssh_credentials
 
     @property
     def iam_endpoint(self):

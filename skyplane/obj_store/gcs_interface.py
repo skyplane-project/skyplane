@@ -9,6 +9,7 @@ import requests
 from typing import Iterator, List, Optional, Tuple
 
 from skyplane import exceptions, compute
+from skyplane.config_paths import cloud_config
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger
@@ -48,20 +49,24 @@ class GCSInterface(ObjectStoreInterface):
 
         # load bucket from GCS client
         bucket = None
+        default_region = cloud_config.get_flag("gcp_default_region")
         try:
             bucket = self._gcs_client.lookup_bucket(self.bucket_name)
         except Exception as e:
             # does not have storage.buckets.get access to the Google Cloud Storage bucket
             if "access to the Google Cloud Storage bucket" in str(e):
                 logger.warning(
-                    f"No access to the Google Cloud Storage bucket '{self.bucket_name}', assuming bucket is in the 'us-central1-a' zone"
+                    f"No access to the Google Cloud Storage bucket '{self.bucket_name}', assuming bucket is in the '{default_region}' zone"
                 )
-                return "us-central1-a"
+                return default_region
             raise
         if bucket is None:
             raise exceptions.MissingBucketException(f"GCS bucket {self.bucket_name} does not exist")
         else:
-            return map_region_to_zone(bucket.location.lower())
+            loc = bucket.location.lower()
+            if default_region.startswith(loc):
+                loc = default_region
+            return map_region_to_zone(loc)
 
     def region_tag(self):
         return "gcp:" + self.gcp_region
@@ -234,23 +239,39 @@ class GCSInterface(ObjectStoreInterface):
 
     def complete_multipart_upload(self, dst_object_name, upload_id):
         # get parts
-        response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "GET")
-
-        # build request xml tree
-        tree = ElementTree.fromstring(response.content)
-        ns = {"ns": tree.tag.split("}")[0][1:]}
         xml_data = ElementTree.Element("CompleteMultipartUpload")
-        for part in tree.findall("ns:Part", ns):
-            part_xml = ElementTree.Element("Part")
-            etag_match = part.find("ns:ETag", ns)
-            assert etag_match is not None
-            etag = etag_match.text
-            part_num_match = part.find("ns:PartNumber", ns)
-            assert part_num_match is not None
-            part_num = part_num_match.text
-            ElementTree.SubElement(part_xml, "PartNumber").text = part_num
-            ElementTree.SubElement(part_xml, "ETag").text = etag
-            xml_data.append(part_xml)
+        next_part_number_marker = None
+
+        # Parts in the list are ordered sequentially, and the XML API does not return lists longer than 1000 parts.
+        while True:
+            if next_part_number_marker is None:
+                response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "GET")
+            else:
+                response = self.send_xml_request(
+                    dst_object_name, {"uploadId": upload_id, "part-number-marker": next_part_number_marker}, "GET"
+                )
+
+            # build request xml tree
+            tree = ElementTree.fromstring(response.content)
+            ns = {"ns": tree.tag.split("}")[0][1:]}
+            for part in tree.findall("ns:Part", ns):
+                part_xml = ElementTree.Element("Part")
+                etag_match = part.find("ns:ETag", ns)
+                assert etag_match is not None
+                etag = etag_match.text
+                part_num_match = part.find("ns:PartNumber", ns)
+                assert part_num_match is not None
+                part_num = part_num_match.text
+                ElementTree.SubElement(part_xml, "PartNumber").text = part_num
+                ElementTree.SubElement(part_xml, "ETag").text = etag
+                xml_data.append(part_xml)
+
+            is_truncated = tree.findall("ns:IsTruncated", ns)[0].text
+            if is_truncated == "false":
+                break
+            else:
+                next_part_number_marker = tree.findall("ns:NextPartNumberMarker", ns)[0].text
+
         xml_data = ElementTree.tostring(xml_data, encoding="utf-8", method="xml")
         xml_data = xml_data.replace(b"ns0:", b"")
 

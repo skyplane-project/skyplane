@@ -29,3 +29,5 @@ ibm-cloud-sdk-core
 ibm-vpc
 ibm-cos-sdk
 inquirer
+numpy
+pandas

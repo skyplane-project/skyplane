@@ -19,7 +19,7 @@ class IBMCloudServer(Server):
 
     def __init__(self, vpc_backend, region_tag, instance_id, vsi, log_dir=None):
         super().__init__(region_tag, log_dir=log_dir)
-        assert self.region_tag.split(":")[0] == "cos"
+        assert self.region_tag.split(":")[0] == "ibmcloud"
         self.vpc_backend = vpc_backend
         self.instance_id = instance_id
         self.vsi = vsi
@@ -52,7 +52,7 @@ class IBMCloudServer(Server):
     @ignore_lru_cache(ignored_value={})
     def tags(self) -> Dict[str, str]:
         tags = self.ibmcloud_provider.node_tags(self.instance_id)
-        print(tags)
+        print(f"ibmcloud server tags {tags}")
         return tags
         # return {tag["Key"]: tag["Value"] for tag in tags} if tags else {}
 

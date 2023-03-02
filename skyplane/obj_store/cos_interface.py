@@ -48,7 +48,10 @@ class COSInterface(ObjectStoreInterface):
         raise exceptions.MissingBucketException(f"S3 bucket {self.bucket_name} does not exist")
 
     def region_tag(self):
-        return "cos:" + self.cos_region
+        return "ibmcloud:" + self.cos_region
+
+    def bucket(self) -> str:
+        return self.bucket_name
 
     def set_requester_bool(self, requester: bool):
         self.requester_pays = requester
