@@ -198,7 +198,7 @@ class Dataplane:
 
         do_parallel(copy_log, self.bound_nodes.values(), n=-1)
 
-    def deprovision(self, max_jobs: int = 64, spinner: bool = False):
+    def deprovision(self, max_jobs: int = 64, spinner: bool = False, debug: bool = False):
         """
         Deprovision the remote gateways
 
