@@ -150,7 +150,7 @@ class ThroughputSolver:
         return throughput, egress_cost, instance_cost
 
     def plot_throughput_grid(self, data_grid, title="Throughput (Gbps)"):
-        import matplotlib.pyplot as plt
+        import matplotlib.pyplot as plt  # pytype: disable=import-error
 
         for i in range(data_grid.shape[0]):
             for j in range(data_grid.shape[1]):
@@ -203,7 +203,7 @@ class ThroughputSolver:
             logger.debug("No feasible solution")
 
     def plot_graphviz(self, solution: ThroughputSolution):
-        import graphviz as gv
+        import graphviz as gv  # pytype: disable=import-error
 
         # if dot is not installed
         has_dot = shutil.which("dot") is not None
