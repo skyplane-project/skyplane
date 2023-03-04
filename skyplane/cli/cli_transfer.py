@@ -250,9 +250,9 @@ class SkyplaneCLI:
             return False
 
 
-def force_deprovision(dp: skyplane.Dataplane):
+def force_deprovision(dp: skyplane.Dataplane, debug: bool = False):
     s = signal.signal(signal.SIGINT, signal.SIG_IGN)
-    dp.deprovision(debug=True)
+    dp.deprovision(debug=debug)
     signal.signal(signal.SIGINT, s)
 
 
@@ -358,7 +358,7 @@ def cp(
                 console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")
                 do_parallel(dp.copy_log, dp.bound_nodes.values(), n=-1)
                 try:
-                    force_deprovision(dp)
+                    force_deprovision(dp, debug=debug)
                 except Exception as e:
                     logger.fs.exception(e)
                     console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
@@ -371,13 +371,13 @@ def cp(
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e.pretty_print_str())
                 UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
-                force_deprovision(dp)
+                force_deprovision(dp, debug=debug)
             except Exception as e:
                 logger.fs.exception(e)
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e)
                 UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
-                force_deprovision(dp)
+                force_deprovision(dp, debug=debug)
         if dp.provisioned:
             typer.secho("Dataplane is not deprovisioned! Run `skyplane deprovision` to force deprovision VMs.", fg="red")
 
@@ -481,13 +481,31 @@ def sync(
                 if not cli.confirm_transfer(dp, 5, ask_to_confirm_transfer=not confirm):
                     return 1
                 dp.provision(spinner=True)
-                # print a rocket emoji to indicate that the transfer is in progress
-                console.print("[blue]:rocket: Launching transfer to VMs![/blue]")
                 dp.run(ProgressBarTransferHook())
+            except KeyboardInterrupt:
+                logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt).")
+                console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")
+                do_parallel(dp.copy_log, dp.bound_nodes.values(), n=-1)
+                try:
+                    force_deprovision(dp, debug=debug)
+                except Exception as e:
+                    logger.fs.exception(e)
+                    console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+                    console.print(e)
+                    UsageClient.log_exception("cli_cp", e, args, cli.src_region_tag, cli.dst_region_tag)
+                    console.print("[bold red]Deprovisioning was interrupted! VMs may still be running which will incur charges.[/bold red]")
+                    console.print("[bold red]Please manually deprovision the VMs by running `skyplane deprovision`.[/bold red]")
+                return 1
             except skyplane.exceptions.SkyplaneException as e:
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e.pretty_print_str())
                 UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
                 return 1
+            except Exception as e:
+                logger.fs.exception(e)
+                console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+                console.print(e)
+                UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
+                force_deprovision(dp, debug=debug)
         if dp.provisioned:
             typer.secho("Dataplane is not deprovisioned! Run `skyplane deprovision` to force deprovision VMs.", fg="red")
