@@ -47,6 +47,12 @@ Contents
    performance_stats_collection
    faq
 
+.. toctree::
+   :maxdepth: 2
+   :caption: Tutorials
+
+   tutorial_dataloader
+   tutorial_airflow
 
 .. toctree::
    :maxdepth: 4
