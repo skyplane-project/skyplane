@@ -252,7 +252,7 @@ class SkyplaneCLI:
 
 def force_deprovision(dp: skyplane.Dataplane):
     s = signal.signal(signal.SIGINT, signal.SIG_IGN)
-    dp.deprovision()
+    dp.deprovision(debug=True)
     signal.signal(signal.SIGINT, s)
 
 
@@ -355,11 +355,18 @@ def cp(
                 dp.run(ProgressBarTransferHook())
             except KeyboardInterrupt:
                 logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt).")
-                console.print(
-                    "\n[bold red]Transfer cancelled by user. Copying gateway logs and exiting.Pressing `Ctrl C` repeatedly can leave straggling instances![/bold red]"
-                )
+                console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")
                 do_parallel(dp.copy_log, dp.bound_nodes.values(), n=-1)
-                force_deprovision(dp)
+                try:
+                    force_deprovision(dp)
+                except Exception as e:
+                    logger.fs.exception(e)
+                    console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+                    console.print(e)
+                    UsageClient.log_exception("cli_cp", e, args, cli.src_region_tag, cli.dst_region_tag)
+                    console.print("[bold red]Deprovisioning was interrupted! VMs may still be running which will incur charges.[/bold red]")
+                    console.print("[bold red]Please manually deprovision the VMs by running `skyplane deprovision`.[/bold red]")
+                return 1
             except skyplane.exceptions.SkyplaneException as e:
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e.pretty_print_str())
