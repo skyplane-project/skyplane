@@ -1,13 +1,10 @@
-# Loading Data from S3 for Model Training
+# Faster Training Data Loading
 
 This tutorial explains how you can use the Skyplane API to quickly download data from an object store located in a different region or cloud than your training instance. See full workflow [here](https://github.com/skyplane-project/skyplane/tree/main/examples).
 
 Large-scale machine learning (ML) training typically includes a step for acquiring training data. The following example illustrates an ML workflow where the original ImageNet data is stored in an S3 bucket in the US-East-1 region.
 
-In many cases, datasets and virtual machines (VMs) are located in different regions. This can lead to slow data transfer speeds and high costs for data egress fees when using cloud provider tools, such as aws s3 cp, to download data to the VM's local disk. Skyplane offers a solution by allowing a fast and more cost-effective transfer of the dataset to an S3 bucket in the same region as the VM (e.g. US-West-2), with direct streaming of the data to the model without the need for downloading it to the local folder.
-
 ![imagenet_training](_static/api/imagenet.png)
-This process is as simple as adding just two lines of code, similar to the demonstration of the Skyplane simple copy.
 
 ## Remote vs. Local Regions
 Say that you have a VM for running training jobs in an AWS region, `us-west-2`. Reading data from a same-region S3 bucket will be very fast and free. However, if your data is in another region or cloud provider, read the data will be much slower and also charge you per-GB egress fees. In this tutorial, we assume that our data is in a bucket in `us-east-1` (the remote region), but we are running training from another region `us-west-2` (the local region).
