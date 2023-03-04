@@ -202,6 +202,7 @@ class IBMVPCBackend:
             with open(f"{key_filename}.pub", "r") as file:
                 ssh_key_data = file.read()
             try:
+                print("key name", keyname)
                 key_info = self.vpc_cli.create_key(
                     public_key=ssh_key_data, name=keyname, type="rsa", resource_group={"id": self.config["resource_group_id"]}
                 ).get_result()

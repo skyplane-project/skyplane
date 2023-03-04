@@ -224,6 +224,9 @@ class SkyplaneConfig:
                 if flag_name in config["flags"]:
                     skyplane_config.set_flag(flag_name, config["flags"][flag_name])
 
+
+        print("return config")
+
         return skyplane_config
 
     def to_config_file(self, path):

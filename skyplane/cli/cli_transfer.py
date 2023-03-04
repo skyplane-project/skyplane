@@ -63,6 +63,8 @@ class SkyplaneCLI:
         typer.secho(f"Using Skyplane version {skyplane.__version__}", fg="bright_black")
         typer.secho(f"Logging to: {self.client.log_dir / 'client.log'}", fg="bright_black")
 
+        #import pdb; pdb.set_trace()
+
     def to_api_config(self, config: SkyplaneConfig):
         aws_config = AWSConfig(aws_enabled=config.aws_enabled)
         # todo: fix azure config support by collecting azure umi name and resource group and store in skyplane config
@@ -343,7 +345,7 @@ def cp(
             typer.secho("HDFS is not supported yet.", fg="red")
             return 1
         return 0 if cli.transfer_cp_onprem(src, dst, recursive) else 1
-    elif provider_src in ("aws", "gcp", "azure", "cos") and provider_dst in ("aws", "gcp", "azure", "cos"):
+    elif provider_src in ("aws", "gcp", "azure", "ibmcloud") and provider_dst in ("aws", "gcp", "azure", "ibmcloud"):
         # todo support ILP solver params
         dp = cli.make_dataplane(
             solver_type=solver,
