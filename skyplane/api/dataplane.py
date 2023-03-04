@@ -108,9 +108,9 @@ class Dataplane:
             if self.provisioned:
                 logger.error("Cannot provision dataplane, already provisioned!")
                 return
-            aws_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.nodes if n.region.startswith("aws:"))
-            azure_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.nodes if n.region.startswith("azure:"))
-            gcp_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.nodes if n.region.startswith("gcp:"))
+            is_aws_used = any(n.region.startswith("aws:") for n in self.topology.nodes)
+            is_azure_used = any(n.region.startswith("azure:") for n in self.topology.nodes)
+            is_gcp_used = any(n.region.startswith("gcp:") for n in self.topology.nodes)
 
             # create VMs from the topology
             for node in self.topology.gateway_nodes:
@@ -124,11 +124,7 @@ class Dataplane:
                 )
 
             # initialize clouds
-            self.provisioner.init_global(
-                aws=len(aws_nodes_to_provision) > 0,
-                azure=len(azure_nodes_to_provision) > 0,
-                gcp=len(gcp_nodes_to_provision) > 0,
-            )
+            self.provisioner.init_global(aws=is_aws_used, azure=is_azure_used, gcp=is_gcp_used)
 
             # provision VMs
             uuids = self.provisioner.provision(
