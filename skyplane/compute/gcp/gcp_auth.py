@@ -142,7 +142,7 @@ class GCPAuthentication:
             keys = service.projects().serviceAccounts().keys().list(name="projects/-/serviceAccounts/" + service_account_email).execute()
 
             # cannot have more than 10 keys per service account
-            if len(keys["keys"]) >= 10: 
+            if len(keys["keys"]) >= 10:
                 logger.warning(f"Service account {service_account_email} has too many keys. Deleting stale keys to create new key.")
                 deleted_keys = 0
                 for key in keys["keys"]:
