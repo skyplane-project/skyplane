@@ -65,14 +65,14 @@ class GatewayReceiver:
 
     def start_server(self):
         started_event = Event()
-        port = Value("i", 0)
+        port_value = Value("i", 0)
 
         def server_worker(worker_id: int):
             self.worker_id = worker_id
             with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
                 sock.bind(("0.0.0.0", 0))
                 socket_port = sock.getsockname()[1]
-                port.value = socket_port
+                port_value.value = socket_port  # type: ignore
                 exit_flag = Event()
 
                 def signal_handler(signal, frame):
@@ -106,9 +106,9 @@ class GatewayReceiver:
         p.start()
         started_event.wait()
         self.server_processes.append(p)
-        self.server_ports.append(port.value)
-        logger.info(f"[receiver:{port.value}] Started server)")
-        return port.value
+        self.server_ports.append(port_value.value)  # type: ignore
+        logger.info(f"[receiver:{port_value.value}] Started server)")  # type: ignore
+        return port_value.value  # type: ignore
 
     def stop_server(self, port: int):
         matched_process = None
