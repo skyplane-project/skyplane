@@ -1,9 +1,7 @@
 ***************
-Getting Started
+Installation
 ***************
 
-Installation
------------------------
 We're ready to install Skyplane. It's as easy as:
 
 .. code-block:: bash
@@ -25,7 +23,7 @@ We're ready to install Skyplane. It's as easy as:
 
       $ GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 GRPC_PYTHON_BUILD_SYSTEM_ZLIB=1 pip install skyplane[all]
 
-Cloud Credentials
+Setting up Cloud Credentials
 -----------------------
 Skyplane needs access to cloud credentials to perform transfers. To get started with setting up credentials, make sure you have cloud provider CLI tools installed: 
 
@@ -59,43 +57,3 @@ Now, you can initialize Skyplane with your desired cloud providers. Skyplane aut
    
    ---> Setup cloud provider connectors:
    $ skyplane init
-
-
-Transferring Data via Skyplane CLI
-------------------------------------
-
-We're ready to use the Skyplane CLI! Let's use `skyplane cp` to copy files from AWS to GCP:
-
-.. code-block:: bash
-
-   ---> 🎸 Ready to rock and roll! Copy some files:
-   $ skyplane cp -r s3://... gs://...
-
-To transfer only new objects, you can instead use `skyplane sync`: 
-
-.. code-block:: bash
-
-   ---> Copy only diff
-   $ skyplane sync s3://... gs://...
-
-Transferring Data via Skyplane API
-------------------------------------
-
-We can also leverage the power of the Skyplane API! To access Skyplane and its functions, you can import it in your Python code like this:
-
-.. code-block:: python
-
-    import skyplane
-
-To start a simple copy job using the Skyplane API, we simply create a SkyplaneClient and call `copy`:
-
-.. code-block:: python
-    :caption: Example of how to use API simple copy that automatically deprovisions the VMs
-
-    import skyplane
-
-    client = skyplane.SkyplaneClient(aws_config=skyplane.AWSConfig())
-    client.copy(src="s3://skycamp-demo-src/synset_labels.txt", dst="s3://skycamp-demo-us-east-2/imagenet-bucket/synset_labels.txt", recursive=False)
-
-.. note::
-   In this example, we use a defauly AWSConfig which infers AWS credentials from the environment.

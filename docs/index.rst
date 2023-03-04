@@ -40,6 +40,7 @@ Contents
    :maxdepth: 2
    :caption: Overview
 
+   installation 
    quickstart
    configure
    architecture
