@@ -41,10 +41,8 @@ Contents
    :caption: Overview
 
    quickstart
-   benchmark
    configure
    architecture
-   performance_stats_collection
    faq
 
 .. toctree::
@@ -60,7 +58,6 @@ Contents
 
    build_from_source
    contributing
-   roadmap
    debugging
 
 .. toctree::
@@ -69,6 +66,14 @@ Contents
 
    skyplane_api
    skyplane_cli
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Learn More 
+
+   benchmark
+   performance_stats_collection
+   roadmap
 
 .. toctree::
    :caption: Community 
