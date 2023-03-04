@@ -95,10 +95,11 @@ class IBMCloudServer(Server):
 
     def get_sftp_client(self):
         t = paramiko.Transport((self.public_ip(), 22))
-
+        print("Get SFTP client")
         t.connect(
             username=self.vsi.ssh_credentials["username"],
             pkey=paramiko.RSAKey.from_private_key_file(self.vsi.ssh_credentials["key_filename"]),
+            look_for_keys=False
         )
         return paramiko.SFTPClient.from_transport(t)
 

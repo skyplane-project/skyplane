@@ -34,7 +34,7 @@ from skyplane.compute.ibmcloud.ibm_gen2.utils import load_yaml_config, dump_yaml
 
 logger = logging.getLogger(__name__)
 
-INSTANCE_START_TIMEOUT = 180
+INSTANCE_START_TIMEOUT = 180*2
 VPC_API_VERSION = "2021-09-21"
 
 
