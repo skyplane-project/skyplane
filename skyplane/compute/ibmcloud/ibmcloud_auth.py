@@ -21,18 +21,13 @@ class IBMCloudAuthentication:
             self.config = SkyplaneConfig.load_config(config_path)
 
         self.user_agent = self.config.ibmcloud_useragent if self.config.ibmcloud_useragent is not None else "skyplane-ibm"
-        #self._ibmcloud_resource_group_id = self.config.ibmcloud_resource_group_id
-        self._ibmcloud_resource_group_id = "0e64ce277c7c4b009a7b59a0c3e07180"
+        self._ibmcloud_resource_group_id = self.config.ibmcloud_resource_group_id
 
         if self.config.ibmcloud_access_id and self.config.ibmcloud_secret_key:
             self._access_key = self.config.ibmcloud_access_id
             self._secret_key = self.config.ibmcloud_secret_key
         if self.config.ibmcloud_iam_key:
             self._iam_key = self.config.ibmcloud_iam_key
-
-        print("access key", self._access_key)
-        print("iam key", self._iam_key)
-
 
     @imports.inject("ibm_cloud_sdk_core", pip_extra="ibmcloud")
     def get_iam_authenticator(ibm_cloud_sdk_core, self):
@@ -128,7 +123,6 @@ class IBMCloudAuthentication:
             read_timeout=CONN_READ_TIMEOUT,
             retries={"max_attempts": OBJ_REQ_RETRIES},
         )
-        print("User agent", self.user_agent)
 
         if cos_region is None:
             return self.get_boto3_session().client(service_name, config=client_config)

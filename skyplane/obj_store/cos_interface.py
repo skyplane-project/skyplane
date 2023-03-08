@@ -24,7 +24,7 @@ class COSInterface(ObjectStoreInterface):
         self.requester_pays = False
         self.bucket_name = bucket_name
         self.region = region
-        if region is not None and "cos:" in region:
+        if region is not None and "ibmcloud:" in region:
             self.region = region[4:]
 
         self._cached_cos_clients = {}
@@ -66,8 +66,6 @@ class COSInterface(ObjectStoreInterface):
     @imports.inject("botocore.exceptions", pip_extra="ibmcloud")
     def bucket_exists(botocore_exceptions, self):
         s3_client = self._cos_client()
-        print("key", self.auth.access_key)
-        print("secret key", self.auth.secret_key)
         try:
             requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
             s3_client.list_objects_v2(Bucket=self.bucket_name, MaxKeys=1, **requester_pays)
