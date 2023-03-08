@@ -19,7 +19,9 @@ class AzureAuthentication:
 
     @property
     @imports.inject(
-        "azure.identity.DefaultAzureCredential", "azure.identity.ManagedIdentityCredential", pip_extra="azure",
+        "azure.identity.DefaultAzureCredential",
+        "azure.identity.ManagedIdentityCredential",
+        pip_extra="azure",
     )
     def credential(DefaultAzureCredential, ManagedIdentityCredential, self):
         if self._credential is None:
