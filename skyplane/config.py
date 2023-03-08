@@ -129,8 +129,6 @@ class SkyplaneConfig:
     @classmethod
     def load_config(cls, path) -> "SkyplaneConfig":
         """Load from a config file."""
-        print(path)
-        path = Path(path)
         config = configparser.ConfigParser()
         if not path.exists():
             raise FileNotFoundError(f"Config file not found: {path}")
@@ -181,8 +179,6 @@ class SkyplaneConfig:
         ibmcloud_iam_endpoint = None
         ibmcloud_useragent = None
         ibmcloud_resource_group_id = None
-        ibmcloud_ssh_user = None
-        ibmcloud_ssh_key_filename = None
         if "ibmcloud" in config:
             if "ibmcloud_enabled" in config["ibmcloud"]:
                 ibmcloud_enabled = config.getboolean("ibmcloud", "ibmcloud_enabled")
@@ -193,11 +189,7 @@ class SkyplaneConfig:
             ibmcloud_iam_endpoint = _get_value("ibmcloud", "ibmcloud_iam_endpoint", config)
             ibmcloud_useragent = _get_value("ibmcloud", "ibmcloud_useragent", config)
             ibmcloud_resource_group_id = _get_value("ibmcloud", "ibmcloud_resource_group_id", config)
-            print("get value", ibmcloud_resource_group_id)
-            ibmcloud_ssh_user = _get_value("ibmcloud", "ibmclod_ssh_user", config, "root")
-            ibmcloud_ssh_key_filename = _get_value("ibmcloud", "ibmclod_ssh_key_filename", config, "~/.ssh/id.rsa.default-ssh-key")
 
-        print("resource group id", ibmcloud_resource_group_id)
 
         skyplane_config = cls(
             aws_enabled=aws_enabled,
@@ -225,7 +217,6 @@ class SkyplaneConfig:
                     skyplane_config.set_flag(flag_name, config["flags"][flag_name])
 
 
-        print("return config")
 
         return skyplane_config
 

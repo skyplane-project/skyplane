@@ -125,10 +125,8 @@ class IBMVPCBackend:
             vpc_prototype["address_prefix_management"] = "auto"
             vpc_prototype["classic_access"] = False
             vpc_prototype["name"] = self.vpc_name
-            #vpc_prototype["resource_group"] = {"id": self.config["resource_group_id"]}
-            vpc_prototype["resource_group"] = {"id": "0e64ce277c7c4b009a7b59a0c3e07180"}
+            vpc_prototype["resource_group"] = {"id": self.config["resource_group_id"]}
         
-            print(vpc_prototype)
             response = self.vpc_cli.create_vpc(**vpc_prototype)
             vpc_info = response.result
 
