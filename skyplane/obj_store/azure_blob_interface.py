@@ -48,8 +48,7 @@ class AzureBlobInterface(ObjectStoreInterface):
         try:
             self.container_client.get_container_properties()
             return True
-        # except exceptions.ResourceNotFoundError:
-        except Exception as e:
+        except exceptions.ResourceNotFoundError:
             return False
 
     def exists(self, obj_name):
