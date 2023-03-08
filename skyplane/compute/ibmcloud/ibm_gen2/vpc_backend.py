@@ -205,7 +205,7 @@ class IBMVPCBackend:
                     public_key=ssh_key_data, name=keyname, type="rsa", resource_group={"id": self.config["resource_group_id"]}
                 ).get_result()
             except ApiException as e:
-                logger.error(e)
+                logger.warn(e.message)
                 if "Key with name already exists" in e.message:
                     self.vpc_cli.delete_key(id=_get_ssh_key()["id"])
                     key_info = self.vpc_cli.create_key(
@@ -563,7 +563,7 @@ class IBMVPCBackend:
             self._delete_ssh_key()
             self._delete_vpc()
 
-        delete_yaml_config(self.vpc_data_filename)
+            delete_yaml_config(self.vpc_data_filename)
 
     def clear(self, job_keys=None):
         """
