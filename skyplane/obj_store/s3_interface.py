@@ -1,4 +1,5 @@
 import base64
+import time
 import hashlib
 import os
 from functools import lru_cache
@@ -79,6 +80,18 @@ class S3Interface(ObjectStoreInterface):
                 s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": aws_region})
 
     def delete_bucket(self):
+        # delete 1000 keys at a time 
+        keys = [] 
+        for key in self.list_objects():
+            keys.append(key.key)
+            if len(keys) == 1000:
+                self.delete_objects(keys)
+                keys = []
+                print("Deleted 1000 keys")
+        self.delete_objects(keys)
+        assert len(list(self.list_objects())) == 0, f"Bucket not empty after deleting all keys {list(self.list_objects())}"
+
+        # delete bucket
         self._s3_client().delete_bucket(Bucket=self.bucket_name)
 
     def list_objects(self, prefix="") -> Iterator[S3Object]:

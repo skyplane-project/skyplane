@@ -142,3 +142,38 @@ class SkyplaneClient:
             return Dataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
         else:
             raise NotImplementedError(f"Dataplane type {solver_type} not implemented")
+        
+    def download_object(self, bucket_name: str, provider: str, key: str, filename: str): 
+        obj_store = ObjectStoreInterface.create(f"{provider}:infer", bucket_name)
+        obj_store.download_object(key, filename)
+
+    def upload_object(self, filename: str, bucket_name: str, provider: str, key: str):
+        obj_store = ObjectStoreInterface.create(f"{provider}:infer", bucket_name)
+        obj_store.upload_object(filename, key)
+
+    def exists(self, bucket_name: str, provider: str, key: str) -> bool:
+        obj_store = ObjectStoreInterface.create(f"{provider}:infer", bucket_name)
+        return obj_store.exists(key)
+    
+    def bucket_exists(self, bucket_name: str, provider: str) -> bool: 
+        obj_store = ObjectStoreInterface.create(f"{provider}:infer", bucket_name)
+        return obj_store.bucket_exists()
+    
+    def create_bucket(self, region: str, bucket_name: str): 
+        obj_store = ObjectStoreInterface.create(region, bucket_name)
+        obj_store.create_bucket(region.split(":")[1])
+        provider = region.split(":")[0]
+
+        # TODO: create util function for this
+        if provider == "aws": 
+            return f"s3://{bucket_name}"
+        elif provider == "gcp":
+            return f"gs://{bucket_name}"
+        elif provider == "azure":
+            return f"az://{bucket_name}"
+        else: 
+            raise NotImplementedError(f"Provider {provider} not implemented")
+
+    def delete_bucket(self, bucket_name: str, provider: str):
+        obj_store = ObjectStoreInterface.create(f"{provider}:infer", bucket_name)
+        obj_store.delete_bucket()
