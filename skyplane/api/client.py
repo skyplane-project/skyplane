@@ -55,12 +55,7 @@ class SkyplaneClient:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         logger.open_log_file(self.log_dir / "client.log")
 
-        self.provisioner = Provisioner(
-            host_uuid=self.clientid,
-            aws_auth=self.aws_auth,
-            azure_auth=self.azure_auth,
-            gcp_auth=self.gcp_auth,
-        )
+        self.provisioner = Provisioner(host_uuid=self.clientid, aws_auth=self.aws_auth, azure_auth=self.azure_auth, gcp_auth=self.gcp_auth,)
 
     def copy(self, src: str, dst: str, recursive: bool = False, num_vms: int = 1):
         """
@@ -142,8 +137,8 @@ class SkyplaneClient:
             return Dataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
         else:
             raise NotImplementedError(f"Dataplane type {solver_type} not implemented")
-        
-    def download_object(self, bucket_name: str, provider: str, key: str, filename: str): 
+
+    def download_object(self, bucket_name: str, provider: str, key: str, filename: str):
         obj_store = ObjectStoreInterface.create(f"{provider}:infer", bucket_name)
         obj_store.download_object(key, filename)
 
@@ -154,24 +149,24 @@ class SkyplaneClient:
     def exists(self, bucket_name: str, provider: str, key: str) -> bool:
         obj_store = ObjectStoreInterface.create(f"{provider}:infer", bucket_name)
         return obj_store.exists(key)
-    
-    def bucket_exists(self, bucket_name: str, provider: str) -> bool: 
+
+    def bucket_exists(self, bucket_name: str, provider: str) -> bool:
         obj_store = ObjectStoreInterface.create(f"{provider}:infer", bucket_name)
         return obj_store.bucket_exists()
-    
-    def create_bucket(self, region: str, bucket_name: str): 
+
+    def create_bucket(self, region: str, bucket_name: str):
         obj_store = ObjectStoreInterface.create(region, bucket_name)
         obj_store.create_bucket(region.split(":")[1])
         provider = region.split(":")[0]
 
         # TODO: create util function for this
-        if provider == "aws": 
+        if provider == "aws":
             return f"s3://{bucket_name}"
         elif provider == "gcp":
             return f"gs://{bucket_name}"
         elif provider == "azure":
             return f"az://{bucket_name}"
-        else: 
+        else:
             raise NotImplementedError(f"Provider {provider} not implemented")
 
     def delete_bucket(self, bucket_name: str, provider: str):

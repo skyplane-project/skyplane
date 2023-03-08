@@ -80,8 +80,8 @@ class S3Interface(ObjectStoreInterface):
                 s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": aws_region})
 
     def delete_bucket(self):
-        # delete 1000 keys at a time 
-        keys = [] 
+        # delete 1000 keys at a time
+        keys = []
         for key in self.list_objects():
             keys.append(key.key)
             if len(keys) == 1000:
@@ -145,7 +145,7 @@ class S3Interface(ObjectStoreInterface):
         size_bytes=None,
         write_at_offset=False,
         generate_md5=False,
-        write_block_size=2**16,
+        write_block_size=2 ** 16,
     ) -> Tuple[Optional[str], Optional[bytes]]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
 

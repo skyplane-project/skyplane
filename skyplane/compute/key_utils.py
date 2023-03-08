@@ -9,11 +9,7 @@ from skyplane.utils.fn import PathLike
 
 
 def generate_keypair(pubkey_path: PathLike, pem_path: PathLike):
-    key = rsa.generate_private_key(
-        backend=crypto_default_backend(),
-        public_exponent=65537,
-        key_size=4096,
-    )
+    key = rsa.generate_private_key(backend=crypto_default_backend(), public_exponent=65537, key_size=4096,)
     private_key = key.private_bytes(
         crypto_serialization.Encoding.PEM, crypto_serialization.PrivateFormat.TraditionalOpenSSL, crypto_serialization.NoEncryption()
     )

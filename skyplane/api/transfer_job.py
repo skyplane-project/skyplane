@@ -59,10 +59,7 @@ class Chunker:
         self.concurrent_multipart_chunk_threads = concurrent_multipart_chunk_threads
 
     def _run_multipart_chunk_thread(
-        self,
-        exit_event: threading.Event,
-        in_queue: "Queue[Tuple[ObjectStoreObject, ObjectStoreObject]]",
-        out_queue: "Queue[Chunk]",
+        self, exit_event: threading.Event, in_queue: "Queue[Tuple[ObjectStoreObject, ObjectStoreObject]]", out_queue: "Queue[Chunk]",
     ):
         """Chunks large files into many small chunks."""
         region = self.dst_iface.region_tag()
@@ -181,11 +178,7 @@ class Chunker:
                     return join(dest_prefix, src_path_after_prefix)
 
     def transfer_pair_generator(
-        self,
-        src_prefix: str,
-        dst_prefix: str,
-        recursive: bool,
-        prefilter_fn: Optional[Callable[[ObjectStoreObject], bool]] = None,
+        self, src_prefix: str, dst_prefix: str, recursive: bool, prefilter_fn: Optional[Callable[[ObjectStoreObject], bool]] = None,
     ) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
         """Query source region and return list of objects to transfer.
 
@@ -261,10 +254,7 @@ class Chunker:
                 multipart_send_queue.put((src_obj, dst_obj))
             else:
                 yield Chunk(
-                    src_key=src_obj.key,
-                    dest_key=dst_obj.key,
-                    chunk_id=uuid.uuid4().hex,
-                    chunk_length_bytes=src_obj.size,
+                    src_key=src_obj.key, dest_key=dst_obj.key, chunk_id=uuid.uuid4().hex, chunk_length_bytes=src_obj.size,
                 )
 
             if self.transfer_config.multipart_enabled:
@@ -457,10 +447,7 @@ class CopyJob(TransferJob):
         yield from chunker.transfer_pair_generator(self.src_prefix, self.dst_prefix, self.recursive, self._pre_filter_fn)
 
     def dispatch(
-        self,
-        dataplane: "Dataplane",
-        transfer_config: TransferConfig,
-        dispatch_batch_size: int = 100,  # 6.4 GB worth of chunks
+        self, dataplane: "Dataplane", transfer_config: TransferConfig, dispatch_batch_size: int = 100,  # 6.4 GB worth of chunks
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways.
 

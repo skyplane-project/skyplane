@@ -100,7 +100,7 @@ class GCSInterface(ObjectStoreInterface):
             self._gcs_client.create_bucket(bucket, location=region_without_zone)
 
     def delete_bucket(self):
-        keys = [] 
+        keys = []
         for key in self.list_objects():
             keys.append(key.key)
             if len(keys) >= 1000:
@@ -228,11 +228,7 @@ class GCSInterface(ObjectStoreInterface):
         # send XML api request
         headers = {"Content-MD5": b64_md5sum} if check_md5 else None
         response = self.send_xml_request(
-            dst_object_name,
-            {"uploadId": upload_id, "partNumber": part_number},
-            "PUT",
-            headers=headers,
-            data=open(src_file_path, "rb"),
+            dst_object_name, {"uploadId": upload_id, "partNumber": part_number}, "PUT", headers=headers, data=open(src_file_path, "rb"),
         )
 
         # check response

@@ -188,10 +188,7 @@ class SkyplaneCLI:
             )
         # show spinner
         with Progress(
-            TextColumn(" "),
-            SpinnerColumn(),
-            TextColumn(f"[bright_black]Querying objects for transfer...[/bright_black]"),
-            transient=True,
+            TextColumn(" "), SpinnerColumn(), TextColumn(f"[bright_black]Querying objects for transfer...[/bright_black]"), transient=True,
         ) as progress:
             progress.add_task("", total=None)
             obj_pairs = []

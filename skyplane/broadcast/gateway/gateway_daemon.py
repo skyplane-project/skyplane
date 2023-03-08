@@ -32,12 +32,7 @@ from skyplane.utils import logger
 
 class GatewayDaemon:
     def __init__(
-        self,
-        region: str,
-        chunk_dir: PathLike,
-        max_incoming_ports=64,
-        use_tls=True,
-        use_e2ee=False,
+        self, region: str, chunk_dir: PathLike, max_incoming_ports=64, use_tls=True, use_e2ee=False,
     ):
         # read gateway program
         gateway_program_path = Path(os.environ["GATEWAY_PROGRAM_FILE"]).expanduser()
@@ -302,9 +297,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     os.makedirs(args.chunk_dir)
-    daemon = GatewayDaemon(
-        region=args.region,
-        chunk_dir=args.chunk_dir,
-        use_tls=not args.disable_tls,
-    )
+    daemon = GatewayDaemon(region=args.region, chunk_dir=args.chunk_dir, use_tls=not args.disable_tls,)
     daemon.run()
