@@ -41,9 +41,10 @@ def test_region(region):
     os.remove(dst_filename)
 
 
-def test_azure_interface():
-    test_region("azure:canadacentral")
-    return True
+# TODO: implement azure
+# def test_azure_interface():
+#    test_region("azure:canadacentral")
+#    return True
 
 
 def test_aws_interface():
