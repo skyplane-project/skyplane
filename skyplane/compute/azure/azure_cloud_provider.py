@@ -385,7 +385,10 @@ class AzureCloudProvider(CloudProvider):
                                 {
                                     # code from: https://github.com/ray-project/ray/pull/7080/files#diff-0f1bb1da82d112b850a85c1b7b1876e50efd5a7400c62a5c4de334f494d3bf46R222-R233
                                     "key": f"/subscriptions/{cloud_config.azure_subscription_id}/resourceGroups/skyplane/providers/Microsoft.ManagedIdentity/userAssignedIdentities/skyplane_umi",
-                                    "value": {"principal_id": cloud_config.azure_principal_id, "client_id": cloud_config.azure_client_id,},
+                                    "value": {
+                                        "principal_id": cloud_config.azure_principal_id,
+                                        "client_id": cloud_config.azure_client_id,
+                                    },
                                 }
                             ],
                         },
@@ -398,7 +401,11 @@ class AzureCloudProvider(CloudProvider):
                             "uefi_settings": {"v_tpm_enabled": True, "secure_boot_enabled": True},
                         }
                         vm_params["storage_profile"]["os_disk"].update(
-                            {"managed_disk": {"security_profile": {"security_encryption_type": "DiskWithVMGuestState"},}}
+                            {
+                                "managed_disk": {
+                                    "security_profile": {"security_encryption_type": "DiskWithVMGuestState"},
+                                }
+                            }
                         )
                         vm_params["storage_profile"]["image_reference"] = {
                             "publisher": "Canonical",
@@ -406,7 +413,11 @@ class AzureCloudProvider(CloudProvider):
                             "sku": "20_04-lts-cvm",
                             "version": "latest",
                         }
-                    poller = compute_client.virtual_machines.begin_create_or_update(resource_group, AzureServer.vm_name(name), vm_params,)
+                    poller = compute_client.virtual_machines.begin_create_or_update(
+                        resource_group,
+                        AzureServer.vm_name(name),
+                        vm_params,
+                    )
                     try:
                         vm_result = poller.result()
                     except KeyboardInterrupt:

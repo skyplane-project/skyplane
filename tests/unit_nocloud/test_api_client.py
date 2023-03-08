@@ -11,7 +11,7 @@ def test_region(region):
     provider = region.split(":")[0]
     if provider == "azure":
         # need both storage account and container
-        bucket_name = str(uuid.uuid4()).replace("-", "") + "/" + str(uuid.uuid4()).replace("-", "")
+        bucket_name = str(uuid.uuid4()).replace("-", "")[:24] + "/" + str(uuid.uuid4()).replace("-", "")
     else:
         bucket_name = str(uuid.uuid4()).replace("-", "")
     file_size = 1024
@@ -41,6 +41,11 @@ def test_region(region):
     os.remove(dst_filename)
 
 
+def test_azure_interface():
+    test_region("azure:canadacentral")
+    return True
+
+
 def test_aws_interface():
     test_region("aws:us-east-1")
     return True
@@ -48,9 +53,4 @@ def test_aws_interface():
 
 def test_gcp_interface():
     test_region("gcp:us-central1-a")
-    return True
-
-
-def test_azure_interface():
-    test_region("azure:canadacentral")
     return True
