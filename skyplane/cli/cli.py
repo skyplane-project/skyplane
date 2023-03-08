@@ -16,18 +16,9 @@ from skyplane.utils import logger
 from skyplane.utils.fn import do_parallel
 
 app = typer.Typer(name="skyplane")
-app.command(
-    name="cp",
-    help="Copy files between any two cloud object stores",
-)(cp)
-app.command(
-    name="sync",
-    help="Sync files between any two cloud object stores",
-)(sync)
-app.command(
-    name="init",
-    help="Initialize the Skyplane CLI with your cloud credentials",
-)(init)
+app.command(name="cp", help="Copy files between any two cloud object stores",)(cp)
+app.command(name="sync", help="Sync files between any two cloud object stores",)(sync)
+app.command(name="init", help="Initialize the Skyplane CLI with your cloud credentials",)(init)
 app.add_typer(skyplane.cli.experiments.app, name="experiments")
 app.add_typer(skyplane.cli.cli_cloud.app, name="cloud")
 app.add_typer(skyplane.cli.cli_config.app, name="config")

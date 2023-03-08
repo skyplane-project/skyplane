@@ -57,12 +57,7 @@ class SkyplaneClient:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         logger.open_log_file(self.log_dir / "client.log")
 
-        self.provisioner = Provisioner(
-            host_uuid=self.clientid,
-            aws_auth=self.aws_auth,
-            azure_auth=self.azure_auth,
-            gcp_auth=self.gcp_auth,
-        )
+        self.provisioner = Provisioner(host_uuid=self.clientid, aws_auth=self.aws_auth, azure_auth=self.azure_auth, gcp_auth=self.gcp_auth,)
 
     def copy(self, src: str, dst: str, recursive: bool = False, num_vms: int = 1):
         """

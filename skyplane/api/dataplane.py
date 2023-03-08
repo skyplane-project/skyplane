@@ -40,11 +40,7 @@ class Dataplane:
     """A Dataplane represents a concrete Skyplane network, including topology and VMs."""
 
     def __init__(
-        self,
-        clientid: str,
-        topology: ReplicationTopology,
-        provisioner: "Provisioner",
-        transfer_config: TransferConfig,
+        self, clientid: str, topology: ReplicationTopology, provisioner: "Provisioner", transfer_config: TransferConfig,
     ):
         """
         :param clientid: the uuid of the local host to create the dataplane
@@ -127,11 +123,7 @@ class Dataplane:
             self.provisioner.init_global(aws=is_aws_used, azure=is_azure_used, gcp=is_gcp_used)
 
             # provision VMs
-            uuids = self.provisioner.provision(
-                authorize_firewall=allow_firewall,
-                max_jobs=max_jobs,
-                spinner=spinner,
-            )
+            uuids = self.provisioner.provision(authorize_firewall=allow_firewall, max_jobs=max_jobs, spinner=spinner,)
 
             # bind VMs to nodes
             servers = [self.provisioner.get_node(u) for u in uuids]
@@ -148,8 +140,7 @@ class Dataplane:
             self.provisioned = True
 
         def _start_gateway(
-            gateway_node: ReplicationTopologyGateway,
-            gateway_server: compute.Server,
+            gateway_node: ReplicationTopologyGateway, gateway_server: compute.Server,
         ):
             # map outgoing ports
             setup_args = {}
@@ -224,8 +215,7 @@ class Dataplane:
                 raise
             finally:
                 self.provisioner.deprovision(
-                    max_jobs=max_jobs,
-                    spinner=spinner,
+                    max_jobs=max_jobs, spinner=spinner,
                 )
                 self.provisioned = False
 
@@ -261,12 +251,7 @@ class Dataplane:
         instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
         instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 
-    def queue_copy(
-        self,
-        src: str,
-        dst: str,
-        recursive: bool = False,
-    ) -> str:
+    def queue_copy(self, src: str, dst: str, recursive: bool = False,) -> str:
         """
         Add a copy job to job list.
         Return the uuid of the job.
@@ -283,11 +268,7 @@ class Dataplane:
         self.jobs_to_dispatch.append(job)
         return job.uuid
 
-    def queue_sync(
-        self,
-        src: str,
-        dst: str,
-    ) -> str:
+    def queue_sync(self, src: str, dst: str,) -> str:
         """
         Add a sync job to job list.
         Return the uuid of the job.

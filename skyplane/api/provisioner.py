@@ -156,11 +156,7 @@ class Provisioner:
                 assert self.gcp.auth.enabled(), "GCP credentials not configured"
                 # todo specify network tier in ReplicationTopology
                 server = self.gcp.provision_instance(
-                    task.region,
-                    task.vm_type,
-                    use_spot_instances=task.spot,
-                    gcp_premium_network=False,
-                    tags=task.tags,
+                    task.region, task.vm_type, use_spot_instances=task.spot, gcp_premium_network=False, tags=task.tags,
                 )
             else:
                 raise NotImplementedError(f"Unknown provider {task.cloud_provider}")
@@ -203,12 +199,7 @@ class Provisioner:
         # provision VMs
         logger.fs.info(f"[Provisioner.provision] Provisioning {len(provision_tasks)} VMs")
         results: List[Tuple[ProvisionerTask, compute.Server]] = do_parallel(
-            self._provision_task,
-            provision_tasks,
-            n=max_jobs,
-            spinner=spinner,
-            spinner_persist=spinner,
-            desc="Provisioning VMs",
+            self._provision_task, provision_tasks, n=max_jobs, spinner=spinner, spinner_persist=spinner, desc="Provisioning VMs",
         )
 
         # configure firewall
@@ -278,12 +269,7 @@ class Provisioner:
             logger.warning("Azure deprovisioning is very slow. Please be patient.")
         logger.fs.info(f"[Provisioner.deprovision] Deprovisioning {len(servers)} VMs")
         do_parallel(
-            deprovision_gateway_instance,
-            servers,
-            n=max_jobs,
-            spinner=spinner,
-            spinner_persist=False,
-            desc="Deprovisioning VMs",
+            deprovision_gateway_instance, servers, n=max_jobs, spinner=spinner, spinner_persist=False, desc="Deprovisioning VMs",
         )
 
         # clean up firewall

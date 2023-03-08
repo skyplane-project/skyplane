@@ -101,9 +101,21 @@ class GCSInterface(ObjectStoreInterface):
             self._gcs_client.create_bucket(bucket, location=region_without_zone)
 
     def delete_bucket(self):
+<<<<<<< HEAD
         for batch in batch_generator(self.list_objects(), 1000):
             self.delete_objects([obj.key for obj in batch])
         assert len(list(self.list_objects())) == 0, f"Bucket not empty after deleting all keys {list(self.list_objects())}"
+=======
+        keys = []
+        for key in self.list_objects():
+            keys.append(key.key)
+            if len(keys) >= 1000:
+                self.delete_objects(keys)
+                keys = []
+        self.delete_objects(keys)
+        assert len(list(self.list_objects())) == 0, "Bucket not empty after deleting all objects"
+
+>>>>>>> 6484f35 (reformat)
         self._gcs_client.get_bucket(self.bucket_name).delete()
 
     def list_objects(self, prefix="") -> Iterator[GCSObject]:
@@ -223,11 +235,7 @@ class GCSInterface(ObjectStoreInterface):
         # send XML api request
         headers = {"Content-MD5": b64_md5sum} if check_md5 else None
         response = self.send_xml_request(
-            dst_object_name,
-            {"uploadId": upload_id, "partNumber": part_number},
-            "PUT",
-            headers=headers,
-            data=open(src_file_path, "rb"),
+            dst_object_name, {"uploadId": upload_id, "partNumber": part_number}, "PUT", headers=headers, data=open(src_file_path, "rb"),
         )
 
         # check response
