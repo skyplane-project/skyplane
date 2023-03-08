@@ -1,13 +1,14 @@
 import base64
 import os
 import time
+import json
 from pathlib import Path
 
 from typing import Optional
 
 from skyplane.compute.server import key_root
 from skyplane.config import SkyplaneConfig
-from skyplane.config_paths import config_path, gcp_config_path
+from skyplane.config_paths import config_path, gcp_config_path, gcp_quota_path
 from skyplane.utils import logger, imports
 from skyplane.utils.retry import retry_backoff
 
@@ -45,6 +46,23 @@ class GCPAuthentication:
 
             f.write("\n".join(region_list))
             print(f"    GCP region config file saved to {gcp_config_path}")
+
+        with gcp_quota_path.open("w") as f:
+            service = discovery.build("compute", "beta", credentials=self.credentials)
+            request = service.regions().list(project=self.project_id)
+            region_to_vcpus = {}
+            while request is not None:
+                response = request.execute()
+                for region in response["items"]:
+                    if region["kind"] != "compute#region":
+                        continue
+                    region_name = region["name"]
+                    for quota_item in region["quotas"]:
+                        if quota_item["metric"] == "CPUS":
+                            region_to_vcpus[region_name] = quota_item["limit"]
+                            break
+                request = service.regions().list_next(previous_request=request, previous_response=response)
+            json.dump(region_to_vcpus, f)
 
     @staticmethod
     def clear_region_config():

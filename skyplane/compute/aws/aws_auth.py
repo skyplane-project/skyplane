@@ -1,8 +1,10 @@
-from typing import Optional
+from typing import Optional, Dict
+import json
+import os
 
 from skyplane.config import SkyplaneConfig
-from skyplane.config_paths import config_path, aws_config_path
-from skyplane.utils import imports
+from skyplane.config_paths import config_path, aws_config_path, aws_quota_path
+from skyplane.utils import imports, fn
 
 
 class AWSAuthentication:
@@ -22,6 +24,25 @@ class AWSAuthentication:
             self._access_key = None
             self._secret_key = None
 
+    def _get_ec2_vm_quota(self, region) -> Dict[str, int]:
+        """Given the region, get the maximum number of vCPU that can be launched.
+
+        Returns:
+            name_to_quota: a dictionary of quota name to quota value
+        """
+        # NOTE: the QuotaCode can be retried via
+        # aws service-quotas list-service-quotas --service-code ec2
+        # The items we are looking is
+        # "Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances" L-1216C47A
+        # "All Standard (A, C, D, H, I, M, R, T, Z) Spot Instance Requests" L-34B43A08
+        quotas_client = self.get_boto3_client("service-quotas", region)
+
+        name_to_quota = {}
+        for name, code in [("on_demand_standard_vcpus", "L-1216C47A"), ("spot_standard_vcpus", "L-34B43A08")]:
+            retrieved_quota = quotas_client.get_service_quota(ServiceCode="ec2", QuotaCode=code)
+            name_to_quota[name] = int(retrieved_quota["Quota"]["Value"])
+        return name_to_quota
+
     @imports.inject("boto3", pip_extra="aws")
     def save_region_config(boto3, self, config: SkyplaneConfig):
         if not config.aws_enabled:
@@ -37,20 +58,26 @@ class AWSAuthentication:
                     region_list.append(region_name)
             f.write("\n".join(region_list))
 
+        quota_infos = fn.do_parallel(
+            self._get_ec2_vm_quota, region_list, return_args=False, spinner=True, desc="Retrieving EC2 Quota information"
+        )
+        region_infos = [dict(**info, **{"region_name": name}) for name, info in zip(region_list, quota_infos)]
+        with aws_quota_path.open("w") as f:
+            f.write(json.dumps(region_infos, indent=2))
+
     def clear_region_config(self):
         with aws_config_path.open("w") as f:
             f.write("")
 
     @staticmethod
     def get_region_config():
-        try:
-            f = open(aws_config_path, "r")
-        except FileNotFoundError:
+        if aws_config_path.exists():
             return []
-        region_list = []
-        for region in f.read().split("\n"):
-            region_list.append(region)
-        return region_list
+        with open(aws_config_path) as f:
+            region_list = []
+            for region in f.read().split("\n"):
+                region_list.append(region)
+            return region_list
 
     @property
     def access_key(self):

@@ -55,7 +55,7 @@ werkzeug = { version = "^2.1.2", optional = true }
 
 [tool.poetry.extras]
 aws = ["boto3"]
-azure = ["azure-identity", "azure-mgmt-authorization", "azure-mgmt-compute", "azure-mgmt-network", "azure-mgmt-resource", "azure-mgmt-storage", "azure-mgmt-subscription", "azure-storage-blob"]
+azure = ["azure-identity", "azure-mgmt-authorization", "azure-mgmt-compute", "azure-mgmt-network", "azure-mgmt-resource", "azure-mgmt-storage", "azure-mgmt-quota", "azure-mgmt-subscription", "azure-storage-blob"]
 gcp = ["google-api-python-client", "google-auth", "google-cloud-compute", "google-cloud-storage"]
 all = ["boto3", "azure-identity", "azure-mgmt-authorization", "azure-mgmt-compute", "azure-mgmt-network", "azure-mgmt-resource", "azure-mgmt-storage", "azure-mgmt-subscription", "azure-storage-blob", "google-api-python-client", "google-auth", "google-cloud-compute", "google-cloud-storage"]
 gateway = ["flask", "lz4", "pynacl", "pyopenssl", "werkzeug"]
@@ -65,6 +65,7 @@ solver = ["cvxpy", "graphviz", "matplotlib", "numpy"]
 pytest = ">=6.0.0"
 pytest-cov = ">=2.10.0"
 pytest-xdist = ">=2.0.0"
+black = "^23.1.0"
 
 [build-system]
 requires = ["setuptools", "poetry-core>=1.2.0"]

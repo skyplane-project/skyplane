@@ -25,7 +25,7 @@ def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> Sk
         import boto3
     except ImportError:
         config.aws_enabled = False
-        typer.secho("    AWS support disabled because boto3 is not installed. Run `pip install skyplane[aws].`", fg="red", err=True)
+        typer.secho("    AWS support disabled because boto3 is not installed. Run `pip install 'skyplane[aws]'`.", fg="red", err=True)
         return config
     if non_interactive or typer.confirm("    Do you want to configure AWS support in Skyplane?", default=True):
         session = boto3.Session()
@@ -83,9 +83,9 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             for role in roles
         ]
 
-    def run_az_cmd(cmd: List[str]):
+    def run_az_cmd(cmd: List[str], ignore_error=False):
         out, err = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-        if err:
+        if err and not ignore_error:
             typer.secho(f"    Error running command: {cmd}", fg="red", err=True)
             typer.secho(f"    stdout: {out.decode('utf-8')}", fg="red", err=True)
             typer.secho(f"    stderr: {err.decode('utf-8')}", fg="red", err=True)
@@ -206,10 +206,12 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
                 else defaults["umi_name"]
             )
 
+        enable_quota_provider_cmd = f"az provider register -n Microsoft.Quota"
         change_subscription_cmd = f"az account set --subscription {config.azure_subscription_id}"
         create_rg_cmd = f"az group create -l westus2 -n {config.azure_resource_group}"
         create_umi_cmd = f"az identity create -g {config.azure_resource_group} -n {config.azure_umi_name}"
         typer.secho(f"    I will run the following commands to create an Azure managed identity:", fg="blue")
+        typer.secho(f"        $ {enable_quota_provider_cmd}", fg="yellow")
         typer.secho(f"        $ {change_subscription_cmd}", fg="yellow")
         typer.secho(f"        $ {create_rg_cmd}", fg="yellow")
         typer.secho(f"        $ {create_umi_cmd}", fg="yellow")
@@ -218,6 +220,9 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             TextColumn("    "), SpinnerColumn(), TextColumn("Creating Skyplane managed identity{task.description}"), transient=True
         ) as progress:
             progress.add_task("", total=None)
+            # NOTE: we want to run this command early on because it takes time to register the quota provider
+            _ = run_az_cmd(enable_quota_provider_cmd.split(), ignore_error=True)
+
             cmd_success, out, err = run_az_cmd(change_subscription_cmd.split())
             if not cmd_success:
                 return clear_azure_config(config)
