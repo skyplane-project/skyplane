@@ -13,7 +13,7 @@ Welcome to Skyplane!
    :parser: myst_parser.sphinx_
 
 Contents
---------
+---------
 
 
 .. toctree::

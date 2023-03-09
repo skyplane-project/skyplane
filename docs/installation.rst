@@ -24,7 +24,7 @@ We're ready to install Skyplane. It's as easy as:
       $ GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 GRPC_PYTHON_BUILD_SYSTEM_ZLIB=1 pip install skyplane[all]
 
 Setting up Cloud Credentials
------------------------
+-----------------------------
 Skyplane needs access to cloud credentials to perform transfers. To get started with setting up credentials, make sure you have cloud provider CLI tools installed: 
 
 .. code-block:: bash
