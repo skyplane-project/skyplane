@@ -168,10 +168,8 @@ class SkyplaneCLI:
 
     def make_dataplane(self, **solver_args) -> skyplane.Dataplane:
         if self.src_region_tag.split(":")[0] == "hdfs":
-            new_region_tag = "gcp:" + self.src_region_tag.split(":")[1]
-        else:
-            new_region_tag = self.src_region_tag
-        dp = self.client.dataplane(*new_region_tag.split(":"), *self.dst_region_tag.split(":"), **solver_args)
+            self.src_region_tag = self.dst_region_tag
+        dp = self.client.dataplane(*self.src_region_tag.split(":"), *self.dst_region_tag.split(":"), **solver_args)
         logger.fs.debug(f"Using dataplane: {dp}")
         return dp
 

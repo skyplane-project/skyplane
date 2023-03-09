@@ -1,5 +1,5 @@
 import uuid
-from skyplane.config_paths import cloud_config
+from skyplane.config_paths import load_cloud_config, load_config_path, cloud_config
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from tests.interface_util import interface_test_framework
 from skyplane.utils import imports
@@ -9,9 +9,9 @@ from google.cloud import compute_v1 as compute
 def test_dataproc():
     
     
-    cluster_name = f"skyplane-dataproc-test-acf"
-    region = "us-central1"
-    project_id ="skyplane-hailey-373919"
+    cluster_name = f"skyplane-dataproc-test"
+    region="us-central1"
+    project_id=cloud_config.gcp_project_id
 
     
     # Create a client with the endpoint set to the desired cluster region.
