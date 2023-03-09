@@ -369,6 +369,7 @@ class IBMVPCBackend:
             vsi.private_ip = instance_data["primary_network_interface"]["primary_ipv4_address"]
             vsi.instance_id = instance_data["id"]
 
+        instance_id = vsi.create(check_if_exists=True)
         if not vsi.is_ready():
             instance_id = vsi.create(check_if_exists=True)
             vsi.wait_ready()
