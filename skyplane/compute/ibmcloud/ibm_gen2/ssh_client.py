@@ -5,17 +5,18 @@ import os
 logger = logging.getLogger(__name__)
 
 
-class SSHClient:
+class SSHClient():
+
     def __init__(self, ip_address, ssh_credentials):
         self.ip_address = ip_address
         self.ssh_credentials = ssh_credentials
         self.ssh_client = None
 
-        if "key_filename" in self.ssh_credentials:
-            fpath = os.path.abspath(os.path.expanduser(self.ssh_credentials["key_filename"]))
+        if 'key_filename' in self.ssh_credentials:
+            fpath = os.path.expanduser(self.ssh_credentials['key_filename'])
             if not os.path.exists(fpath):
                 raise Exception(f"Private key file {fpath} doesn't exist")
-            self.ssh_credentials["key_filename"] = fpath
+            self.ssh_credentials['key_filename'] = fpath
 
     def close(self):
         """
@@ -31,18 +32,44 @@ class SSHClient:
         try:
             self.ssh_client = paramiko.SSHClient()
             self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+            user = self.ssh_credentials.get('username')
+            password = self.ssh_credentials.get('password')
+            pkey = None
+
+            if self.ssh_credentials.get('key_filename'):
+                with open(self.ssh_credentials['key_filename']) as f:
+                    pkey = paramiko.RSAKey.from_private_key(f)
+
             self.ssh_client.connect(
-                self.ip_address, **self.ssh_credentials, timeout=timeout, banner_timeout=200, allow_agent=False, look_for_keys=False
+                self.ip_address, username=user,
+                password=password, pkey=pkey,
+                timeout=timeout, banner_timeout=200,
+                allow_agent=False, look_for_keys=False
             )
 
-            logger.debug("{} ssh client created".format(self.ip_address))
+            logger.debug(f"{self.ip_address} ssh client created")
         except Exception as e:
-            pk = self.ssh_credentials.get("key_filename")
-            if pk and str(e) == "Authentication failed.":
-                raise Exception(f"Private key {pk} is not valid")
+            pk = self.ssh_credentials.get('key_filename')
+            if pk and str(e) == 'Authentication failed.':
+                raise Exception(f'Private key {pk} is not valid')
             raise e
 
         return self.ssh_client
+
+    def exec_command(self, cmd, timeout=None, run_async=False):
+        if not self.ip_address or self.ip_address == '0.0.0.0':
+            raise Exception('Invalid IP Address')
+
+        if self.ssh_client is None:
+            self.ssh_client = self.create_client()
+
+        try:
+            return self.ssh_client.exec_command(cmd, timeout=timeout)
+        except Exception as e:
+            # Normally this is a timeout exception
+            self.ssh_client = self.create_client()
+            return  self.ssh_client.exec_command(cmd, timeout=timeout)
 
     def run_remote_command(self, cmd, timeout=None, run_async=False):
         """
@@ -50,15 +77,15 @@ class SSHClient:
         param: timeout: execution timeout
         param: run_async: do not wait for command completion
         """
-        if not self.ip_address or self.ip_address == "0.0.0.0":
-            raise Exception("Invalid IP Address")
+        if not self.ip_address or self.ip_address == '0.0.0.0':
+            raise Exception('Invalid IP Address')
 
         if self.ssh_client is None:
             self.ssh_client = self.create_client()
 
         try:
             stdin, stdout, stderr = self.ssh_client.exec_command(cmd, timeout=timeout)
-        except Exception:
+        except Exception as e:
             # Normally this is a timeout exception
             self.ssh_client = self.create_client()
             stdin, stdout, stderr = self.ssh_client.exec_command(cmd, timeout=timeout)
@@ -66,7 +93,7 @@ class SSHClient:
         out = None
         if not run_async:
             out = stdout.read().decode().strip()
-            stderr.read().decode().strip()
+            error = stderr.read().decode().strip()
 
         return out
 
@@ -124,7 +151,7 @@ class SSHClient:
 
         ftp_client = self.ssh_client.open_sftp()
 
-        with ftp_client.open(remote_dst, "w") as f:
+        with ftp_client.open(remote_dst, 'w') as f:
             f.write(data)
 
         ftp_client.close()
