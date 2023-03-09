@@ -76,22 +76,7 @@ class IBMCloudServer(Server):
         self.vpc_backend.clean(all=True)
 
     def get_ssh_client_impl(self):
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        try:
-            client.connect(
-                self.public_ip(),
-                username=self.vsi.ssh_credentials["username"],
-                pkey=paramiko.RSAKey.from_private_key_file(self.vsi.ssh_credentials["key_filename"]),
-                look_for_keys=False,
-                allow_agent=False,
-                banner_timeout=200,
-            )
-            return client
-        except paramiko.AuthenticationException as e:
-            raise exceptions.BadConfigException(
-                f"Failed to connect to IBM Cloud server {self.uuid()}. Delete local IBM Cloud keys and retry: `rm -rf {key_root / 'ibmcloud'}`"
-            ) from e
+        return self.vsi.get_ssh_client()
 
     def get_sftp_client(self):
         t = paramiko.Transport((self.public_ip(), 22))

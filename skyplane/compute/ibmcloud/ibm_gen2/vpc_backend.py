@@ -77,6 +77,8 @@ class IBMVPCBackend:
         Loads VPC data from local cache
         """
         self.vpc_data = load_yaml_config(self.vpc_data_filename)
+        print ("load VPC data")
+        print (self.vpc_data)
 
         if not self.vpc_data:
             logger.debug(f"Could not find VPC cache data in {self.vpc_data_filename}")
@@ -94,13 +96,16 @@ class IBMVPCBackend:
         Creates a new VPC
         """
         if "vpc_id" in self.config:
+            print ("vpc_id in self.config")
             return
 
         if "vpc_id" in self.vpc_data:
+            print ("vpc_id in self.vpc_data")
             try:
                 self.vpc_cli.get_vpc(self.vpc_data["vpc_id"])
                 self.config["vpc_id"] = self.vpc_data["vpc_id"]
                 self.config["security_group_id"] = self.vpc_data["security_group_id"]
+                print (self.config)
                 return
             except ApiException:
                 pass
@@ -167,9 +172,11 @@ class IBMVPCBackend:
     def _create_ssh_key(self):
 
         if "ssh_key_id" in self.config:
+            print ("ssh_key_id in self.config")
             return
 
         if "ssh_key_id" in self.vpc_data:
+            print ("ssh_key_id in self.vpc_data")
             try:
                 self.vpc_cli.get_key(self.vpc_data["ssh_key_id"])
                 self.config["ssh_key_id"] = self.vpc_data["ssh_key_id"]
@@ -188,8 +195,9 @@ class IBMVPCBackend:
             for key in self.vpc_cli.list_keys().result["keys"]:
                 if key["name"] == keyname:
                     return key
-
+        print (key_filename)
         if not os.path.isfile(key_filename):
+            print (f"generate new key in {key_filename}")
             logger.debug("Generating new ssh key pair")
             os.system(f'ssh-keygen -b 2048 -t rsa -f {key_filename} -q -N ""')
             logger.debug(f"SHH key pair generated: {key_filename}")
