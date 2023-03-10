@@ -339,6 +339,30 @@ class IBMVPCBackend:
         floating_ip_id = floating_ip_data["id"]
         return floating_ip, floating_ip_id
 
+    def add_ips_to_security_group(self, ip_address):
+        for ip in ip_address:
+            ip_rule = {}
+            ip_rule['direction'] = 'inbound'
+            ip_rule['ip_version'] = 'ipv4'
+            ip_rule['protocol'] = 'all'
+            remote = {}
+            remote['address'] = ip
+            ip_rule['remote'] = remote
+
+            deploy_ip_rule = True
+            sg_rules = self.vpc_cli.get_security_group(self.config['security_group_id'])
+            for rule in sg_rules.get_result()['rules']:
+                if all(item in rule.items() for item in ip_rule.items()):
+                    deploy_ip_rule = False
+
+            if deploy_ip_rule:
+                logger.debug (f'About to create ip rule for {ip}')
+                try:
+                    self.vpc_cli.create_security_group_rule(self.config['security_group_id'], ip_rule)
+                    logger.debug(f'Created rule for {ip_rule}')
+                except Exception as e:
+                    raise e
+
     def create_vpc_instance(self, public=True):
         """
         Creates the master VM insatnce

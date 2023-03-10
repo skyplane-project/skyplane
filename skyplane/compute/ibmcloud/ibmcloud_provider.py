@@ -51,7 +51,7 @@ class IBMCloudProvider(CloudProvider):
             self.regions_vpc[region].clean(all=True)
 
     def add_ips_to_security_group(self, cos_region: str, ips: Optional[List[str]] = None):
-        pass
+        return self.regions_vpc[cos_region].add_ips_to_security_group(ips)
 
     def remove_ips_from_security_group(self, cos_region: str, ips: List[str]):
         pass
