@@ -34,7 +34,7 @@ from skyplane.compute.ibmcloud.ibm_gen2.utils import load_yaml_config, dump_yaml
 
 logger = logging.getLogger(__name__)
 
-INSTANCE_START_TIMEOUT = 180
+INSTANCE_START_TIMEOUT = 180*2
 VPC_API_VERSION = "2021-09-21"
 
 
@@ -393,6 +393,7 @@ class IBMVPCBackend:
             vsi.private_ip = instance_data["primary_network_interface"]["primary_ipv4_address"]
             vsi.instance_id = instance_data["id"]
 
+        instance_id = vsi.create(check_if_exists=True)
         if not vsi.is_ready():
             instance_id = vsi.create(check_if_exists=True)
             vsi.wait_ready()
