@@ -8,30 +8,34 @@ from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 import mimetypes
 
+
 def test_and_set_hadoop_classpath():
     import subprocess
 
-    if 'hadoop' in os.environ.get('CLASSPATH', ''):
+    if "hadoop" in os.environ.get("CLASSPATH", ""):
         return
 
-    if 'HADOOP_HOME' in os.environ:
-        hadoop_bin = os.path.normpath(os.environ['HADOOP_HOME'])  +"/bin/"  #'{0}/bin/hadoop'.format(os.environ['HADOOP_HOME'])
+    if "HADOOP_HOME" in os.environ:
+        hadoop_bin = os.path.normpath(os.environ["HADOOP_HOME"]) + "/bin/"  #'{0}/bin/hadoop'.format(os.environ['HADOOP_HOME'])
     else:
-        hadoop_bin = 'hadoop'
+        hadoop_bin = "hadoop"
 
     os.chdir(hadoop_bin)
-    hadoop_bin_exe = os.path.join(hadoop_bin, 'hadoop')
+    hadoop_bin_exe = os.path.join(hadoop_bin, "hadoop")
     print(hadoop_bin_exe)
-    classpath = subprocess.check_output([hadoop_bin_exe, 'classpath', '--glob'])
-    os.environ['CLASSPATH'] = classpath.decode('utf-8')
+    classpath = subprocess.check_output([hadoop_bin_exe, "classpath", "--glob"])
+    os.environ["CLASSPATH"] = classpath.decode("utf-8")
+
 
 def resolve_hostnames():
     os.system("cat /tmp/hostname >> /etc/hosts")
+
 
 @dataclass
 class HDFSFile(ObjectStoreObject):
     def full_path(self):
         return f"hdfs://{self.key}"
+
 
 class HDFSInterface(ObjectStoreInterface):
     def __init__(self, host, path="", port=8020):
@@ -41,7 +45,15 @@ class HDFSInterface(ObjectStoreInterface):
         test_and_set_hadoop_classpath()
         resolve_hostnames()
         self.hdfs = fs.HadoopFileSystem(
-            host=f"{self.host}/", port=self.port, user="hadoop", extra_conf={"dfs.permissions.enabled": "false", "dfs.client.use.datanode.hostname": "true", "dfs.datanode.use.datanode.hostname": "false"})
+            host=f"{self.host}/",
+            port=self.port,
+            user="hadoop",
+            extra_conf={
+                "dfs.permissions.enabled": "false",
+                "dfs.client.use.datanode.hostname": "true",
+                "dfs.datanode.use.datanode.hostname": "false",
+            },
+        )
         print(f"Connecting to HDFS at {self.host}:{self.port}")
 
     def path(self) -> str:

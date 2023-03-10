@@ -54,7 +54,7 @@ def test_hdfs():
         master_ip = ""
         for instance in client.list_instances(ClusterId=clusterID)["Instances"]:
             master_ip = instance["PublicIpAddress"]
-        
+
         assert interface_test_framework("hdfs:emr", master_ip, False, test_delete_bucket=True)
 
         assert interface_test_framework("hdfs:emr", master_ip, False, test_delete_bucket=True, file_size_mb=0)

@@ -81,7 +81,7 @@ class CloudProvider:
         use_spot_instances: bool = False,
         name: Optional[str] = None,
         tags={"skyplane": "true"},
-        **kwargs
+        **kwargs,
     ) -> Server:
         raise NotImplementedError
 

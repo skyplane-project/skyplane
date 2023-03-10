@@ -35,7 +35,7 @@ class POSIXInterface(ObjectStoreInterface):
                 bucket=self.dir_path,
                 key=self.dir_path,
                 size=os.path.getsize(self.dir_path),
-                last_modified=os.path.getmtime(self.dir_path),
+                last_modified=f"{os.path.getmtime(self.dir_path)}",
             )
         else:
             for root, dirs, files in os.walk(self.dir_path):
@@ -46,7 +46,7 @@ class POSIXInterface(ObjectStoreInterface):
                         bucket=self.dir_path,
                         key=full_path,
                         size=os.path.getsize(full_path),
-                        last_modified=os.path.getmtime(full_path),
+                        last_modified=f"{os.path.getmtime(full_path)}",
                     )
 
     def exists(self, obj_name: str):

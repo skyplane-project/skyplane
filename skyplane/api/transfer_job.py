@@ -38,8 +38,8 @@ class Chunker:
 
     def __init__(
         self,
-        src_iface: ObjectStoreObject or FileSystemInterface,
-        dst_iface: ObjectStoreObject or FileSystemInterface,
+        src_iface: ObjectStoreInterface or FileSystemInterface,
+        dst_iface: ObjectStoreInterface or FileSystemInterface,
         transfer_config: TransferConfig,
         concurrent_multipart_chunk_threads: int = 64,
     ):
@@ -184,7 +184,7 @@ class Chunker:
         src_prefix: str,
         dst_prefix: str,
         recursive: bool,
-        prefilter_fn: Optional[Callable[[ObjectStoreObject], bool]] = None,
+        prefilter_fn: Optional[Callable[[ObjectStoreObject or FileSystemInterface], bool]] = None,
     ) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
         """Query source region and return list of objects to transfer.
 

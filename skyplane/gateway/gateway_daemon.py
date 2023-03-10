@@ -71,7 +71,7 @@ class GatewayDaemon:
             n_conn = 24  # due to throttling limits from authentication
         else:
             n_conn = 32
-            
+
         logger.info(f"[gateway_daemon] Using {n_conn} connections to object store")
         self.obj_store_conn = GatewayObjStoreConn(self.chunk_store, self.error_event, self.error_queue, max_conn=n_conn)
 
@@ -151,7 +151,13 @@ class GatewayDaemon:
 
                             self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
                             threading.Thread(target=fn, args=(chunk_req, size_mb)).start()
-                    elif ((chunk_req.src_region.split(":")[0] in ("hdfs", "local") and self.region.split(":")[1] == chunk_req.src_region.split(":")[1]) or self.region == chunk_req.src_region) and chunk_req.src_type == "object_store":
+                    elif (
+                        (
+                            chunk_req.src_region.split(":")[0] in ("hdfs", "local")
+                            and self.region.split(":")[1] == chunk_req.src_region.split(":")[1]
+                        )
+                        or self.region == chunk_req.src_region
+                    ) and chunk_req.src_type == "object_store":
                         logger.info(f"[gateway_daemon] Chunk {chunk_req.src_region} is registered, {chunk_req}")
                         self.chunk_store.state_queue_download(chunk_req.chunk.chunk_id)
                         self.obj_store_conn.queue_download_request(chunk_req)

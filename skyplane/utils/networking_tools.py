@@ -7,7 +7,7 @@ def get_ip() -> str:
     try:
         ip = requests.get("https://api.ipify.org").text
     except:
-        return None
+        return ""
     return ip
 
 
