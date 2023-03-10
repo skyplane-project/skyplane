@@ -29,17 +29,20 @@ def test_dataproc():
         # # Create the cluster.
         operation = cluster_client.create_cluster(request={"project_id": project_id, "region": region, "cluster": cluster})
         result = operation.result()
+    except Exception as e:
+        raise e
 
+    print("Cluster created successfully. Testing interface...")
+
+    try:
         cluster_data = cluster_client.get_cluster(project_id=project_id, region=region, cluster_name=cluster_name)
 
         master_instance = compute.InstancesClient().get(project=project_id, zone="us-central1-b", instance="skyplane-dataproc-test-acf-m")
         ip = master_instance.network_interfaces[0].network_i_p
-
-        # Output a success message.
-        print(f"Cluster created successfully: {result.cluster_name}")
-
         assert interface_test_framework(f"hdfs:{region}", ip, False, test_delete_bucket=True)
-
+    except Exception as e:
+        print(e)
+    finally:
         # # Delete the cluster once the job has terminated.
         operation = cluster_client.delete_cluster(
             request={
@@ -50,6 +53,4 @@ def test_dataproc():
         )
         operation.result()
 
-        print("Cluster {} successfully deleted.".format(cluster_name))
-    except Exception as e:
-        print(e)
+    print("Cluster {} successfully deleted.".format(cluster_name))

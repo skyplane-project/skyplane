@@ -636,6 +636,8 @@ files = [
     {file = "cvxopt-1.3.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f4dcbd39a18d0aef9c856242fd5ed41049122f5439832c22778ad5300930145d"},
     {file = "cvxopt-1.3.0-cp310-cp310-win32.whl", hash = "sha256:3f318c62bf4452f0512485e3d21e05f57fcf325c3e16a7bdf409850561885ede"},
     {file = "cvxopt-1.3.0-cp310-cp310-win_amd64.whl", hash = "sha256:2b61f96561ee87b5d1e40281b6d908c80a454d529dcef947d4f229bba3f68e74"},
+    {file = "cvxopt-1.3.0-cp311-cp311-win32.whl", hash = "sha256:e090c1a9c721425bc4a86807a8ab7adc339fa845423407b6fe8d9a66f907d647"},
+    {file = "cvxopt-1.3.0-cp311-cp311-win_amd64.whl", hash = "sha256:7a9532151294874fb47e2c6027fcbfffa6334ce584496d0420001b43929a2118"},
     {file = "cvxopt-1.3.0-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:d0aad902085e17c618d0e238c804a0e416edb701c5b0231003ce2ba1e0a3e751"},
     {file = "cvxopt-1.3.0-cp36-cp36m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:96cec99ec0236399def3fdadf3899c2f385f0277a0a296c56271cb84f472eaf0"},
     {file = "cvxopt-1.3.0-cp36-cp36m-win32.whl", hash = "sha256:8a9877128839ed62275d84f477760c40c04e78e476cf46a44d1b1ab705463061"},
@@ -838,7 +840,7 @@ name = "google-api-core"
 version = "2.11.0"
 description = "Google API client core library"
 category = "main"
-optional = true
+optional = false
 python-versions = ">=3.7"
 files = [
     {file = "google-api-core-2.11.0.tar.gz", hash = "sha256:4b9bb5d5a380a0befa0573b302651b8a9a89262c1730e37bf423cec511804c22"},
@@ -888,7 +890,7 @@ name = "google-auth"
 version = "2.16.0"
 description = "Google Authentication Library"
 category = "main"
-optional = true
+optional = false
 python-versions = ">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*"
 files = [
     {file = "google-auth-2.16.0.tar.gz", hash = "sha256:ed7057a101af1146f0554a769930ac9de506aeca4fd5af6543ebe791851a9fbd"},
@@ -963,6 +965,27 @@ google-auth = ">=1.25.0,<3.0dev"
 
 [package.extras]
 grpc = ["grpcio (>=1.38.0,<2.0dev)"]
+
+[[package]]
+name = "google-cloud-dataproc"
+version = "5.4.0"
+description = "Google Cloud Dataproc API client library"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "google-cloud-dataproc-5.4.0.tar.gz", hash = "sha256:a0c5fe5cc8259a0bb6b1f4445714aafc4f5fa047f8f54cc7133914ba97856f5e"},
+    {file = "google_cloud_dataproc-5.4.0-py2.py3-none-any.whl", hash = "sha256:6c0e8e80189ab7cf1a792e82269efd63bb80fbeaa19276847f96f53df5a13ee8"},
+]
+
+[package.dependencies]
+google-api-core = {version = ">=1.34.0,<2.0.0 || >=2.11.0,<3.0.0dev", extras = ["grpc"]}
+grpc-google-iam-v1 = ">=0.12.4,<1.0.0dev"
+proto-plus = [
+    {version = ">=1.22.0,<2.0.0dev", markers = "python_version < \"3.11\""},
+    {version = ">=1.22.2,<2.0.0dev", markers = "python_version >= \"3.11\""},
+]
+protobuf = ">=3.19.5,<3.20.0 || >3.20.0,<3.20.1 || >3.20.1,<4.21.0 || >4.21.0,<4.21.1 || >4.21.1,<4.21.2 || >4.21.2,<4.21.3 || >4.21.3,<4.21.4 || >4.21.4,<4.21.5 || >4.21.5,<5.0.0dev"
 
 [[package]]
 name = "google-cloud-storage"
@@ -1091,7 +1114,7 @@ name = "googleapis-common-protos"
 version = "1.58.0"
 description = "Common protobufs used in Google APIs"
 category = "main"
-optional = true
+optional = false
 python-versions = ">=3.7"
 files = [
     {file = "googleapis-common-protos-1.58.0.tar.gz", hash = "sha256:c727251ec025947d545184ba17e3578840fc3a24a0516a020479edab660457df"},
@@ -1099,6 +1122,7 @@ files = [
 ]
 
 [package.dependencies]
+grpcio = {version = ">=1.44.0,<2.0.0dev", optional = true, markers = "extra == \"grpc\""}
 protobuf = ">=3.19.5,<3.20.0 || >3.20.0,<3.20.1 || >3.20.1,<4.21.1 || >4.21.1,<4.21.2 || >4.21.2,<4.21.3 || >4.21.3,<4.21.4 || >4.21.4,<4.21.5 || >4.21.5,<5.0.0dev"
 
 [package.extras]
@@ -1122,11 +1146,28 @@ docs = ["sphinx (>=5)", "sphinx-autodoc-typehints", "sphinx-rtd-theme"]
 test = ["coverage", "mock (>=4)", "pytest (>=7)", "pytest-cov", "pytest-mock (>=3)"]
 
 [[package]]
+name = "grpc-google-iam-v1"
+version = "0.12.6"
+description = "IAM API client library"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "grpc-google-iam-v1-0.12.6.tar.gz", hash = "sha256:2bc4b8fdf22115a65d751c9317329322602c39b7c86a289c9b72d228d960ef5f"},
+    {file = "grpc_google_iam_v1-0.12.6-py2.py3-none-any.whl", hash = "sha256:5c10f3d8dc2d88678ab1a9b0cb5482735c5efee71e6c0cd59f872eef22913f5c"},
+]
+
+[package.dependencies]
+googleapis-common-protos = {version = ">=1.56.0,<2.0.0dev", extras = ["grpc"]}
+grpcio = ">=1.44.0,<2.0.0dev"
+protobuf = ">=3.19.5,<3.20.0 || >3.20.0,<3.20.1 || >3.20.1,<4.21.1 || >4.21.1,<4.21.2 || >4.21.2,<4.21.3 || >4.21.3,<4.21.4 || >4.21.4,<4.21.5 || >4.21.5,<5.0.0dev"
+
+[[package]]
 name = "grpcio"
 version = "1.51.1"
 description = "HTTP/2-based RPC framework"
 category = "main"
-optional = true
+optional = false
 python-versions = ">=3.7"
 files = [
     {file = "grpcio-1.51.1-cp310-cp310-linux_armv7l.whl", hash = "sha256:cc2bece1737b44d878cc1510ea04469a8073dbbcdd762175168937ae4742dfb3"},
@@ -1184,7 +1225,7 @@ name = "grpcio-status"
 version = "1.51.1"
 description = "Status proto mapping for gRPC"
 category = "main"
-optional = true
+optional = false
 python-versions = ">=3.6"
 files = [
     {file = "grpcio-status-1.51.1.tar.gz", hash = "sha256:ac2617a3095935ebd785e2228958f24b10a0d527a0c9eb5a0863c784f648a816"},
@@ -1985,7 +2026,7 @@ name = "proto-plus"
 version = "1.22.2"
 description = "Beautiful, Pythonic protocol buffers."
 category = "main"
-optional = true
+optional = false
 python-versions = ">=3.6"
 files = [
     {file = "proto-plus-1.22.2.tar.gz", hash = "sha256:0e8cda3d5a634d9895b75c573c9352c16486cb75deb0e078b5fda34db4243165"},
@@ -2003,7 +2044,7 @@ name = "protobuf"
 version = "4.21.12"
 description = ""
 category = "main"
-optional = true
+optional = false
 python-versions = ">=3.7"
 files = [
     {file = "protobuf-4.21.12-cp310-abi3-win32.whl", hash = "sha256:b135410244ebe777db80298297a97fbb4c862c881b4403b71bac9d4107d61fd1"},
@@ -2065,7 +2106,7 @@ name = "pyasn1"
 version = "0.4.8"
 description = "ASN.1 types and codecs"
 category = "main"
-optional = true
+optional = false
 python-versions = "*"
 files = [
     {file = "pyasn1-0.4.8-py2.py3-none-any.whl", hash = "sha256:39c7e2ec30515947ff4e87fb6f456dfc6e84857d34be479c9d4a4ba4bf46aa5d"},
@@ -2077,7 +2118,7 @@ name = "pyasn1-modules"
 version = "0.2.8"
 description = "A collection of ASN.1-based protocols modules."
 category = "main"
-optional = true
+optional = false
 python-versions = "*"
 files = [
     {file = "pyasn1-modules-0.2.8.tar.gz", hash = "sha256:905f84c712230b2c592c19470d3ca8d552de726050d1d1716282a1f6146be65e"},
@@ -2429,7 +2470,7 @@ name = "rsa"
 version = "4.9"
 description = "Pure-Python RSA implementation"
 category = "main"
-optional = true
+optional = false
 python-versions = ">=3.6,<4"
 files = [
     {file = "rsa-4.9-py3-none-any.whl", hash = "sha256:90260d9058e514786967344d0ef75fa8727eed8a7d2e43ce9f4bcf1b536174f7"},
@@ -2702,4 +2743,4 @@ solver = ["cvxpy", "graphviz", "matplotlib", "numpy"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.7.1,<3.12"
-content-hash = "cec57185a0b904c02d48cf4d9b7de7ab287bd70b3482bdcfea0b3e7419bff456"
+content-hash = "2b00466a825ca821981d60b3a0d08232b0b8929ad5f266780de6881508c72380"

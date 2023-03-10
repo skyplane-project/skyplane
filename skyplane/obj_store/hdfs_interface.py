@@ -15,12 +15,11 @@ def test_and_set_hadoop_classpath():
     if "hadoop" in os.environ.get("CLASSPATH", ""):
         return
 
-    if "HADOOP_HOME" in os.environ:
-        hadoop_bin = os.path.normpath(os.environ["HADOOP_HOME"]) + "/bin/"  #'{0}/bin/hadoop'.format(os.environ['HADOOP_HOME'])
-    else:
-        hadoop_bin = "hadoop"
+    if "HADOOP_HOME" not in os.environ:
+        os.environ["HADOOP_HOME"] = "/usr/local/hadoop"
+        os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-11-openjdk-amd64"
 
-    os.chdir(hadoop_bin)
+    hadoop_bin = os.path.normpath(os.environ["HADOOP_HOME"]) + "/bin/"  #'{0}/bin/hadoop'.format(os.environ['HADOOP_HOME'])
     hadoop_bin_exe = os.path.join(hadoop_bin, "hadoop")
     print(hadoop_bin_exe)
     classpath = subprocess.check_output([hadoop_bin_exe, "classpath", "--glob"])

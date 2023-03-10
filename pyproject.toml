@@ -39,6 +39,7 @@ google-api-python-client = { version = ">=2.0.2", optional = true }
 google-auth = { version = ">=2.0.0", optional = true }
 google-cloud-compute = { version = ">=1.0.0", optional = true }
 google-cloud-storage = { version = ">=1.30.0", optional = true }
+google-cloud-dataproc = { version = "^5.4.0", optional = true }
 
 # solver dependencies
 cvxpy = { version = ">=1.1.0", optional = true, extras = ["cvxopt"] }
