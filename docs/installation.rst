@@ -1,9 +1,7 @@
 ***************
-Getting Started
+Installation
 ***************
 
-Installation
------------------------
 We're ready to install Skyplane. It's as easy as:
 
 .. code-block:: bash
@@ -25,8 +23,8 @@ We're ready to install Skyplane. It's as easy as:
 
       $ GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 GRPC_PYTHON_BUILD_SYSTEM_ZLIB=1 pip install skyplane[all]
 
-Cloud Credentials
------------------------
+Setting up Cloud Credentials
+-----------------------------
 Skyplane needs access to cloud credentials to perform transfers. To get started with setting up credentials, make sure you have cloud provider CLI tools installed: 
 
 .. code-block:: bash
@@ -59,21 +57,3 @@ Now, you can initialize Skyplane with your desired cloud providers. Skyplane aut
    
    ---> Setup cloud provider connectors:
    $ skyplane init
-
-
-Transferring Data
--------------------
-
-We're ready to use Skyplane! Let's use `skyplane cp` to copy files from AWS to GCP:
-
-.. code-block:: bash
-
-   ---> 🎸 Ready to rock and roll! Copy some files:
-   $ skyplane cp -r s3://... gs://...
-
-To transfer only new objects, you can instead use `skyplane sync`: 
-
-.. code-block:: bash
-
-   ---> Copy only diff
-   $ skyplane sync s3://... gs://...
