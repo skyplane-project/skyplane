@@ -3,9 +3,10 @@ from skyplane.config_paths import load_cloud_config, load_config_path, cloud_con
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from tests.interface_util import interface_test_framework
 from skyplane.utils import imports
-from google.cloud import dataproc_v1 as dataproc
-from google.cloud import compute_v1 as compute
-from google.api_core.extended_operation import ExtendedOperation
+
+# from google.cloud import dataproc_v1 as dataproc
+# from google.cloud import compute_v1 as compute
+# from google.api_core.extended_operation import ExtendedOperation
 
 
 def test_dataproc():
