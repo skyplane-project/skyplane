@@ -25,7 +25,7 @@ from skyplane.utils import logger
 from skyplane.utils.definitions import MB
 from skyplane.utils.fn import do_parallel
 from skyplane.utils.path import parse_path
-from skyplane.utils.generator import batch_generator
+from skyplane.utils.generator import batch_generator, prefetch_generator, tail_generator
 
 if TYPE_CHECKING:
     from skyplane.api.dataplane import Dataplane
@@ -416,12 +416,12 @@ class CopyJob(TransferJob):
         """
         chunker = Chunker(self.src_iface, self.dst_iface, transfer_config)
         transfer_pair_generator = self.gen_transfer_pairs(chunker)
-        gen_transfer_list = chunker.tail_generator(transfer_pair_generator, self.transfer_list)
+        gen_transfer_list = tail_generator(transfer_pair_generator, self.transfer_list)
         chunks = chunker.chunk(gen_transfer_list)
         chunk_requests = chunker.to_chunk_requests(chunks)
 
-        batches = chunker.batch_generator(
-            chunker.prefetch_generator(chunk_requests, buffer_size=dispatch_batch_size * 32), batch_size=dispatch_batch_size
+        batches = batch_generator(
+            prefetch_generator(chunk_requests, buffer_size=dispatch_batch_size * 32), batch_size=dispatch_batch_size
         )
 
         # dispatch chunk requests
