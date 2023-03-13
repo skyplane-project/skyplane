@@ -12,7 +12,6 @@ from skyplane import exceptions
 from skyplane.api.config import TransferConfig
 from skyplane.chunk import ChunkRequest, ChunkState, Chunk
 from skyplane.utils import logger, imports
-from skyplane.utils.definitions import tmp_log_dir
 from skyplane.utils.fn import do_parallel
 from skyplane.api.usage import UsageClient
 from skyplane.utils.definitions import GB
@@ -92,8 +91,7 @@ class TransferProgressTracker(Thread):
         self.dataplane = dataplane
         self.jobs = {job.uuid: job for job in jobs}
         self.transfer_config = transfer_config
-        self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.transfer_dir.mkdir(exist_ok=True, parents=True)
+
         if hooks is None:
             self.hooks = EmptyTransferHook()
         else:
@@ -225,7 +223,7 @@ class TransferProgressTracker(Thread):
             errors = self.dataplane.check_error_logs()
             if any(errors.values()):
                 logger.warning("Copying gateway logs...")
-                do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=-1)
+                self.dataplane.copy_logs()
                 self.errors = errors
                 raise exceptions.SkyplaneGatewayException("Transfer failed with errors", errors)
 
@@ -322,8 +320,3 @@ class TransferProgressTracker(Thread):
                 ]
             )
         return sum(bytes_total_per_job.values())
-
-    def copy_log(self, instance):
-        instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
-        instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
-        instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")

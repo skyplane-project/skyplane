@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
-import matplotlib.pyplot as plt  # type: ignore
+import matplotlib.pyplot as plt  # pytype: disable=import-error
 from tqdm import tqdm
 
 from skyplane import __root__

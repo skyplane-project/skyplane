@@ -109,7 +109,7 @@ class GatewayObjStoreConn:
                     chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id)
                     self.chunk_store.state_finish_upload(chunk_req.chunk.chunk_id, f"obj_store:{self.worker_id}")
                     chunk_file_path.unlink()
-                    logger.debug(f"[obj_store:{self.worker_id}] Uploaded {chunk_req.chunk.chunk_id} to {bucket}")
+                    logger.info(f"[obj_store:{self.worker_id}] Uploaded {chunk_req.chunk.chunk_id} to {bucket}")
                 elif req_type == "download":
                     assert chunk_req.src_type == "object_store"
 
