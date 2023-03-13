@@ -144,6 +144,7 @@ class GatewayReceiver:
 
             # wait for space
             while self.chunk_store.remaining_bytes() < chunk_header.data_len * self.max_pending_chunks:
+                logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} no space {chunk_header.data_len} {self.max_pending_chunks}")
                 time.sleep(0.1)
 
             # get data

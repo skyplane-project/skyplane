@@ -420,9 +420,7 @@ class CopyJob(TransferJob):
         chunks = chunker.chunk(gen_transfer_list)
         chunk_requests = chunker.to_chunk_requests(chunks)
 
-        batches = batch_generator(
-            prefetch_generator(chunk_requests, buffer_size=dispatch_batch_size * 32), batch_size=dispatch_batch_size
-        )
+        batches = batch_generator(prefetch_generator(chunk_requests, buffer_size=dispatch_batch_size * 32), batch_size=dispatch_batch_size)
 
         # dispatch chunk requests
         src_gateways = dataplane.source_gateways()
