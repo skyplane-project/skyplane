@@ -282,6 +282,8 @@ class Chunker:
             # drain multipart chunk queue and yield with updated chunk IDs
             while not multipart_chunk_queue.empty():
                 yield multipart_chunk_queue.get()
+
+
 @dataclass
 class TransferJob(ABC):
     """

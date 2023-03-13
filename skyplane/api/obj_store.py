@@ -1,7 +1,7 @@
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 
-class ObjectStore: 
 
+class ObjectStore:
     def __init__(self) -> None:
         pass
 

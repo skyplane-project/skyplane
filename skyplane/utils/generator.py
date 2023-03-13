@@ -5,6 +5,7 @@ import threading
 
 T = TypeVar("T")
 
+
 def batch_generator(gen_in: Generator[T, None, None], batch_size: int) -> Generator[List[T], None, None]:
     """Batches generator, while handling StopIteration
 
@@ -19,6 +20,7 @@ def batch_generator(gen_in: Generator[T, None, None], batch_size: int) -> Genera
             batch = []
     if len(batch) > 0:
         yield batch
+
 
 def prefetch_generator(gen_in: Generator[T, None, None], buffer_size: int) -> Generator[T, None, None]:
     """
@@ -48,6 +50,7 @@ def prefetch_generator(gen_in: Generator[T, None, None], buffer_size: int) -> Ge
             break
         yield item
 
+
 def tail_generator(gen_in: Generator[T, None, None], out_list: List[T]) -> Generator[T, None, None]:
     """Tails generator while handling StopIteration
 
@@ -59,4 +62,3 @@ def tail_generator(gen_in: Generator[T, None, None], out_list: List[T]) -> Gener
     for item in gen_in:
         out_list.append(item)
         yield item
-

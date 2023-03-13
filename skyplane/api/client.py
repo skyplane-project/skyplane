@@ -144,8 +144,6 @@ class SkyplaneClient:
             return Dataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
         else:
             raise NotImplementedError(f"Dataplane type {solver_type} not implemented")
-        
-    def object_store(self): 
+
+    def object_store(self):
         return ObjectStore()
-
-
