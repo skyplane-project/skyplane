@@ -125,7 +125,6 @@ class ObjectStoreInterface:
             return AzureBlobInterface(storage_account, container)
 
         elif region_tag.startswith("hdfs"):
-            logger.fs.debug(f"Creating HDFS interface for bucket {bucket}")
             from skyplane.obj_store.hdfs_interface import HDFSInterface
 
             logger.fs.debug(f"attempting to create hdfs bucket {bucket}")

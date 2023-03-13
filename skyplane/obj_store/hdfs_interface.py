@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Iterator, List, Optional
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
+from skyplane.utils import imports, logger
 import mimetypes
 
 
@@ -15,19 +16,27 @@ def test_and_set_hadoop_classpath():
     if "hadoop" in os.environ.get("CLASSPATH", ""):
         return
 
+    # If HADOOP_HOME is not set, set it to the default location
     if "HADOOP_HOME" not in os.environ:
         os.environ["HADOOP_HOME"] = "/usr/local/hadoop"
         os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-11-openjdk-amd64"
 
     hadoop_bin = os.path.normpath(os.environ["HADOOP_HOME"]) + "/bin/"  #'{0}/bin/hadoop'.format(os.environ['HADOOP_HOME'])
     hadoop_bin_exe = os.path.join(hadoop_bin, "hadoop")
-    print(hadoop_bin_exe)
+
     classpath = subprocess.check_output([hadoop_bin_exe, "classpath", "--glob"])
     os.environ["CLASSPATH"] = classpath.decode("utf-8")
 
 
 def resolve_hostnames():
-    os.system("cat /tmp/hostname >> /etc/hosts")
+    if os.path.exists("/tmp/hostname"):
+        logger.info("Found hostname file")
+        rc = os.system("cat /tmp/hostname >> /etc/hosts")
+        if rc:
+            logger.info("Failed to add hostname to /etc/hosts")
+    # elif os.path.exists("scripts/on_prem/hostname"):
+    #     print("Found hostname file")
+    #     os.system("cat scripts/on_prem/hostname >> sudo /etc/hosts")
 
 
 @dataclass
@@ -53,16 +62,16 @@ class HDFSInterface(ObjectStoreInterface):
                 "dfs.datanode.use.datanode.hostname": "false",
             },
         )
-        print(f"Connecting to HDFS at {self.host}:{self.port}")
+        logger.info(f"Connecting to HDFS at {self.host}:{self.port}", flush=True)
 
     def path(self) -> str:
         return self.hdfs_path
 
     def list_objects(self, prefix="/skyplane5") -> Iterator[HDFSFile]:
         fileselector = fs.FileSelector("/skyplane5", recursive=True, allow_not_found=True)
-        print(f"File selector created successfully, {fileselector.base_dir}")
+        logger.info(f"File selector created successfully, {fileselector.base_dir}")
         response = self.hdfs.get_file_info(fileselector)
-        print(f"Response: {response}")
+        logger.info(f"Response: {response}")
         if hasattr(response, "__len__") and (not isinstance(response, str)):
             for file in response:
                 yield HDFSFile(provider="hdfs", bucket=self.host, key=file.path, size=file.size, last_modified=file.mtime)

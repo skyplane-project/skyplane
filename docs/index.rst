@@ -45,6 +45,7 @@ Contents
    configure
    architecture
    performance_stats_collection
+   on-prem_setup
    faq
 
 

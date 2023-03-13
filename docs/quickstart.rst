@@ -77,3 +77,15 @@ To transfer only new objects, you can instead use `skyplane sync`:
 
    ---> Copy only diff
    $ skyplane sync s3://... gs://...
+
+To transfer from local disk or HDFS cluster, you can use `skyplane cp` as well:
+
+(Note: On-Prem require additional setup. Please navigate to the `On-Prem` section for more details)
+
+.. code-block:: bash
+
+   ---> Copy from local disk
+   $ skyplane cp -r /path/to/local/file gs://...
+
+   ---> Copy from HDFS
+   $ skyplane cp -r hdfs://... gs://...
