@@ -70,6 +70,5 @@ class IBMCloudProvider(CloudProvider):
 
         tags["node-type"] = "master"
         tags["node-name"] = "skyplane-master"
-
         instance_id, vsi = self.regions_vpc[region].create_vpc_instance()
         return IBMCloudServer(self.regions_vpc[region], f"ibmcloud:{region}", instance_id, vsi)

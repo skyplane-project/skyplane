@@ -73,14 +73,13 @@ class IBMCloudServer(Server):
         return f"IBMCloudServer(region_tag={self.region_tag}, instance_id={self.instance_id})"
 
     def terminate_instance_impl(self):
-        self.vpc_backend.clean(all=True)
+        self.vsi.delete()
 
     def get_ssh_client_impl(self):
         return self.vsi.get_ssh_client()
 
     def get_sftp_client(self):
         t = paramiko.Transport((self.public_ip(), 22))
-        print("Get SFTP client")
         t.connect(
             username=self.vsi.ssh_credentials["username"],
             pkey=paramiko.RSAKey.from_private_key_file(self.vsi.ssh_credentials["key_filename"]),

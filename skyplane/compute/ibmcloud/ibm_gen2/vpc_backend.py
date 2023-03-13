@@ -23,6 +23,7 @@ import paramiko
 import time
 import logging
 import uuid
+import random
 from ibm_vpc import VpcV1
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 from ibm_cloud_sdk_core import ApiException
@@ -197,7 +198,6 @@ class IBMVPCBackend:
                     return key
         print (key_filename)
         if not os.path.isfile(key_filename):
-            print (f"generate new key in {key_filename}")
             logger.debug("Generating new ssh key pair")
             os.system(f'ssh-keygen -b 2048 -t rsa -f {key_filename} -q -N ""')
             logger.debug(f"SHH key pair generated: {key_filename}")
@@ -208,7 +208,6 @@ class IBMVPCBackend:
             with open(f"{key_filename}.pub", "r") as file:
                 ssh_key_data = file.read()
             try:
-                print("key name", keyname)
                 key_info = self.vpc_cli.create_key(
                     public_key=ssh_key_data, name=keyname, type="rsa", resource_group={"id": self.config["resource_group_id"]}
                 ).get_result()
@@ -313,20 +312,20 @@ class IBMVPCBackend:
         # Attach public gateway to the subnet
         self.vpc_cli.set_subnet_public_gateway(self.config["subnet_id"], {"id": self.config["gateway_id"]})
 
-    def _create_floating_ip(self):
+    def _create_floating_ip(self, disable_recycle = True):
         """
         Creates a new floating IP address
         """
 
         floating_ip_data = None
-
-        floating_ips_info = self.vpc_cli.list_floating_ips().get_result()
-        for fip in floating_ips_info["floating_ips"]:
-            if fip["name"].startswith("skyplane-recyclable") and fip["status"] == "available":
-                floating_ip_data = fip
+        if not disable_recycle:
+            floating_ips_info = self.vpc_cli.list_floating_ips().get_result()
+            for fip in floating_ips_info["floating_ips"]:
+                if fip["name"].startswith("skyplane") and fip["status"] == "available":
+                    floating_ip_data = fip
 
         if not floating_ip_data:
-            floating_ip_name = f"skyplane-recyclable-{str(uuid.uuid1())[-4:]}"
+            floating_ip_name = f"skyplane-{str(uuid.uuid1())[-4:]}-{str(random.randint(1000,9999))}"
             logger.debug(f"Creating floating IP {floating_ip_name}")
             floating_ip_prototype = {}
             floating_ip_prototype["name"] = floating_ip_name
@@ -833,6 +832,9 @@ class IBMVPCInstance:
         else:
             self.vpc_cli.add_instance_network_interface_floating_ip(instance["id"], instance["network_interfaces"][0]["id"], fip_id)
 
+    def _delete_floating_ip(self, fip_id):
+            response = self.vpc_cli.delete_floating_ip(id=fip_id)
+
     def get_instance_data(self):
         """
         Returns the instance information
@@ -960,6 +962,8 @@ class IBMVPCInstance:
         Deletes the VM instance
         """
         self._delete_instance()
+        self._delete_floating_ip(self.floating_ip_id)
+
 
     def validate_capabilities(self):
         """
