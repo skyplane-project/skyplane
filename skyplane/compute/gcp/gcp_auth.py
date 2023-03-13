@@ -127,7 +127,6 @@ class GCPAuthentication:
             key_path = key_root / "gcp" / "service_account_key.json"
         # write key file
         if not os.path.exists(key_path):
-
             # list existing keys
             keys = service.projects().serviceAccounts().keys().list(name="projects/-/serviceAccounts/" + service_account_email).execute()
 

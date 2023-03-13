@@ -49,10 +49,10 @@ class BroadcastDataplane(Dataplane):
         self,
         clientid: str,
         provisioner: "Provisioner",
-        log_dir: str, 
+        log_dir: str,
         transfer_config: TransferConfig,
         topology: Optional[BroadcastReplicationTopology] = None,
-        gateway_program_path: Optional[str] = None, 
+        gateway_program_path: Optional[str] = None,
     ):
         self.log_dir = log_dir
         self.clientid = clientid
@@ -62,14 +62,13 @@ class BroadcastDataplane(Dataplane):
         self.provisioning_lock = threading.Lock()
         self.provisioned = False
 
-        # either set topology or gateway program 
+        # either set topology or gateway program
         self.gateway_program_path = gateway_program_path
         self.topology = topology
         self.src_region_tag = self.topology.source_region()
         self.dst_region_tags = self.topology.sink_regions()
         regions = Counter([node.region for node in self.topology.gateway_nodes])
         self.max_instances = int(regions[max(regions, key=regions.get)])
- 
 
         # pending tracker tasks
         self.jobs_to_dispatch: List[BCTransferJob] = []
@@ -88,7 +87,7 @@ class BroadcastDataplane(Dataplane):
     def get_object_store_connection(self, region: str):
         provider = region.split(":")[0]
         if provider == "aws" or provider == "gcp":
-            #n_conn = 32
+            # n_conn = 32
             n_conn = 32
         elif provider == "azure":
             n_conn = 24  # due to throttling limits from authentication
@@ -234,12 +233,9 @@ class BroadcastDataplane(Dataplane):
     @property
     @functools.lru_cache(maxsize=None)
     def current_gw_programs(self):
-
         if self.gateway_program_path is not None:
             # return existing gateway program file
             return json.load(open(self.gateway_program_path, "r"))
-
-        
 
         solution_graph = self.topology.nx_graph
         # print("Solution graph: ", solution_graph.edges.data())
@@ -303,7 +299,7 @@ class BroadcastDataplane(Dataplane):
 
             gateway_programs[node] = self.remap_keys(node_gateway_program.to_dict())
             assert len(gateway_programs[node]) > 0, f"Empty gateway program {node}"
-            #print("PROGRAM", gateway_programs[node])
+            # print("PROGRAM", gateway_programs[node])
 
         return gateway_programs
 
@@ -320,7 +316,7 @@ class BroadcastDataplane(Dataplane):
         am_sink = gateway_node in self.topology.sink_instances()
 
         # start gateway
-        #if sgateway_log_dir:
+        # if sgateway_log_dir:
         if self.log_dir:
             gateway_server.init_log_files(self.log_dir)
         if authorize_ssh_pub_key:

@@ -34,12 +34,12 @@ def start_transfer(args):
     # dest_files = [f"s3://broadcast-opt-{d}/test_replication/" for d in dst_regions]
 
     # source_file = "s3://skyplane-broadcast/imagenet-images/"
-    #source_file = "s3://broadcast-exp3-ap-east-1/OPT-66B/"
+    # source_file = "s3://broadcast-exp3-ap-east-1/OPT-66B/"
     source_file = "s3://broadcast-opt-ap-east-1/test_replication/"
     dest_files = [f"s3://broadcast-exp3-{d}/OPT-66B/" for d in dst_regions]
 
     # create bucket if it doesn't exist
-    for (region, bucket_path) in zip([src_region] + dst_regions, [source_file] + dest_files):
+    for region, bucket_path in zip([src_region] + dst_regions, [source_file] + dest_files):
         bucket_name = bucket_path.split("/")[2]
         bucket = S3Interface(bucket_name)
         try:

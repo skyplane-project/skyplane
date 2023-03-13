@@ -84,29 +84,29 @@ class GatewayOperator(ABC):
                 except queue.Empty:
                     continue
 
-                #print(f"[{self.handle}:{self.worker_id}] Got chunk {chunk_req.chunk.chunk_id}")
+                # print(f"[{self.handle}:{self.worker_id}] Got chunk {chunk_req.chunk.chunk_id}")
 
                 # TODO: status logging
                 self.chunk_store.log_chunk_state(chunk_req, ChunkState.in_progress, operator_handle=self.handle, worker_id=worker_id)
-                #print(f"[{self.handle}:{self.worker_id}] Updated chunk state {chunk_req.chunk.chunk_id}")
+                # print(f"[{self.handle}:{self.worker_id}] Updated chunk state {chunk_req.chunk.chunk_id}")
 
                 # process chunk
                 succ = self.process(chunk_req, *args)
 
                 # place in output queue
                 if succ:
-                    #print(f"[{self.handle}:{self.worker_id}] Placing chunk {chunk_req.chunk.chunk_id} in downstream queue")
-                    #print(self.handle)
+                    # print(f"[{self.handle}:{self.worker_id}] Placing chunk {chunk_req.chunk.chunk_id} in downstream queue")
+                    # print(self.handle)
                     self.chunk_store.log_chunk_state(chunk_req, ChunkState.complete, operator_handle=self.handle, worker_id=worker_id)
                     if self.output_queue is not None:
-                        #print(f"[{self.handle}:{self.worker_id}] Output queue is not None - not a terminal operator")
+                        # print(f"[{self.handle}:{self.worker_id}] Output queue is not None - not a terminal operator")
                         self.output_queue.put(chunk_req)
                     else:
                         print(f"[{self.handle}:{self.worker_id}] Output queue is None - terminal operator")
                 else:
                     # failed to process - re-queue
                     time.sleep(0.1)
-                    #print(f"[{self.handle}:{self.worker_id}] Failed to process - re-queueing {chunk_req.chunk.chunk_id}")
+                    # print(f"[{self.handle}:{self.worker_id}] Failed to process - re-queueing {chunk_req.chunk.chunk_id}")
                     self.input_queue.put(chunk_req)
 
             except Exception as e:
@@ -135,7 +135,7 @@ class GatewayWaitReciever(GatewayOperator):
     def process(self, chunk_req: ChunkRequest):
         chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id)
         if not os.path.exists(chunk_file_path):  # chunk still not downloaded, re-queue
-            #logger.debug(f"[{self.handle}:{self.worker_id}] Chunk {chunk_req.chunk.chunk_id} not downloaded yet, re-queueing")
+            # logger.debug(f"[{self.handle}:{self.worker_id}] Chunk {chunk_req.chunk.chunk_id} not downloaded yet, re-queueing")
             return False
 
         # check to see if file is completed downloading
@@ -270,7 +270,7 @@ class GatewaySender(GatewayOperator):
         with Timer(f"pre-register chunks {chunk_ids} to {dst_host}"):
             register_body = json.dumps([c.as_dict() for c in chunk_reqs]).encode("utf-8")
             print(f"[sender-{self.worker_id}]:{chunk_ids} register body {register_body}")
-            #while True:
+            # while True:
             #   try:
             #       response = self.http_pool.request(
             #           "POST", f"https://{dst_host}:8080/api/v1/chunk_requests", body=register_body, headers={"Content-Type": "application/json"}
@@ -359,7 +359,6 @@ class GatewayRandomDataGen(GatewayOperator):
         self.size_mb = size_mb
 
     def process(self, chunk_req: ChunkRequest):
-
         # wait until enough space available
         fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
         size_bytes = int(self.size_mb * MB)

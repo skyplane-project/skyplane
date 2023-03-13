@@ -37,11 +37,10 @@ class DataplaneAutoDeprovision:
         print(f"Copying gateway std err files to gateway_{instance.uuid()}.stderr")
         instance.download_file("/tmp/gateway.stderr", self.dataplane.log_dir / f"gateway_{instance.uuid()}.stderr")
 
-
     def __exit__(self, exc_type, exc_value, exc_tb):
         logger.fs.warning("Deprovisioning dataplane")
         print("Starting deprovision")
-        # TODO: insert log copy here? 
+        # TODO: insert log copy here?
         do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=-1)
         self.dataplane.deprovision()
 
@@ -55,7 +54,7 @@ class Dataplane:
         topology: ReplicationTopology,
         provisioner: "Provisioner",
         transfer_config: TransferConfig,
-        log_dir: str, 
+        log_dir: str,
     ):
         self.log_dir = log_dir
         self.clientid = clientid

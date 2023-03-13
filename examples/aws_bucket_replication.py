@@ -142,7 +142,6 @@ def write_source_data(src_region, target_data, directory):
 
 
 def main(argv):
-
     src_region = FLAGS.src_region
     dst_regions = list(FLAGS.dst_regions)
     directory = "test_replication"
@@ -243,7 +242,6 @@ def main(argv):
         "aws", target_data_region, "aws", src_region, n_vms=8
     )  # TODO: pass in target_throughput that we also pass to broadcast?
     with dp.auto_deprovision():
-
         # copy data with skyplane to source bucket
         dp.provision(spinner=True)
         dp.queue_copy(FLAGS.target_data, f"s3://{src_bucket}/{directory}", recursive=True)

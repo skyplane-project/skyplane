@@ -65,7 +65,7 @@ class TransferConfig:
     azure_use_spot_instances: bool = False
     gcp_use_spot_instances: bool = False
     aws_instance_class: str = "m5.8xlarge"
-    azure_instance_class: str = "Standard_D32_v5" # note: setting to lower values may have too little memory 
+    azure_instance_class: str = "Standard_D32_v5"  # note: setting to lower values may have too little memory
     gcp_instance_class: str = "n2-standard-32"
     gcp_use_premium_network: bool = True
 

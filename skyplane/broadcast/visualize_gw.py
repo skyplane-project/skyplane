@@ -87,17 +87,17 @@ def get_nx_graph(path):
             print("Region: ", region)
             pprint(region_p)
 
-            for partition_group in region_p: 
+            for partition_group in region_p:
                 partitions = partition_group["partitions"]
-                p_plan = partition_group['value']
-                for pid in partitions: 
+                p_plan = partition_group["value"]
+                for pid in partitions:
                     nx_g = plot_children(nx_g, start_node, region, p_plan, pid)
 
-            #pprint(region_p)
-            #plans = region_p["_plan"]
-            #partitions = [int(i) for i in list(plans.keys())]
+            # pprint(region_p)
+            # plans = region_p["_plan"]
+            # partitions = [int(i) for i in list(plans.keys())]
             ## print("partitions: ", [int(i) for i in list(plans.keys())])
-            #for pid in partitions:
+            # for pid in partitions:
             #    p_plan = plans[str(pid)]
             #    nx_g = plot_children(nx_g, start_node, region, p_plan, pid)
             ## break
@@ -176,7 +176,7 @@ if __name__ == "__main__":
     for i in range(len(nodes)):
         color_map[nodes[i]] = color[i]
 
-    #plot_path = "/tmp/skyplane/gw_programs/gateway_programs_complete.json"
+    # plot_path = "/tmp/skyplane/gw_programs/gateway_programs_complete.json"
     plot_path = "/Users/sarahwooders/repos/skyplane/new_gw_programs/gateway_programs_complete.json"
     add_nx_g = get_nx_graph(plot_path)
     h = networkx_to_graphviz(add_nx_g)

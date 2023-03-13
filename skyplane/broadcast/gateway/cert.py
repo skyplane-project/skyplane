@@ -1,5 +1,6 @@
 from OpenSSL import crypto
 
+
 # Based on https://stackoverflow.com/questions/27164354/create-a-self-signed-x509-certificate-in-python
 def generate_self_signed_certificate(output_cert_file, output_key_file):
     k = crypto.PKey()

@@ -21,8 +21,9 @@ class GatewayQueue:
     def get_handles(self):
         return self.handles
 
-    def size(self): 
+    def size(self):
         return self.q.qsize()
+
 
 class GatewayANDQueue(GatewayQueue):
     def __init__(self, maxsize=0):

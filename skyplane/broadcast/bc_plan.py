@@ -53,7 +53,6 @@ class BroadcastReplicationTopology(ReplicationTopology):
         tot_vm_price_per_s: Optional[float] = None,
         default_max_conn_per_vm: Optional[int] = None,
     ):
-
         """
         Edge is represented by:
         Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int, int] -> [src_node, dst_node, num_conn, partition_index]

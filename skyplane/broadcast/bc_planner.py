@@ -15,9 +15,10 @@ import numpy as np
 from skyplane.utils import logger
 from skyplane.broadcast import __root__
 import functools
-import random 
+import random
 import colorama
 from colorama import Fore, Style
+
 
 class BroadcastPlanner:
     def __init__(
@@ -36,7 +37,6 @@ class BroadcastPlanner:
         cost_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "cost.csv",
         tp_grid_path: Optional[Path] = __root__ / "broadcast" / "profiles" / "throughput.csv",
     ):
-
         self.src_provider = src_provider
         self.src_region = src_region
         self.dst_providers = dst_providers
@@ -80,7 +80,7 @@ class BroadcastPlanner:
             else:
                 continue
 
-        # update the cost using skyplane.compute tools if not in cost.csv [i.e. in utils.py] 
+        # update the cost using skyplane.compute tools if not in cost.csv [i.e. in utils.py]
         for edge in G.edges.data():
             if edge[-1]["cost"] is None:
                 edge[-1]["cost"] = self.get_path_cost(edge[0], edge[1])
@@ -205,7 +205,6 @@ class BroadcastDirectPlanner(BroadcastPlanner):
 
 
 class BroadcastPlannerFromFile(BroadcastPlanner):
-
     def __init__(self, filename: str, **kwargs):
         self.filename = filename
         super().__init__(**kwargs)
@@ -213,7 +212,7 @@ class BroadcastPlannerFromFile(BroadcastPlanner):
     def plan(self) -> BroadcastReplicationTopology:
         gw_program = json.load(open(self.filename))
 
-        # loop through region 
+        # loop through region
 
         # loop hough operators with recieve or gen data -> collect (instace, region)
         graph = nx.DiGraph()
@@ -381,6 +380,7 @@ class BroadcastHSTPlanner(BroadcastPlanner):
         os.remove(param_loc)
         return self.get_topo_from_nxgraph(self.num_partitions, self.gbyte_to_transfer, solution_graph)
 
+
 class BroadcastSpiderPlanner(BroadcastPlanner):
     def __init__(
         self,
@@ -428,14 +428,15 @@ class BroadcastSpiderPlanner(BroadcastPlanner):
         makespan = data_vol * 8 / sum(bw)
         cost_per_instance_hr = 0.54
 
-        import math         
+        import math
+
         def split(my_list, weight_list):
             sublists = []
             prev_index = 0
             for weight in weight_list:
-                next_index = prev_index + math.ceil( (len(my_list) * weight) )
+                next_index = prev_index + math.ceil((len(my_list) * weight))
 
-                sublists.append(my_list[prev_index : next_index] )
+                sublists.append(my_list[prev_index:next_index])
                 prev_index = next_index
 
             return sublists
@@ -445,12 +446,13 @@ class BroadcastSpiderPlanner(BroadcastPlanner):
         print(f"Bw: {bw}, split: {output_partitions}")
 
         from itertools import islice
+
         egress_cost = 0
         complete_tree = nx.DiGraph()
 
         for i in range(len(tree_set)):
             if len(output_partitions[i]) == 0:
-                continue # not assigning any partition to this tree 
+                continue  # not assigning any partition to this tree
 
             egress_cost += sum([edge[-1]["cost"] for edge in tree_set[i].edges.data()]) * data_vol * bw[i] / sum(bw)
 
@@ -505,6 +507,7 @@ class BroadcastSpiderPlanner(BroadcastPlanner):
 
     def SPIDER(self, h, src, dsts, egress_limits, ingress_limits, elim_set=None):
         import copy
+
         N = set([src] + dsts)  # set of nodes that each tree must span
         Tree_set = []  # output: a set of trees
         bw = []  # list of bandwidth for each tree
@@ -616,11 +619,10 @@ class BroadcastSpiderPlanner(BroadcastPlanner):
         h = nx.DiGraph(self.G.copy().subgraph(dsts + [src]))
         h.remove_edges_from(list(h.in_edges(src)) + list(nx.selfloop_edges(h)))
         Tree_set, bw, h, elim_set = self.SPIDER(h, src, dsts, egress_limits=self.eg_lims, ingress_limits=self.in_lims)
-        Spider_graph = self.evaluate(
-            Tree_set, bw, self.num_instances, num_partitions=self.num_partitions, data_vol=1
-        )  
+        Spider_graph = self.evaluate(Tree_set, bw, self.num_instances, num_partitions=self.num_partitions, data_vol=1)
 
         return self.get_topo_from_nxgraph(self.num_partitions, self.gbyte_to_transfer, Spider_graph)
+
 
 class BroadcastILPSolverPlanner(BroadcastPlanner):
     def __init__(
@@ -774,14 +776,12 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         return result_g
 
     def get_egress_ingress(self, g, nodes, edges, partition_size, p):
-
         partition_size *= 8  # need to convert to gbits?
 
         num_edges = len(edges)
         egress = []
         ingress = []
         for node in nodes:
-
             node_i = nodes.index(node)
             # egress
             i = np.zeros(num_edges)
@@ -855,9 +855,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         # constraints to enforce flow between source/dest nodes
         for i in range(num_nodes):
             for j in range(num_nodes + 1):
-
                 if i != j:
-
                     if j != num_nodes:
                         edge = (nodes[i], nodes[j])
 
@@ -917,7 +915,6 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
 
         # instance limits
         for node in nodes:
-
             node_i = nodes.index(node)
             # egress
             i = np.zeros(num_edges)
@@ -970,7 +967,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         solve_iterative: bool = False,
         solver_verbose: bool = False,
         save_lp_path: Optional[str] = None,
-        n_clusters: Optional[int] = 20
+        n_clusters: Optional[int] = 20,
     ) -> BroadcastReplicationTopology:
         import cvxpy as cp
 
@@ -984,7 +981,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         dest_v = problem.dsts
 
         # node-approximation
-        if filter_node: 
+        if filter_node:
             from sklearn.cluster import KMeans
 
             random.seed(10)
@@ -992,17 +989,17 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             print("Number of nodes: ", len(node_list))
             for node in node_list:
                 node_map[node] = []
-                for neighbor_node in node_list: 
-                    if node != neighbor_node: 
-                        node_map[node].append(g[node][neighbor_node]["cost"])
-                    else: 
-                        node_map[node].append(0) # cost to itself 
-                
                 for neighbor_node in node_list:
-                    if node != neighbor_node: 
+                    if node != neighbor_node:
+                        node_map[node].append(g[node][neighbor_node]["cost"])
+                    else:
+                        node_map[node].append(0)  # cost to itself
+
+                for neighbor_node in node_list:
+                    if node != neighbor_node:
                         node_map[node].append(g[node][neighbor_node]["throughput"])
-                    else: 
-                        node_map[node].append(100) # tput to itself or throughput within a single region? 
+                    else:
+                        node_map[node].append(100)  # tput to itself or throughput within a single region?
 
             np_node_map = np.array([li for li in node_map.values()])
             print(f"node map: {np_node_map}, shape: {np_node_map.shape}")
@@ -1161,9 +1158,8 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         solve_iterative: bool = False,
         solver_verbose: bool = False,
         save_lp_path: Optional[str] = None,
-        n_clusters: Optional[int] = 20
+        n_clusters: Optional[int] = 20,
     ) -> BroadcastReplicationTopology:
-
         import cvxpy as cp
 
         if solver is None:
@@ -1179,7 +1175,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
         dest_v = problem.dsts
 
         # node-approximation
-        if filter_node: 
+        if filter_node:
             from sklearn.cluster import KMeans
 
             random.seed(10)
@@ -1187,17 +1183,17 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             print("Number of nodes: ", len(node_list))
             for node in node_list:
                 node_map[node] = []
-                for neighbor_node in node_list: 
-                    if node != neighbor_node: 
-                        node_map[node].append(g[node][neighbor_node]["cost"])
-                    else: 
-                        node_map[node].append(0) # cost to itself 
-                
                 for neighbor_node in node_list:
-                    if node != neighbor_node: 
+                    if node != neighbor_node:
+                        node_map[node].append(g[node][neighbor_node]["cost"])
+                    else:
+                        node_map[node].append(0)  # cost to itself
+
+                for neighbor_node in node_list:
+                    if node != neighbor_node:
                         node_map[node].append(g[node][neighbor_node]["throughput"])
-                    else: 
-                        node_map[node].append(100) # tput to itself or throughput within a single region? 
+                    else:
+                        node_map[node].append(100)  # tput to itself or throughput within a single region?
 
             np_node_map = np.array([li for li in node_map.values()])
             print(f"node map: {np_node_map}, shape: {np_node_map.shape}")
@@ -1229,7 +1225,7 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
             print(f"Remaining node length: {len(g.nodes)}, nodes: {g.nodes}")
 
         # banned nodes
-        # NOTE: why do we do this? 
+        # NOTE: why do we do this?
         # sampled = list(self.G.nodes)
         # sampled.remove("aws:eu-south-2")
         # sampled.remove("aws:eu-central-2")
@@ -1270,12 +1266,9 @@ class BroadcastILPSolverPlanner(BroadcastPlanner):
 
         # constraints to enforce flow between source/dest nodes
         for c in range(problem.num_partitions):
-
             for i in range(num_nodes):
                 for j in range(num_nodes + 1):
-
                     if i != j:
-
                         if j != num_nodes:
                             edge = (nodes[i], nodes[j])
 
