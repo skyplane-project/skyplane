@@ -11,6 +11,7 @@ from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.config_paths import cloud_config
 from skyplane.utils import logger, imports
+from skyplane.utils.generator import batch_generator
 
 
 class S3Object(ObjectStoreObject):
@@ -81,14 +82,8 @@ class S3Interface(ObjectStoreInterface):
 
     def delete_bucket(self):
         # delete 1000 keys at a time
-        keys = []
-        for key in self.list_objects():
-            keys.append(key.key)
-            if len(keys) == 1000:
-                self.delete_objects(keys)
-                keys = []
-                print("Deleted 1000 keys")
-        self.delete_objects(keys)
+        for batch in batch_generator(self.list_objects(), 1000):
+            self.delete_objects([obj.key for obj in batch])
         assert len(list(self.list_objects())) == 0, f"Bucket not empty after deleting all keys {list(self.list_objects())}"
 
         # delete bucket
