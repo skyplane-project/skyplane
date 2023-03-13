@@ -3,7 +3,6 @@ from skyplane.api.client import SkyplaneClient
 import uuid
 import os
 
-
 @pytest.mark.skip(reason="Shared function")
 def test_region(region):
     client = SkyplaneClient().object_store()
