@@ -57,3 +57,33 @@ Now, you can initialize Skyplane with your desired cloud providers. Skyplane aut
    
    ---> Setup cloud provider connectors:
    $ skyplane init
+
+
+Transferring Data
+-------------------
+
+We're ready to use Skyplane! Let's use `skyplane cp` to copy files from AWS to GCP:
+
+.. code-block:: bash
+
+   ---> 🎸 Ready to rock and roll! Copy some files:
+   $ skyplane cp -r s3://... gs://...
+
+To transfer only new objects, you can instead use `skyplane sync`: 
+
+.. code-block:: bash
+
+   ---> Copy only diff
+   $ skyplane sync s3://... gs://...
+
+To transfer from local disk or HDFS cluster, you can use `skyplane cp` as well:
+
+(Note: On-Prem require additional setup. Please navigate to the `On-Prem` section for more details)
+
+.. code-block:: bash
+
+   ---> Copy from local disk
+   $ skyplane cp -r /path/to/local/file gs://...
+
+   ---> Copy from HDFS
+   $ skyplane cp -r hdfs://... gs://...

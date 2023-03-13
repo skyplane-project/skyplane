@@ -1,7 +1,6 @@
 import cvxpy as cp  # type: ignore
 
 from skyplane.planner.solver import ThroughputSolver, ThroughputProblem, GBIT_PER_GBYTE, ThroughputSolution
-from skyplane.utils import logger
 
 
 class ThroughputSolverILP(ThroughputSolver):
