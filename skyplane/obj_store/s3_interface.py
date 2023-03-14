@@ -1,4 +1,5 @@
 import base64
+import time
 import hashlib
 import os
 from functools import lru_cache
@@ -10,6 +11,7 @@ from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.config_paths import cloud_config
 from skyplane.utils import logger, imports
+from skyplane.utils.generator import batch_generator
 
 
 class S3Object(ObjectStoreObject):
@@ -79,6 +81,12 @@ class S3Interface(ObjectStoreInterface):
                 s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": aws_region})
 
     def delete_bucket(self):
+        # delete 1000 keys at a time
+        for batch in batch_generator(self.list_objects(), 1000):
+            self.delete_objects([obj.key for obj in batch])
+        assert len(list(self.list_objects())) == 0, f"Bucket not empty after deleting all keys {list(self.list_objects())}"
+
+        # delete bucket
         self._s3_client().delete_bucket(Bucket=self.bucket_name)
 
     def list_objects(self, prefix="") -> Iterator[S3Object]:

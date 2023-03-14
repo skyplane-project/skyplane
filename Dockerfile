@@ -2,10 +2,24 @@
 FROM python:3.11-slim
 
 # install apt packages
-RUN --mount=type=cache,target=/var/cache/apt apt update \
-    && apt-get install --no-install-recommends -y curl ca-certificates stunnel4 gcc libc-dev \
+RUN --mount=type=cache,target=/var/cache/apt apt-get update \
+    && apt-get install --no-install-recommends -y curl ca-certificates stunnel4 gcc libc-dev wget \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+#install HDFS Onprem Packages
+RUN apt-get update && \
+    apt-get install -y openjdk-11-jdk && \
+    apt-get clean 
+
+ENV JAVA_HOME /usr/lib/jvm/java-11-openjdk-amd64
+
+RUN wget https://archive.apache.org/dist/hadoop/core/hadoop-3.3.0/hadoop-3.3.0.tar.gz -P /tmp \
+    && tar -xzf /tmp/hadoop-3.3.0.tar.gz -C /tmp \
+    && mv /tmp/hadoop-3.3.0 /usr/local/hadoop \
+    && rm /tmp/hadoop-3.3.0.tar.gz
+
+ENV HADOOP_HOME /usr/local/hadoop
 
 # configure stunnel
 RUN mkdir -p /etc/stunnel \
@@ -31,6 +45,10 @@ RUN (echo 'net.ipv4.ip_local_port_range = 12000 65535' >> /etc/sysctl.conf) \
 
 # install gateway
 COPY scripts/requirements-gateway.txt /tmp/requirements-gateway.txt
+
+#Onprem: Install Hostname Resolution for HDFS
+COPY scripts/on_prem/hostname /tmp/hostname
+
 RUN --mount=type=cache,target=/root/.cache/pip pip3 install --no-cache-dir -r /tmp/requirements-gateway.txt && rm -r /tmp/requirements-gateway.txt
 
 WORKDIR /pkg

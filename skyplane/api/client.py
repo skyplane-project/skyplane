@@ -6,12 +6,14 @@ from typing import TYPE_CHECKING, Optional
 from skyplane.api.config import TransferConfig
 from skyplane.api.dataplane import Dataplane
 from skyplane.api.provisioner import Provisioner
+from skyplane.api.obj_store import ObjectStore
 from skyplane.api.usage import get_clientid
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.planner.planner import DirectPlanner, ILPSolverPlanner, RONSolverPlanner
 from skyplane.utils import logger
 from skyplane.utils.definitions import tmp_log_dir
 from skyplane.utils.path import parse_path
+
 
 if TYPE_CHECKING:
     from skyplane.api.config import AWSConfig, AzureConfig, GCPConfig, TransferConfig
@@ -142,3 +144,6 @@ class SkyplaneClient:
             return Dataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
         else:
             raise NotImplementedError(f"Dataplane type {solver_type} not implemented")
+
+    def object_store(self):
+        return ObjectStore()

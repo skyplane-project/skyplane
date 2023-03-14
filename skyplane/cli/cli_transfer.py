@@ -1,6 +1,5 @@
 import os
 import signal
-import sys
 import time
 import traceback
 from dataclasses import dataclass
@@ -23,6 +22,7 @@ from skyplane.api.usage import UsageClient
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import cloud_config, config_path
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
+from skyplane.obj_store.file_system_interface import FileSystemInterface
 from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 from skyplane.utils import logger
 from skyplane.utils.definitions import GB, format_bytes
@@ -167,6 +167,8 @@ class SkyplaneCLI:
             return False
 
     def make_dataplane(self, **solver_args) -> skyplane.Dataplane:
+        if self.src_region_tag.split(":")[0] == "hdfs":
+            self.src_region_tag = self.dst_region_tag
         dp = self.client.dataplane(*self.src_region_tag.split(":"), *self.dst_region_tag.split(":"), **solver_args)
         logger.fs.debug(f"Using dataplane: {dp}")
         return dp
@@ -306,8 +308,16 @@ def cp(
     print_header()
     provider_src, bucket_src, path_src = parse_path(src)
     provider_dst, bucket_dst, path_dst = parse_path(dst)
-    src_region_tag = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src).region_tag()
-    dst_region_tag = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst).region_tag()
+    if provider_src in ("local", "nfs"):
+        src_region_tag = FileSystemInterface.create(f"{provider_src}:infer", path_src).region_tag()
+    else:
+        src_region_tag = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src).region_tag()
+
+    if provider_dst in ("local", "nfs"):
+        dst_region_tag = FileSystemInterface.create(f"{provider_dst}:infer", path_dst).region_tag()
+    else:
+        dst_region_tag = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst).region_tag()
+
     args = {
         "cmd": "cp",
         "recursive": recursive,
@@ -327,12 +337,28 @@ def cp(
         )
         return 1
 
-    if provider_src in ("local", "hdfs", "nfs") or provider_dst in ("local", "hdfs", "nfs"):
-        if provider_src == "hdfs" or provider_dst == "hdfs":
-            typer.secho("HDFS is not supported yet.", fg="red")
-            return 1
-        return 0 if cli.transfer_cp_onprem(src, dst, recursive) else 1
-    elif provider_src in ("aws", "gcp", "azure") and provider_dst in ("aws", "gcp", "azure"):
+    dp = cli.make_dataplane(
+        solver_type=solver,
+        n_vms=max_instances,
+        n_connections=max_connections,
+        solver_required_throughput_gbits=solver_required_throughput_gbits,
+    )
+
+    if provider_src in ("local", "nfs") and provider_dst in ("aws", "gcp", "azure"):
+        with dp.auto_deprovision():
+            dp.queue_copy(src, dst, recursive=recursive)
+            try:
+                if not cli.confirm_transfer(dp, 5, ask_to_confirm_transfer=not confirm):
+                    return 1
+                dp.provision(spinner=True)
+                dp.run(ProgressBarTransferHook())
+            except skyplane.exceptions.SkyplaneException as e:
+                console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+                console.print(e.pretty_print_str())
+                UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
+                return 1
+        # return 0 if cli.transfer_cp_onprem(src, dst, recursive) else 1
+    elif provider_src in ("aws", "gcp", "azure", "hdfs") and provider_dst in ("aws", "gcp", "azure"):
         # todo support ILP solver params
         dp = cli.make_dataplane(
             solver_type=solver,
