@@ -4,7 +4,7 @@ import os
 
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import config_path, aws_config_path, aws_quota_path
-from skyplane.utils import imports, fn
+from skyplane.utils import imports, fn, logger
 
 
 class AWSAuthentication:
@@ -39,8 +39,13 @@ class AWSAuthentication:
 
         name_to_quota = {}
         for name, code in [("on_demand_standard_vcpus", "L-1216C47A"), ("spot_standard_vcpus", "L-34B43A08")]:
-            retrieved_quota = quotas_client.get_service_quota(ServiceCode="ec2", QuotaCode=code)
-            name_to_quota[name] = int(retrieved_quota["Quota"]["Value"])
+            try:
+                retrieved_quota = quotas_client.get_service_quota(ServiceCode="ec2", QuotaCode=code)
+                name_to_quota[name] = int(retrieved_quota["Quota"]["Value"])
+            except Exception:
+                logger.warning(
+                    f"Failed to retrieve quota information for {name} in {region}. Skyplane will use a conservative configuration."
+                )
         return name_to_quota
 
     @imports.inject("boto3", pip_extra="aws")
@@ -71,9 +76,9 @@ class AWSAuthentication:
 
     @staticmethod
     def get_region_config():
-        if aws_config_path.exists():
+        if not aws_config_path.exists():
             return []
-        with open(aws_config_path) as f:
+        with aws_config_path.open() as f:
             region_list = []
             for region in f.read().split("\n"):
                 region_list.append(region)

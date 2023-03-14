@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 from skyplane.compute.const_cmds import query_which_cloud
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import config_path, azure_config_path, azure_sku_path, azure_quota_path
-from skyplane.utils import imports
+from skyplane.utils import imports, logger
 from skyplane.utils.definitions import is_gateway_env
 from skyplane.utils.fn import do_parallel
 
@@ -78,6 +78,12 @@ class AzureAuthentication:
                 return [item.as_dict() for item in quota]
             except HttpResponseError as e:
                 if "NoRegisteredProviderFound" in e.message:
+                    logger.warning(
+                        f"Microsoft.Quota API provider has not been registered in region {region}. "
+                        "Skyplane will use a conversative quota configuration. "
+                        "Please run `az provider register --namespace Microsoft.Quota` to register the provider "
+                        "and `az provider show -n Microsoft.Quota` to wait for it to become available."
+                    )
                     return []
                 else:
                     raise e

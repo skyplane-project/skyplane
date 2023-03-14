@@ -47,22 +47,25 @@ class GCPAuthentication:
             f.write("\n".join(region_list))
             print(f"    GCP region config file saved to {gcp_config_path}")
 
-        with gcp_quota_path.open("w") as f:
-            service = discovery.build("compute", "beta", credentials=self.credentials)
-            request = service.regions().list(project=self.project_id)
-            region_to_vcpus = {}
-            while request is not None:
-                response = request.execute()
-                for region in response["items"]:
-                    if region["kind"] != "compute#region":
-                        continue
-                    region_name = region["name"]
-                    for quota_item in region["quotas"]:
-                        if quota_item["metric"] == "CPUS":
-                            region_to_vcpus[region_name] = quota_item["limit"]
-                            break
-                request = service.regions().list_next(previous_request=request, previous_response=response)
-            json.dump(region_to_vcpus, f)
+        try:
+            with gcp_quota_path.open("w") as f:
+                service = discovery.build("compute", "beta", credentials=self.credentials)
+                request = service.regions().list(project=self.project_id)
+                region_to_vcpus = {}
+                while request is not None:
+                    response = request.execute()
+                    for region in response["items"]:
+                        if region["kind"] != "compute#region":
+                            continue
+                        region_name = region["name"]
+                        for quota_item in region["quotas"]:
+                            if quota_item["metric"] == "CPUS":
+                                region_to_vcpus[region_name] = quota_item["limit"]
+                                break
+                    request = service.regions().list_next(previous_request=request, previous_response=response)
+                json.dump(region_to_vcpus, f)
+        except Exception:
+            logger.warning("Failed to retrieve GCP quota information. Skyplane will a conservative configuration.")
 
     @staticmethod
     def clear_region_config():
@@ -71,11 +74,10 @@ class GCPAuthentication:
 
     @staticmethod
     def get_region_config():
-        try:
-            f = open(gcp_config_path, "r")
-        except FileNotFoundError:
+        if not gcp_config_path.exists():
             return []
-        return [r for r in map(str.strip, f.readlines()) if r]
+        with gcp_config_path.open("r") as f:
+            return [r for r in map(str.strip, f.readlines()) if r]
 
     @property
     def credentials(self):
