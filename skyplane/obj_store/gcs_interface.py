@@ -13,6 +13,7 @@ from skyplane.config_paths import cloud_config
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger
+from skyplane.utils.generator import batch_generator
 
 
 class GCSObject(ObjectStoreObject):
@@ -100,6 +101,9 @@ class GCSInterface(ObjectStoreInterface):
             self._gcs_client.create_bucket(bucket, location=region_without_zone)
 
     def delete_bucket(self):
+        for batch in batch_generator(self.list_objects(), 1000):
+            self.delete_objects([obj.key for obj in batch])
+        assert len(list(self.list_objects())) == 0, f"Bucket not empty after deleting all keys {list(self.list_objects())}"
         self._gcs_client.get_bucket(self.bucket_name).delete()
 
     def list_objects(self, prefix="") -> Iterator[GCSObject]:
