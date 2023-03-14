@@ -355,6 +355,11 @@ class TransferJob(ABC):
         """Verifies the transfer completed, otherwise raises TransferFailedException."""
         raise NotImplementedError("Verify not implemented")
 
+    def gen_transfer_pairs(
+        self, chunker: Optional[Chunker] = None
+    ) -> Generator[Tuple[ObjectStoreObject or FileSystemInterface, ObjectStoreObject or FileSystemInterface], None, None]:
+        raise NotImplementedError("Generate transfer pairs not implemented")
+
     def size_gb(self):
         """Return the size of the transfer in GB"""
         total_size = 0
