@@ -27,6 +27,7 @@ from skyplane.broadcast.gateway.operators.gateway_receiver import GatewayReceive
 from skyplane.utils import logger
 from collections import defaultdict
 
+
 # TODO: add default partition ID to main
 # create gateway br
 class GatewayDaemon:
@@ -134,7 +135,6 @@ class GatewayDaemon:
         def create_gateway_operators_helper(input_queue, program: List[Dict], partition_ids: List[str]):
             total_p = 0
             for op in program:
-
                 handle = op["op_type"] + "_" + op["handle"]
                 print(f"Input queue {input_queue}, adding handle {handle} (current handles {input_queue.get_handles()}")
                 input_queue.register_handle(handle)

@@ -27,7 +27,6 @@ class S3Interface(ObjectStoreInterface):
     def path(self):
         return f"s3://{self.bucket_name}"
 
-
     @property
     @lru_cache(maxsize=1)
     def aws_region(self):
@@ -84,7 +83,7 @@ class S3Interface(ObjectStoreInterface):
                 s3_client.create_bucket(Bucket=self.bucket_name)
             else:
                 s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": aws_region})
-        else: 
+        else:
             print("bucket already exists", aws_region, self.bucket_name)
 
     def delete_bucket(self):

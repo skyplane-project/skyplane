@@ -100,7 +100,6 @@ class AWSAuthentication:
         else:
             return self.get_boto3_session().client(service_name, region_name=aws_region)
 
-
     def get_azs_in_region(self, region):
         ec2 = self.get_boto3_client("ec2", region)
         azs = []

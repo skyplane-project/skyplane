@@ -1,5 +1,5 @@
 import uuid
-import json 
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -8,7 +8,13 @@ from typing import TYPE_CHECKING, Optional, List
 from skyplane.api.client import tmp_log_dir
 from skyplane.api.client import get_clientid
 from skyplane.broadcast.bc_dataplane import BroadcastDataplane
-from skyplane.broadcast.bc_planner import BroadcastDirectPlanner, BroadcastMDSTPlanner, BroadcastHSTPlanner, BroadcastILPSolverPlanner, BroadcastSpiderPlanner
+from skyplane.broadcast.bc_planner import (
+    BroadcastDirectPlanner,
+    BroadcastMDSTPlanner,
+    BroadcastHSTPlanner,
+    BroadcastILPSolverPlanner,
+    BroadcastSpiderPlanner,
+)
 from skyplane.api.provisioner import Provisioner
 from skyplane.api.config import TransferConfig
 from skyplane.utils import logger
@@ -69,9 +75,9 @@ class SkyplaneBroadcastClient:
             gcp_auth=self.gcp_auth,
         )
 
-
-    def networkx_to_graphviz(self, src, dsts, g, label='partitions'):
+    def networkx_to_graphviz(self, src, dsts, g, label="partitions"):
         import graphviz as gv
+
         """Convert `networkx` graph `g` to `graphviz.Digraph`.
 
         @type g: `networkx.Graph` or `networkx.DiGraph`
@@ -82,34 +88,30 @@ class SkyplaneBroadcastClient:
         else:
             h = gv.Graph()
         for u, d in g.nodes(data=True):
-            #u = u.split(",")[0]
+            # u = u.split(",")[0]
             if u.split(",")[0] == src:
-                h.node(str(u.replace(":", " ")), fillcolor="red", style='filled')
+                h.node(str(u.replace(":", " ")), fillcolor="red", style="filled")
             elif u.split(",")[0] in dsts:
-                h.node(str(u.replace(":", " ")), fillcolor="green", style='filled')
+                h.node(str(u.replace(":", " ")), fillcolor="green", style="filled")
             h.node(str(u.replace(":", " ")))
         for u, v, d in g.edges(data=True):
             # print('edge', u, v, d)
             h.edge(str(u.replace(":", " ")), str(v.replace(":", " ")), label=str(d[label]))
-        h.render(directory='solution', view=True)
+        h.render(directory="solution", view=True)
         return h
 
-    def broadcast_dataplane_from_gateway_program(self, gateway_program_path: str) -> BroadcastDataplane: 
-        # load dataplane for existing gateway program 
+    def broadcast_dataplane_from_gateway_program(self, gateway_program_path: str) -> BroadcastDataplane:
+        # load dataplane for existing gateway program
 
-        # create topology 
+        # create topology
         gw_program = json.load(open(gateway_program_path, "r"))
-    
-
 
         return BroadcastDataplane(
-            clientid=self.clientid, 
-            gateway_program_path = gateway_program_path, 
-            provisioner=self.provisioner, 
-            transfer_config=self.transfer_config
+            clientid=self.clientid,
+            gateway_program_path=gateway_program_path,
+            provisioner=self.provisioner,
+            transfer_config=self.transfer_config,
         )
-
-
 
     # methods to create dataplane
     def broadcast_dataplane(
@@ -122,7 +124,7 @@ class SkyplaneBroadcastClient:
         n_vms: int = 1,
         num_connections: int = 256,
         num_partitions: int = 10,
-        gbyte_to_transfer: float = 1,
+        gbyte_to_transfer: float = 1,  # TODO: do we need to input this when creating dataplane
         # ILP specific parameters
         target_time: float = 10,
         filter_node: bool = False,
@@ -214,13 +216,19 @@ class SkyplaneBroadcastClient:
             raise NotImplementedError(f"Dataplane type {type} not implemented")
 
         logger.fs.info(f"[SkyplaneClient.direct_dataplane] Topology: {topo.to_json()}")
-        #if type != "ILP":
-        print(f"Solution: {topo.nx_graph.edges.data()}")
-        print(topo.nx_graph.nodes)
+        # print(f"Solution: {topo.nx_graph.edges.data()}")
+        # print(topo.nx_graph.nodes)
         print(src_region)
-        self.networkx_to_graphviz(f"{src_cloud_provider}:{src_region}", [f"{provider}:{region}" for provider, region in zip(dst_cloud_providers, dst_regions)], topo.nx_graph)
+        self.networkx_to_graphviz(
+            f"{src_cloud_provider}:{src_region}",
+            [f"{provider}:{region}" for provider, region in zip(dst_cloud_providers, dst_regions)],
+            topo.nx_graph,
+        )
 
         print("Transfer src region: ", self.transfer_config.src_region)
         print("Transfer dst regions: ", self.transfer_config.dst_regions)
 
-        return BroadcastDataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config, log_dir=self.log_dir)
+        # TODO: remove the nx_graph representation, directly generate gateway program and pass in to BroadcastDataplane (i.e. topology=topo)
+        return BroadcastDataplane(
+            clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config, log_dir=self.log_dir
+        )

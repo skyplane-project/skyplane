@@ -217,7 +217,7 @@ class BCTransferProgressTracker(TransferProgressTracker):
             print()
 
         size_of_transfer = self.calculate_size(list(self.dst_regions)[0])
-        overall_tput_gbps = size_of_transfer * 8 / overall_runtime_s 
+        overall_tput_gbps = size_of_transfer * 8 / overall_runtime_s
 
         cost_per_gb = self.dataplane.topology.cost_per_gb
         tot_egress_cost = round(cost_per_gb * size_of_transfer, 8)
@@ -263,8 +263,8 @@ class BCTransferProgressTracker(TransferProgressTracker):
         # todo implement transfer monitoring to update job_complete_chunk_ids and job_pending_chunk_ids while the transfer is in progress
         sinks = {n for n in self.dataplane.topology.sink_instances() if n.region == dst_region}
         sink_regions = {dst_region}
-        runtime_s = 0 
-        
+        runtime_s = 0
+
         assert len(sink_regions) == 1  # BC: only monitor one sink region in this call
 
         # any of the jobs of this region is not complete

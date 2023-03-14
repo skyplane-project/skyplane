@@ -157,7 +157,9 @@ class GatewayReceiver:
 
             # wait for space
             while self.chunk_store.remaining_bytes() < chunk_header.data_len * self.max_pending_chunks:
-                print(f"[receiver:{server_port}]: No remaining space with bytes {self.chunk_store.remaining_bytes()} data len {chunk_header.data_len} max pending {self.max_pending_chunks}, total space {init_space}")
+                print(
+                    f"[receiver:{server_port}]: No remaining space with bytes {self.chunk_store.remaining_bytes()} data len {chunk_header.data_len} max pending {self.max_pending_chunks}, total space {init_space}"
+                )
                 time.sleep(0.1)
 
             # get data
@@ -185,19 +187,21 @@ class GatewayReceiver:
                         )
                     to_write = bytes(to_write)
 
-                    # try to write data until successful  
-                    while True: 
+                    # try to write data until successful
+                    while True:
                         try:
                             f.write(to_write)
 
-                            # check size 
+                            # check size
                             file_size = os.path.getsize(fpath)
                             if file_size == chunk_header.data_len:
                                 break
-                        except Exception as e: 
+                        except Exception as e:
                             print(e)
-                        
-                        print(f"[receiver:{server_port}]: No remaining space with bytes {self.chunk_store.remaining_bytes()} data len {chunk_header.data_len} max pending {self.max_pending_chunks}, total space {init_space}")
+
+                        print(
+                            f"[receiver:{server_port}]: No remaining space with bytes {self.chunk_store.remaining_bytes()} data len {chunk_header.data_len} max pending {self.max_pending_chunks}, total space {init_space}"
+                        )
                         time.sleep(1)
             assert (
                 socket_data_len == 0 and chunk_received_size == chunk_header.data_len

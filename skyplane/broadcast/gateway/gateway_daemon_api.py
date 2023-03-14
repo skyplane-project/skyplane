@@ -114,7 +114,6 @@ class GatewayDaemonAPI(threading.Thread):
                     self.chunk_status.get(chunk_id, None) != ChunkState.complete.name
                     and len(self.chunk_completions[chunk_id]) == self.num_required_terminal[partition]
                 ):
-
                     # TODO: set this somewhere else
                     self.chunk_status[chunk_id] = ChunkState.complete.name
 
@@ -140,7 +139,7 @@ class GatewayDaemonAPI(threading.Thread):
                             + f"Required completitions = {self.num_required_terminal[partition]}"
                         )
 
-                    #else:
+                    # else:
                     #    print(f"[gateway_api] chunk {chunk_id}: after {handle} state = {elem['state']}")
                 self.chunk_status_log.append(elem)
 

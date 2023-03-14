@@ -12,38 +12,36 @@ import argparse
 
 
 def start_transfer(args):
-    #src_region = "ap-east-1"
+    # src_region = "ap-east-1"
     # src_region = "af-south-1"
     # src_region = "us-east-1"
     # dst_regions = ["ap-south-1", "ap-east-1", "ap-southeast-1", "ap-northeast-3", "ap-northeast-1"]
     # dst_regions = ["ap-south-1", "ap-east-1", "ap-southeast-2", "ap-northeast-3", "ap-northeast-1"]
 
     # dst_regions = ["ap-southeast-2", "ap-south-1"]
-    #dst_regions = ["ap-southeast-2", "ap-south-1", "ap-northeast-3", "ap-northeast-2", "ap-northeast-1"]
+    # dst_regions = ["ap-southeast-2", "ap-south-1", "ap-northeast-3", "ap-northeast-2", "ap-northeast-1"]
     # dst_regions = ["us-west-1", "us-west-2"]
 
-
-
-    # GCP 
+    # GCP
 
     # gcp:asia-southeast2-a gcp:australia-southeast1-a gcp:southamerica-east1-a gcp:europe-west4-a gcp:europe-west6-a gcp:asia-east1-a gcp:europe-west2-a
     src_cloud_provider = "gcp"
-    #src_region = "asia-southeast2-a"
+    # src_region = "asia-southeast2-a"
     src_region = "us-east1-b"
     source_file = "gs://skyplane-broadcast-datasets/OPT-66B/"
-    #dst_regions = ["europe-west3-a", "europe-west4-a", "us-west4-a", "europe-north1-a", "europe-west2-a"] #, "asia-south1-a"]
+    # dst_regions = ["europe-west3-a", "europe-west4-a", "us-west4-a", "europe-north1-a", "europe-west2-a"] #, "asia-south1-a"]
     dst_regions = ["australia-southeast1-a", "southamerica-east1-a", "europe-west4-a", "europe-west6-a", "asia-east1-a", "europe-west2-a"]
     dst_cloud_providers = ["gcp"] * len(dst_regions)
     dest_files = [f"gs://skyplane-broadcast-test-{d}/OPT-66B/" for d in dst_regions]
 
     ## AWS
-    #dst_regions = ["ap-east-1", "ap-northeast-1"]
-    #dst_cloud_providers = ["aws"] * len(dst_regions)
-    #dest_files = [f"s3://skyplane-broadcast-test-{d}/OPT-66B/" for d in dst_regions]
-    #src_cloud_provider = "aws"
-    #src_region = "us-east-1"
-    #source_file = "s3://laion-400m-dataset/"
- 
+    # dst_regions = ["ap-east-1", "ap-northeast-1"]
+    # dst_cloud_providers = ["aws"] * len(dst_regions)
+    # dest_files = [f"s3://skyplane-broadcast-test-{d}/OPT-66B/" for d in dst_regions]
+    # src_cloud_provider = "aws"
+    # src_region = "us-east-1"
+    # source_file = "s3://laion-400m-dataset/"
+
     # OPT model
     # source_file = "s3://skyplane-broadcast/OPT-66B/"
     # source_file = f"s3://broadcast-opt-{src_region}/test_replication/"
@@ -53,27 +51,27 @@ def start_transfer(args):
     # dest_files = [f"s3://broadcast-opt-{d}/test_replication/" for d in dst_regions]
 
     # source_file = "s3://skyplane-broadcast/imagenet-images/"
-    #source_file = "s3://broadcast-exp3-ap-east-1/OPT-66B/"
-    #source_file = "s3://broadcast-opt-ap-east-1/test_replication/"
-    #dest_files = [f"s3://broadcast-exp3-{d}/OPT-66B/" for d in dst_regions]
+    # source_file = "s3://broadcast-exp3-ap-east-1/OPT-66B/"
+    # source_file = "s3://broadcast-opt-ap-east-1/test_replication/"
+    # dest_files = [f"s3://broadcast-exp3-{d}/OPT-66B/" for d in dst_regions]
 
     # create bucket if it doesn't exist
 
     actual_dest_regions = []
-    for (region, bucket_path) in zip([src_region] + dst_regions, [source_file] + dest_files):
+    for region, bucket_path in zip([src_region] + dst_regions, [source_file] + dest_files):
         bucket_name = bucket_path.split("/")[2]
         if "s3://" in bucket_path:
             bucket = S3Interface(bucket_name)
         elif "gs://" in bucket_path:
             bucket = GCSInterface(bucket_name)
-        else: 
+        else:
             print("Unsupported cloud provider", bucket_path)
         print("Create bucket", region, bucket_path)
         bucket.create_bucket(region)
 
         actual_dest_regions.append(bucket.gcp_region)
 
-    print("acutual dest", actual_dest_regions, dst_regions) 
+    print("acutual dest", actual_dest_regions, dst_regions)
     dst_regions = actual_dest_regions
 
     print(source_file)

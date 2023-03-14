@@ -41,7 +41,6 @@ class BCTransferJob:
     transfer_config: TransferConfig = None
 
     def __post_init__(self):
-
         if not self.transfer_config.gen_random_data:
             print("Parse src: ", parse_path(self.src_path))
             provider_src, bucket_src, src_prefix = parse_path(self.src_path)
@@ -111,7 +110,7 @@ class BCCopyJob(BCTransferJob):
         self,
         dataplane: "BroadcastDataplane",
         transfer_config: TransferConfig,
-        dispatch_batch_size: int = 128, # need to change it back later 
+        dispatch_batch_size: int = 128,  # need to change it back later
     ) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways."""
         if not transfer_config.gen_random_data:
@@ -186,7 +185,7 @@ class BCCopyJob(BCTransferJob):
             partitions = [cr.chunk.partition_id for cr in batch]
             print("partitions", partitions)
             if reply.status != 200:
-                print(f"failed to dispatch {server.instance_name()}: {reply.data.decode('utf-8')}") 
+                print(f"failed to dispatch {server.instance_name()}: {reply.data.decode('utf-8')}")
                 print(server.instance_name())
                 print(server.public_ip())
                 time.sleep(100000)
