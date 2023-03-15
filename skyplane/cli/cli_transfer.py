@@ -384,7 +384,7 @@ def cp(
             except KeyboardInterrupt:
                 logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt).")
                 console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")
-                do_parallel(dp.copy_log, dp.bound_nodes.values(), n=-1)
+                dp.copy_gateway_logs()
                 try:
                     force_deprovision(dp)
                 except Exception as e:
@@ -514,7 +514,7 @@ def sync(
             except KeyboardInterrupt:
                 logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt).")
                 console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")
-                do_parallel(dp.copy_log, dp.bound_nodes.values(), n=-1)
+                dp.copy_gateway_logs()
                 try:
                     force_deprovision(dp)
                 except Exception as e:
