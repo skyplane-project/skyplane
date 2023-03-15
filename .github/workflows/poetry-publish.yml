@@ -34,8 +34,6 @@ jobs:
           poetry install -E gateway -E solver -E aws -E azure -E gcp
           poetry run pip install -r requirements-dev.txt
         if: steps.cache.outputs.cache-hit != 'true'
-      - name: Install Dependencies
-        if: steps.cache.outputs.cache-hit != 'true'
       - name: Build package
         run: |
           export SKYPLANEVERSION=`poetry version | awk 'END {print $NF}'`
