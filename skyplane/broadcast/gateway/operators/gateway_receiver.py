@@ -156,11 +156,11 @@ class GatewayReceiver:
             # should_decompress = chunk_header.is_compressed and chunk_request.dst_region == self.region
 
             # wait for space
-            while self.chunk_store.remaining_bytes() < chunk_header.data_len * self.max_pending_chunks:
-                print(
-                    f"[receiver:{server_port}]: No remaining space with bytes {self.chunk_store.remaining_bytes()} data len {chunk_header.data_len} max pending {self.max_pending_chunks}, total space {init_space}"
-                )
-                time.sleep(0.1)
+            #while self.chunk_store.remaining_bytes() < chunk_header.data_len * self.max_pending_chunks:
+            #    print(
+            #        f"[receiver:{server_port}]: No remaining space with bytes {self.chunk_store.remaining_bytes()} data len {chunk_header.data_len} max pending {self.max_pending_chunks}, total space {init_space}"
+            #    )
+            #    time.sleep(0.1)
 
             # get data
             # self.chunk_store.state_queue_download(chunk_header.chunk_id)
@@ -190,6 +190,7 @@ class GatewayReceiver:
                     # try to write data until successful
                     while True:
                         try:
+                            f.seek(0, 0)
                             f.write(to_write)
                             f.flush()
 
@@ -197,6 +198,8 @@ class GatewayReceiver:
                             file_size = os.path.getsize(fpath)
                             if file_size == chunk_header.data_len:
                                 break
+                            elif file_size >= chunk_header.data_len: 
+                                raise ValueError(f"[Gateway] File size {file_size} greater than chunk size {chunk_header.data_len}")
                         except Exception as e:
                             print(e)
 
