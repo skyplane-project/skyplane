@@ -6,7 +6,7 @@ from skyplane.api.config import TransferConfig, AWSConfig, AzureConfig, GCPConfi
 from skyplane.api.dataplane import Dataplane
 from skyplane.api.tracker import TransferHook
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"
 __root__ = Path(__file__).parent.parent
 __all__ = [
     "__version__",
