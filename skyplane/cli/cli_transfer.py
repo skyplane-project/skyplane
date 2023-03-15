@@ -252,9 +252,9 @@ class SkyplaneCLI:
             return False
 
 
-def force_deprovision(dp: skyplane.Dataplane, debug: bool = False):
+def force_deprovision(dp: skyplane.Dataplane):
     s = signal.signal(signal.SIGINT, signal.SIG_IGN)
-    dp.deprovision(debug=debug)
+    dp.deprovision()
     signal.signal(signal.SIGINT, s)
 
 
@@ -342,6 +342,7 @@ def cp(
         n_vms=max_instances,
         n_connections=max_connections,
         solver_required_throughput_gbits=solver_required_throughput_gbits,
+        debug=debug,
     )
 
     if provider_src in ("local", "nfs") and provider_dst in ("aws", "gcp", "azure"):
@@ -365,6 +366,7 @@ def cp(
             solver_required_throughput_gbits=solver_required_throughput_gbits,
             n_vms=max_instances,
             n_connections=max_connections,
+            debug=debug,
         )
         with dp.auto_deprovision():
             dp.queue_copy(src, dst, recursive=recursive)
@@ -493,6 +495,7 @@ def sync(
             solver_required_throughput_gbits=solver_required_throughput_gbits,
             n_vms=max_instances,
             n_connections=max_connections,
+            debug=debug,
         )
         with dp.auto_deprovision():
             dp.queue_sync(src, dst)

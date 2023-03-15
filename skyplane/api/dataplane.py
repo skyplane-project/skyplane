@@ -6,6 +6,7 @@ from datetime import datetime
 from functools import partial
 from datetime import datetime
 
+import typer
 import nacl.secret
 import nacl.utils
 import urllib3
@@ -40,11 +41,7 @@ class Dataplane:
     """A Dataplane represents a concrete Skyplane network, including topology and VMs."""
 
     def __init__(
-        self,
-        clientid: str,
-        topology: ReplicationTopology,
-        provisioner: "Provisioner",
-        transfer_config: TransferConfig,
+        self, clientid: str, topology: ReplicationTopology, provisioner: "Provisioner", transfer_config: TransferConfig, debug: bool = False
     ):
         """
         :param clientid: the uuid of the local host to create the dataplane
@@ -55,6 +52,8 @@ class Dataplane:
         :type provisioner: Provisioner
         :param transfer_config: the configuration during the transfer
         :type transfer_config: TransferConfig
+        :param debug: whether to enable debug mode, defaults to False
+        :type debug: bool, optional
         """
         self.clientid = clientid
         self.topology = topology
@@ -78,6 +77,8 @@ class Dataplane:
         self.jobs_to_dispatch: List[TransferJob] = []
         self.pending_transfers: List[TransferProgressTracker] = []
         self.bound_nodes: Dict[ReplicationTopologyGateway, compute.Server] = {}
+
+        self.debug = debug
 
     def provision(
         self,
@@ -192,13 +193,16 @@ class Dataplane:
     def copy_gateway_logs(self):
         # copy logs from all gateways in parallel
         def copy_log(instance):
+            typer.secho(f"Downloading log: {self.transfer_dir}/gateway_{instance.uuid()}.stdout", fg="bright_black")
+            typer.secho(f"Downloading log: {self.transfer_dir}/gateway_{instance.uuid()}.stderr", fg="bright_black")
+
             instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
             instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
             instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 
         do_parallel(copy_log, self.bound_nodes.values(), n=-1)
 
-    def deprovision(self, max_jobs: int = 64, spinner: bool = False, debug: bool = False):
+    def deprovision(self, max_jobs: int = 64, spinner: bool = False):
         """
         Deprovision the remote gateways
 
@@ -208,8 +212,8 @@ class Dataplane:
         :type spinner: bool
         """
         with self.provisioning_lock:
-            if debug:
-                logger.fs.info("Copying gateway logs to {self.transfer_dir}")
+            if self.debug:
+                logger.fs.info(f"Copying gateway logs to {self.transfer_dir}")
                 self.copy_gateway_logs()
 
             if not self.provisioned:
@@ -256,10 +260,12 @@ class Dataplane:
         """Returns a list of sink gateway nodes"""
         return [self.bound_nodes[n] for n in self.topology.sink_instances()] if self.provisioned else []
 
-    def copy_log(self, instance):
-        instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
-        instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
-        instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
+    # def copy_log(self, instance):
+    #    typer.secho(f"Downloading log: {self.transfer_dir}/gateway_{instance.uuid()}.stdout", fg="bright_black")
+    #    typer.secho(f"Downloading log: {self.transfer_dir}/gateway_{instance.uuid()}.stderr", fg="bright_black")
+    #    instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
+    #    instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
+    #    instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 
     def queue_copy(
         self,
