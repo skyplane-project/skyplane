@@ -456,7 +456,9 @@ class CopyJob(TransferJob):
             )
             end = time.time()
             if reply.status != 200:
-                raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
+                logger.fs.error(f"Failed to dispatch chunks {server.instance_name()}, copying gateway logs....")
+                dataplane.copy_gateway_logs()
+                raise Exception(f"ERROR Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
             logger.fs.debug(
                 f"Dispatched {len(batch)} chunk requests to {server.instance_name()} ({n_bytes} bytes) in {end - start:.2f} seconds"
             )
