@@ -355,9 +355,17 @@ class TransferJob(ABC):
         """Verifies the transfer completed, otherwise raises TransferFailedException."""
         raise NotImplementedError("Verify not implemented")
 
-    def estimate_cost(self):
-        # TODO
-        raise NotImplementedError
+    def gen_transfer_pairs(
+        self, chunker: Optional[Chunker] = None
+    ) -> Generator[Tuple[ObjectStoreObject or FileSystemInterface, ObjectStoreObject or FileSystemInterface], None, None]:
+        raise NotImplementedError("Generate transfer pairs not implemented")
+
+    def size_gb(self):
+        """Return the size of the transfer in GB"""
+        total_size = 0
+        for src_obj, _ in self.gen_transfer_pairs():
+            total_size += src_obj.size
+        return total_size / 1e9
 
     @classmethod
     def _pre_filter_fn(cls, obj: ObjectStoreObject) -> bool:
@@ -389,9 +397,6 @@ class CopyJob(TransferJob):
         if not hasattr(self, "_http_pool"):
             self._http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         return self._http_pool
-
-    def estimate_cost(self):
-        raise NotImplementedError()
 
     def gen_transfer_pairs(
         self, chunker: Optional[Chunker] = None
@@ -497,9 +502,6 @@ class CopyJob(TransferJob):
 @dataclass
 class SyncJob(CopyJob):
     """sync job that copies the source objects that does not exist in the destination bucket to the destination"""
-
-    def estimate_cost(self):
-        raise NotImplementedError()
 
     def gen_transfer_pairs(
         self, chunker: Optional[Chunker] = None

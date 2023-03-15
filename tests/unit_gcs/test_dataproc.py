@@ -10,7 +10,6 @@ from skyplane.utils import imports
 
 
 def test_dataproc():
-
     cluster_name = f"skyplane-dataproc-test"
     region = "us-central1"
     # project_id = cloud_config.gcp_project_id
