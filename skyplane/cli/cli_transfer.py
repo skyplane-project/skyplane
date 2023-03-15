@@ -386,7 +386,7 @@ def cp(
                 console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")
                 do_parallel(dp.copy_log, dp.bound_nodes.values(), n=-1)
                 try:
-                    force_deprovision(dp, debug=debug)
+                    force_deprovision(dp)
                 except Exception as e:
                     logger.fs.exception(e)
                     console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
@@ -399,13 +399,13 @@ def cp(
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e.pretty_print_str())
                 UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
-                force_deprovision(dp, debug=debug)
+                force_deprovision(dp)
             except Exception as e:
                 logger.fs.exception(e)
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e)
                 UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
-                force_deprovision(dp, debug=debug)
+                force_deprovision(dp)
         if dp.provisioned:
             typer.secho("Dataplane is not deprovisioned! Run `skyplane deprovision` to force deprovision VMs.", fg="red")
 
@@ -516,7 +516,7 @@ def sync(
                 console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")
                 do_parallel(dp.copy_log, dp.bound_nodes.values(), n=-1)
                 try:
-                    force_deprovision(dp, debug=debug)
+                    force_deprovision(dp)
                 except Exception as e:
                     logger.fs.exception(e)
                     console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
@@ -535,6 +535,6 @@ def sync(
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e)
                 UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
-                force_deprovision(dp, debug=debug)
+                force_deprovision(dp)
         if dp.provisioned:
             typer.secho("Dataplane is not deprovisioned! Run `skyplane deprovision` to force deprovision VMs.", fg="red")
