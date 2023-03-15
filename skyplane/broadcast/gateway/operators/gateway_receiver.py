@@ -191,6 +191,7 @@ class GatewayReceiver:
                     while True:
                         try:
                             f.write(to_write)
+                            f.flush()
 
                             # check size
                             file_size = os.path.getsize(fpath)
