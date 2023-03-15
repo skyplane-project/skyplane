@@ -7,7 +7,6 @@ import os
 
 
 def test_hdfs():
-
     # TODO: Create HDFS unit test
     client = boto3.client("emr", "us-east-1")
 

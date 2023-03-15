@@ -328,3 +328,10 @@ class Dataplane:
         tracker = self.run_async(hooks)
         logger.fs.debug(f"[SkyplaneClient] Waiting for transfer to complete")
         tracker.join()
+
+    def estimate_total_cost(self):
+        """Estimate total cost of queued jobs"""
+        total_size = 0
+        for job in self.jobs_to_dispatch:
+            total_size += job.size_gb()
+        return total_size * self.topology.cost_per_gb
