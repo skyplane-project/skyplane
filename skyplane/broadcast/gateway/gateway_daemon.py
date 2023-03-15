@@ -24,6 +24,7 @@ from skyplane.broadcast.gateway.operators.gateway_operator import (
     GatewayWaitReciever,
 )
 from skyplane.broadcast.gateway.operators.gateway_receiver import GatewayReceiver
+from skyplane.utils import logger
 from collections import defaultdict
 
 

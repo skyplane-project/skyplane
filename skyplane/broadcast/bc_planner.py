@@ -49,6 +49,56 @@ class BroadcastPlanner:
         # need to input cost_grid and tp_grid
         self.costs = pd.read_csv(cost_grid_path)
         self.throughput = pd.read_csv(tp_grid_path)
+
+        # remove subregion
+        # TODO: lookup subregions with matching region and duplicate  (so lookups dont fail)
+        def remove_subregion(region):
+            print("region", region, region[-2:])
+            if region[-2:] == "-a" or region[-2:] == "-b" or region[-2:] == "-c":
+                return region[:-2]
+            return region
+
+        def map_subregions(df, source_key, dest_key):
+            # create subregion -> region map
+            regions = df[source_key].apply(lambda region: remove_subregion(region))
+            region_map = {}
+            for full_region, region in zip(df[source_key].tolist(), regions.tolist()):
+                # TODO: include full set of regions (list)
+                region_map[region] = full_region
+
+            regions = list(set(regions))
+            zones = ["a", "b", "c"]
+            for region in regions:
+                for zone in zones:
+                    subregion = f"{region}-{zone}"
+                    if subregion not in df[source_key].values:
+                        mapped_region = region_map[region]
+                        if mapped_region == subregion:
+                            continue
+
+                        # append new rows
+                        print(f"Adding region {subregion} with {mapped_region}")
+                        # print("ORIGINAL", df)
+                        region_df = pd.DataFrame(df[(df[source_key] == mapped_region) | (df[dest_key] == mapped_region)]).reset_index(
+                            drop=True
+                        )
+                        region_df[source_key] = region_df[source_key].replace(mapped_region, subregion)
+                        region_df[dest_key] = region_df[dest_key].replace(mapped_region, subregion)
+                        # print("NEW", region_df)
+                        # df = pd.concat([df, region_df], axis=1).reset_index()
+                        df = df.append(region_df, ignore_index=True)
+                        # print("combin", df)
+
+            return df
+
+        self.costs = map_subregions(self.costs.reset_index(), "src", "dest")
+        self.throughput = map_subregions(self.throughput.reset_index(), "src_region", "dst_region")
+
+        # self.costs.src = self.costs.src.apply(lambda region: remove_subregion(region))
+        # self.costs.dest = self.costs.dest.apply(lambda region: remove_subregion(region))
+        # self.throughput.src_region = self.throughput.src_region.apply(lambda region: remove_subregion(region))
+        # self.throughput.dst_region = self.throughput.dst_region.apply(lambda region: remove_subregion(region))
+
         self.G = self.make_nx_graph(self.costs, self.throughput, num_instances)
 
         if aws_only:
@@ -146,7 +196,6 @@ class BroadcastPlanner:
         topo.cost_per_gb = cost_egress / gbyte_to_transfer  # cost per gigabytes
         topo.tot_vm_price_per_s = tot_vm_price_per_s
         topo.tot_vms = tot_vms
-        topo.default_max_conn_per_vm = self.num_connections
         topo.nx_graph = solution_graph
         return topo
 

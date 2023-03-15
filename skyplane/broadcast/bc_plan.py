@@ -16,7 +16,7 @@ from skyplane.utils.definitions import MB
 
 @dataclass
 class BroadcastReplicationJob:
-    ource_region: str
+    source_region: str
     dest_regions: List[str]
     source_bucket: Optional[str]
     dest_buckets: Optional[List[str]]
@@ -45,13 +45,13 @@ class BroadcastReplicationTopology(ReplicationTopology):
 
     def __init__(
         self,
-        nx_graph: nx.DiGraph,
-        num_partitions: int,
-        edges: Optional[List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int, str]]] = None,
+        nx_graph: nx.DiGraph,  # TODO: remove this, maybe replace with List[GatewayPrograms], map[id --> GatewayProgramID]
+        num_partitions: int,  # TODO: remove this
+        edges: Optional[List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int, str]]] = None,  # TODO: remove this
+        # NOTE: topology-related metric
         cost_per_gb: Optional[float] = None,
-        tot_vms: Optional[int] = None,
+        tot_vms: Optional[int] = None,  # TODO: remove this
         tot_vm_price_per_s: Optional[float] = None,
-        default_max_conn_per_vm: Optional[int] = None,
     ):
         """
         Edge is represented by:
@@ -59,14 +59,15 @@ class BroadcastReplicationTopology(ReplicationTopology):
 
         """
         self.nx_graph = nx_graph
+
         self.num_partitions = num_partitions
 
         self.edges: List[Tuple[ReplicationTopologyNode, ReplicationTopologyNode, int, str]] = edges or []
         self.nodes: Set[ReplicationTopologyNode] = set(k[0] for k in self.edges) | set(k[1] for k in self.edges)
+
         self.cost_per_gb: Optional[float] = cost_per_gb
         self.tot_vm_price_per_s: Optional[float] = tot_vm_price_per_s
         self.tot_vms: Optional[int] = tot_vms
-        self.default_max_conn_per_vm: Optional[int] = default_max_conn_per_vm
 
     def get_outgoing_paths(self, src: ReplicationTopologyNode):
         """Return nodes that follow src in the topology."""

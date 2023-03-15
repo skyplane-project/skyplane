@@ -248,9 +248,9 @@ class BCTransferProgressTracker(TransferProgressTracker):
     def copy_log(self, instance):
         print("COPY DATA TO", str(self.transfer_dir) + f"/gateway_{instance.uuid()}.stdout")
         instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
-        pprint(f"Copying gateway std out files to gateway_{instance.uuid()}.stdout")
+        pprint(f"Copying gateway std out files to {self.transfer_dir}/gateway_{instance.uuid()}.stdout")
         instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
-        pprint(f"Copying gateway std err files to gateway_{instance.uuid()}.stderr")
+        pprint(f"Copying gateway std err files to {self.transfer_dir}/gateway_{instance.uuid()}.stderr")
         instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 
     @property

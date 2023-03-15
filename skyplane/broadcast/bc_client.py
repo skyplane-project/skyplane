@@ -124,7 +124,7 @@ class SkyplaneBroadcastClient:
         n_vms: int = 1,
         num_connections: int = 256,
         num_partitions: int = 10,
-        gbyte_to_transfer: float = 1,
+        gbyte_to_transfer: float = 1,  # TODO: do we need to input this when creating dataplane
         # ILP specific parameters
         target_time: float = 10,
         filter_node: bool = False,
@@ -229,6 +229,7 @@ class SkyplaneBroadcastClient:
         print("Transfer src region: ", self.transfer_config.src_region)
         print("Transfer dst regions: ", self.transfer_config.dst_regions)
 
+        # TODO: remove the nx_graph representation, directly generate gateway program and pass in to BroadcastDataplane (i.e. topology=topo)
         return BroadcastDataplane(
             clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config, log_dir=self.log_dir
         )

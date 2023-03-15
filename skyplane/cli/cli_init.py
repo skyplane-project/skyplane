@@ -103,7 +103,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         # check if az cli is installed
         if not shutil.which("az"):
             typer.secho(
-                "    Azure CLI not found, please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli",
+                "    Azure CLI not found, please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli. \n Then login with `az login`",
                 fg="red",
                 err=True,
             )
@@ -123,7 +123,7 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         out, err = subprocess.Popen("az --version".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
         if not out.decode("utf-8").startswith("azure-cli"):
             typer.secho(
-                "    Azure CLI not found, please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli",
+                "    Azure CLI not found, please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli. \n Then login with `az login`",
                 fg="red",
                 err=True,
             )
@@ -322,7 +322,7 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
 
         # check if GCP is enabled
         inferred_cred, inferred_project = compute.GCPAuthentication.get_adc_credential()
-        if inferred_cred is None or inferred_project is None:
+        if inferred_cred is None:  # or inferred_project is None:
             typer.secho("    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.", fg="red", err=True)
             typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red", err=True)
             return disable_gcp_support()
@@ -331,6 +331,7 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
             if non_interactive or typer.confirm("    GCP credentials found, do you want to enable GCP support in Skyplane?", default=True):
                 if not non_interactive:
                     config.gcp_project_id = typer.prompt("    Enter the GCP project ID", default=inferred_project)
+
                 else:
                     config.gcp_project_id = inferred_project
                 assert config.gcp_project_id is not None, "GCP project ID must not be None"
@@ -387,19 +388,28 @@ def init(
         cloud_config = SkyplaneConfig.default_config()
 
     # load AWS config
-    typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)
-    if not disable_config_aws:
-        cloud_config = load_aws_config(cloud_config, non_interactive=non_interactive)
+    if not (reinit_azure or reinit_gcp):
+        typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)
+        if not disable_config_aws:
+            cloud_config = load_aws_config(cloud_config, non_interactive=non_interactive)
 
     # load Azure config
-    typer.secho("\n(2) Configuring Azure:", fg="yellow", bold=True)
-    if not disable_config_azure:
-        cloud_config = load_azure_config(cloud_config, force_init=reinit_azure, non_interactive=non_interactive)
+    if not reinit_gcp:
+        if reinit_azure:
+            typer.secho("\nConfiguring Azure:", fg="yellow", bold=True)
+        else:
+            typer.secho("\n(2) Configuring Azure:", fg="yellow", bold=True)
+        if not disable_config_azure:
+            cloud_config = load_azure_config(cloud_config, force_init=reinit_azure, non_interactive=non_interactive)
 
     # load GCP config
-    typer.secho("\n(3) Configuring GCP:", fg="yellow", bold=True)
-    if not disable_config_gcp:
-        cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
+    if not reinit_azure:
+        if reinit_gcp:
+            typer.secho("\nConfiguring GCP:", fg="yellow", bold=True)
+        else:
+            typer.secho("\n(3) Configuring GCP:", fg="yellow", bold=True)
+        if not disable_config_gcp:
+            cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
 
     cloud_config.to_config_file(config_path)
     typer.secho(f"\nConfig file saved to {config_path}", fg="green")

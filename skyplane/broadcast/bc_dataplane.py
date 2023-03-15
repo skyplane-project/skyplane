@@ -51,8 +51,9 @@ class BroadcastDataplane(Dataplane):
         provisioner: "Provisioner",
         log_dir: str,
         transfer_config: TransferConfig,
-        topology: Optional[BroadcastReplicationTopology] = None,
+        topology: Optional[BroadcastReplicationTopology] = None,  # TODO: change this to incorporate gateway program
         gateway_program_path: Optional[str] = None,
+        debug: bool = False,
     ):
         self.log_dir = log_dir
         self.clientid = clientid
@@ -61,6 +62,7 @@ class BroadcastDataplane(Dataplane):
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         self.provisioning_lock = threading.Lock()
         self.provisioned = False
+        self.debug = debug
 
         # either set topology or gateway program
         self.gateway_program_path = gateway_program_path
@@ -237,7 +239,10 @@ class BroadcastDataplane(Dataplane):
             # return existing gateway program file
             return json.load(open(self.gateway_program_path, "r"))
 
+        # TODO: create GatewayProgram based on algorithm output
+        # TODO: move this gateway program creation logic to when initiating BroadcastDataplane?
         solution_graph = self.topology.nx_graph
+
         # print("Solution graph: ", solution_graph.edges.data())
 
         num_partitions = self.topology.num_partitions
@@ -290,6 +295,7 @@ class BroadcastDataplane(Dataplane):
 
                 # dst receive data, write to object store / write local (if obj_store=None), forward data if needed
                 elif node in dsts:
+                    print("dest obj", dsts_obj_store_map)
                     dst_obj_store = None if dsts_obj_store_map is None else dsts_obj_store_map[node]
                     self.add_dst_operator(solution_graph, node_gateway_program, node, partitions, obj_store=dst_obj_store)
 
@@ -315,22 +321,30 @@ class BroadcastDataplane(Dataplane):
         am_source = gateway_node in self.topology.source_instances()
         am_sink = gateway_node in self.topology.sink_instances()
 
-        # start gateway
-        # if sgateway_log_dir:
-        if self.log_dir:
-            gateway_server.init_log_files(self.log_dir)
-        if authorize_ssh_pub_key:
-            gateway_server.copy_public_key(authorize_ssh_pub_key)
+        import traceback
 
-        gateway_server.start_gateway(
-            {},  # don't need setup arguments here to pass as outgoing_ports
-            gateway_programs=self.current_gw_programs,  # NOTE: BC pass in gateway programs
-            gateway_docker_image=gateway_docker_image,
-            e2ee_key_bytes=e2ee_key_bytes if (self.transfer_config.use_e2ee and (am_source or am_sink)) else None,
-            use_bbr=False,
-            use_compression=self.transfer_config.use_compression,
-            use_socket_tls=self.transfer_config.use_socket_tls,
-        )
+        try:
+            print("Gateway", gateway_docker_image)
+
+            # start gateway
+            if self.log_dir:
+                gateway_server.init_log_files(self.log_dir)
+            if authorize_ssh_pub_key:
+                gateway_server.copy_public_key(authorize_ssh_pub_key)
+
+            gateway_server.start_gateway(
+                {},  # don't need setup arguments here to pass as outgoing_ports
+                gateway_programs=self.current_gw_programs,  # NOTE: BC pass in gateway programs
+                gateway_docker_image=gateway_docker_image,
+                e2ee_key_bytes=e2ee_key_bytes if (self.transfer_config.use_e2ee and (am_source or am_sink)) else None,
+                use_bbr=False,
+                use_compression=self.transfer_config.use_compression,
+                use_socket_tls=self.transfer_config.use_socket_tls,
+            )
+        except Exception as e:
+            print(traceback.format_exc())
+            print(sys.exc_info()[2])
+            print("ERROR: ", e)
 
     def source_gateways(self) -> List[compute.Server]:
         return [self.bound_nodes[n] for n in self.topology.source_instances()] if self.provisioned else []
