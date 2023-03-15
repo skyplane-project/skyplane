@@ -216,8 +216,9 @@ class SkyplaneBroadcastClient:
             raise NotImplementedError(f"Dataplane type {type} not implemented")
 
         logger.fs.info(f"[SkyplaneClient.direct_dataplane] Topology: {topo.to_json()}")
-        # print(f"Solution: {topo.nx_graph.edges.data()}")
-        # print(topo.nx_graph.nodes)
+        # if type != "ILP":
+        print(f"Solution: {topo.nx_graph.edges.data()}")
+        print(topo.nx_graph.nodes)
         print(src_region)
         self.networkx_to_graphviz(
             f"{src_cloud_provider}:{src_region}",
