@@ -252,9 +252,9 @@ class SkyplaneCLI:
             return False
 
 
-def force_deprovision(dp: skyplane.Dataplane, debug: bool = False):
+def force_deprovision(dp: skyplane.Dataplane):
     s = signal.signal(signal.SIGINT, signal.SIG_IGN)
-    dp.deprovision(debug=debug)
+    dp.deprovision()
     signal.signal(signal.SIGINT, s)
 
 
@@ -342,6 +342,7 @@ def cp(
         n_vms=max_instances,
         n_connections=max_connections,
         solver_required_throughput_gbits=solver_required_throughput_gbits,
+        debug=debug,
     )
 
     if provider_src in ("local", "nfs") and provider_dst in ("aws", "gcp", "azure"):
@@ -365,6 +366,7 @@ def cp(
             solver_required_throughput_gbits=solver_required_throughput_gbits,
             n_vms=max_instances,
             n_connections=max_connections,
+            debug=debug,
         )
         with dp.auto_deprovision():
             dp.queue_copy(src, dst, recursive=recursive)
@@ -382,9 +384,9 @@ def cp(
             except KeyboardInterrupt:
                 logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt).")
                 console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")
-                do_parallel(dp.copy_log, dp.bound_nodes.values(), n=-1)
+                dp.copy_gateway_logs()
                 try:
-                    force_deprovision(dp, debug=debug)
+                    force_deprovision(dp)
                 except Exception as e:
                     logger.fs.exception(e)
                     console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
@@ -397,13 +399,13 @@ def cp(
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e.pretty_print_str())
                 UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
-                force_deprovision(dp, debug=debug)
+                force_deprovision(dp)
             except Exception as e:
                 logger.fs.exception(e)
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e)
                 UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
-                force_deprovision(dp, debug=debug)
+                force_deprovision(dp)
         if dp.provisioned:
             typer.secho("Dataplane is not deprovisioned! Run `skyplane deprovision` to force deprovision VMs.", fg="red")
 
@@ -493,6 +495,7 @@ def sync(
             solver_required_throughput_gbits=solver_required_throughput_gbits,
             n_vms=max_instances,
             n_connections=max_connections,
+            debug=debug,
         )
         with dp.auto_deprovision():
             dp.queue_sync(src, dst)
@@ -511,9 +514,9 @@ def sync(
             except KeyboardInterrupt:
                 logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt).")
                 console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")
-                do_parallel(dp.copy_log, dp.bound_nodes.values(), n=-1)
+                dp.copy_gateway_logs()
                 try:
-                    force_deprovision(dp, debug=debug)
+                    force_deprovision(dp)
                 except Exception as e:
                     logger.fs.exception(e)
                     console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
@@ -532,6 +535,6 @@ def sync(
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e)
                 UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
-                force_deprovision(dp, debug=debug)
+                force_deprovision(dp)
         if dp.provisioned:
             typer.secho("Dataplane is not deprovisioned! Run `skyplane deprovision` to force deprovision VMs.", fg="red")
