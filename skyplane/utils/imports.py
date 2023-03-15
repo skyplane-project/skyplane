@@ -17,7 +17,7 @@ def inject(*modules, pip_extra=None):
             for module in modules:
                 err_msg = f"Cannot import {module}."
                 if pip_extra:
-                    err_msg += f" Install skyplane with {pip_extra} support: `pip install skyplane[{pip_extra.lower()}]`"
+                    err_msg += f" Install skyplane with {pip_extra} support: `pip install 'skyplane[{pip_extra.lower()}]'`"
                 try:
                     modules_imported.append(importlib.import_module(module))
                 except ImportError as e:
