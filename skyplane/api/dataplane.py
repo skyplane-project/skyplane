@@ -112,7 +112,6 @@ class Dataplane:
             azure_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.nodes if n.region.startswith("azure:"))
             gcp_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.nodes if n.region.startswith("gcp:"))
             ibmcloud_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.nodes if n.region.startswith("ibmcloud:"))
-            print (f"ibmcloud_nodes_to_provision  {ibmcloud_nodes_to_provision}")
 
             # create VMs from the topology
             for node in self.topology.gateway_nodes:
