@@ -129,7 +129,7 @@ class Dataplane:
                 aws=len(aws_nodes_to_provision) > 0,
                 azure=len(azure_nodes_to_provision) > 0,
                 gcp=len(gcp_nodes_to_provision) > 0,
-                ibmcloud = len(ibmcloud_nodes_to_provision) > 0,
+                ibmcloud=len(ibmcloud_nodes_to_provision) > 0,
             )
 
             # provision VMs

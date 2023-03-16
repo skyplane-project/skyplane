@@ -19,6 +19,7 @@ from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import aws_config_path, gcp_config_path, config_path, ibmcloud_config_path
 from skyplane.utils import logger
 
+
 def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> SkyplaneConfig:
     try:
         import boto3
@@ -448,6 +449,7 @@ def load_ibmcloud_config(config: SkyplaneConfig, force_init: bool = False, non_i
         config.cos_enabled = False
         typer.secho("    Disabling IBM Cloud support", fg="blue")
         return config
+
 
 def init(
     non_interactive: bool = typer.Option(False, "--non-interactive", "-y", help="Run non-interactively"),

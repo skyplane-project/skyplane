@@ -175,7 +175,6 @@ def throughput_grid(
         logger.error(f"Invalid IBM Cloud region list: {ibmcloud_region_list}")
         raise typer.Abort()
 
-
     # provision servers
     aws = compute.AWSCloudProvider()
     azure = compute.AzureCloudProvider()
@@ -186,7 +185,7 @@ def throughput_grid(
         aws=aws,
         azure=azure,
         gcp=gcp,
-        ibmcloud = ibmcloud,
+        ibmcloud=ibmcloud,
         aws_regions_to_provision=aws_region_list,
         azure_regions_to_provision=azure_region_list,
         gcp_regions_to_provision=gcp_region_list,
@@ -411,7 +410,6 @@ def latency_grid(
         logger.error(f"Invalid IBM Cloud region list: {ibmcloud_region_list}")
         raise typer.Abort()
 
-
     # provision servers
     aws = compute.AWSCloudProvider()
     azure = compute.AzureCloudProvider()
@@ -421,7 +419,7 @@ def latency_grid(
         aws=aws,
         azure=azure,
         gcp=gcp,
-        ibmcloud = ibmcloud,
+        ibmcloud=ibmcloud,
         aws_regions_to_provision=aws_region_list,
         azure_regions_to_provision=azure_region_list,
         gcp_regions_to_provision=gcp_region_list,
@@ -442,7 +440,7 @@ def latency_grid(
         aws=aws,
         azure=azure,
         gcp=gcp,
-        ibmcloud = ibmcloud,
+        ibmcloud=ibmcloud,
         aws_regions_to_provision=[],
         azure_regions_to_provision=[],
         gcp_regions_to_provision=gcp_standard_region_list,

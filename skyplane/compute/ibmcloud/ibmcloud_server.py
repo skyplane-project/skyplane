@@ -83,7 +83,7 @@ class IBMCloudServer(Server):
         t.connect(
             username=self.vsi.ssh_credentials["username"],
             pkey=paramiko.RSAKey.from_private_key_file(self.vsi.ssh_credentials["key_filename"]),
-            #look_for_keys=False
+            # look_for_keys=False
         )
         return paramiko.SFTPClient.from_transport(t)
 

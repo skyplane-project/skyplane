@@ -57,6 +57,7 @@ class IBMCloudConfig(AuthenticationConfig):
         return compute.IBMCloudAuthentication(config=self)  # type: ignore
         # pytype: enable=attribute-error
 
+
 @dataclass(frozen=True)
 class TransferConfig:
     autoterminate_minutes: int = 15

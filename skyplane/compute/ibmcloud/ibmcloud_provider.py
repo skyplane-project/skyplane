@@ -11,7 +11,11 @@ from skyplane.utils import imports
 
 
 class IBMCloudProvider(CloudProvider):
-    def __init__(self, key_prefix: str = "skyplane", auth: Optional[IBMCloudAuthentication] = None,):
+    def __init__(
+        self,
+        key_prefix: str = "skyplane",
+        auth: Optional[IBMCloudAuthentication] = None,
+    ):
         super().__init__()
         self.key_prefix = key_prefix
         self.auth = auth if auth else IBMCloudAuthentication()
@@ -24,8 +28,7 @@ class IBMCloudProvider(CloudProvider):
 
     @staticmethod
     def region_list() -> List[str]:
-        return  REGIONS
-
+        return REGIONS
 
     def setup_global(self, iam_name: str = "skyplane_gateway", attach_policy_arn: Optional[str] = None):
         # Not sure this should execute something. We will create VPC per region

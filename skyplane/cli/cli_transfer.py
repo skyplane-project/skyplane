@@ -57,26 +57,29 @@ class SkyplaneCLI:
         self.aws_config, self.azure_config, self.gcp_config, self.ibmcloud_config = self.to_api_config(skyplane_config or cloud_config)
         self.transfer_config = self.make_transfer_config(skyplane_config or cloud_config)
         self.client = skyplane.SkyplaneClient(
-            aws_config=self.aws_config, azure_config=self.azure_config, gcp_config=self.gcp_config,
-            transfer_config=self.transfer_config, ibmcloud_config=self.ibmcloud_config
+            aws_config=self.aws_config,
+            azure_config=self.azure_config,
+            gcp_config=self.gcp_config,
+            transfer_config=self.transfer_config,
+            ibmcloud_config=self.ibmcloud_config,
         )
         typer.secho(f"Using Skyplane version {skyplane.__version__}", fg="bright_black")
         typer.secho(f"Logging to: {self.client.log_dir / 'client.log'}", fg="bright_black")
 
-        #import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
 
     def to_api_config(self, config: SkyplaneConfig):
         aws_config = AWSConfig(aws_enabled=config.aws_enabled)
         # todo: fix azure config support by collecting azure umi name and resource group and store in skyplane config
         gcp_config = GCPConfig(gcp_project_id=config.gcp_project_id, gcp_enabled=config.gcp_enabled)
         ibmcloud_config = IBMCloudConfig(
-            ibmcloud_access_id = config.ibmcloud_access_id,
-            ibmcloud_secret_key = config.ibmcloud_secret_key,
-            ibmcloud_iam_key = config.ibmcloud_iam_key,
-            ibmcloud_iam_endpoint = config.ibmcloud_iam_endpoint,
-            ibmcloud_useragent = config.ibmcloud_useragent,
-            ibmcloud_resource_group_id = config.ibmcloud_resource_group_id,
-            ibmcloud_enabled = config.ibmcloud_enabled
+            ibmcloud_access_id=config.ibmcloud_access_id,
+            ibmcloud_secret_key=config.ibmcloud_secret_key,
+            ibmcloud_iam_key=config.ibmcloud_iam_key,
+            ibmcloud_iam_endpoint=config.ibmcloud_iam_endpoint,
+            ibmcloud_useragent=config.ibmcloud_useragent,
+            ibmcloud_resource_group_id=config.ibmcloud_resource_group_id,
+            ibmcloud_enabled=config.ibmcloud_enabled,
         )
         if not config.azure_resource_group or not config.azure_umi_name:
             typer.secho(

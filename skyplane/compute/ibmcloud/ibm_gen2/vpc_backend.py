@@ -35,7 +35,7 @@ from skyplane.compute.ibmcloud.ibm_gen2.utils import load_yaml_config, dump_yaml
 
 logger = logging.getLogger(__name__)
 
-INSTANCE_START_TIMEOUT = 180*2
+INSTANCE_START_TIMEOUT = 180 * 2
 VPC_API_VERSION = "2021-09-21"
 
 
@@ -78,8 +78,8 @@ class IBMVPCBackend:
         Loads VPC data from local cache
         """
         self.vpc_data = load_yaml_config(self.vpc_data_filename)
-        print ("load VPC data")
-        print (self.vpc_data)
+        print("load VPC data")
+        print(self.vpc_data)
 
         if not self.vpc_data:
             logger.debug(f"Could not find VPC cache data in {self.vpc_data_filename}")
@@ -97,16 +97,16 @@ class IBMVPCBackend:
         Creates a new VPC
         """
         if "vpc_id" in self.config:
-            print ("vpc_id in self.config")
+            print("vpc_id in self.config")
             return
 
         if "vpc_id" in self.vpc_data:
-            print ("vpc_id in self.vpc_data")
+            print("vpc_id in self.vpc_data")
             try:
                 self.vpc_cli.get_vpc(self.vpc_data["vpc_id"])
                 self.config["vpc_id"] = self.vpc_data["vpc_id"]
                 self.config["security_group_id"] = self.vpc_data["security_group_id"]
-                print (self.config)
+                print(self.config)
                 return
             except ApiException:
                 pass
@@ -132,7 +132,7 @@ class IBMVPCBackend:
             vpc_prototype["classic_access"] = False
             vpc_prototype["name"] = self.vpc_name
             vpc_prototype["resource_group"] = {"id": self.config["resource_group_id"]}
-        
+
             response = self.vpc_cli.create_vpc(**vpc_prototype)
             vpc_info = response.result
 
@@ -173,11 +173,11 @@ class IBMVPCBackend:
     def _create_ssh_key(self):
 
         if "ssh_key_id" in self.config:
-            print ("ssh_key_id in self.config")
+            print("ssh_key_id in self.config")
             return
 
         if "ssh_key_id" in self.vpc_data:
-            print ("ssh_key_id in self.vpc_data")
+            print("ssh_key_id in self.vpc_data")
             try:
                 self.vpc_cli.get_key(self.vpc_data["ssh_key_id"])
                 self.config["ssh_key_id"] = self.vpc_data["ssh_key_id"]
@@ -196,7 +196,8 @@ class IBMVPCBackend:
             for key in self.vpc_cli.list_keys().result["keys"]:
                 if key["name"] == keyname:
                     return key
-        print (key_filename)
+
+        print(key_filename)
         if not os.path.isfile(key_filename):
             logger.debug("Generating new ssh key pair")
             os.system(f'ssh-keygen -b 2048 -t rsa -f {key_filename} -q -N ""')
@@ -312,7 +313,7 @@ class IBMVPCBackend:
         # Attach public gateway to the subnet
         self.vpc_cli.set_subnet_public_gateway(self.config["subnet_id"], {"id": self.config["gateway_id"]})
 
-    def _create_floating_ip(self, disable_recycle = True):
+    def _create_floating_ip(self, disable_recycle=True):
         """
         Creates a new floating IP address
         """
@@ -341,24 +342,24 @@ class IBMVPCBackend:
     def add_ips_to_security_group(self, ip_address):
         for ip in ip_address:
             ip_rule = {}
-            ip_rule['direction'] = 'inbound'
-            ip_rule['ip_version'] = 'ipv4'
-            ip_rule['protocol'] = 'all'
+            ip_rule["direction"] = "inbound"
+            ip_rule["ip_version"] = "ipv4"
+            ip_rule["protocol"] = "all"
             remote = {}
-            remote['address'] = ip
-            ip_rule['remote'] = remote
+            remote["address"] = ip
+            ip_rule["remote"] = remote
 
             deploy_ip_rule = True
-            sg_rules = self.vpc_cli.get_security_group(self.config['security_group_id'])
-            for rule in sg_rules.get_result()['rules']:
+            sg_rules = self.vpc_cli.get_security_group(self.config["security_group_id"])
+            for rule in sg_rules.get_result()["rules"]:
                 if all(item in rule.items() for item in ip_rule.items()):
                     deploy_ip_rule = False
 
             if deploy_ip_rule:
-                logger.debug (f'About to create ip rule for {ip}')
+                logger.debug(f"About to create ip rule for {ip}")
                 try:
-                    self.vpc_cli.create_security_group_rule(self.config['security_group_id'], ip_rule)
-                    logger.debug(f'Created rule for {ip_rule}')
+                    self.vpc_cli.create_security_group_rule(self.config["security_group_id"], ip_rule)
+                    logger.debug(f"Created rule for {ip_rule}")
                 except Exception as e:
                     raise e
 
@@ -647,7 +648,7 @@ class IBMVPCInstance:
         self.delete_on_dismantle = self.config["delete_on_dismantle"]
         self.profile_name = self.config["worker_profile_name"]
 
-        self.vpc_cli =  None
+        self.vpc_cli = None
         self.vpc_cli = ibm_vpc_client or self._create_vpc_client()
         self.public = public
 
@@ -683,7 +684,7 @@ class IBMVPCInstance:
         ibm_vpc_client.set_service_url(self.config["endpoint"] + "/v1")
 
         # decorate instance public methods with except/retry logic
-        decorate_instance(self.vpc_cli , vpc_retry_on_except)
+        decorate_instance(self.vpc_cli, vpc_retry_on_except)
 
         return ibm_vpc_client
 
@@ -833,7 +834,7 @@ class IBMVPCInstance:
             self.vpc_cli.add_instance_network_interface_floating_ip(instance["id"], instance["network_interfaces"][0]["id"], fip_id)
 
     def _delete_floating_ip(self, fip_id):
-            response = self.vpc_cli.delete_floating_ip(id=fip_id)
+        response = self.vpc_cli.delete_floating_ip(id=fip_id)
 
     def get_instance_data(self):
         """
@@ -963,7 +964,6 @@ class IBMVPCInstance:
         """
         self._delete_instance()
         self._delete_floating_ip(self.floating_ip_id)
-
 
     def validate_capabilities(self):
         """

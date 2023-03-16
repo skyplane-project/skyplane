@@ -172,7 +172,7 @@ class Provisioner:
                     gcp_premium_network=False,
                     tags=task.tags,
                 )
-            elif task.cloud_provider == "ibmcloud" :
+            elif task.cloud_provider == "ibmcloud":
                 assert self.ibmcloud.auth.enabled(), "IBM Cloud credentials not configured"
                 server = self.ibmcloud.provision_instance(task.region, task.vm_type, tags=task.tags)
             else:
@@ -208,7 +208,6 @@ class Provisioner:
         gcp_provisioned = any([task.cloud_provider == "gcp" for task in provision_tasks])
         ibmcloud_provisioned = any([task.cloud_provider == "ibmcloud" for task in provision_tasks])
 
-
         # configure regions
         if aws_provisioned:
             do_parallel(
@@ -218,10 +217,13 @@ class Provisioner:
 
         if ibmcloud_provisioned:
             do_parallel(
-                self.ibmcloud.setup_region, list(set(ibmcloud_regions)), spinner=spinner, spinner_persist=False, desc="Configuring IBM Cloud regions"
+                self.ibmcloud.setup_region,
+                list(set(ibmcloud_regions)),
+                spinner=spinner,
+                spinner_persist=False,
+                desc="Configuring IBM Cloud regions",
             )
             logger.fs.info(f"[Provisioner.provision] Configured IBM Cloud regions {ibmcloud_regions}")
-
 
         # provision VMs
         logger.fs.info(f"[Provisioner.provision] Provisioning {len(provision_tasks)} VMs")

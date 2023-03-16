@@ -190,7 +190,6 @@ class SkyplaneConfig:
             ibmcloud_useragent = _get_value("ibmcloud", "ibmcloud_useragent", config)
             ibmcloud_resource_group_id = _get_value("ibmcloud", "ibmcloud_resource_group_id", config)
 
-
         skyplane_config = cls(
             aws_enabled=aws_enabled,
             azure_enabled=azure_enabled,
@@ -215,8 +214,6 @@ class SkyplaneConfig:
             for flag_name in _FLAG_TYPES:
                 if flag_name in config["flags"]:
                     skyplane_config.set_flag(flag_name, config["flags"][flag_name])
-
-
 
         return skyplane_config
 
