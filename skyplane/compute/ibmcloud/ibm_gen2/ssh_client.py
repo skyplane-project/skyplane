@@ -69,7 +69,7 @@ class SSHClient:
 
         try:
             return self.ssh_client.exec_command(cmd, timeout=timeout)
-        except Exception as e:
+        except Exception:
             # Normally this is a timeout exception
             self.ssh_client = self.create_client()
             return self.ssh_client.exec_command(cmd, timeout=timeout)
@@ -88,7 +88,7 @@ class SSHClient:
 
         try:
             stdin, stdout, stderr = self.ssh_client.exec_command(cmd, timeout=timeout)
-        except Exception as e:
+        except Exception:
             # Normally this is a timeout exception
             self.ssh_client = self.create_client()
             stdin, stdout, stderr = self.ssh_client.exec_command(cmd, timeout=timeout)
@@ -96,7 +96,7 @@ class SSHClient:
         out = None
         if not run_async:
             out = stdout.read().decode().strip()
-            error = stderr.read().decode().strip()
+            stderr.read().decode().strip()
 
         return out
 
