@@ -6,12 +6,14 @@ from typing import TYPE_CHECKING, Optional
 from skyplane.api.config import TransferConfig
 from skyplane.api.dataplane import Dataplane
 from skyplane.api.provisioner import Provisioner
+from skyplane.api.obj_store import ObjectStore
 from skyplane.api.usage import get_clientid
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.planner.planner import DirectPlanner, ILPSolverPlanner, RONSolverPlanner
 from skyplane.utils import logger
 from skyplane.utils.definitions import tmp_log_dir
 from skyplane.utils.path import parse_path
+
 
 if TYPE_CHECKING:
     from skyplane.api.config import AWSConfig, AzureConfig, GCPConfig, TransferConfig, IBMCloudConfig
@@ -107,6 +109,7 @@ class SkyplaneClient:
         solver_required_throughput_gbits: float = 1,
         n_vms: int = 1,
         n_connections: int = 32,
+        debug: bool = False,
     ) -> Dataplane:
         """
         Create a dataplane and calculates the transfer topology.
@@ -125,25 +128,36 @@ class SkyplaneClient:
         :type num_vms: int
         :param n_connections: The maximum number of connections to use in topology per region (default: 32)
         :type n_connections: int
+        :param debug: If true, will print debug logs (default: False)
+        :type debug: bool
         """
         if solver_type.lower() == "direct":
             planner = DirectPlanner(src_cloud_provider, src_region, dst_cloud_provider, dst_region, n_vms, n_connections)
             topo = planner.plan()
             logger.fs.info(f"[SkyplaneClient.direct_dataplane] Topology: {topo.to_json()}")
-            return Dataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
+            return Dataplane(
+                clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config, debug=debug
+            )
         elif solver_type.upper() == "ILP":
             planner = ILPSolverPlanner(
                 src_cloud_provider, src_region, dst_cloud_provider, dst_region, n_vms, n_connections, solver_required_throughput_gbits
             )
             topo = planner.plan()
             logger.fs.info(f"[SkyplaneClient.ilp_dataplane] Topology: {topo.to_json()}")
-            return Dataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
+            return Dataplane(
+                clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config, debug=debug
+            )
         elif solver_type.upper() == "RON":
             planner = RONSolverPlanner(
                 src_cloud_provider, src_region, dst_cloud_provider, dst_region, n_vms, n_connections, solver_required_throughput_gbits
             )
             topo = planner.plan()
             logger.fs.info(f"[SkyplaneClient.ron_dataplane] Topology: {topo.to_json()}")
-            return Dataplane(clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config)
+            return Dataplane(
+                clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config, debug=debug
+            )
         else:
             raise NotImplementedError(f"Dataplane type {solver_type} not implemented")
+
+    def object_store(self):
+        return ObjectStore()

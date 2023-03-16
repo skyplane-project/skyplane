@@ -22,6 +22,7 @@ from skyplane.api.usage import UsageClient
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import cloud_config, config_path
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
+from skyplane.obj_store.file_system_interface import FileSystemInterface
 from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 from skyplane.utils import logger
 from skyplane.utils.definitions import GB, format_bytes
@@ -182,6 +183,8 @@ class SkyplaneCLI:
             return False
 
     def make_dataplane(self, **solver_args) -> skyplane.Dataplane:
+        if self.src_region_tag.split(":")[0] == "hdfs":
+            self.src_region_tag = self.dst_region_tag
         dp = self.client.dataplane(*self.src_region_tag.split(":"), *self.dst_region_tag.split(":"), **solver_args)
         logger.fs.debug(f"Using dataplane: {dp}")
         return dp
@@ -321,8 +324,16 @@ def cp(
     print_header()
     provider_src, bucket_src, path_src = parse_path(src)
     provider_dst, bucket_dst, path_dst = parse_path(dst)
-    src_region_tag = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src).region_tag()
-    dst_region_tag = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst).region_tag()
+    if provider_src in ("local", "nfs"):
+        src_region_tag = FileSystemInterface.create(f"{provider_src}:infer", path_src).region_tag()
+    else:
+        src_region_tag = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src).region_tag()
+
+    if provider_dst in ("local", "nfs"):
+        dst_region_tag = FileSystemInterface.create(f"{provider_dst}:infer", path_dst).region_tag()
+    else:
+        dst_region_tag = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst).region_tag()
+
     args = {
         "cmd": "cp",
         "recursive": recursive,
@@ -342,18 +353,36 @@ def cp(
         )
         return 1
 
-    if provider_src in ("local", "hdfs", "nfs") or provider_dst in ("local", "hdfs", "nfs"):
-        if provider_src == "hdfs" or provider_dst == "hdfs":
-            typer.secho("HDFS is not supported yet.", fg="red")
-            return 1
-        return 0 if cli.transfer_cp_onprem(src, dst, recursive) else 1
-    elif provider_src in ("aws", "gcp", "azure", "ibmcloud") and provider_dst in ("aws", "gcp", "azure", "ibmcloud"):
+    dp = cli.make_dataplane(
+        solver_type=solver,
+        n_vms=max_instances,
+        n_connections=max_connections,
+        solver_required_throughput_gbits=solver_required_throughput_gbits,
+        debug=debug,
+    )
+
+    if provider_src in ("local", "nfs") and provider_dst in ("aws", "gcp", "azure"):
+        with dp.auto_deprovision():
+            dp.queue_copy(src, dst, recursive=recursive)
+            try:
+                if not cli.confirm_transfer(dp, 5, ask_to_confirm_transfer=not confirm):
+                    return 1
+                dp.provision(spinner=True)
+                dp.run(ProgressBarTransferHook())
+            except skyplane.exceptions.SkyplaneException as e:
+                console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+                console.print(e.pretty_print_str())
+                UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
+                return 1
+        # return 0 if cli.transfer_cp_onprem(src, dst, recursive) else 1
+    elif provider_src in ("aws", "gcp", "azure", "hdfs", "ibmcloud") and provider_dst in ("aws", "gcp", "azure", "ibmcloud"):
         # todo support ILP solver params
         dp = cli.make_dataplane(
             solver_type=solver,
             solver_required_throughput_gbits=solver_required_throughput_gbits,
             n_vms=max_instances,
             n_connections=max_connections,
+            debug=debug,
         )
         with dp.auto_deprovision():
             dp.queue_copy(src, dst, recursive=recursive)
@@ -369,10 +398,19 @@ def cp(
                 dp.provision(spinner=True)
                 dp.run(ProgressBarTransferHook())
             except KeyboardInterrupt:
-                logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt)")
-                console.print("\n[bold red]Transfer cancelled by user. Copying gateway logs and exiting.[/bold red]")
-                do_parallel(dp.copy_log, dp.bound_nodes.values(), n=-1)
-                force_deprovision(dp)
+                logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt).")
+                console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")
+                dp.copy_gateway_logs()
+                try:
+                    force_deprovision(dp)
+                except Exception as e:
+                    logger.fs.exception(e)
+                    console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+                    console.print(e)
+                    UsageClient.log_exception("cli_cp", e, args, cli.src_region_tag, cli.dst_region_tag)
+                    console.print("[bold red]Deprovisioning was interrupted! VMs may still be running which will incur charges.[/bold red]")
+                    console.print("[bold red]Please manually deprovision the VMs by running `skyplane deprovision`.[/bold red]")
+                return 1
             except skyplane.exceptions.SkyplaneException as e:
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e.pretty_print_str())
@@ -473,6 +511,7 @@ def sync(
             solver_required_throughput_gbits=solver_required_throughput_gbits,
             n_vms=max_instances,
             n_connections=max_connections,
+            debug=debug,
         )
         with dp.auto_deprovision():
             dp.queue_sync(src, dst)
@@ -487,13 +526,31 @@ def sync(
                 if not cli.confirm_transfer(dp, 5, ask_to_confirm_transfer=not confirm):
                     return 1
                 dp.provision(spinner=True)
-                # print a rocket emoji to indicate that the transfer is in progress
-                console.print("[blue]:rocket: Launching transfer to VMs![/blue]")
                 dp.run(ProgressBarTransferHook())
+            except KeyboardInterrupt:
+                logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt).")
+                console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")
+                dp.copy_gateway_logs()
+                try:
+                    force_deprovision(dp)
+                except Exception as e:
+                    logger.fs.exception(e)
+                    console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+                    console.print(e)
+                    UsageClient.log_exception("cli_cp", e, args, cli.src_region_tag, cli.dst_region_tag)
+                    console.print("[bold red]Deprovisioning was interrupted! VMs may still be running which will incur charges.[/bold red]")
+                    console.print("[bold red]Please manually deprovision the VMs by running `skyplane deprovision`.[/bold red]")
+                return 1
             except skyplane.exceptions.SkyplaneException as e:
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e.pretty_print_str())
                 UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
                 return 1
+            except Exception as e:
+                logger.fs.exception(e)
+                console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+                console.print(e)
+                UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
+                force_deprovision(dp)
         if dp.provisioned:
             typer.secho("Dataplane is not deprovisioned! Run `skyplane deprovision` to force deprovision VMs.", fg="red")

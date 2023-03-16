@@ -1,4 +1,4 @@
-import cvxpy as cp
+import cvxpy as cp  # type: ignore
 
 from skyplane.planner.solver import ThroughputSolver, ThroughputProblem, GBIT_PER_GBYTE, ThroughputSolution
 

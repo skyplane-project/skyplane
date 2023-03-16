@@ -1,9 +1,7 @@
 ***************
-Getting Started
+Installation
 ***************
 
-Installation
------------------------
 We're ready to install Skyplane. It's as easy as:
 
 .. code-block:: bash
@@ -25,8 +23,8 @@ We're ready to install Skyplane. It's as easy as:
 
       $ GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1 GRPC_PYTHON_BUILD_SYSTEM_ZLIB=1 pip install skyplane[all]
 
-Cloud Credentials
------------------------
+Setting up Cloud Credentials
+-----------------------------
 Skyplane needs access to cloud credentials to perform transfers. To get started with setting up credentials, make sure you have cloud provider CLI tools installed: 
 
 .. code-block:: bash
@@ -78,24 +76,14 @@ To transfer only new objects, you can instead use `skyplane sync`:
    ---> Copy only diff
    $ skyplane sync s3://... gs://...
 
-Transferring Data via Skyplane API
-------------------------------------
+To transfer from local disk or HDFS cluster, you can use `skyplane cp` as well:
 
-We can also leverage the power of the Skyplane API! To access Skyplane and its functions, you can import it in your Python code like this:
+(Note: On-Prem require additional setup. Please navigate to the `On-Prem` section for more details)
 
-.. code-block:: python
+.. code-block:: bash
 
-    import skyplane
+   ---> Copy from local disk
+   $ skyplane cp -r /path/to/local/file gs://...
 
-To start a simple copy job using the Skyplane API, we simply create a SkyplaneClient and call `copy`:
-
-.. code-block:: python
-    :caption: Example of how to use API simple copy that automatically deprovisions the VMs
-
-    import skyplane
-
-    client = skyplane.SkyplaneClient(aws_config=skyplane.AWSConfig())
-    client.copy(src="s3://skycamp-demo-src/synset_labels.txt", dst="s3://skycamp-demo-us-east-2/imagenet-bucket/synset_labels.txt", recursive=False)
-
-.. note::
-   In this example, we use a defauly AWSConfig which infers AWS credentials from the environment.
+   ---> Copy from HDFS
+   $ skyplane cp -r hdfs://... gs://...

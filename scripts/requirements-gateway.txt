@@ -31,3 +31,4 @@ ibm-cos-sdk
 inquirer
 numpy
 pandas
+pyarrow

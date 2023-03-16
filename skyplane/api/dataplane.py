@@ -6,6 +6,7 @@ from datetime import datetime
 from functools import partial
 from datetime import datetime
 
+import typer
 import nacl.secret
 import nacl.utils
 import urllib3
@@ -40,11 +41,7 @@ class Dataplane:
     """A Dataplane represents a concrete Skyplane network, including topology and VMs."""
 
     def __init__(
-        self,
-        clientid: str,
-        topology: ReplicationTopology,
-        provisioner: "Provisioner",
-        transfer_config: TransferConfig,
+        self, clientid: str, topology: ReplicationTopology, provisioner: "Provisioner", transfer_config: TransferConfig, debug: bool = False
     ):
         """
         :param clientid: the uuid of the local host to create the dataplane
@@ -55,6 +52,8 @@ class Dataplane:
         :type provisioner: Provisioner
         :param transfer_config: the configuration during the transfer
         :type transfer_config: TransferConfig
+        :param debug: whether to enable debug mode, defaults to False
+        :type debug: bool, optional
         """
         self.clientid = clientid
         self.topology = topology
@@ -78,6 +77,8 @@ class Dataplane:
         self.jobs_to_dispatch: List[TransferJob] = []
         self.pending_transfers: List[TransferProgressTracker] = []
         self.bound_nodes: Dict[ReplicationTopologyGateway, compute.Server] = {}
+
+        self.debug = debug
 
     def provision(
         self,
@@ -108,10 +109,10 @@ class Dataplane:
             if self.provisioned:
                 logger.error("Cannot provision dataplane, already provisioned!")
                 return
-            aws_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.nodes if n.region.startswith("aws:"))
-            azure_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.nodes if n.region.startswith("azure:"))
-            gcp_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.nodes if n.region.startswith("gcp:"))
-            ibmcloud_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.nodes if n.region.startswith("ibmcloud:"))
+            is_aws_used = any(n.region.startswith("aws:") for n in self.topology.nodes)
+            is_azure_used = any(n.region.startswith("azure:") for n in self.topology.nodes)
+            is_gcp_used = any(n.region.startswith("gcp:") for n in self.topology.nodes)
+            is_ibmcloud_used = any(n.region.startswith("ibmcloud:") for n in self.topology.nodes)
 
             # create VMs from the topology
             for node in self.topology.gateway_nodes:
@@ -125,12 +126,7 @@ class Dataplane:
                 )
 
             # initialize clouds
-            self.provisioner.init_global(
-                aws=len(aws_nodes_to_provision) > 0,
-                azure=len(azure_nodes_to_provision) > 0,
-                gcp=len(gcp_nodes_to_provision) > 0,
-                ibmcloud=len(ibmcloud_nodes_to_provision) > 0,
-            )
+            self.provisioner.init_global(aws=is_aws_used, azure=is_azure_used, gcp=is_gcp_used, ibmcloud=is_ibmcloud_used)
 
             # provision VMs
             uuids = self.provisioner.provision(
@@ -198,7 +194,9 @@ class Dataplane:
     def copy_gateway_logs(self):
         # copy logs from all gateways in parallel
         def copy_log(instance):
-            print("Copy", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
+            typer.secho(f"Downloading log: {self.transfer_dir}/gateway_{instance.uuid()}.stdout", fg="bright_black")
+            typer.secho(f"Downloading log: {self.transfer_dir}/gateway_{instance.uuid()}.stderr", fg="bright_black")
+
             instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
             instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
             instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
@@ -216,8 +214,8 @@ class Dataplane:
         """
         debug = True
         with self.provisioning_lock:
-            if debug:
-                logger.fs.info("Copying gateway logs to {self.transfer_dir}")
+            if self.debug:
+                logger.fs.info(f"Copying gateway logs to {self.transfer_dir}")
                 self.copy_gateway_logs()
 
             if not self.provisioned:
@@ -264,10 +262,12 @@ class Dataplane:
         """Returns a list of sink gateway nodes"""
         return [self.bound_nodes[n] for n in self.topology.sink_instances()] if self.provisioned else []
 
-    def copy_log(self, instance):
-        instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
-        instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
-        instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
+    # def copy_log(self, instance):
+    #    typer.secho(f"Downloading log: {self.transfer_dir}/gateway_{instance.uuid()}.stdout", fg="bright_black")
+    #    typer.secho(f"Downloading log: {self.transfer_dir}/gateway_{instance.uuid()}.stderr", fg="bright_black")
+    #    instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
+    #    instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
+    #    instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 
     def queue_copy(
         self,
@@ -336,3 +336,10 @@ class Dataplane:
         tracker = self.run_async(hooks)
         logger.fs.debug(f"[SkyplaneClient] Waiting for transfer to complete")
         tracker.join()
+
+    def estimate_total_cost(self):
+        """Estimate total cost of queued jobs"""
+        total_size = 0
+        for job in self.jobs_to_dispatch:
+            total_size += job.size_gb()
+        return total_size * self.topology.cost_per_gb

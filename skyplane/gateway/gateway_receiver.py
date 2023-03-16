@@ -71,7 +71,7 @@ class GatewayReceiver:
             with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
                 sock.bind(("0.0.0.0", 0))
                 socket_port = sock.getsockname()[1]
-                port.value = socket_port
+                port.value = socket_port  # type: ignore
                 exit_flag = Event()
 
                 def signal_handler(signal, frame):
@@ -105,9 +105,9 @@ class GatewayReceiver:
         p.start()
         started_event.wait()
         self.server_processes.append(p)
-        self.server_ports.append(port.value)
-        logger.info(f"[receiver:{port.value}] Started server)")
-        return port.value
+        self.server_ports.append(port.value)  # type: ignore
+        logger.info(f"[receiver:{port.value}] Started server)")  # type: ignore
+        return port.value  # type: ignore
 
     def stop_server(self, port: int):
         matched_process = None
@@ -144,6 +144,7 @@ class GatewayReceiver:
 
             # wait for space
             while self.chunk_store.remaining_bytes() < chunk_header.data_len * self.max_pending_chunks:
+                logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} no space {chunk_header.data_len} {self.max_pending_chunks}")
                 time.sleep(0.1)
 
             # get data

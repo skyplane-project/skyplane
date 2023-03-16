@@ -41,6 +41,10 @@ class CloudProvider:
             # from skyplane.compute.ibmcloud.ibmcloud_provider.py import IBMCloudProvider
             # return IBMCloudProvider.get_transfer_cost(src_key, dst_key, premium_tier)
             return 0
+        elif src_provider == "hdfs":
+            from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
+
+            return GCPCloudProvider.get_transfer_cost(f"gcp:{_}", dst_key, premium_tier)
         else:
             raise ValueError(f"Unknown provider {src_provider}")
 

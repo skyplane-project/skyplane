@@ -23,11 +23,11 @@ from skyplane.utils.timer import Timer
 class GatewaySender:
     def __init__(
         self,
-        region: str,
         chunk_store: ChunkStore,
         error_event,
         error_queue: Queue,
         outgoing_ports: Dict[str, int],
+        region: Optional[str] = None,
         use_tls: bool = True,
         use_compression: bool = True,
         e2ee_key_bytes: Optional[bytes] = None,
