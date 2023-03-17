@@ -35,7 +35,6 @@ class COSInterface(ObjectStoreInterface):
     @property
     @lru_cache(maxsize=1)
     def cos_region(self):
-
         for region in REGIONS:
             s3_client = self.auth.get_boto3_client("s3", region)
             try:

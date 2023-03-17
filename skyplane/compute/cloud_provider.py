@@ -37,7 +37,6 @@ class CloudProvider:
 
             return AzureCloudProvider.get_transfer_cost(src_key, dst_key, premium_tier)
         elif src_provider == "ibmcloud":
-
             # from skyplane.compute.ibmcloud.ibmcloud_provider.py import IBMCloudProvider
             # return IBMCloudProvider.get_transfer_cost(src_key, dst_key, premium_tier)
             return 0

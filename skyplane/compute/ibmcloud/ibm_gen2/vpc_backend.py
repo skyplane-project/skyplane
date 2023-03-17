@@ -171,7 +171,6 @@ class IBMVPCBackend:
             self.vpc_cli.create_security_group_rule(self.config["security_group_id"], sg_rule_prototype_icmp)
 
     def _create_ssh_key(self):
-
         if "ssh_key_id" in self.config:
             print("ssh_key_id in self.config")
             return
@@ -1018,7 +1017,6 @@ def decorate_instance(instance, decorator):
 
 
 def vpc_retry_on_except(func):
-
     RETRIES = 3
     SLEEP_FACTOR = 1.5
     MAX_SLEEP = 30
