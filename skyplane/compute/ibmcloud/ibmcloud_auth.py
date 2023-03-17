@@ -29,7 +29,7 @@ class IBMCloudAuthentication:
         if self.config.ibmcloud_iam_key:
             self._iam_key = self.config.ibmcloud_iam_key
 
-    @imports.inject("ibm_cloud_sdk_core", pip_extra="ibmcloud")
+    @imports.inject("ibm_cloud_sdk_core", "ibm_cloud_sdk_core.authenticators", pip_extra="ibmcloud")
     def get_iam_authenticator(ibm_cloud_sdk_core, self):
         from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 

@@ -203,10 +203,11 @@ def throughput_grid(
     instance_list.extend([i for ilist in gcp_instances.values() for i in ilist])
 
     # provision standard tier servers
-    _, _, gcp_standard_instances = provision(
+    _, _, gcp_standard_instances, _ = provision(
         aws=aws,
         azure=azure,
         gcp=gcp,
+        ibmcloud=ibmcloud,
         aws_regions_to_provision=[],
         azure_regions_to_provision=[],
         ibmcloud_regions_to_provision=[],
@@ -436,7 +437,7 @@ def latency_grid(
     instance_list.extend([i for ilist in ibmcloud_instances.values() for i in ilist])
 
     # provision standard tier servers
-    _, _, gcp_standard_instances = provision(
+    _, _, gcp_standard_instances, _ = provision(
         aws=aws,
         azure=azure,
         gcp=gcp,

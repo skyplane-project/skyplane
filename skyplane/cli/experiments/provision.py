@@ -41,7 +41,12 @@ def provision(
     azure_instance_os: str = "ubuntu",
     gcp_use_premium_network: bool = True,
     log_dir: Optional[str] = None,
-) -> Tuple[Dict[str, List[compute.AWSServer]], Dict[str, List[compute.AzureServer]], Dict[str, List[compute.GCPServer]]]:
+) -> Tuple[
+    Dict[str, List[compute.AWSServer]],
+    Dict[str, List[compute.AzureServer]],
+    Dict[str, List[compute.GCPServer]],
+    Dict[str, List[compute.IBMCloudServer]],
+]:
     """Provision list of instances in AWS, Azure, and GCP in each specified region."""
     aws_instances = {}
     azure_instances = {}
