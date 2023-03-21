@@ -25,3 +25,4 @@ werkzeug
 numpy
 pandas
 pyarrow
+typer
