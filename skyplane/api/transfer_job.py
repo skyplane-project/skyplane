@@ -9,7 +9,7 @@ from abc import ABC
 from collections import defaultdict
 from dataclasses import dataclass, field
 from queue import Queue
-from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple, TypeVar
+from typing import TYPE_CHECKING, Callable, Generator, Optional, Tuple, TypeVar
 
 import urllib3
 from rich import print as rprint
