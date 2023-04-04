@@ -62,7 +62,7 @@ class AzureAuthentication:
             return
         region_list = []
         for location in self.get_subscription_client().subscriptions.list_locations(subscription_id=self.subscription_id):
-            if not location.name.endswith("stage") and location.name.endswith("euap"):
+            if not location.name.endswith("stage") and not location.name.endswith("euap"):
                 region_list.append(location.name)
         with azure_config_path.open("w") as f:
             f.write("\n".join(region_list))
