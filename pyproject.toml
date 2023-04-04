@@ -29,6 +29,7 @@ azure-identity = { version = ">=1.0.0", optional = true }
 azure-mgmt-authorization = { version = ">=1.0.0", optional = true }
 azure-mgmt-compute = { version = ">=24.0.0", optional = true }
 azure-mgmt-network = { version = ">=10.0.0", optional = true }
+azure-mgmt-quota = { version = ">=1.1.0b3", optional = true }
 azure-mgmt-resource = { version = ">=11.0.0", optional = true }
 azure-mgmt-storage = { version = ">=11.0.0", optional = true }
 azure-mgmt-subscription = { version = ">=1.0.0", optional = true }
