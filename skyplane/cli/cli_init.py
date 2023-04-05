@@ -333,7 +333,7 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
             return disable_gcp_support()
         else:
             typer.secho("    GCP credentials found in GCP CLI", fg="blue")
-            if non_interactive or typer.confirm("    GCP credentials found, do you want to enable GCP support in Skyplane?", default=True):
+            if non_interactive or typer.confirm("    Do you want to enable GCP support in Skyplane?", default=True):
                 if not non_interactive:
                     config.gcp_project_id = typer.prompt("    Enter the GCP project ID", default=inferred_project)
 
