@@ -69,7 +69,6 @@ class IBMCloudAuthentication:
     @staticmethod
     def get_region_config():
         try:
-            print(ibmcloud_config_path)
             f = open(ibmcloud_config_path, "r")
         except FileNotFoundError:
             return []

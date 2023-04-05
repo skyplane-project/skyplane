@@ -212,7 +212,6 @@ class Dataplane:
         :param spinner: Whether to show the spinner during the job (default: False)
         :type spinner: bool
         """
-        debug = True
         with self.provisioning_lock:
             if self.debug:
                 logger.fs.info(f"Copying gateway logs to {self.transfer_dir}")

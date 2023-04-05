@@ -88,7 +88,7 @@ $ az login
 
 ---> For IBM Cloud:
 $ Follow IBM Cloud and create an account with the resource group.
-Copy `/skyplane/compute/ibmcloud/ibm_credentials.yaml.template` 
+Copy https://github.com/skyplane-project/skyplane/blob/main/skyplane/compute/ibmcloud/ibm_credentials.yaml.template
 into `~/.bluemix/ibm_credentials` and fill your 
 IBM IAM key and credentials to your IBM Cloud object storage 
 

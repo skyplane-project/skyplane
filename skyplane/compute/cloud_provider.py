@@ -4,6 +4,7 @@ from typing import List, Optional, Union
 
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils.fn import do_parallel
+from skyplane.utils import logger
 
 
 class CloudProvider:
@@ -37,8 +38,7 @@ class CloudProvider:
 
             return AzureCloudProvider.get_transfer_cost(src_key, dst_key, premium_tier)
         elif src_provider == "ibmcloud":
-            # from skyplane.compute.ibmcloud.ibmcloud_provider.py import IBMCloudProvider
-            # return IBMCloudProvider.get_transfer_cost(src_key, dst_key, premium_tier)
+            logger.warning("IBM cloud costs are not yet supported.")
             return 0
         elif src_provider == "hdfs":
             from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider

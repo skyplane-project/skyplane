@@ -67,7 +67,6 @@ class GatewayDaemon:
             e2ee_key_bytes=e2ee_key_bytes,
         )
         provider = region.split(":")[0]
-        n_conn = 32
         if provider == "azure":
             n_conn = 24  # due to throttling limits from authentication
         else:

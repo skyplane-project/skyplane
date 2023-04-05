@@ -91,7 +91,4 @@ def ssh():
 typer_click_object = typer.main.get_command(app)
 
 if __name__ == "__main__":
-    import os
-
-    os.environ["SKYPLANE_DOCKER_IMAGE"] = "public.ecr.aws/s6m1p0n8/skyplane-ibm:ibmcloud-support"
     app()

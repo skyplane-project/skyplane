@@ -101,5 +101,4 @@ class IBMCloudServer(Server):
         )
 
     def get_ssh_cmd(self):
-        # return f"ssh -i {self.local_keyfile} ec2-user@{self.public_ip()}"
         return f"ssh -i {self.vsi.ssh_credentials['key_filename']} {self.vsi.ssh_credentials['username']}@{self.public_ip()}"
