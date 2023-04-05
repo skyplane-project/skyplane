@@ -96,7 +96,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
         run: |
-          poetry run skyplane init -y --disable-config-azure --disable-config-gcp
+          poetry run skyplane init -y --disable-config-azure --disable-config-gcp --disable-config-ibm
           poetry run skyplane config set usage_stats false
           poetry run pytest -s tests/unit_aws
   test-azure:
@@ -128,7 +128,7 @@ jobs:
       - name: Run cloud tests
         run: |
           poetry run pip freeze
-          poetry run skyplane init -y --disable-config-aws --disable-config-gcp
+          poetry run skyplane init -y --disable-config-aws --disable-config-gcp --disable-config-ibm
           poetry run skyplane config set usage_stats false
           poetry run pytest -s tests/unit_azure
   test-gcp:
@@ -170,7 +170,7 @@ jobs:
       - name: Run cloud tests
         run: |
           poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
-          poetry run skyplane init -y --disable-config-aws --disable-config-azure
+          poetry run skyplane init -y --disable-config-aws --disable-config-azure --disable-config-ibm
           poetry run skyplane config set usage_stats false
           poetry run pytest -s tests/unit_gcs
       - name: Cleanup GCP service account

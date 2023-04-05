@@ -459,11 +459,11 @@ def init(
     non_interactive: bool = typer.Option(False, "--non-interactive", "-y", help="Run non-interactively"),
     reinit_azure: bool = False,
     reinit_gcp: bool = False,
-    reinit_ibmcloud: bool = False,
+    reinit_ibm: bool = False,
     disable_config_aws: bool = False,
     disable_config_azure: bool = False,
     disable_config_gcp: bool = False,
-    disable_config_ibmcloud: bool = False,
+    disable_config_ibm: bool = False,
 ):
     """
     It loads the configuration file, and if it doesn't exist, it creates a default one. Then it creates
@@ -473,16 +473,16 @@ def init(
     :type reinit_azure: bool
     :param reinit_gcp: If true, will reinitialize the GCP region list and credentials
     :type reinit_gcp: bool
-    :param reinit_ibmcloud: If true, will reinitialize the IBM Cloud region list and credentials
-    :type reinit_ibmcloud: bool
+    :param reinit_ibm: If true, will reinitialize the IBM Cloud region list and credentials
+    :type reinit_ibm: bool
     :param disable_config_aws: If true, will disable AWS configuration (may still be enabled if environment variables are set)
     :type disable_config_aws: bool
     :param disable_config_azure: If true, will disable Azure configuration (may still be enabled if environment variables are set)
     :type disable_config_azure: bool
     :param disable_config_gcp: If true, will disable GCP configuration (may still be enabled if environment variables are set)
     :type disable_config_gcp: bool
-    :param disable_config_ibmcloud: If true, will disable IBM Cloud configuration (may still be enabled if environment variables are set)
-    :type disable_config_ibmcloud: bool
+    :param disable_config_ibm: If true, will disable IBM Cloud configuration (may still be enabled if environment variables are set)
+    :type disable_config_ibm: bool
 
     """
     print_header()
@@ -497,13 +497,13 @@ def init(
         cloud_config = SkyplaneConfig.default_config()
 
     # load AWS config
-    if not (reinit_azure or reinit_gcp or reinit_ibmcloud):
+    if not (reinit_azure or reinit_gcp or reinit_ibm):
         typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)
         if not disable_config_aws:
             cloud_config = load_aws_config(cloud_config, non_interactive=non_interactive)
 
     # load Azure config
-    if not (reinit_gcp or reinit_ibmcloud):
+    if not (reinit_gcp or reinit_ibm):
         if reinit_azure:
             typer.secho("\nConfiguring Azure:", fg="yellow", bold=True)
         else:
@@ -521,10 +521,10 @@ def init(
             cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
 
     # load IBMCloud config
-    if not reinit_ibmcloud:
+    if not reinit_ibm:
         typer.secho("\n(4) Configuring IBM Cloud:", fg="yellow", bold=True)
-        if not disable_config_ibmcloud:
-            cloud_config = load_ibmcloud_config(cloud_config, force_init=reinit_ibmcloud, non_interactive=non_interactive)
+        if not disable_config_ibm:
+            cloud_config = load_ibmcloud_config(cloud_config, force_init=reinit_ibm, non_interactive=non_interactive)
 
     cloud_config.to_config_file(config_path)
     typer.secho(f"\nConfig file saved to {config_path}", fg="green")
