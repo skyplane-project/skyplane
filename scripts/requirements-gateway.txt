@@ -32,3 +32,4 @@ inquirer
 numpy
 pandas
 pyarrow
+typer
