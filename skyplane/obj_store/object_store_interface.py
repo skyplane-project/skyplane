@@ -124,6 +124,10 @@ class ObjectStoreInterface:
             storage_account, container = bucket.split("/", 1)  # <storage_account>/<container>
             return AzureBlobInterface(storage_account, container)
 
+        elif region_tag.startswith("ibmcloud"):
+            from skyplane.obj_store.cos_interface import COSInterface
+
+            return COSInterface(bucket, region_tag)
         elif region_tag.startswith("hdfs"):
             from skyplane.obj_store.hdfs_interface import HDFSInterface
 

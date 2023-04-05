@@ -4,6 +4,7 @@ from typing import List, Optional, Union
 
 from skyplane.compute.server import Server, ServerState
 from skyplane.utils.fn import do_parallel
+from skyplane.utils import logger
 
 
 class CloudProvider:
@@ -21,9 +22,9 @@ class CloudProvider:
     @staticmethod
     @functools.lru_cache(maxsize=None)
     def get_transfer_cost(src_key, dst_key, premium_tier=True):
-        if src_key == dst_key:
-            return 0.0
         src_provider, _ = src_key.split(":")
+        if src_key == dst_key or src_provider == "cos":
+            return 0.0
         if src_provider == "aws":
             from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 
@@ -36,12 +37,15 @@ class CloudProvider:
             from skyplane.compute.azure.azure_cloud_provider import AzureCloudProvider
 
             return AzureCloudProvider.get_transfer_cost(src_key, dst_key, premium_tier)
+        elif src_provider == "ibmcloud":
+            logger.warning("IBM cloud costs are not yet supported.")
+            return 0
         elif src_provider == "hdfs":
             from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 
             return GCPCloudProvider.get_transfer_cost(f"gcp:{_}", dst_key, premium_tier)
         else:
-            raise NotImplementedError
+            raise ValueError(f"Unknown provider {src_provider}")
 
     def get_instance_list(self, region) -> List[Server]:
         raise NotImplementedError

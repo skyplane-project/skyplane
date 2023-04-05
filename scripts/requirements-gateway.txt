@@ -22,6 +22,13 @@ flask
 lz4
 pyopenssl
 werkzeug
+pyyaml
+ibm-platform-services
+ibm-watson
+ibm-cloud-sdk-core
+ibm-vpc
+ibm-cos-sdk
+inquirer
 numpy
 pandas
 pyarrow
