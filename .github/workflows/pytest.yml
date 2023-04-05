@@ -63,7 +63,7 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
       - name: Run unit tests
         run: |
-          poetry run skyplane init -y --disable-config-aws --disable-config-azure --disable-config-gcp
+          poetry run skyplane init -y --disable-config-aws --disable-config-azure --disable-config-gcp --disable-config-ibm
           poetry run skyplane config set usage_stats false
           poetry run pytest -s tests/unit_nocloud
   test-aws:
