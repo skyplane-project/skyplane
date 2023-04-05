@@ -7,4 +7,4 @@ sphinx-click
 sphinx-copybutton
 sphinx>=4.4,!=5.1
 sphinxext.opengraph
-.[solver,gateway,aws,azure,gcp]
+.[solver,gateway,aws,azure,gcp,ibm]
