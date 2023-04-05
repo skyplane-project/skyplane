@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Iterator, List, Optional
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
-from skyplane.utils import imports, logger
+from skyplane.utils import logger
 import mimetypes
 
 

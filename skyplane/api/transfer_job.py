@@ -9,7 +9,7 @@ from abc import ABC
 from collections import defaultdict
 from dataclasses import dataclass, field
 from queue import Queue
-from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple, TypeVar
+from typing import TYPE_CHECKING, Callable, Generator, Optional, Tuple, TypeVar
 
 import urllib3
 from rich import print as rprint
@@ -22,6 +22,7 @@ from skyplane.obj_store.file_system_interface import FileSystemInterface
 from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.obj_store.s3_interface import S3Object
+from skyplane.obj_store.cos_interface import COSObject
 from skyplane.utils import logger
 from skyplane.utils.definitions import MB
 from skyplane.utils.fn import do_parallel
@@ -224,6 +225,8 @@ class Chunker:
                     dest_obj = AzureBlobObject(dest_provider, self.dst_iface.bucket(), dest_key)
                 elif dest_provider == "gcp":
                     dest_obj = GCSObject(dest_provider, self.dst_iface.bucket(), dest_key)
+                elif dest_provider == "ibmcloud":
+                    dest_obj = COSObject(dest_provider, self.dst_iface.bucket(), dest_key)
                 else:
                     raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
                 n_objs += 1

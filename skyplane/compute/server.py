@@ -67,6 +67,18 @@ class ServerState(Enum):
         }
         return mapping.get(aws_state, ServerState.UNKNOWN)
 
+    @staticmethod
+    def from_ibmcloud_state(ibmcloud_state):
+        mapping = {
+            "pending": ServerState.PENDING,
+            "running": ServerState.RUNNING,
+            "shutting-down": ServerState.TERMINATED,
+            "terminated": ServerState.TERMINATED,
+            "stopping": ServerState.SUSPENDED,
+            "stopped": ServerState.SUSPENDED,
+        }
+        return mapping.get(ibmcloud_state, ServerState.UNKNOWN)
+
 
 class Server:
     """Abstract server class to support basic SSH operations"""
@@ -304,6 +316,7 @@ class Server:
         # pull docker image and start container
         with Timer() as t:
             retry_backoff(partial(self.pull_docker, gateway_docker_image), exception_class=RuntimeError)
+
         logger.fs.debug(f"{desc_prefix} docker pull in {t.elapsed}")
         logger.fs.debug(f"{desc_prefix}: Starting gateway container")
         docker_run_flags = f"-d --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024}"

@@ -16,7 +16,7 @@ from skyplane import compute
 from skyplane.cli.impl.common import print_header
 from skyplane.api.usage import UsageClient, UsageStatsStatus
 from skyplane.config import SkyplaneConfig
-from skyplane.config_paths import aws_config_path, gcp_config_path, config_path
+from skyplane.config_paths import aws_config_path, gcp_config_path, config_path, ibmcloud_config_path
 from skyplane.utils import logger
 
 
@@ -333,7 +333,7 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
             return disable_gcp_support()
         else:
             typer.secho("    GCP credentials found in GCP CLI", fg="blue")
-            if non_interactive or typer.confirm("    GCP credentials found, do you want to enable GCP support in Skyplane?", default=True):
+            if non_interactive or typer.confirm("    Do you want to enable GCP support in Skyplane?", default=True):
                 if not non_interactive:
                     config.gcp_project_id = typer.prompt("    Enter the GCP project ID", default=inferred_project)
 
@@ -358,28 +358,132 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
         return disable_gcp_support()
 
 
+def load_ibmcloud_config(config: SkyplaneConfig, force_init: bool = False, non_interactive: bool = False) -> SkyplaneConfig:
+    try:
+        HOME_DIR = os.path.expanduser("~")
+        CONFIG_DIR = os.path.join(HOME_DIR, ".bluemix")
+        CONFIG_FILE = os.path.join(CONFIG_DIR, "ibm_credentials")
+
+        def load_yaml_config(config_filename):
+            import yaml
+
+            try:
+                with open(config_filename, "r") as config_file:
+                    data = yaml.safe_load(config_file)
+            except FileNotFoundError:
+                data = {}
+
+            return data
+
+        def get_default_config_filename():
+            """
+            First checks .ibm_config
+            then checks IBM_CONFIG_FILE environment variable
+            then ~/.ibm/config
+            """
+            if "IBM_CONFIG_FILE" in os.environ:
+                config_filename = os.environ["IBM_CONFIG_FILE"]
+
+            elif os.path.exists(".ibm_config"):
+                config_filename = os.path.abspath(".ibm_credentials")
+
+            else:
+                config_filename = CONFIG_FILE
+                if not os.path.exists(config_filename):
+                    return None
+
+            return config_filename
+
+        def load_config():
+            """Load the configuration"""
+            config_data = None
+            config_filename = get_default_config_filename()
+            if config_filename:
+                config_data = load_yaml_config(config_filename)
+            else:
+                # throw exception
+                raise Exception(f"IBM Config file not foud in {config_filename}")
+
+            return config_data
+
+    except ImportError:
+        config.ibmcloud_enabled = False
+        typer.secho(
+            "    IBM Cloud support disabled because ibm_boto3 is not installed. Run `pip install skyplane[ibmcloud].`", fg="red", err=True
+        )
+        return config
+    if non_interactive or typer.confirm("    Do you want to configure IBM Cloud support in Skyplane?", default=True):
+        ibm_config = load_config()
+        config.ibmcloud_useragent = ibm_config["user_agent"] if "user_agent" in ibm_config else "skyplane-ibm"
+
+        if "iam" in ibm_config and "ibm_iam_key" in ibm_config["iam"]:
+            config.ibmcloud_iam_key = ibm_config["iam"].get("ibm_iam_key")
+
+        if "iam" in ibm_config and "iam_endpoint" in ibm_config["iam"]:
+            config.ibmcloud_iam_endpoint = ibm_config["iam"].get("iam_endpoint")
+        else:
+            config.ibmcloud_iam_endpoint = "https://iam.cloud.ibm.com"
+
+        if "cos" in ibm_config and "access_key" in ibm_config["cos"]:
+            config.ibmcloud_access_id = ibm_config["cos"]["access_key"]
+
+        if "cos" in ibm_config and "secret_key" in ibm_config["cos"]:
+            config.ibmcloud_secret_key = ibm_config["cos"]["secret_key"]
+
+        if "ibm" in ibm_config and "resource_group_id" in ibm_config["ibm"]:
+            config.ibmcloud_resource_group_id = ibm_config["ibm"]["resource_group_id"]
+
+        if config.ibmcloud_access_id is not None:
+            config.ibmcloud_enabled = True
+
+        auth = compute.IBMCloudAuthentication(config=config)
+        if config.ibmcloud_enabled:
+            typer.secho(f"    Loaded IBM Cloud credentials ", fg="blue")
+            config.ibmcloud_enabled = True
+            auth.save_region_config(config)
+            typer.secho(f"    IBM Cloud  config file saved to {ibmcloud_config_path}", fg="blue")
+            return config
+        else:
+            typer.secho(f"    COS credentials not found {get_default_config_filename()}", fg="red", err=True)
+            typer.secho("    Disabling IBM Cloud support", fg="blue")
+            if auth is not None:
+                auth.clear_region_config()
+            return config
+    else:
+        config.cos_enabled = False
+        typer.secho("    Disabling IBM Cloud support", fg="blue")
+        return config
+
+
 def init(
     non_interactive: bool = typer.Option(False, "--non-interactive", "-y", help="Run non-interactively"),
     reinit_azure: bool = False,
     reinit_gcp: bool = False,
+    reinit_ibm: bool = False,
     disable_config_aws: bool = False,
     disable_config_azure: bool = False,
     disable_config_gcp: bool = False,
+    disable_config_ibm: bool = False,
 ):
     """
     It loads the configuration file, and if it doesn't exist, it creates a default one. Then it creates
-    AWS, Azure, and GCP region list configurations.
+    AWS, Azure, IBM and GCP region list configurations.
 
     :param reinit_azure: If true, will reinitialize the Azure region list and credentials
     :type reinit_azure: bool
     :param reinit_gcp: If true, will reinitialize the GCP region list and credentials
     :type reinit_gcp: bool
+    :param reinit_ibm: If true, will reinitialize the IBM Cloud region list and credentials
+    :type reinit_ibm: bool
     :param disable_config_aws: If true, will disable AWS configuration (may still be enabled if environment variables are set)
     :type disable_config_aws: bool
     :param disable_config_azure: If true, will disable Azure configuration (may still be enabled if environment variables are set)
     :type disable_config_azure: bool
     :param disable_config_gcp: If true, will disable GCP configuration (may still be enabled if environment variables are set)
     :type disable_config_gcp: bool
+    :param disable_config_ibm: If true, will disable IBM Cloud configuration (may still be enabled if environment variables are set)
+    :type disable_config_ibm: bool
+
     """
     print_header()
 
@@ -393,13 +497,13 @@ def init(
         cloud_config = SkyplaneConfig.default_config()
 
     # load AWS config
-    if not (reinit_azure or reinit_gcp):
+    if not (reinit_azure or reinit_gcp or reinit_ibm):
         typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)
         if not disable_config_aws:
             cloud_config = load_aws_config(cloud_config, non_interactive=non_interactive)
 
     # load Azure config
-    if not reinit_gcp:
+    if not (reinit_gcp or reinit_ibm):
         if reinit_azure:
             typer.secho("\nConfiguring Azure:", fg="yellow", bold=True)
         else:
@@ -415,6 +519,12 @@ def init(
             typer.secho("\n(3) Configuring GCP:", fg="yellow", bold=True)
         if not disable_config_gcp:
             cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
+
+    # load IBMCloud config
+    if not reinit_ibm:
+        typer.secho("\n(4) Configuring IBM Cloud:", fg="yellow", bold=True)
+        if not disable_config_ibm:
+            cloud_config = load_ibmcloud_config(cloud_config, force_init=reinit_ibm, non_interactive=non_interactive)
 
     cloud_config.to_config_file(config_path)
     typer.secho(f"\nConfig file saved to {config_path}", fg="green")

@@ -51,6 +51,7 @@ class Provisioner:
         azure_auth: Optional[compute.AzureAuthentication] = None,
         gcp_auth: Optional[compute.GCPAuthentication] = None,
         host_uuid: Optional[str] = None,
+        ibmcloud_auth: Optional[compute.IBMCloudAuthentication] = None,
     ):
         """
         :param aws_auth: authentication information for aws
@@ -61,11 +62,14 @@ class Provisioner:
         :type gcp_auth: compute.GCPAuthentication
         :param host_uuid: the uuid of the local host that requests the provision task
         :type host_uuid: string
+        :param ibmcloud_auth: authentication information for aws
+        :type ibmcloud_auth: compute.IBMCloudAuthentication
         """
         self.aws_auth = aws_auth
         self.azure_auth = azure_auth
         self.gcp_auth = gcp_auth
         self.host_uuid = host_uuid
+        self.ibmcloud_auth = ibmcloud_auth
         self._make_cloud_providers()
         self.temp_nodes: Set[compute.Server] = set()  # temporary area to store nodes that should be terminated upon exit
         self.pending_provisioner_tasks: List[ProvisionerTask] = []
@@ -80,8 +84,9 @@ class Provisioner:
         )
         self.azure = compute.AzureCloudProvider(auth=self.azure_auth)
         self.gcp = compute.GCPCloudProvider(auth=self.gcp_auth)
+        self.ibmcloud = compute.IBMCloudProvider(auth=self.ibmcloud_auth)
 
-    def init_global(self, aws: bool = True, azure: bool = True, gcp: bool = True):
+    def init_global(self, aws: bool = True, azure: bool = True, gcp: bool = True, ibmcloud: bool = True):
         """
         Initialize the global cloud providers by configuring with credentials
 
@@ -91,6 +96,8 @@ class Provisioner:
         :type azure: bool
         :param gcp: whether to configure gcp (default: True)
         :type gcp: bool
+        :param ibmcloud: whether to configure ibmcloud (default: True)
+        :type ibmcloud: bool
         """
         logger.fs.info(f"[Provisioner.init_global] Initializing global resources for aws={aws}, azure={azure}, gcp={gcp}")
         jobs = []
@@ -101,6 +108,9 @@ class Provisioner:
             jobs.append(self.azure.set_up_resource_group)
         if gcp:
             jobs.append(self.gcp.setup_global)
+        if ibmcloud:
+            jobs.append(self.ibmcloud.setup_global)
+
         do_parallel(lambda fn: fn(), jobs, spinner=False)
 
     def add_task(
@@ -162,6 +172,9 @@ class Provisioner:
                     gcp_premium_network=False,
                     tags=task.tags,
                 )
+            elif task.cloud_provider == "ibmcloud":
+                assert self.ibmcloud.auth.enabled(), "IBM Cloud credentials not configured"
+                server = self.ibmcloud.provision_instance(task.region, task.vm_type, tags=task.tags)
             else:
                 raise NotImplementedError(f"Unknown provider {task.cloud_provider}")
         logger.fs.debug(f"[Provisioner._provision_task] Provisioned {server} in {t.elapsed:.2f}s")
@@ -190,8 +203,10 @@ class Provisioner:
         provision_tasks = list(self.pending_provisioner_tasks)
         aws_provisioned = any([task.cloud_provider == "aws" for task in provision_tasks])
         aws_regions = set([task.region for task in provision_tasks if task.cloud_provider == "aws"])
+        ibmcloud_regions = set([task.region for task in provision_tasks if task.cloud_provider == "ibmcloud"])
         azure_provisioned = any([task.cloud_provider == "azure" for task in provision_tasks])
         gcp_provisioned = any([task.cloud_provider == "gcp" for task in provision_tasks])
+        ibmcloud_provisioned = any([task.cloud_provider == "ibmcloud" for task in provision_tasks])
 
         # configure regions
         if aws_provisioned:
@@ -199,6 +214,16 @@ class Provisioner:
                 self.aws.setup_region, list(set(aws_regions)), spinner=spinner, spinner_persist=False, desc="Configuring AWS regions"
             )
             logger.fs.info(f"[Provisioner.provision] Configured AWS regions {aws_regions}")
+
+        if ibmcloud_provisioned:
+            do_parallel(
+                self.ibmcloud.setup_region,
+                list(set(ibmcloud_regions)),
+                spinner=spinner,
+                spinner_persist=False,
+                desc="Configuring IBM Cloud regions",
+            )
+            logger.fs.info(f"[Provisioner.provision] Configured IBM Cloud regions {ibmcloud_regions}")
 
         # provision VMs
         logger.fs.info(f"[Provisioner.provision] Provisioning {len(provision_tasks)} VMs")
@@ -216,7 +241,10 @@ class Provisioner:
             public_ips = [s.public_ip() for _, s in results]
             # authorize access to private IPs for GCP VMs due to global VPC
             private_ips = [s.private_ip() for t, s in results if t.cloud_provider == "gcp"]
+
             authorize_ip_jobs = []
+            if ibmcloud_provisioned:
+                authorize_ip_jobs.extend([partial(self.ibmcloud.add_ips_to_security_group, r, public_ips) for r in set(ibmcloud_regions)])
             if aws_provisioned:
                 authorize_ip_jobs.extend([partial(self.aws.add_ips_to_security_group, r, public_ips) for r in set(aws_regions)])
             if gcp_provisioned:
@@ -274,6 +302,7 @@ class Provisioner:
         aws_deprovisioned = any([s.provider == "aws" for s in servers])
         azure_deprovisioned = any([s.provider == "azure" for s in servers])
         gcp_deprovisioned = any([s.provider == "gcp" for s in servers])
+        ibmcloud_deprovisioned = any([s.provider == "ibmcloud" for s in servers])
         if azure_deprovisioned:
             logger.warning("Azure deprovisioning is very slow. Please be patient.")
         logger.fs.info(f"[Provisioner.deprovision] Deprovisioning {len(servers)} VMs")

@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "skyplane"
 packages = [{ include = "skyplane" }]
-version = "0.3.0"
+version = "0.3.1"
 description = "Skyplane efficiently transports data between cloud regions and providers."
 authors = ["Skyplane authors <skyplaneproject@gmail.com>"]
 license = "Apache-2.0"
@@ -41,6 +41,13 @@ google-cloud-compute = { version = ">=1.0.0", optional = true }
 google-cloud-storage = { version = ">=1.30.0", optional = true }
 google-cloud-dataproc = { version = "^5.4.0", optional = true }
 
+# ibm dependencies 
+ibm-cloud-sdk-core = { version = ">=3.16.2", optional = true} 
+ibm-cos-sdk = { version = ">=2.12.2", optional = true} 
+ibm-cos-sdk-core = { version = ">=2.12.2", optional = true} 
+ibm-cos-sdk-s3transfer = { version = ">=2.12.2", optional = true} 
+ibm-vpc = { version = ">=0.15.0", optional = true} 
+
 # solver dependencies
 cvxpy = { version = ">=1.1.0", optional = true, extras = ["cvxopt"] }
 graphviz = { version = ">=0.15", optional = true }
@@ -59,7 +66,8 @@ pyarrow = "^10.0.1"
 aws = ["boto3"]
 azure = ["azure-identity", "azure-mgmt-authorization", "azure-mgmt-compute", "azure-mgmt-network", "azure-mgmt-resource", "azure-mgmt-storage", "azure-mgmt-quota", "azure-mgmt-subscription", "azure-storage-blob"]
 gcp = ["google-api-python-client", "google-auth", "google-cloud-compute", "google-cloud-storage"]
-all = ["boto3", "azure-identity", "azure-mgmt-authorization", "azure-mgmt-compute", "azure-mgmt-network", "azure-mgmt-resource", "azure-mgmt-storage", "azure-mgmt-subscription", "azure-storage-blob", "google-api-python-client", "google-auth", "google-cloud-compute", "google-cloud-storage"]
+ibm = ["ibm-cloud-sdk-core", "ibm-cos-sdk", "ibm-vpc"]
+all = ["boto3", "azure-identity", "azure-mgmt-authorization", "azure-mgmt-compute", "azure-mgmt-network", "azure-mgmt-resource", "azure-mgmt-storage", "azure-mgmt-subscription", "azure-storage-blob", "google-api-python-client", "google-auth", "google-cloud-compute", "google-cloud-storage", "ibm-cloud-sdk-core", "ibm-cos-sdk", "ibm-vpc"]
 gateway = ["flask", "lz4", "pynacl", "pyopenssl", "werkzeug"]
 solver = ["cvxpy", "graphviz", "matplotlib", "numpy"]
 

@@ -1,6 +1,5 @@
 from typing import Optional, Dict
 import json
-import os
 
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import config_path, aws_config_path, aws_quota_path
