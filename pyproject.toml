@@ -32,8 +32,8 @@ azure-mgmt-network = { version = ">=10.0.0", optional = true }
 azure-mgmt-resource = { version = ">=11.0.0", optional = true }
 azure-mgmt-storage = { version = ">=11.0.0", optional = true }
 azure-mgmt-subscription = { version = ">=1.0.0", optional = true }
+azure-mgmt-quota = { version = ">=1.1.0b3", optional = true} 
 azure-storage-blob = { version = ">=12.0.0", optional = true }
-azure-mgmt-quota = { version = ">=1.1.0b3", optional = true }
 
 # gcp dependencies
 google-api-python-client = { version = ">=2.0.2", optional = true }
@@ -50,7 +50,7 @@ ibm-cos-sdk-s3transfer = { version = ">=2.12.2", optional = true}
 ibm-vpc = { version = ">=0.15.0", optional = true} 
 
 # solver dependencies
-cvxpy = { version = ">=1.1.0", optional = true, extras = ["cvxopt"] }
+cvxpy = { version = ">=1.1.0", optional = true }
 graphviz = { version = ">=0.15", optional = true }
 matplotlib = { version = ">=3.0.0", optional = true }
 numpy = { version = ">=1.19.0", optional = true }
