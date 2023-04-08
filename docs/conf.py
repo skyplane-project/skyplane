@@ -18,8 +18,8 @@ project = "Skyplane"
 copyright = "2022, The Skyplane authors"
 author = "The Skyplane authors"
 
-release = "0.2"
-version = "0.2.1"
+release = "0.3"
+version = "0.3.1"
 
 # -- General configuration
 

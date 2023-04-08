@@ -35,6 +35,7 @@ Storing debug information for transfer in /tmp/skyplane/transfer_logs/...
 **Environment info (please complete the following information):**
  - OS: [e.g. Mac OS, Linux]
 - Python version
+- Skyplane version 
 
 **Additional context**
 Add any other context about the problem here.

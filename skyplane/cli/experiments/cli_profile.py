@@ -22,6 +22,7 @@ all_aws_regions = compute.AWSCloudProvider.region_list()
 all_azure_regions = compute.AzureCloudProvider.region_list()
 all_gcp_regions = compute.GCPCloudProvider.region_list()
 all_gcp_regions_standard = compute.GCPCloudProvider.region_list_standard()
+all_ibmcloud_regions = compute.IBMCloudProvider.region_list()
 
 
 def split_list(l):
@@ -95,14 +96,17 @@ def throughput_grid(
     azure_region_list: List[str] = typer.Option(all_azure_regions, "-azure"),
     gcp_region_list: List[str] = typer.Option(all_gcp_regions, "-gcp"),
     gcp_standard_region_list: List[str] = typer.Option(all_gcp_regions_standard, "-gcp-standard"),
+    ibmcloud_region_list: List[str] = typer.Option(all_ibmcloud_regions, "-ibmcloud"),
     enable_aws: bool = typer.Option(True),
     enable_azure: bool = typer.Option(True),
     enable_gcp: bool = typer.Option(True),
     enable_gcp_standard: bool = typer.Option(True),
+    enable_ibmcloud: bool = typer.Option(True),
     # instances to provision
     aws_instance_class: str = typer.Option("m5.8xlarge", help="AWS instance class to use"),
     azure_instance_class: str = typer.Option("Standard_D32_v5", help="Azure instance class to use"),
     gcp_instance_class: str = typer.Option("n2-standard-32", help="GCP instance class to use"),
+    ibmcloud_instance_class: str = typer.Option("bx2-2x8", help="IBM Cloud instance class to use"),
     # iperf3 options
     iperf3_runtime: int = typer.Option(5, help="Runtime for iperf3 in seconds"),
     iperf3_connections: int = typer.Option(64, help="Number of connections to test"),
@@ -130,8 +134,9 @@ def throughput_grid(
     aws_region_list = aws_region_list if enable_aws else []
     azure_region_list = azure_region_list if enable_azure else []
     gcp_region_list = gcp_region_list if enable_gcp else []
-    if not enable_aws and not enable_azure and not enable_gcp:
-        logger.error("At least one of -aws, -azure, -gcp must be enabled.")
+    ibmcloud_region_list = ibmcloud_region_list if enable_ibmcloud else []
+    if not enable_aws and not enable_azure and not enable_gcp and not enable_ibmcloud:
+        logger.error("At least one of -aws, -azure, -gcp, -ibmcloud must be enabled.")
         raise typer.Abort()
 
     # validate AWS regions
@@ -163,20 +168,32 @@ def throughput_grid(
         logger.error(f"Invalid GCP standard region list: {gcp_standard_region_list}")
         raise typer.Abort()
 
+    # validate IBM Cloud regions
+    if not enable_ibmcloud:
+        ibmcloud_region_list = []
+    elif not all(r in all_ibmcloud_regions for r in ibmcloud_region_list):
+        logger.error(f"Invalid IBM Cloud region list: {ibmcloud_region_list}")
+        raise typer.Abort()
+
     # provision servers
     aws = compute.AWSCloudProvider()
     azure = compute.AzureCloudProvider()
     gcp = compute.GCPCloudProvider()
-    aws_instances, azure_instances, gcp_instances = provision(
+    ibmcloud = compute.IBMCloudProvider()
+
+    aws_instances, azure_instances, gcp_instances, ibmcloud_instances = provision(
         aws=aws,
         azure=azure,
         gcp=gcp,
+        ibmcloud=ibmcloud,
         aws_regions_to_provision=aws_region_list,
         azure_regions_to_provision=azure_region_list,
         gcp_regions_to_provision=gcp_region_list,
+        ibmcloud_regions_to_provision=ibmcloud_region_list,
         aws_instance_class=aws_instance_class,
         azure_instance_class=azure_instance_class,
         gcp_instance_class=gcp_instance_class,
+        ibmcloud_instance_class=ibmcloud_instance_class,
         aws_instance_os="ubuntu",
         gcp_instance_os="ubuntu",
         gcp_use_premium_network=True,
@@ -186,16 +203,19 @@ def throughput_grid(
     instance_list.extend([i for ilist in gcp_instances.values() for i in ilist])
 
     # provision standard tier servers
-    _, _, gcp_standard_instances = provision(
+    _, _, gcp_standard_instances, _ = provision(
         aws=aws,
         azure=azure,
         gcp=gcp,
+        ibmcloud=ibmcloud,
         aws_regions_to_provision=[],
         azure_regions_to_provision=[],
+        ibmcloud_regions_to_provision=[],
         gcp_regions_to_provision=gcp_standard_region_list,
         aws_instance_class=aws_instance_class,
         azure_instance_class=azure_instance_class,
         gcp_instance_class=gcp_instance_class,
+        ibmcloud_instance_class=ibmcloud_instance_class,
         aws_instance_os="ubuntu",
         gcp_instance_os="ubuntu",
         gcp_use_premium_network=False,
@@ -327,14 +347,17 @@ def latency_grid(
     azure_region_list: List[str] = typer.Option(all_azure_regions, "-azure"),
     gcp_region_list: List[str] = typer.Option(all_gcp_regions, "-gcp"),
     gcp_standard_region_list: List[str] = typer.Option(all_gcp_regions_standard, "-gcp-standard"),
+    ibmcloud_region_list: List[str] = typer.Option(all_ibmcloud_regions, "-gcp"),
     enable_aws: bool = typer.Option(True),
     enable_azure: bool = typer.Option(True),
     enable_gcp: bool = typer.Option(True),
     enable_gcp_standard: bool = typer.Option(True),
+    enable_ibmcloud: bool = typer.Option(True),
     # instances to provision
     aws_instance_class: str = typer.Option("m5.large", help="AWS instance class to use"),
     azure_instance_class: str = typer.Option("Standard_D2_v3", help="Azure instance class to use"),
     gcp_instance_class: str = typer.Option("n2-standard-4", help="GCP instance class to use"),
+    ibmcloud_instance_class: str = typer.Option("bx2-2x8", help="IBM Cloud instance class to use"),
 ):
     # similar to throughput_grid but start all instances at once and then ping all pairs of instances concurrently
 
@@ -345,8 +368,9 @@ def latency_grid(
     aws_region_list = aws_region_list if enable_aws else []
     azure_region_list = azure_region_list if enable_azure else []
     gcp_region_list = gcp_region_list if enable_gcp else []
-    if not enable_aws and not enable_azure and not enable_gcp:
-        logger.error("At least one of -aws, -azure, -gcp must be enabled.")
+    ibmcloud_region_list = ibmcloud_region_list if enable_ibmcloud else []
+    if not enable_aws and not enable_azure and not enable_gcp and not enable_ibmcloud:
+        logger.error("At least one of -aws, -azure, -gcp, -ibmcloud must be enabled.")
         raise typer.Abort()
 
     # validate AWS regions
@@ -380,37 +404,52 @@ def latency_grid(
         logger.error(f"Invalid GCP standard region list: {gcp_standard_region_list}")
         raise typer.Abort()
 
+    # validate IBM Cloud regions
+    if not enable_ibmcloud:
+        ibmcloud_region_list = []
+    elif not all(r in all_ibmcloud_regions for r in ibmcloud_region_list):
+        logger.error(f"Invalid IBM Cloud region list: {ibmcloud_region_list}")
+        raise typer.Abort()
+
     # provision servers
     aws = compute.AWSCloudProvider()
     azure = compute.AzureCloudProvider()
     gcp = compute.GCPCloudProvider()
-    aws_instances, azure_instances, gcp_instances = provision(
+    ibmcloud = compute.IBMCloudProvider()
+    aws_instances, azure_instances, gcp_instances, ibmcloud_instances = provision(
         aws=aws,
         azure=azure,
         gcp=gcp,
+        ibmcloud=ibmcloud,
         aws_regions_to_provision=aws_region_list,
         azure_regions_to_provision=azure_region_list,
         gcp_regions_to_provision=gcp_region_list,
+        ibmcloud_regions_to_provision=ibmcloud_region_list,
         aws_instance_class=aws_instance_class,
         azure_instance_class=azure_instance_class,
         gcp_instance_class=gcp_instance_class,
+        ibmcloud_instance_class=ibmcloud_instance_class,
         gcp_use_premium_network=True,
     )
     instance_list: List[compute.Server] = [i for ilist in aws_instances.values() for i in ilist]
     instance_list.extend([i for ilist in azure_instances.values() for i in ilist])
     instance_list.extend([i for ilist in gcp_instances.values() for i in ilist])
+    instance_list.extend([i for ilist in ibmcloud_instances.values() for i in ilist])
 
     # provision standard tier servers
-    _, _, gcp_standard_instances = provision(
+    _, _, gcp_standard_instances, _ = provision(
         aws=aws,
         azure=azure,
         gcp=gcp,
+        ibmcloud=ibmcloud,
         aws_regions_to_provision=[],
         azure_regions_to_provision=[],
         gcp_regions_to_provision=gcp_standard_region_list,
+        ibmcloud_regions_to_provision=[],
         aws_instance_class=aws_instance_class,
         azure_instance_class=azure_instance_class,
         gcp_instance_class=gcp_instance_class,
+        ibmcloud_instance_class=ibmcloud_instance_class,
         gcp_use_premium_network=False,
     )
     instance_list.extend([i for ilist in gcp_standard_instances.values() for i in ilist])

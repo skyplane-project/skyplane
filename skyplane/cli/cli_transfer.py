@@ -9,7 +9,7 @@ import typer
 from rich.progress import Progress, TextColumn, SpinnerColumn
 
 import skyplane
-from skyplane.api.config import TransferConfig, AWSConfig, GCPConfig, AzureConfig
+from skyplane.api.config import TransferConfig, AWSConfig, GCPConfig, AzureConfig, IBMCloudConfig
 from skyplane.api.transfer_job import CopyJob
 from skyplane.cli.impl.cp_replicate_fallback import (
     replicate_onprem_cp_cmd,
@@ -26,7 +26,6 @@ from skyplane.obj_store.file_system_interface import FileSystemInterface
 from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 from skyplane.utils import logger
 from skyplane.utils.definitions import GB, format_bytes
-from skyplane.utils.fn import do_parallel
 from skyplane.utils.path import parse_path
 
 
@@ -54,10 +53,14 @@ class SkyplaneCLI:
     def __init__(self, src_region_tag: str, dst_region_tag: str, args: Dict[str, Any], skyplane_config: Optional[SkyplaneConfig] = None):
         self.src_region_tag, self.dst_region_tag = src_region_tag, dst_region_tag
         self.args = args
-        self.aws_config, self.azure_config, self.gcp_config = self.to_api_config(skyplane_config or cloud_config)
+        self.aws_config, self.azure_config, self.gcp_config, self.ibmcloud_config = self.to_api_config(skyplane_config or cloud_config)
         self.transfer_config = self.make_transfer_config(skyplane_config or cloud_config)
         self.client = skyplane.SkyplaneClient(
-            aws_config=self.aws_config, azure_config=self.azure_config, gcp_config=self.gcp_config, transfer_config=self.transfer_config
+            aws_config=self.aws_config,
+            azure_config=self.azure_config,
+            gcp_config=self.gcp_config,
+            transfer_config=self.transfer_config,
+            ibmcloud_config=self.ibmcloud_config,
         )
         typer.secho(f"Using Skyplane version {skyplane.__version__}", fg="bright_black")
         typer.secho(f"Logging to: {self.client.log_dir / 'client.log'}", fg="bright_black")
@@ -66,13 +69,22 @@ class SkyplaneCLI:
         aws_config = AWSConfig(aws_enabled=config.aws_enabled)
         # todo: fix azure config support by collecting azure umi name and resource group and store in skyplane config
         gcp_config = GCPConfig(gcp_project_id=config.gcp_project_id, gcp_enabled=config.gcp_enabled)
+        ibmcloud_config = IBMCloudConfig(
+            ibmcloud_access_id=config.ibmcloud_access_id,
+            ibmcloud_secret_key=config.ibmcloud_secret_key,
+            ibmcloud_iam_key=config.ibmcloud_iam_key,
+            ibmcloud_iam_endpoint=config.ibmcloud_iam_endpoint,
+            ibmcloud_useragent=config.ibmcloud_useragent,
+            ibmcloud_resource_group_id=config.ibmcloud_resource_group_id,
+            ibmcloud_enabled=config.ibmcloud_enabled,
+        )
         if not config.azure_resource_group or not config.azure_umi_name:
             typer.secho(
                 "Azure resource group and UMI name not configured correctly. Please reinit Azure with `skyplane init --reinit-azure`.",
                 fg=typer.colors.RED,
                 err=True,
             )
-            return aws_config, None, gcp_config
+            return aws_config, None, gcp_config, ibmcloud_config
         azure_config = AzureConfig(
             config.azure_subscription_id,
             config.azure_resource_group,
@@ -81,7 +93,7 @@ class SkyplaneCLI:
             config.azure_client_id,
             config.azure_enabled,
         )
-        return aws_config, azure_config, gcp_config
+        return aws_config, azure_config, gcp_config, ibmcloud_config
 
     def make_transfer_config(self, config: SkyplaneConfig) -> TransferConfig:
         intraregion = self.src_region_tag == self.dst_region_tag
@@ -98,6 +110,7 @@ class SkyplaneCLI:
             aws_instance_class=config.get_flag("aws_instance_class"),
             azure_instance_class=config.get_flag("azure_instance_class"),
             gcp_instance_class=config.get_flag("gcp_instance_class"),
+            ibmcloud_instance_class=config.get_flag("ibmcloud_instance_class"),
             gcp_use_premium_network=config.get_flag("gcp_use_premium_network"),
             multipart_enabled=config.get_flag("multipart_enabled"),
             multipart_threshold_mb=config.get_flag("multipart_min_threshold_mb"),
@@ -252,9 +265,9 @@ class SkyplaneCLI:
             return False
 
 
-def force_deprovision(dp: skyplane.Dataplane, debug: bool = False):
+def force_deprovision(dp: skyplane.Dataplane):
     s = signal.signal(signal.SIGINT, signal.SIG_IGN)
-    dp.deprovision(debug=debug)
+    dp.deprovision()
     signal.signal(signal.SIGINT, s)
 
 
@@ -342,6 +355,7 @@ def cp(
         n_vms=max_instances,
         n_connections=max_connections,
         solver_required_throughput_gbits=solver_required_throughput_gbits,
+        debug=debug,
     )
 
     if provider_src in ("local", "nfs") and provider_dst in ("aws", "gcp", "azure"):
@@ -358,13 +372,14 @@ def cp(
                 UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
                 return 1
         # return 0 if cli.transfer_cp_onprem(src, dst, recursive) else 1
-    elif provider_src in ("aws", "gcp", "azure", "hdfs") and provider_dst in ("aws", "gcp", "azure"):
+    elif provider_src in ("aws", "gcp", "azure", "hdfs", "ibmcloud") and provider_dst in ("aws", "gcp", "azure", "ibmcloud"):
         # todo support ILP solver params
         dp = cli.make_dataplane(
             solver_type=solver,
             solver_required_throughput_gbits=solver_required_throughput_gbits,
             n_vms=max_instances,
             n_connections=max_connections,
+            debug=debug,
         )
         with dp.auto_deprovision():
             dp.queue_copy(src, dst, recursive=recursive)
@@ -382,9 +397,9 @@ def cp(
             except KeyboardInterrupt:
                 logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt).")
                 console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")
-                do_parallel(dp.copy_log, dp.bound_nodes.values(), n=-1)
+                dp.copy_gateway_logs()
                 try:
-                    force_deprovision(dp, debug=debug)
+                    force_deprovision(dp)
                 except Exception as e:
                     logger.fs.exception(e)
                     console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
@@ -397,13 +412,13 @@ def cp(
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e.pretty_print_str())
                 UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
-                force_deprovision(dp, debug=debug)
+                force_deprovision(dp)
             except Exception as e:
                 logger.fs.exception(e)
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e)
                 UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
-                force_deprovision(dp, debug=debug)
+                force_deprovision(dp)
         if dp.provisioned:
             typer.secho("Dataplane is not deprovisioned! Run `skyplane deprovision` to force deprovision VMs.", fg="red")
 
@@ -493,6 +508,7 @@ def sync(
             solver_required_throughput_gbits=solver_required_throughput_gbits,
             n_vms=max_instances,
             n_connections=max_connections,
+            debug=debug,
         )
         with dp.auto_deprovision():
             dp.queue_sync(src, dst)
@@ -511,9 +527,9 @@ def sync(
             except KeyboardInterrupt:
                 logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt).")
                 console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")
-                do_parallel(dp.copy_log, dp.bound_nodes.values(), n=-1)
+                dp.copy_gateway_logs()
                 try:
-                    force_deprovision(dp, debug=debug)
+                    force_deprovision(dp)
                 except Exception as e:
                     logger.fs.exception(e)
                     console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
@@ -532,6 +548,6 @@ def sync(
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e)
                 UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
-                force_deprovision(dp, debug=debug)
+                force_deprovision(dp)
         if dp.provisioned:
             typer.secho("Dataplane is not deprovisioned! Run `skyplane deprovision` to force deprovision VMs.", fg="red")
