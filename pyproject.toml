@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "skyplane"
 packages = [{ include = "skyplane" }]
-version = "0.2.1"
+version = "0.3.1"
 description = "Skyplane efficiently transports data between cloud regions and providers."
 authors = ["Skyplane authors <skyplaneproject@gmail.com>"]
 license = "Apache-2.0"
@@ -32,6 +32,7 @@ azure-mgmt-network = { version = ">=10.0.0", optional = true }
 azure-mgmt-resource = { version = ">=11.0.0", optional = true }
 azure-mgmt-storage = { version = ">=11.0.0", optional = true }
 azure-mgmt-subscription = { version = ">=1.0.0", optional = true }
+azure-mgmt-quota = { version = ">=1.1.0b3", optional = true} 
 azure-storage-blob = { version = ">=12.0.0", optional = true }
 
 # gcp dependencies
@@ -41,8 +42,15 @@ google-cloud-compute = { version = ">=1.0.0", optional = true }
 google-cloud-storage = { version = ">=1.30.0", optional = true }
 google-cloud-dataproc = { version = "^5.4.0", optional = true }
 
+# ibm dependencies 
+ibm-cloud-sdk-core = { version = ">=3.16.2", optional = true} 
+ibm-cos-sdk = { version = ">=2.12.2", optional = true} 
+ibm-cos-sdk-core = { version = ">=2.12.2", optional = true} 
+ibm-cos-sdk-s3transfer = { version = ">=2.12.2", optional = true} 
+ibm-vpc = { version = ">=0.15.0", optional = true} 
+
 # solver dependencies
-cvxpy = { version = ">=1.1.0", optional = true, extras = ["cvxopt"] }
+cvxpy = { version = ">=1.1.0", optional = true }
 graphviz = { version = ">=0.15", optional = true }
 matplotlib = { version = ">=3.0.0", optional = true }
 numpy = { version = ">=1.19.0", optional = true }
@@ -57,9 +65,10 @@ pyarrow = "^10.0.1"
 
 [tool.poetry.extras]
 aws = ["boto3"]
-azure = ["azure-identity", "azure-mgmt-authorization", "azure-mgmt-compute", "azure-mgmt-network", "azure-mgmt-resource", "azure-mgmt-storage", "azure-mgmt-subscription", "azure-storage-blob"]
+azure = ["azure-identity", "azure-mgmt-authorization", "azure-mgmt-compute", "azure-mgmt-network", "azure-mgmt-resource", "azure-mgmt-storage", "azure-mgmt-quota", "azure-mgmt-subscription", "azure-storage-blob"]
 gcp = ["google-api-python-client", "google-auth", "google-cloud-compute", "google-cloud-storage"]
-all = ["boto3", "azure-identity", "azure-mgmt-authorization", "azure-mgmt-compute", "azure-mgmt-network", "azure-mgmt-resource", "azure-mgmt-storage", "azure-mgmt-subscription", "azure-storage-blob", "google-api-python-client", "google-auth", "google-cloud-compute", "google-cloud-storage"]
+ibm = ["ibm-cloud-sdk-core", "ibm-cos-sdk", "ibm-vpc"]
+all = ["boto3", "azure-identity", "azure-mgmt-authorization", "azure-mgmt-compute", "azure-mgmt-network", "azure-mgmt-resource", "azure-mgmt-storage", "azure-mgmt-subscription", "azure-storage-blob", "google-api-python-client", "google-auth", "google-cloud-compute", "google-cloud-storage", "ibm-cloud-sdk-core", "ibm-cos-sdk", "ibm-vpc"]
 gateway = ["flask", "lz4", "pynacl", "pyopenssl", "werkzeug"]
 solver = ["cvxpy", "graphviz", "matplotlib", "numpy"]
 
@@ -67,6 +76,7 @@ solver = ["cvxpy", "graphviz", "matplotlib", "numpy"]
 pytest = ">=6.0.0"
 pytest-cov = ">=2.10.0"
 pytest-xdist = ">=2.0.0"
+black = "^23.1.0"
 
 [build-system]
 requires = ["setuptools", "poetry-core>=1.2.0"]

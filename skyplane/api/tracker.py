@@ -223,7 +223,7 @@ class TransferProgressTracker(Thread):
             errors = self.dataplane.check_error_logs()
             if any(errors.values()):
                 logger.warning("Copying gateway logs...")
-                self.dataplane.copy_logs()
+                self.dataplane.copy_gateway_logs()
                 self.errors = errors
                 raise exceptions.SkyplaneGatewayException("Transfer failed with errors", errors)
 

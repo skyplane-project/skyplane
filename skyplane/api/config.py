@@ -42,6 +42,22 @@ class GCPConfig(AuthenticationConfig):
         return compute.GCPAuthentication(config=self)  # type: ignore
 
 
+@dataclass
+class IBMCloudConfig(AuthenticationConfig):
+    ibmcloud_access_id: Optional[str] = None
+    ibmcloud_secret_key: Optional[str] = None
+    ibmcloud_iam_key: Optional[str] = None
+    ibmcloud_iam_endpoint: Optional[str] = None
+    ibmcloud_useragent: Optional[str] = None
+    ibmcloud_resource_group_id: Optional[str] = None
+    ibmcloud_enabled: bool = False
+
+    def make_auth_provider(self) -> compute.IBMCloudAuthentication:
+        # pytype: disable=attribute-error
+        return compute.IBMCloudAuthentication(config=self)  # type: ignore
+        # pytype: enable=attribute-error
+
+
 @dataclass(frozen=True)
 class TransferConfig:
     autoterminate_minutes: int = 15
@@ -57,9 +73,12 @@ class TransferConfig:
     aws_use_spot_instances: bool = False
     azure_use_spot_instances: bool = False
     gcp_use_spot_instances: bool = False
+    ibmcloud_use_spot_instances: bool = False
+
     aws_instance_class: str = "m5.8xlarge"
     azure_instance_class: str = "Standard_D2_v5"
     gcp_instance_class: str = "n2-standard-16"
+    ibmcloud_instance_class: str = "bx2-2x8"
     gcp_use_premium_network: bool = True
 
     # multipart config

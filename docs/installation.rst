@@ -59,10 +59,10 @@ Now, you can initialize Skyplane with your desired cloud providers. Skyplane aut
    $ skyplane init
 
 
-Transferring Data
--------------------
+Transferring Data via Skyplane CLI
+------------------------------------
 
-We're ready to use Skyplane! Let's use `skyplane cp` to copy files from AWS to GCP:
+We're ready to use the Skyplane CLI! Let's use `skyplane cp` to copy files from AWS to GCP:
 
 .. code-block:: bash
 

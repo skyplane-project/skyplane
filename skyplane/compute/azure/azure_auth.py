@@ -6,8 +6,8 @@ from typing import Dict, List, Optional
 
 from skyplane.compute.const_cmds import query_which_cloud
 from skyplane.config import SkyplaneConfig
-from skyplane.config_paths import config_path, azure_config_path, azure_sku_path
-from skyplane.utils import imports
+from skyplane.config_paths import config_path, azure_config_path, azure_sku_path, azure_quota_path
+from skyplane.utils import imports, logger
 from skyplane.utils.definitions import is_gateway_env
 from skyplane.utils.fn import do_parallel
 
@@ -52,15 +52,54 @@ class AzureAuthentication:
     def subscription_id(self) -> Optional[str]:
         return self.config.azure_subscription_id
 
-    def save_region_config(self):
+    @imports.inject(
+        "azure.core.exceptions.HttpResponseError",
+        pip_extra="azure",
+    )
+    def save_region_config(HttpResponseError, self):
         if self.config.azure_enabled == False:
             self.clear_region_config()
             return
         region_list = []
         for location in self.get_subscription_client().subscriptions.list_locations(subscription_id=self.subscription_id):
-            region_list.append(location.name)
+            if not location.name.endswith("stage") and not location.name.endswith("euap"):
+                region_list.append(location.name)
         with azure_config_path.open("w") as f:
             f.write("\n".join(region_list))
+
+        # Get Quotas
+        quota_client = self.get_quota_client()
+
+        def get_quota(region):
+            try:
+                quota = quota_client.quota.list(
+                    scope=f"/subscriptions/{self.subscription_id}/providers/Microsoft.Compute/locations/{region}"
+                )
+                return [item.as_dict() for item in quota]
+            except HttpResponseError as e:
+                if "NoRegisteredProviderFound" in e.message:
+                    logger.warning(
+                        f"Microsoft.Quota API provider has not been registered in region {region}. "
+                        "Skyplane will use a conversative quota configuration. "
+                        "Please run `az provider register --namespace Microsoft.Quota` to register the provider "
+                        "and `az provider show -n Microsoft.Quota` to wait for it to become available."
+                    )
+                    return []
+                else:
+                    raise e
+
+        result = do_parallel(
+            get_quota,
+            region_list,
+            spinner=False,
+            spinner_persist=False,
+            desc="Query available VM quotas from each enabled Azure region",
+            n=8,
+        )
+        with open(azure_quota_path, "w") as f:
+            json.dump(dict(result), f)
+
+        # Get SKUs
         client = self.get_compute_client()
 
         def get_skus(region):
@@ -87,15 +126,15 @@ class AzureAuthentication:
 
     @staticmethod
     def get_region_config() -> List[str]:
-        try:
-            f = open(azure_config_path, "r")
-        except FileNotFoundError:
+        if not azure_config_path.exists():
             return []
-        region_list = []
-        for region in f.read().split("\n"):
-            if not region.endswith("stage") and not region.endswith("euap"):
-                region_list.append(region)
-        return region_list
+
+        with open(azure_config_path, "r") as f:
+            region_list = []
+            for region in f.read().split("\n"):
+                if not region.endswith("stage") and not region.endswith("euap"):
+                    region_list.append(region)
+            return region_list
 
     @staticmethod
     def get_sku_mapping() -> Dict[str, List[str]]:
@@ -159,3 +198,7 @@ class AzureAuthentication:
     @imports.inject("azure.storage.blob.BlobServiceClient", pip_extra="azure")
     def get_blob_service_client(BlobServiceClient, self, account_url: str):
         return BlobServiceClient(account_url=account_url, credential=self.credential)
+
+    @imports.inject("azure.mgmt.quota.AzureQuotaExtensionAPI", pip_extra="azure")
+    def get_quota_client(AzureQuotaExtensionAPI, self):
+        return AzureQuotaExtensionAPI(self.credential)

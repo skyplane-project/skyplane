@@ -88,7 +88,7 @@ class POSIXInterface(ObjectStoreInterface):
         for key in keys:
             try:
                 os.remove(key)
-            except OSError as error:
+            except OSError:
                 print(f"{key} is a directory, not a file. Skipping.", file=sys.stderr)
                 continue
         return True

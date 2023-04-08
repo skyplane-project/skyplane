@@ -2,6 +2,7 @@ name: poetry-publish
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   publish-test-pypi:
@@ -13,7 +14,7 @@ jobs:
         with:
           python-version: 3.8
       - name: Install Poetry
-        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.1
+        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.4.0
       - name: Cache Poetry virtualenv
         uses: actions/cache@v1
         id: cache
@@ -32,9 +33,6 @@ jobs:
         run: |
           poetry install -E gateway -E solver -E aws -E azure -E gcp
           poetry run pip install -r requirements-dev.txt
-        if: steps.cache.outputs.cache-hit != 'true'
-      - name: Install Dependencies
-        if: steps.cache.outputs.cache-hit != 'true'
       - name: Build package
         run: |
           export SKYPLANEVERSION=`poetry version | awk 'END {print $NF}'`
@@ -55,7 +53,7 @@ jobs:
         with:
           python-version: 3.8
       - name: Install Poetry
-        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.1
+        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.4.0
       - name: Cache Poetry virtualenv
         uses: actions/cache@v1
         id: cache
@@ -73,7 +71,6 @@ jobs:
         run: |
           poetry install -E gateway -E solver -E aws -E azure -E gcp
           poetry run pip install -r requirements-dev.txt
-        if: steps.cache.outputs.cache-hit != 'true'
       - name: Build package under skyplane-dev name
         run: |
           sed -i 's/name = "skyplane"/name = "skyplane-dev"/g' pyproject.toml
@@ -95,7 +92,7 @@ jobs:
         with:
           python-version: 3.8
       - name: Install Poetry
-        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.1
+        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.4.0
       - name: Cache Poetry virtualenv
         uses: actions/cache@v1
         id: cache
@@ -113,7 +110,6 @@ jobs:
         run: |
           poetry install -E gateway -E solver -E aws -E azure -E gcp
           poetry run pip install -r requirements-dev.txt
-        if: steps.cache.outputs.cache-hit != 'true'
       - name: Build package under skyplane name
         run: |
           export SKYPLANEVERSION=`poetry version | awk 'END {print $NF}'`

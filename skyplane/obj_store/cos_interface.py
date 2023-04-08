@@ -2,50 +2,52 @@ import base64
 import hashlib
 import os
 from functools import lru_cache
-
 from typing import Iterator, List, Optional, Tuple
 
-from skyplane import exceptions, compute
+
+from skyplane import exceptions
+from skyplane.compute.ibmcloud.ibmcloud_auth import IBMCloudAuthentication
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
-from skyplane.config_paths import cloud_config
+from skyplane.compute.ibmcloud.ibm_gen2.config import REGIONS
 from skyplane.utils import logger, imports
-from skyplane.utils.generator import batch_generator
 
 
-class S3Object(ObjectStoreObject):
+class COSObject(ObjectStoreObject):
     def full_path(self):
-        return f"s3://{self.bucket}/{self.key}"
+        return f"cos://{self.bucket}/{self.key}"
 
 
-class S3Interface(ObjectStoreInterface):
-    def __init__(self, bucket_name: str):
-        self.auth = compute.AWSAuthentication()
+class COSInterface(ObjectStoreInterface):
+    def __init__(self, bucket_name: str, region: Optional[str]):
+        self.auth = IBMCloudAuthentication()
         self.requester_pays = False
         self.bucket_name = bucket_name
-        self._cached_s3_clients = {}
+        self.region = region
+        if region is not None and "ibmcloud:" in region:
+            self.region = region[4:]
+
+        self._cached_cos_clients = {}
 
     def path(self):
-        return f"s3://{self.bucket_name}"
+        return f"cos://{self.bucket_name}"
 
     @property
     @lru_cache(maxsize=1)
-    def aws_region(self):
-        s3_client = self.auth.get_boto3_client("s3")
-        default_region = cloud_config.get_flag("aws_default_region")
-        try:
-            # None means us-east-1 for legacy reasons
-            region = s3_client.get_bucket_location(Bucket=self.bucket_name).get("LocationConstraint", "us-east-1")
-            return region if region is not None else default_region
-        except Exception as e:
-            if "An error occurred (AccessDenied) when calling the GetBucketLocation operation" in str(e):
-                logger.warning(f"Bucket location {self.bucket_name} is not public. Assuming region is {default_region}")
-                return default_region
-            logger.warning(f"Specified bucket {self.bucket_name} does not exist, got AWS error: {e}")
-            raise exceptions.MissingBucketException(f"S3 bucket {self.bucket_name} does not exist") from e
+    def cos_region(self):
+        for region in REGIONS:
+            s3_client = self.auth.get_boto3_client("s3", region)
+            try:
+                res = s3_client.get_bucket_location(Bucket=self.bucket_name)
+                return region
+            except s3_client.exceptions.NoSuchBucket:
+                pass
+
+        logger.warning(f"Specified bucket {self.bucket_name} does not exist")
+        raise exceptions.MissingBucketException(f"S3 bucket {self.bucket_name} does not exist")
 
     def region_tag(self):
-        return "aws:" + self.aws_region
+        return "ibmcloud:" + self.cos_region
 
     def bucket(self) -> str:
         return self.bucket_name
@@ -53,15 +55,16 @@ class S3Interface(ObjectStoreInterface):
     def set_requester_bool(self, requester: bool):
         self.requester_pays = requester
 
-    def _s3_client(self, region=None):
-        region = region if region is not None else self.aws_region
-        if region not in self._cached_s3_clients:
-            self._cached_s3_clients[region] = self.auth.get_boto3_client("s3", region)
-        return self._cached_s3_clients[region]
+    def _cos_client(self, cos_region: Optional[str] = None):
+        if cos_region is not None and cos_region not in self._cached_cos_clients:
+            self._cached_cos_clients[cos_region] = self.auth.get_boto3_client("s3", cos_region)
+        elif self.cos_region not in self._cached_cos_clients:
+            self._cached_cos_clients[self.cos_region] = self.auth.get_boto3_client("s3", self.cos_region)
+        return self._cached_cos_clients[self.cos_region]
 
-    @imports.inject("botocore.exceptions", pip_extra="aws")
+    @imports.inject("botocore.exceptions", pip_extra="ibmcloud")
     def bucket_exists(botocore_exceptions, self):
-        s3_client = self._s3_client("us-east-1")
+        s3_client = self._cos_client()
         try:
             requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
             s3_client.list_objects_v2(Bucket=self.bucket_name, MaxKeys=1, **requester_pays)
@@ -69,10 +72,10 @@ class S3Interface(ObjectStoreInterface):
         except botocore_exceptions.ClientError as e:
             if e.response["Error"]["Code"] == "NoSuchBucket" or e.response["Error"]["Code"] == "AccessDenied":
                 return False
-            raise
+            raise e
 
     def create_bucket(self, aws_region):
-        s3_client = self._s3_client(aws_region)
+        s3_client = self._cos_client(aws_region)
         if not self.bucket_exists():
             if aws_region == "us-east-1":
                 s3_client.create_bucket(Bucket=self.bucket_name)
@@ -80,38 +83,28 @@ class S3Interface(ObjectStoreInterface):
                 s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": aws_region})
 
     def delete_bucket(self):
-        # delete 1000 keys at a time
-        for batch in batch_generator(self.list_objects(), 1000):
-            self.delete_objects([obj.key for obj in batch])
-        assert len(list(self.list_objects())) == 0, f"Bucket not empty after deleting all keys {list(self.list_objects())}"
+        self._cos_client().delete_bucket(Bucket=self.bucket_name)
 
-        # delete bucket
-        self._s3_client().delete_bucket(Bucket=self.bucket_name)
-
-    def list_objects(self, prefix="") -> Iterator[S3Object]:
-        paginator = self._s3_client().get_paginator("list_objects_v2")
+    def list_objects(self, prefix="") -> Iterator[COSObject]:
+        paginator = self._cos_client().get_paginator("list_objects_v2")
         requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
         page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix, **requester_pays)
         for page in page_iterator:
-            objs = []
             for obj in page.get("Contents", []):
-                objs.append(
-                    S3Object("aws", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"], mime_type=obj.get("ContentType"))
-                )
-            yield from objs
+                yield COSObject("cos", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"])
 
     def delete_objects(self, keys: List[str]):
-        s3_client = self._s3_client()
+        s3_client = self._cos_client()
         while keys:
             batch, keys = keys[:1000], keys[1000:]  # take up to 1000 keys at a time
             s3_client.delete_objects(Bucket=self.bucket_name, Delete={"Objects": [{"Key": k} for k in batch]})
 
     @lru_cache(maxsize=1024)
-    @imports.inject("botocore.exceptions", pip_extra="aws")
+    @imports.inject("botocore.exceptions", pip_extra="ibmcloud")
     def get_obj_metadata(botocore_exceptions, self, obj_name):
-        s3_client = self._s3_client()
+        cos_client = self._cos_client()
         try:
-            return s3_client.head_object(Bucket=self.bucket_name, Key=str(obj_name))
+            return cos_client.head_object(Bucket=self.bucket_name, Key=str(obj_name))
         except botocore_exceptions.ClientError as e:
             raise NoSuchObjectException(f"Object {obj_name} does not exist, or you do not have permission to access it") from e
 
@@ -143,7 +136,7 @@ class S3Interface(ObjectStoreInterface):
     ) -> Tuple[Optional[str], Optional[bytes]]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
 
-        s3_client = self._s3_client()
+        s3_client = self._cos_client()
         assert len(src_object_name) > 0, f"Source object name must be non-empty: '{src_object_name}'"
         args = {"Bucket": self.bucket_name, "Key": src_object_name}
         assert not (offset_bytes and not size_bytes), f"Cannot specify {offset_bytes} without {size_bytes}"
@@ -171,12 +164,12 @@ class S3Interface(ObjectStoreInterface):
         mime_type = response["ContentType"]
         return mime_type, md5
 
-    @imports.inject("botocore.exceptions", pip_extra="aws")
+    @imports.inject("botocore.exceptions", pip_extra="ibmcloud")
     def upload_object(
         botocore_exceptions, self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None, mime_type=None
     ):
         dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
-        s3_client = self._s3_client()
+        s3_client = self._cos_client()
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
         b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
         checksum_args = dict(ContentMD5=b64_md5sum) if b64_md5sum else dict()
@@ -201,8 +194,20 @@ class S3Interface(ObjectStoreInterface):
                 raise exceptions.ChecksumMismatchException(f"Checksum mismatch for object {dst_object_name}") from e
             raise
 
+    def initiate_multipart_uploads(self, dst_object_names: List[str]) -> List[str]:
+        client = self._cos_client()
+        upload_ids = []
+        for dst_object_name in dst_object_names:
+            assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
+            response = client.create_multipart_upload(Bucket=self.bucket_name, Key=dst_object_name)
+            if "UploadId" in response:
+                upload_ids.append(response["UploadId"])
+            else:
+                raise exceptions.SkyplaneException(f"Failed to initiate multipart upload for {dst_object_name}: {response}")
+        return upload_ids
+
     def initiate_multipart_upload(self, dst_object_name: str, mime_type: Optional[str] = None) -> str:
-        client = self._s3_client()
+        client = self._cos_client()
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
         response = client.create_multipart_upload(
             Bucket=self.bucket_name, Key=dst_object_name, **(dict(ContentType=mime_type) if mime_type else dict())
@@ -213,10 +218,11 @@ class S3Interface(ObjectStoreInterface):
             raise exceptions.SkyplaneException(f"Failed to initiate multipart upload for {dst_object_name}: {response}")
 
     def complete_multipart_upload(self, dst_object_name, upload_id):
-        s3_client = self._s3_client()
+        print("complete multipart upload")
+        cos_client = self._cos_client()
         all_parts = []
         while True:
-            response = s3_client.list_parts(
+            response = cos_client.list_parts(
                 Bucket=self.bucket_name, Key=dst_object_name, MaxParts=100, UploadId=upload_id, PartNumberMarker=len(all_parts)
             )
             if "Parts" not in response:
@@ -226,7 +232,7 @@ class S3Interface(ObjectStoreInterface):
                     break
                 all_parts += response["Parts"]
         all_parts = sorted(all_parts, key=lambda d: d["PartNumber"])
-        response = s3_client.complete_multipart_upload(
+        response = cos_client.complete_multipart_upload(
             UploadId=upload_id,
             Bucket=self.bucket_name,
             Key=dst_object_name,
