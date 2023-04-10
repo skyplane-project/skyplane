@@ -95,6 +95,11 @@ jobs:
           skyplane config set usage_stats false
       - name: Deprovision
         run: skyplane deprovision
+      - name: Delete matching S3 buckets
+        run: |
+          aws s3api list-buckets --query 'Buckets[?starts_with(Name, `test-skyplane-`) == `true`].Name' --output text | tr '\t' '\n' | while read bucket; do
+            aws s3 rb "s3://$bucket" --force
+          done
       - name: Cleanup GCP service account
         if: always()
         run: gcloud iam service-accounts delete --quiet ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
