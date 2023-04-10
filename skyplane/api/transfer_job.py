@@ -41,6 +41,7 @@ class Chunker:
         dst_iface: ObjectStoreInterface,
         transfer_config: TransferConfig,
         concurrent_multipart_chunk_threads: int = 64,
+        num_partitions: int = 1,
     ):
         """
         :param src_iface: source object store interface
@@ -57,6 +58,7 @@ class Chunker:
         self.transfer_config = transfer_config
         self.multipart_upload_requests = []
         self.concurrent_multipart_chunk_threads = concurrent_multipart_chunk_threads
+        self.num_partitions = num_partitions
 
     def _run_multipart_chunk_thread(
         self,
@@ -97,6 +99,7 @@ class Chunker:
                     dest_key=dest_object.key,
                     chunk_id=uuid.uuid4().hex,
                     file_offset_bytes=offset,
+                    partition_id=str(part_num % self.num_partitions),
                     chunk_length_bytes=file_size_bytes,
                     part_number=part_num,
                     upload_id=upload_id,

@@ -64,7 +64,7 @@ class SkyplaneClient:
             gcp_auth=self.gcp_auth,
         )
 
-    def pipeline(self): 
+    def pipeline(self):
         """Create a pipeline object to queue jobs"""
         return Pipeline(clientid=self.clientid, provisioner=self.provisioner, transfer_config=self.transfer_config)
         return Pipeline()

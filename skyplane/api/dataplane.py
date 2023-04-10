@@ -16,7 +16,8 @@ from skyplane import compute
 from skyplane.api.tracker import TransferProgressTracker, TransferHook
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
-#from skyplane.planner.topology_old import ReplicationTopology, ReplicationTopologyGateway
+
+# from skyplane.planner.topology_old import ReplicationTopology, ReplicationTopologyGateway
 from skyplane.planner.topology import TopologyPlan, TopologyPlanGateway
 from skyplane.utils import logger
 from skyplane.utils.definitions import gateway_docker_image, tmp_log_dir
@@ -88,7 +89,6 @@ class Dataplane:
         self.debug = debug
 
         # pending tracker tasks
-        self.jobs_to_dispatch: List[TransferJob] = []
         self.pending_transfers: List[TransferProgressTracker] = []
         self.bound_nodes: Dict[TopologyPlanGateway, compute.Server] = {}
 
@@ -117,21 +117,22 @@ class Dataplane:
             gateway_server.init_log_files(gateway_log_dir)
         if authorize_ssh_pub_key:
             gateway_server.copy_public_key(authorize_ssh_pub_key)
-        
+
         # write gateway programs
-        gateway_program_filename = Path(f"{gateway_log_dir}/gateway_program_{gateway_node.gateway_id}")
+        gateway_program_filename = Path(f"{gateway_log_dir}/gateway_program_{gateway_node.gateway_id}.json")
+        print(gateway_node.gateway_program.to_dict())
         with open(gateway_program_filename, "w") as f:
-            f.write(gateway_node.gateway_program.to_dict(), default=lambda obj: obj.__dict__)
-        print("gateway", gateway_program_filename) 
+            f.write(gateway_node.gateway_program.to_json())
+        print("gateway", gateway_program_filename)
 
         # start gateway
         gateway_server.start_gateway(
-            setup_args,
+            # setup_args,
             gateway_docker_image=gateway_docker_image,
             gateway_program_path=gateway_program_filename,
-            gateway_info_path=f"{gateway_log_dir}/gateway_info.json", 
-            e2ee_key_bytes=None, # TODO: remove
-            use_bbr=self.transfer_config.use_bbr, # TODO: remove
+            gateway_info_path=f"{gateway_log_dir}/gateway_info.json",
+            e2ee_key_bytes=None,  # TODO: remove
+            use_bbr=self.transfer_config.use_bbr,  # TODO: remove
             use_compression=self.transfer_config.use_compression,
             use_socket_tls=self.transfer_config.use_socket_tls,
         )
@@ -155,7 +156,7 @@ class Dataplane:
         :type authorize_ssh_pub_key: str
         :param max_jobs: maximum number of provision jobs to launch concurrently (default: 16)
         :type max_jobs: int
-        :param spinner: whether to show the spinner during the job (default: False)its to determine how many instances to create in each region 
+        :param spinner: whether to show the spinner during the job (default: False)its to determine how many instances to create in each region
         # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
         :type spinner: bool
         """
@@ -168,7 +169,7 @@ class Dataplane:
             aws_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.get_gateways() if n.region.startswith("aws:"))
             azure_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.get_gateways() if n.region.startswith("azure:"))
             gcp_nodes_to_provision = list(n.region.split(":")[0] for n in self.topology.get_gateways() if n.region.startswith("gcp:"))
- 
+
             self.provisioner.init_global(
                 aws=len(aws_nodes_to_provision) > 0,
                 azure=len(azure_nodes_to_provision) > 0,
@@ -200,8 +201,8 @@ class Dataplane:
                 servers_by_region[s.region_tag].append(s)
             print(servers_by_region)
             for node in self.topology.get_gateways():
-                print(node.region)
-                instance = servers_by_region[node.region].pop()
+                print(node.region_tag)
+                instance = servers_by_region[node.region_tag].pop()
                 self.bound_nodes[node] = instance
 
                 # set ip addresses (for gateway program generation)
@@ -218,14 +219,15 @@ class Dataplane:
         e2ee_key_bytes = nacl.utils.random(nacl.secret.SecretBox.KEY_SIZE)
 
         # create gateway logging dir
-        gateway_program_dir = f"{self.log_dir}/programs/"
+        gateway_program_dir = f"{self.log_dir}/programs"
         Path(gateway_program_dir).mkdir(exist_ok=True, parents=True)
         print("writing programs", gateway_program_dir)
 
-        # write gateway info file 
-        gateway_info_path = f"{self.log_dir}/gateway_info.json"
+        # write gateway info file
+        gateway_info_path = f"{gateway_program_dir}/gateway_info.json"
         with open(gateway_info_path, "w") as f:
             json.dump(self.topology.get_gateway_info_json(), f, indent=4)
+        print("write info json", gateway_info_path)
 
         # start gateways in parallel
         jobs = []
@@ -256,7 +258,8 @@ class Dataplane:
         """
         with self.provisioning_lock:
             if self.debug:
-                logger.fs.info("Copying gateway logs to {self.transfer_dir}")
+                logger.fs.info(f"Copying gateway logs to {self.transfer_dir}")
+                print(f"Copying gateway logs to {self.transfer_dir}")
                 self.copy_gateway_logs()
 
             if not self.provisioned:
@@ -352,7 +355,7 @@ class Dataplane:
         self.jobs_to_dispatch.append(job)
         return job.uuid
 
-    def run_async(self, hooks: Optional[TransferHook] = None) -> TransferProgressTracker:
+    def run_async(self, jobs: List[TransferJob], hooks: Optional[TransferHook] = None) -> TransferProgressTracker:
         """Start the transfer asynchronously. The main thread will not be blocked.
 
         :param hooks: Tracks the status of the transfer
@@ -360,19 +363,18 @@ class Dataplane:
         """
         if not self.provisioned:
             logger.error("Dataplane must be pre-provisioned. Call dataplane.provision() before starting a transfer")
-        tracker = TransferProgressTracker(self, self.jobs_to_dispatch, self.transfer_config, hooks)
+        tracker = TransferProgressTracker(self, jobs, self.transfer_config, hooks)
         self.pending_transfers.append(tracker)
         tracker.start()
-        logger.fs.info(f"[SkyplaneClient] Started async transfer with {len(self.jobs_to_dispatch)} jobs")
-        self.jobs_to_dispatch = []
+        logger.fs.info(f"[SkyplaneClient] Started async transfer with {len(jobs)} jobs")
         return tracker
 
-    def run(self, hooks: Optional[TransferHook] = None):
+    def run(self, jobs: List[TransferJob], hooks: Optional[TransferHook] = None):
         """Start the transfer in the main thread. Wait until the transfer is complete.
 
         :param hooks: Tracks the status of the transfer
         :type hooks: TransferHook
         """
-        tracker = self.run_async(hooks)
+        tracker = self.run_async(jobs, hooks)
         logger.fs.debug(f"[SkyplaneClient] Waiting for transfer to complete")
         tracker.join()

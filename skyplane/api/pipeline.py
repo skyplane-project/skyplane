@@ -66,18 +66,18 @@ class Pipeline:
         self.pending_transfers: List[TransferProgressTracker] = []
         self.bound_nodes: Dict[ReplicationTopologyGateway, compute.Server] = {}
 
-    def start(self): 
-
+    def start(self):
         # TODO: Set number of connections properly (or not at all)
         planner = DirectPlanner(self.max_instances, 32)
 
         # create plan from set of jobs scheduled
         topo = planner.plan(self.jobs_to_dispatch)
 
-        # create dataplane from plan 
-        dp = Dataplane(self.clientid, topo, self.provisioner, self.transfer_config, self.transfer_dir, debug=self.debug)
-        dp.provision(spinner=True) 
-        dp.run()
+        # create dataplane from plan
+        dp = Dataplane(self.clientid, topo, self.provisioner, self.transfer_config, self.transfer_dir, debug=True)
+        dp.provision(spinner=True)
+        dp.run(self.jobs_to_dispatch)
+        dp.deprovision(spinner=True)
 
     def queue_copy(
         self,

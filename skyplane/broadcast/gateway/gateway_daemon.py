@@ -43,6 +43,12 @@ class GatewayDaemon:
         gateway_program_path = Path(os.environ["GATEWAY_PROGRAM_FILE"]).expanduser()
         gateway_program = json.load(open(gateway_program_path, "r"))
 
+        pprint(gateway_program)
+
+        # read gateway info
+        gateway_info_path = Path(os.environ["GATEWAY_INFO_FILE"]).expanduser()
+        self.gateway_info = json.load(open(gateway_info_path, "r"))
+
         print("starting gateway daemon", gateway_program_path)
         pprint(gateway_program)
         assert len(gateway_program) > 0, f"Cannot have empty gateway program {gateway_program}"
@@ -206,10 +212,13 @@ class GatewayDaemon:
                         size_mb=op["size_mb"],
                     )
                 elif op["op_type"] == "send":
+                    # TODO: handle private ips for GCP->GCP
+                    target_gateway_info = self.gateway_info[op["target_gateway_id"]]
+                    print("Gateway sender sending to ", target_gateway_info["private_ip_address"])
                     operators[handle] = GatewaySender(
                         handle,
                         region=self.region,
-                        ip_addr=op["ip_address"],
+                        ip_addr=target_gateway_info["private_ip_address"],
                         input_queue=input_queue,
                         output_queue=output_queue,
                         error_event=self.error_event,

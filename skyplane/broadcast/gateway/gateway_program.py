@@ -122,12 +122,28 @@ class GatewayProgram:
         return op.handle
 
     def to_dict(self):
-        plan_dict = {}
+        """
+        Return dictionary representation of all partitions and gateway partitions.
+        Partitions with equivalent programs are grouped together to save space.
+        """
+        program_all = []
         for partition_id, op_list in self._plan.items():
-            plan_dict[partition_id] = []
+            # build gateway program representation
+            program = []
             for op in op_list:
-                plan_dict[partition_id].append(op.to_dict())
-        return plan_dict
+                program.append(op.to_dict())
+
+            # check if any existing
+            exists = False
+            for p in program_all:
+                if p["value"] == program:  # equivalent partition exists
+                    p["partitions"].append(partition_id)
+                    exists = True
+                    break
+            if not exists:
+                program_all.append({"value": program, "partitions": [partition_id]})
+
+        return program_all
 
     def to_json(self):
         return json.dumps(self.to_dict())

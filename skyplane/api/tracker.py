@@ -124,7 +124,7 @@ class TransferProgressTracker(Thread):
             "cmd": ",".join([job.__class__.__name__ for job in self.jobs.values()]),
             "recursive": ",".join([str(job.recursive) for job in self.jobs.values()]),
             "multipart": self.transfer_config.multipart_enabled,
-            "instances_per_region": 1, # TODO: read this from config file
+            "instances_per_region": 1,  # TODO: read this from config file
             "src_instance_type": getattr(self.transfer_config, f"{src_cloud_provider}_instance_class"),
             "dst_instance_type": getattr(self.transfer_config, f"{dst_cloud_provider}_instance_class"),
             "src_spot_instance": getattr(self.transfer_config, f"{src_cloud_provider}_use_spot_instances"),
@@ -151,7 +151,12 @@ class TransferProgressTracker(Thread):
                 )
         except Exception as e:
             UsageClient.log_exception(
-                "dispatch job", e, args, self.dataplane.topology.src_region_tag, self.dataplane.topology.dest_region_tags, session_start_timestamp_ms
+                "dispatch job",
+                e,
+                args,
+                self.dataplane.topology.src_region_tag,
+                self.dataplane.topology.dest_region_tags,
+                session_start_timestamp_ms,
             )
             raise e
 
@@ -174,7 +179,12 @@ class TransferProgressTracker(Thread):
             raise err
         except Exception as e:
             UsageClient.log_exception(
-                "monitor transfer", e, args, self.dataplane.topology.src_region_tag, self.dataplane.topology.dst_region_tags, session_start_timestamp_ms
+                "monitor transfer",
+                e,
+                args,
+                self.dataplane.topology.src_region_tag,
+                self.dataplane.topology.dest_region_tags,
+                session_start_timestamp_ms,
             )
             raise e
         end_time = int(time.time())
@@ -185,7 +195,12 @@ class TransferProgressTracker(Thread):
                 job.finalize()
         except Exception as e:
             UsageClient.log_exception(
-                "finalize job", e, args, self.dataplane.topology.src_region_tag, self.dataplane.topology.dest_region_tags, session_start_timestamp_ms
+                "finalize job",
+                e,
+                args,
+                self.dataplane.topology.src_region_tag,
+                self.dataplane.topology.dest_region_tags,
+                session_start_timestamp_ms,
             )
             raise e
 
@@ -195,7 +210,12 @@ class TransferProgressTracker(Thread):
                 job.verify()
         except Exception as e:
             UsageClient.log_exception(
-                "verify job", e, args, self.dataplane.topology.src_region_tag, self.dataplane.topology.dest_region_tags, session_start_timestamp_ms
+                "verify job",
+                e,
+                args,
+                self.dataplane.topology.src_region_tag,
+                self.dataplane.topology.dest_region_tags,
+                session_start_timestamp_ms,
             )
             raise e
 
@@ -206,7 +226,11 @@ class TransferProgressTracker(Thread):
         }
         self.hooks.on_transfer_end(transfer_stats)
         UsageClient.log_transfer(
-            transfer_stats, args, self.dataplane.topology.src_region_tag, self.dataplane.topology.dest_region_tags, session_start_timestamp_ms
+            transfer_stats,
+            args,
+            self.dataplane.topology.src_region_tag,
+            self.dataplane.topology.dest_region_tags,
+            session_start_timestamp_ms,
         )
 
     @imports.inject("pandas")
@@ -224,7 +248,7 @@ class TransferProgressTracker(Thread):
             errors = self.dataplane.check_error_logs()
             if any(errors.values()):
                 logger.warning("Copying gateway logs...")
-                self.dataplane.copy_logs()
+                self.dataplane.copy_gateway_logs()
                 self.errors = errors
                 raise exceptions.SkyplaneGatewayException("Transfer failed with errors", errors)
 
@@ -275,7 +299,7 @@ class TransferProgressTracker(Thread):
             logs = []
             for log_entry in json.loads(reply.data.decode("utf-8"))["chunk_status_log"]:
                 log_entry["region"] = node.region
-                log_entry["instance"] = node.instance
+                log_entry["instance"] = node.gateway_id
                 log_entry["time"] = datetime.fromisoformat(log_entry["time"])
                 log_entry["state"] = ChunkState.from_str(log_entry["state"])
                 logs.append(log_entry)

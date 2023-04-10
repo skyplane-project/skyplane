@@ -275,12 +275,12 @@ class Server:
 
     def start_gateway(
         self,
-        #outgoing_ports: Dict[str, int],  # maps ip to number of connections along route
+        # outgoing_ports: Dict[str, int],  # maps ip to number of connections along route
         gateway_docker_image: str,
-        #gateway_programs: Optional[Dict[str, GatewayProgram]] = None,  # Broadcast: map region to gateway program for this region
-        #gateway: TopologyPlanGateway,
-        #gateway_program_dir: str,
-        gateway_program_path: str, 
+        # gateway_programs: Optional[Dict[str, GatewayProgram]] = None,  # Broadcast: map region to gateway program for this region
+        # gateway: TopologyPlanGateway,
+        # gateway_program_dir: str,
+        gateway_program_path: str,
         gateway_info_path: str,
         log_viewer_port=8888,
         use_bbr=False,
@@ -339,23 +339,22 @@ class Server:
             docker_envs["E2EE_KEY_FILE"] = f"/pkg/data/{e2ee_key_file}"
             docker_run_flags += f" -v /tmp/{e2ee_key_file}:/pkg/data/{e2ee_key_file}"
 
-
-        # upload gateway programs and gateway info 
-        gateway_program_file = os.path.basename(gateway_program_path)
-        gateway_info_file = os.path.basename(gateway_info_path)
-        self.upload_file(gateway_program_path, f"/tmp/{gateway_program_file}") # upload gateway program
-        self.upload_file(gateway_info_path, f"/tmp/{gateway_info_file}") # upload gateway info
-        docker_envs["GATEWAY_PROGRAM_FILE"] = f"/pkg/data/{gateway_program_file}"
-        docker_envs["GATEWAY_INFO_FILE"] = f"/pkg/data/{gateway_info_file}"
-        docker_run_flags += f" -v /tmp/{gateway_program_file}:/pkg/data/{gateway_program_file}"
-        docker_run_flags += f" -v /tmp/{gateway_info_file}:/pkg/data/{gateway_info_file}"
+        # upload gateway programs and gateway info
+        gateway_program_file = os.path.basename(gateway_program_path).replace(":", "_")
+        gateway_info_file = os.path.basename(gateway_info_path).replace(":", "_")
+        self.upload_file(gateway_program_path, f"/tmp/{gateway_program_file}")  # upload gateway program
+        self.upload_file(gateway_info_path, f"/tmp/{gateway_info_file}")  # upload gateway info
+        docker_envs["GATEWAY_PROGRAM_FILE"] = f"/pkg/data/gateway_program.json"
+        docker_envs["GATEWAY_INFO_FILE"] = f"/pkg/data/gateway_info.json"
+        docker_run_flags += f" -v /tmp/{gateway_program_file}:/pkg/data/gateway_program.json"
+        docker_run_flags += f" -v /tmp/{gateway_info_file}:/pkg/data/gateway_info.json"
         gateway_daemon_cmd = (
             f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/broadcast/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
         )
         print("has gateway program", gateway_daemon_cmd)
 
         ## NOTE: (BC) upload gateway specification for this gateway
-        #if gateway_programs:
+        # if gateway_programs:
         #    # for ip, program in gateway_programs.items():
         #    #    print(ip)
         #    #    pprint(program.to_dict())
@@ -380,7 +379,7 @@ class Server:
         #        f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/broadcast/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
         #    )
         #    print("has gateway program", gateway_daemon_cmd)
-        #else:
+        # else:
         #    # not use broadcast gateway programs, pass in outgoing ports
         #    gateway_daemon_cmd = (
         #        f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
