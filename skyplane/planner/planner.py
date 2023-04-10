@@ -1,45 +1,100 @@
 from importlib.resources import path
 
+from typing import List, Optional, Tuple
+
 from skyplane import compute
-from skyplane.planner.solver import ThroughputProblem
-from skyplane.planner.topology import ReplicationTopology
+from skyplane.planner.topology_old import ReplicationTopology
+
+from skyplane.planner.topology import TopologyPlan
+from skyplane.broadcast.gateway.gateway_program import GatewayProgram, GatewayMuxOr, GatewayReadObjectStore, GatewayReceive, GatewayWriteObjectStore, GatewaySend
+
+from skyplane.api.transfer_job import TransferJob
 
 
 class Planner:
-    def __init__(self, src_provider: str, src_region, dst_provider: str, dst_region: str):
-        self.src_provider = src_provider
-        self.src_region = src_region
-        self.dst_provider = dst_provider
-        self.dst_region = dst_region
-
-    def plan(self) -> ReplicationTopology:
+    def plan(self) -> TopologyPlan:
         raise NotImplementedError
+    
 
+class DirectPlanner(Planner): 
 
-class DirectPlanner(Planner):
-    def __init__(self, src_provider: str, src_region, dst_provider: str, dst_region: str, n_instances: int, n_connections: int):
+    def __init__(self, n_instances: int, n_connections: int):
         self.n_instances = n_instances
         self.n_connections = n_connections
-        super().__init__(src_provider, src_region, dst_provider, dst_region)
+        super().__init__()
 
-    def plan(self) -> ReplicationTopology:
-        src_region_tag = f"{self.src_provider}:{self.src_region}"
-        dst_region_tag = f"{self.dst_provider}:{self.dst_region}"
-        if src_region_tag == dst_region_tag:  # intra-region transfer w/o solver
-            topo = ReplicationTopology()
+    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
+
+        # jobs must have same sources and destinations 
+        src_region_tag = jobs[0].src_iface.region_tag()
+        dst_region_tag = jobs[0].dst_iface.region_tag()
+        for job in jobs[1:]: 
+            assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
+            assert job.dst_iface.region_tag() == dst_region_tag, "All jobs must have same destination region"
+
+        print(src_region_tag, dst_region_tag)
+
+        plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=[dst_region_tag])
+        # TODO: use VM limits to determine how many instances to create in each region 
+        # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
+        for i in range(self.n_instances):
+            plan.add_gateway(src_region_tag)
+            plan.add_gateway(dst_region_tag)
+
+        # ids of gateways in dst region 
+        dst_gateways = plan.get_region_gateways(dst_region_tag)
+
+        src_program = GatewayProgram()
+        dst_program = GatewayProgram()
+
+        for job in jobs:
+            src_bucket = job.src_iface.bucket
+            dst_bucket = job.dst_iface.bucket
+
+            # give each job a different partition id, so we can read/write to different buckets 
+            partition_id = jobs.index(job)
+        
+            # source region gateway program 
+            obj_store_read = src_program.add_operator(GatewayReadObjectStore(src_bucket, src_region_tag, self.n_connections), partition_id=partition_id)
+            mux_or = src_program.add_operator(GatewayMuxOr(), parent_handle=obj_store_read, partition_id=partition_id)
             for i in range(self.n_instances):
-                topo.add_objstore_instance_edge(src_region_tag, src_region_tag, i)
-                topo.add_instance_objstore_edge(src_region_tag, i, src_region_tag)
-            topo.cost_per_gb = 0
-            return topo
-        else:  # inter-region transfer w/ solver
-            topo = ReplicationTopology()
-            for i in range(self.n_instances):
-                topo.add_objstore_instance_edge(src_region_tag, src_region_tag, i)
-                topo.add_instance_instance_edge(src_region_tag, i, dst_region_tag, i, self.n_connections)
-                topo.add_instance_objstore_edge(dst_region_tag, i, dst_region_tag)
-            topo.cost_per_gb = compute.CloudProvider.get_transfer_cost(src_region_tag, dst_region_tag)
-            return topo
+                src_program.add_operator(GatewaySend(target_gateway_id=dst_gateways[i].gateway_id, region=src_region_tag, num_connections=self.n_connections), parent_handle=mux_or, partition_id=partition_id)
+
+            # dst region gateway program
+            recv_op = dst_program.add_operator(GatewayReceive(), partition_id=partition_id)
+            dst_program.add_operator(GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections), parent_handle=recv_op, partition_id=partition_id)
+
+        # set gateway programs
+        plan.set_gateway_program(src_region_tag, src_program)
+        plan.set_gateway_program(dst_region_tag, dst_program)
+
+        return plan 
+
+
+#class DirectPlanner(Planner):
+#    def __init__(self, src_provider: str, src_region, dst_provider: str, dst_region: str, n_instances: int, n_connections: int):
+#        self.n_instances = n_instances
+#        self.n_connections = n_connections
+#        super().__init__(src_provider, src_region, dst_provider, dst_region)
+#
+#    def plan(self) -> ReplicationTopology:
+#        src_region_tag = f"{self.src_provider}:{self.src_region}"
+#        dst_region_tag = f"{self.dst_provider}:{self.dst_region}"
+#        if src_region_tag == dst_region_tag:  # intra-region transfer w/o solver
+#            topo = ReplicationTopology()
+#            for i in range(self.n_instances):
+#                topo.add_objstore_instance_edge(src_region_tag, src_region_tag, i)
+#                topo.add_instance_objstore_edge(src_region_tag, i, src_region_tag)
+#            topo.cost_per_gb = 0
+#            return topo
+#        else:  # inter-region transfer w/ solver
+#            topo = ReplicationTopology()
+#            for i in range(self.n_instances):
+#                topo.add_objstore_instance_edge(src_region_tag, src_region_tag, i)
+#                topo.add_instance_instance_edge(src_region_tag, i, dst_region_tag, i, self.n_connections)
+#                topo.add_instance_objstore_edge(dst_region_tag, i, dst_region_tag)
+#            topo.cost_per_gb = compute.CloudProvider.get_transfer_cost(src_region_tag, dst_region_tag)
+#            return topo
 
 
 class ILPSolverPlanner(Planner):
@@ -60,7 +115,7 @@ class ILPSolverPlanner(Planner):
 
     def plan(self) -> ReplicationTopology:
         from skyplane.planner.solver_ilp import ThroughputSolverILP
-
+        from skyplane.planner.solver import ThroughputProblem
         problem = ThroughputProblem(
             src=f"{self.src_provider}:{self.src_region}",
             dst=f"{self.dst_provider}:{self.dst_region}",
@@ -96,6 +151,7 @@ class RONSolverPlanner(Planner):
 
     def plan(self) -> ReplicationTopology:
         from skyplane.planner.solver_ron import ThroughputSolverRON
+        from skyplane.planner.solver import ThroughputProblem
 
         problem = ThroughputProblem(
             src=self.src_region,

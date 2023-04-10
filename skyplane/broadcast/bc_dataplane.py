@@ -11,7 +11,7 @@ from collections import defaultdict, Counter
 from skyplane import compute
 from skyplane.api.dataplane import Dataplane
 from skyplane.api.config import TransferConfig
-from skyplane.planner.topology import ReplicationTopology, ReplicationTopologyGateway
+from skyplane.planner.topology_old import ReplicationTopology, ReplicationTopologyGateway
 from skyplane.api.tracker import TransferHook
 from skyplane.broadcast.impl.bc_tracker import BCTransferProgressTracker
 from skyplane.broadcast.impl.bc_transfer_job import BCCopyJob, BCSyncJob, BCTransferJob

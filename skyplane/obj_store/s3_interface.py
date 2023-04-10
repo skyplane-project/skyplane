@@ -23,6 +23,7 @@ class S3Interface(ObjectStoreInterface):
         self.requester_pays = False
         self.bucket_name = bucket_name
         self._cached_s3_clients = {}
+        self.provider = "aws"
 
     def path(self):
         return f"s3://{self.bucket_name}"

@@ -118,13 +118,13 @@ class TransferProgressTracker(Thread):
 
     def run(self):
         """Dispatch and start the transfer jobs"""
-        src_cloud_provider = self.dataplane.src_region_tag.split(":")[0]
-        dst_cloud_provider = self.dataplane.dst_region_tag.split(":")[0]
+        src_cloud_provider = self.dataplane.topology.src_region_tag.split(":")[0]
+        dst_cloud_provider = self.dataplane.topology.dest_region_tags[0].split(":")[0]
         args = {
             "cmd": ",".join([job.__class__.__name__ for job in self.jobs.values()]),
             "recursive": ",".join([str(job.recursive) for job in self.jobs.values()]),
             "multipart": self.transfer_config.multipart_enabled,
-            "instances_per_region": self.dataplane.max_instances,
+            "instances_per_region": 1, # TODO: read this from config file
             "src_instance_type": getattr(self.transfer_config, f"{src_cloud_provider}_instance_class"),
             "dst_instance_type": getattr(self.transfer_config, f"{dst_cloud_provider}_instance_class"),
             "src_spot_instance": getattr(self.transfer_config, f"{src_cloud_provider}_use_spot_instances"),
@@ -151,7 +151,7 @@ class TransferProgressTracker(Thread):
                 )
         except Exception as e:
             UsageClient.log_exception(
-                "dispatch job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
+                "dispatch job", e, args, self.dataplane.topology.src_region_tag, self.dataplane.topology.dest_region_tags, session_start_timestamp_ms
             )
             raise e
 
@@ -167,14 +167,14 @@ class TransferProgressTracker(Thread):
                 "monitor transfer",
                 reformat_err,
                 args,
-                self.dataplane.src_region_tag,
-                self.dataplane.dst_region_tag,
+                self.dataplane.topology.src_region_tag,
+                self.dataplane.topology.dest_region_tags,
                 session_start_timestamp_ms,
             )
             raise err
         except Exception as e:
             UsageClient.log_exception(
-                "monitor transfer", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
+                "monitor transfer", e, args, self.dataplane.topology.src_region_tag, self.dataplane.topology.dst_region_tags, session_start_timestamp_ms
             )
             raise e
         end_time = int(time.time())
@@ -185,7 +185,7 @@ class TransferProgressTracker(Thread):
                 job.finalize()
         except Exception as e:
             UsageClient.log_exception(
-                "finalize job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
+                "finalize job", e, args, self.dataplane.topology.src_region_tag, self.dataplane.topology.dest_region_tags, session_start_timestamp_ms
             )
             raise e
 
@@ -195,7 +195,7 @@ class TransferProgressTracker(Thread):
                 job.verify()
         except Exception as e:
             UsageClient.log_exception(
-                "verify job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
+                "verify job", e, args, self.dataplane.topology.src_region_tag, self.dataplane.topology.dest_region_tags, session_start_timestamp_ms
             )
             raise e
 
@@ -206,7 +206,7 @@ class TransferProgressTracker(Thread):
         }
         self.hooks.on_transfer_end(transfer_stats)
         UsageClient.log_transfer(
-            transfer_stats, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
+            transfer_stats, args, self.dataplane.topology.src_region_tag, self.dataplane.topology.dest_region_tags, session_start_timestamp_ms
         )
 
     @imports.inject("pandas")
@@ -214,6 +214,7 @@ class TransferProgressTracker(Thread):
         """Monitor the tranfer by copying remote gateway logs and show transfer stats by hooks"""
         # todo implement transfer monitoring to update job_complete_chunk_ids and job_pending_chunk_ids while the transfer is in progress
         sinks = self.dataplane.topology.sink_instances()
+        print("sink instances", sinks)
         sink_regions = set([sink.region for sink in sinks])
         while any([len(self.job_pending_chunk_ids[job_uuid]) > 0 for job_uuid in self.job_pending_chunk_ids]):
             # refresh shutdown status by running noop

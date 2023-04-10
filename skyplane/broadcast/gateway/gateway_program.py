@@ -32,9 +32,9 @@ class GatewayOperator:
 
 
 class GatewaySend(GatewayOperator):
-    def __init__(self, ip_address: str, region: str, num_connections: int = 32, compress: bool = False, encrypt: bool = False):
+    def __init__(self, target_gateway_id: str, region: str, num_connections: int = 32, compress: bool = False, encrypt: bool = False):
         super().__init__("send")
-        self.ip_address = ip_address
+        self.target_gateway_id = target_gateway_id  # gateway to send to
         self.region = region  # region to send to
         self.num_connections = num_connections  # default this for now
         self.compress = compress
@@ -94,18 +94,25 @@ class GatewayProgram:
     We intend to extend GatewayProgram to eventually support operations on chunk data.
     """
 
+    ip_address = None
+
     def __init__(self):
         self._plan = defaultdict(list)
         self._ops = {}
 
-    def add_operators(self, ops: List[GatewayOperator], parent_op: Optional[GatewayOperator] = None, partition_id: Optional[Tuple] = None):
+    def get_operators(self) -> List[GatewayOperator]:
+        return list(self._ops.values())
+
+    def add_operators(self, ops: List[GatewayOperator], parent_handle: Optional[str] = None, partition_id: int = None):
+        parent_op = self._ops[parent_handle] if parent_handle else None
         ops_handles = []
         for op in ops:
             ops_handles.append(self.add_operator(op, parent_op, partition_id))
 
         return ops_handles
 
-    def add_operator(self, op: GatewayOperator, parent_op: Optional[GatewayOperator] = None, partition_id: Optional[Tuple] = None):
+    def add_operator(self, op: GatewayOperator, parent_handle: Optional[str] = None, partition_id: int = None):
+        parent_op = self._ops[parent_handle] if parent_handle else None
         if not parent_op:  # root operation
             self._plan[partition_id].append(op)
         else:

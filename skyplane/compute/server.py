@@ -19,6 +19,7 @@ from skyplane.utils import logger
 from skyplane.utils.fn import PathLike, wait_for
 from skyplane.utils.retry import retry_backoff
 from skyplane.utils.timer import Timer
+from skyplane.planner.topology import TopologyPlanGateway
 
 tmp_log_dir = Path("/tmp/skyplane")
 
@@ -274,9 +275,13 @@ class Server:
 
     def start_gateway(
         self,
-        outgoing_ports: Dict[str, int],  # maps ip to number of connections along route
+        #outgoing_ports: Dict[str, int],  # maps ip to number of connections along route
         gateway_docker_image: str,
-        gateway_programs: Optional[Dict[str, GatewayProgram]] = None,  # Broadcast: map region to gateway program for this region
+        #gateway_programs: Optional[Dict[str, GatewayProgram]] = None,  # Broadcast: map region to gateway program for this region
+        #gateway: TopologyPlanGateway,
+        #gateway_program_dir: str,
+        gateway_program_path: str, 
+        gateway_info_path: str,
         log_viewer_port=8888,
         use_bbr=False,
         use_compression=False,
@@ -334,39 +339,54 @@ class Server:
             docker_envs["E2EE_KEY_FILE"] = f"/pkg/data/{e2ee_key_file}"
             docker_run_flags += f" -v /tmp/{e2ee_key_file}:/pkg/data/{e2ee_key_file}"
 
-        # NOTE: (BC) upload gateway specification for this gateway
-        if gateway_programs:
-            # for ip, program in gateway_programs.items():
-            #    print(ip)
-            #    pprint(program.to_dict())
 
-            region_tag = self.region_tag.replace(":", "_")
-            filename = f"gateway_programs_{region_tag}.json"
-            write_json_dir = tmp_log_dir / "gw_programs"
-            write_json_dir.mkdir(exist_ok=True, parents=True)
-            write_json_path = write_json_dir / filename
-            with open(write_json_path, "w") as f:
-                f.write(json.dumps(gateway_programs[self.region_tag], default=lambda obj: obj.__dict__))
+        # upload gateway programs and gateway info 
+        gateway_program_file = os.path.basename(gateway_program_path)
+        gateway_info_file = os.path.basename(gateway_info_path)
+        self.upload_file(gateway_program_path, f"/tmp/{gateway_program_file}") # upload gateway program
+        self.upload_file(gateway_info_path, f"/tmp/{gateway_info_file}") # upload gateway info
+        docker_envs["GATEWAY_PROGRAM_FILE"] = f"/pkg/data/{gateway_program_file}"
+        docker_envs["GATEWAY_INFO_FILE"] = f"/pkg/data/{gateway_info_file}"
+        docker_run_flags += f" -v /tmp/{gateway_program_file}:/pkg/data/{gateway_program_file}"
+        docker_run_flags += f" -v /tmp/{gateway_info_file}:/pkg/data/{gateway_info_file}"
+        gateway_daemon_cmd = (
+            f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/broadcast/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
+        )
+        print("has gateway program", gateway_daemon_cmd)
 
-            # write gateway programs at all regions into a single file (for visualization)
-            write_json_complete_path = write_json_dir / "gateway_programs_complete.json"
-            with open(write_json_complete_path, "w") as f:
-                f.write(json.dumps(gateway_programs, default=lambda obj: obj.__dict__))
+        ## NOTE: (BC) upload gateway specification for this gateway
+        #if gateway_programs:
+        #    # for ip, program in gateway_programs.items():
+        #    #    print(ip)
+        #    #    pprint(program.to_dict())
 
-            self.upload_file(write_json_path, f"/tmp/{filename}")
-            docker_envs["GATEWAY_PROGRAM_FILE"] = f"/pkg/data/{filename}"
-            docker_run_flags += f" -v /tmp/{filename}:/pkg/data/{filename}"
-            gateway_daemon_cmd = (
-                f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/broadcast/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
-            )
-            print("has gateway program", gateway_daemon_cmd)
-        else:
-            # not use broadcast gateway programs, pass in outgoing ports
-            gateway_daemon_cmd = (
-                f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
-            )
-            gateway_daemon_cmd += f" --outgoing-ports '{json.dumps(outgoing_ports)}'"
-            print("no gateway program", gateway_daemon_cmd)
+        #    region_tag = self.region_tag.replace(":", "_")
+        #    filename = f"gateway_programs_{region_tag}.json"
+        #    write_json_dir = tmp_log_dir / "gw_programs"
+        #    write_json_dir.mkdir(exist_ok=True, parents=True)
+        #    write_json_path = write_json_dir / filename
+        #    with open(write_json_path, "w") as f:
+        #        f.write(json.dumps(gateway_programs[self.region_tag], default=lambda obj: obj.__dict__))
+
+        #    # write gateway programs at all regions into a single file (for visualization)
+        #    write_json_complete_path = write_json_dir / "gateway_programs_complete.json"
+        #    with open(write_json_complete_path, "w") as f:
+        #        f.write(json.dumps(gateway_programs, default=lambda obj: obj.__dict__))
+
+        #    self.upload_file(write_json_path, f"/tmp/{filename}")
+        #    docker_envs["GATEWAY_PROGRAM_FILE"] = f"/pkg/data/{filename}"
+        #    docker_run_flags += f" -v /tmp/{filename}:/pkg/data/{filename}"
+        #    gateway_daemon_cmd = (
+        #        f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/broadcast/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
+        #    )
+        #    print("has gateway program", gateway_daemon_cmd)
+        #else:
+        #    # not use broadcast gateway programs, pass in outgoing ports
+        #    gateway_daemon_cmd = (
+        #        f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
+        #    )
+        #    gateway_daemon_cmd += f" --outgoing-ports '{json.dumps(outgoing_ports)}'"
+        #    print("no gateway program", gateway_daemon_cmd)
 
         docker_run_flags += " " + " ".join(f"--env {k}={v}" for k, v in docker_envs.items())
 

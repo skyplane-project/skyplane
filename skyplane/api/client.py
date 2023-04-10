@@ -13,6 +13,8 @@ from skyplane.utils import logger
 from skyplane.utils.definitions import tmp_log_dir
 from skyplane.utils.path import parse_path
 
+from skyplane.api.pipeline import Pipeline
+
 if TYPE_CHECKING:
     from skyplane.api.config import AWSConfig, AzureConfig, GCPConfig, TransferConfig
 
@@ -61,6 +63,11 @@ class SkyplaneClient:
             azure_auth=self.azure_auth,
             gcp_auth=self.gcp_auth,
         )
+
+    def pipeline(self): 
+        """Create a pipeline object to queue jobs"""
+        return Pipeline(clientid=self.clientid, provisioner=self.provisioner, transfer_config=self.transfer_config)
+        return Pipeline()
 
     def copy(self, src: str, dst: str, recursive: bool = False, num_vms: int = 1):
         """
