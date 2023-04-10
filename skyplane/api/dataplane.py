@@ -177,7 +177,7 @@ class Dataplane:
 
             # create VMs from the topology
             for node in self.topology.get_gateways():
-                cloud_provider, region = node.region.split(":")
+                cloud_provider, region = node.region_tag.split(":")
                 self.provisioner.add_task(
                     cloud_provider=cloud_provider,
                     region=region,

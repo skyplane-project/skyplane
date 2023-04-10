@@ -7,14 +7,24 @@ class TopologyPlanGateway:
     Represents a gateway in the topology plan.
     """
 
-    def __init__(self, region: str, gateway_id: str): 
-        self.region = region 
+    def __init__(self, region_tag: str, gateway_id: str): 
+        self.region_tag = region_tag
         self.gateway_id = gateway_id
         self.gateway_program = None
 
         # ip addresses
         self.private_ip_address = None
         self.public_ip_address = None
+
+    @property
+    def provider(self): 
+        """Get the provider of the gateway"""
+        return self.region.split(":")[0]
+    
+    @property
+    def region(self): 
+        """Get the region of the gateway"""
+        return self.region_tag.split(":")[1]
 
     def set_private_ip_address(self, private_ip_address: str): 
         """ Set the IP address of the gateway (not determined until provisioning is complete)
@@ -45,18 +55,18 @@ class TopologyPlan:
         """Get all regions in the topology plan"""
         return list(set([gateway.region for gateway in self.gateways.values()]))
 
-    def add_gateway(self, region: str): 
+    def add_gateway(self, region_tag: str): 
         """Create gateway in specified region"""
-        print(region)
-        gateway_id = region + str(len([gateway for gateway in self.gateways.values() if gateway.region == region]))
+        print(region_tag)
+        gateway_id = region_tag + str(len([gateway for gateway in self.gateways.values() if gateway.region == region_tag]))
         assert gateway_id not in self.gateways
-        gateway = TopologyPlanGateway(region, gateway_id)
+        gateway = TopologyPlanGateway(region_tag, gateway_id)
         self.gateways[gateway_id] = gateway
         return gateway
 
-    def get_region_gateways(self, region: str): 
+    def get_region_gateways(self, region_tag: str): 
         """Get all gateways in a region"""
-        return [gateway for gateway in self.gateways.values() if gateway.region == region]
+        return [gateway for gateway in self.gateways.values() if gateway.region_tag == region_tag]
     
     def get_gateways(self) -> List[TopologyPlanGateway]: 
         """Get all gateways"""
@@ -65,9 +75,9 @@ class TopologyPlan:
     def get_gateway(self, gateway_id: str) -> TopologyPlanGateway: 
         return self.gateways[gateway_id]
     
-    def set_gateway_program(self, region: str, gateway_program: GatewayProgram): 
+    def set_gateway_program(self, region_tag: str, gateway_program: GatewayProgram): 
         """Update all gateways in a region with specified gateway program"""
-        for gateway in self.get_region_gateways(region):   
+        for gateway in self.get_region_gateways(region_tag):   
             gateway.set_gateway_program(gateway_program)
 
     def set_ip_addresses(self, gateway_id: str, private_ip_address: str, public_ip_address: str):
@@ -75,10 +85,10 @@ class TopologyPlan:
         self.gateways[gateway_id].set_private_ip_address(private_ip_address)
         self.gateways[gateway_id].set_public_ip_address(public_ip_address)
     
-    def generate_gateway_program(self, region: str): 
+    def generate_gateway_program(self, region_tag: str): 
         """Generate gateway program for all gateways in a region"""
         # TODO: eventually let gateways in same region have different programs
-        for gateway in self.get_region_gateways(region):   
+        for gateway in self.get_region_gateways(region_tag):   
             return gateway.generate_gateway_program()
 
     def get_outgoing_paths(self, gateway_id: str): 
