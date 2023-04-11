@@ -1,4 +1,5 @@
 import argparse
+from multiprocessing import Manager
 from pprint import pprint
 import atexit
 import json
@@ -42,6 +43,8 @@ class GatewayDaemon:
         # read gateway program
         gateway_program_path = Path(os.environ["GATEWAY_PROGRAM_FILE"]).expanduser()
         gateway_program = json.load(open(gateway_program_path, "r"))
+
+        self.upload_id_map = Manager().dict()
 
         pprint(gateway_program)
 
@@ -97,6 +100,7 @@ class GatewayDaemon:
             self.error_queue,
             terminal_operators=self.terminal_operators,
             num_required_terminal=self.num_required_terminal,
+            upload_id_map=self.upload_id_map,
         )
         self.api_server.start()
         atexit.register(self.api_server.shutdown)
@@ -242,6 +246,7 @@ class GatewayDaemon:
                         chunk_store=self.chunk_store,
                         bucket_name=op["bucket_name"],
                         bucket_region=op["bucket_region"],
+                        upload_id_map=self.upload_id_map,
                     )
                     total_p += op["num_connections"]
                 elif op["op_type"] == "write_local":

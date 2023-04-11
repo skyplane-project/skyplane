@@ -526,6 +526,8 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         output_queue: GatewayQueue,
         error_event,
         error_queue: GatewayQueue,
+        # upload_id_requests: Queue[Dict[str, str]],  # queue of upload_id mappings from client
+        upload_id_map: Dict[str, str],  # map of upload_id mappings from client
         n_processes: Optional[int] = 32,
         chunk_store: Optional[ChunkStore] = None,
         bucket_name: Optional[str] = None,
@@ -542,24 +544,26 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
             f"[{self.handle}:{self.worker_id}] Start upload {chunk_req.chunk.chunk_id} to {self.bucket_name}, key {chunk_req.chunk.dest_key}"
         )
 
+        # TODO: cache object store interface
         obj_store_interface = self.get_obj_store_interface(self.bucket_region, self.bucket_name)
 
         if chunk_req.chunk.multi_part:
-            key_to_upload_id = self.bucket_region + ":" + self.bucket_name + ":" + chunk_req.chunk.dest_key
-            logger.debug(f"[obj_store:{self.worker_id}] key {key_to_upload_id}, multi-part is enabled")
+            assert chunk_req.chunk.key in self.upload_id_map, f"Upload id for {chunk_req.chunk.key} not found"
+            upload_id = self.upload_id_map[chunk_req.chunk.key]
+            # key_to_upload_id = self.bucket_region + ":" + self.bucket_name + ":" + chunk_req.chunk.dest_key
+            # logger.debug(f"[obj_store:{self.worker_id}] key {key_to_upload_id}, multi-part is enabled")
 
-            map_file_path = self.chunk_store.get_upload_id_map_path()
-            if not os.path.exists(map_file_path):
-                logger.debug(f"[obj_store:{self.worker_id}]: map path {map_file_path} does not exists")
-                return False
+            # map_file_path = self.chunk_store.get_upload_id_map_path()
+            # if not os.path.exists(map_file_path):
+            #    logger.debug(f"[obj_store:{self.worker_id}]: map path {map_file_path} does not exists")
+            #    return False
 
-            with open(map_file_path, "rb") as f:
-                upload_ids_map = json.load(f)
+            # with open(map_file_path, "rb") as f:
+            #    upload_ids_map = json.load(f)
 
-            # logger.debug(f"[obj_store:{self.worker_id}] all upload id map: {upload_ids_map}")
-            upload_id = str(upload_ids_map[key_to_upload_id])
-            logger.debug(f"[obj_store:{self.worker_id}] key {key_to_upload_id}, map to upload id: {upload_id}, type: {type(upload_id)}")
-
+            ## logger.debug(f"[obj_store:{self.worker_id}] all upload id map: {upload_ids_map}")
+            # upload_id = str(upload_ids_map[key_to_upload_id])
+            # logger.debug(f"[obj_store:{self.worker_id}] key {key_to_upload_id}, map to upload id: {upload_id}, type: {type(upload_id)}")
         else:
             upload_id = None
 

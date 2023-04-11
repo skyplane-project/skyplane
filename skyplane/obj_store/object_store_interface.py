@@ -7,9 +7,9 @@ from typing import Iterator, List, Optional, Tuple
 class ObjectStoreObject:
     """Defines object in object store."""
 
-    provider: str
-    bucket: str
     key: str
+    provider: str = None
+    bucket: str = None
     size: Optional[int] = None
     last_modified: Optional[str] = None
     mime_type: Optional[str] = None

@@ -250,6 +250,7 @@ class TransferProgressTracker(Thread):
                 logger.warning("Copying gateway logs...")
                 self.dataplane.copy_gateway_logs()
                 self.errors = errors
+                print("ERRORS", errors)
                 raise exceptions.SkyplaneGatewayException("Transfer failed with errors", errors)
 
             log_df = pd.DataFrame(self._query_chunk_status())

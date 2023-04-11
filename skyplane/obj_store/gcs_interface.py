@@ -216,7 +216,8 @@ class GCSInterface(ObjectStoreInterface):
             return
 
         # multipart upload
-        assert part_number is not None and upload_id is not None
+        assert part_number is not None, f"Part number cannot be none for multipart upload: {part_number}, {upload_id}"
+        assert upload_id is not None, f"Upload ID cannot be none for multipart upload: {part_number}, {upload_id}"
 
         # send XML api request
         headers = {"Content-MD5": b64_md5sum} if check_md5 else None

@@ -9,7 +9,7 @@ from abc import ABC
 from collections import defaultdict
 from dataclasses import dataclass, field
 from queue import Queue
-from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple, TypeVar
+from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple, TypeVar, Dict
 
 import urllib3
 from rich import print as rprint
@@ -32,13 +32,19 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
+class GatewayMessage:
+    def __init__(self, chunk: Chunk = None, upload_id_mapping: Dict[str, Dict[str, str]] = None):
+        self.chunk = chunk
+        self.upload_id_mapping = upload_id_mapping
+
+
 class Chunker:
     """class that chunks the original files and makes the chunk requests"""
 
     def __init__(
         self,
         src_iface: ObjectStoreInterface,
-        dst_iface: ObjectStoreInterface,
+        dst_ifaces: List[ObjectStoreInterface],
         transfer_config: TransferConfig,
         concurrent_multipart_chunk_threads: int = 64,
         num_partitions: int = 1,
@@ -54,7 +60,7 @@ class Chunker:
         :type concurrent_multipart_chunk_threads: int
         """
         self.src_iface = src_iface
-        self.dst_iface = dst_iface
+        self.dst_ifaces = dst_ifaces
         self.transfer_config = transfer_config
         self.multipart_upload_requests = []
         self.concurrent_multipart_chunk_threads = concurrent_multipart_chunk_threads
@@ -64,21 +70,29 @@ class Chunker:
         self,
         exit_event: threading.Event,
         in_queue: "Queue[Tuple[ObjectStoreObject, ObjectStoreObject]]",
-        out_queue: "Queue[Chunk]",
+        out_queue_chunks: "Queue[GatewayMessage]",
     ):
         """Chunks large files into many small chunks."""
-        region = self.dst_iface.region_tag()
-        bucket = self.dst_iface.bucket()
         while not exit_event.is_set():
             try:
                 input_data = in_queue.get(block=False, timeout=0.1)
             except queue.Empty:
                 continue
 
-            # get source and destination object and then compute number of chunks
             src_object, dest_object = input_data
+
+            # create multipart upload request per destination
+            upload_id_mapping = {}
+            for dst_iface in self.dst_ifaces:
+                bucket = dst_iface.bucket()
+                upload_id = self.dst_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
+
+                # store mapping between key and upload id for each region
+                upload_id_mapping[bucket.region_tag()] = (dest_object.key, upload_id)
+            out_queue_chunks.put(GatewayMessage(upload_id_mapping=upload_id_mapping))  # send to output queue
+
+            # get source and destination object and then compute number of chunks
             mime_type = self.src_iface.get_obj_mime_type(src_object.key)
-            upload_id = self.dst_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
             chunk_size_bytes = int(self.transfer_config.multipart_chunk_size_mb * MB)
             num_chunks = math.ceil(src_object.size / chunk_size_bytes)
             if num_chunks > self.transfer_config.multipart_max_chunks:
@@ -102,35 +116,43 @@ class Chunker:
                     partition_id=str(part_num % self.num_partitions),
                     chunk_length_bytes=file_size_bytes,
                     part_number=part_num,
-                    upload_id=upload_id,
+                    # upload_id=upload_id,
+                    multi_part=True,
                 )
+                assert upload_id is not None, f"Upload id cannot be None for multipart upload for {src_object.key}"
+                assert part_num is not None, f"Partition cannot be none {part_num}"
                 offset += file_size_bytes
                 parts.append(part_num)
                 part_num += 1
-                out_queue.put(chunk)
+                out_queue_chunks.put(GatewayMessage(chunk=chunk))
 
-            self.multipart_upload_requests.append(dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket))
+            # store multipart ids
+            for dst_iface in self.dst_ifaces:
+                bucket = dst_iface.bucket()
+                region = bucket.region_tag()
+                upload_id = upload_id_mapping[region]
+                self.multipart_upload_requests.append(
+                    dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket)
+                )
 
-    def to_chunk_requests(self, gen_in: Generator[Chunk, None, None]) -> Generator[ChunkRequest, None, None]:
-        """Converts a generator of chunks to a generator of chunk requests.
+    # def to_chunk_requests(self, gen_in: Generator[Chunk, None, None]) -> Generator[ChunkRequest, None, None]:
+    #    """Converts a generator of chunks to a generator of chunk requests.
 
-        :param gen_in: generator that generates chunk requests
-        :type gen_in: Generator
-        """
-        src_region = self.src_iface.region_tag()
-        dest_region = self.dst_iface.region_tag()
-        src_bucket = self.src_iface.bucket()
-        dest_bucket = self.dst_iface.bucket()
-        for chunk in gen_in:
-            yield ChunkRequest(
-                chunk=chunk,
-                src_region=src_region,
-                dst_region=dest_region,
-                src_object_store_bucket=src_bucket,
-                dst_object_store_bucket=dest_bucket,
-                src_type="object_store",
-                dst_type="object_store",
-            )
+    #    :param gen_in: generator that generates chunk requests
+    #    :type gen_in: Generator
+    #    """
+    #    src_region = self.src_iface.region_tag()
+    #    src_bucket = self.src_iface.bucket()
+    #    for chunk in gen_in:
+    #        yield ChunkRequest(
+    #            chunk=chunk,
+    #            src_region=src_region,
+    #            #dst_region=dest_region,
+    #            src_object_store_bucket=src_bucket,
+    #            #dst_object_store_bucket=dest_bucket,
+    #            src_type="object_store",
+    #            #dst_type="object_store",
+    #        )
 
     @staticmethod
     def map_object_key_prefix(source_prefix: str, source_key: str, dest_prefix: str, recursive: bool = False):
@@ -203,8 +225,9 @@ class Chunker:
         """
         if not self.src_iface.bucket_exists():
             raise exceptions.MissingBucketException(f"Source bucket {self.src_iface.path()} does not exist or is not readable.")
-        if not self.dst_iface.bucket_exists():
-            raise exceptions.MissingBucketException(f"Destination bucket {self.dst_iface.path()} does not exist or is not readable.")
+        for dst_iface in self.dst_ifaces:
+            if not dst_iface.bucket_exists():
+                raise exceptions.MissingBucketException(f"Destination bucket {dst_iface.path()} does not exist or is not readable.")
 
         # query all source region objects
         logger.fs.debug(f"Querying objects in {self.src_iface.path()}")
@@ -218,15 +241,16 @@ class Chunker:
                     raise e from None
 
                 # make destination object
-                dest_provider, dest_region = self.dst_iface.region_tag().split(":")
-                if dest_provider == "aws":
-                    dest_obj = S3Object(dest_provider, self.dst_iface.bucket(), dest_key)
-                elif dest_provider == "azure":
-                    dest_obj = AzureBlobObject(dest_provider, self.dst_iface.bucket(), dest_key)
-                elif dest_provider == "gcp":
-                    dest_obj = GCSObject(dest_provider, self.dst_iface.bucket(), dest_key)
-                else:
-                    raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
+                # dest_provider, dest_region = self.dst_iface.region_tag().split(":")
+                # if dest_provider == "aws":
+                #    dest_obj = S3Object(dest_provider, self.dst_iface.bucket(), dest_key)
+                # elif dest_provider == "azure":
+                #    dest_obj = AzureBlobObject(dest_provider, self.dst_iface.bucket(), dest_key)
+                # elif dest_provider == "gcp":
+                #    dest_obj = GCSObject(dest_provider, self.dst_iface.bucket(), dest_key)
+                # else:
+                #    raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
+                dest_obj = ObjectStoreObject(key=dest_key)
                 n_objs += 1
                 logger.fs.debug(f"Yield: {obj}, {dest_obj}")
                 yield obj, dest_obj
@@ -237,14 +261,14 @@ class Chunker:
 
     def chunk(
         self, transfer_pair_generator: Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]
-    ) -> Generator[Chunk, None, None]:
+    ) -> Generator[GatewayMessage, None, None]:
         """Break transfer list into chunks.
 
         :param transfer_pair_generator: generator of pairs of objects to transfer
         :type transfer_pair_generator: Generator
         """
         multipart_send_queue: Queue[Tuple[ObjectStoreObject, ObjectStoreObject]] = Queue()
-        multipart_chunk_queue: Queue[Chunk] = Queue()
+        multipart_chunk_queue: Queue[GatewayMessage] = Queue()
         multipart_exit_event = threading.Event()
         multipart_chunk_threads = []
 
@@ -264,11 +288,14 @@ class Chunker:
             if self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
                 multipart_send_queue.put((src_obj, dst_obj))
             else:
-                yield Chunk(
-                    src_key=src_obj.key,
-                    dest_key=dst_obj.key,
-                    chunk_id=uuid.uuid4().hex,
-                    chunk_length_bytes=src_obj.size,
+                yield GatewayMessage(
+                    chunk=Chunk(
+                        src_key=src_obj.key,
+                        dest_key=dst_obj.key,
+                        chunk_id=uuid.uuid4().hex,
+                        chunk_length_bytes=src_obj.size,
+                        partition_id=0,  # TODO: fix this to distribute across multiple partitions
+                    )
                 )
 
             if self.transfer_config.multipart_enabled:
@@ -457,7 +484,7 @@ class CopyJob(TransferJob):
         :type chunker: Chunker
         """
         if chunker is None:  # used for external access to transfer pair list
-            chunker = Chunker(self.src_iface, self.dst_iface, TransferConfig())
+            chunker = Chunker(self.src_iface, self.dst_ifaces, TransferConfig())
         yield from chunker.transfer_pair_generator(self.src_prefix, self.dst_prefix, self.recursive, self._pre_filter_fn)
 
     def dispatch(
@@ -475,14 +502,14 @@ class CopyJob(TransferJob):
         :param dispatch_batch_size: maximum size of the buffer to temporarily store the generators (default: 1000)
         :type dispatch_batch_size: int
         """
-        chunker = Chunker(self.src_iface, self.dst_iface, transfer_config)
+        chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
         transfer_pair_generator = self.gen_transfer_pairs(chunker)
         gen_transfer_list = chunker.tail_generator(transfer_pair_generator, self.transfer_list)
         chunks = chunker.chunk(gen_transfer_list)
-        chunk_requests = chunker.to_chunk_requests(chunks)
+        # chunk_requests = chunker.to_chunk_requests(chunks)
 
         batches = chunker.batch_generator(
-            chunker.prefetch_generator(chunk_requests, buffer_size=dispatch_batch_size * 32), batch_size=dispatch_batch_size
+            chunker.prefetch_generator(chunks, buffer_size=dispatch_batch_size * 32), batch_size=dispatch_batch_size
         )
 
         # dispatch chunk requests
@@ -491,9 +518,29 @@ class CopyJob(TransferJob):
         n_multiparts = 0
         start = time.time()
         for batch in batches:
-            end = time.time()
-            logger.fs.debug(f"Queried {len(batch)} chunks in {end - start:.2f} seconds")
-            start = time.time()
+            # send upload_id mappings to sink gateways
+            upload_id_batch = [cr for cr in batch if cr.upload_id_mapping is not None]
+            dst_gateways = dataplane.sink_gateways()
+            for dst_gateway in dst_gateways:
+                # collect upload id mappings per region
+                mappings = {}
+                for region_mapping in upload_id_batch:
+                    for region_tag, (key, id) in region_mapping.items():
+                        mappings[key] = id
+
+                # send mapping to gateway
+                reply = self.http_pool.request(
+                    "POST",
+                    f"{dst_gateway.gateway_api_url}/api/v1/upload_id_maps",
+                    body=json.dumps(mappings).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                )
+                # TODO: assume that only destination nodes would write to the obj store
+                if reply.status != 200:
+                    raise Exception(f"Failed to update upload ids to the dst gateway {dst_gateway.instance_name()}")
+
+            # send chunk requests to source gateways
+            chunk_batch = [cr.chunk.as_dict() for cr in batch if cr.chunk is not None]
             min_idx = bytes_dispatched.index(min(bytes_dispatched))
             server = src_gateways[min_idx]
             n_bytes = sum([cr.chunk.chunk_length_bytes for cr in batch])
@@ -502,7 +549,7 @@ class CopyJob(TransferJob):
             reply = self.http_pool.request(
                 "POST",
                 f"{server.gateway_api_url}/api/v1/chunk_requests",
-                body=json.dumps([c.as_dict() for c in batch]).encode("utf-8"),
+                body=json.dumps(chunk_batch).encode("utf-8"),
                 headers={"Content-Type": "application/json"},
             )
             end = time.time()

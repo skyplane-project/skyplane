@@ -56,6 +56,7 @@ class SkyplaneClient:
         # set up logging
         self.log_dir.mkdir(parents=True, exist_ok=True)
         logger.open_log_file(self.log_dir / "client.log")
+        print("logging:", self.log_dir / "client.log")
 
         self.provisioner = Provisioner(
             host_uuid=self.clientid,

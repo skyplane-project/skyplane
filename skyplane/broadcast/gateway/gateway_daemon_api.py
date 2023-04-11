@@ -40,6 +40,7 @@ class GatewayDaemonAPI(threading.Thread):
         error_queue: Queue,
         terminal_operators: Dict[str, List[str]],
         num_required_terminal: Dict[str, int],
+        upload_id_map: Dict[str, str],
         host="0.0.0.0",
         port=8081,
     ):
@@ -53,6 +54,7 @@ class GatewayDaemonAPI(threading.Thread):
         self.num_required_terminal = num_required_terminal
         self.error_list: List[TracebackException] = []
         self.error_list_lock = threading.Lock()
+        upload_id_map = upload_id_map
 
         # load routes
         self.register_global_routes(self.app)
@@ -247,7 +249,7 @@ class GatewayDaemonAPI(threading.Thread):
         # add a new chunk request with default state registered
         @app.route("/api/v1/chunk_requests", methods=["POST"])
         def add_chunk_request():
-            logging.info(f"[gateway_api] Recieved chunk request {request.json}")
+            print(f"[gateway_api] Recieved chunk request {request.json}")
             state_param = request.args.get("state", "registered")
             n_added = add_chunk_req(request.json, ChunkState.from_str(state_param))
             # TODO: Add to chunk manager queue
@@ -282,13 +284,21 @@ class GatewayDaemonAPI(threading.Thread):
         # post the upload ids mapping
         @app.route("/api/v1/upload_id_maps", methods=["POST"])
         def update_upload_ids_mapping():
+            # TODO: beware that this assumes that only a single thread on the client is making requests
+            # if concurrent calls are made, this needs to be processed as chunk requests are
             logging.debug(f"[gateway_api] Recieved id mapping request {request.json}")
-            upload_id_file_path = self.chunk_store.get_upload_id_map_path()
+            # upload_id_file_path = self.chunk_store.get_upload_id_map_path()
 
-            with upload_id_file_path.open("w") as f:
-                f.write(json.dumps(request.json))
+            # with upload_id_file_path.open("w") as f:
+            #    f.write(json.dumps(request.json))
 
-            print(f"[gateway_api] Gateway add upload IDs to {upload_id_file_path}")
+            # update upload id mapping
+            upload_ids = json.load(request.json)
+            for key, id in upload_ids.items():
+                self.upload_ids[key] = id
+
+            print(f"Added upload id mappings {upload_ids}")
+
             return jsonify({"status": "ok"})
 
     def register_error_routes(self, app):
