@@ -35,6 +35,7 @@ class Pipeline:
         clientid: str,
         provisioner: "Provisioner",
         transfer_config: TransferConfig,
+        cloud_regions: dict,
         debug: bool = False,
     ):
         """
@@ -46,6 +47,7 @@ class Pipeline:
         :type transfer_config: TransferConfig
         """
         self.clientid = clientid
+        self.cloud_regions = cloud_regions
         # TODO: set max instances with VM CPU limits and/or config
         self.max_instances = 1
         self.provisioner = provisioner
@@ -93,6 +95,28 @@ class Pipeline:
         :type src: str
         :param dst: the destination of the transfer
         :type dst: str
+        :param recursive: if true, will copy objects at folder prefix recursively (default: False)
+        :type recursive: bool
+        """
+        job = CopyJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
+        logger.fs.debug(f"[SkyplaneClient] Queued copy job {job}")
+        self.jobs_to_dispatch.append(job)
+        return job.uuid
+
+    def queue_copy(
+        self,
+        src: str,
+        dst: List[str],
+        recursive: bool = False,
+    ) -> str:
+        """
+        Add a broadcast replication job to job list.
+        Return the uuid of the job.
+
+        :param src: source prefix to copy from
+        :type src: str
+        :param dst: the destinations of the transfer
+        :type dst: List[str]
         :param recursive: if true, will copy objects at folder prefix recursively (default: False)
         :type recursive: bool
         """

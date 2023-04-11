@@ -389,11 +389,41 @@ class TransferJob(ABC):
     :type uuid: str
     """
 
-    src_path: str
-    dst_path: str
-    recursive: bool = False
-    requester_pays: bool = False
-    uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
+    @abstractmethod
+    def __init__(
+        src_path: str
+        dst_path: str
+        recursive: bool = False
+        requester_pays: bool = False
+        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
+    ):
+        self.src_path = src_path
+        self.dst_path = dst_path
+        self.recursive = recursive
+        self.requester_pays = requester_pays
+        self.uuid = uuid
+
+
+    @abstractmethod
+    def __init__(
+        src_path: str
+        dst_path: List[str]
+        recursive: bool = False
+        requester_pays: bool = False
+        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
+    ):
+        self.src_path = src_path
+        self.dst_path = dst_path
+        self.recursive = recursive
+        self.requester_pays = requester_pays
+        self.uuid = uuid
+
+    @property
+    def transfer_type(self) -> str:
+        if isinstance(self.dst_path, str):
+            return "unicast"
+        else:
+            return "multicast"
 
     @property
     def src_prefix(self) -> Optional[str]:
@@ -416,15 +446,24 @@ class TransferJob(ABC):
     def dst_prefix(self) -> Optional[str]:
         """Return the destination prefix"""
         if not hasattr(self, "_dst_prefix"):
-            self._dst_prefix = parse_path(self.dst_path)[2]
+            if self.transfer_type == "unicast":
+                self._dst_prefix = parse_path(self.dst_path)[2]
+            else:
+                self._dst_prefix = [parse_path(path)[2] for path in self.dst_path]
         return self._dst_prefix
 
     @property
     def dst_iface(self) -> ObjectStoreInterface:
         """Return the destination object store interface"""
         if not hasattr(self, "_dst_iface"):
-            provider_dst, bucket_dst, _ = parse_path(self.dst_path)
-            self._dst_iface = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst)
+            if self.transfer_type == "unicast":
+                provider_dst, bucket_dst, _ = parse_path(self.dst_path)
+                self._dst_iface = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst)
+            else:
+                self._dst_iface = []
+                for path in self.dst_path:
+                    provider_dst, bucket_dst, _ = parse_path(path)
+                    self._dst_iface.append(ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst))
         return self._dst_iface
 
     def dispatch(self, dataplane: "Dataplane", **kwargs) -> Generator[ChunkRequest, None, None]:
