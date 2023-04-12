@@ -77,8 +77,14 @@ class Pipeline:
 
         # create dataplane from plan
         dp = Dataplane(self.clientid, topo, self.provisioner, self.transfer_config, self.transfer_dir, debug=True)
-        dp.provision(spinner=True)
-        dp.run(self.jobs_to_dispatch)
+        try:
+            dp.provision(spinner=True)
+            dp.run(self.jobs_to_dispatch)
+        except Exception as e:
+            print(e) 
+            print("copy gateway logs")
+            dp.copy_gateway_logs()
+        print("deprovisioning dataplane...")
         dp.deprovision(spinner=True)
 
     def queue_copy(

@@ -54,7 +54,7 @@ class GatewayDaemonAPI(threading.Thread):
         self.num_required_terminal = num_required_terminal
         self.error_list: List[TracebackException] = []
         self.error_list_lock = threading.Lock()
-        upload_id_map = upload_id_map
+        self.upload_id_map = upload_id_map
 
         # load routes
         self.register_global_routes(self.app)
@@ -293,9 +293,10 @@ class GatewayDaemonAPI(threading.Thread):
             #    f.write(json.dumps(request.json))
 
             # update upload id mapping
-            upload_ids = json.load(request.json)
+            print(request.json)
+            upload_ids = request.json
             for key, id in upload_ids.items():
-                self.upload_ids[key] = id
+                self.upload_id_map[key] = id
 
             print(f"Added upload id mappings {upload_ids}")
 

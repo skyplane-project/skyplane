@@ -82,6 +82,7 @@ class Chunker:
                 continue
 
             src_object, dest_object = input_data
+            mime_type = self.src_iface.get_obj_mime_type(src_object.key)
 
             # create multipart upload request per destination
             upload_id_mapping = {}
@@ -90,11 +91,10 @@ class Chunker:
                 upload_id = dst_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
 
                 # store mapping between key and upload id for each region
-                upload_id_mapping[bucket.region_tag()] = (dest_object.key, upload_id)
+                upload_id_mapping[dst_iface.region_tag()] = (dest_object.key, upload_id)
             out_queue_chunks.put(GatewayMessage(upload_id_mapping=upload_id_mapping))  # send to output queue
 
             # get source and destination object and then compute number of chunks
-            mime_type = self.src_iface.get_obj_mime_type(src_object.key)
             chunk_size_bytes = int(self.transfer_config.multipart_chunk_size_mb * MB)
             num_chunks = math.ceil(src_object.size / chunk_size_bytes)
             if num_chunks > self.transfer_config.multipart_max_chunks:
@@ -131,7 +131,7 @@ class Chunker:
             # store multipart ids
             for dst_iface in self.dst_ifaces:
                 bucket = dst_iface.bucket()
-                region = bucket.region_tag()
+                region = dst_iface.region_tag()
                 upload_id = upload_id_mapping[region]
                 self.multipart_upload_requests.append(
                     dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket)
@@ -597,9 +597,11 @@ class CopyJob(TransferJob):
             for dst_gateway in dst_gateways:
                 # collect upload id mappings per region
                 mappings = {}
-                for region_mapping in upload_id_batch:
-                    for region_tag, (key, id) in region_mapping.items():
-                        mappings[key] = id
+                for message in upload_id_batch:
+                    for region_tag, (key, id) in message.upload_id_mapping.items():
+                        print(region_tag, dst_gateway.region_tag)
+                        if region_tag == dst_gateway.region_tag:
+                            mappings[key] = id
 
                 # send mapping to gateway
                 reply = self.http_pool.request(
@@ -610,7 +612,7 @@ class CopyJob(TransferJob):
                 )
                 # TODO: assume that only destination nodes would write to the obj store
                 if reply.status != 200:
-                    raise Exception(f"Failed to update upload ids to the dst gateway {dst_gateway.instance_name()}")
+                    raise Exception(f"Failed to update upload ids to the dst gateway {dst_gateway.instance_name()}: {reply.data.decode('utf-8')}")
 
             # send chunk requests to source gateways
             chunk_batch = [cr.chunk.as_dict() for cr in batch if cr.chunk is not None]
