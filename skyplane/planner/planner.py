@@ -30,12 +30,17 @@ class DirectPlanner(Planner):
         super().__init__()
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        # jobs must have same sources and destinations
+
+        # make sure only single destination
+        for job in jobs: 
+            assert len(job.dst_ifaces) == 1, f"DirectPlanner only support single destination jobs, got {len(job.dst_ifaces)}"
+
         src_region_tag = jobs[0].src_iface.region_tag()
-        dst_region_tag = jobs[0].dst_iface.region_tag()
+        dst_region_tag = jobs[0].dst_ifaces[0].region_tag()
+        # jobs must have same sources and destinations
         for job in jobs[1:]:
             assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
-            assert job.dst_iface.region_tag() == dst_region_tag, "All jobs must have same destination region"
+            assert job.dst_ifaces[0].region_tag() == dst_region_tag, "All jobs must have same destination region"
 
         print(src_region_tag, dst_region_tag)
 
@@ -54,7 +59,7 @@ class DirectPlanner(Planner):
 
         for job in jobs:
             src_bucket = job.src_iface.bucket()
-            dst_bucket = job.dst_iface.bucket()
+            dst_bucket = job.dst_ifaces[0].bucket()
 
             # give each job a different partition id, so we can read/write to different buckets
             partition_id = jobs.index(job)

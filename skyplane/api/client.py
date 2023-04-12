@@ -68,7 +68,6 @@ class SkyplaneClient:
     def pipeline(self):
         """Create a pipeline object to queue jobs"""
         return Pipeline(clientid=self.clientid, provisioner=self.provisioner, transfer_config=self.transfer_config)
-        return Pipeline()
 
     def copy(self, src: str, dst: str, recursive: bool = False, num_vms: int = 1):
         """

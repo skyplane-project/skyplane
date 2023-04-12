@@ -35,7 +35,7 @@ class Pipeline:
         clientid: str,
         provisioner: "Provisioner",
         transfer_config: TransferConfig,
-        cloud_regions: dict,
+        #cloud_regions: dict,
         debug: bool = False,
     ):
         """
@@ -47,7 +47,7 @@ class Pipeline:
         :type transfer_config: TransferConfig
         """
         self.clientid = clientid
-        self.cloud_regions = cloud_regions
+        #self.cloud_regions = cloud_regions
         # TODO: set max instances with VM CPU limits and/or config
         self.max_instances = 1
         self.provisioner = provisioner

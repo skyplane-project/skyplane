@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from queue import Queue
 from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple, TypeVar, Dict
 
+from abc import ABC, abstractmethod
+
 import urllib3
 from rich import print as rprint
 
@@ -85,7 +87,7 @@ class Chunker:
             upload_id_mapping = {}
             for dst_iface in self.dst_ifaces:
                 bucket = dst_iface.bucket()
-                upload_id = self.dst_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
+                upload_id = dst_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
 
                 # store mapping between key and upload id for each region
                 upload_id_mapping[bucket.region_tag()] = (dest_object.key, upload_id)
@@ -182,6 +184,7 @@ class Chunker:
                 else:
                     return dest_prefix
             else:
+                print(f"source_key: {source_key}, source_prefix: {source_prefix}, dest_prefix: {dest_prefix}")
                 # todo: don't print output here
                 rprint(f"\n:x: [bold red]In order to transfer objects using a prefix, you must use the --recursive or -r flag.[/bold red]")
                 rprint(f"[yellow]If you meant to transfer a single object, pass the full source object key.[/yellow]")
@@ -235,6 +238,7 @@ class Chunker:
         for obj in self.src_iface.list_objects(src_prefix):
             if prefilter_fn is None or prefilter_fn(obj):
                 try:
+                    print("object key", obj.key, src_prefix)
                     dest_key = self.map_object_key_prefix(src_prefix, obj.key, dst_prefix, recursive=recursive)
                 except exceptions.MissingObjectException as e:
                     logger.fs.exception(e)
@@ -389,12 +393,13 @@ class TransferJob(ABC):
     :type uuid: str
     """
 
-    @abstractmethod
+    #@abstractmethod
     def __init__(
-        src_path: str
-        dst_path: str
-        recursive: bool = False
-        requester_pays: bool = False
+        self,
+        src_path: str,
+        dst_path: str,
+        recursive: bool = False,
+        requester_pays: bool = False,
         uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
     ):
         self.src_path = src_path
@@ -404,12 +409,13 @@ class TransferJob(ABC):
         self.uuid = uuid
 
 
-    @abstractmethod
+    #@abstractmethod
     def __init__(
-        src_path: str
-        dst_path: List[str]
-        recursive: bool = False
-        requester_pays: bool = False
+        self,
+        src_path: str,
+        dst_path: List[str],
+        recursive: bool = False,
+        requester_pays: bool = False,
         uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
     ):
         self.src_path = src_path
@@ -430,6 +436,7 @@ class TransferJob(ABC):
         """Return the source prefix"""
         if not hasattr(self, "_src_prefix"):
             self._src_prefix = parse_path(self.src_path)[2]
+            print("src_prefix", self.src_path, self._src_prefix)
         return self._src_prefix
 
     @property
@@ -453,18 +460,18 @@ class TransferJob(ABC):
         return self._dst_prefix
 
     @property
-    def dst_iface(self) -> ObjectStoreInterface:
+    def dst_ifaces(self) -> List[ObjectStoreInterface]:
         """Return the destination object store interface"""
         if not hasattr(self, "_dst_iface"):
             if self.transfer_type == "unicast":
                 provider_dst, bucket_dst, _ = parse_path(self.dst_path)
-                self._dst_iface = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst)
+                self._dst_ifaces = [ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst)]
             else:
-                self._dst_iface = []
+                self._dst_ifaces = []
                 for path in self.dst_path:
                     provider_dst, bucket_dst, _ = parse_path(path)
-                    self._dst_iface.append(ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst))
-        return self._dst_iface
+                    self._dst_ifaces.append(ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst))
+        return self._dst_ifaces
 
     def dispatch(self, dataplane: "Dataplane", **kwargs) -> Generator[ChunkRequest, None, None]:
         """Dispatch transfer job to specified gateways."""
@@ -503,8 +510,35 @@ class CopyJob(TransferJob):
     :type multipart_transfer_list: list
     """
 
-    transfer_list: list = field(default_factory=list)
-    multipart_transfer_list: list = field(default_factory=list)
+    def __init__(
+        self,
+        src_path: str,
+        dst_path: str,
+        recursive: bool = False,
+        requester_pays: bool = False,
+        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
+    ):
+        super().__init__(src_path, dst_path, recursive, requester_pays, uuid)
+        self.transfer_list = []
+        self.multipart_transfer_list = []
+
+
+    #@abstractmethod
+    def __init__(
+        self,
+        src_path: str,
+        dst_path: List[str],
+        recursive: bool = False,
+        requester_pays: bool = False,
+        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
+    ):
+        super().__init__(src_path, dst_path, recursive, requester_pays, uuid)
+        self.transfer_list = []
+        self.multipart_transfer_list = []
+
+
+    #transfer_list: list = field(default_factory=list)
+    #multipart_transfer_list: list = field(default_factory=list)
 
     @property
     def http_pool(self):
@@ -626,14 +660,15 @@ class CopyJob(TransferJob):
     def verify(self):
         """Verify the integrity of the transfered destination objects"""
         dst_keys = {dst_o.key: src_o for src_o, dst_o in self.transfer_list}
-        for obj in self.dst_iface.list_objects(self.dst_prefix):
-            # check metadata (src.size == dst.size) && (src.modified <= dst.modified)
-            src_obj = dst_keys.get(obj.key)
-            if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:
-                del dst_keys[obj.key]
-        if dst_keys:
-            failed_keys = [obj.key for obj in dst_keys.values()]
-            raise exceptions.TransferFailedException(f"{len(dst_keys)} objects failed verification {failed_keys}")
+        for dst_iface in self.dst_ifaces:
+            for obj in dst_iface.list_objects(self.dst_prefix):
+                # check metadata (src.size == dst.size) && (src.modified <= dst.modified)
+                src_obj = dst_keys.get(obj.key)
+                if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:
+                    del dst_keys[obj.key]
+            if dst_keys:
+                failed_keys = [obj.key for obj in dst_keys.values()]
+                raise exceptions.TransferFailedException(f"{len(dst_keys)} objects failed verification {failed_keys}")
 
 
 @dataclass
@@ -650,7 +685,7 @@ class SyncJob(CopyJob):
         :type chunker: Chunker
         """
         if chunker is None:  # used for external access to transfer pair list
-            chunker = Chunker(self.src_iface, self.dst_iface, TransferConfig())
+            chunker = Chunker(self.src_iface, self.dst_ifaces, TransferConfig())
         transfer_pair_gen = chunker.transfer_pair_generator(self.src_prefix, self.dst_prefix, self.recursive, self._pre_filter_fn)
         # enrich destination objects with metadata
         for src_obj, dest_obj in self._enrich_dest_objs(transfer_pair_gen, self.dst_prefix):
@@ -667,14 +702,15 @@ class SyncJob(CopyJob):
         :param transfer_pairs: generator of transfer pairs
         :type transfer_pairs: Generator
         """
-        logger.fs.debug(f"Querying objects in {self.dst_iface.bucket()}")
-        if not hasattr(self, "_found_dest_objs"):
-            self._found_dest_objs = {obj.key: obj for obj in self.dst_iface.list_objects(dest_prefix)}
-        for src_obj, dest_obj in transfer_pairs:
-            if dest_obj.key in self._found_dest_objs:
-                dest_obj.size = self._found_dest_objs[dest_obj.key].size
-                dest_obj.last_modified = self._found_dest_objs[dest_obj.key].last_modified
-            yield src_obj, dest_obj
+        for dst_iface in self.dst_ifaces:
+            logger.fs.debug(f"Querying objects in {dst_iface.bucket()}")
+            if not hasattr(self, "_found_dest_objs"):
+                self._found_dest_objs = {obj.key: obj for obj in dst_iface.list_objects(dest_prefix)}
+            for src_obj, dest_obj in transfer_pairs:
+                if dest_obj.key in self._found_dest_objs:
+                    dest_obj.size = self._found_dest_objs[dest_obj.key].size
+                    dest_obj.last_modified = self._found_dest_objs[dest_obj.key].last_modified
+                yield src_obj, dest_obj
 
     @classmethod
     def _post_filter_fn(cls, src_obj: ObjectStoreObject, dest_obj: ObjectStoreObject) -> bool:

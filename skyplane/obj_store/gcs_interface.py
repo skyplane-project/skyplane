@@ -16,6 +16,8 @@ from skyplane.utils import logger
 
 
 class GCSObject(ObjectStoreObject):
+
+    provider = "gcs"
     def full_path(self):
         return os.path.join(f"gs://{self.bucket}", self.key)
 
@@ -107,7 +109,7 @@ class GCSInterface(ObjectStoreInterface):
     def list_objects(self, prefix="", region=None) -> Iterator[GCSObject]:
         blobs = self._gcs_client.list_blobs(self.bucket_name, prefix=prefix)
         for blob in blobs:
-            yield GCSObject("gcs", self.bucket_name, blob.name, blob.size, blob.updated, mime_type=getattr(blob, "content_type", None))
+            yield GCSObject(blob.name, bucket=self.bucket_name, size=blob.size, last_modified=blob.updated, mime_type=getattr(blob, "content_type", None))
 
     def delete_objects(self, keys: List[str]):
         for key in keys:
