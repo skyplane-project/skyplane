@@ -133,7 +133,7 @@ class TransferProgressTracker(Thread):
         session_start_timestamp_ms = int(time.time() * 1000)
         try:
             # pre-dispatch chunks to begin pre-buffering chunks
-            cr_streams = {
+            chunk_streams = {
                 job_uuid: job.dispatch(self.dataplane, transfer_config=self.transfer_config) for job_uuid, job in self.jobs.items()
             }
             for job_uuid, job in self.jobs.items():
@@ -141,10 +141,10 @@ class TransferProgressTracker(Thread):
                 self.job_chunk_requests[job_uuid] = {}
                 self.job_pending_chunk_ids[job_uuid] = set()
                 self.job_complete_chunk_ids[job_uuid] = set()
-                for cr in cr_streams[job_uuid]:
-                    chunks_dispatched = [cr.chunk]
-                    self.job_chunk_requests[job_uuid][cr.chunk.chunk_id] = cr
-                    self.job_pending_chunk_ids[job_uuid].add(cr.chunk.chunk_id)
+                for chunk in chunk_streams[job_uuid]:
+                    chunks_dispatched = [chunk]
+                    self.job_chunk_requests[job_uuid][chunk.chunk_id] = chunk
+                    self.job_pending_chunk_ids[job_uuid].add(chunk.chunk_id)
                     self.hooks.on_chunk_dispatched(chunks_dispatched)
                 logger.fs.debug(
                     f"[TransferProgressTracker] Job {job.uuid} dispatched with {len(self.job_chunk_requests[job_uuid])} chunk requests"

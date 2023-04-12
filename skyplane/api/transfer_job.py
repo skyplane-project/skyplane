@@ -473,7 +473,7 @@ class TransferJob(ABC):
                     self._dst_ifaces.append(ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst))
         return self._dst_ifaces
 
-    def dispatch(self, dataplane: "Dataplane", **kwargs) -> Generator[ChunkRequest, None, None]:
+    def dispatch(self, dataplane: "Dataplane", **kwargs) -> Generator[Chunk, None, None]:
         """Dispatch transfer job to specified gateways."""
         raise NotImplementedError("Dispatch not implemented")
 
@@ -565,7 +565,7 @@ class CopyJob(TransferJob):
         dataplane: "Dataplane",
         transfer_config: TransferConfig,
         dispatch_batch_size: int = 100,  # 6.4 GB worth of chunks
-    ) -> Generator[ChunkRequest, None, None]:
+    ) -> Generator[Chunk, None, None]:
         """Dispatch transfer job to specified gateways.
 
         :param dataplane: dataplane that starts the transfer job
@@ -615,16 +615,17 @@ class CopyJob(TransferJob):
                     raise Exception(f"Failed to update upload ids to the dst gateway {dst_gateway.instance_name()}: {reply.data.decode('utf-8')}")
 
             # send chunk requests to source gateways
-            chunk_batch = [cr.chunk.as_dict() for cr in batch if cr.chunk is not None]
+            chunk_batch = [cr.chunk for cr in batch if cr.chunk is not None]
+            print(chunk_batch)
             min_idx = bytes_dispatched.index(min(bytes_dispatched))
             server = src_gateways[min_idx]
-            n_bytes = sum([cr.chunk.chunk_length_bytes for cr in batch])
+            n_bytes = sum([chunk.chunk_length_bytes for chunk in chunk_batch])
             bytes_dispatched[min_idx] += n_bytes
             start = time.time()
             reply = self.http_pool.request(
                 "POST",
                 f"{server.gateway_api_url}/api/v1/chunk_requests",
-                body=json.dumps(chunk_batch).encode("utf-8"),
+                body=json.dumps([chunk.as_dict() for chunk in chunk_batch]).encode("utf-8"),
                 headers={"Content-Type": "application/json"},
             )
             end = time.time()
@@ -633,7 +634,7 @@ class CopyJob(TransferJob):
             logger.fs.debug(
                 f"Dispatched {len(batch)} chunk requests to {server.instance_name()} ({n_bytes} bytes) in {end - start:.2f} seconds"
             )
-            yield from batch
+            yield from chunk_batch
 
             # copy new multipart transfers to the multipart transfer list
             updated_len = len(chunker.multipart_upload_requests)

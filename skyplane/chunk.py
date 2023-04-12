@@ -45,10 +45,10 @@ class ChunkRequest:
     """A ChunkRequest stores all local state in the Gateway pertaining to a ChunkRequest."""
 
     chunk: Chunk
-    src_region: str
-    dst_region: str
-    src_type: str  # enum of {"object_store", "random", "read_local"}
-    dst_type: str  # enum of {"object_store", "save_local"}
+    src_region: Optional[str] = None
+    dst_region: Optional[str] = None
+    src_type: Optional[str] = None # enum of {"object_store", "random", "read_local"}
+    dst_type: Optional[str] = None # enum of {"object_store", "save_local"}
     src_random_size_mb: Optional[int] = None
     src_object_store_bucket: Optional[str] = None
     dst_object_store_bucket: Optional[str] = None
@@ -67,9 +67,9 @@ class ChunkRequest:
         return dict_out
 
     @staticmethod
-    def from_dict(in_dict: Dict):
-        in_dict["chunk"] = Chunk.from_dict(in_dict["chunk"])
-        return ChunkRequest(**in_dict)
+    def from_dict(in_dict: Dict): 
+        #in_dict["chunk"] = Chunk.from_dict(in_dict)
+        return ChunkRequest(**{"chunk": Chunk.from_dict(in_dict)})
 
 
 @total_ordering
