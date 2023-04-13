@@ -69,7 +69,7 @@ jobs:
         run: poetry run python tests/integration/cp.py ${{ matrix.pairs }}
       - name: Cleanup GCP service account
         if: always()
-        run: gcloud iam service-accounts delete ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+        run: gcloud iam service-accounts delete --quiet ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
   deprovision:
     runs-on: ubuntu-latest
     if: ${{ always() }}
