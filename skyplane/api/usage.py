@@ -260,7 +260,6 @@ class UsageClient:
         if dest_region_tags is None:
             dest_provider, dest_region = None, None
         else:
-
             # TODO: have usage stats view for multiple destinations
             dest_provider, dest_region = dest_region_tags[0].split(":")
 

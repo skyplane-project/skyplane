@@ -262,7 +262,7 @@ class TransferProgressTracker(Thread):
             # TODO: have visualization for completition across all destinations
             is_complete_rec = (
                 lambda row: row["state"] == ChunkState.complete
-                #and row["instance"] in [s.instance for s in sinks]
+                # and row["instance"] in [s.instance for s in sinks]
                 and row["region"] in [s.region for s in sinks]
             )
             sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]

@@ -393,14 +393,14 @@ class TransferJob(ABC):
     :type uuid: str
     """
 
-    #@abstractmethod
+    # @abstractmethod
     def __init__(
         self,
         src_path: str,
         dst_path: str,
         recursive: bool = False,
         requester_pays: bool = False,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
+        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
         self.src_path = src_path
         self.dst_path = dst_path
@@ -408,15 +408,14 @@ class TransferJob(ABC):
         self.requester_pays = requester_pays
         self.uuid = uuid
 
-
-    #@abstractmethod
+    # @abstractmethod
     def __init__(
         self,
         src_path: str,
         dst_path: List[str],
         recursive: bool = False,
         requester_pays: bool = False,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
+        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
         self.src_path = src_path
         self.dst_path = dst_path
@@ -516,29 +515,27 @@ class CopyJob(TransferJob):
         dst_path: str,
         recursive: bool = False,
         requester_pays: bool = False,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
+        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
         super().__init__(src_path, dst_path, recursive, requester_pays, uuid)
         self.transfer_list = []
         self.multipart_transfer_list = []
 
-
-    #@abstractmethod
+    # @abstractmethod
     def __init__(
         self,
         src_path: str,
         dst_path: List[str],
         recursive: bool = False,
         requester_pays: bool = False,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
+        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
         super().__init__(src_path, dst_path, recursive, requester_pays, uuid)
         self.transfer_list = []
         self.multipart_transfer_list = []
 
-
-    #transfer_list: list = field(default_factory=list)
-    #multipart_transfer_list: list = field(default_factory=list)
+    # transfer_list: list = field(default_factory=list)
+    # multipart_transfer_list: list = field(default_factory=list)
 
     @property
     def http_pool(self):
@@ -615,7 +612,9 @@ class CopyJob(TransferJob):
                 )
                 # TODO: assume that only destination nodes would write to the obj store
                 if reply.status != 200:
-                    raise Exception(f"Failed to update upload ids to the dst gateway {dst_gateway.instance_name()}: {reply.data.decode('utf-8')}")
+                    raise Exception(
+                        f"Failed to update upload ids to the dst gateway {dst_gateway.instance_name()}: {reply.data.decode('utf-8')}"
+                    )
 
             # send chunk requests to source gateways
             chunk_batch = [cr.chunk for cr in batch if cr.chunk is not None]
