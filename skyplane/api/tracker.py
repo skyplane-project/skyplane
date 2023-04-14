@@ -259,9 +259,10 @@ class TransferProgressTracker(Thread):
                 time.sleep(0.05)
                 continue
 
+            # TODO: have visualization for completition across all destinations
             is_complete_rec = (
-                lambda row: row["state"] == ChunkState.upload_complete
-                and row["instance"] in [s.instance for s in sinks]
+                lambda row: row["state"] == ChunkState.complete
+                #and row["instance"] in [s.instance for s in sinks]
                 and row["region"] in [s.region for s in sinks]
             )
             sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
@@ -276,7 +277,7 @@ class TransferProgressTracker(Thread):
                 )
                 completed_chunks = []
                 for id in new_chunk_ids:
-                    completed_chunks.append(self.job_chunk_requests[job_uuid][id].chunk)
+                    completed_chunks.append(self.job_chunk_requests[job_uuid][id])
                 self.hooks.on_chunk_completed(completed_chunks)
                 self.job_complete_chunk_ids[job_uuid] = self.job_complete_chunk_ids[job_uuid].union(job_complete_chunk_ids)
                 self.job_pending_chunk_ids[job_uuid] = self.job_pending_chunk_ids[job_uuid].difference(job_complete_chunk_ids)
@@ -304,6 +305,7 @@ class TransferProgressTracker(Thread):
                 log_entry["time"] = datetime.fromisoformat(log_entry["time"])
                 log_entry["state"] = ChunkState.from_str(log_entry["state"])
                 logs.append(log_entry)
+
             return logs
 
         rows = []
@@ -340,9 +342,9 @@ class TransferProgressTracker(Thread):
         for job_uuid in self.job_complete_chunk_ids.keys():
             bytes_total_per_job[job_uuid] = sum(
                 [
-                    cr.chunk.chunk_length_bytes
+                    cr.chunk_length_bytes
                     for cr in self.job_chunk_requests[job_uuid].values()
-                    if cr.chunk.chunk_id in self.job_complete_chunk_ids[job_uuid]
+                    if cr.chunk_id in self.job_complete_chunk_ids[job_uuid]
                 ]
             )
         return sum(bytes_total_per_job.values())

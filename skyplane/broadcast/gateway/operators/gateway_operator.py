@@ -274,7 +274,9 @@ class GatewaySender(GatewayOperator):
         chunk_ids = [chunk_req.chunk.chunk_id]
         chunk_reqs = [chunk_req]
         with Timer(f"pre-register chunks {chunk_ids} to {dst_host}"):
-            register_body = json.dumps([c.as_dict() for c in chunk_reqs]).encode("utf-8")
+
+            # TODO: remove chunk request wrapper
+            register_body = json.dumps([c.chunk.as_dict() for c in chunk_reqs]).encode("utf-8")
             print(f"[sender-{self.worker_id}]:{chunk_ids} register body {register_body}")
             # while True:
             #   try:
@@ -537,6 +539,7 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
             handle, region, input_queue, output_queue, error_event, error_queue, n_processes, chunk_store, bucket_name, bucket_region
         )
         self.chunk_store = chunk_store
+        self.upload_id_map = upload_id_map
 
     def process(self, chunk_req: ChunkRequest):
         fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
@@ -548,8 +551,8 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         obj_store_interface = self.get_obj_store_interface(self.bucket_region, self.bucket_name)
 
         if chunk_req.chunk.multi_part:
-            assert chunk_req.chunk.key in self.upload_id_map, f"Upload id for {chunk_req.chunk.key} not found"
-            upload_id = self.upload_id_map[chunk_req.chunk.key]
+            assert chunk_req.chunk.dest_key in self.upload_id_map, f"Upload id for {chunk_req.chunk.dest_key} not found {self.upload_id_map}"
+            upload_id = self.upload_id_map[chunk_req.chunk.dest_key]
             # key_to_upload_id = self.bucket_region + ":" + self.bucket_name + ":" + chunk_req.chunk.dest_key
             # logger.debug(f"[obj_store:{self.worker_id}] key {key_to_upload_id}, multi-part is enabled")
 

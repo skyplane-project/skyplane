@@ -203,6 +203,7 @@ class Dataplane:
             for node in self.topology.get_gateways():
                 print(node.region_tag)
                 instance = servers_by_region[node.region_tag].pop()
+                print("instance", instance)
                 self.bound_nodes[node] = instance
 
                 # set ip addresses (for gateway program generation)

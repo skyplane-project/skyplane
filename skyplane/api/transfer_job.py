@@ -596,12 +596,15 @@ class CopyJob(TransferJob):
             dst_gateways = dataplane.sink_gateways()
             for dst_gateway in dst_gateways:
                 # collect upload id mappings per region
+                print("upload id batch", upload_id_batch)
                 mappings = {}
                 for message in upload_id_batch:
                     for region_tag, (key, id) in message.upload_id_mapping.items():
                         print(region_tag, dst_gateway.region_tag)
                         if region_tag == dst_gateway.region_tag:
                             mappings[key] = id
+
+                print("mappings", mappings)
 
                 # send mapping to gateway
                 reply = self.http_pool.request(
@@ -616,12 +619,12 @@ class CopyJob(TransferJob):
 
             # send chunk requests to source gateways
             chunk_batch = [cr.chunk for cr in batch if cr.chunk is not None]
-            print(chunk_batch)
             min_idx = bytes_dispatched.index(min(bytes_dispatched))
             server = src_gateways[min_idx]
             n_bytes = sum([chunk.chunk_length_bytes for chunk in chunk_batch])
             bytes_dispatched[min_idx] += n_bytes
             start = time.time()
+            assert Chunk.from_dict(chunk_batch[0].as_dict()) == chunk_batch[0], f"Invalid chunk request: {chunk_batch[0].as_dict}"
             reply = self.http_pool.request(
                 "POST",
                 f"{server.gateway_api_url}/api/v1/chunk_requests",
@@ -656,7 +659,8 @@ class CopyJob(TransferJob):
 
             def complete_fn(batch):
                 for req in batch:
-                    obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"])
+                    print("request", req)
+                    obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"][1])
 
             do_parallel(complete_fn, batches, n=-1)
 

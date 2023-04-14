@@ -158,7 +158,7 @@ class UsageClient:
         transfer_stats: Optional[Dict],
         args: Optional[Dict] = None,
         src_region_tag: Optional[str] = None,
-        dest_region_tag: Optional[str] = None,
+        dest_region_tags: Optional[str] = None,
         session_start_timestamp_ms: Optional[int] = None,
     ):
         if cls.enabled():
@@ -167,7 +167,7 @@ class UsageClient:
                 arguments_dict=args,
                 transfer_stats=transfer_stats,
                 src_region_tag=src_region_tag,
-                dest_region_tag=dest_region_tag,
+                dest_region_tags=dest_region_tags,
                 session_start_timestamp_ms=session_start_timestamp_ms,
             )
             destination = client.write_usage_data(stats)
@@ -250,17 +250,19 @@ class UsageClient:
         arguments_dict: Optional[Dict] = None,
         transfer_stats: Optional[Dict] = None,
         src_region_tag: Optional[str] = None,
-        dest_region_tag: Optional[str] = None,
+        dest_region_tags: Optional[str] = None,
         session_start_timestamp_ms: Optional[int] = None,
     ):
         if src_region_tag is None:
             src_provider, src_region = None, None
         else:
             src_provider, src_region = src_region_tag.split(":")
-        if dest_region_tag is None:
+        if dest_region_tags is None:
             dest_provider, dest_region = None, None
         else:
-            dest_provider, dest_region = dest_region_tag.split(":")
+
+            # TODO: have usage stats view for multiple destinations
+            dest_provider, dest_region = dest_region_tags[0].split(":")
 
         return UsageStatsToReport(
             skyplane_version=skyplane.__version__,
