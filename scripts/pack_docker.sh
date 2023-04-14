@@ -12,7 +12,7 @@ set +e
 
 >&2 echo -e "${BGreen}Building docker image${NC}"
 set -e
->&2 sudo DOCKER_BUILDKIT=1 docker build -t skyplane --platform linux/x86_64 .
+>&2 sudo DOCKER_BUILDKIT=1 docker build -f Dockerfile.broadcast -t skyplane --platform linux/x86_64 .
 set +e
 
 DOCKER_URL="ghcr.io/$1/skyplane:local-$(openssl rand -hex 16)"
