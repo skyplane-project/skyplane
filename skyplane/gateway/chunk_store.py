@@ -8,7 +8,7 @@ from typing import Dict, Optional
 from skyplane.utils import logger
 
 from skyplane.chunk import ChunkRequest, ChunkState
-from skyplane.broadcast.gateway.gateway_queue import GatewayQueue
+from skyplane.gateway.gateway_queue import GatewayQueue
 
 
 class ChunkStore:

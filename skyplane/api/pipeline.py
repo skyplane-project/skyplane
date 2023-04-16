@@ -16,7 +16,7 @@ from skyplane.api.tracker import TransferProgressTracker, TransferHook
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
 from skyplane.planner.topology_old import ReplicationTopology, ReplicationTopologyGateway
-from skyplane.planner.planner import DirectPlanner
+from skyplane.planner.planner import MultiDestDirectPlanner 
 from skyplane.utils import logger
 from skyplane.utils.definitions import gateway_docker_image, tmp_log_dir
 from skyplane.utils.fn import PathLike, do_parallel
@@ -70,7 +70,8 @@ class Pipeline:
 
     def start(self):
         # TODO: Set number of connections properly (or not at all)
-        planner = DirectPlanner(self.max_instances, 32)
+        #planner = DirectPlanner(self.max_instances, 32)
+        planner = MultiDestDirectPlanner(self.max_instances, 32)
 
         # create plan from set of jobs scheduled
         topo = planner.plan(self.jobs_to_dispatch)
@@ -90,7 +91,7 @@ class Pipeline:
     def queue_copy(
         self,
         src: str,
-        dst: str,
+        dst: List[str],
         recursive: bool = False,
     ) -> str:
         """
@@ -104,28 +105,8 @@ class Pipeline:
         :param recursive: if true, will copy objects at folder prefix recursively (default: False)
         :type recursive: bool
         """
-        job = CopyJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
-        logger.fs.debug(f"[SkyplaneClient] Queued copy job {job}")
-        self.jobs_to_dispatch.append(job)
-        return job.uuid
-
-    def queue_copy(
-        self,
-        src: str,
-        dst: List[str],
-        recursive: bool = False,
-    ) -> str:
-        """
-        Add a broadcast replication job to job list.
-        Return the uuid of the job.
-
-        :param src: source prefix to copy from
-        :type src: str
-        :param dst: the destinations of the transfer
-        :type dst: List[str]
-        :param recursive: if true, will copy objects at folder prefix recursively (default: False)
-        :type recursive: bool
-        """
+        if isinstance(dst, str):
+            dst = [dst]
         job = CopyJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
         logger.fs.debug(f"[SkyplaneClient] Queued copy job {job}")
         self.jobs_to_dispatch.append(job)

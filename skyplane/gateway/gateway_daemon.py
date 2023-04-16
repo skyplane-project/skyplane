@@ -13,18 +13,18 @@ from typing import Dict, List, Optional
 
 from skyplane.utils import logger
 
-from skyplane.broadcast.gateway.gateway_queue import GatewayQueue, GatewayANDQueue
-from skyplane.broadcast.gateway.chunk_store import ChunkStore
-from skyplane.broadcast.gateway.gateway_daemon_api import GatewayDaemonAPI
-from skyplane.broadcast.gateway.operators.gateway_operator import (
+from skyplane.gateway.gateway_queue import GatewayQueue, GatewayANDQueue
+from skyplane.gateway.chunk_store import ChunkStore
+from skyplane.gateway.gateway_daemon_api import GatewayDaemonAPI
+from skyplane.gateway.operators.gateway_operator import (
     GatewaySender,
     GatewayRandomDataGen,
     GatewayWriteLocal,
     GatewayObjStoreReadOperator,
     GatewayObjStoreWriteOperator,
     GatewayWaitReciever,
+    GatewayReceiver,
 )
-from skyplane.broadcast.gateway.operators.gateway_receiver import GatewayReceiver
 from skyplane.utils import logger
 from collections import defaultdict
 

@@ -6,7 +6,7 @@ from skyplane import compute
 from skyplane.planner.topology_old import ReplicationTopology
 
 from skyplane.planner.topology import TopologyPlan
-from skyplane.broadcast.gateway.gateway_program import (
+from skyplane.gateway.gateway_program import (
     GatewayProgram,
     GatewayMuxOr,
     GatewayReadObjectStore,
@@ -23,7 +23,7 @@ class Planner:
         raise NotImplementedError
 
 
-class DirectPlanner(Planner):
+class SingleDestDirectPlanner(Planner):
     def __init__(self, n_instances: int, n_connections: int):
         self.n_instances = n_instances
         self.n_connections = n_connections
@@ -84,6 +84,73 @@ class DirectPlanner(Planner):
         # set gateway programs
         plan.set_gateway_program(src_region_tag, src_program)
         plan.set_gateway_program(dst_region_tag, dst_program)
+
+        return plan
+
+class MultiDestDirectPlanner(Planner):
+    def __init__(self, n_instances: int, n_connections: int):
+        self.n_instances = n_instances
+        self.n_connections = n_connections
+        super().__init__()
+
+    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
+
+        src_region_tag = jobs[0].src_iface.region_tag()
+        dst_region_tags = [iface.region_tag() for iface in jobs[0]] 
+        # jobs must have same sources and destinations
+        for job in jobs[1:]:
+            assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
+            assert [iface.region_tag() for iface in job]== dst_region_tags, "Add jobs must have same destination set"
+
+        print(src_region_tag, dst_region_tags)
+
+        plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=dst_region_tags)
+        # TODO: use VM limits to determine how many instances to create in each region
+        # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
+        for i in range(self.n_instances):
+            plan.add_gateway(src_region_tag)
+            for dst_region_tag in dst_region_tags:
+                plan.add_gateway(dst_region_tag)
+
+        # initialize gateway programs per region
+        dst_program = {dst_region: GatewayProgram() for dst_region in dst_region_tags}
+        src_program = GatewayProgram()
+
+        # iterate through all jobs
+        for job in jobs:
+            src_bucket = job.src_iface.bucket()
+            dst_bucket = job.dst_ifaces[0].bucket()
+
+            # give each job a different partition id, so we can read/write to different buckets
+            partition_id = jobs.index(job)
+
+            # source region gateway program
+            obj_store_read = src_program.add_operator(
+                GatewayReadObjectStore(src_bucket, src_region_tag, self.n_connections), partition_id=partition_id
+            )
+            # send to all destination
+            mux_and = src_program.add_operator(GatewayMuxAnd(), parent_handle=obj_store_read, partition_id=partition_id)
+            # send to one gateway in destination
+            for dst_region_tag in dst_region_tags:
+                dst_gateways = plan.get_region_gateways(dst_region_tag)
+                mux_or = src_program.add_operator(GatewayMuxOr(), parent_handle=mux_and, partition_id=partition_id)
+                for i in range(self.n_instances):
+                    src_program.add_operator(
+                        GatewaySend(target_gateway_id=dst_gateways[i].gateway_id, region=dst_region_tag, num_connections=self.n_connections),
+                        parent_handle=mux_and,
+                        partition_id=partition_id,
+                    )
+
+                # each gateway also recieves data from source
+                recv_op = dst_program[dst_region_tag].add_operator(GatewayReceive(), partition_id=partition_id)
+                dst_program.add_operator(
+                    GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections), parent_handle=recv_op, partition_id=partition_id
+                )
+
+        # set gateway programs
+        plan.set_gateway_program(src_region_tag, src_program)
+        for dst_region_tag, program in dst_program.items():
+            plan.set_gateway_program(dst_region_tag, program)
 
         return plan
 

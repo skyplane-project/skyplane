@@ -1,4 +1,4 @@
-from skyplane.broadcast.gateway.gateway_program import (
+from skyplane.gateway.gateway_program import (
     GatewayProgram,
     GatewaySend,
     GatewayWriteLocal,
