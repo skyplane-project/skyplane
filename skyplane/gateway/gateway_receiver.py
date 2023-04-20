@@ -152,7 +152,8 @@ class GatewayReceiver:
             self.chunk_store.state_start_download(chunk_header.chunk_id, f"receiver:{self.worker_id}")
             logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} wire header length {chunk_header.data_len}")
             with Timer() as t:
-                with self.chunk_store.get_chunk_file_path(chunk_header.chunk_id).open("wb") as f:
+                fpath = self.chunk_store.get_chunk_file_path(chunk_header.chunk_id)
+                with fpath.open("wb") as f:
                     socket_data_len = chunk_header.data_len
                     chunk_received_size = 0
                     chunk_received_size_decompressed = 0
@@ -177,7 +178,22 @@ class GatewayReceiver:
                         data_batch_decompressed = lz4.frame.decompress(to_write)
                         chunk_received_size_decompressed += len(data_batch_decompressed)
                         to_write = data_batch_decompressed
-                    f.write(to_write)
+
+                    # try to write data until successful
+                    while True:
+                        try:
+                            f.seek(0, 0)
+                            f.write(to_write)
+                            f.flush()
+
+                            # check size
+                            file_size = os.path.getsize(fpath)
+                            if file_size == len(to_write):
+                                break
+                            elif file_size > len(to_write):
+                                raise ValueError(f"[Gateway] File size {file_size} greater than chunk size {chunk_header.data_len}")
+                        except Exception as e:
+                            print(e)
             assert (
                 socket_data_len == 0 and chunk_received_size == chunk_header.data_len
             ), f"Size mismatch: got {chunk_received_size} expected {chunk_header.data_len} and had {socket_data_len} bytes remaining"
