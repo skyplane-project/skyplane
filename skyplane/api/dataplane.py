@@ -307,7 +307,11 @@ class Dataplane:
 
     def sink_gateways(self) -> List[compute.Server]:
         """Returns a list of sink gateway nodes"""
-        return {region: [self.bound_nodes[n] for n in nodes] for region, nodes in self.topology.sink_instances().items()} if self.provisioned else {}
+        return (
+            {region: [self.bound_nodes[n] for n in nodes] for region, nodes in self.topology.sink_instances().items()}
+            if self.provisioned
+            else {}
+        )
 
     def copy_log(self, instance):
         instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")

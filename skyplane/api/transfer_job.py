@@ -33,12 +33,14 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 
-class TransferPair: 
 
+class TransferPair:
     "Represents transfer pair between source and destination"
+
     def __init__(self, src: ObjectStoreObject, dsts: Dict[str, List[ObjectStoreObject]]):
         self.src = src
-        self.dsts = dsts # map region_tag -> List[ObjectStoreObject]
+        self.dsts = dsts  # map region_tag -> List[ObjectStoreObject]
+
 
 class GatewayMessage:
     def __init__(self, chunk: Chunk = None, upload_id_mapping: Dict[str, Dict[str, str]] = None):
@@ -95,7 +97,7 @@ class Chunker:
             # create multipart upload request per destination
             upload_id_mapping = {}
             for dest_iface in self.dst_ifaces:
-                #dest_object = dest_objects[dest_iface.region_tag()]
+                # dest_object = dest_objects[dest_iface.region_tag()]
                 upload_id = dest_iface.initiate_multipart_upload(src_object.key, mime_type=mime_type)
                 print(f"Created upload id for key {src_object.key} with upload id {upload_id} for bucket {dest_iface.bucket_name}")
                 # store mapping between key and upload id for each region
@@ -122,7 +124,7 @@ class Chunker:
                 assert file_size_bytes > 0, f"file size <= 0 {file_size_bytes}"
                 chunk = Chunk(
                     src_key=src_object.key,
-                    dest_key=src_object.key, #dest_object.key, # TODO: upload basename (no prefix) 
+                    dest_key=src_object.key,  # dest_object.key, # TODO: upload basename (no prefix)
                     chunk_id=uuid.uuid4().hex,
                     file_offset_bytes=offset,
                     partition_id=str(part_num % self.num_partitions),
@@ -143,9 +145,7 @@ class Chunker:
                 bucket = dest_iface.bucket()
                 region = dest_iface.region_tag()
                 dest_key, upload_id = upload_id_mapping[region]
-                self.multipart_upload_requests.append(
-                    dict(upload_id=upload_id, key=dest_key, parts=parts, region=region, bucket=bucket)
-                )
+                self.multipart_upload_requests.append(dict(upload_id=upload_id, key=dest_key, parts=parts, region=region, bucket=bucket))
 
     # def to_chunk_requests(self, gen_in: Generator[Chunk, None, None]) -> Generator[ChunkRequest, None, None]:
     #    """Converts a generator of chunks to a generator of chunk requests.
@@ -224,7 +224,7 @@ class Chunker:
         dst_prefixes: str,
         recursive: bool,
         prefilter_fn: Optional[Callable[[ObjectStoreObject], bool]] = None,
-    #) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
+        # ) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
     ) -> Generator[TransferPair, None, None]:
         """Query source region and return list of objects to transfer.
 
@@ -252,7 +252,7 @@ class Chunker:
 
                 # collect list of destination objects
                 dest_objs = {}
-                for dst_iface in self.dst_ifaces: 
+                for dst_iface in self.dst_ifaces:
                     dest_provider, dest_region = dst_iface.region_tag().split(":")
                     dst_prefix = dst_prefixes[self.dst_ifaces.index(dst_iface)]
                     try:
@@ -260,18 +260,17 @@ class Chunker:
                     except exceptions.MissingObjectException as e:
                         logger.fs.exception(e)
                         raise e from None
-                    
+
                     if dest_provider == "aws":
-                       dest_obj = S3Object(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
+                        dest_obj = S3Object(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
                     elif dest_provider == "azure":
-                       dest_obj = AzureBlobObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
+                        dest_obj = AzureBlobObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
                     elif dest_provider == "gcp":
-                       dest_obj = GCSObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
+                        dest_obj = GCSObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
                     else:
-                       raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
-                    
+                        raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
+
                     dest_objs[dst_iface.region_tag()] = dest_obj
- 
 
                 # make destination object
                 # dest_provider, dest_region = self.dst_iface.region_tag().split(":")
@@ -283,7 +282,7 @@ class Chunker:
                 #    dest_obj = GCSObject(dest_provider, self.dst_iface.bucket(), dest_key)
                 # else:
                 #    raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
-                #dest_obj = ObjectStoreObject(key=dest_key)
+                # dest_obj = ObjectStoreObject(key=dest_key)
 
                 n_objs += 1
                 logger.fs.debug(f"Yield: {obj}, {dest_objs}")
@@ -293,9 +292,7 @@ class Chunker:
             logger.error("Specified object does not exist.\n")
             raise exceptions.MissingObjectException(f"No objects were found in the specified prefix")
 
-    def chunk(
-        self, transfer_pair_generator: Generator[TransferPair, None, None]
-    ) -> Generator[GatewayMessage, None, None]:
+    def chunk(self, transfer_pair_generator: Generator[TransferPair, None, None]) -> Generator[GatewayMessage, None, None]:
         """Break transfer list into chunks.
 
         :param transfer_pair_generator: generator of pairs of objects to transfer
@@ -305,7 +302,6 @@ class Chunker:
         multipart_chunk_queue: Queue[GatewayMessage] = Queue()
         multipart_exit_event = threading.Event()
         multipart_chunk_threads = []
-
 
         # start chunking threads
         if self.transfer_config.multipart_enabled:
@@ -327,7 +323,7 @@ class Chunker:
                 yield GatewayMessage(
                     chunk=Chunk(
                         src_key=src_obj.key,
-                        dest_key=src_obj.key, # TODO: get rid of dest_key, and have write object have info on prefix  (or have a map here)
+                        dest_key=src_obj.key,  # TODO: get rid of dest_key, and have write object have info on prefix  (or have a map here)
                         chunk_id=uuid.uuid4().hex,
                         chunk_length_bytes=transfer_pair.src.size,
                         partition_id=0,  # TODO: fix this to distribute across multiple partitions
@@ -425,14 +421,14 @@ class TransferJob(ABC):
     :type uuid: str
     """
 
-    #@abstractmethod
+    # @abstractmethod
     def __init__(
         self,
         src_path: str,
         dst_paths: str,
         recursive: bool = False,
         requester_pays: bool = False,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
+        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
         self.src_path = src_path
         self.dst_paths = dst_paths
@@ -440,15 +436,14 @@ class TransferJob(ABC):
         self.requester_pays = requester_pays
         self.uuid = uuid
 
-
-    #@abstractmethod
+    # @abstractmethod
     def __init__(
         self,
         src_path: str,
         dst_paths: List[str],
         recursive: bool = False,
         requester_pays: bool = False,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
+        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
         self.src_path = src_path
         self.dst_paths = dst_paths
@@ -548,29 +543,27 @@ class CopyJob(TransferJob):
         dst_paths: str,
         recursive: bool = False,
         requester_pays: bool = False,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
+        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
         super().__init__(src_path, dst_paths, recursive, requester_pays, uuid)
         self.transfer_list = []
         self.multipart_transfer_list = []
 
-
-    #@abstractmethod
+    # @abstractmethod
     def __init__(
         self,
         src_path: str,
         dst_paths: List[str],
         recursive: bool = False,
         requester_pays: bool = False,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4()))
+        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
         super().__init__(src_path, dst_paths, recursive, requester_pays, uuid)
         self.transfer_list = []
         self.multipart_transfer_list = []
 
-
-    #transfer_list: list = field(default_factory=list)
-    #multipart_transfer_list: list = field(default_factory=list)
+    # transfer_list: list = field(default_factory=list)
+    # multipart_transfer_list: list = field(default_factory=list)
 
     @property
     def http_pool(self):
@@ -608,7 +601,7 @@ class CopyJob(TransferJob):
         :type dispatch_batch_size: int
         """
         chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
-        transfer_pair_generator = self.gen_transfer_pairs(chunker) # returns TransferPair objects
+        transfer_pair_generator = self.gen_transfer_pairs(chunker)  # returns TransferPair objects
         gen_transfer_list = chunker.tail_generator(transfer_pair_generator, self.transfer_list)
         chunks = chunker.chunk(gen_transfer_list)
         # chunk_requests = chunker.to_chunk_requests(chunks)
@@ -649,7 +642,9 @@ class CopyJob(TransferJob):
                     )
                     # TODO: assume that only destination nodes would write to the obj store
                     if reply.status != 200:
-                        raise Exception(f"Failed to update upload ids to the dst gateway {dst_gateway.instance_name()}: {reply.data.decode('utf-8')}")
+                        raise Exception(
+                            f"Failed to update upload ids to the dst gateway {dst_gateway.instance_name()}: {reply.data.decode('utf-8')}"
+                        )
 
             # send chunk requests to source gateways
             chunk_batch = [cr.chunk for cr in batch if cr.chunk is not None]
@@ -699,8 +694,8 @@ class CopyJob(TransferJob):
 
     def verify(self):
         """Verify the integrity of the transfered destination objects"""
-        # TODO: fix this 
-        return 
+        # TODO: fix this
+        return
         for dst_iface in self.dst_ifaces:
             i = self.dst_ifaces.index(dst_iface)
             # keys for this destination
@@ -713,7 +708,9 @@ class CopyJob(TransferJob):
                     del dst_keys[obj.key]
             if dst_keys:
                 failed_keys = [obj.key for obj in dst_keys.values()]
-                raise exceptions.TransferFailedException(f"Destination {dst_iface.region_tag()}: {len(dst_keys)} objects failed verification {failed_keys}")
+                raise exceptions.TransferFailedException(
+                    f"Destination {dst_iface.region_tag()}: {len(dst_keys)} objects failed verification {failed_keys}"
+                )
 
 
 @dataclass

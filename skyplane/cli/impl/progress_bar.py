@@ -9,11 +9,11 @@ from skyplane.api.tracker import TransferHook
 
 
 class MultiDestinationProgressBarTransferHook(TransferHook):
-    """ Transfer hook for multi-destination transfers. """
+    """Transfer hook for multi-destination transfers."""
 
     def on_dispatch_start(self):
-        return 
-    
+        return
+
     def __init__(self, dest_region_tags: List[str]):
         self.spinner = Progress(
             SpinnerColumn(),
@@ -23,7 +23,7 @@ class MultiDestinationProgressBarTransferHook(TransferHook):
             transient=True,
         )
         self.dest_region_tags = dest_region_tags
-        self.pbar = None # map between region_tag and progress bar 
+        self.pbar = None  # map between region_tag and progress bar
         self.transfer_task = {}
         self.chunks_dispatched = 0
         self.bytes_dispatched = 0
@@ -72,6 +72,7 @@ class MultiDestinationProgressBarTransferHook(TransferHook):
     def on_transfer_error(self, error):
         console.log(error)
         raise exceptions.SkyplaneGatewayException("Transfer failed with error", error)
+
 
 class ProgressBarTransferHook(TransferHook):
     def on_dispatch_start(self):

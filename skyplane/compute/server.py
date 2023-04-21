@@ -348,9 +348,7 @@ class Server:
         docker_envs["GATEWAY_INFO_FILE"] = f"/pkg/data/gateway_info.json"
         docker_run_flags += f" -v /tmp/{gateway_program_file}:/pkg/data/gateway_program.json"
         docker_run_flags += f" -v /tmp/{gateway_info_file}:/pkg/data/gateway_info.json"
-        gateway_daemon_cmd = (
-            f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
-        )
+        gateway_daemon_cmd = f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
         print("has gateway program", gateway_daemon_cmd)
 
         ## NOTE: (BC) upload gateway specification for this gateway

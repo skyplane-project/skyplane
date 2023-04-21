@@ -209,13 +209,12 @@ class TransferProgressTracker(Thread):
             finally:
                 print("copying gateway logs")
 
- 
         # old monitoring code
         ## Record only the transfer time
-        #start_time = int(time.time())
-        #try:
+        # start_time = int(time.time())
+        # try:
         #    self.monitor_transfer()
-        #except exceptions.SkyplaneGatewayException as err:
+        # except exceptions.SkyplaneGatewayException as err:
         #    reformat_err = Exception(err.pretty_print_str()[37:])
         #    UsageClient.log_exception(
         #        "monitor transfer",
@@ -226,7 +225,7 @@ class TransferProgressTracker(Thread):
         #        session_start_timestamp_ms,
         #    )
         #    raise err
-        #except Exception as e:
+        # except Exception as e:
         #    UsageClient.log_exception(
         #        "monitor transfer",
         #        e,
@@ -236,7 +235,7 @@ class TransferProgressTracker(Thread):
         #        session_start_timestamp_ms,
         #    )
         #    raise e
-        #end_time = int(time.time())
+        # end_time = int(time.time())
 
         start_time = int(time.time())
         try:
@@ -292,8 +291,8 @@ class TransferProgressTracker(Thread):
         region_sinks = self.dataplane.topology.sink_instances()
         sinks = region_sinks[region_tag]
         print("sink instances", sinks)
-        #for region_tag, sink_gateways in self.dataplane.topology.sink_gateways().items():
-        #sink_regions = set([sink.region for sink in sinks])
+        # for region_tag, sink_gateways in self.dataplane.topology.sink_gateways().items():
+        # sink_regions = set([sink.region for sink in sinks])
         while any([len(self.job_pending_chunk_ids[job_uuid]) > 0 for job_uuid in self.job_pending_chunk_ids]):
             # refresh shutdown status by running noop
             do_parallel(lambda i: i.run_command("echo 1"), self.dataplane.bound_nodes.values(), n=8)
@@ -322,7 +321,7 @@ class TransferProgressTracker(Thread):
             sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
             completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region_tag"].unique()) == set([region_tag]))
             completed_chunk_ids = completed_status[completed_status].index
-            #print(f"region {region_tag} completed", completed_chunk_ids)
+            # print(f"region {region_tag} completed", completed_chunk_ids)
 
             # update job_complete_chunk_ids and job_pending_chunk_ids
             # TODO: do chunk-tracking per-destination

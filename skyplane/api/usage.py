@@ -284,7 +284,7 @@ class UsageClient:
         error_dict: Dict,
         arguments_dict: Optional[Dict] = None,
         src_region_tag: Optional[str] = None,
-        dest_region_tag: Optional[str] = None, 
+        dest_region_tag: Optional[str] = None,
         session_start_timestamp_ms: Optional[int] = None,
     ):
         if src_region_tag is None:
@@ -292,9 +292,9 @@ class UsageClient:
         else:
             src_provider, src_region = src_region_tag.split(":")
 
-        if dest_region_tag is None: 
+        if dest_region_tag is None:
             dest_provider, dest_region = None, None
-        else: 
+        else:
             dest_provider, dest_region = dest_region_tag.split(":")
 
         return UsageStatsToReport(
