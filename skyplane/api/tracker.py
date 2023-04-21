@@ -238,6 +238,7 @@ class TransferProgressTracker(Thread):
         #    raise e
         #end_time = int(time.time())
 
+        start_time = int(time.time())
         try:
             for job in self.jobs.values():
                 logger.fs.debug(f"[TransferProgressTracker] Finalizing job {job.uuid}")
@@ -252,7 +253,9 @@ class TransferProgressTracker(Thread):
                 session_start_timestamp_ms,
             )
             raise e
+        end_time = int(time.time())
 
+        # verify transfer
         try:
             for job in self.jobs.values():
                 logger.fs.debug(f"[TransferProgressTracker] Verifying job {job.uuid}")
@@ -322,6 +325,7 @@ class TransferProgressTracker(Thread):
             #print(f"region {region_tag} completed", completed_chunk_ids)
 
             # update job_complete_chunk_ids and job_pending_chunk_ids
+            # TODO: do chunk-tracking per-destination
             for job_uuid, job in self.jobs.items():
                 job_complete_chunk_ids = set(chunk_id for chunk_id in completed_chunk_ids if self._chunk_to_job_map[chunk_id] == job_uuid)
                 new_chunk_ids = (
@@ -330,7 +334,7 @@ class TransferProgressTracker(Thread):
                 completed_chunks = []
                 for id in new_chunk_ids:
                     completed_chunks.append(self.job_chunk_requests[job_uuid][id])
-                self.hooks.on_chunk_completed(completed_chunks)
+                self.hooks.on_chunk_completed(completed_chunks, region_tag)
                 self.job_complete_chunk_ids[job_uuid] = self.job_complete_chunk_ids[job_uuid].union(job_complete_chunk_ids)
                 self.job_pending_chunk_ids[job_uuid] = self.job_pending_chunk_ids[job_uuid].difference(job_complete_chunk_ids)
 
