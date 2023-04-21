@@ -8,7 +8,7 @@ from skyplane.api.dataplane import Dataplane
 from skyplane.api.provisioner import Provisioner
 from skyplane.api.usage import get_clientid
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
-from skyplane.planner.planner import MultiDestDirectPlanner
+from skyplane.planner.planner import MulticastDirectPlanner 
 from skyplane.utils import logger
 from skyplane.utils.definitions import tmp_log_dir
 from skyplane.utils.path import parse_path

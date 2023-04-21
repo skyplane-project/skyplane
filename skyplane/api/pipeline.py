@@ -17,8 +17,8 @@ from skyplane import compute
 from skyplane.api.tracker import TransferProgressTracker, TransferHook
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
-from skyplane.planner.topology_old import ReplicationTopology, ReplicationTopologyGateway
-from skyplane.planner.planner import MultiDestDirectPlanner
+#from skyplane.planner.topology_old import ReplicationTopology, ReplicationTopologyGateway
+from skyplane.planner.planner import MulticastDirectPlanner 
 from skyplane.utils import logger
 from skyplane.utils.definitions import gateway_docker_image, tmp_log_dir
 from skyplane.utils.fn import PathLike, do_parallel
@@ -73,7 +73,7 @@ class Pipeline:
     def start(self):
         # TODO: Set number of connections properly (or not at all)
         # planner = DirectPlanner(self.max_instances, 32)
-        planner = MultiDestDirectPlanner(self.max_instances, 32)
+        planner = MulticastDirectPlanner(self.max_instances, 32)
 
         # create plan from set of jobs scheduled
         topo = planner.plan(self.jobs_to_dispatch)
@@ -84,23 +84,23 @@ class Pipeline:
             dp.provision(spinner=True)
             tracker = dp.run_async(self.jobs_to_dispatch, hooks=MultiDestinationProgressBarTransferHook(dp.topology.dest_region_tags))
 
-            while True:
-                # handle errors
-                if tracker.errors:
-                    for ip, error_list in tracker.errors.items():
-                        for error in error_list:
-                            raise ValueError(f"Error on {ip}: {error}")
-                    break
+            # while True:
+            #    # handle errors
+            #    if tracker.errors:
+            #        for ip, error_list in tracker.errors.items():
+            #            for error in error_list:
+            #                raise ValueError(f"Error on {ip}: {error}")
+            #        break
 
-                bytes_remaining, _ = tracker.query_bytes_remaining()
-                timestamp = time.strftime("%H:%M:%S", time.localtime())
-                if bytes_remaining is None:
-                    print(f"{timestamp} Transfer not yet started")
-                elif bytes_remaining > 0:
-                    print(f"{timestamp} {(bytes_remaining / (2 ** 30)):.5f}GB left")
-                else:
-                    break
-                time.sleep(10)
+            #    bytes_remaining, _ = tracker.query_bytes_remaining()
+            #    timestamp = time.strftime("%H:%M:%S", time.localtime())
+            #    if bytes_remaining is None:
+            #        print(f"{timestamp} Transfer not yet started")
+            #    elif bytes_remaining > 0:
+            #        print(f"{timestamp} {(bytes_remaining / (2 ** 30)):.5f}GB left")
+            #    else:
+            #        break
+            #    time.sleep(10)
         except Exception as e:
             print(e)
             print("copy gateway logs")

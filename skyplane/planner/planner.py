@@ -1,5 +1,4 @@
 from importlib.resources import path
-
 from typing import List, Optional, Tuple
 
 from skyplane import compute
@@ -24,7 +23,7 @@ class Planner:
         raise NotImplementedError
 
 
-class SingleDestDirectPlanner(Planner):
+class UnicastDirectPlanner(Planner):
     def __init__(self, n_instances: int, n_connections: int):
         self.n_instances = n_instances
         self.n_connections = n_connections
@@ -89,7 +88,7 @@ class SingleDestDirectPlanner(Planner):
         return plan
 
 
-class MultiDestDirectPlanner(Planner):
+class MulticastDirectPlanner(Planner):
     def __init__(self, n_instances: int, n_connections: int):
         self.n_instances = n_instances
         self.n_connections = n_connections
@@ -162,99 +161,43 @@ class MultiDestDirectPlanner(Planner):
         return plan
 
 
-# class DirectPlanner(Planner):
-#    def __init__(self, src_provider: str, src_region, dst_provider: str, dst_region: str, n_instances: int, n_connections: int):
-#        self.n_instances = n_instances
-#        self.n_connections = n_connections
-#        super().__init__(src_provider, src_region, dst_provider, dst_region)
-#
-#    def plan(self) -> ReplicationTopology:
-#        src_region_tag = f"{self.src_provider}:{self.src_region}"
-#        dst_region_tag = f"{self.dst_provider}:{self.dst_region}"
-#        if src_region_tag == dst_region_tag:  # intra-region transfer w/o solver
-#            topo = ReplicationTopology()
-#            for i in range(self.n_instances):
-#                topo.add_objstore_instance_edge(src_region_tag, src_region_tag, i)
-#                topo.add_instance_objstore_edge(src_region_tag, i, src_region_tag)
-#            topo.cost_per_gb = 0
-#            return topo
-#        else:  # inter-region transfer w/ solver
-#            topo = ReplicationTopology()
-#            for i in range(self.n_instances):
-#                topo.add_objstore_instance_edge(src_region_tag, src_region_tag, i)
-#                topo.add_instance_instance_edge(src_region_tag, i, dst_region_tag, i, self.n_connections)
-#                topo.add_instance_objstore_edge(dst_region_tag, i, dst_region_tag)
-#            topo.cost_per_gb = compute.CloudProvider.get_transfer_cost(src_region_tag, dst_region_tag)
-#            return topo
-
-
-class ILPSolverPlanner(Planner):
-    def __init__(
-        self,
-        src_provider: str,
-        src_region,
-        dst_provider: str,
-        dst_region: str,
-        max_instances: int,
-        max_connections: int,
-        required_throughput_gbits: float,
-    ):
-        self.max_instances = max_instances
-        self.max_connections = max_connections
+class UnicastILPPlanner(Planner):
+    def __init__(self, n_instances: int, n_connections: int, required_throughput_gbits: float):
+        self.n_instances = n_instances
+        self.n_connections = n_connections
         self.solver_required_throughput_gbits = required_throughput_gbits
-        super().__init__(src_provider, src_region, dst_provider, dst_region)
+        super().__init__()
 
-    def plan(self) -> ReplicationTopology:
-        from skyplane.planner.solver_ilp import ThroughputSolverILP
-        from skyplane.planner.solver import ThroughputProblem
-
-        problem = ThroughputProblem(
-            src=f"{self.src_provider}:{self.src_region}",
-            dst=f"{self.dst_provider}:{self.dst_region}",
-            required_throughput_gbits=self.solver_required_throughput_gbits,
-            gbyte_to_transfer=1,
-            instance_limit=self.max_instances,
-        )
-
-        with path("skyplane.data", "throughput.csv") as solver_throughput_grid:
-            tput = ThroughputSolverILP(solver_throughput_grid)
-        solution = tput.solve_min_cost(problem, solver=ThroughputSolverILP.choose_solver(), save_lp_path=None)
-        if not solution.is_feasible:
-            raise ValueError("ILP solver failed to find a solution, try solving with fewer constraints")
-        topo, _ = tput.to_replication_topology(solution)
-        return topo
+    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
+        raise NotImplementedError("ILP solver not implemented yet")
 
 
-class RONSolverPlanner(Planner):
-    def __init__(
-        self,
-        src_provider: str,
-        src_region,
-        dst_provider: str,
-        dst_region: str,
-        max_instances: int,
-        max_connections: int,
-        required_throughput_gbits: float,
-    ):
-        self.max_instances = max_instances
-        self.max_connections = max_connections
+class MulticastILPPlanner(Planner):
+    def __init__(self, n_instances: int, n_connections: int, required_throughput_gbits: float):
+        self.n_instances = n_instances
+        self.n_connections = n_connections
         self.solver_required_throughput_gbits = required_throughput_gbits
-        super().__init__(src_provider, src_region, dst_provider, dst_region)
+        super().__init__()
 
-    def plan(self) -> ReplicationTopology:
-        from skyplane.planner.solver_ron import ThroughputSolverRON
-        from skyplane.planner.solver import ThroughputProblem
+    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
+        raise NotImplementedError("ILP solver not implemented yet")
 
-        problem = ThroughputProblem(
-            src=self.src_region,
-            dst=self.dst_region,
-            required_throughput_gbits=self.solver_required_throughput_gbits,
-            gbyte_to_transfer=1,
-            instance_limit=self.max_instances,
-        )
 
-        with path("skyplane.data", "throughput.csv") as solver_throughput_grid:
-            tput = ThroughputSolverRON(solver_throughput_grid)
-        solution = tput.solve(problem)
-        topo, _ = tput.to_replication_topology(solution)
-        return topo
+class MulticastMDSTPlanner(Planner):
+    def __init__(self, n_instances: int, n_connections: int):
+        self.n_instances = n_instances
+        self.n_connections = n_connections
+        super().__init__()
+
+    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
+        raise NotImplementedError("MDST solver not implemented yet")
+
+
+class MulticastSteinerTreePlanner(Planner):
+    def __init__(self, n_instances: int, n_connections: int):
+        self.n_instances = n_instances
+        self.n_connections = n_connections
+        super().__init__()
+
+    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
+        raise NotImplementedError("Steiner tree solver not implemented yet")
