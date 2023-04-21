@@ -6,7 +6,7 @@ from skyplane.gateway.gateway_program import (
     GatewayGenData,
     GatewayReadObjectStore,
 )
-from typing import List
+from typing import List, Dict
 
 
 class TopologyPlanGateway:
@@ -126,13 +126,15 @@ class TopologyPlan:
             }
         return gateway_info
 
-    def sink_instances(self):
+    def sink_instances(self) -> Dict[str, List[TopologyPlanGateway]]:
         """Return list of gateways that have a sink operator (GatewayWriteObjectStore, GatewayWriteLocal)"""
-        nodes = []
+        nodes = {}
         for gateway in self.gateways.values():
             for operator in gateway.gateway_program.get_operators():
                 if isinstance(operator, GatewayWriteObjectStore) or isinstance(operator, GatewayWriteLocal):
-                    nodes.append(gateway)
+                    if gateway.region_tag not in nodes:
+                        nodes[gateway.region_tag] = []
+                    nodes[gateway.region_tag].append(gateway)
                     break
         return nodes
 

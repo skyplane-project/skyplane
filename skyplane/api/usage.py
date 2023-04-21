@@ -146,7 +146,7 @@ class UsageClient:
                 error_dict=error_dict,
                 arguments_dict=args,
                 src_region_tag=src_region_tag,
-                dest_region_tags=dest_region_tag,
+                dest_region_tag=dest_region_tag,
                 session_start_timestamp_ms=session_start_timestamp_ms,
             )
             destination = client.write_usage_data(stats)
@@ -284,7 +284,7 @@ class UsageClient:
         error_dict: Dict,
         arguments_dict: Optional[Dict] = None,
         src_region_tag: Optional[str] = None,
-        dest_region_tags: Optional[List[str]] = [],
+        dest_region_tag: Optional[str] = None, 
         session_start_timestamp_ms: Optional[int] = None,
     ):
         if src_region_tag is None:
@@ -292,8 +292,10 @@ class UsageClient:
         else:
             src_provider, src_region = src_region_tag.split(":")
 
-        dest_providers = [tag.split(":")[0] for tag in dest_region_tags]
-        dest_regions = [tag.split(":")[1] for tag in dest_region_tags]
+        if dest_region_tag is None: 
+            dest_provider, dest_region = None, None
+        else: 
+            dest_provider, dest_region = dest_region_tag.split(":")
 
         return UsageStatsToReport(
             skyplane_version=skyplane.__version__,
@@ -302,9 +304,9 @@ class UsageClient:
             client_id=self.client_id,
             session_id=self.session_id,
             source_region=src_region,
-            destination_region=dest_regions[0],  # TODO: fix this
+            destination_region=dest_region,  # TODO: fix this
             source_cloud_provider=src_provider,
-            destination_cloud_provider=dest_providers[0],  # TODO: FIX THIS
+            destination_cloud_provider=dest_provider,  # TODO: FIX THIS
             os=sys.platform,
             session_start_timestamp_ms=session_start_timestamp_ms if session_start_timestamp_ms else int(time.time() * 1000),
             arguments_dict=arguments_dict,

@@ -9,9 +9,10 @@ from skyplane.planner.topology import TopologyPlan
 from skyplane.gateway.gateway_program import (
     GatewayProgram,
     GatewayMuxOr,
+    GatewayMuxAnd,
     GatewayReadObjectStore,
-    GatewayReceive,
     GatewayWriteObjectStore,
+    GatewayReceive,
     GatewaySend,
 )
 
@@ -96,7 +97,7 @@ class MultiDestDirectPlanner(Planner):
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
 
         src_region_tag = jobs[0].src_iface.region_tag()
-        dst_region_tags = [iface.region_tag() for iface in jobs[0]] 
+        dst_region_tags = [iface.region_tag() for iface in jobs[0].dst_ifaces] 
         # jobs must have same sources and destinations
         for job in jobs[1:]:
             assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
@@ -119,7 +120,6 @@ class MultiDestDirectPlanner(Planner):
         # iterate through all jobs
         for job in jobs:
             src_bucket = job.src_iface.bucket()
-            dst_bucket = job.dst_ifaces[0].bucket()
 
             # give each job a different partition id, so we can read/write to different buckets
             partition_id = jobs.index(job)
@@ -130,20 +130,23 @@ class MultiDestDirectPlanner(Planner):
             )
             # send to all destination
             mux_and = src_program.add_operator(GatewayMuxAnd(), parent_handle=obj_store_read, partition_id=partition_id)
-            # send to one gateway in destination
-            for dst_region_tag in dst_region_tags:
+            for dst_iface in job.dst_ifaces: 
+                dst_region_tag = dst_iface.region_tag()
+                dst_bucket = dst_iface.bucket()
                 dst_gateways = plan.get_region_gateways(dst_region_tag)
+
+                # can send to any gateway in region 
                 mux_or = src_program.add_operator(GatewayMuxOr(), parent_handle=mux_and, partition_id=partition_id)
                 for i in range(self.n_instances):
                     src_program.add_operator(
                         GatewaySend(target_gateway_id=dst_gateways[i].gateway_id, region=dst_region_tag, num_connections=self.n_connections),
-                        parent_handle=mux_and,
+                        parent_handle=mux_or,
                         partition_id=partition_id,
                     )
 
                 # each gateway also recieves data from source
                 recv_op = dst_program[dst_region_tag].add_operator(GatewayReceive(), partition_id=partition_id)
-                dst_program.add_operator(
+                dst_program[dst_region_tag].add_operator(
                     GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections), parent_handle=recv_op, partition_id=partition_id
                 )
 

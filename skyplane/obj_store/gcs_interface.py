@@ -229,13 +229,16 @@ class GCSInterface(ObjectStoreInterface):
 
         # send XML api request
         headers = {"Content-MD5": b64_md5sum} if check_md5 else None
-        response = self.send_xml_request(
-            dst_object_name,
-            {"uploadId": upload_id, "partNumber": part_number},
-            "PUT",
-            headers=headers,
-            data=open(src_file_path, "rb"),
-        )
+        try: 
+            response = self.send_xml_request(
+                dst_object_name,
+                {"uploadId": upload_id, "partNumber": part_number},
+                "PUT",
+                headers=headers,
+                data=open(src_file_path, "rb"),
+            )
+        except Exception as e: 
+            raise ValueError(f"Failed to upload {dst_object_name} to bucket {self.bucket_name} upload id {upload_id}: {e}")
 
         # check response
         if "ETag" not in response.headers:

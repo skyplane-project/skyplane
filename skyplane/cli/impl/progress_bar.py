@@ -1,13 +1,13 @@
-import skyplane
 from typing import List
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
 from skyplane import exceptions
 from skyplane.chunk import Chunk
 from skyplane.cli.impl.common import console, print_stats_completed
 from skyplane.utils.definitions import format_bytes
+from skyplane.api.tracker import TransferHook
 
 
-class ProgressBarTransferHook(skyplane.TransferHook):
+class ProgressBarTransferHook(TransferHook):
     def on_dispatch_start(self):
         return
 

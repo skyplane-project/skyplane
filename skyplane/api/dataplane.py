@@ -203,7 +203,7 @@ class Dataplane:
             for node in self.topology.get_gateways():
                 print(node.region_tag)
                 instance = servers_by_region[node.region_tag].pop()
-                print("instance", instance)
+                print("instance", instance, node.region_tag)
                 self.bound_nodes[node] = instance
 
                 # set ip addresses (for gateway program generation)
@@ -269,6 +269,7 @@ class Dataplane:
             try:
                 for task in self.pending_transfers:
                     logger.fs.warning(f"Before deprovisioning, waiting for jobs to finish: {list(task.jobs.keys())}")
+                    print("Waiting for task join")
                     task.join()
             except KeyboardInterrupt:
                 logger.warning("Interrupted while waiting for transfers to finish, deprovisioning anyway.")
@@ -306,7 +307,7 @@ class Dataplane:
 
     def sink_gateways(self) -> List[compute.Server]:
         """Returns a list of sink gateway nodes"""
-        return [self.bound_nodes[n] for n in self.topology.sink_instances()] if self.provisioned else []
+        return {region: [self.bound_nodes[n] for n in nodes] for region, nodes in self.topology.sink_instances().items()} if self.provisioned else {}
 
     def copy_log(self, instance):
         instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")

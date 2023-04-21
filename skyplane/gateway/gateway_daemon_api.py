@@ -12,8 +12,8 @@ from flask import Flask, jsonify, request
 from werkzeug.serving import make_server
 
 from skyplane.chunk import ChunkRequest, ChunkState
-from skyplane.broadcast.gateway.chunk_store import ChunkStore
-from skyplane.broadcast.gateway.operators.gateway_receiver import GatewayReceiver
+from skyplane.gateway.chunk_store import ChunkStore
+from skyplane.gateway.operators.gateway_receiver import GatewayReceiver
 from skyplane.utils import logger
 
 

@@ -23,8 +23,8 @@ from skyplane.gateway.operators.gateway_operator import (
     GatewayObjStoreReadOperator,
     GatewayObjStoreWriteOperator,
     GatewayWaitReciever,
-    GatewayReceiver,
 )
+from skyplane.gateway.operators.gateway_receiver import GatewayReceiver
 from skyplane.utils import logger
 from collections import defaultdict
 

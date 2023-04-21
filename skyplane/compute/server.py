@@ -349,7 +349,7 @@ class Server:
         docker_run_flags += f" -v /tmp/{gateway_program_file}:/pkg/data/gateway_program.json"
         docker_run_flags += f" -v /tmp/{gateway_info_file}:/pkg/data/gateway_info.json"
         gateway_daemon_cmd = (
-            f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/broadcast/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
+            f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
         )
         print("has gateway program", gateway_daemon_cmd)
 

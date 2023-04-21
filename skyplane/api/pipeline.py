@@ -1,4 +1,5 @@
 import json
+import time
 import os
 import threading
 from collections import defaultdict, Counter
@@ -11,6 +12,7 @@ import nacl.utils
 import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional
 
+from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 from skyplane import compute
 from skyplane.api.tracker import TransferProgressTracker, TransferHook
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
@@ -80,7 +82,25 @@ class Pipeline:
         dp = Dataplane(self.clientid, topo, self.provisioner, self.transfer_config, self.transfer_dir, debug=True)
         try:
             dp.provision(spinner=True)
-            dp.run(self.jobs_to_dispatch)
+            tracker = dp.run_async(self.jobs_to_dispatch, hooks=ProgressBarTransferHook())
+
+            while True:
+                # handle errors
+                if tracker.errors:
+                    for ip, error_list in tracker.errors.items():
+                        for error in error_list:
+                            raise ValueError(f"Error on {ip}: {error}")
+                    break
+
+                bytes_remaining, _ = tracker.query_bytes_remaining()
+                timestamp = time.strftime("%H:%M:%S", time.localtime())
+                if bytes_remaining is None:
+                    print(f"{timestamp} Transfer not yet started")
+                elif bytes_remaining > 0:
+                    print(f"{timestamp} {(bytes_remaining / (2 ** 30)):.5f}GB left")
+                else:
+                    break
+                time.sleep(10)
         except Exception as e:
             print(e)
             print("copy gateway logs")

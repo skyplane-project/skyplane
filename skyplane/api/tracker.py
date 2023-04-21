@@ -1,4 +1,5 @@
 import functools
+from pprint import pprint
 import json
 import time
 from abc import ABC
@@ -7,6 +8,8 @@ from threading import Thread
 
 import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional, Set
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from skyplane import exceptions
 from skyplane.api.config import TransferConfig
@@ -162,32 +165,78 @@ class TransferProgressTracker(Thread):
 
         self.hooks.on_dispatch_end()
 
-        # Record only the transfer time
-        start_time = int(time.time())
-        try:
-            self.monitor_transfer()
-        except exceptions.SkyplaneGatewayException as err:
-            reformat_err = Exception(err.pretty_print_str()[37:])
-            UsageClient.log_exception(
-                "monitor transfer",
-                reformat_err,
-                args,
-                self.dataplane.topology.src_region_tag,
-                self.dataplane.topology.dest_region_tags,
-                session_start_timestamp_ms,
-            )
-            raise err
-        except Exception as e:
-            UsageClient.log_exception(
-                "monitor transfer",
-                e,
-                args,
-                self.dataplane.topology.src_region_tag,
-                self.dataplane.topology.dest_region_tags,
-                session_start_timestamp_ms,
-            )
-            raise e
-        end_time = int(time.time())
+        def monitor_single_dst_helper(dst_region):
+            start_time = time.time()
+            try:
+                self.monitor_transfer(dst_region)
+            except exceptions.SkyplaneGatewayException as err:
+                reformat_err = Exception(err.pretty_print_str()[37:])
+                UsageClient.log_exception(
+                    "monitor transfer",
+                    reformat_err,
+                    args,
+                    self.dataplane.topology.src_region_tag,
+                    [dst_region],
+                    session_start_timestamp_ms,
+                )
+                raise err
+            except Exception as e:
+                UsageClient.log_exception(
+                    "monitor transfer", e, args, self.dataplane.topology.src_region_tag, dst_region, session_start_timestamp_ms
+                )
+                raise e
+            end_time = time.time()
+
+            runtime_s = end_time - start_time
+            # transfer successfully completed
+            transfer_stats = {
+                "dst_region": dst_region,
+                "total_runtime_s": round(runtime_s, 4),
+            }
+            print("Individual transfer statistics")
+            pprint(transfer_stats)
+
+        results = []
+        dest_regions = self.dataplane.topology.dest_region_tags
+        with ThreadPoolExecutor(max_workers=len(dest_regions)) as executor:
+            e2e_start_time = time.time()
+            try:
+                future_list = [executor.submit(monitor_single_dst_helper, dest) for dest in dest_regions]
+                for future in as_completed(future_list):
+                    results.append(future.result())
+            except Exception as e:
+                raise e
+            finally:
+                print("copying gateway logs")
+
+ 
+        # old monitoring code
+        ## Record only the transfer time
+        #start_time = int(time.time())
+        #try:
+        #    self.monitor_transfer()
+        #except exceptions.SkyplaneGatewayException as err:
+        #    reformat_err = Exception(err.pretty_print_str()[37:])
+        #    UsageClient.log_exception(
+        #        "monitor transfer",
+        #        reformat_err,
+        #        args,
+        #        self.dataplane.topology.src_region_tag,
+        #        self.dataplane.topology.dest_region_tags,
+        #        session_start_timestamp_ms,
+        #    )
+        #    raise err
+        #except Exception as e:
+        #    UsageClient.log_exception(
+        #        "monitor transfer",
+        #        e,
+        #        args,
+        #        self.dataplane.topology.src_region_tag,
+        #        self.dataplane.topology.dest_region_tags,
+        #        session_start_timestamp_ms,
+        #    )
+        #    raise e
+        #end_time = int(time.time())
 
         try:
             for job in self.jobs.values():
@@ -234,12 +283,14 @@ class TransferProgressTracker(Thread):
         )
 
     @imports.inject("pandas")
-    def monitor_transfer(pd, self):
+    def monitor_transfer(pd, self, region_tag):
         """Monitor the tranfer by copying remote gateway logs and show transfer stats by hooks"""
         # todo implement transfer monitoring to update job_complete_chunk_ids and job_pending_chunk_ids while the transfer is in progress
-        sinks = self.dataplane.topology.sink_instances()
+        region_sinks = self.dataplane.topology.sink_instances()
+        sinks = region_sinks[region_tag]
         print("sink instances", sinks)
-        sink_regions = set([sink.region for sink in sinks])
+        #for region_tag, sink_gateways in self.dataplane.topology.sink_gateways().items():
+        #sink_regions = set([sink.region for sink in sinks])
         while any([len(self.job_pending_chunk_ids[job_uuid]) > 0 for job_uuid in self.job_pending_chunk_ids]):
             # refresh shutdown status by running noop
             do_parallel(lambda i: i.run_command("echo 1"), self.dataplane.bound_nodes.values(), n=8)
@@ -263,11 +314,12 @@ class TransferProgressTracker(Thread):
             is_complete_rec = (
                 lambda row: row["state"] == ChunkState.complete
                 # and row["instance"] in [s.instance for s in sinks]
-                and row["region"] in [s.region for s in sinks]
+                and row["region_tag"] in [s.region_tag for s in sinks]
             )
             sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
-            completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region"].unique()) == set(sink_regions))
+            completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region_tag"].unique()) == set([region_tag]))
             completed_chunk_ids = completed_status[completed_status].index
+            #print(f"region {region_tag} completed", completed_chunk_ids)
 
             # update job_complete_chunk_ids and job_pending_chunk_ids
             for job_uuid, job in self.jobs.items():
@@ -300,7 +352,7 @@ class TransferProgressTracker(Thread):
                 )
             logs = []
             for log_entry in json.loads(reply.data.decode("utf-8"))["chunk_status_log"]:
-                log_entry["region"] = node.region
+                log_entry["region_tag"] = node.region_tag
                 log_entry["instance"] = node.gateway_id
                 log_entry["time"] = datetime.fromisoformat(log_entry["time"])
                 log_entry["state"] = ChunkState.from_str(log_entry["state"])
