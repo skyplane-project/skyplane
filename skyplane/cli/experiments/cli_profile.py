@@ -5,7 +5,6 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-import pandas as pd
 import typer
 from rich.progress import Progress
 from typing import List, Optional, Tuple
@@ -107,6 +106,9 @@ def throughput_grid(
     iperf3_runtime: int = typer.Option(5, help="Runtime for iperf3 in seconds"),
     iperf3_connections: int = typer.Option(64, help="Number of connections to test"),
 ):
+
+    import pandas as pd
+
     def check_stderr(tup):
         assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
 
@@ -336,6 +338,8 @@ def latency_grid(
     azure_instance_class: str = typer.Option("Standard_D2_v3", help="Azure instance class to use"),
     gcp_instance_class: str = typer.Option("n2-standard-4", help="GCP instance class to use"),
 ):
+    
+    import pandas as pd
     # similar to throughput_grid but start all instances at once and then ping all pairs of instances concurrently
 
     def check_stderr(tup):
