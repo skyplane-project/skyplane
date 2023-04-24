@@ -37,10 +37,10 @@ T = TypeVar("T")
 class TransferPair:
     "Represents transfer pair between source and destination"
 
-    def __init__(self, src_obj: ObjectStoreObject, dst_objs: Dict[str, ObjectStoreObject], dst_key: str): 
+    def __init__(self, src_obj: ObjectStoreObject, dst_objs: Dict[str, ObjectStoreObject], dst_key: str):
         self.src_obj = src_obj
         self.dst_objs = dst_objs
-        self.dst_key = dst_key # shared destination key across all chunks (differnt prefixes)
+        self.dst_key = dst_key  # shared destination key across all chunks (differnt prefixes)
 
 
 class GatewayMessage:
@@ -147,7 +147,9 @@ class Chunker:
                 region = dest_iface.region_tag()
                 dest_object = dest_objects[region]
                 _, upload_id = upload_id_mapping[region]
-                self.multipart_upload_requests.append(dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket))
+                self.multipart_upload_requests.append(
+                    dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket)
+                )
 
     # def to_chunk_requests(self, gen_in: Generator[Chunk, None, None]) -> Generator[ChunkRequest, None, None]:
     #    """Converts a generator of chunks to a generator of chunk requests.
@@ -252,14 +254,16 @@ class Chunker:
             if prefilter_fn is None or prefilter_fn(obj):
                 # collect list of destination objects
                 dest_objs = {}
-                dest_keys = [] 
+                dest_keys = []
                 for dst_iface in self.dst_ifaces:
                     dest_provider, dest_region = dst_iface.region_tag().split(":")
                     dst_prefix = dst_prefixes[self.dst_ifaces.index(dst_iface)]
                     try:
                         dest_key = self.map_object_key_prefix(src_prefix, obj.key, dst_prefix, recursive=recursive)
-                        assert dest_key[:len(dst_prefix)] == dst_prefix, f"Destination key {dest_key} does not start with destination prefix {dst_prefix}"
-                        dest_keys.append(dest_key[len(dst_prefix):])
+                        assert (
+                            dest_key[: len(dst_prefix)] == dst_prefix
+                        ), f"Destination key {dest_key} does not start with destination prefix {dst_prefix}"
+                        dest_keys.append(dest_key[len(dst_prefix) :])
                     except exceptions.MissingObjectException as e:
                         logger.fs.exception(e)
                         raise e from None
@@ -276,7 +280,6 @@ class Chunker:
 
                 assert len(list(set(dest_keys))) == 1, f"Destination keys {dest_keys} do not match"
 
-
                 # make destination object
                 # dest_provider, dest_region = self.dst_iface.region_tag().split(":")
                 # if dest_provider == "aws":
@@ -290,8 +293,8 @@ class Chunker:
                 # dest_obj = ObjectStoreObject(key=dest_key)
 
                 n_objs += 1
-                #logger.fs.debug(f"Yield: {obj}, {dest_objs}")
-                yield TransferPair(src_obj=obj, dst_objs=dest_objs, dst_key = dest_keys[0])
+                # logger.fs.debug(f"Yield: {obj}, {dest_objs}")
+                yield TransferPair(src_obj=obj, dst_objs=dest_objs, dst_key=dest_keys[0])
 
         if n_objs == 0:
             logger.error("Specified object does not exist.\n")
@@ -701,7 +704,7 @@ class CopyJob(TransferJob):
         """Verify the integrity of the transfered destination objects"""
         # TODO: fix this
 
-        for i in range (len(self.dst_ifaces)):
+        for i in range(len(self.dst_ifaces)):
             dst_iface = self.dst_ifaces[i]
             dst_prefix = self.dst_prefixes[i]
 
@@ -718,7 +721,7 @@ class CopyJob(TransferJob):
                 print("get", obj.key, src_obj)
                 if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:
                     del dst_keys[obj.key]
-                else: 
+                else:
                     print("failed", dst_iface.bucket(), src_obj, obj)
 
             if dst_keys:

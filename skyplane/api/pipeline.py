@@ -16,8 +16,9 @@ from skyplane import compute
 from skyplane.api.tracker import TransferProgressTracker, TransferHook
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
-#from skyplane.planner.topology_old import ReplicationTopology, ReplicationTopologyGateway
-from skyplane.planner.planner import MulticastDirectPlanner 
+
+# from skyplane.planner.topology_old import ReplicationTopology, ReplicationTopologyGateway
+from skyplane.planner.planner import MulticastDirectPlanner
 from skyplane.utils import logger
 from skyplane.utils.definitions import gateway_docker_image, tmp_log_dir
 from skyplane.utils.fn import PathLike, do_parallel
