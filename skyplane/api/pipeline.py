@@ -105,6 +105,7 @@ class Pipeline:
             print(e)
             print("copy gateway logs")
             dp.copy_gateway_logs()
+        dp.copy_gateway_logs()
         print("deprovisioning dataplane...")
         dp.deprovision(spinner=True)
 

@@ -37,9 +37,9 @@ T = TypeVar("T")
 class TransferPair:
     "Represents transfer pair between source and destination"
 
-    def __init__(self, src: ObjectStoreObject, dsts: Dict[str, List[ObjectStoreObject]]):
+    def __init__(self, src: ObjectStoreObject, dsts: Dict[str, ObjectStoreObject]):
         self.src = src
-        self.dsts = dsts  # map region_tag -> List[ObjectStoreObject]
+        self.dsts = dsts  # map region_tag -> ObjectStoreObject
 
 
 class GatewayMessage:
@@ -695,21 +695,31 @@ class CopyJob(TransferJob):
     def verify(self):
         """Verify the integrity of the transfered destination objects"""
         # TODO: fix this
-        return
-        for dst_iface in self.dst_ifaces:
-            i = self.dst_ifaces.index(dst_iface)
-            # keys for this destination
-            dst_keys = {dst_o[i].key: src_o for src_o, dst_o in self.transfer_list}
+
+        for i in range (len(self.dst_ifaces)):
+            dst_iface = self.dst_ifaces[i]
             dst_prefix = self.dst_prefixes[i]
+
+            print("verify", dst_iface.region_tag())
+
+            # gather destination key mapping for this region
+            dst_keys = {pair.dsts[dst_iface.region_tag()].key: pair.src for pair in self.transfer_list}
+            print("dst keys", dst_keys)
+
+            # list and check destination prefix
             for obj in dst_iface.list_objects(dst_prefix):
                 # check metadata (src.size == dst.size) && (src.modified <= dst.modified)
                 src_obj = dst_keys.get(obj.key)
+                print("get", obj.key, src_obj)
                 if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:
                     del dst_keys[obj.key]
+                else: 
+                    print("failed", dst_iface.bucket(), src_obj, obj)
+
             if dst_keys:
                 failed_keys = [obj.key for obj in dst_keys.values()]
                 raise exceptions.TransferFailedException(
-                    f"Destination {dst_iface.region_tag()}: {len(dst_keys)} objects failed verification {failed_keys}"
+                    f"Destination {dst_iface.region_tag()} bucket {dst_iface.bucket()}: {len(dst_keys)} objects failed verification {failed_keys}"
                 )
 
 
