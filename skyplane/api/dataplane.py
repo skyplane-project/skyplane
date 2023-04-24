@@ -157,9 +157,10 @@ class Dataplane:
         :param max_jobs: maximum number of provision jobs to launch concurrently (default: 16)
         :type max_jobs: int
         :param spinner: whether to show the spinner during the job (default: False)its to determine how many instances to create in each region
-        # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
         :type spinner: bool
         """
+
+        # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
         with self.provisioning_lock:
             if self.provisioned:
                 logger.error("Cannot provision dataplane, already provisioned!")
