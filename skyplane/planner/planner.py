@@ -2,7 +2,6 @@ from importlib.resources import path
 from typing import List, Optional, Tuple
 
 from skyplane import compute
-from skyplane.planner.topology_old import ReplicationTopology
 
 from skyplane.planner.topology import TopologyPlan
 from skyplane.gateway.gateway_program import (
