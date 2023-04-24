@@ -129,7 +129,10 @@ class MulticastDirectPlanner(Planner):
             )
             # send to all destination
             mux_and = src_program.add_operator(GatewayMuxAnd(), parent_handle=obj_store_read, partition_id=partition_id)
-            for dst_iface in job.dst_ifaces:
+            dst_prefixes = job.dst_prefixes
+            for i in range(len(job.dst_ifaces)):
+                dst_iface = job.dst_ifaces[i]
+                dst_prefix = dst_prefixes[i]
                 dst_region_tag = dst_iface.region_tag()
                 dst_bucket = dst_iface.bucket()
                 dst_gateways = plan.get_region_gateways(dst_region_tag)
@@ -146,9 +149,10 @@ class MulticastDirectPlanner(Planner):
                     )
 
                 # each gateway also recieves data from source
+                print("destination", dst_region_tag, "bucket", dst_bucket, "prefix", dst_prefix, "partition", partition_id)
                 recv_op = dst_program[dst_region_tag].add_operator(GatewayReceive(), partition_id=partition_id)
                 dst_program[dst_region_tag].add_operator(
-                    GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections),
+                    GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
                     parent_handle=recv_op,
                     partition_id=partition_id,
                 )

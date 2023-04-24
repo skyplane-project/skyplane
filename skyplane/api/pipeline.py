@@ -12,7 +12,6 @@ import nacl.utils
 import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional
 
-from skyplane.cli.impl.progress_bar import ProgressBarTransferHook, MultiDestinationProgressBarTransferHook
 from skyplane import compute
 from skyplane.api.tracker import TransferProgressTracker, TransferHook
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
@@ -81,6 +80,8 @@ class Pipeline:
         # create dataplane from plan
         dp = Dataplane(self.clientid, topo, self.provisioner, self.transfer_config, self.transfer_dir, debug=True)
         try:
+            from skyplane.cli.impl.progress_bar import ProgressBarTransferHook, MultiDestinationProgressBarTransferHook
+
             dp.provision(spinner=True)
             tracker = dp.run_async(self.jobs_to_dispatch, hooks=MultiDestinationProgressBarTransferHook(dp.topology.dest_region_tags))
 

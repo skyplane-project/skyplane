@@ -247,6 +247,7 @@ class GatewayDaemon:
                         bucket_name=op["bucket_name"],
                         bucket_region=op["bucket_region"],
                         upload_id_map=self.upload_id_map,
+                        prefix=op["key_prefix"],
                     )
                     total_p += op["num_connections"]
                 elif op["op_type"] == "write_local":

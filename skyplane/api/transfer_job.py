@@ -37,9 +37,10 @@ T = TypeVar("T")
 class TransferPair:
     "Represents transfer pair between source and destination"
 
-    def __init__(self, src: ObjectStoreObject, dsts: Dict[str, ObjectStoreObject]):
-        self.src = src
-        self.dsts = dsts  # map region_tag -> ObjectStoreObject
+    def __init__(self, src_obj: ObjectStoreObject, dst_objs: Dict[str, ObjectStoreObject], dst_key: str): 
+        self.src_obj = src_obj
+        self.dst_objs = dst_objs
+        self.dst_key = dst_key # shared destination key across all chunks (differnt prefixes)
 
 
 class GatewayMessage:
@@ -89,17 +90,17 @@ class Chunker:
             except queue.Empty:
                 continue
 
-            src_object = transfer_pair.src
-            dest_objects = transfer_pair.dsts
-            print("dest objects", dest_objects, transfer_pair)
+            src_object = transfer_pair.src_obj
+            dest_objects = transfer_pair.dst_objs
+            dest_key = transfer_pair.dst_key
             mime_type = self.src_iface.get_obj_mime_type(src_object.key)
 
             # create multipart upload request per destination
             upload_id_mapping = {}
             for dest_iface in self.dst_ifaces:
-                # dest_object = dest_objects[dest_iface.region_tag()]
-                upload_id = dest_iface.initiate_multipart_upload(src_object.key, mime_type=mime_type)
-                print(f"Created upload id for key {src_object.key} with upload id {upload_id} for bucket {dest_iface.bucket_name}")
+                dest_object = dest_objects[dest_iface.region_tag()]
+                upload_id = dest_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
+                print(f"Created upload id for key {dest_object.key} with upload id {upload_id} for bucket {dest_iface.bucket_name}")
                 # store mapping between key and upload id for each region
                 upload_id_mapping[dest_iface.region_tag()] = (src_object.key, upload_id)
                 print("Region", dest_iface.region_tag(), "upload id", upload_id)
@@ -124,7 +125,7 @@ class Chunker:
                 assert file_size_bytes > 0, f"file size <= 0 {file_size_bytes}"
                 chunk = Chunk(
                     src_key=src_object.key,
-                    dest_key=src_object.key,  # dest_object.key, # TODO: upload basename (no prefix)
+                    dest_key=dest_key,  # dest_object.key, # TODO: upload basename (no prefix)
                     chunk_id=uuid.uuid4().hex,
                     file_offset_bytes=offset,
                     partition_id=str(part_num % self.num_partitions),
@@ -144,8 +145,9 @@ class Chunker:
             for dest_iface in self.dst_ifaces:
                 bucket = dest_iface.bucket()
                 region = dest_iface.region_tag()
-                dest_key, upload_id = upload_id_mapping[region]
-                self.multipart_upload_requests.append(dict(upload_id=upload_id, key=dest_key, parts=parts, region=region, bucket=bucket))
+                dest_object = dest_objects[region]
+                _, upload_id = upload_id_mapping[region]
+                self.multipart_upload_requests.append(dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket))
 
     # def to_chunk_requests(self, gen_in: Generator[Chunk, None, None]) -> Generator[ChunkRequest, None, None]:
     #    """Converts a generator of chunks to a generator of chunk requests.
@@ -248,15 +250,16 @@ class Chunker:
         n_objs = 0
         for obj in self.src_iface.list_objects(src_prefix):
             if prefilter_fn is None or prefilter_fn(obj):
-                print("object key", obj.key, src_prefix)
-
                 # collect list of destination objects
                 dest_objs = {}
+                dest_keys = [] 
                 for dst_iface in self.dst_ifaces:
                     dest_provider, dest_region = dst_iface.region_tag().split(":")
                     dst_prefix = dst_prefixes[self.dst_ifaces.index(dst_iface)]
                     try:
                         dest_key = self.map_object_key_prefix(src_prefix, obj.key, dst_prefix, recursive=recursive)
+                        assert dest_key[:len(dst_prefix)] == dst_prefix, f"Destination key {dest_key} does not start with destination prefix {dst_prefix}"
+                        dest_keys.append(dest_key[len(dst_prefix):])
                     except exceptions.MissingObjectException as e:
                         logger.fs.exception(e)
                         raise e from None
@@ -269,8 +272,10 @@ class Chunker:
                         dest_obj = GCSObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
                     else:
                         raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
-
                     dest_objs[dst_iface.region_tag()] = dest_obj
+
+                assert len(list(set(dest_keys))) == 1, f"Destination keys {dest_keys} do not match"
+
 
                 # make destination object
                 # dest_provider, dest_region = self.dst_iface.region_tag().split(":")
@@ -285,8 +290,8 @@ class Chunker:
                 # dest_obj = ObjectStoreObject(key=dest_key)
 
                 n_objs += 1
-                logger.fs.debug(f"Yield: {obj}, {dest_objs}")
-                yield TransferPair(src=obj, dsts=dest_objs)
+                #logger.fs.debug(f"Yield: {obj}, {dest_objs}")
+                yield TransferPair(src_obj=obj, dst_objs=dest_objs, dst_key = dest_keys[0])
 
         if n_objs == 0:
             logger.error("Specified object does not exist.\n")
@@ -316,16 +321,16 @@ class Chunker:
 
         # begin chunking loop
         for transfer_pair in transfer_pair_generator:
-            src_obj = transfer_pair.src
+            src_obj = transfer_pair.src_obj
             if self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
                 multipart_send_queue.put(transfer_pair)
             else:
                 yield GatewayMessage(
                     chunk=Chunk(
                         src_key=src_obj.key,
-                        dest_key=src_obj.key,  # TODO: get rid of dest_key, and have write object have info on prefix  (or have a map here)
+                        dest_key=transfer_pair.dst_key,  # TODO: get rid of dest_key, and have write object have info on prefix  (or have a map here)
                         chunk_id=uuid.uuid4().hex,
-                        chunk_length_bytes=transfer_pair.src.size,
+                        chunk_length_bytes=transfer_pair.src_obj.size,
                         partition_id=0,  # TODO: fix this to distribute across multiple partitions
                     )
                 )
@@ -703,7 +708,7 @@ class CopyJob(TransferJob):
             print("verify", dst_iface.region_tag())
 
             # gather destination key mapping for this region
-            dst_keys = {pair.dsts[dst_iface.region_tag()].key: pair.src for pair in self.transfer_list}
+            dst_keys = {pair.dst_objs[dst_iface.region_tag()].key: pair.src_obj for pair in self.transfer_list}
             print("dst keys", dst_keys)
 
             # list and check destination prefix
