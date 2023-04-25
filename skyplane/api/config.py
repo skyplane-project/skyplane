@@ -83,14 +83,9 @@ class TransferConfig:
     ibmcloud_use_spot_instances: bool = False
 
     aws_instance_class: str = "m5.8xlarge"
-<<<<<<< HEAD
     azure_instance_class: str = "Standard_D2_v5"
     gcp_instance_class: str = "n2-standard-16"
     ibmcloud_instance_class: str = "bx2-2x8"
-=======
-    azure_instance_class: str = "Standard_D32_v5"  # note: setting to lower values may have too little memory
-    gcp_instance_class: str = "n2-standard-32"
->>>>>>> 8de041481e9abc0f66f34af5a9011b99d09e05e6
     gcp_use_premium_network: bool = True
 
     # multipart config
