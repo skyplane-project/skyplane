@@ -98,7 +98,14 @@ class S3Interface(ObjectStoreInterface):
             objs = []
             for obj in page.get("Contents", []):
                 objs.append(
-                    S3Object(obj["Key"], provider="aws", bucket=self.bucket_name, size=obj["Size"], last_modified=obj["LastModified"], mime_type=obj.get("ContentType"))
+                    S3Object(
+                        obj["Key"],
+                        provider="aws",
+                        bucket=self.bucket_name,
+                        size=obj["Size"],
+                        last_modified=obj["LastModified"],
+                        mime_type=obj.get("ContentType"),
+                    )
                 )
             yield from objs
 
