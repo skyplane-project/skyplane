@@ -86,11 +86,11 @@ class AzureBlobInterface(ObjectStoreInterface):
         try:
             for blob in blobs:
                 yield AzureBlobObject(
-                    "azure",
-                    f"{self.account_name}/{blob.container}",
                     blob.name,
-                    blob.size,
-                    blob.last_modified,
+                    provider="azure",
+                    bucket=f"{self.account_name}/{blob.container}",
+                    size=blob.size,
+                    last_modified=blob.last_modified,
                     mime_type=getattr(blob.content_settings, "content_type", None),
                 )
         except exceptions.HttpResponseError as e:
