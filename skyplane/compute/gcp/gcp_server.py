@@ -38,7 +38,7 @@ class GCPServer(Server):
             for i in instances["items"]:
                 if i["name"] == self.gcp_instance_name:
                     return i
-        raise ValueError(f"No instance found with name {self.gcp_instance_name}, {instances}")
+        raise ValueError(f"No instance found with name {self.gcp_instance_name}, {self.gcp_region}, {instances}")
 
     def get_instance_property(self, prop):
         instance = self.get_gcp_instance()

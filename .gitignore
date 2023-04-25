@@ -11,8 +11,13 @@ __pycache__/
 # C extensions
 *.so
 
+# experiment scripts
+solution/ 
+out/
+
 # Distribution / packaging
 .Python
+log/
 build/
 develop-eggs/
 dist/

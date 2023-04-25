@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from typing import Optional
+from typing import Optional, List
 
 from skyplane import compute
 
@@ -63,6 +63,13 @@ class TransferConfig:
     autoterminate_minutes: int = 15
     requester_pays: bool = False
 
+    # randomly generate data or not for broadcast
+    gen_random_data: bool = False
+    random_chunk_size_mb: Optional[float] = None
+    num_random_chunks: Optional[int] = None
+    src_region: Optional[str] = None
+    dst_regions: Optional[List[str]] = None
+
     # gateway settings
     use_bbr: bool = True
     use_compression: bool = True
@@ -76,9 +83,14 @@ class TransferConfig:
     ibmcloud_use_spot_instances: bool = False
 
     aws_instance_class: str = "m5.8xlarge"
+<<<<<<< HEAD
     azure_instance_class: str = "Standard_D2_v5"
     gcp_instance_class: str = "n2-standard-16"
     ibmcloud_instance_class: str = "bx2-2x8"
+=======
+    azure_instance_class: str = "Standard_D32_v5"  # note: setting to lower values may have too little memory
+    gcp_instance_class: str = "n2-standard-32"
+>>>>>>> 8de041481e9abc0f66f34af5a9011b99d09e05e6
     gcp_use_premium_network: bool = True
 
     # multipart config

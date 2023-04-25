@@ -9,11 +9,12 @@ from skyplane.api.provisioner import Provisioner
 from skyplane.api.obj_store import ObjectStore
 from skyplane.api.usage import get_clientid
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
-from skyplane.planner.planner import DirectPlanner, ILPSolverPlanner, RONSolverPlanner
+from skyplane.planner.planner import MulticastDirectPlanner
 from skyplane.utils import logger
 from skyplane.utils.definitions import tmp_log_dir
 from skyplane.utils.path import parse_path
 
+from skyplane.api.pipeline import Pipeline
 
 if TYPE_CHECKING:
     from skyplane.api.config import AWSConfig, AzureConfig, GCPConfig, TransferConfig, IBMCloudConfig
@@ -60,6 +61,7 @@ class SkyplaneClient:
         # set up logging
         self.log_dir.mkdir(parents=True, exist_ok=True)
         logger.open_log_file(self.log_dir / "client.log")
+        print("logging:", self.log_dir / "client.log")
 
         self.provisioner = Provisioner(
             host_uuid=self.clientid,
@@ -68,6 +70,10 @@ class SkyplaneClient:
             gcp_auth=self.gcp_auth,
             ibmcloud_auth=self.ibmcloud_auth,
         )
+
+    def pipeline(self):
+        """Create a pipeline object to queue jobs"""
+        return Pipeline(clientid=self.clientid, provisioner=self.provisioner, transfer_config=self.transfer_config)
 
     def copy(self, src: str, dst: str, recursive: bool = False, num_vms: int = 1):
         """

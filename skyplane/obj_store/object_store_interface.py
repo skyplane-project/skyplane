@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from typing import Iterator, List, Optional, Tuple
 
+from skyplane.obj_store.storage_interface import StorageInterface
 from skyplane.utils import logger
 
 
@@ -9,9 +10,9 @@ from skyplane.utils import logger
 class ObjectStoreObject:
     """Defines object in object store."""
 
-    provider: str
-    bucket: str
     key: str
+    provider: str = None
+    bucket: str = None
     size: Optional[int] = None
     last_modified: Optional[str] = None
     mime_type: Optional[str] = None
@@ -24,7 +25,7 @@ class ObjectStoreObject:
         raise NotImplementedError()
 
 
-class ObjectStoreInterface:
+class ObjectStoreInterface(StorageInterface):
     def path(self) -> str:
         raise NotImplementedError()
 
