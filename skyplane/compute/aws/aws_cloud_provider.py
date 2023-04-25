@@ -221,18 +221,25 @@ class AWSCloudProvider(CloudProvider):
             current_subnet_id = 0
             for i in range(max_retries):
                 try:
+                    print("subnet", region, subnets[current_subnet_id])
                     instance = start_instance(subnets[current_subnet_id].id)
                     break
                 except exceptions.ClientError as e:
                     if i == max_retries - 1:
                         raise
                     elif "VcpuLimitExceeded" in str(e):
+                        print("VCPU LIMIT ERROR")
                         raise skyplane_exceptions.InsufficientVCPUException() from e
-                    elif "Invalid IAM Instance Profile name" not in str(e):
+                    elif "Invalid IAM Instance Profile name" in str(e):
+                        print("INVALID IAM INSTANCE PROFILE NAME")
                         logger.warning(str(e))
                     elif "InsufficientInstanceCapacity" in str(e):
                         # try another subnet
+                        print("try another subnet", region, subnets[current_subnet_id], subnets[(current_subnet_id + 1) % len(subnets)])
+                        print("all", subnets)
                         current_subnet_id = (current_subnet_id + 1) % len(subnets)
+                    else:
+                        print("UNKNOWN", e)
                     time.sleep(backoff)
                     backoff = min(backoff * 2, max_backoff)
 

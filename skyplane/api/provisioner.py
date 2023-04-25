@@ -155,12 +155,14 @@ class Provisioner:
         return self.provisioned_vms[uuid]
 
     def _provision_task(self, task: ProvisionerTask):
+        print("provision", task.region)
         with Timer() as t:
             if task.cloud_provider == "aws":
                 assert self.aws.auth.enabled(), "AWS credentials not configured"
                 server = self.aws.provision_instance(task.region, task.vm_type, use_spot_instances=task.spot, tags=task.tags)
             elif task.cloud_provider == "azure":
                 assert self.azure.auth.enabled(), "Azure credentials not configured"
+                print("PROVISION", task.tags, task.vm_type)
                 server = self.azure.provision_instance(task.region, task.vm_type, use_spot_instances=task.spot, tags=task.tags)
             elif task.cloud_provider == "gcp":
                 assert self.gcp.auth.enabled(), "GCP credentials not configured"
@@ -245,14 +247,13 @@ class Provisioner:
             authorize_ip_jobs = []
             if ibmcloud_provisioned:
                 authorize_ip_jobs.extend([partial(self.ibmcloud.add_ips_to_security_group, r, public_ips) for r in set(ibmcloud_regions)])
+            # NOTE: the following setup is for broadcast only
             if aws_provisioned:
-                authorize_ip_jobs.extend([partial(self.aws.add_ips_to_security_group, r, public_ips) for r in set(aws_regions)])
-            if gcp_provisioned:
-
-                def authorize_gcp_gateways():
-                    self.gcp_firewall_rules.add(self.gcp.authorize_gateways(public_ips + private_ips))
-
-                authorize_ip_jobs.append(authorize_gcp_gateways)
+                authorize_ip_jobs.extend([partial(self.aws.add_ips_to_security_group, r, None) for r in set(aws_regions)])
+            # if gcp_provisioned:
+            #     def authorize_gcp_gateways():
+            #         self.gcp_firewall_rules.add(self.gcp.authorize_gateways(public_ips + private_ips))
+            #     authorize_ip_jobs.append(authorize_gcp_gateways)
 
             do_parallel(
                 lambda fn: fn(),

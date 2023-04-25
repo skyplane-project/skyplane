@@ -8,7 +8,7 @@ import pandas as pd
 from typing import Dict, List, Optional, Tuple
 
 from skyplane import compute
-from skyplane.planner.topology import ReplicationTopology
+from skyplane.planner.topology import TopologyPlan
 from skyplane.utils import logger
 from skyplane.utils.definitions import GB
 

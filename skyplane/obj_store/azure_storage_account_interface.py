@@ -11,6 +11,7 @@ class AzureStorageAccountInterface:
     def __init__(self, account_name: str):
         self.auth = compute.AzureAuthentication()
         self.account_name = account_name
+        self.provider = "azure"
 
     @lru_cache(maxsize=1)
     def storage_account_obj(self):

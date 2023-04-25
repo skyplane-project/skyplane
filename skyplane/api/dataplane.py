@@ -6,17 +6,19 @@ from datetime import datetime
 from functools import partial
 from datetime import datetime
 
-import typer
 import nacl.secret
 import nacl.utils
 import urllib3
+from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 from skyplane import compute
 from skyplane.api.tracker import TransferProgressTracker, TransferHook
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
-from skyplane.planner.topology import ReplicationTopology, ReplicationTopologyGateway
+
+# from skyplane.planner.topology_old import ReplicationTopology, ReplicationTopologyGateway
+from skyplane.planner.topology import TopologyPlan, TopologyPlanGateway
 from skyplane.utils import logger
 from skyplane.utils.definitions import gateway_docker_image, tmp_log_dir
 from skyplane.utils.fn import PathLike, do_parallel
@@ -32,8 +34,19 @@ class DataplaneAutoDeprovision:
     def __enter__(self):
         return self.dataplane
 
+    def copy_log(self, instance):
+        print("COPY DATA TO", str(self.dataplane.log_dir) + f"/gateway_{instance.uuid()}.stdout")
+        instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
+        print(f"Copying gateway std out files to gateway_{instance.uuid()}.stdout")
+        instance.download_file("/tmp/gateway.stdout", self.dataplane.log_dir / f"gateway_{instance.uuid()}.stdout")
+        print(f"Copying gateway std err files to gateway_{instance.uuid()}.stderr")
+        instance.download_file("/tmp/gateway.stderr", self.dataplane.log_dir / f"gateway_{instance.uuid()}.stderr")
+
     def __exit__(self, exc_type, exc_value, exc_tb):
         logger.fs.warning("Deprovisioning dataplane")
+        print("Starting deprovision")
+        # TODO: insert log copy here?
+        do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=-1)
         self.dataplane.deprovision()
 
 
@@ -41,7 +54,13 @@ class Dataplane:
     """A Dataplane represents a concrete Skyplane network, including topology and VMs."""
 
     def __init__(
-        self, clientid: str, topology: ReplicationTopology, provisioner: "Provisioner", transfer_config: TransferConfig, debug: bool = False
+        self,
+        clientid: str,
+        topology: TopologyPlan,
+        provisioner: "Provisioner",
+        transfer_config: TransferConfig,
+        log_dir: str,
+        debug: bool = True,
     ):
         """
         :param clientid: the uuid of the local host to create the dataplane
@@ -52,39 +71,76 @@ class Dataplane:
         :type provisioner: Provisioner
         :param transfer_config: the configuration during the transfer
         :type transfer_config: TransferConfig
-        :param debug: whether to enable debug mode, defaults to False
-        :type debug: bool, optional
         """
         self.clientid = clientid
         self.topology = topology
-        self.src_region_tag = self.topology.source_region()
-        self.dst_region_tag = self.topology.sink_region()
-        regions = Counter([node.region for node in self.topology.gateway_nodes])
-        self.max_instances = int(regions[max(regions, key=regions.get)])
         self.provisioner = provisioner
         self.transfer_config = transfer_config
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         self.provisioning_lock = threading.Lock()
         self.provisioned = False
+        self.log_dir = Path(log_dir)
         self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
         self.transfer_dir.mkdir(exist_ok=True, parents=True)
 
         # transfer logs
         self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
         self.transfer_dir.mkdir(exist_ok=True, parents=True)
+        self.debug = debug
 
         # pending tracker tasks
-        self.jobs_to_dispatch: List[TransferJob] = []
         self.pending_transfers: List[TransferProgressTracker] = []
-        self.bound_nodes: Dict[ReplicationTopologyGateway, compute.Server] = {}
+        self.bound_nodes: Dict[TopologyPlanGateway, compute.Server] = {}
 
-        self.debug = debug
+    def _start_gateway(
+        self,
+        gateway_docker_image: str,
+        gateway_node: TopologyPlanGateway,
+        gateway_server: compute.Server,
+        gateway_log_dir: Optional[PathLike],
+        authorize_ssh_pub_key: Optional[str] = None,
+        e2ee_key_bytes: Optional[str] = None,
+    ):
+        # map outgoing ports
+        setup_args = {}
+        for gateway_id, n_conn in self.topology.get_outgoing_paths(gateway_node.gateway_id).items():
+            node = self.topology.get_gateway(gateway_id)
+            # use private ips for gcp to gcp connection
+            src_provider, dst_provider = gateway_node.region.split(":")[0], node.region.split(":")[0]
+            if src_provider == dst_provider and src_provider == "gcp":
+                setup_args[self.bound_nodes[node].private_ip()] = n_conn
+            else:
+                setup_args[self.bound_nodes[node].public_ip()] = n_conn
+        logger.fs.debug(f"[Dataplane._start_gateway] Setup args for {gateway_node}: {setup_args}")
+
+        if gateway_log_dir:
+            gateway_server.init_log_files(gateway_log_dir)
+        if authorize_ssh_pub_key:
+            gateway_server.copy_public_key(authorize_ssh_pub_key)
+
+        # write gateway programs
+        gateway_program_filename = Path(f"{gateway_log_dir}/gateway_program_{gateway_node.gateway_id}.json")
+        print(gateway_node.gateway_program.to_dict())
+        with open(gateway_program_filename, "w") as f:
+            f.write(gateway_node.gateway_program.to_json())
+        print("gateway", gateway_program_filename)
+
+        # start gateway
+        gateway_server.start_gateway(
+            # setup_args,
+            gateway_docker_image=gateway_docker_image,
+            gateway_program_path=gateway_program_filename,
+            gateway_info_path=f"{gateway_log_dir}/gateway_info.json",
+            e2ee_key_bytes=None,  # TODO: remove
+            use_bbr=self.transfer_config.use_bbr,  # TODO: remove
+            use_compression=self.transfer_config.use_compression,
+            use_socket_tls=self.transfer_config.use_socket_tls,
+        )
 
     def provision(
         self,
         allow_firewall: bool = True,
         gateway_docker_image: str = os.environ.get("SKYPLANE_DOCKER_IMAGE", gateway_docker_image()),
-        gateway_log_dir: Optional[PathLike] = None,
         authorize_ssh_pub_key: Optional[str] = None,
         max_jobs: int = 16,
         spinner: bool = False,
@@ -96,13 +152,12 @@ class Dataplane:
         :type allow_firewall: bool
         :param gateway_docker_image: Docker image token in github
         :type gateway_docker_image: str
-        :param gateway_log_dir: path to the log directory in the remote gatweways
-        :type gateway_log_dir: PathLike
         :param authorize_ssh_pub_key: authorization ssh key to the remote gateways
         :type authorize_ssh_pub_key: str
         :param max_jobs: maximum number of provision jobs to launch concurrently (default: 16)
         :type max_jobs: int
-        :param spinner: whether to show the spinner during the job (default: False)
+        :param spinner: whether to show the spinner during the job (default: False)its to determine how many instances to create in each region
+        # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
         :type spinner: bool
         """
         with self.provisioning_lock:
@@ -115,8 +170,8 @@ class Dataplane:
             is_ibmcloud_used = any(n.region.startswith("ibmcloud:") for n in self.topology.nodes)
 
             # create VMs from the topology
-            for node in self.topology.gateway_nodes:
-                cloud_provider, region = node.region.split(":")
+            for node in self.topology.get_gateways():
+                cloud_provider, region = node.region_tag.split(":")
                 self.provisioner.add_task(
                     cloud_provider=cloud_provider,
                     region=region,
@@ -140,64 +195,49 @@ class Dataplane:
             servers_by_region = defaultdict(list)
             for s in servers:
                 servers_by_region[s.region_tag].append(s)
-            for node in self.topology.gateway_nodes:
-                instance = servers_by_region[node.region].pop()
+            print(servers_by_region)
+            for node in self.topology.get_gateways():
+                print(node.region_tag)
+                instance = servers_by_region[node.region_tag].pop()
+                print("instance", instance, node.region_tag)
                 self.bound_nodes[node] = instance
+
+                # set ip addresses (for gateway program generation)
+                self.topology.set_ip_addresses(node.gateway_id, self.bound_nodes[node].private_ip(), self.bound_nodes[node].public_ip())
+
             logger.fs.debug(f"[Dataplane.provision] bound_nodes = {self.bound_nodes}")
             gateway_bound_nodes = self.bound_nodes.copy()
 
             # start gateways
             self.provisioned = True
 
-        def _start_gateway(
-            gateway_node: ReplicationTopologyGateway,
-            gateway_server: compute.Server,
-        ):
-            # map outgoing ports
-            setup_args = {}
-            for n, v in self.topology.get_outgoing_paths(gateway_node).items():
-                if isinstance(n, ReplicationTopologyGateway):
-                    # use private ips for gcp to gcp connection
-                    src_provider, dst_provider = gateway_node.region.split(":")[0], n.region.split(":")[0]
-                    if src_provider == dst_provider and src_provider == "gcp":
-                        setup_args[self.bound_nodes[n].private_ip()] = v
-                    else:
-                        setup_args[self.bound_nodes[n].public_ip()] = v
-            am_source = gateway_node in self.topology.source_instances()
-            am_sink = gateway_node in self.topology.sink_instances()
-            logger.fs.debug(f"[Dataplane._start_gateway] Setup args for {gateway_node}: {setup_args}")
-
-            # start gateway
-            if gateway_log_dir:
-                gateway_server.init_log_files(gateway_log_dir)
-            if authorize_ssh_pub_key:
-                gateway_server.copy_public_key(authorize_ssh_pub_key)
-            gateway_server.start_gateway(
-                setup_args,
-                gateway_docker_image=gateway_docker_image,
-                e2ee_key_bytes=e2ee_key_bytes if (self.transfer_config.use_e2ee and (am_source or am_sink)) else None,
-                use_bbr=self.transfer_config.use_bbr,
-                use_compression=self.transfer_config.use_compression,
-                use_socket_tls=self.transfer_config.use_socket_tls,
-            )
-
         # todo: move server.py:start_gateway here
         logger.fs.info(f"Using docker image {gateway_docker_image}")
         e2ee_key_bytes = nacl.utils.random(nacl.secret.SecretBox.KEY_SIZE)
 
+        # create gateway logging dir
+        gateway_program_dir = f"{self.log_dir}/programs"
+        Path(gateway_program_dir).mkdir(exist_ok=True, parents=True)
+        print("writing programs", gateway_program_dir)
+
+        # write gateway info file
+        gateway_info_path = f"{gateway_program_dir}/gateway_info.json"
+        with open(gateway_info_path, "w") as f:
+            json.dump(self.topology.get_gateway_info_json(), f, indent=4)
+        print("write info json", gateway_info_path)
+
+        # start gateways in parallel
         jobs = []
         for node, server in gateway_bound_nodes.items():
-            jobs.append(partial(_start_gateway, node, server))
+            jobs.append(
+                partial(self._start_gateway, gateway_docker_image, node, server, gateway_program_dir, authorize_ssh_pub_key, e2ee_key_bytes)
+            )
         logger.fs.debug(f"[Dataplane.provision] Starting gateways on {len(jobs)} servers")
         do_parallel(lambda fn: fn(), jobs, n=-1, spinner=spinner, spinner_persist=spinner, desc="Starting gateway container on VMs")
 
     def copy_gateway_logs(self):
         # copy logs from all gateways in parallel
         def copy_log(instance):
-            print(self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
-            typer.secho(f"Downloading log: {self.transfer_dir}/gateway_{instance.uuid()}.stdout", fg="bright_black")
-            typer.secho(f"Downloading log: {self.transfer_dir}/gateway_{instance.uuid()}.stderr", fg="bright_black")
-
             instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
             instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
             instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
@@ -216,6 +256,9 @@ class Dataplane:
         with self.provisioning_lock:
             if self.debug:
                 logger.fs.info(f"Copying gateway logs to {self.transfer_dir}")
+                print(f"Copying gateway logs to {self.transfer_dir}")
+            if self.debug:
+                logger.fs.info(f"Copying gateway logs to {self.transfer_dir}")
                 self.copy_gateway_logs()
 
             if not self.provisioned:
@@ -224,6 +267,7 @@ class Dataplane:
             try:
                 for task in self.pending_transfers:
                     logger.fs.warning(f"Before deprovisioning, waiting for jobs to finish: {list(task.jobs.keys())}")
+                    print("Waiting for task join")
                     task.join()
             except KeyboardInterrupt:
                 logger.warning("Interrupted while waiting for transfers to finish, deprovisioning anyway.")
@@ -246,7 +290,8 @@ class Dataplane:
             return json.loads(reply.data.decode("utf-8"))["errors"]
 
         errors: Dict[str, List[str]] = {}
-        for (_, instance), result in do_parallel(get_error_logs, self.bound_nodes.items(), n=-1):
+        # for (_, instance), result in do_parallel(get_error_logs, self.bound_nodes.items(), n=-1):
+        for (_, instance), result in do_parallel(get_error_logs, self.bound_nodes.items(), n=1):
             errors[instance] = result
         return errors
 
@@ -260,14 +305,16 @@ class Dataplane:
 
     def sink_gateways(self) -> List[compute.Server]:
         """Returns a list of sink gateway nodes"""
-        return [self.bound_nodes[n] for n in self.topology.sink_instances()] if self.provisioned else []
+        return (
+            {region: [self.bound_nodes[n] for n in nodes] for region, nodes in self.topology.sink_instances().items()}
+            if self.provisioned
+            else {}
+        )
 
-    # def copy_log(self, instance):
-    #    typer.secho(f"Downloading log: {self.transfer_dir}/gateway_{instance.uuid()}.stdout", fg="bright_black")
-    #    typer.secho(f"Downloading log: {self.transfer_dir}/gateway_{instance.uuid()}.stderr", fg="bright_black")
-    #    instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
-    #    instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
-    #    instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
+    def copy_log(self, instance):
+        instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
+        instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
+        instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 
     def queue_copy(
         self,
@@ -312,7 +359,7 @@ class Dataplane:
         self.jobs_to_dispatch.append(job)
         return job.uuid
 
-    def run_async(self, hooks: Optional[TransferHook] = None) -> TransferProgressTracker:
+    def run_async(self, jobs: List[TransferJob], hooks: Optional[TransferHook] = None) -> TransferProgressTracker:
         """Start the transfer asynchronously. The main thread will not be blocked.
 
         :param hooks: Tracks the status of the transfer
@@ -320,26 +367,18 @@ class Dataplane:
         """
         if not self.provisioned:
             logger.error("Dataplane must be pre-provisioned. Call dataplane.provision() before starting a transfer")
-        tracker = TransferProgressTracker(self, self.jobs_to_dispatch, self.transfer_config, hooks)
+        tracker = TransferProgressTracker(self, jobs, self.transfer_config, hooks)
         self.pending_transfers.append(tracker)
         tracker.start()
-        logger.fs.info(f"[SkyplaneClient] Started async transfer with {len(self.jobs_to_dispatch)} jobs")
-        self.jobs_to_dispatch = []
+        logger.fs.info(f"[SkyplaneClient] Started async transfer with {len(jobs)} jobs")
         return tracker
 
-    def run(self, hooks: Optional[TransferHook] = None):
+    def run(self, jobs: List[TransferJob], hooks: Optional[TransferHook] = None):
         """Start the transfer in the main thread. Wait until the transfer is complete.
 
         :param hooks: Tracks the status of the transfer
         :type hooks: TransferHook
         """
-        tracker = self.run_async(hooks)
+        tracker = self.run_async(jobs, hooks)
         logger.fs.debug(f"[SkyplaneClient] Waiting for transfer to complete")
         tracker.join()
-
-    def estimate_total_cost(self):
-        """Estimate total cost of queued jobs"""
-        total_size = 0
-        for job in self.jobs_to_dispatch:
-            total_size += job.size_gb()
-        return total_size * self.topology.cost_per_gb

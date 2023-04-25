@@ -133,6 +133,10 @@ class GCPCloudProvider(CloudProvider):
             name = f"skyplane-gcp-{str(uuid.uuid4().hex[:8])}"
         compute = self.auth.get_gcp_client()
 
+        # if region[-2:] != "-a" or region[-2:] != "-b":
+        #    region = region + "-a"
+        #    print("Adding subregion to region", region)
+
         if instance_os == "ubuntu":
             image = "projects/ubuntu-os-cloud/global/images/family/ubuntu-2004-lts"
         elif instance_os == "cos":
