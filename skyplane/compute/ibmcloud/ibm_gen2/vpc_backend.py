@@ -39,7 +39,6 @@ VPC_API_VERSION = "2021-09-21"
 
 
 class IBMVPCBackend:
-
     @imports.inject("ibm_vpc", "ibm_cloud_sdk_core.authenticators", "ibm_cloud_sdk_core", pip_extra="ibmcloud")
     def __init__(self, ibm_vpc_config):
         logger.debug("Creating IBM VPC client")

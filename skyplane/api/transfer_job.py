@@ -101,7 +101,7 @@ class Chunker:
             for dest_iface in self.dst_ifaces:
                 dest_object = dest_objects[dest_iface.region_tag()]
                 upload_id = dest_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
-                #print(f"Created upload id for key {dest_object.key} with upload id {upload_id} for bucket {dest_iface.bucket_name}")
+                # print(f"Created upload id for key {dest_object.key} with upload id {upload_id} for bucket {dest_iface.bucket_name}")
                 # store mapping between key and upload id for each region
                 upload_id_mapping[dest_iface.region_tag()] = (src_object.key, upload_id)
             out_queue_chunks.put(GatewayMessage(upload_id_mapping=upload_id_mapping))  # send to output queue
@@ -264,7 +264,7 @@ class Chunker:
                         assert (
                             dest_key[: len(dst_prefix)] == dst_prefix
                         ), f"Destination key {dest_key} does not start with destination prefix {dst_prefix}"
-                        dest_keys.append(dest_key[len(dst_prefix):])
+                        dest_keys.append(dest_key[len(dst_prefix) :])
                     except exceptions.MissingObjectException as e:
                         logger.fs.exception(e)
                         raise e from None
@@ -281,7 +281,7 @@ class Chunker:
                     print(dest_objs)
                     dest_objs[dst_iface.region_tag()] = dest_obj
 
-                # assert that all destinations share the same post-fix key 
+                # assert that all destinations share the same post-fix key
                 print("DEST KEYS", dest_keys, "prefix", dst_prefixes)
                 print("DEST OBJS", dest_objs)
                 assert len(list(set(dest_keys))) == 1, f"Destination keys {dest_keys} do not match"
@@ -630,8 +630,8 @@ class CopyJob(TransferJob):
                             if region_tag == dst_gateway.region_tag:
                                 mappings[key] = id
 
-                    #print("mappings", mappings, "region", dst_gateway.region_tag, dst_gateway)
-                    #print("sending mapping to ", dst_gateway, dst_gateway.gateway_api_url)
+                    # print("mappings", mappings, "region", dst_gateway.region_tag, dst_gateway)
+                    # print("sending mapping to ", dst_gateway, dst_gateway.gateway_api_url)
                     # send mapping to gateway
                     reply = self.http_pool.request(
                         "POST",

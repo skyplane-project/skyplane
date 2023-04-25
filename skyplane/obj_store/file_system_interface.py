@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Iterator, List, Optional
 from skyplane.obj_store.storage_interface import StorageInterface
 
+
 @dataclass
 class LocalFile:
     """Defines file on local node."""
