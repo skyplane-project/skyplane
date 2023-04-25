@@ -251,7 +251,6 @@ class GatewayDaemonAPI(threading.Thread):
         def add_chunk_request():
             print(f"[gateway_api] Recieved chunk request {request.json}")
             state_param = request.args.get("state", "registered")
-            logger.info(f"Adding chunk request {request.json}")
             n_added = add_chunk_req(request.json, ChunkState.from_str(state_param))
             # TODO: Add to chunk manager queue
             return jsonify({"status": "ok", "n_added": n_added})

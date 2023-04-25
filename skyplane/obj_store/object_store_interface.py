@@ -111,13 +111,13 @@ class ObjectStoreInterface(StorageInterface):
 
     @staticmethod
     def create(region_tag: str, bucket: str):
+        # TODO: modify this to also support local file 
         if region_tag.startswith("aws"):
             from skyplane.obj_store.s3_interface import S3Interface
 
             return S3Interface(bucket)
         elif region_tag.startswith("gcp"):
             from skyplane.obj_store.gcs_interface import GCSInterface
-
             return GCSInterface(bucket)
         elif region_tag.startswith("azure"):
             from skyplane.obj_store.azure_blob_interface import AzureBlobInterface

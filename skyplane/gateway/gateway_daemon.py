@@ -322,7 +322,6 @@ class GatewayDaemon:
         signal.signal(signal.SIGTERM, exit_handler)
 
         logger.info("[gateway_daemon] Starting daemon loop")
-        logger.info(self.chunk_store.get_chunk_requests())
         try:
             while not exit_flag.is_set() and not self.error_event.is_set():
                 self.api_server.pull_chunk_status_queue()

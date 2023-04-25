@@ -3,7 +3,7 @@ from skyplane.api.pipeline import Pipeline
 
 client = SkyplaneClient()
 
-pipeline = client.pipeline()
+pipeline = client.pipeline(debug=True)
 
 # single direct transfer
 # pipeline.queue_copy(src="gs://skyplane-broadcast-datasets/OPT-66B/reshard-model_part-0.pt", dst="gs://test-destination-2/")

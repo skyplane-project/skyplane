@@ -17,8 +17,6 @@ from skyplane.utils.generator import batch_generator
 
 
 class GCSObject(ObjectStoreObject):
-    provider = "gcs"
-
     def full_path(self):
         return os.path.join(f"gs://{self.bucket}", self.key)
 
@@ -30,12 +28,14 @@ class GCSInterface(ObjectStoreInterface):
         self._gcs_client = self.auth.get_storage_client()
         self._requests_session = requests.Session()
         self.provider = "gcp"
+        #self.region_tag = self.a
 
     def path(self):
         return f"gs://{self.bucket_name}"
 
+
     @property
-    @lru_cache(maxsize=1)
+    #@lru_cache(maxsize=1)
     def gcp_region(self):
         def map_region_to_zone(region) -> str:
             """Resolves bucket locations to a valid zone."""
@@ -79,7 +79,6 @@ class GCSInterface(ObjectStoreInterface):
         return self.bucket_name
 
     def bucket_exists(self):
-        print("list client objects")
         iterator = self._gcs_client.list_blobs(self.bucket_name, page_size=1)
         try:
             next(iterator.pages, None)
@@ -115,6 +114,7 @@ class GCSInterface(ObjectStoreInterface):
         for blob in blobs:
             yield GCSObject(
                 blob.name,
+                provider="gcp",
                 bucket=self.bucket_name,
                 size=blob.size,
                 last_modified=blob.updated,
@@ -125,7 +125,7 @@ class GCSInterface(ObjectStoreInterface):
         for key in keys:
             self._gcs_client.bucket(self.bucket_name).blob(key).delete()
 
-    @lru_cache(maxsize=1024)
+    #@lru_cache(maxsize=1024)
     def get_obj_metadata(self, obj_name):
         bucket = self._gcs_client.bucket(self.bucket_name)
         blob = bucket.get_blob(obj_name)

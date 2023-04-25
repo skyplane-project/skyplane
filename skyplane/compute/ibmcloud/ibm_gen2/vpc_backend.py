@@ -24,14 +24,13 @@ import time
 import logging
 import uuid
 import random
-from ibm_vpc import VpcV1
-from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
-from ibm_cloud_sdk_core import ApiException
 from concurrent.futures import ThreadPoolExecutor
 
 from skyplane.compute.ibmcloud.ibm_gen2.ssh_client import SSHClient
 from skyplane.compute.ibmcloud.ibm_gen2.constants import COMPUTE_CLI_MSG, CACHE_DIR
 from skyplane.compute.ibmcloud.ibm_gen2.utils import load_yaml_config, dump_yaml_config, delete_yaml_config
+
+from skyplane.utils import imports
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +39,8 @@ VPC_API_VERSION = "2021-09-21"
 
 
 class IBMVPCBackend:
+
+    @imports.inject("ibm_vpc", "ibm_cloud_sdk_core.authenticators", "ibm_cloud_sdk_core", pip_extra="ibmcloud")
     def __init__(self, ibm_vpc_config):
         logger.debug("Creating IBM VPC client")
         self.name = "ibm_gen2"
@@ -60,8 +61,8 @@ class IBMVPCBackend:
         self.workers = []
 
         self.iam_api_key = self.config.get("iam_api_key")
-        authenticator = IAMAuthenticator(self.iam_api_key, url=self.config.get("iam_endpoint"))
-        self.vpc_cli = VpcV1(VPC_API_VERSION, authenticator=authenticator)
+        authenticator = ibm_cloud_sdk_core.authenticators(self.iam_api_key, url=self.config.get("iam_endpoint"))
+        self.vpc_cli = ibm_vpc.VpcV1(VPC_API_VERSION, authenticator=authenticator)
         self.vpc_cli.set_service_url(self.config["endpoint"] + "/v1")
 
         user_agent_string = "ibm_vpc_{}".format(self.config["user_agent"])

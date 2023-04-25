@@ -157,17 +157,17 @@ class Dataplane:
         :param max_jobs: maximum number of provision jobs to launch concurrently (default: 16)
         :type max_jobs: int
         :param spinner: whether to show the spinner during the job (default: False)its to determine how many instances to create in each region
-        # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
         :type spinner: bool
         """
+        # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
         with self.provisioning_lock:
             if self.provisioned:
                 logger.error("Cannot provision dataplane, already provisioned!")
                 return
-            is_aws_used = any(n.region.startswith("aws:") for n in self.topology.nodes)
-            is_azure_used = any(n.region.startswith("azure:") for n in self.topology.nodes)
-            is_gcp_used = any(n.region.startswith("gcp:") for n in self.topology.nodes)
-            is_ibmcloud_used = any(n.region.startswith("ibmcloud:") for n in self.topology.nodes)
+            is_aws_used = any(n.region_tag.startswith("aws:") for n in self.topology.get_gateways())
+            is_azure_used = any(n.region_tag.startswith("azure:") for n in self.topology.get_gateways())
+            is_gcp_used = any(n.region_tag.startswith("gcp:") for n in self.topology.get_gateways())
+            is_ibmcloud_used = any(n.region_tag.startswith("ibmcloud:") for n in self.topology.get_gateways())
 
             # create VMs from the topology
             for node in self.topology.get_gateways():
@@ -254,9 +254,6 @@ class Dataplane:
         :type spinner: bool
         """
         with self.provisioning_lock:
-            if self.debug:
-                logger.fs.info(f"Copying gateway logs to {self.transfer_dir}")
-                print(f"Copying gateway logs to {self.transfer_dir}")
             if self.debug:
                 logger.fs.info(f"Copying gateway logs to {self.transfer_dir}")
                 self.copy_gateway_logs()

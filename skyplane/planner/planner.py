@@ -94,6 +94,7 @@ class MulticastDirectPlanner(Planner):
         super().__init__()
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
+        print(jobs[0].src_iface)
         src_region_tag = jobs[0].src_iface.region_tag()
         dst_region_tags = [iface.region_tag() for iface in jobs[0].dst_ifaces]
         # jobs must have same sources and destinations

@@ -27,7 +27,7 @@ class TopologyPlanGateway:
     @property
     def provider(self):
         """Get the provider of the gateway"""
-        return self.region.split(":")[0]
+        return self.region_tag.split(":")[0]
 
     @property
     def region(self):

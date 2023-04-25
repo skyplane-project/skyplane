@@ -21,7 +21,8 @@ from skyplane.api.config import TransferConfig
 from skyplane.chunk import Chunk, ChunkRequest
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.obj_store.gcs_interface import GCSObject
-from skyplane.obj_store.object_store_interface import StorageInterface, ObjectStoreObject
+from skyplane.obj_store.storage_interface import StorageInterface
+from skyplane.obj_store.object_store_interface import ObjectStoreObject, ObjectStoreInterface
 from skyplane.obj_store.s3_interface import S3Object
 from skyplane.utils import logger
 from skyplane.utils.definitions import MB
@@ -100,11 +101,9 @@ class Chunker:
             for dest_iface in self.dst_ifaces:
                 dest_object = dest_objects[dest_iface.region_tag()]
                 upload_id = dest_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
-                print(f"Created upload id for key {dest_object.key} with upload id {upload_id} for bucket {dest_iface.bucket_name}")
+                #print(f"Created upload id for key {dest_object.key} with upload id {upload_id} for bucket {dest_iface.bucket_name}")
                 # store mapping between key and upload id for each region
                 upload_id_mapping[dest_iface.region_tag()] = (src_object.key, upload_id)
-                print("Region", dest_iface.region_tag(), "upload id", upload_id)
-            print("UPLOAD ID", upload_id_mapping)
             out_queue_chunks.put(GatewayMessage(upload_id_mapping=upload_id_mapping))  # send to output queue
 
             # get source and destination object and then compute number of chunks
@@ -254,15 +253,18 @@ class Chunker:
                 # collect list of destination objects
                 dest_objs = {}
                 dest_keys = []
-                for dst_iface in self.dst_ifaces:
+                for i in range(len(self.dst_ifaces)):
+                    dst_iface = self.dst_ifaces[i]
+                    dst_prefix = dst_prefixes[i]
                     dest_provider, dest_region = dst_iface.region_tag().split(":")
-                    dst_prefix = dst_prefixes[self.dst_ifaces.index(dst_iface)]
+                    print("index", i, dst_prefixes, dst_prefix, "region", dst_iface)
                     try:
                         dest_key = self.map_object_key_prefix(src_prefix, obj.key, dst_prefix, recursive=recursive)
+                        print("key", dest_key, "prefix", dst_prefix)
                         assert (
                             dest_key[: len(dst_prefix)] == dst_prefix
                         ), f"Destination key {dest_key} does not start with destination prefix {dst_prefix}"
-                        dest_keys.append(dest_key[len(dst_prefix) :])
+                        dest_keys.append(dest_key[len(dst_prefix):])
                     except exceptions.MissingObjectException as e:
                         logger.fs.exception(e)
                         raise e from None
@@ -275,9 +277,13 @@ class Chunker:
                         dest_obj = GCSObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
                     else:
                         raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
+                    print("dest_obj", dest_obj)
+                    print(dest_objs)
                     dest_objs[dst_iface.region_tag()] = dest_obj
 
                 # assert that all destinations share the same post-fix key 
+                print("DEST KEYS", dest_keys, "prefix", dst_prefixes)
+                print("DEST OBJS", dest_objs)
                 assert len(list(set(dest_keys))) == 1, f"Destination keys {dest_keys} do not match"
 
                 n_objs += 1
@@ -315,6 +321,7 @@ class Chunker:
             if self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
                 multipart_send_queue.put(transfer_pair)
             else:
+                print("source key", src_obj.key)
                 yield GatewayMessage(
                     chunk=Chunk(
                         src_key=src_obj.key,
@@ -466,7 +473,7 @@ class TransferJob(ABC):
         """Return the source object store interface"""
         if not hasattr(self, "_src_iface"):
             provider_src, bucket_src, _ = parse_path(self.src_path)
-            self._src_iface = StorageInterface.create(f"{provider_src}:infer", bucket_src)
+            self._src_iface = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src)
             if self.requester_pays:
                 self._src_iface.set_requester_bool(True)
         return self._src_iface
@@ -614,20 +621,17 @@ class CopyJob(TransferJob):
             # send upload_id mappings to sink gateways
             upload_id_batch = [cr for cr in batch if cr.upload_id_mapping is not None]
             region_dst_gateways = dataplane.sink_gateways()
-            print("REGION DEST", region_dst_gateways)
             for region_tag, dst_gateways in region_dst_gateways.items():
-                print("upload id batch", [cr.upload_id_mapping for cr in upload_id_batch])
                 for dst_gateway in dst_gateways:
                     # collect upload id mappings per region
                     mappings = {}
                     for message in upload_id_batch:
                         for region_tag, (key, id) in message.upload_id_mapping.items():
-                            print(region_tag, dst_gateway.region_tag)
                             if region_tag == dst_gateway.region_tag:
                                 mappings[key] = id
 
-                    print("mappings", mappings, "region", dst_gateway.region_tag, dst_gateway)
-                    print("sending mapping to ", dst_gateway, dst_gateway.gateway_api_url)
+                    #print("mappings", mappings, "region", dst_gateway.region_tag, dst_gateway)
+                    #print("sending mapping to ", dst_gateway, dst_gateway.gateway_api_url)
                     # send mapping to gateway
                     reply = self.http_pool.request(
                         "POST",
