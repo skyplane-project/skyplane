@@ -18,6 +18,7 @@ from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
 
 from skyplane.planner.planner import MulticastDirectPlanner
+from skyplane.planner.topology import TopologyPlanGateway
 from skyplane.utils import logger
 from skyplane.utils.definitions import gateway_docker_image, tmp_log_dir
 from skyplane.utils.fn import PathLike, do_parallel
@@ -37,6 +38,7 @@ class Pipeline:
         provisioner: "Provisioner",
         transfer_config: TransferConfig,
         # cloud_regions: dict,
+        planning_algorithm: str = "direct",
         debug: bool = False,
     ):
         """
@@ -59,6 +61,13 @@ class Pipeline:
         self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
         self.transfer_dir.mkdir(exist_ok=True, parents=True)
 
+        # planner
+        self.planning_algorithm = planning_algorithm
+        if self.planning_algorithm == "direct":
+            self.planner = MulticastDirectPlanner(self.max_instances, 32)
+        else:
+            raise ValueError(f"No such planning algorithm {planning_algorithm}")
+
         # transfer logs
         self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
         self.transfer_dir.mkdir(exist_ok=True, parents=True)
@@ -67,53 +76,43 @@ class Pipeline:
         # pending tracker tasks
         self.jobs_to_dispatch: List[TransferJob] = []
         self.pending_transfers: List[TransferProgressTracker] = []
-        self.bound_nodes: Dict[ReplicationTopologyGateway, compute.Server] = {}
+        self.bound_nodes: Dict[TopologyPlanGateway, compute.Server] = {}
 
-    def start(self):
+    def start(self, debug=False, progress=False):
         # TODO: Set number of connections properly (or not at all)
-        # planner = DirectPlanner(self.max_instances, 32)
         planner = MulticastDirectPlanner(self.max_instances, 32)
 
         # create plan from set of jobs scheduled
         topo = planner.plan(self.jobs_to_dispatch)
 
         # create dataplane from plan
-        dp = Dataplane(self.clientid, topo, self.provisioner, self.transfer_config, self.transfer_dir, debug=True)
+        dp = Dataplane(self.clientid, topo, self.provisioner, self.transfer_config, self.transfer_dir, debug=debug)
         try:
-            from skyplane.cli.impl.progress_bar import ProgressBarTransferHook, MultiDestinationProgressBarTransferHook
-
             dp.provision(spinner=True)
-            tracker = dp.run_async(self.jobs_to_dispatch, hooks=MultiDestinationProgressBarTransferHook(dp.topology.dest_region_tags))
+            if progress:
+                from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 
-            # while True:
-            #    # handle errors
-            #    if tracker.errors:
-            #        for ip, error_list in tracker.errors.items():
-            #            for error in error_list:
-            #                raise ValueError(f"Error on {ip}: {error}")
-            #        break
+                tracker = dp.run_async(self.jobs_to_dispatch, hooks=ProgressBarTransferHook(dp.topology.dest_region_tags))
+            else:
+                tracker = dp.run_async(self.jobs_to_dispatch)
 
-            #    bytes_remaining, _ = tracker.query_bytes_remaining()
-            #    timestamp = time.strftime("%H:%M:%S", time.localtime())
-            #    if bytes_remaining is None:
-            #        print(f"{timestamp} Transfer not yet started")
-            #    elif bytes_remaining > 0:
-            #        print(f"{timestamp} {(bytes_remaining / (2 ** 30)):.5f}GB left")
-            #    else:
-            #        break
-            #    time.sleep(10)
+            # wait for job to finish
+            tracker.join()
+
+            # copy gateway logs
+            if debug:
+                dp.copy_gateway_logs()
         except Exception as e:
             print(e)
             print("copy gateway logs")
             dp.copy_gateway_logs()
-        dp.copy_gateway_logs()
         print("deprovisioning dataplane...")
         dp.deprovision(spinner=True)
 
     def queue_copy(
         self,
         src: str,
-        dst: List[str],
+        dst: str or List[str],
         recursive: bool = False,
     ) -> str:
         """
@@ -137,7 +136,7 @@ class Pipeline:
     def queue_sync(
         self,
         src: str,
-        dst: str,
+        dst: str or List[str],
     ) -> str:
         """
         Add a sync job to job list.
@@ -150,32 +149,21 @@ class Pipeline:
         :param recursive: If true, will copy objects at folder prefix recursively (default: False)
         :type recursive: bool
         """
+        if isinstance(dst, str):
+            dst = [dst]
         job = SyncJob(src, dst, recursive=True, requester_pays=self.transfer_config.requester_pays)
         logger.fs.debug(f"[SkyplaneClient] Queued sync job {job}")
         self.jobs_to_dispatch.append(job)
         return job.uuid
 
-    def run_async(self, hooks: Optional[TransferHook] = None) -> TransferProgressTracker:
-        """Start the transfer asynchronously. The main thread will not be blocked.
+    def estimate_total_cost(self):
+        """Estimate total cost of queued jobs"""
+        total_size = 0
+        for job in self.jobs_to_dispatch:
+            total_size += job.size_gb()
 
-        :param hooks: Tracks the status of the transfer
-        :type hooks: TransferHook
-        """
-        if not self.provisioned:
-            logger.error("Dataplane must be pre-provisioned. Call dataplane.provision() before starting a transfer")
-        tracker = TransferProgressTracker(self, self.jobs_to_dispatch, self.transfer_config, hooks)
-        self.pending_transfers.append(tracker)
-        tracker.start()
-        logger.fs.info(f"[SkyplaneClient] Started async transfer with {len(self.jobs_to_dispatch)} jobs")
-        self.jobs_to_dispatch = []
-        return tracker
+        # get planner topology
+        topo = self.planner.plan(self.jobs_to_dispatch)
 
-    def run(self, hooks: Optional[TransferHook] = None):
-        """Start the transfer in the main thread. Wait until the transfer is complete.
-
-        :param hooks: Tracks the status of the transfer
-        :type hooks: TransferHook
-        """
-        tracker = self.run_async(hooks)
-        logger.fs.debug(f"[SkyplaneClient] Waiting for transfer to complete")
-        tracker.join()
+        # return size
+        return total_size * topo.cost_per_gb

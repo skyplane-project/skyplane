@@ -75,7 +75,7 @@ class SkyplaneClient:
         """Create a pipeline object to queue jobs"""
         return Pipeline(clientid=self.clientid, provisioner=self.provisioner, transfer_config=self.transfer_config, debug=debug)
 
-    def copy(self, src: str, dst: str, recursive: bool = False, num_vms: int = 1):
+    def copy(self, src: str, dst: str, recursive: bool = False):
         """
         A simple version of Skyplane copy. It automatically waits for transfer to complete
         (the main thread is blocked) and deprovisions VMs at the end.
@@ -89,81 +89,25 @@ class SkyplaneClient:
         :param num_vms: The maximum number of instances to use per region (default: 1)
         :type num_vms: int
         """
-        provider_src, bucket_src, self.src_prefix = parse_path(src)
-        provider_dst, bucket_dst, self.dst_prefix = parse_path(dst)
-        self.src_iface = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src)
-        self.dst_iface = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst)
-        if self.transfer_config.requester_pays:
-            self.src_iface.set_requester_bool(True)
-            self.dst_iface.set_requester_bool(True)
-        src_region = self.src_iface.region_tag()
-        dst_region = self.dst_iface.region_tag()
-        dp = self.dataplane(*src_region.split(":"), *dst_region.split(":"), n_vms=num_vms)
-        with dp.auto_deprovision():
-            dp.provision(spinner=True)
-            dp.queue_copy(src, dst, recursive=recursive)
-            dp.run()
 
-    # methods to create dataplane
-    def dataplane(
-        self,
-        src_cloud_provider: str,
-        src_region: str,
-        dst_cloud_provider: str,
-        dst_region: str,
-        solver_type: str = "direct",
-        solver_required_throughput_gbits: float = 1,
-        n_vms: int = 1,
-        n_connections: int = 32,
-        debug: bool = False,
-    ) -> Dataplane:
-        """
-        Create a dataplane and calculates the transfer topology.
+        pipeline = self.pipeline()
+        pipeline.queue_copy(src, dst, recursive=recursive)
+        pipeline.run()
 
-        :param src_cloud_provider: the name of the source cloud provider
-        :type src_cloud_provider: str
-        :param src_region: the name of the source region bucket
-        :type src_region: str
-        :param dst_cloud_provider: the name of the destination cloud provider
-        :type dst_cloud_provider: str
-        :param dst_region: the name of the destination region bucket
-        :type dst_region: str
-        :param type: the type of the solver for calculating the topology (default: "direct")
-        :type type: str
-        :param num_vms: The maximum number of instances to use per region (default: 1)
-        :type num_vms: int
-        :param n_connections: The maximum number of connections to use in topology per region (default: 32)
-        :type n_connections: int
-        :param debug: If true, will print debug logs (default: False)
-        :type debug: bool
-        """
-        if solver_type.lower() == "direct":
-            planner = DirectPlanner(src_cloud_provider, src_region, dst_cloud_provider, dst_region, n_vms, n_connections)
-            topo = planner.plan()
-            logger.fs.info(f"[SkyplaneClient.direct_dataplane] Topology: {topo.to_json()}")
-            return Dataplane(
-                clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config, debug=debug
-            )
-        elif solver_type.upper() == "ILP":
-            planner = ILPSolverPlanner(
-                src_cloud_provider, src_region, dst_cloud_provider, dst_region, n_vms, n_connections, solver_required_throughput_gbits
-            )
-            topo = planner.plan()
-            logger.fs.info(f"[SkyplaneClient.ilp_dataplane] Topology: {topo.to_json()}")
-            return Dataplane(
-                clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config, debug=debug
-            )
-        elif solver_type.upper() == "RON":
-            planner = RONSolverPlanner(
-                src_cloud_provider, src_region, dst_cloud_provider, dst_region, n_vms, n_connections, solver_required_throughput_gbits
-            )
-            topo = planner.plan()
-            logger.fs.info(f"[SkyplaneClient.ron_dataplane] Topology: {topo.to_json()}")
-            return Dataplane(
-                clientid=self.clientid, topology=topo, provisioner=self.provisioner, transfer_config=self.transfer_config, debug=debug
-            )
-        else:
-            raise NotImplementedError(f"Dataplane type {solver_type} not implemented")
+        # provider_src, bucket_src, self.src_prefix = parse_path(src)
+        # provider_dst, bucket_dst, self.dst_prefix = parse_path(dst)
+        # self.src_iface = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src)
+        # self.dst_iface = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst)
+        # if self.transfer_config.requester_pays:
+        #    self.src_iface.set_requester_bool(True)
+        #    self.dst_iface.set_requester_bool(True)
+        # src_region = self.src_iface.region_tag()
+        # dst_region = self.dst_iface.region_tag()
+        # dp = self.dataplane(*src_region.split(":"), *dst_region.split(":"), n_vms=num_vms)
+        # with dp.auto_deprovision():
+        #    dp.provision(spinner=True)
+        #    dp.queue_copy(src, dst, recursive=recursive)
+        #    dp.run()
 
     def object_store(self):
         return ObjectStore()

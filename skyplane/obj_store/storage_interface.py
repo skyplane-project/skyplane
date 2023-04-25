@@ -1,5 +1,6 @@
 from skyplane.utils import logger
 
+
 class StorageInterface:
     def path(self) -> str:
         raise NotImplementedError()

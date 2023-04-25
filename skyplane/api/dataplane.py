@@ -313,49 +313,6 @@ class Dataplane:
         instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
         instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 
-    def queue_copy(
-        self,
-        src: str,
-        dst: str,
-        recursive: bool = False,
-    ) -> str:
-        """
-        Add a copy job to job list.
-        Return the uuid of the job.
-
-        :param src: source prefix to copy from
-        :type src: str
-        :param dst: the destination of the transfer
-        :type dst: str
-        :param recursive: if true, will copy objects at folder prefix recursively (default: False)
-        :type recursive: bool
-        """
-        job = CopyJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
-        logger.fs.debug(f"[SkyplaneClient] Queued copy job {job}")
-        self.jobs_to_dispatch.append(job)
-        return job.uuid
-
-    def queue_sync(
-        self,
-        src: str,
-        dst: str,
-    ) -> str:
-        """
-        Add a sync job to job list.
-        Return the uuid of the job.
-
-        :param src: Source prefix to copy from
-        :type src: str
-        :param dst: The destination of the transfer
-        :type dst: str
-        :param recursive: If true, will copy objects at folder prefix recursively (default: False)
-        :type recursive: bool
-        """
-        job = SyncJob(src, dst, recursive=True, requester_pays=self.transfer_config.requester_pays)
-        logger.fs.debug(f"[SkyplaneClient] Queued sync job {job}")
-        self.jobs_to_dispatch.append(job)
-        return job.uuid
-
     def run_async(self, jobs: List[TransferJob], hooks: Optional[TransferHook] = None) -> TransferProgressTracker:
         """Start the transfer asynchronously. The main thread will not be blocked.
 

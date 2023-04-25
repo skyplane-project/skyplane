@@ -80,6 +80,9 @@ class UnicastDirectPlanner(Planner):
                 GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections), parent_handle=recv_op, partition_id=partition_id
             )
 
+            # update cost per GB
+            plan.cost_per_gb += compute.CloudProvider.get_transfer_cost(src_region_tag, dst_region_tag)
+
         # set gateway programs
         plan.set_gateway_program(src_region_tag, src_program)
         plan.set_gateway_program(dst_region_tag, dst_program)
@@ -119,6 +122,7 @@ class MulticastDirectPlanner(Planner):
         # iterate through all jobs
         for job in jobs:
             src_bucket = job.src_iface.bucket()
+            src_region_tag = job.src_iface.region_tag()
 
             # give each job a different partition id, so we can read/write to different buckets
             partition_id = jobs.index(job)
@@ -156,6 +160,9 @@ class MulticastDirectPlanner(Planner):
                     parent_handle=recv_op,
                     partition_id=partition_id,
                 )
+
+                # update cost per GB
+                plan.cost_per_gb += compute.CloudProvider.get_transfer_cost(src_region_tag, dst_region_tag)
 
         # set gateway programs
         plan.set_gateway_program(src_region_tag, src_program)

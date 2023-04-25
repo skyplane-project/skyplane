@@ -52,10 +52,11 @@ class TopologyPlan:
     The TopologyPlan constains a list of gateway programs corresponding to each gateway in the dataplane.
     """
 
-    def __init__(self, src_region_tag: str, dest_region_tags: List[str]):
+    def __init__(self, src_region_tag: str, dest_region_tags: List[str], cost_per_gb: float = 0.0):
         self.src_region_tag = src_region_tag
         self.dest_region_tags = dest_region_tags
         self.gateways = {}
+        self.cost_per_gb = cost_per_gb
 
     @property
     def regions(self) -> List[str]:
