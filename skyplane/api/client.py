@@ -1,4 +1,5 @@
 import uuid
+import typer
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
@@ -61,7 +62,7 @@ class SkyplaneClient:
         # set up logging
         self.log_dir.mkdir(parents=True, exist_ok=True)
         logger.open_log_file(self.log_dir / "client.log")
-        print("logging:", self.log_dir / "client.log")
+        typer.secho(f"Logging to: {self.log_dir / 'client.log'}", fg="bright_black")
 
         self.provisioner = Provisioner(
             host_uuid=self.clientid,

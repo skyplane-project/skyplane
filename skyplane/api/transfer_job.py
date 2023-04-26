@@ -1,4 +1,5 @@
 import json
+import typer
 import math
 import queue
 import sys
@@ -623,8 +624,6 @@ class CopyJob(TransferJob):
                             if region_tag == dst_gateway.region_tag:
                                 mappings[key] = id
 
-                    # print("mappings", mappings, "region", dst_gateway.region_tag, dst_gateway)
-                    # print("sending mapping to ", dst_gateway, dst_gateway.gateway_api_url)
                     # send mapping to gateway
                     reply = self.http_pool.request(
                         "POST",
@@ -668,6 +667,7 @@ class CopyJob(TransferJob):
     def finalize(self):
         """Complete the multipart upload requests"""
         print("Finalizing multipart uploads...")
+        typer.secho(f"Finalizing multipart uploads...", fg="bright_black")
         groups = defaultdict(list)
         for req in self.multipart_transfer_list:
             if "region" not in req or "bucket" not in req:
@@ -688,7 +688,6 @@ class CopyJob(TransferJob):
     def verify(self):
         """Verify the integrity of the transfered destination objects"""
 
-        # for i in range(len(self.dst_ifaces)):
         def verify_region(i):
             dst_iface = self.dst_ifaces[i]
             dst_prefix = self.dst_prefixes[i]
@@ -710,14 +709,15 @@ class CopyJob(TransferJob):
                     f"Destination {dst_iface.region_tag()} bucket {dst_iface.bucket()}: {len(dst_keys)} objects failed verification {failed_keys}"
                 )
 
-        # WARNING: setting n>1 causes concurrency error
+        n = 1  # number threads
+        assert n == 1, "Only use one thread for verifying objects: n>1 causes concurrency error"
         do_parallel(
             verify_region,
             range(len(self.dst_ifaces)),
             spinner=True,
             spinner_persist=False,
             desc="Verifying objects in destination buckets",
-            n=1,
+            n=n,
         )
 
 

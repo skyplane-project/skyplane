@@ -255,6 +255,10 @@ class GCPAuthentication:
     @imports.inject("google.cloud.storage", pip_extra="gcp")
     def get_storage_client(storage, self):
         # must use service account for XML storage API
+        print("using service account", self.service_account_credentials)
+
+        # TODO: cache storage account clinet
+        # check that storage account works
         return storage.Client.from_service_account_json(self.service_account_credentials)
 
     def get_gcp_instances(self, gcp_region: str):

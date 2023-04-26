@@ -65,8 +65,8 @@ class TransferConfig:
 
     # randomly generate data or not for broadcast
     gen_random_data: bool = False
-    random_chunk_size_mb: Optional[float] = None
-    num_random_chunks: Optional[int] = None
+    gen_random_data_chunk_size_mb: Optional[float] = None
+    gen_random_data_num_chunks: Optional[int] = None
     src_region: Optional[str] = None
     dst_regions: Optional[List[str]] = None
 
