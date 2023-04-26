@@ -38,7 +38,7 @@ class TransferHook(ABC):
         """Ending the dispatch job"""
         raise NotImplementedError()
 
-    def on_chunk_completed(self, chunks: List[Chunk]):
+    def on_chunk_completed(self, chunks: List[Chunk], region_tag: str = None):
         """Chunks are all transferred"""
         raise NotImplementedError()
 
@@ -66,7 +66,7 @@ class EmptyTransferHook(TransferHook):
     def on_dispatch_end(self):
         return
 
-    def on_chunk_completed(self, chunks: List[Chunk]):
+    def on_chunk_completed(self, chunks: List[Chunk], region_tag: str = None):
         return
 
     def on_transfer_end(self, transfer_stats):
@@ -176,7 +176,7 @@ class TransferProgressTracker(Thread):
                     reformat_err,
                     args,
                     self.dataplane.topology.src_region_tag,
-                    [dst_region],
+                    dst_region,
                     session_start_timestamp_ms,
                 )
                 raise err

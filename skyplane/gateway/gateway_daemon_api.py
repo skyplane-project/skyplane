@@ -235,7 +235,7 @@ class GatewayDaemonAPI(threading.Thread):
 
         @app.route("/api/v1/incomplete_chunk_requests", methods=["GET"])
         def get_incomplete_chunk_requests():
-            return jsonify({"chunk_requests": {k: v for k, v in get_chunk_reqs().items() if v["state"] != "upload_complete"}})
+            return jsonify({"chunk_requests": {k: v for k, v in get_chunk_reqs().items() if v["state"] != "complete"}})
 
         # lookup chunk request given chunk worker_id
         @app.route("/api/v1/chunk_requests/<int:chunk_id>", methods=["GET"])

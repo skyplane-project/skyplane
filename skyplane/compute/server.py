@@ -287,11 +287,7 @@ class Server:
 
     def start_gateway(
         self,
-        # outgoing_ports: Dict[str, int],  # maps ip to number of connections along route
         gateway_docker_image: str,
-        # gateway_programs: Optional[Dict[str, GatewayProgram]] = None,  # Broadcast: map region to gateway program for this region
-        # gateway: TopologyPlanGateway,
-        # gateway_program_dir: str,
         gateway_program_path: str,
         gateway_info_path: str,
         log_viewer_port=8888,

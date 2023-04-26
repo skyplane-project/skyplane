@@ -94,20 +94,5 @@ class SkyplaneClient:
         pipeline.queue_copy(src, dst, recursive=recursive)
         pipeline.run()
 
-        # provider_src, bucket_src, self.src_prefix = parse_path(src)
-        # provider_dst, bucket_dst, self.dst_prefix = parse_path(dst)
-        # self.src_iface = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src)
-        # self.dst_iface = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst)
-        # if self.transfer_config.requester_pays:
-        #    self.src_iface.set_requester_bool(True)
-        #    self.dst_iface.set_requester_bool(True)
-        # src_region = self.src_iface.region_tag()
-        # dst_region = self.dst_iface.region_tag()
-        # dp = self.dataplane(*src_region.split(":"), *dst_region.split(":"), n_vms=num_vms)
-        # with dp.auto_deprovision():
-        #    dp.provision(spinner=True)
-        #    dp.queue_copy(src, dst, recursive=recursive)
-        #    dp.run()
-
     def object_store(self):
         return ObjectStore()
