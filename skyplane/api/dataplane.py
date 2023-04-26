@@ -34,19 +34,8 @@ class DataplaneAutoDeprovision:
     def __enter__(self):
         return self.dataplane
 
-    def copy_log(self, instance):
-        print("COPY DATA TO", str(self.dataplane.log_dir) + f"/gateway_{instance.uuid()}.stdout")
-        instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
-        print(f"Copying gateway std out files to gateway_{instance.uuid()}.stdout")
-        instance.download_file("/tmp/gateway.stdout", self.dataplane.log_dir / f"gateway_{instance.uuid()}.stdout")
-        print(f"Copying gateway std err files to gateway_{instance.uuid()}.stderr")
-        instance.download_file("/tmp/gateway.stderr", self.dataplane.log_dir / f"gateway_{instance.uuid()}.stderr")
-
     def __exit__(self, exc_type, exc_value, exc_tb):
         logger.fs.warning("Deprovisioning dataplane")
-        print("Starting deprovision")
-        # TODO: insert log copy here?
-        do_parallel(self.copy_log, self.dataplane.bound_nodes.values(), n=-1)
         self.dataplane.deprovision()
 
 
@@ -120,10 +109,8 @@ class Dataplane:
 
         # write gateway programs
         gateway_program_filename = Path(f"{gateway_log_dir}/gateway_program_{gateway_node.gateway_id}.json")
-        print(gateway_node.gateway_program.to_dict())
         with open(gateway_program_filename, "w") as f:
             f.write(gateway_node.gateway_program.to_json())
-        print("gateway", gateway_program_filename)
 
         # start gateway
         gateway_server.start_gateway(
@@ -195,11 +182,8 @@ class Dataplane:
             servers_by_region = defaultdict(list)
             for s in servers:
                 servers_by_region[s.region_tag].append(s)
-            print(servers_by_region)
             for node in self.topology.get_gateways():
-                print(node.region_tag)
                 instance = servers_by_region[node.region_tag].pop()
-                print("instance", instance, node.region_tag)
                 self.bound_nodes[node] = instance
 
                 # set ip addresses (for gateway program generation)
@@ -218,13 +202,11 @@ class Dataplane:
         # create gateway logging dir
         gateway_program_dir = f"{self.log_dir}/programs"
         Path(gateway_program_dir).mkdir(exist_ok=True, parents=True)
-        print("writing programs", gateway_program_dir)
 
         # write gateway info file
         gateway_info_path = f"{gateway_program_dir}/gateway_info.json"
         with open(gateway_info_path, "w") as f:
             json.dump(self.topology.get_gateway_info_json(), f, indent=4)
-        print("write info json", gateway_info_path)
 
         # start gateways in parallel
         jobs = []
@@ -264,7 +246,6 @@ class Dataplane:
             try:
                 for task in self.pending_transfers:
                     logger.fs.warning(f"Before deprovisioning, waiting for jobs to finish: {list(task.jobs.keys())}")
-                    print("Waiting for task join")
                     task.join()
             except KeyboardInterrupt:
                 logger.warning("Interrupted while waiting for transfers to finish, deprovisioning anyway.")
@@ -287,8 +268,7 @@ class Dataplane:
             return json.loads(reply.data.decode("utf-8"))["errors"]
 
         errors: Dict[str, List[str]] = {}
-        # for (_, instance), result in do_parallel(get_error_logs, self.bound_nodes.items(), n=-1):
-        for (_, instance), result in do_parallel(get_error_logs, self.bound_nodes.items(), n=1):
+        for (_, instance), result in do_parallel(get_error_logs, self.bound_nodes.items(), n=8):
             errors[instance] = result
         return errors
 
@@ -307,11 +287,6 @@ class Dataplane:
             if self.provisioned
             else {}
         )
-
-    def copy_log(self, instance):
-        instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
-        instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
-        instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 
     def run_async(self, jobs: List[TransferJob], hooks: Optional[TransferHook] = None) -> TransferProgressTracker:
         """Start the transfer asynchronously. The main thread will not be blocked.

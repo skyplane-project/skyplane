@@ -109,8 +109,8 @@ class TransferProgressTracker(Thread):
 
         # transfer state
         self.job_chunk_requests: Dict[str, Dict[str, ChunkRequest]] = {}
-        self.job_pending_chunk_ids: Dict[str, Set[str]] = {}
-        self.job_complete_chunk_ids: Dict[str, Set[str]] = {}
+        self.job_pending_chunk_ids: Dict[str, Dict[str, Set[str]]] = {}
+        self.job_complete_chunk_ids: Dict[str, Dict[str, Set[str]]] = {}
         self.errors: Optional[Dict[str, List[str]]] = None
 
         # http_pool
@@ -142,13 +142,14 @@ class TransferProgressTracker(Thread):
             for job_uuid, job in self.jobs.items():
                 logger.fs.debug(f"[TransferProgressTracker] Dispatching job {job.uuid}")
                 self.job_chunk_requests[job_uuid] = {}
-                self.job_pending_chunk_ids[job_uuid] = set()
-                self.job_complete_chunk_ids[job_uuid] = set()
+                self.job_pending_chunk_ids[job_uuid] = {region: set() for region in self.dataplane.topology.dest_region_tags}
+                self.job_complete_chunk_ids[job_uuid] = {region: set() for region in self.dataplane.topology.dest_region_tags}
                 for chunk in chunk_streams[job_uuid]:
                     chunks_dispatched = [chunk]
                     self.job_chunk_requests[job_uuid][chunk.chunk_id] = chunk
-                    self.job_pending_chunk_ids[job_uuid].add(chunk.chunk_id)
                     self.hooks.on_chunk_dispatched(chunks_dispatched)
+                    for region in self.dataplane.topology.dest_region_tags:
+                        self.job_pending_chunk_ids[job_uuid][region].add(chunk.chunk_id)
                 logger.fs.debug(
                     f"[TransferProgressTracker] Job {job.uuid} dispatched with {len(self.job_chunk_requests[job_uuid])} chunk requests"
                 )
@@ -205,6 +206,8 @@ class TransferProgressTracker(Thread):
             except Exception as e:
                 raise e
 
+        print("results", results)
+
         start_time = int(time.time())
         try:
             for job in self.jobs.values():
@@ -260,7 +263,7 @@ class TransferProgressTracker(Thread):
         sinks = region_sinks[region_tag]
         # for region_tag, sink_gateways in self.dataplane.topology.sink_gateways().items():
         # sink_regions = set([sink.region for sink in sinks])
-        while any([len(self.job_pending_chunk_ids[job_uuid]) > 0 for job_uuid in self.job_pending_chunk_ids]):
+        while any([len(self.job_pending_chunk_ids[job_uuid][region_tag]) > 0 for job_uuid in self.job_pending_chunk_ids]):
             # refresh shutdown status by running noop
             do_parallel(lambda i: i.run_command("echo 1"), self.dataplane.bound_nodes.values(), n=8)
 
@@ -293,17 +296,25 @@ class TransferProgressTracker(Thread):
             for job_uuid, job in self.jobs.items():
                 job_complete_chunk_ids = set(chunk_id for chunk_id in completed_chunk_ids if self._chunk_to_job_map[chunk_id] == job_uuid)
                 new_chunk_ids = (
-                    self.job_complete_chunk_ids[job_uuid].union(job_complete_chunk_ids).difference(self.job_complete_chunk_ids[job_uuid])
+                    self.job_complete_chunk_ids[job_uuid][region_tag]
+                    .union(job_complete_chunk_ids)
+                    .difference(self.job_complete_chunk_ids[job_uuid][region_tag])
                 )
                 completed_chunks = []
                 for id in new_chunk_ids:
                     completed_chunks.append(self.job_chunk_requests[job_uuid][id])
                 self.hooks.on_chunk_completed(completed_chunks, region_tag)
-                self.job_complete_chunk_ids[job_uuid] = self.job_complete_chunk_ids[job_uuid].union(job_complete_chunk_ids)
-                self.job_pending_chunk_ids[job_uuid] = self.job_pending_chunk_ids[job_uuid].difference(job_complete_chunk_ids)
+                self.job_complete_chunk_ids[job_uuid][region_tag] = self.job_complete_chunk_ids[job_uuid][region_tag].union(
+                    job_complete_chunk_ids
+                )
+                self.job_pending_chunk_ids[job_uuid][region_tag] = self.job_pending_chunk_ids[job_uuid][region_tag].difference(
+                    job_complete_chunk_ids
+                )
 
             # sleep
             time.sleep(0.05)
+
+        print("no more pending", region_tag)
 
     @property
     @functools.lru_cache(maxsize=1)
@@ -334,9 +345,9 @@ class TransferProgressTracker(Thread):
         return rows
 
     @property
-    def is_complete(self):
+    def is_complete(self, region_tag: str):
         """Return if the transfer is complete"""
-        return all([len(self.job_pending_chunk_ids[job_uuid]) == 0 for job_uuid in self.jobs.keys()])
+        return all([len(self.job_pending_chunk_ids[job_uuid][region_tag]) == 0 for job_uuid in self.jobs.keys()])
 
     def query_bytes_remaining(self):
         """Query the total number of bytes remaining in all the transfer jobs"""
@@ -364,7 +375,7 @@ class TransferProgressTracker(Thread):
                 [
                     cr.chunk_length_bytes
                     for cr in self.job_chunk_requests[job_uuid].values()
-                    if cr.chunk_id in self.job_complete_chunk_ids[job_uuid]
+                    # if cr.chunk_id in self.job_complete_chunk_ids[job_uuid]
                 ]
             )
         return sum(bytes_total_per_job.values())

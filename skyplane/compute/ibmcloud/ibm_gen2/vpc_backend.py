@@ -39,8 +39,7 @@ VPC_API_VERSION = "2021-09-21"
 
 
 class IBMVPCBackend:
-    @imports.inject("ibm_vpc", "ibm_cloud_sdk_core", pip_extra="ibmcloud")
-    def __init__(ibm_vpc, ibm_cloud_sdk_core, self, ibm_vpc_config):
+    def __init__(self, ibm_vpc_config):
         logger.debug("Creating IBM VPC client")
         self.name = "ibm_gen2"
         self.config = ibm_vpc_config
@@ -60,9 +59,10 @@ class IBMVPCBackend:
         self.workers = []
 
         self.iam_api_key = self.config.get("iam_api_key")
-        authenticator = ibm_cloud_sdk_core.authenticators(self.iam_api_key, url=self.config.get("iam_endpoint"))
-        self.vpc_cli = ibm_vpc.VpcV1(VPC_API_VERSION, authenticator=authenticator)
-        self.vpc_cli.set_service_url(self.config["endpoint"] + "/v1")
+        self.vpc_cli = self.create_vpc_cli()
+        # authenticator = ibm_cloud_sdk_core.authenticators(self.iam_api_key, url=self.config.get("iam_endpoint"))
+        # self.vpc_cli = ibm_vpc.VpcV1(VPC_API_VERSION, authenticator=authenticator)
+        # self.vpc_cli.set_service_url(self.config["endpoint"] + "/v1")
 
         user_agent_string = "ibm_vpc_{}".format(self.config["user_agent"])
         self.vpc_cli._set_user_agent_header(user_agent_string)
@@ -72,6 +72,13 @@ class IBMVPCBackend:
 
         msg = COMPUTE_CLI_MSG.format("IBM VPC")
         logger.info(f"{msg} - Region: {self.region}")
+
+    @imports.inject("ibm_vpc", "ibm_cloud_sdk_core", pip_extra="ibmcloud")
+    def create_vpc_cli(ibm_vpc, ibm_cloud_sdk_core, self):
+        authenticator = ibm_cloud_sdk_core.authenticators(self.iam_api_key, url=self.config.get("iam_endpoint"))
+        vpc_cli = ibm_vpc.VpcV1(VPC_API_VERSION, authenticator=authenticator)
+        vpc_cli.set_service_url(self.config["endpoint"] + "/v1")
+        return vpc_cli
 
     def _load_vpc_data(self):
         """

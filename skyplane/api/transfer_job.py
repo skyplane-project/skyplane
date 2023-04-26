@@ -197,7 +197,6 @@ class Chunker:
                 else:
                     return dest_prefix
             else:
-                print(f"source_key: {source_key}, source_prefix: {source_prefix}, dest_prefix: {dest_prefix}")
                 # todo: don't print output here
                 rprint(f"\n:x: [bold red]In order to transfer objects using a prefix, you must use the --recursive or -r flag.[/bold red]")
                 rprint(f"[yellow]If you meant to transfer a single object, pass the full source object key.[/yellow]")
@@ -257,10 +256,8 @@ class Chunker:
                     dst_iface = self.dst_ifaces[i]
                     dst_prefix = dst_prefixes[i]
                     dest_provider, dest_region = dst_iface.region_tag().split(":")
-                    print("index", i, dst_prefixes, dst_prefix, "region", dst_iface)
                     try:
                         dest_key = self.map_object_key_prefix(src_prefix, obj.key, dst_prefix, recursive=recursive)
-                        print("key", dest_key, "prefix", dst_prefix)
                         assert (
                             dest_key[: len(dst_prefix)] == dst_prefix
                         ), f"Destination key {dest_key} does not start with destination prefix {dst_prefix}"
@@ -277,13 +274,9 @@ class Chunker:
                         dest_obj = GCSObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
                     else:
                         raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
-                    print("dest_obj", dest_obj)
-                    print(dest_objs)
                     dest_objs[dst_iface.region_tag()] = dest_obj
 
                 # assert that all destinations share the same post-fix key
-                print("DEST KEYS", dest_keys, "prefix", dst_prefixes)
-                print("DEST OBJS", dest_objs)
                 assert len(list(set(dest_keys))) == 1, f"Destination keys {dest_keys} do not match"
 
                 n_objs += 1
@@ -321,7 +314,6 @@ class Chunker:
             if self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
                 multipart_send_queue.put(transfer_pair)
             else:
-                print("source key", src_obj.key)
                 yield GatewayMessage(
                     chunk=Chunk(
                         src_key=src_obj.key,
@@ -465,7 +457,6 @@ class TransferJob(ABC):
         """Return the source prefix"""
         if not hasattr(self, "_src_prefix"):
             self._src_prefix = parse_path(self.src_path)[2]
-            print("src_prefix", self.src_path, self._src_prefix)
         return self._src_prefix
 
     @property
@@ -699,21 +690,15 @@ class CopyJob(TransferJob):
             dst_iface = self.dst_ifaces[i]
             dst_prefix = self.dst_prefixes[i]
 
-            print("verify", dst_iface.region_tag())
-
             # gather destination key mapping for this region
             dst_keys = {pair.dst_objs[dst_iface.region_tag()].key: pair.src_obj for pair in self.transfer_list}
-            print("dst keys", dst_keys)
 
             # list and check destination prefix
             for obj in dst_iface.list_objects(dst_prefix):
                 # check metadata (src.size == dst.size) && (src.modified <= dst.modified)
                 src_obj = dst_keys.get(obj.key)
-                print("get", obj.key, src_obj)
                 if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:
                     del dst_keys[obj.key]
-                else:
-                    print("failed", dst_iface.bucket(), src_obj, obj)
 
             if dst_keys:
                 failed_keys = [obj.key for obj in dst_keys.values()]

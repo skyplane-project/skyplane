@@ -51,21 +51,19 @@ class ProgressBarTransferHook(TransferHook):
             DownloadColumn(binary_units=True),
             TransferSpeedColumn(),
             TimeRemainingColumn(),
-            transient=True,
+            # transient=True,
         )
         for region_tag in self.dest_region_tags:
             self.transfer_task[region_tag] = self.pbar.add_task(region_tag, total=self.bytes_dispatched)
         self.pbar.start()
 
     def on_chunk_completed(self, chunks: List[Chunk], region_tag: str):
-        if len(chunks) == 0:
-            self.bytes_completed[region_tag] = 0
-        else:
-            self.chunks_completed[region_tag] += len(chunks)
-            self.bytes_completed[region_tag] += sum([chunk.chunk_length_bytes for chunk in chunks])
+        self.chunks_completed[region_tag] += len(chunks)
+        self.bytes_completed[region_tag] += sum([chunk.chunk_length_bytes for chunk in chunks])
         self.pbar.update(self.transfer_task[region_tag], completed=self.bytes_completed[region_tag])
 
     def on_transfer_end(self, transfer_stats):
+        print("ENDING PBAR")
         self.pbar.stop()
         print_stats_completed(total_runtime_s=transfer_stats["total_runtime_s"], throughput_gbits=transfer_stats["throughput_gbits"])
 
