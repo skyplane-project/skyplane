@@ -19,6 +19,8 @@ from skyplane.utils.fn import do_parallel
 from skyplane.api.usage import UsageClient
 from skyplane.utils.definitions import GB
 
+from skyplane.cli.impl.common import print_stats_completed
+
 if TYPE_CHECKING:
     from skyplane.api.transfer_job import TransferJob
 
@@ -205,8 +207,13 @@ class TransferProgressTracker(Thread):
                     results.append(future.result())
             except Exception as e:
                 raise e
-
+        e2e_end_time = time.time()
         print("results", results)
+        transfer_stats = {
+            "total_runtime_s": e2e_end_time - e2e_start_time,
+            "throughput_gbits": self.query_bytes_dispatched() / (e2e_end_time - e2e_start_time) / GB * 8,
+        }
+        self.hooks.on_transfer_end()
 
         start_time = int(time.time())
         try:
@@ -236,17 +243,12 @@ class TransferProgressTracker(Thread):
                 e,
                 args,
                 self.dataplane.topology.src_region_tag,
-                self.dataplane.topology.dest_region_tags,
+                self.dataplane.topology.dest_region_tags[0],
                 session_start_timestamp_ms,
             )
             raise e
 
         # transfer successfully completed
-        transfer_stats = {
-            "total_runtime_s": end_time - start_time,
-            "throughput_gbits": self.query_bytes_dispatched() / (end_time - start_time) / GB * 8,
-        }
-        self.hooks.on_transfer_end(transfer_stats)
         UsageClient.log_transfer(
             transfer_stats,
             args,
@@ -254,6 +256,7 @@ class TransferProgressTracker(Thread):
             self.dataplane.topology.dest_region_tags,
             session_start_timestamp_ms,
         )
+        print_stats_completed(total_runtime_s=transfer_stats["total_runtime_s"], throughput_gbits=transfer_stats["throughput_gbits"])
 
     @imports.inject("pandas")
     def monitor_transfer(pd, self, region_tag):

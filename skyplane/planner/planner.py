@@ -40,8 +40,6 @@ class UnicastDirectPlanner(Planner):
             assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
             assert job.dst_ifaces[0].region_tag() == dst_region_tag, "All jobs must have same destination region"
 
-        print(src_region_tag, dst_region_tag)
-
         plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=[dst_region_tag])
         # TODO: use VM limits to determine how many instances to create in each region
         # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
@@ -97,15 +95,12 @@ class MulticastDirectPlanner(Planner):
         super().__init__()
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        print(jobs[0].src_iface)
         src_region_tag = jobs[0].src_iface.region_tag()
         dst_region_tags = [iface.region_tag() for iface in jobs[0].dst_ifaces]
         # jobs must have same sources and destinations
         for job in jobs[1:]:
             assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
             assert [iface.region_tag() for iface in job] == dst_region_tags, "Add jobs must have same destination set"
-
-        print(src_region_tag, dst_region_tags)
 
         plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=dst_region_tags)
         # TODO: use VM limits to determine how many instances to create in each region
@@ -153,7 +148,6 @@ class MulticastDirectPlanner(Planner):
                     )
 
                 # each gateway also recieves data from source
-                print("destination", dst_region_tag, "bucket", dst_bucket, "prefix", dst_prefix, "partition", partition_id)
                 recv_op = dst_program[dst_region_tag].add_operator(GatewayReceive(), partition_id=partition_id)
                 dst_program[dst_region_tag].add_operator(
                     GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),

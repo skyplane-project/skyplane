@@ -99,6 +99,7 @@ class GatewayDaemonAPI(threading.Thread):
                 state = elem["state"]
                 chunk_id = elem["chunk_id"]
                 partition = elem["partition"]
+                chunk_file_path = self.chunk_store.get_chunk_file_path(elem["chunk_id"])
 
                 if chunk_id not in self.chunk_status:
                     self.chunk_status[chunk_id] = ChunkState.registered.name
@@ -121,7 +122,6 @@ class GatewayDaemonAPI(threading.Thread):
 
                     print(f"[gateway_api] chunk {chunk_id}: complete, all operators have uploaded {self.terminal_operators}")
                     # remove chunk file
-                    chunk_file_path = self.chunk_store.get_chunk_file_path(elem["chunk_id"])
                     if os.path.exists(chunk_file_path):
                         logging.info(f"[gateway_api] Removing chunk file {chunk_file_path}")
                         chunk_file_path.unlink()

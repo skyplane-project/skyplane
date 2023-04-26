@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
+@dataclass
 class TransferPair:
     "Represents transfer pair between source and destination"
 
@@ -44,6 +45,7 @@ class TransferPair:
         self.dst_key = dst_key  # shared destination key across all chunks (differnt prefixes)
 
 
+@dataclass
 class GatewayMessage:
     def __init__(self, chunk: Chunk = None, upload_id_mapping: Dict[str, Dict[str, str]] = None):
         self.chunk = chunk
@@ -665,6 +667,7 @@ class CopyJob(TransferJob):
 
     def finalize(self):
         """Complete the multipart upload requests"""
+        print("Finalizing multipart uploads...")
         groups = defaultdict(list)
         for req in self.multipart_transfer_list:
             if "region" not in req or "bucket" not in req:
@@ -684,9 +687,9 @@ class CopyJob(TransferJob):
 
     def verify(self):
         """Verify the integrity of the transfered destination objects"""
-        # TODO: fix this
 
-        for i in range(len(self.dst_ifaces)):
+        # for i in range(len(self.dst_ifaces)):
+        def verify_region(i):
             dst_iface = self.dst_ifaces[i]
             dst_prefix = self.dst_prefixes[i]
 
@@ -701,10 +704,21 @@ class CopyJob(TransferJob):
                     del dst_keys[obj.key]
 
             if dst_keys:
-                failed_keys = [obj.key for obj in dst_keys.values()]
+                # failed_keys = [obj.key for obj in dst_keys.values()]
+                failed_keys = list(dst_keys.keys())
                 raise exceptions.TransferFailedException(
                     f"Destination {dst_iface.region_tag()} bucket {dst_iface.bucket()}: {len(dst_keys)} objects failed verification {failed_keys}"
                 )
+
+        # WARNING: setting n>1 causes concurrency error
+        do_parallel(
+            verify_region,
+            range(len(self.dst_ifaces)),
+            spinner=True,
+            spinner_persist=False,
+            desc="Verifying objects in destination buckets",
+            n=1,
+        )
 
 
 @dataclass
