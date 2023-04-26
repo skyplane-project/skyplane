@@ -683,12 +683,13 @@ class IBMVPCInstance:
         else:
             return f"VM instance {self.name} ({ip})"
 
-    def _create_vpc_client(self):
+    @imports.inject("ibm_vpc", "ibm_cloud_sdk_core", pip_extra="ibmcloud")
+    def _create_vpc_client(ibm_vpc, ibm_cloud_sdk_core, self):
         """
         Creates an IBM VPC python-sdk instance
         """
-        authenticator = IAMAuthenticator(self.config.get("iam_api_key"), url=self.config.get("iam_endpoint"))
-        ibm_vpc_client = VpcV1(VPC_API_VERSION, authenticator=authenticator)
+        authenticator = ibm_cloud_sdk_core.authenticators.IAMAuthenticator(self.config.get("iam_api_key"), url=self.config.get("iam_endpoint"))
+        ibm_vpc_client = ibm_vpc.VpcV1(VPC_API_VERSION, authenticator=authenticator)
         ibm_vpc_client.set_service_url(self.config["endpoint"] + "/v1")
 
         # decorate instance public methods with except/retry logic
