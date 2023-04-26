@@ -189,7 +189,8 @@ class GatewaySender:
             # read data from disk (and optionally compress if sending from source region)
             with open(chunk_file_path, "rb") as f:
                 data = f.read()
-            assert len(data) == chunk.chunk_length_bytes, f"chunk {chunk_id} has size {len(data)} but should be {chunk.chunk_length_bytes}"
+            if self.region == chunk_req.src_region:
+                assert len(data) == chunk.chunk_length_bytes, f"chunk {chunk_id} has size {len(data)} but should be {chunk.chunk_length_bytes}"
 
             wire_length = len(data)
             compressed_length = None
@@ -203,7 +204,7 @@ class GatewaySender:
 
             # send chunk header
             header = chunk.to_wire_header(
-                n_chunks_left_on_socket=len(chunk_ids) - idx - 1, wire_length=wire_length, is_compressed=(compressed_length is not None)
+                n_chunks_left_on_socket=len(chunk_ids) - idx - 1, wire_length=wire_length, is_compressed=self.use_compression
             )
             logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sending chunk header")
             header.to_socket(sock)
