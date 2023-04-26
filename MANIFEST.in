@@ -1,2 +1,2 @@
 include skyplane/data/aws_transfer_costs.csv
-include skyplane/data/whole_throughput_11_28.csv
+include skyplane/data/throughput.csv
