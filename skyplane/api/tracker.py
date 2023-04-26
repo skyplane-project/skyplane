@@ -193,8 +193,6 @@ class TransferProgressTracker(Thread):
                 "dst_region": dst_region,
                 "total_runtime_s": round(runtime_s, 4),
             }
-            print("Individual transfer statistics")
-            pprint(transfer_stats)
 
         results = []
         dest_regions = self.dataplane.topology.dest_region_tags
@@ -206,36 +204,6 @@ class TransferProgressTracker(Thread):
                     results.append(future.result())
             except Exception as e:
                 raise e
-            finally:
-                print("copying gateway logs")
-
-        # old monitoring code
-        ## Record only the transfer time
-        # start_time = int(time.time())
-        # try:
-        #    self.monitor_transfer()
-        # except exceptions.SkyplaneGatewayException as err:
-        #    reformat_err = Exception(err.pretty_print_str()[37:])
-        #    UsageClient.log_exception(
-        #        "monitor transfer",
-        #        reformat_err,
-        #        args,
-        #        self.dataplane.topology.src_region_tag,
-        #        self.dataplane.topology.dest_region_tags,
-        #        session_start_timestamp_ms,
-        #    )
-        #    raise err
-        # except Exception as e:
-        #    UsageClient.log_exception(
-        #        "monitor transfer",
-        #        e,
-        #        args,
-        #        self.dataplane.topology.src_region_tag,
-        #        self.dataplane.topology.dest_region_tags,
-        #        session_start_timestamp_ms,
-        #    )
-        #    raise e
-        # end_time = int(time.time())
 
         start_time = int(time.time())
         try:
@@ -290,7 +258,6 @@ class TransferProgressTracker(Thread):
         # todo implement transfer monitoring to update job_complete_chunk_ids and job_pending_chunk_ids while the transfer is in progress
         region_sinks = self.dataplane.topology.sink_instances()
         sinks = region_sinks[region_tag]
-        print("sink instances", sinks)
         # for region_tag, sink_gateways in self.dataplane.topology.sink_gateways().items():
         # sink_regions = set([sink.region for sink in sinks])
         while any([len(self.job_pending_chunk_ids[job_uuid]) > 0 for job_uuid in self.job_pending_chunk_ids]):
@@ -303,7 +270,6 @@ class TransferProgressTracker(Thread):
                 logger.warning("Copying gateway logs...")
                 self.dataplane.copy_gateway_logs()
                 self.errors = errors
-                print("ERRORS", errors)
                 raise exceptions.SkyplaneGatewayException("Transfer failed with errors", errors)
 
             log_df = pd.DataFrame(self._query_chunk_status())
@@ -321,7 +287,6 @@ class TransferProgressTracker(Thread):
             sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
             completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region_tag"].unique()) == set([region_tag]))
             completed_chunk_ids = completed_status[completed_status].index
-            # print(f"region {region_tag} completed", completed_chunk_ids)
 
             # update job_complete_chunk_ids and job_pending_chunk_ids
             # TODO: do chunk-tracking per-destination

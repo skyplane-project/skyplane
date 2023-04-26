@@ -688,7 +688,9 @@ class IBMVPCInstance:
         """
         Creates an IBM VPC python-sdk instance
         """
-        authenticator = ibm_cloud_sdk_core.authenticators.IAMAuthenticator(self.config.get("iam_api_key"), url=self.config.get("iam_endpoint"))
+        authenticator = ibm_cloud_sdk_core.authenticators.IAMAuthenticator(
+            self.config.get("iam_api_key"), url=self.config.get("iam_endpoint")
+        )
         ibm_vpc_client = ibm_vpc.VpcV1(VPC_API_VERSION, authenticator=authenticator)
         ibm_vpc_client.set_service_url(self.config["endpoint"] + "/v1")
 
