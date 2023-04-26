@@ -362,51 +362,14 @@ class Server:
         docker_run_flags += f" -v /tmp/{gateway_program_file}:/pkg/data/gateway_program.json"
         docker_run_flags += f" -v /tmp/{gateway_info_file}:/pkg/data/gateway_info.json"
         gateway_daemon_cmd = f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
-        print("has gateway program", gateway_daemon_cmd)
 
-        ## NOTE: (BC) upload gateway specification for this gateway
-        # if gateway_programs:
-        #    # for ip, program in gateway_programs.items():
-        #    #    print(ip)
-        #    #    pprint(program.to_dict())
-
-        #    region_tag = self.region_tag.replace(":", "_")
-        #    filename = f"gateway_programs_{region_tag}.json"
-        #    write_json_dir = tmp_log_dir / "gw_programs"
-        #    write_json_dir.mkdir(exist_ok=True, parents=True)
-        #    write_json_path = write_json_dir / filename
-        #    with open(write_json_path, "w") as f:
-        #        f.write(json.dumps(gateway_programs[self.region_tag], default=lambda obj: obj.__dict__))
-
-        #    # write gateway programs at all regions into a single file (for visualization)
-        #    write_json_complete_path = write_json_dir / "gateway_programs_complete.json"
-        #    with open(write_json_complete_path, "w") as f:
-        #        f.write(json.dumps(gateway_programs, default=lambda obj: obj.__dict__))
-
-        #    self.upload_file(write_json_path, f"/tmp/{filename}")
-        #    docker_envs["GATEWAY_PROGRAM_FILE"] = f"/pkg/data/{filename}"
-        #    docker_run_flags += f" -v /tmp/{filename}:/pkg/data/{filename}"
-        #    gateway_daemon_cmd = (
-        #        f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/broadcast/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
-        #    )
-        #    print("has gateway program", gateway_daemon_cmd)
-        # else:
-        #    # not use broadcast gateway programs, pass in outgoing ports
-        #    gateway_daemon_cmd = (
-        #        f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
-        #    )
-        #    gateway_daemon_cmd += f" --outgoing-ports '{json.dumps(outgoing_ports)}'"
-        #    print("no gateway program", gateway_daemon_cmd)
-
+        # update docker flags
         docker_run_flags += " " + " ".join(f"--env {k}={v}" for k, v in docker_envs.items())
 
         gateway_daemon_cmd += f" --region {self.region_tag} {'--use-compression' if use_compression else ''}"
         gateway_daemon_cmd += f" {'--disable-e2ee' if e2ee_key_bytes is None else ''}"
         gateway_daemon_cmd += f" {'--disable-tls' if not use_socket_tls else ''}"
         escaped_gateway_daemon_cmd = gateway_daemon_cmd.replace('"', '\\"')
-        print(
-            f'sudo docker run {docker_run_flags} --name skyplane_gateway {gateway_docker_image} /bin/bash -c "{escaped_gateway_daemon_cmd}"'
-        )
         docker_launch_cmd = (
             f'sudo docker run {docker_run_flags} --name skyplane_gateway {gateway_docker_image} /bin/bash -c "{escaped_gateway_daemon_cmd}"'
         )
