@@ -53,7 +53,7 @@ class Dataplane:
         :param clientid: the uuid of the local host to create the dataplane
         :type clientid: str
         :param topology: the calculated topology during the transfer
-        :type topology: TopologyPlan 
+        :type topology: TopologyPlan
         :param provisioner: the provisioner to launch the VMs
         :type provisioner: Provisioner
         :param transfer_config: the configuration during the transfer
