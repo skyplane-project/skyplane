@@ -496,11 +496,9 @@ class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
                 file_size = os.path.getsize(fpath)
                 if file_size == chunk_req.chunk.chunk_length_bytes:
                     break
-                else:
-                    print("error wrong downloaded size", chunk.chunk_length_bytes, file_size)
 
             except Exception as e:
-                print("Failed", e)
+                logger.error(f"[obj_store:{self.worker_id}] {str(e)}")
                 time.sleep(1)
 
         # update md5sum for chunk requests
