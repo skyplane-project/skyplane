@@ -100,7 +100,7 @@ class SkyplaneClient:
 
         pipeline = self.pipeline()
         pipeline.queue_copy(src, dst, recursive=recursive)
-        pipeline.run()
+        pipeline.start()
 
     def object_store(self):
         return ObjectStore()

@@ -1,4 +1,5 @@
 import json
+import multiprocessing
 import os
 from typing import List
 import queue
@@ -525,7 +526,7 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         output_queue: GatewayQueue,
         error_event,
         error_queue: GatewayQueue,
-        upload_id_map: Dict[str, str],  # map of upload_id mappings from client
+        upload_id_map,  # map of upload_id mappings from client
         n_processes: Optional[int] = 32,
         chunk_store: Optional[ChunkStore] = None,
         bucket_name: Optional[str] = None,

@@ -1,4 +1,5 @@
 import logging
+import multiprocessing
 from collections import defaultdict
 import logging.handlers
 import os
@@ -40,7 +41,7 @@ class GatewayDaemonAPI(threading.Thread):
         error_queue: Queue,
         terminal_operators: Dict[str, List[str]],
         num_required_terminal: Dict[str, int],
-        upload_id_map: Dict[str, str],
+        upload_id_map: multiprocessing.managers.DictProxy,
         host="0.0.0.0",
         port=8081,
     ):

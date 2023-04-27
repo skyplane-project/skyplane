@@ -114,7 +114,7 @@ class Dataplane:
         gateway_server.start_gateway(
             # setup_args,
             gateway_docker_image=gateway_docker_image,
-            gateway_program_path=gateway_program_filename,
+            gateway_program_path=str(gateway_program_filename),
             gateway_info_path=f"{gateway_log_dir}/gateway_info.json",
             e2ee_key_bytes=None,  # TODO: remove
             use_bbr=self.transfer_config.use_bbr,  # TODO: remove
@@ -278,7 +278,7 @@ class Dataplane:
         """Returns a list of source gateway nodes"""
         return [self.bound_nodes[n] for n in self.topology.source_instances()] if self.provisioned else []
 
-    def sink_gateways(self) -> List[compute.Server]:
+    def sink_gateways(self) -> Dict[str, List[compute.Server]]:
         """Returns a list of sink gateway nodes"""
         return (
             {region: [self.bound_nodes[n] for n in nodes] for region, nodes in self.topology.sink_instances().items()}
