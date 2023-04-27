@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from collections import defaultdict
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
 from skyplane import exceptions
@@ -57,7 +57,8 @@ class ProgressBarTransferHook(TransferHook):
             self.transfer_task[region_tag] = self.pbar.add_task(region_tag, total=self.bytes_dispatched)
         self.pbar.start()
 
-    def on_chunk_completed(self, chunks: List[Chunk], region_tag: str):
+    def on_chunk_completed(self, chunks: List[Chunk], region_tag: Optional[str] = None):
+        assert region_tag is not None, f"Must specify region tag for progress bar"
         self.chunks_completed[region_tag] += len(chunks)
         self.bytes_completed[region_tag] += sum([chunk.chunk_length_bytes for chunk in chunks])
         self.pbar.update(self.transfer_task[region_tag], completed=self.bytes_completed[region_tag])

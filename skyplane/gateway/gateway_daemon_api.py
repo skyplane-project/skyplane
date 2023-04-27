@@ -1,10 +1,10 @@
 import logging
-import multiprocessing
 from collections import defaultdict
 import logging.handlers
 import os
 import threading
 from multiprocessing import Queue
+from multiprocessing.managers import DictProxy
 from queue import Empty
 from traceback import TracebackException
 from typing import Dict, List, Tuple, Optional
@@ -41,7 +41,7 @@ class GatewayDaemonAPI(threading.Thread):
         error_queue: Queue,
         terminal_operators: Dict[str, List[str]],
         num_required_terminal: Dict[str, int],
-        upload_id_map: multiprocessing.managers.DictProxy,
+        upload_id_map: DictProxy,
         host="0.0.0.0",
         port=8081,
     ):

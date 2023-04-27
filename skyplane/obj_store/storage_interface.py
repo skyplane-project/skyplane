@@ -1,11 +1,33 @@
 from skyplane.utils import logger
+from typing import Iterator, Any
 
 
 class StorageInterface:
+    def bucket(self) -> str:
+        return self.bucket_name
+
+    def region_tag(self) -> str:
+        raise NotImplementedError()
+
     def path(self) -> str:
         raise NotImplementedError()
 
+    def bucket(self) -> str:
+        raise NotImplementedError()
+
+    def create_bucket(self, region_tag: str):
+        raise NotImplementedError()
+
+    def delete_bucket(self):
+        raise NotImplementedError()
+
+    def bucket_exists(self) -> bool:
+        raise NotImplementedError()
+
     def exists(self, obj_name: str) -> bool:
+        raise NotImplementedError()
+
+    def list_objects(self, prefix="") -> Iterator[Any]:
         raise NotImplementedError()
 
     @staticmethod

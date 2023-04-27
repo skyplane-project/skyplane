@@ -26,32 +26,8 @@ class ObjectStoreObject:
 
 
 class ObjectStoreInterface(StorageInterface):
-    def path(self) -> str:
-        raise NotImplementedError()
-
-    def region_tag(self) -> str:
-        raise NotImplementedError()
-
-    def bucket(self) -> str:
-        raise NotImplementedError()
-
     def set_requester_bool(self, requester: bool):
         return
-
-    def create_bucket(self, region_tag: str):
-        raise NotImplementedError()
-
-    def delete_bucket(self):
-        raise NotImplementedError()
-
-    def bucket_exists(self) -> bool:
-        raise NotImplementedError()
-
-    def exists(self, obj_name: str) -> bool:
-        raise NotImplementedError()
-
-    def list_objects(self, prefix="") -> Iterator[ObjectStoreObject]:
-        raise NotImplementedError()
 
     def get_obj_size(self, obj_name) -> int:
         raise NotImplementedError()

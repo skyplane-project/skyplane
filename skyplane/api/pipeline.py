@@ -87,7 +87,7 @@ class Pipeline:
         topo = self.planner.plan(self.jobs_to_dispatch)
 
         # create dataplane from plan
-        dp = Dataplane(self.clientid, topo, self.provisioner, self.transfer_config, self.transfer_dir, debug=debug)
+        dp = Dataplane(self.clientid, topo, self.provisioner, self.transfer_config, str(self.transfer_dir), debug=debug)
         return dp
 
     def start(self, debug=False, progress=False):
@@ -97,10 +97,8 @@ class Pipeline:
         ## create dataplane from plan
         # dp = Dataplane(self.clientid, topo, self.provisioner, self.transfer_config, self.transfer_dir, debug=debug)
         dp = self.create_dataplane(debug)
-        print("created dataplane")
         try:
             dp.provision(spinner=True)
-            print("done provision")
             if progress:
                 from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 

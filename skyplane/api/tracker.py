@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from skyplane import exceptions
 from skyplane.api.config import TransferConfig
-from skyplane.chunk import ChunkRequest, ChunkState, Chunk
+from skyplane.chunk import ChunkState, Chunk
 from skyplane.utils import logger, imports
 from skyplane.utils.fn import do_parallel
 from skyplane.api.usage import UsageClient
@@ -40,7 +40,7 @@ class TransferHook(ABC):
         """Ending the dispatch job"""
         raise NotImplementedError()
 
-    def on_chunk_completed(self, chunks: List[Chunk], region_tag: str = None):
+    def on_chunk_completed(self, chunks: List[Chunk], region_tag: Optional[str] = None):
         """Chunks are all transferred"""
         raise NotImplementedError()
 
@@ -68,7 +68,7 @@ class EmptyTransferHook(TransferHook):
     def on_dispatch_end(self):
         return
 
-    def on_chunk_completed(self, chunks: List[Chunk], region_tag: str = None):
+    def on_chunk_completed(self, chunks: List[Chunk], region_tag: Optional[str] = None):
         return
 
     def on_transfer_end(self, transfer_stats):
@@ -110,7 +110,7 @@ class TransferProgressTracker(Thread):
         logger.fs.debug(f"[TransferProgressTracker] Transfer config: {transfer_config}")
 
         # transfer state
-        self.job_chunk_requests: Dict[str, Dict[str, ChunkRequest]] = {}
+        self.job_chunk_requests: Dict[str, Dict[str, Chunk]] = {}
         self.job_pending_chunk_ids: Dict[str, Dict[str, Set[str]]] = {}
         self.job_complete_chunk_ids: Dict[str, Dict[str, Set[str]]] = {}
         self.errors: Optional[Dict[str, List[str]]] = None
@@ -349,17 +349,20 @@ class TransferProgressTracker(Thread):
         """Return if the transfer is complete"""
         return all([len(self.job_pending_chunk_ids[job_uuid][region_tag]) == 0 for job_uuid in self.jobs.keys()])
 
-    def query_bytes_remaining(self):
+    def query_bytes_remaining(self, region_tag: Optional[str] = None):
         """Query the total number of bytes remaining in all the transfer jobs"""
+        if region_tag is None:
+            assert len(list(self.job_pending_chunk_ids.keys())) == 1, "Must specify region_tag if there are multiple regions"
+            region_tag = list(self.job_pending_chunk_ids.keys())[0]
         if len(self.job_chunk_requests) == 0:
             return None
         bytes_remaining_per_job = {}
         for job_uuid in self.job_pending_chunk_ids.keys():
             bytes_remaining_per_job[job_uuid] = sum(
                 [
-                    cr.chunk.chunk_length_bytes
+                    cr.chunk_length_bytes
                     for cr in self.job_chunk_requests[job_uuid].values()
-                    if cr.chunk.chunk_id in self.job_pending_chunk_ids[job_uuid]
+                    if cr.chunk_id in self.job_pending_chunk_ids[job_uuid][region_tag]
                 ]
             )
         logger.fs.debug(f"[TransferProgressTracker] Bytes remaining per job: {bytes_remaining_per_job}")

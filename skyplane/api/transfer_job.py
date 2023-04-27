@@ -48,7 +48,7 @@ class TransferPair:
 
 @dataclass
 class GatewayMessage:
-    def __init__(self, chunk: Chunk = None, upload_id_mapping: Dict[str, Dict[str, str]] = None):
+    def __init__(self, chunk: Optional[Chunk] = None, upload_id_mapping: Optional[Dict[str, Tuple[str, str]]] = None):
         self.chunk = chunk
         self.upload_id_mapping = upload_id_mapping
 
@@ -61,8 +61,8 @@ class Chunker:
         src_iface: StorageInterface,
         dst_ifaces: List[StorageInterface],
         transfer_config: TransferConfig,
-        concurrent_multipart_chunk_threads: int = 64,
-        num_partitions: int = 1,
+        concurrent_multipart_chunk_threads: Optional[int] = 64,
+        num_partitions: Optional[int] = 1,
     ):
         """
         :param src_iface: source object store interface
@@ -84,7 +84,7 @@ class Chunker:
     def _run_multipart_chunk_thread(
         self,
         exit_event: threading.Event,
-        in_queue: "Queue[Tuple[StorageInterface, StorageInterface]]",
+        in_queue: "Queue[TransferPair]",
         out_queue_chunks: "Queue[GatewayMessage]",
     ):
         """Chunks large files into many small chunks."""
@@ -97,61 +97,64 @@ class Chunker:
             src_object = transfer_pair.src_obj
             dest_objects = transfer_pair.dst_objs
             dest_key = transfer_pair.dst_key
-            mime_type = self.src_iface.get_obj_mime_type(src_object.key)
+            if isinstance(self.src_iface, ObjectStoreInterface):
+                mime_type = self.src_iface.get_obj_mime_type(src_object.key)
+                # create multipart upload request per destination
+                upload_id_mapping = {}
+                for dest_iface in self.dst_ifaces:
+                    dest_object = dest_objects[dest_iface.region_tag()]
+                    upload_id = dest_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
+                    # print(f"Created upload id for key {dest_object.key} with upload id {upload_id} for bucket {dest_iface.bucket_name}")
+                    # store mapping between key and upload id for each region
+                    upload_id_mapping[dest_iface.region_tag()] = (src_object.key, upload_id)
+                out_queue_chunks.put(GatewayMessage(upload_id_mapping=upload_id_mapping))  # send to output queue
 
-            # create multipart upload request per destination
-            upload_id_mapping = {}
-            for dest_iface in self.dst_ifaces:
-                dest_object = dest_objects[dest_iface.region_tag()]
-                upload_id = dest_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
-                # print(f"Created upload id for key {dest_object.key} with upload id {upload_id} for bucket {dest_iface.bucket_name}")
-                # store mapping between key and upload id for each region
-                upload_id_mapping[dest_iface.region_tag()] = (src_object.key, upload_id)
-            out_queue_chunks.put(GatewayMessage(upload_id_mapping=upload_id_mapping))  # send to output queue
-
-            # get source and destination object and then compute number of chunks
-            chunk_size_bytes = int(self.transfer_config.multipart_chunk_size_mb * MB)
-            num_chunks = math.ceil(src_object.size / chunk_size_bytes)
-            if num_chunks > self.transfer_config.multipart_max_chunks:
-                chunk_size_bytes = int(src_object.size / self.transfer_config.multipart_max_chunks)
-                chunk_size_bytes = math.ceil(chunk_size_bytes / MB) * MB  # round to next largest mb
+                # get source and destination object and then compute number of chunks
+                chunk_size_bytes = int(self.transfer_config.multipart_chunk_size_mb * MB)
                 num_chunks = math.ceil(src_object.size / chunk_size_bytes)
+                if num_chunks > self.transfer_config.multipart_max_chunks:
+                    chunk_size_bytes = int(src_object.size / self.transfer_config.multipart_max_chunks)
+                    chunk_size_bytes = math.ceil(chunk_size_bytes / MB) * MB  # round to next largest mb
+                    num_chunks = math.ceil(src_object.size / chunk_size_bytes)
 
-            assert num_chunks * chunk_size_bytes >= src_object.size
-            # create chunks
-            offset = 0
-            part_num = 1
-            parts = []
-            for _ in range(num_chunks):
-                file_size_bytes = min(chunk_size_bytes, src_object.size - offset)
-                assert file_size_bytes > 0, f"file size <= 0 {file_size_bytes}"
-                chunk = Chunk(
-                    src_key=src_object.key,
-                    dest_key=dest_key,  # dest_object.key, # TODO: upload basename (no prefix)
-                    chunk_id=uuid.uuid4().hex,
-                    file_offset_bytes=offset,
-                    partition_id=str(part_num % self.num_partitions),
-                    chunk_length_bytes=file_size_bytes,
-                    part_number=part_num,
-                    # upload_id=upload_id,
-                    multi_part=True,
-                )
-                assert upload_id is not None, f"Upload id cannot be None for multipart upload for {src_object.key}"
-                assert part_num is not None, f"Partition cannot be none {part_num}"
-                offset += file_size_bytes
-                parts.append(part_num)
-                part_num += 1
-                out_queue_chunks.put(GatewayMessage(chunk=chunk))
+                assert num_chunks * chunk_size_bytes >= src_object.size
+                # create chunks
+                offset = 0
+                part_num = 1
+                parts = []
+                for _ in range(num_chunks):
+                    file_size_bytes = min(chunk_size_bytes, src_object.size - offset)
+                    assert file_size_bytes > 0, f"file size <= 0 {file_size_bytes}"
+                    chunk = Chunk(
+                        src_key=src_object.key,
+                        dest_key=dest_key,  # dest_object.key, # TODO: upload basename (no prefix)
+                        chunk_id=uuid.uuid4().hex,
+                        file_offset_bytes=offset,
+                        partition_id=str(part_num % self.num_partitions),
+                        chunk_length_bytes=file_size_bytes,
+                        part_number=part_num,
+                        # upload_id=upload_id,
+                        multi_part=True,
+                    )
+                    assert upload_id is not None, f"Upload id cannot be None for multipart upload for {src_object.key}"
+                    assert part_num is not None, f"Partition cannot be none {part_num}"
+                    offset += file_size_bytes
+                    parts.append(part_num)
+                    part_num += 1
+                    out_queue_chunks.put(GatewayMessage(chunk=chunk))
 
-            # store multipart ids
-            for dest_iface in self.dst_ifaces:
-                bucket = dest_iface.bucket()
-                region = dest_iface.region_tag()
-                dest_object = dest_objects[region]
-                _, upload_id = upload_id_mapping[region]
-                self.multipart_upload_requests.append(
-                    dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket)
-                )
+                # store multipart ids
+                for dest_iface in self.dst_ifaces:
+                    bucket = dest_iface.bucket()
+                    region = dest_iface.region_tag()
+                    dest_object = dest_objects[region]
+                    _, upload_id = upload_id_mapping[region]
+                    self.multipart_upload_requests.append(
+                        dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket)
+                    )
+            else:
+                mime_type = None
+                raise NotImplementedError("Multipart not implement for non-object store interfaces")
 
     # def to_chunk_requests(self, gen_in: Generator[Chunk, None, None]) -> Generator[ChunkRequest, None, None]:
     #    """Converts a generator of chunks to a generator of chunk requests.
@@ -226,9 +229,9 @@ class Chunker:
     def transfer_pair_generator(
         self,
         src_prefix: str,
-        dst_prefixes: str,
+        dst_prefixes: List[str],
         recursive: bool,
-        prefilter_fn: Optional[Callable[[StorageInterface], bool]] = None,
+        prefilter_fn: Optional[Callable[[ObjectStoreObject], bool]] = None,  # TODO: change to StorageObject
     ) -> Generator[TransferPair, None, None]:
         """Query source region and return list of objects to transfer.
 
@@ -241,6 +244,11 @@ class Chunker:
         :param prefilter_fn: filters out objects whose prefixes do not match the filter function (default: None)
         :type prefilter_fn: Callable[[ObjectStoreObject], bool]
         """
+        if not isinstance(self.src_iface, ObjectStoreInterface) or not all(
+            [isinstance(dst_iface, ObjectStoreInterface) for dst_iface in self.dst_ifaces]
+        ):
+            raise NotImplementedError("TransferPair only supports object store interfaces")
+
         if not self.src_iface.bucket_exists():
             raise exceptions.MissingBucketException(f"Source bucket {self.src_iface.path()} does not exist or is not readable.")
         for dst_iface in self.dst_ifaces:
@@ -295,7 +303,7 @@ class Chunker:
         :param transfer_pair_generator: generator of pairs of objects to transfer
         :type transfer_pair_generator: Generator
         """
-        multipart_send_queue: Queue[Tuple[ObjectStoreObject, ObjectStoreObject]] = Queue()
+        multipart_send_queue: Queue[TransferPair] = Queue()
         multipart_chunk_queue: Queue[GatewayMessage] = Queue()
         multipart_exit_event = threading.Event()
         multipart_chunk_threads = []
@@ -323,7 +331,7 @@ class Chunker:
                         dest_key=transfer_pair.dst_key,  # TODO: get rid of dest_key, and have write object have info on prefix  (or have a map here)
                         chunk_id=uuid.uuid4().hex,
                         chunk_length_bytes=transfer_pair.src_obj.size,
-                        partition_id=0,  # TODO: fix this to distribute across multiple partitions
+                        partition_id=str(0),  # TODO: fix this to distribute across multiple partitions
                     )
                 )
 
@@ -422,22 +430,7 @@ class TransferJob(ABC):
     def __init__(
         self,
         src_path: str,
-        dst_paths: str,
-        recursive: bool = False,
-        requester_pays: bool = False,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
-    ):
-        self.src_path = src_path
-        self.dst_paths = dst_paths
-        self.recursive = recursive
-        self.requester_pays = requester_pays
-        self.uuid = uuid
-
-    # @abstractmethod
-    def __init__(
-        self,
-        src_path: str,
-        dst_paths: List[str],
+        dst_paths: List[str] or str,
         recursive: bool = False,
         requester_pays: bool = False,
         uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
@@ -473,13 +466,13 @@ class TransferJob(ABC):
         return self._src_iface
 
     @property
-    def dst_prefixes(self) -> Optional[str]:
+    def dst_prefixes(self) -> List[str]:
         """Return the destination prefix"""
         if not hasattr(self, "_dst_prefix"):
             if self.transfer_type == "unicast":
-                self._dst_prefix = [parse_path(self.dst_paths[0])[2]]
+                self._dst_prefix = [str(parse_path(self.dst_paths[0])[2])]
             else:
-                self._dst_prefix = [parse_path(path)[2] for path in self.dst_paths]
+                self._dst_prefix = [str(parse_path(path)[2]) for path in self.dst_paths]
         return self._dst_prefix
 
     @property
@@ -510,10 +503,7 @@ class TransferJob(ABC):
 
     def size_gb(self):
         """Return the size of the transfer in GB"""
-        total_size = 0
-        for pair in self.gen_transfer_pairs():
-            total_size += pair.src_obj.size
-        return total_size / 1e9
+        raise NotImplementedError("Size not implemented")
 
     @classmethod
     def _pre_filter_fn(cls, obj: ObjectStoreObject) -> bool:
@@ -539,7 +529,7 @@ class CopyJob(TransferJob):
     def __init__(
         self,
         src_path: str,
-        dst_paths: str,
+        dst_paths: List[str] or str,
         recursive: bool = False,
         requester_pays: bool = False,
         uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
@@ -547,22 +537,6 @@ class CopyJob(TransferJob):
         super().__init__(src_path, dst_paths, recursive, requester_pays, uuid)
         self.transfer_list = []
         self.multipart_transfer_list = []
-
-    # @abstractmethod
-    def __init__(
-        self,
-        src_path: str,
-        dst_paths: List[str],
-        recursive: bool = False,
-        requester_pays: bool = False,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
-    ):
-        super().__init__(src_path, dst_paths, recursive, requester_pays, uuid)
-        self.transfer_list = []
-        self.multipart_transfer_list = []
-
-    # transfer_list: list = field(default_factory=list)
-    # multipart_transfer_list: list = field(default_factory=list)
 
     @property
     def http_pool(self):
@@ -720,6 +694,13 @@ class CopyJob(TransferJob):
             n=n,
         )
 
+    def size_gb(self):
+        """Return the size of the transfer in GB"""
+        total_size = 0
+        for pair in self.gen_transfer_pairs():
+            total_size += pair.src_obj.size
+        return total_size / 1e9
+
 
 @dataclass
 class SyncJob(CopyJob):
@@ -728,7 +709,7 @@ class SyncJob(CopyJob):
     def __init__(
         self,
         src_path: str,
-        dst_paths: str,
+        dst_paths: List[str] or str,
         recursive: bool = False,
         requester_pays: bool = False,
         uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
@@ -737,18 +718,10 @@ class SyncJob(CopyJob):
         self.transfer_list = []
         self.multipart_transfer_list = []
 
-    # @abstractmethod
-    def __init__(
-        self,
-        src_path: str,
-        dst_paths: List[str],
-        recursive: bool = False,
-        requester_pays: bool = False,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
-    ):
-        super().__init__(src_path, dst_paths, recursive, requester_pays, uuid)
-        self.transfer_list = []
-        self.multipart_transfer_list = []
+        assert isinstance(self.src_iface, ObjectStoreInterface), "Source must be an object store interface"
+        assert not any(
+            [not isinstance(iface, ObjectStoreInterface) for iface in self.dst_ifaces]
+        ), "Destination must be a object store interface"
 
     def gen_transfer_pairs(self, chunker: Optional[Chunker] = None) -> Generator[TransferPair, None, None]:
         """Generate transfer pairs for the transfer job.
@@ -773,7 +746,7 @@ class SyncJob(CopyJob):
                 )
 
     def _enrich_dest_objs(
-        self, transfer_pairs: Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None], dest_prefix: str
+        self, transfer_pairs: Generator[TransferPair, None, None], dest_prefixes: List[str]
     ) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
         """
         For skyplane sync, we enrich dest obj metadata with our existing dest obj metadata from the dest bucket following a query.
@@ -782,7 +755,9 @@ class SyncJob(CopyJob):
         :param transfer_pairs: generator of transfer pairs
         :type transfer_pairs: Generator
         """
-        for dst_iface in self.dst_ifaces:
+        for i in range(len(self.dst_ifaces)):
+            dst_iface = self.dst_ifaces[i]
+            dest_prefix = dest_prefixes[i]
             logger.fs.debug(f"Querying objects in {dst_iface.bucket()}")
             if not hasattr(self, "_found_dest_objs"):
                 self._found_dest_objs = {obj.key: obj for obj in dst_iface.list_objects(dest_prefix)}

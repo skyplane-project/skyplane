@@ -100,7 +100,7 @@ class MulticastDirectPlanner(Planner):
         # jobs must have same sources and destinations
         for job in jobs[1:]:
             assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
-            assert [iface.region_tag() for iface in job] == dst_region_tags, "Add jobs must have same destination set"
+            assert [iface.region_tag() for iface in job.dst_ifaces] == dst_region_tags, "Add jobs must have same destination set"
 
         plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=dst_region_tags)
         # TODO: use VM limits to determine how many instances to create in each region
