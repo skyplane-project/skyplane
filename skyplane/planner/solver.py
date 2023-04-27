@@ -231,7 +231,7 @@ class ThroughputSolver:
                     g.edge(src_label, dst_label, label=label)
         return g
 
-    def to_replication_topology(self, solution: ThroughputSolution, scale_to_capacity=True) -> Tuple[ReplicationTopology, float]:
+    def to_replication_topology(self, solution: ThroughputSolution, scale_to_capacity=True) -> Tuple[TopologyPlan, float]:
         regions = self.get_regions()
         Edge = namedtuple("Edge", ["src_region", "src_instance_idx", "dst_region", "dst_instance_idx", "connections"])
 
@@ -320,9 +320,9 @@ class ThroughputSolver:
         else:
             scale_factor = 1.0
 
-        # build ReplicationTopology
+        # build TopologyPlan
         obj_store_edges = set()
-        replication_topology = ReplicationTopology()
+        replication_topology = TopologyPlan(src_region_tag=e.src_region, dest_region_tags=[e.dst_region])
         for e in dst_edges:
             if e.connections >= 1:
                 # connect source to destination
