@@ -155,14 +155,12 @@ class Provisioner:
         return self.provisioned_vms[uuid]
 
     def _provision_task(self, task: ProvisionerTask):
-        print("provision", task.region)
         with Timer() as t:
             if task.cloud_provider == "aws":
                 assert self.aws.auth.enabled(), "AWS credentials not configured"
                 server = self.aws.provision_instance(task.region, task.vm_type, use_spot_instances=task.spot, tags=task.tags)
             elif task.cloud_provider == "azure":
                 assert self.azure.auth.enabled(), "Azure credentials not configured"
-                print("PROVISION", task.tags, task.vm_type)
                 server = self.azure.provision_instance(task.region, task.vm_type, use_spot_instances=task.spot, tags=task.tags)
             elif task.cloud_provider == "gcp":
                 assert self.gcp.auth.enabled(), "GCP credentials not configured"

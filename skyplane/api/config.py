@@ -63,12 +63,10 @@ class TransferConfig:
     autoterminate_minutes: int = 15
     requester_pays: bool = False
 
-    # randomly generate data or not for broadcast
+    # randomly generate data
     gen_random_data: bool = False
     gen_random_data_chunk_size_mb: Optional[float] = None
     gen_random_data_num_chunks: Optional[int] = None
-    src_region: Optional[str] = None
-    dst_regions: Optional[List[str]] = None
 
     # gateway settings
     use_bbr: bool = True

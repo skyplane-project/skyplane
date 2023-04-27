@@ -72,9 +72,16 @@ class SkyplaneClient:
             ibmcloud_auth=self.ibmcloud_auth,
         )
 
-    def pipeline(self, debug=False):
+    def pipeline(self, planning_algorithm: Optional[str] = "direct", max_instances: Optional[int] = 1, debug=False):
         """Create a pipeline object to queue jobs"""
-        return Pipeline(clientid=self.clientid, provisioner=self.provisioner, transfer_config=self.transfer_config, debug=debug)
+        return Pipeline(
+            planning_algorithm=planning_algorithm,
+            max_instances=max_instances,
+            clientid=self.clientid,
+            provisioner=self.provisioner,
+            transfer_config=self.transfer_config,
+            debug=debug,
+        )
 
     def copy(self, src: str, dst: str, recursive: bool = False):
         """

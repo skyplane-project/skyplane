@@ -208,7 +208,6 @@ class TransferProgressTracker(Thread):
             except Exception as e:
                 raise e
         e2e_end_time = time.time()
-        print("results", results)
         transfer_stats = {
             "total_runtime_s": e2e_end_time - e2e_start_time,
             "throughput_gbits": self.query_bytes_dispatched() / (e2e_end_time - e2e_start_time) / GB * 8,
@@ -316,8 +315,6 @@ class TransferProgressTracker(Thread):
 
             # sleep
             time.sleep(0.05)
-
-        print("no more pending", region_tag)
 
     @property
     @functools.lru_cache(maxsize=1)

@@ -65,7 +65,6 @@ class TopologyPlan:
 
     def add_gateway(self, region_tag: str):
         """Create gateway in specified region"""
-        print(region_tag)
         gateway_id = region_tag + str(len([gateway for gateway in self.gateways.values() if gateway.region == region_tag]))
         assert gateway_id not in self.gateways
         gateway = TopologyPlanGateway(region_tag, gateway_id)
@@ -148,3 +147,10 @@ class TopologyPlan:
                     nodes.append(gateway)
                     break
         return nodes
+
+    def per_region_count(self) -> Dict[str, int]:
+        """Return number of gateways VMs per region"""
+        counts = {}
+        for node in self.get_gateways():
+            counts[node.region_tag] = counts.get(node.region_tag, 0) + 1
+        return counts

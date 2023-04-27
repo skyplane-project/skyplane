@@ -38,8 +38,9 @@ class Pipeline:
         provisioner: "Provisioner",
         transfer_config: TransferConfig,
         # cloud_regions: dict,
-        planning_algorithm: str = "direct",
-        debug: bool = False,
+        max_instances: Optional[int] = 1,
+        planning_algorithm: Optional[str] = "direct",
+        debug: Optional[bool] = False,
     ):
         """
         :param clientid: the uuid of the local host to create the dataplane
@@ -52,7 +53,7 @@ class Pipeline:
         self.clientid = clientid
         # self.cloud_regions = cloud_regions
         # TODO: set max instances with VM CPU limits and/or config
-        self.max_instances = 1
+        self.max_instances = max_instances
         self.provisioner = provisioner
         self.transfer_config = transfer_config
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
@@ -60,6 +61,9 @@ class Pipeline:
         self.provisioned = False
         self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
         self.transfer_dir.mkdir(exist_ok=True, parents=True)
+
+        # dataplane
+        self.dataplane = None
 
         # planner
         self.planning_algorithm = planning_algorithm
@@ -78,17 +82,25 @@ class Pipeline:
         self.pending_transfers: List[TransferProgressTracker] = []
         self.bound_nodes: Dict[TopologyPlanGateway, compute.Server] = {}
 
-    def start(self, debug=False, progress=False):
-        # TODO: Set number of connections properly (or not at all)
-        planner = MulticastDirectPlanner(self.max_instances, 32)
-
+    def create_dataplane(self, debug):
         # create plan from set of jobs scheduled
-        topo = planner.plan(self.jobs_to_dispatch)
+        topo = self.planner.plan(self.jobs_to_dispatch)
 
         # create dataplane from plan
         dp = Dataplane(self.clientid, topo, self.provisioner, self.transfer_config, self.transfer_dir, debug=debug)
+        return dp
+
+    def start(self, debug=False, progress=False):
+        ## create plan from set of jobs scheduled
+        # topo = self.planner.plan(self.jobs_to_dispatch)
+
+        ## create dataplane from plan
+        # dp = Dataplane(self.clientid, topo, self.provisioner, self.transfer_config, self.transfer_dir, debug=debug)
+        dp = self.create_dataplane(debug)
+        print("created dataplane")
         try:
             dp.provision(spinner=True)
+            print("done provision")
             if progress:
                 from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 
@@ -103,11 +115,9 @@ class Pipeline:
             if debug:
                 dp.copy_gateway_logs()
         except Exception as e:
-            print(e)
-            print("copy gateway logs")
             dp.copy_gateway_logs()
-        print("deprovisioning dataplane...")
         dp.deprovision(spinner=True)
+        return dp
 
     def queue_copy(
         self,

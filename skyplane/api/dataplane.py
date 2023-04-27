@@ -234,7 +234,7 @@ class Dataplane:
         :type spinner: bool
         """
         with self.provisioning_lock:
-            if self.debug:
+            if self.debug and self.provisioned:
                 logger.fs.info(f"Copying gateway logs to {self.transfer_dir}")
                 self.copy_gateway_logs()
 

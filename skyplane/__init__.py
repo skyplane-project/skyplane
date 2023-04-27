@@ -4,6 +4,7 @@ from skyplane import compute, exceptions
 from skyplane.api.client import SkyplaneClient
 from skyplane.api.config import TransferConfig, AWSConfig, AzureConfig, GCPConfig
 from skyplane.api.dataplane import Dataplane
+from skyplane.api.pipeline import Pipeline
 from skyplane.api.tracker import TransferHook
 
 __version__ = "0.3.1"
@@ -17,6 +18,7 @@ __all__ = [
     # API
     "SkyplaneClient",
     "Dataplane",
+    "Pipeline",
     "TransferConfig",
     "AWSConfig",
     "AzureConfig",

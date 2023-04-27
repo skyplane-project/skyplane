@@ -725,7 +725,32 @@ class CopyJob(TransferJob):
 class SyncJob(CopyJob):
     """sync job that copies the source objects that does not exist in the destination bucket to the destination"""
 
-    def gen_transfer_pairs(self, chunker: Optional[Chunker] = None) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
+    def __init__(
+        self,
+        src_path: str,
+        dst_paths: str,
+        recursive: bool = False,
+        requester_pays: bool = False,
+        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
+    ):
+        super().__init__(src_path, dst_paths, recursive, requester_pays, uuid)
+        self.transfer_list = []
+        self.multipart_transfer_list = []
+
+    # @abstractmethod
+    def __init__(
+        self,
+        src_path: str,
+        dst_paths: List[str],
+        recursive: bool = False,
+        requester_pays: bool = False,
+        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
+    ):
+        super().__init__(src_path, dst_paths, recursive, requester_pays, uuid)
+        self.transfer_list = []
+        self.multipart_transfer_list = []
+
+    def gen_transfer_pairs(self, chunker: Optional[Chunker] = None) -> Generator[TransferPair, None, None]:
         """Generate transfer pairs for the transfer job.
 
         :param chunker: chunker that makes the chunk requests
@@ -734,10 +759,18 @@ class SyncJob(CopyJob):
         if chunker is None:  # used for external access to transfer pair list
             chunker = Chunker(self.src_iface, self.dst_ifaces, TransferConfig())
         transfer_pair_gen = chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, self.recursive, self._pre_filter_fn)
+
+        # only single destination supported
+        assert len(self.dst_ifaces) == 1, "Only single destination supported for sync job"
+
         # enrich destination objects with metadata
         for src_obj, dest_obj in self._enrich_dest_objs(transfer_pair_gen, self.dst_prefixes):
             if self._post_filter_fn(src_obj, dest_obj):
-                yield src_obj, dest_obj
+                yield TransferPair(
+                    src_obj=src_obj,
+                    dst_objs={self.dst_ifaces[0].region_tag(): dest_obj},
+                    dst_key=dest_obj.key.replace(self.dst_prefixes[0], ""),
+                )
 
     def _enrich_dest_objs(
         self, transfer_pairs: Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None], dest_prefix: str
@@ -753,7 +786,10 @@ class SyncJob(CopyJob):
             logger.fs.debug(f"Querying objects in {dst_iface.bucket()}")
             if not hasattr(self, "_found_dest_objs"):
                 self._found_dest_objs = {obj.key: obj for obj in dst_iface.list_objects(dest_prefix)}
-            for src_obj, dest_obj in transfer_pairs:
+            for pair in transfer_pairs:
+                src_obj = pair.src_obj
+                dest_obj = list(pair.dst_objs.values())[0]
+                assert len(list(pair.dst_objs.keys())) == 1, f"Multiple destinations are not support for sync: {pair.dst_objs}"
                 if dest_obj.key in self._found_dest_objs:
                     dest_obj.size = self._found_dest_objs[dest_obj.key].size
                     dest_obj.last_modified = self._found_dest_objs[dest_obj.key].last_modified

@@ -62,8 +62,6 @@ class AWSAuthentication:
                     region_text = region["Endpoint"]
                     region_name = region_text[region_text.find(".") + 1 : region_text.find(".amazon")]
                     region_list.append(region_name)
-
-            # get VCPU limits
             f.write("\n".join(region_list))
 
         quota_infos = fn.do_parallel(
