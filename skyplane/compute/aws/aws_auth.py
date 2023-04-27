@@ -54,6 +54,8 @@ class AWSAuthentication:
             return
         with aws_config_path.open("w") as f:
             region_list = []
+
+            # query regions
             describe_regions = boto3.client("ec2", region_name="us-east-1").describe_regions()
             for region in describe_regions["Regions"]:
                 if region["OptInStatus"] == "opt-in-not-required" or region["OptInStatus"] == "opted-in":

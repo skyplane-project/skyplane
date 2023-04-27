@@ -10,12 +10,13 @@ from typing import Optional, Tuple
 
 import nacl.secret
 
-from skyplane.broadcast.gateway.cert import generate_self_signed_certificate
-from skyplane.broadcast.gateway.chunk_store import ChunkStore
-from skyplane.chunk import WireProtocolHeader
-from skyplane.utils import logger
 from skyplane.utils.definitions import MB
+from skyplane.utils import logger
 from skyplane.utils.timer import Timer
+
+from skyplane.chunk import WireProtocolHeader
+from skyplane.gateway.cert import generate_self_signed_certificate
+from skyplane.gateway.chunk_store import ChunkStore
 
 
 class GatewayReceiver:
@@ -28,8 +29,8 @@ class GatewayReceiver:
         error_queue: Queue,
         recv_block_size=4 * MB,
         max_pending_chunks=1,
-        use_tls: bool = True,
-        use_compression: bool = True,
+        use_tls: Optional[bool] = True,
+        use_compression: Optional[bool] = True,
         e2ee_key_bytes: Optional[bytes] = None,
     ):
         self.handle = handle
@@ -39,6 +40,7 @@ class GatewayReceiver:
         self.error_queue = error_queue
         self.recv_block_size = recv_block_size
         self.max_pending_chunks = max_pending_chunks
+        print("Max pending chunks", self.max_pending_chunks)
         self.use_compression = use_compression
         if e2ee_key_bytes is None:
             self.e2ee_secretbox = None
@@ -65,14 +67,14 @@ class GatewayReceiver:
 
     def start_server(self):
         started_event = Event()
-        port_value = Value("i", 0)
+        port = Value("i", 0)
 
         def server_worker(worker_id: int):
             self.worker_id = worker_id
             with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
                 sock.bind(("0.0.0.0", 0))
                 socket_port = sock.getsockname()[1]
-                port_value.value = socket_port  # type: ignore
+                port.value = socket_port  # type: ignore
                 exit_flag = Event()
 
                 def signal_handler(signal, frame):
@@ -106,9 +108,9 @@ class GatewayReceiver:
         p.start()
         started_event.wait()
         self.server_processes.append(p)
-        self.server_ports.append(port_value.value)  # type: ignore
-        logger.info(f"[receiver:{port_value.value}] Started server)")  # type: ignore
-        return port_value.value  # type: ignore
+        self.server_ports.append(port.value)  # type: ignore
+        logger.info(f"[receiver:{port.value}] Started server)")  # type: ignore
+        return port.value  # type: ignore
 
     def stop_server(self, port: int):
         matched_process = None
@@ -139,6 +141,8 @@ class GatewayReceiver:
     def recv_chunks(self, conn: socket.socket, addr: Tuple[str, int]):
         server_port = conn.getsockname()[1]
         chunks_received = []
+        init_space = self.chunk_store.remaining_bytes()
+        print("Init space", init_space)
         while True:
             # receive header and write data to file
             logger.debug(f"[receiver:{server_port}] Blocking for next header")
@@ -152,17 +156,19 @@ class GatewayReceiver:
             # should_decompress = chunk_header.is_compressed and chunk_request.dst_region == self.region
 
             # wait for space
-            # TODO: implement same fix as for gen_data
-            while self.chunk_store.remaining_bytes() < chunk_header.data_len * self.max_pending_chunks:
-                logger.debug(f"[reciever] Chunk store full, waiting before recieving more chunks")
-                time.sleep(0.1)
+            # while self.chunk_store.remaining_bytes() < chunk_header.data_len * self.max_pending_chunks:
+            #    print(
+            #        f"[receiver:{server_port}]: No remaining space with bytes {self.chunk_store.remaining_bytes()} data len {chunk_header.data_len} max pending {self.max_pending_chunks}, total space {init_space}"
+            #    )
+            #    time.sleep(0.1)
 
             # get data
             # self.chunk_store.state_queue_download(chunk_header.chunk_id)
             # self.chunk_store.state_start_download(chunk_header.chunk_id, f"receiver:{self.worker_id}")
             logger.debug(f"[receiver:{server_port}]:{chunk_header.chunk_id} wire header length {chunk_header.data_len}")
             with Timer() as t:
-                with self.chunk_store.get_chunk_file_path(chunk_header.chunk_id).open("wb") as f:
+                fpath = self.chunk_store.get_chunk_file_path(chunk_header.chunk_id)
+                with fpath.open("wb") as f:
                     socket_data_len = chunk_header.data_len
                     chunk_received_size = 0
                     to_write = bytearray(socket_data_len)
@@ -180,10 +186,32 @@ class GatewayReceiver:
                             )
                         )
                     to_write = bytes(to_write)
-                    f.write(to_write)
+
+                    # try to write data until successful
+                    while True:
+                        try:
+                            f.seek(0, 0)
+                            f.write(to_write)
+                            f.flush()
+
+                            # check size
+                            file_size = os.path.getsize(fpath)
+                            if file_size == chunk_header.data_len:
+                                break
+                            elif file_size >= chunk_header.data_len:
+                                raise ValueError(f"[Gateway] File size {file_size} greater than chunk size {chunk_header.data_len}")
+                        except Exception as e:
+                            print(e)
+
+                        print(
+                            f"[receiver:{server_port}]: No remaining space with bytes {self.chunk_store.remaining_bytes()} data len {chunk_header.data_len} max pending {self.max_pending_chunks}, total space {init_space}"
+                        )
+                        time.sleep(1)
             assert (
                 socket_data_len == 0 and chunk_received_size == chunk_header.data_len
             ), f"Size mismatch: got {chunk_received_size} expected {chunk_header.data_len} and had {socket_data_len} bytes remaining"
+
+            logger.debug(f"Recieved chunk {chunk_header.chunk_id} size {chunk_header.data_len}")
 
             # todo check hash
             # self.chunk_store.state_finish_download(chunk_header.chunk_id, f"receiver:{self.worker_id}")

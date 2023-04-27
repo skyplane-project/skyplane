@@ -1,4 +1,4 @@
-skyplane.api.transfer\_job
+﻿skyplane.api.transfer\_job
 ==========================
 
 .. automodule:: skyplane.api.transfer_job
@@ -19,8 +19,10 @@ skyplane.api.transfer\_job
    
       Chunker
       CopyJob
+      GatewayMessage
       SyncJob
       TransferJob
+      TransferPair
    
    
 
