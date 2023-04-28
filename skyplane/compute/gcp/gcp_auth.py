@@ -8,12 +8,39 @@ from typing import Optional
 
 from skyplane.compute.server import key_root
 from skyplane.config import SkyplaneConfig
-from skyplane.config_paths import config_path, gcp_config_path, gcp_quota_path
+from skyplane.config_paths import config_path, gcp_config_path, gcp_quota_path, gcp_instances_path
 from skyplane.utils import logger, imports
 from skyplane.utils.retry import retry_backoff
 
 
 class GCPAuthentication:
+
+    # Hard coding the vcpu info since the api doesn't provide a clean way for this
+    _VCPUS_INFO = {
+            "n1-standard-1": 1,
+            "n1-standard-2": 2,
+            "n1-standard-4": 4,
+            "n1-standard-8": 8,
+            "n1-standard-16": 16,
+            "n1-standard-32": 32,
+            "n1-standard-64": 64,
+            "n1-standard-96": 96,
+            "n1-highcpu-2": 2,
+            "n1-highcpu-4": 4,
+            "n1-highcpu-8": 8,
+            "n1-highcpu-16": 16,
+            "n1-highcpu-32": 32,
+            "n1-highcpu-64": 64,
+            "n1-highcpu-96": 96,
+            "n1-highmem-2": 2,
+            "n1-highmem-4": 4,
+            "n1-highmem-8": 8,
+            "n1-highmem-16": 16,
+            "n1-highmem-32": 32,
+            "n1-highmem-64": 64,
+            "n1-highmem-96": 96
+        } 
+
     def __init__(self, config: Optional[SkyplaneConfig] = None):
         if not config == None:
             self.config = config
@@ -66,6 +93,10 @@ class GCPAuthentication:
                 json.dump(region_to_vcpus, f)
         except Exception:
             logger.warning("Failed to retrieve GCP quota information. Skyplane will a conservative configuration.")
+
+        # Saving VCPUS_INFO
+        with gcp_instances_path.open("w") as f:
+            f.write(json.dumps(GCPAuthentication._VCPUS_INFO))
 
     @staticmethod
     def clear_region_config():
@@ -259,3 +290,11 @@ class GCPAuthentication:
 
     def get_gcp_instances(self, gcp_region: str):
         return self.get_gcp_client().instances().list(project=self.project_id, zone=gcp_region).execute()
+    
+    def get_vcpus_for_instance(self, instance_type: str) -> int:
+        return GCPAuthentication._VCPUS_INFO[instance_type]
+    
+    def get_quota_limits(self):
+        with gcp_quota_path.open("r") as f:
+            quota_limits = json.load(f)
+            return quota_limits
