@@ -17,7 +17,7 @@ from skyplane.api.tracker import TransferProgressTracker, TransferHook
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
 
-from skyplane.planner.planner import MulticastDirectPlanner
+from skyplane.planner.planner import MulticastDirectPlanner, UnicastDirectPlanner, UnicastILPPlanner, MulticastILPPlanner, MulticastMDSTPlanner, MulticastSteinerTreePlanner
 from skyplane.planner.topology import TopologyPlanGateway
 from skyplane.utils import logger
 from skyplane.utils.definitions import gateway_docker_image, tmp_log_dir
@@ -39,6 +39,7 @@ class Pipeline:
         transfer_config: TransferConfig,
         # cloud_regions: dict,
         max_instances: Optional[int] = 1,
+        num_connections: Optional[int] = 32, 
         planning_algorithm: Optional[str] = "direct",
         debug: Optional[bool] = False,
     ):
@@ -68,7 +69,15 @@ class Pipeline:
         # planner
         self.planning_algorithm = planning_algorithm
         if self.planning_algorithm == "direct":
-            self.planner = MulticastDirectPlanner(self.max_instances, 32)
+            self.planner = MulticastDirectPlanner(self.max_instances, num_connections)
+        elif self.planning_algorithm == "MDST":
+            self.planner = MulticastMDSTPlanner(self.max_instances, num_connections)
+        elif self.planning_algorithm == "SteinerTree":
+            self.planning_algorithm = MulticastSteinerTreePlanner(self.max_instances, num_connections)
+        elif self.planning_algorithm == "ILP":
+            self.planning_algorithm = MulticastILPPlanner(self.max_instances, num_connections)
+        elif self.planning_algorithm == "UnicastILP":
+            self.planning_algorithm = UnicastILPPlanner(self.max_instances, num_connections)
         else:
             raise ValueError(f"No such planning algorithm {planning_algorithm}")
 
