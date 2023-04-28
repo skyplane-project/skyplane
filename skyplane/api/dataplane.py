@@ -158,11 +158,29 @@ class Dataplane:
             # create VMs from the topology
             for node in self.topology.get_gateways():
                 cloud_provider, region = node.region_tag.split(":")
+            for node in self.topology.gateway_nodes:
+                cloud_provider, region = node.region.split(":")
+                spot = getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances")
+                vm_type = self.transfer_config.get_flag(f"{cloud_provider}_instance_class")
+
+                # TODO: Make this a local method called _fall_back_to_smaller_vm_if_necessary()
+                if cloud_provider == "aws":
+                    quota_limit = compute.AWSAuthentication.get_quota_limits_for(region, spot)
+                    smaller_vm = compute.AWSAuthentication.fall_back_to_smaller_vm_if_neccessary(instance_type=vm_type, quota_limit=quota_limit)
+                    if smaller_vm is not None:
+                        vm_type = smaller_vm
+                        # TODO: Warning message
+                # TODO: add gcp, azure, ibm support
+
+                
+                # TODO: Add the logic for partitioning the task into multiple vms if we fell back (in fall_back functions)
+                # Ex: if the config vm uses 32 vCPUs but the quota limit is 8 vCPUS, call add_task 4 times with the smaller vm
+
                 self.provisioner.add_task(
                     cloud_provider=cloud_provider,
                     region=region,
-                    vm_type=getattr(self.transfer_config, f"{cloud_provider}_instance_class"),
-                    spot=getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances"),
+                    vm_type=vm_type,
+                    spot=spot,
                     autoterminate_minutes=self.transfer_config.autoterminate_minutes,
                 )
 

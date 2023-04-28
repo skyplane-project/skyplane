@@ -13,6 +13,9 @@ gcp_config_path = __config_root__ / "gcp_config"
 ibmcloud_config_path = __config_root__ / "ibmcloud_config"
 gcp_quota_path = __config_root__ / "gcp_quota"
 
+aws_instances_path = __config_root__ / "aws_instances"
+gcp_instances_path = __config_root__ / "gcp_instances"
+
 
 @functools.lru_cache(maxsize=None)
 def load_config_path():

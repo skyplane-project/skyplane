@@ -2,7 +2,7 @@ from typing import Optional, Dict
 import json
 
 from skyplane.config import SkyplaneConfig
-from skyplane.config_paths import config_path, aws_config_path, aws_quota_path
+from skyplane.config_paths import config_path, aws_config_path, aws_quota_path, aws_instances_path
 from skyplane.utils import imports, fn, logger
 
 
@@ -22,7 +22,40 @@ class AWSAuthentication:
             self.config_mode = "iam_inferred"
             self._access_key = None
             self._secret_key = None
+        
+    @staticmethod
+    def fall_back_to_smaller_vm_if_neccessary(instance_type: str, quota_limit: int) -> Optional[str]:
+        with aws_instances_path.open("r") as f:
+            vcpus_info = json.load(f)
 
+            if vcpus_info[instance_type]  <= quota_limit:
+                return None # don't need to fall back
+
+            header = instance_type.split(".")[0]
+            max_vcpus = 0
+            max_instance = None
+            for instance, vcpus in vcpus_info.items():
+                # Get the largest of the smaller VMs than the quota_limit
+                if instance.startswith(header) and vcpus < quota_limit and vcpus > max_vcpus:
+                    max_vcpus = vcpus
+                    max_instance = instance
+
+            # TODO: Add the logic for partitioning the task into multiple vms if we fell back 
+            # Ex: if the config vm uses 32 vCPUs but the quota limit is 8 vCPUS, call add_task 4 times with the smaller vm
+        
+            return max_instance # None if no smaller VM exists
+        
+    @staticmethod
+    def get_quota_limits_for(region: str, spot: bool = False) -> int:
+        with aws_quota_path.open("r") as f:
+            quota_limits = json.load(f)
+            for quota in quota_limits:
+                if quota["region_name"] == region:
+                    if spot:
+                        return quota["spot_standard_vcpus"]
+                    else:
+                        return quota["on_demand_standard_vcpus"]
+                    
     def _get_ec2_vm_quota(self, region) -> Dict[str, int]:
         """Given the region, get the maximum number of vCPU that can be launched.
 
@@ -70,6 +103,14 @@ class AWSAuthentication:
         region_infos = [dict(**info, **{"region_name": name}) for name, info in zip(region_list, quota_infos)]
         with aws_quota_path.open("w") as f:
             f.write(json.dumps(region_infos, indent=2))
+
+        with aws_instances_path.open("w") as f:
+            describe_instance_types = boto3.client("ec2", region_name="us-east-1").describe_instance_types()
+            vcpus = {}
+            for instance_type in describe_instance_types['InstanceTypes']:
+                instance_type_name = instance_type['InstanceType']
+                vcpus[instance_type_name] = instance_type['VCpuInfo']['DefaultVCpus']
+                f.write(json.dumps(vcpus))
 
     def clear_region_config(self):
         with aws_config_path.open("w") as f:
