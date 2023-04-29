@@ -93,7 +93,7 @@ class UsageStatsToReport:
     #: The source region of the transfer session.
     source_region: str
     #: The destination region of the transfer session.
-    destination_region: str
+    destination_region: str # TODO: make into dest_regions
     #: The source cloud provider of the transfer session.
     source_cloud_provider: str
     #: The destination cloud provider of the transfer session.
