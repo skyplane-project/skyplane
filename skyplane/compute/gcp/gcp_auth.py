@@ -109,6 +109,26 @@ class GCPAuthentication:
         with gcp_config_path.open("r") as f:
             return [r for r in map(str.strip, f.readlines()) if r]
 
+    @staticmethod
+    def get_quota_limits_for(region: str) -> int:
+        with gcp_quota_path.open("r") as f:
+            quota_limits = json.load(f)
+            return quota_limits[region]
+
+    @staticmethod
+    def fall_back_to_smaller_vm_if_neccessary(instance_type: str, quota_limit: int) -> Optional[str]:
+        # TODO: Add the logic for partitioning the task into multiple vms if we fell back
+        # Ex: if the config vm uses 32 vCPUs but the quota limit is 8 vCPUS, call add_task 4 times with the smaller vm
+        if GCPAuthentication._VCPUS_INFO[instance_type] <= quota_limit:
+            return None  # don't need to fall back
+
+        # Find the greatest instance that is less than quota
+        # Hard coding the vCPUs since they follow a pattern
+        family = "-".join(instance_type.split("-")[:2])
+        for val in (96, 64, 32, 16, 8, 4, 2, 1):
+            if val < quota_limit:
+                return f"{family}-{val}"
+
     @property
     def credentials(self):
         if self._credentials is None:
@@ -289,11 +309,3 @@ class GCPAuthentication:
 
     def get_gcp_instances(self, gcp_region: str):
         return self.get_gcp_client().instances().list(project=self.project_id, zone=gcp_region).execute()
-
-    def get_vcpus_for_instance(self, instance_type: str) -> int:
-        return GCPAuthentication._VCPUS_INFO[instance_type]
-
-    def get_quota_limits(self):
-        with gcp_quota_path.open("r") as f:
-            quota_limits = json.load(f)
-            return quota_limits

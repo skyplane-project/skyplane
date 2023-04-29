@@ -115,21 +115,24 @@ class Dataplane:
             is_ibmcloud_used = any(n.region.startswith("ibmcloud:") for n in self.topology.nodes)
 
             # create VMs from the topology
+            auths = {
+                "aws": compute.AWSAuthentication,
+                "azure": compute.AzureAuthentication,
+                "gcp": compute.GCPAuthentication,
+                "ibmcloud": compute.IBMCloudAuthentication,
+            }
             for node in self.topology.gateway_nodes:
                 cloud_provider, region = node.region.split(":")
                 spot = getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances")
                 vm_type = self.transfer_config.get_flag(f"{cloud_provider}_instance_class")
 
-                # TODO: Make this a local method called _fall_back_to_smaller_vm_if_necessary()
-                if cloud_provider == "aws":
-                    quota_limit = compute.AWSAuthentication.get_quota_limits_for(region, spot)
-                    smaller_vm = compute.AWSAuthentication.fall_back_to_smaller_vm_if_neccessary(
-                        instance_type=vm_type, quota_limit=quota_limit
-                    )
-                    if smaller_vm is not None:
-                        vm_type = smaller_vm
-                        # TODO: Warning message
-                # TODO: add gcp, azure, ibm support
+                # Fall back to smaller vm if necessary
+                auth = auths[cloud_provider]
+                quota_limit = auth.get_quota_limits_for(region, spot)
+                smaller_vm = auth.fall_back_to_smaller_vm_if_neccessary(instance_type=vm_type, quota_limit=quota_limit)
+                if smaller_vm is not None:
+                    vm_type = smaller_vm
+                    logger.warning(f"Falling back to {smaller_vm} at node {node} due to the vCPU quota limit {quota_limit}")
 
                 # TODO: Add the logic for partitioning the task into multiple vms if we fell back (in fall_back functions)
                 # Ex: if the config vm uses 32 vCPUs but the quota limit is 8 vCPUS, call add_task 4 times with the smaller vm
