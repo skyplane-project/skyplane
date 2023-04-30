@@ -341,6 +341,8 @@ class Chunker:
                     yield multipart_chunk_queue.get()
 
         if self.transfer_config.multipart_enabled:
+            while not multipart_send_queue.empty() or not multipart_chunk_queue.empty():
+                time.sleep(0.1)
             # send sentinel to all threads
             multipart_exit_event.set()
             for thread in multipart_chunk_threads:
