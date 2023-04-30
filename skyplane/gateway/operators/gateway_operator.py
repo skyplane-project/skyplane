@@ -7,7 +7,7 @@ import ssl
 import time
 import traceback
 from functools import partial
-from multiprocessing import Event, Process
+from multiprocessing import Event, Process, Queue
 from multiprocessing.managers import DictProxy
 from typing import Dict, List, Optional
 
@@ -35,7 +35,7 @@ class GatewayOperator(ABC):
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
-        error_queue: GatewayQueue,
+        error_queue: Queue,
         chunk_store: ChunkStore,
         n_processes: Optional[int] = 1,
     ):
@@ -163,7 +163,7 @@ class GatewaySender(GatewayOperator):
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
-        error_queue: GatewayQueue,
+        error_queue: Queue,
         chunk_store: ChunkStore,
         ip_addr: str,
         use_tls: Optional[bool] = True,
@@ -358,7 +358,7 @@ class GatewayRandomDataGen(GatewayOperator):
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
-        error_queue: GatewayQueue,
+        error_queue: Queue,
         chunk_store: ChunkStore,
         size_mb: int,
         n_processes: Optional[int] = 1,
@@ -398,7 +398,7 @@ class GatewayWriteLocal(GatewayOperator):
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
-        error_queue: GatewayQueue,
+        error_queue: Queue,
         chunk_store: ChunkStore,
         n_processes: int = 1,
     ):
@@ -417,7 +417,7 @@ class GatewayObjStoreOperator(GatewayOperator):
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
-        error_queue: GatewayQueue,
+        error_queue: Queue,
         n_processes: Optional[int] = 1,
         chunk_store: Optional[ChunkStore] = None,
         bucket_name: Optional[str] = None,
@@ -452,7 +452,7 @@ class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
-        error_queue: GatewayQueue,
+        error_queue: Queue,
         n_processes: int = 32,
         chunk_store: Optional[ChunkStore] = None,
         bucket_name: Optional[str] = None,
@@ -525,7 +525,7 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
-        error_queue: GatewayQueue,
+        error_queue: Queue,
         upload_id_map: DictProxy,  # map of upload_id mappings from client
         n_processes: Optional[int] = 32,
         chunk_store: Optional[ChunkStore] = None,
