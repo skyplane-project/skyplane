@@ -1,5 +1,6 @@
 import json
 import typer
+import typer
 import math
 import queue
 import sys
@@ -10,6 +11,9 @@ from abc import ABC
 from collections import defaultdict
 from dataclasses import dataclass, field
 from queue import Queue
+from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple, TypeVar, Dict
+
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple, TypeVar, Dict
 
 from abc import ABC, abstractmethod
@@ -104,9 +108,7 @@ class Chunker:
                 for dest_iface in self.dst_ifaces:
                     dest_object = dest_objects[dest_iface.region_tag()]
                     upload_id = dest_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
-                    logger.fs.debug(
-                        f"Created upload id for key {dest_object.key} with upload id {upload_id} for bucket {dest_iface.bucket_name}"
-                    )
+                    # print(f"Created upload id for key {dest_object.key} with upload id {upload_id} for bucket {dest_iface.bucket_name}")
                     # store mapping between key and upload id for each region
                     upload_id_mapping[dest_iface.region_tag()] = (src_object.key, upload_id)
                 out_queue_chunks.put(GatewayMessage(upload_id_mapping=upload_id_mapping))  # send to output queue
@@ -327,12 +329,14 @@ class Chunker:
             if self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
                 multipart_send_queue.put(transfer_pair)
             else:
-                chunk = Chunk(
-                    src_key=src_obj.key,
-                    dest_key=transfer_pair.dst_key,  # TODO: get rid of dest_key, and have write object have info on prefix  (or have a map here)
-                    chunk_id=uuid.uuid4().hex,
-                    chunk_length_bytes=transfer_pair.src_obj.size,
-                    partition_id=str(0),  # TODO: fix this to distribute across multiple partitions
+                yield GatewayMessage(
+                    chunk=Chunk(
+                        src_key=src_obj.key,
+                        dest_key=transfer_pair.dst_key,  # TODO: get rid of dest_key, and have write object have info on prefix  (or have a map here)
+                        chunk_id=uuid.uuid4().hex,
+                        chunk_length_bytes=transfer_pair.src_obj.size,
+                        partition_id=str(0),  # TODO: fix this to distribute across multiple partitions
+                    )
                 )
                 yield GatewayMessage(chunk=chunk)
 
@@ -356,8 +360,6 @@ class Chunker:
             # drain multipart chunk queue and yield with updated chunk IDs
             while not multipart_chunk_queue.empty():
                 yield multipart_chunk_queue.get()
-
-        assert multipart_send_queue.empty(), f"Not all multipart chunks were sent: {multipart_send_queue.qsize()}"
 
     @staticmethod
     def batch_generator(gen_in: Generator[T, None, None], batch_size: int) -> Generator[List[T], None, None]:
@@ -583,7 +585,6 @@ class CopyJob(TransferJob):
         transfer_pair_generator = self.gen_transfer_pairs(chunker)  # returns TransferPair objects
         gen_transfer_list = chunker.tail_generator(transfer_pair_generator, self.transfer_list)
         chunks = chunker.chunk(gen_transfer_list)
-
         # chunk_requests = chunker.to_chunk_requests(chunks)
 
         batches = chunker.batch_generator(
@@ -643,7 +644,6 @@ class CopyJob(TransferJob):
             logger.fs.debug(
                 f"Dispatched {len(batch)} chunk requests to {server.instance_name()} ({n_bytes} bytes) in {end - start:.2f} seconds"
             )
-            sent += len(chunk_batch)
             yield from chunk_batch
 
             # copy new multipart transfers to the multipart transfer list

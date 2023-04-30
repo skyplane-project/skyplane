@@ -7,6 +7,15 @@ from skyplane.gateway.gateway_program import (
     GatewayReadObjectStore,
 )
 from typing import List, Dict
+from skyplane.gateway.gateway_program import (
+    GatewayProgram,
+    GatewaySend,
+    GatewayWriteLocal,
+    GatewayWriteObjectStore,
+    GatewayGenData,
+    GatewayReadObjectStore,
+)
+from typing import List, Dict
 
 
 class TopologyPlanGateway:
