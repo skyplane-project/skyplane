@@ -24,7 +24,7 @@ class ChunkStore:
             chunk_file.unlink()
 
         # queues of incoming chunk requests for each partition from gateway API (passed to operator graph)
-        self.chunk_requests: Dict[str, GatewayQueue] = {}
+        self.chunk_requests: Dict[str, GatewayQueue or None] = {}
 
         # queue of chunk status updates coming from operators (passed to gateway API)
         self.chunk_status_queue: Queue[Dict] = Queue()

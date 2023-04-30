@@ -13,7 +13,7 @@ class GatewayQueue:
         self.q.put(chunk_req)
 
     def pop(self, requester_handle=None):
-        self.q.get()
+        self.q.pop()
 
     def get_nowait(self, requester_handle=None):
         return self.q.get_nowait()
@@ -48,7 +48,7 @@ class GatewayANDQueue(GatewayQueue):
             self.q[handle].put(chunk_req)
 
     def pop(self, requester_handle):
-        self.q[requester_handle].get()
+        self.q[requester_handle].pop()
 
     def get_nowait(self, requester_handle):
         return self.q[requester_handle].get_nowait()

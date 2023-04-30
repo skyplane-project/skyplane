@@ -346,8 +346,9 @@ class Chunker:
             # wait for processing multipart requests to finish
             logger.fs.debug("Waiting for multipart threads to finish")
             # while not multipart_send_queue.empty():
-            while not multipart_send_queue.empty() or not multipart_chunk_queue.empty():
-                logger.fs.debug(f"Remaining in multipart queue {multipart_send_queue.qsize()}")
+            # TODO: may be an issue waiting for this in case of force-quit 
+            while not multipart_send_queue.empty():
+                logger.fs.debug(f"Remaining in multipart queue: sent {multipart_send_queue.qsize()}")
                 time.sleep(0.1)
             # send sentinel to all threads
             multipart_exit_event.set()
