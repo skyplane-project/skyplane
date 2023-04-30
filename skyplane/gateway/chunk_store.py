@@ -24,7 +24,7 @@ class ChunkStore:
             chunk_file.unlink()
 
         # queues of incoming chunk requests for each partition from gateway API (passed to operator graph)
-        self.chunk_requests: Dict[str, GatewayQueue or None] = {}
+        self.chunk_requests: Dict[str, GatewayQueue] = {}
 
         # queue of chunk status updates coming from operators (passed to gateway API)
         self.chunk_status_queue: Queue[Dict] = Queue()
@@ -41,7 +41,7 @@ class ChunkStore:
             raise ValueError(f"Partition {partition_id} already exists")
         self.chunk_requests[partition_id] = GatewayQueue()
 
-    def add_partition(self, partition_id: str, queue: Optional[GatewayQueue]):
+    def add_partition(self, partition_id: str, queue: GatewayQueue):
         """Create a queue for this partition."""
         print("Adding partition", partition_id, queue)
         if partition_id in self.chunk_requests:
