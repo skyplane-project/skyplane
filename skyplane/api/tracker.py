@@ -347,6 +347,9 @@ class TransferProgressTracker(Thread):
 
     def query_bytes_remaining(self, region_tag: Optional[str] = None):
         """Query the total number of bytes remaining in all the transfer jobs"""
+        if region_tag is None:
+            assert len(list(self.job_pending_chunk_ids.keys())) == 1, "Must specify region_tag if there are multiple regions"
+            region_tag = list(self.job_pending_chunk_ids.keys())[0]
         if len(self.job_chunk_requests) == 0:
             return None
         bytes_remaining_per_job = {}
@@ -371,7 +374,6 @@ class TransferProgressTracker(Thread):
                 [
                     cr.chunk_length_bytes
                     for cr in self.job_chunk_requests[job_uuid].values()
-                    if cr.chunk.chunk_id in self.job_complete_chunk_ids[job_uuid]
                 ]
             )
         return sum(bytes_total_per_job.values())
