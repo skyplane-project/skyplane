@@ -249,8 +249,10 @@ class Provisioner:
             if aws_provisioned:
                 authorize_ip_jobs.extend([partial(self.aws.add_ips_to_security_group, r, None) for r in set(aws_regions)])
             if gcp_provisioned:
+
                 def authorize_gcp_gateways():
                     self.gcp_firewall_rules.add(self.gcp.authorize_gateways(public_ips + private_ips))
+
                 authorize_ip_jobs.append(authorize_gcp_gateways)
 
             do_parallel(

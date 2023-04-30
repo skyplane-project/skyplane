@@ -218,12 +218,12 @@ class GatewayDaemon:
                 elif op["op_type"] == "send":
                     # TODO: handle private ips for GCP->GCP
                     target_gateway_info = self.gateway_info[op["target_gateway_id"]]
-                    print("Gateway sender sending to ", target_gateway_info["private_ip_address"])
-
+                    ip_addr = target_gateway_info["private_ip_address"] if op["private_ip"] else target_gateway_info["public_ip_address"]
+                    print("Gateway sender sending to ", ip_addr, "private", op["private_ip"])
                     operators[handle] = GatewaySender(
                         handle,
                         region=self.region,
-                        ip_addr=target_gateway_info["public_ip_address"],
+                        ip_addr=ip_addr,
                         input_queue=input_queue,
                         output_queue=output_queue,
                         error_event=self.error_event,

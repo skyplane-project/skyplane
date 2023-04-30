@@ -65,8 +65,8 @@ class TopologyPlan:
 
     def add_gateway(self, region_tag: str):
         """Create gateway in specified region"""
-        gateway_id = region_tag + str(len([gateway for gateway in self.gateways.values() if gateway.region == region_tag]))
-        assert gateway_id not in self.gateways
+        gateway_id = region_tag + str(len([gateway for gateway in self.gateways.values() if gateway.region_tag == region_tag]))
+        assert gateway_id not in self.gateways, f"Gateway id {gateway_id} in {self.gateways}"
         gateway = TopologyPlanGateway(region_tag, gateway_id)
         self.gateways[gateway_id] = gateway
         return gateway

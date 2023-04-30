@@ -118,6 +118,7 @@ class MulticastDirectPlanner(Planner):
         for job in jobs:
             src_bucket = job.src_iface.bucket()
             src_region_tag = job.src_iface.region_tag()
+            src_provider = src_region_tag.split(":")[0]
 
             # give each job a different partition id, so we can read/write to different buckets
             partition_id = jobs.index(job)
@@ -139,9 +140,16 @@ class MulticastDirectPlanner(Planner):
                 # can send to any gateway in region
                 mux_or = src_program.add_operator(GatewayMuxOr(), parent_handle=mux_and, partition_id=partition_id)
                 for i in range(self.n_instances):
+                    private_ip = False
+                    if dst_gateways[i].provider == "gcp" and src_provider == "gcp":
+                        print("Using private IP for GCP to GCP transfer", src_region_tag, dst_region_tag)
+                        private_ip = True
                     src_program.add_operator(
                         GatewaySend(
-                            target_gateway_id=dst_gateways[i].gateway_id, region=dst_region_tag, num_connections=self.n_connections
+                            target_gateway_id=dst_gateways[i].gateway_id,
+                            region=dst_region_tag,
+                            num_connections=self.n_connections,
+                            private_ip=private_ip,
                         ),
                         parent_handle=mux_or,
                         partition_id=partition_id,

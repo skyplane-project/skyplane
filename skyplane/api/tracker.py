@@ -224,8 +224,8 @@ class TransferProgressTracker(Thread):
                 "finalize job",
                 e,
                 args,
-                #self.dataplane.topology.src_region_tag,
-                #self.dataplane.topology.dest_region_tags,
+                # self.dataplane.topology.src_region_tag,
+                # self.dataplane.topology.dest_region_tags,
                 session_start_timestamp_ms,
             )
             raise e

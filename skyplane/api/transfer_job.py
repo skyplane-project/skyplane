@@ -104,7 +104,9 @@ class Chunker:
                 for dest_iface in self.dst_ifaces:
                     dest_object = dest_objects[dest_iface.region_tag()]
                     upload_id = dest_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
-                    logger.fs.debug(f"Created upload id for key {dest_object.key} with upload id {upload_id} for bucket {dest_iface.bucket_name}")
+                    logger.fs.debug(
+                        f"Created upload id for key {dest_object.key} with upload id {upload_id} for bucket {dest_iface.bucket_name}"
+                    )
                     # store mapping between key and upload id for each region
                     upload_id_mapping[dest_iface.region_tag()] = (src_object.key, upload_id)
                 out_queue_chunks.put(GatewayMessage(upload_id_mapping=upload_id_mapping))  # send to output queue
@@ -325,7 +327,7 @@ class Chunker:
             if self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
                 multipart_send_queue.put(transfer_pair)
             else:
-                chunk=Chunk(
+                chunk = Chunk(
                     src_key=src_obj.key,
                     dest_key=transfer_pair.dst_key,  # TODO: get rid of dest_key, and have write object have info on prefix  (or have a map here)
                     chunk_id=uuid.uuid4().hex,
@@ -340,10 +342,10 @@ class Chunker:
                     yield multipart_chunk_queue.get()
 
         if self.transfer_config.multipart_enabled:
-
-            # wait for processing multipart requests to finish 
+            # wait for processing multipart requests to finish
             logger.fs.debug("Waiting for multipart threads to finish")
-            while not multipart_send_queue.empty():
+            # while not multipart_send_queue.empty():
+            while not multipart_send_queue.empty() or not multipart_chunk_queue.empty():
                 logger.fs.debug(f"Remaining in multipart queue {multipart_send_queue.qsize()}")
                 time.sleep(0.1)
             # send sentinel to all threads
@@ -593,8 +595,8 @@ class CopyJob(TransferJob):
         bytes_dispatched = [0] * len(src_gateways)
         n_multiparts = 0
         start = time.time()
-        
-        sent = 0 
+
+        sent = 0
         for batch in batches:
             # send upload_id mappings to sink gateways
             upload_id_batch = [cr for cr in batch if cr.upload_id_mapping is not None]
