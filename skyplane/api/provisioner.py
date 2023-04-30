@@ -164,7 +164,6 @@ class Provisioner:
                 server = self.azure.provision_instance(task.region, task.vm_type, use_spot_instances=task.spot, tags=task.tags)
             elif task.cloud_provider == "gcp":
                 assert self.gcp.auth.enabled(), "GCP credentials not configured"
-                # TODO: specify network tier in TopologyPlan
                 server = self.gcp.provision_instance(
                     task.region,
                     task.vm_type,

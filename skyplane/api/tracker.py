@@ -370,10 +370,5 @@ class TransferProgressTracker(Thread):
             return 0
         bytes_total_per_job = {}
         for job_uuid in self.job_complete_chunk_ids.keys():
-            bytes_total_per_job[job_uuid] = sum(
-                [
-                    cr.chunk_length_bytes
-                    for cr in self.job_chunk_requests[job_uuid].values()
-                ]
-            )
+            bytes_total_per_job[job_uuid] = sum([cr.chunk_length_bytes for cr in self.job_chunk_requests[job_uuid].values()])
         return sum(bytes_total_per_job.values())

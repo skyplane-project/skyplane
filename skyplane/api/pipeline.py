@@ -111,7 +111,6 @@ class Pipeline:
 
             # copy gateway logs
             if debug:
-                print("debug so copy logs")
                 dp.copy_gateway_logs()
         except Exception as e:
             dp.copy_gateway_logs()

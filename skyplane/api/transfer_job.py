@@ -10,7 +10,6 @@ from abc import ABC
 from collections import defaultdict
 from dataclasses import dataclass, field
 from queue import Queue
-from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple, TypeVar, Dict
 
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple, TypeVar, Dict
@@ -337,7 +336,6 @@ class Chunker:
                         partition_id=str(0),  # TODO: fix this to distribute across multiple partitions
                     )
                 )
-                yield GatewayMessage(chunk=chunk)
 
             if self.transfer_config.multipart_enabled:
                 # drain multipart chunk queue and yield with updated chunk IDs
@@ -596,7 +594,6 @@ class CopyJob(TransferJob):
         n_multiparts = 0
         start = time.time()
 
-        sent = 0
         for batch in batches:
             # send upload_id mappings to sink gateways
             upload_id_batch = [cr for cr in batch if cr.upload_id_mapping is not None]
