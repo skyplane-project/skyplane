@@ -32,13 +32,22 @@ class GatewayOperator:
 
 
 class GatewaySend(GatewayOperator):
-    def __init__(self, target_gateway_id: str, region: str, num_connections: int = 32, compress: bool = False, encrypt: bool = False):
+    def __init__(
+        self,
+        target_gateway_id: str,
+        region: str,
+        num_connections: int = 32,
+        compress: bool = False,
+        encrypt: bool = False,
+        private_ip: bool = False,
+    ):
         super().__init__("send")
         self.target_gateway_id = target_gateway_id  # gateway to send to
         self.region = region  # region to send to
         self.num_connections = num_connections  # default this for now
         self.compress = compress
         self.encrypt = encrypt
+        self.private_ip = private_ip  # whether to send to private or public IP (private for GCP->GCP)
 
 
 class GatewayReceive(GatewayOperator):

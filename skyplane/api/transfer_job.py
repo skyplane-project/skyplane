@@ -10,6 +10,8 @@ from abc import ABC
 from collections import defaultdict
 from dataclasses import dataclass, field
 from queue import Queue
+
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple, TypeVar, Dict
 
 from abc import ABC, abstractmethod
@@ -341,7 +343,12 @@ class Chunker:
                     yield multipart_chunk_queue.get()
 
         if self.transfer_config.multipart_enabled:
-            while not multipart_send_queue.empty() or not multipart_chunk_queue.empty():
+            # wait for processing multipart requests to finish
+            logger.fs.debug("Waiting for multipart threads to finish")
+            # while not multipart_send_queue.empty():
+            # TODO: may be an issue waiting for this in case of force-quit
+            while not multipart_send_queue.empty():
+                logger.fs.debug(f"Remaining in multipart queue: sent {multipart_send_queue.qsize()}")
                 time.sleep(0.1)
             # send sentinel to all threads
             multipart_exit_event.set()
@@ -587,6 +594,7 @@ class CopyJob(TransferJob):
         bytes_dispatched = [0] * len(src_gateways)
         n_multiparts = 0
         start = time.time()
+
         for batch in batches:
             # send upload_id mappings to sink gateways
             upload_id_batch = [cr for cr in batch if cr.upload_id_mapping is not None]
@@ -642,7 +650,6 @@ class CopyJob(TransferJob):
 
     def finalize(self):
         """Complete the multipart upload requests"""
-        print("Finalizing multipart uploads...")
         typer.secho(f"Finalizing multipart uploads...", fg="bright_black")
         groups = defaultdict(list)
         for req in self.multipart_transfer_list:
@@ -657,9 +664,10 @@ class CopyJob(TransferJob):
 
             def complete_fn(batch):
                 for req in batch:
+                    logger.fs.debug(f"Finalize upload id {req['upload_id']} for key {req['key']}")
                     obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"])
 
-            do_parallel(complete_fn, batches, n=-1)
+            do_parallel(complete_fn, batches, n=8)
 
     def verify(self):
         """Verify the integrity of the transfered destination objects"""

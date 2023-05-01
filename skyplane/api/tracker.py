@@ -1,5 +1,6 @@
 import functools
 from pprint import pprint
+from pprint import pprint
 import json
 import time
 from abc import ABC
@@ -221,12 +222,7 @@ class TransferProgressTracker(Thread):
                 job.finalize()
         except Exception as e:
             UsageClient.log_exception(
-                "finalize job",
-                e,
-                args,
-                self.dataplane.topology.src_region_tag,
-                self.dataplane.topology.dest_region_tags,
-                session_start_timestamp_ms,
+                "finalize job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
             )
             raise e
         end_time = int(time.time())
@@ -374,11 +370,5 @@ class TransferProgressTracker(Thread):
             return 0
         bytes_total_per_job = {}
         for job_uuid in self.job_complete_chunk_ids.keys():
-            bytes_total_per_job[job_uuid] = sum(
-                [
-                    cr.chunk_length_bytes
-                    for cr in self.job_chunk_requests[job_uuid].values()
-                    # if cr.chunk_id in self.job_complete_chunk_ids[job_uuid]
-                ]
-            )
+            bytes_total_per_job[job_uuid] = sum([cr.chunk_length_bytes for cr in self.job_chunk_requests[job_uuid].values()])
         return sum(bytes_total_per_job.values())
