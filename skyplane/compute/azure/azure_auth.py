@@ -77,7 +77,7 @@ class AzureAuthentication:
                 )
                 return [item.as_dict() for item in quota]
             except HttpResponseError as e:
-                if "NoRegisteredProviderFound" in e.message:
+                if "NoRegisteredProviderFound" in e.message or "BadRequest" in e.message:
                     logger.warning(
                         f"Microsoft.Quota API provider has not been registered in region {region}. "
                         "Skyplane will use a conversative quota configuration. "
@@ -86,7 +86,8 @@ class AzureAuthentication:
                     )
                     return []
                 else:
-                    raise e
+                    logger.warning(f"Getting quota for Azure Cloud has failed: {e}. Falling back to default.")
+                    return []
 
         result = do_parallel(
             get_quota,
