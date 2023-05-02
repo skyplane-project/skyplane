@@ -14,16 +14,17 @@ class Chunk:
     dest_key: str  # human readable path where object is stored
     chunk_id: str
     chunk_length_bytes: int
+    partition_id: Optional[str] = None  # for broadcast
     mime_type: Optional[str] = None
-    partition: Optional[str] = None
 
     # checksum
     md5_hash: Optional[bytes] = None  # 128 bits
 
     # multi-part upload/download info
+    multi_part: Optional[bool] = False
     file_offset_bytes: Optional[int] = None
     part_number: Optional[int] = None
-    upload_id: Optional[str] = None
+    upload_id: Optional[str] = None  # TODO: for broadcast, this is not used
 
     def to_wire_header(self, n_chunks_left_on_socket: int, wire_length: int, is_compressed: bool = False):
         return WireProtocolHeader(
@@ -44,10 +45,10 @@ class ChunkRequest:
     """A ChunkRequest stores all local state in the Gateway pertaining to a ChunkRequest."""
 
     chunk: Chunk
-    src_region: str
-    dst_region: str
-    src_type: str  # enum of {"object_store", "random", "read_local"}
-    dst_type: str  # enum of {"object_store", "save_local"}
+    src_region: Optional[str] = None
+    dst_region: Optional[str] = None
+    src_type: Optional[str] = None  # enum of {"object_store", "random", "read_local"}
+    dst_type: Optional[str] = None  # enum of {"object_store", "save_local"}
     src_random_size_mb: Optional[int] = None
     src_object_store_bucket: Optional[str] = None
     dst_object_store_bucket: Optional[str] = None
@@ -67,20 +68,17 @@ class ChunkRequest:
 
     @staticmethod
     def from_dict(in_dict: Dict):
-        in_dict["chunk"] = Chunk.from_dict(in_dict["chunk"])
-        return ChunkRequest(**in_dict)
+        # in_dict["chunk"] = Chunk.from_dict(in_dict)
+        return ChunkRequest(**{"chunk": Chunk.from_dict(in_dict)})
 
 
 @total_ordering
 class ChunkState(Enum):
     registered = auto()
-    download_queued = auto()
-    download_in_progress = auto()
-    downloaded = auto()
-    upload_queued = auto()
-    upload_in_progress = auto()
-    upload_complete = auto()
+    in_progress = auto()
     failed = auto()
+    queued = auto()
+    complete = auto()
 
     @staticmethod
     def from_str(s: str):

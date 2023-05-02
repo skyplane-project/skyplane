@@ -31,9 +31,9 @@ def test_cost_estimate():
     assert obj_store.exists(bucket_name, src_provider, key), f"Object {key} does not exist in bucket {bucket_name}"
 
     # setup transfer
-    dp = client.dataplane(src_provider, src_region.split(":")[1], dst_provider, dst_region.split(":")[1], n_vms=1)
-    dp.queue_copy(src_bucket + "/" + key, dst_bucket + "/" + key, recursive=False)
-    cost = dp.estimate_total_cost()
+    pipeline = client.pipeline()  # src_provider, src_region.split(":")[1], dst_provider, dst_region.split(":")[1])
+    pipeline.queue_copy(src_bucket + "/" + key, dst_bucket + "/" + key, recursive=False)
+    cost = pipeline.estimate_total_cost()
     assert cost == file_size * 0.12 / 1e9, f"Cost estimate is incorrect: {cost}, should be {file_size * 0.09 / 1e9}"
 
     # cleanup

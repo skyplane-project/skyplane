@@ -42,7 +42,7 @@ def do_parallel(
         try:
             return args, func(args)
         except Exception as e:
-            logger.error(f"Error running {func.__name__}: {e}")
+            logger.error(f"Error running {func.__name__}, {args}: {e}")
             raise
 
     results = []

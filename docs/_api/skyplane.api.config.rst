@@ -1,4 +1,4 @@
-skyplane.api.config
+﻿skyplane.api.config
 ===================
 
 .. automodule:: skyplane.api.config
@@ -21,6 +21,7 @@ skyplane.api.config
       AuthenticationConfig
       AzureConfig
       GCPConfig
+      IBMCloudConfig
       TransferConfig
    
    

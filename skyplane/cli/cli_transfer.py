@@ -63,7 +63,6 @@ class SkyplaneCLI:
             ibmcloud_config=self.ibmcloud_config,
         )
         typer.secho(f"Using Skyplane version {skyplane.__version__}", fg="bright_black")
-        typer.secho(f"Logging to: {self.client.log_dir / 'client.log'}", fg="bright_black")
 
     def to_api_config(self, config: SkyplaneConfig):
         aws_config = AWSConfig(aws_enabled=config.aws_enabled)
@@ -179,27 +178,35 @@ class SkyplaneCLI:
         else:
             return False
 
-    def make_dataplane(self, **solver_args) -> skyplane.Dataplane:
-        if self.src_region_tag.split(":")[0] == "hdfs":
-            self.src_region_tag = self.dst_region_tag
-        dp = self.client.dataplane(*self.src_region_tag.split(":"), *self.dst_region_tag.split(":"), **solver_args)
-        logger.fs.debug(f"Using dataplane: {dp}")
-        return dp
+    # def make_dataplane(self, **solver_args) -> skyplane.Dataplane:
+    #    if self.src_region_tag.split(":")[0] == "hdfs":
+    #        self.src_region_tag = self.dst_region_tag
+    #    dp = self.client.dataplane(*self.src_region_tag.split(":"), *self.dst_region_tag.split(":"), **solver_args)
+    #    logger.fs.debug(f"Using dataplane: {dp}")
+    #    return dp
 
-    def confirm_transfer(self, dp: skyplane.Dataplane, query_n: int = 5, ask_to_confirm_transfer=True) -> bool:
+    def make_pipeline(self, **solver_args) -> skyplane.Pipeline:
+        pipeline = self.client.pipeline(**solver_args)
+        logger.fs.debug(f"Using pipeline: {pipeline}")
+        return pipeline
+
+    def confirm_transfer(self, pipeline: skyplane.Pipeline, dp: skyplane.Dataplane, query_n: int = 5, ask_to_confirm_transfer=True) -> bool:
         """Prompts the user to confirm their transfer by querying the first query_n files from the TransferJob"""
-        if not len(dp.jobs_to_dispatch) > 0:
+        if not len(pipeline.jobs_to_dispatch) > 0:
             typer.secho("No jobs to dispatch.")
             return False
-        transfer_pair_gen = dp.jobs_to_dispatch[0].gen_transfer_pairs()  # type: ignore
-        console.print(f"[bold yellow]Will transfer objects from {dp.src_region_tag} to {dp.dst_region_tag}[/bold yellow]")
-        sorted_counts = sorted(dp.topology.per_region_count().items(), key=lambda x: x[0])
+        transfer_pair_gen = pipeline.jobs_to_dispatch[0].gen_transfer_pairs()  # type: ignore
+        console.print(
+            f"[bold yellow]Will transfer objects from {dp.topology.src_region_tag} to {dp.topology.dest_region_tags}[/bold yellow]"
+        )
+        topology = pipeline.planner.plan(pipeline.jobs_to_dispatch)
+        sorted_counts = sorted(topology.per_region_count().items(), key=lambda x: x[0])
         console.print(
             f"  [bold][blue]VMs to provision:[/blue][/bold] [bright_black]{', '.join(f'{c}x {r}' for r, c in sorted_counts)}[/bright_black]"
         )
-        if dp.topology.cost_per_gb:
+        if topology.cost_per_gb:
             console.print(
-                f"  [bold][blue]Estimated egress cost:[/blue][/bold] [bright_black]${dp.topology.cost_per_gb:,.2f}/GB[/bright_black]"
+                f"  [bold][blue]Estimated egress cost:[/blue][/bold] [bright_black]${topology.cost_per_gb:,.2f}/GB[/bright_black]"
             )
         # show spinner
         with Progress(
@@ -218,10 +225,12 @@ class SkyplaneCLI:
         if len(obj_pairs) == 0:
             typer.secho("No objects to transfer.")
             return False
-        for src_obj, dst_obj in obj_pairs[:query_n]:
-            console.print(
-                f"  [bright_black][bold]{src_obj.full_path()}[/bold] => [bold]{dst_obj.full_path()}[/bold] ({format_bytes(src_obj.size)})[/bright_black]"
-            )
+        for pair in obj_pairs[:query_n]:
+            src_obj = pair.src_obj
+            for dst_obj in pair.dst_objs.values():
+                console.print(
+                    f"  [bright_black][bold]{src_obj.full_path()}[/bold] => [bold]{dst_obj.full_path()}[/bold] ({format_bytes(src_obj.size)})[/bright_black]"
+                )
         if len(obj_pairs) > query_n:
             console.print(f"  [bright_black]...[/bright_black]")
         if ask_to_confirm_transfer:
@@ -239,12 +248,12 @@ class SkyplaneCLI:
             console.print("[green]Transfer starting[/green]")
             return True
 
-    def estimate_small_transfer(self, dp: skyplane.Dataplane, size_threshold_bytes: float, query_n: int = 1000) -> bool:
+    def estimate_small_transfer(self, pipeline: skyplane.Pipeline, size_threshold_bytes: float, query_n: int = 1000) -> bool:
         """Estimates if the transfer is small by querying up to `query_n` files from the TransferJob. If it exceeds
         the file size limit, then it will fall back to the cloud CLIs."""
-        if len(dp.jobs_to_dispatch) != 1:
+        if len(pipeline.jobs_to_dispatch) != 1:
             return False
-        job = dp.jobs_to_dispatch[0]
+        job = pipeline.jobs_to_dispatch[0]
         if not isinstance(job, CopyJob):
             return False
         transfer_pair_gen = job.gen_transfer_pairs()
@@ -252,7 +261,8 @@ class SkyplaneCLI:
         generator_exhausted = False
         for _ in range(query_n):
             try:
-                src_obj, _ = next(transfer_pair_gen)
+                pair = next(transfer_pair_gen)
+                src_obj = pair.src_obj
                 total_size += src_obj.size
                 if total_size > size_threshold_bytes:
                     return False
@@ -350,22 +360,27 @@ def cp(
         )
         return 1
 
-    dp = cli.make_dataplane(
-        solver_type=solver,
-        n_vms=max_instances,
-        n_connections=max_connections,
-        solver_required_throughput_gbits=solver_required_throughput_gbits,
-        debug=debug,
-    )
+    # dp = cli.make_dataplane(
+    #    solver_type=solver,
+    #    n_vms=max_instances,
+    #    n_connections=max_connections,
+    #    solver_required_throughput_gbits=solver_required_throughput_gbits,
+    #    debug=debug,
+    # )
+    pipeline = cli.make_pipeline(planning_algorithm=solver, max_instances=max_instances)
+    pipeline.queue_copy(src, dst, recursive=recursive)
+
+    # dataplane must be created after transfers are queued
+    dp = pipeline.create_dataplane(debug=debug)
 
     if provider_src in ("local", "nfs") and provider_dst in ("aws", "gcp", "azure"):
+        # manually create dataplane for queued transfer
         with dp.auto_deprovision():
-            dp.queue_copy(src, dst, recursive=recursive)
             try:
-                if not cli.confirm_transfer(dp, 5, ask_to_confirm_transfer=not confirm):
+                if not cli.confirm_transfer(pipeline, dp, 5, ask_to_confirm_transfer=not confirm):
                     return 1
                 dp.provision(spinner=True)
-                dp.run(ProgressBarTransferHook())
+                dp.run(pipeline.jobs_to_dispatch, hooks=ProgressBarTransferHook(dp.topology.dest_region_tags))
             except skyplane.exceptions.SkyplaneException as e:
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e.pretty_print_str())
@@ -374,26 +389,27 @@ def cp(
         # return 0 if cli.transfer_cp_onprem(src, dst, recursive) else 1
     elif provider_src in ("aws", "gcp", "azure", "hdfs", "ibmcloud") and provider_dst in ("aws", "gcp", "azure", "ibmcloud"):
         # todo support ILP solver params
-        dp = cli.make_dataplane(
-            solver_type=solver,
-            solver_required_throughput_gbits=solver_required_throughput_gbits,
-            n_vms=max_instances,
-            n_connections=max_connections,
-            debug=debug,
-        )
+        # dp = cli.make_dataplane(
+        #    solver_type=solver,
+        #    solver_required_throughput_gbits=solver_required_throughput_gbits,
+        #    n_vms=max_instances,
+        #    n_connections=max_connections,
+        #    debug=debug,
+        # )
         with dp.auto_deprovision():
-            dp.queue_copy(src, dst, recursive=recursive)
+            # dp.queue_copy(src, dst, recursive=recursive)
             if cloud_config.get_flag("native_cmd_enabled") and cli.estimate_small_transfer(
-                dp, cloud_config.get_flag("native_cmd_threshold_gb") * GB
+                pipeline, cloud_config.get_flag("native_cmd_threshold_gb") * GB
             ):
                 small_transfer_status = cli.transfer_cp_small(src, dst, recursive)
                 if small_transfer_status:
                     return 0
             try:
-                if not cli.confirm_transfer(dp, 5, ask_to_confirm_transfer=not confirm):
+                if not cli.confirm_transfer(pipeline, dp, 5, ask_to_confirm_transfer=not confirm):
                     return 1
                 dp.provision(spinner=True)
-                dp.run(ProgressBarTransferHook())
+                # dp.run(ProgressBarTransferHook())
+                dp.run(pipeline.jobs_to_dispatch, hooks=ProgressBarTransferHook(dp.topology.dest_region_tags))
             except KeyboardInterrupt:
                 logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt).")
                 console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")
@@ -503,27 +519,24 @@ def sync(
     elif provider_src in ("aws", "gcp", "azure") and provider_dst in ("aws", "gcp", "azure"):
         # todo support ILP solver params
         print()
-        dp = cli.make_dataplane(
-            solver_type=solver,
-            solver_required_throughput_gbits=solver_required_throughput_gbits,
-            n_vms=max_instances,
-            n_connections=max_connections,
-            debug=debug,
-        )
+        pipeline = cli.make_pipeline(planning_algorithm=solver, max_instances=max_instances)
+        pipeline.queue_sync(src, dst)
+
+        dp = pipeline.create_dataplane(debug=True)
+
         with dp.auto_deprovision():
-            dp.queue_sync(src, dst)
             if cloud_config.get_flag("native_cmd_enabled") and cli.estimate_small_transfer(
-                dp, cloud_config.get_flag("native_cmd_threshold_gb") * GB
+                pipeline, cloud_config.get_flag("native_cmd_threshold_gb") * GB
             ):
                 small_transfer_status = cli.transfer_sync_small(src, dst)
                 if small_transfer_status:
                     return 0
             try:
                 console.print("[yellow]Note: sync must query the destination bucket to diff objects. This may take a while.[/yellow]")
-                if not cli.confirm_transfer(dp, 5, ask_to_confirm_transfer=not confirm):
+                if not cli.confirm_transfer(pipeline, dp, 5, ask_to_confirm_transfer=not confirm):
                     return 1
                 dp.provision(spinner=True)
-                dp.run(ProgressBarTransferHook())
+                dp.run(pipeline.jobs_to_dispatch, hooks=ProgressBarTransferHook(dp.topology.dest_region_tags))
             except KeyboardInterrupt:
                 logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt).")
                 console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")

@@ -31,9 +31,7 @@ class IBMCloudAuthentication:
 
     @imports.inject("ibm_cloud_sdk_core", "ibm_cloud_sdk_core.authenticators", pip_extra="ibmcloud")
     def get_iam_authenticator(ibm_cloud_sdk_core, self):
-        from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
-
-        return IAMAuthenticator(self.config.ibmcloud_iam_key, url=self.config.ibmcloud_iam_endpoint)
+        return ibm_cloud_sdk_core.authenticators.IAMAuthenticator(self.config.ibmcloud_iam_key, url=self.config.ibmcloud_iam_endpoint)
 
     def get_ibmcloud_endpoint(self, region, compute_backend="public"):
         if region is not None:

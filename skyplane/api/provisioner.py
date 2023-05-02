@@ -164,7 +164,6 @@ class Provisioner:
                 server = self.azure.provision_instance(task.region, task.vm_type, use_spot_instances=task.spot, tags=task.tags)
             elif task.cloud_provider == "gcp":
                 assert self.gcp.auth.enabled(), "GCP credentials not configured"
-                # todo specify network tier in ReplicationTopology
                 server = self.gcp.provision_instance(
                     task.region,
                     task.vm_type,
@@ -245,8 +244,9 @@ class Provisioner:
             authorize_ip_jobs = []
             if ibmcloud_provisioned:
                 authorize_ip_jobs.extend([partial(self.ibmcloud.add_ips_to_security_group, r, public_ips) for r in set(ibmcloud_regions)])
+            # NOTE: the following setup is for broadcast only
             if aws_provisioned:
-                authorize_ip_jobs.extend([partial(self.aws.add_ips_to_security_group, r, public_ips) for r in set(aws_regions)])
+                authorize_ip_jobs.extend([partial(self.aws.add_ips_to_security_group, r, None) for r in set(aws_regions)])
             if gcp_provisioned:
 
                 def authorize_gcp_gateways():

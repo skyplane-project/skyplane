@@ -11,7 +11,7 @@ from pathlib import Path
 
 import requests
 from rich import print as rprint
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
 import skyplane
 from skyplane.utils.definitions import tmp_log_dir
@@ -93,7 +93,7 @@ class UsageStatsToReport:
     #: The source region of the transfer session.
     source_region: str
     #: The destination region of the transfer session.
-    destination_region: str
+    destination_region: str  # TODO: make into dest_regions
     #: The source cloud provider of the transfer session.
     source_cloud_provider: str
     #: The destination cloud provider of the transfer session.
@@ -136,7 +136,7 @@ class UsageClient:
         exception: Exception,
         args: Optional[Dict] = None,
         src_region_tag: Optional[str] = None,
-        dest_region_tag: Optional[str] = None,
+        dest_region_tag: Optional[str] = None,  # TODO: fix this for mult-dest
         session_start_timestamp_ms: Optional[int] = None,
     ):
         if cls.enabled():
@@ -158,7 +158,7 @@ class UsageClient:
         transfer_stats: Optional[Dict],
         args: Optional[Dict] = None,
         src_region_tag: Optional[str] = None,
-        dest_region_tag: Optional[str] = None,
+        dest_region_tags: Optional[str] = None,
         session_start_timestamp_ms: Optional[int] = None,
     ):
         if cls.enabled():
@@ -167,7 +167,7 @@ class UsageClient:
                 arguments_dict=args,
                 transfer_stats=transfer_stats,
                 src_region_tag=src_region_tag,
-                dest_region_tag=dest_region_tag,
+                dest_region_tags=dest_region_tags,
                 session_start_timestamp_ms=session_start_timestamp_ms,
             )
             destination = client.write_usage_data(stats)
@@ -250,17 +250,18 @@ class UsageClient:
         arguments_dict: Optional[Dict] = None,
         transfer_stats: Optional[Dict] = None,
         src_region_tag: Optional[str] = None,
-        dest_region_tag: Optional[str] = None,
+        dest_region_tags: Optional[str] = None,
         session_start_timestamp_ms: Optional[int] = None,
     ):
         if src_region_tag is None:
             src_provider, src_region = None, None
         else:
             src_provider, src_region = src_region_tag.split(":")
-        if dest_region_tag is None:
+        if dest_region_tags is None:
             dest_provider, dest_region = None, None
         else:
-            dest_provider, dest_region = dest_region_tag.split(":")
+            # TODO: have usage stats view for multiple destinations
+            dest_provider, dest_region = dest_region_tags[0].split(":")
 
         return UsageStatsToReport(
             skyplane_version=skyplane.__version__,
@@ -290,6 +291,7 @@ class UsageClient:
             src_provider, src_region = None, None
         else:
             src_provider, src_region = src_region_tag.split(":")
+
         if dest_region_tag is None:
             dest_provider, dest_region = None, None
         else:
@@ -302,9 +304,9 @@ class UsageClient:
             client_id=self.client_id,
             session_id=self.session_id,
             source_region=src_region,
-            destination_region=dest_region,
+            destination_region=dest_region,  # TODO: fix this
             source_cloud_provider=src_provider,
-            destination_cloud_provider=dest_provider,
+            destination_cloud_provider=dest_provider,  # TODO: FIX THIS
             os=sys.platform,
             session_start_timestamp_ms=session_start_timestamp_ms if session_start_timestamp_ms else int(time.time() * 1000),
             arguments_dict=arguments_dict,
