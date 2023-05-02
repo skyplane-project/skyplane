@@ -1,15 +1,26 @@
 import json
 import os
 import subprocess
+import re
 
 from typing import Dict, List, Optional
 
 from skyplane.compute.const_cmds import query_which_cloud
 from skyplane.config import SkyplaneConfig
-from skyplane.config_paths import config_path, azure_config_path, azure_sku_path, azure_quota_path
+from skyplane.config_paths import config_path, azure_config_path, azure_sku_path, azure_quota_path, azure_standardDv5_quota_path
 from skyplane.utils import imports, logger
 from skyplane.utils.definitions import is_gateway_env
 from skyplane.utils.fn import do_parallel
+
+
+{'Standard_D16_v5': 16,
+ 'Standard_D2_v5': 2,
+ 'Standard_D32_v5': 32,
+ 'Standard_D4_v5': 4,
+ 'Standard_D48_v5': 48,
+ 'Standard_D64_v5': 64,
+ 'Standard_D8_v5': 8,
+ 'Standard_D96_v5': 96,}
 
 
 class AzureAuthentication:
@@ -100,6 +111,17 @@ class AzureAuthentication:
         with open(azure_quota_path, "w") as f:
             json.dump(dict(result), f)
 
+        # Since we are dealing with "Standard_Dv5" family instances initially
+        # we are also saving the quota limits on "Standard_Dv5" instances
+        # TODO: in the future, might support other family types
+        with open(azure_standardDv5_quota_path, "w") as f:
+            all_region_vcpus_azure = {}
+            for region in region_list:
+                azure_target = [item for item in result[region] if item["properties"]["name"]["value"] == "standardDv5Family"]
+                if azure_target:
+                    all_region_vcpus_azure[region] = azure_target[0]["properties"]["limit"]["value"]
+            f.write(json.dumps(all_region_vcpus_azure, indent=2))                
+
         # Get SKUs
         client = self.get_compute_client()
 
@@ -136,6 +158,28 @@ class AzureAuthentication:
                 if not region.endswith("stage") and not region.endswith("euap"):
                     region_list.append(region)
             return region_list
+        
+    @staticmethod
+    def get_quota_limits_for(region: str, spot: bool = False) -> int:
+        with open(azure_standardDv5_quota_path, "r") as f:
+            quota_limits = json.load(f)
+            return quota_limits[region]
+        
+    @staticmethod
+    def fall_back_to_smaller_vm_if_neccessary(instance_type: str, quota_limit: int) -> Optional[str]:
+        # TODO: Add the logic for partitioning the task into multiple vms if we fell back
+        # Ex: if the config vm uses 32 vCPUs but the quota limit is 8 vCPUS, call add_task 4 times with the smaller vm
+
+        # Since Azure instances follow a common pattern, we can just extract the vCPUs from the instance name
+        vcpus = int(re.search(r'\d+', instance_type).group())
+        if vcpus <= quota_limit:
+            return None  # don't need to fall back
+        
+        # Find the greatest instance that is less than quota
+        for val in (96, 64, 48, 32, 16, 8, 4, 2):
+            if val <= quota_limit:
+                return f"Standard_D{val}_v5"
+
 
     @staticmethod
     def get_sku_mapping() -> Dict[str, List[str]]:

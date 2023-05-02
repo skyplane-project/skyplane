@@ -8,13 +8,11 @@ aws_config_path = __config_root__ / "aws_config"
 aws_quota_path = __config_root__ / "aws_quota"
 azure_config_path = __config_root__ / "azure_config"
 azure_quota_path = __config_root__ / "azure_quota"
+azure_standardDv5_quota_path = __config_root__ / "azure_standardDv5_quota"
 azure_sku_path = __config_root__ / "azure_sku_mapping"
 gcp_config_path = __config_root__ / "gcp_config"
 ibmcloud_config_path = __config_root__ / "ibmcloud_config"
 gcp_quota_path = __config_root__ / "gcp_quota"
-
-aws_instances_path = __config_root__ / "aws_instances"
-gcp_instances_path = __config_root__ / "gcp_instances"
 
 
 @functools.lru_cache(maxsize=None)

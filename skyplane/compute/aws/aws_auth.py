@@ -2,12 +2,23 @@ from typing import Optional, Dict
 import json
 
 from skyplane.config import SkyplaneConfig
-from skyplane.config_paths import config_path, aws_config_path, aws_quota_path, aws_instances_path
+from skyplane.config_paths import config_path, aws_config_path, aws_quota_path
 from skyplane.utils import imports, fn, logger
-from skyplane.compute.vcpu_info import aws_vcpus
-
 
 class AWSAuthentication:
+
+    # Only supporting "m5." instances for now
+    _AWS_VCPUS = {"m5.8xlarge": 32,
+        "m5.12xlarge": 48,
+        "m5.24xlarge": 96,
+        "m5.metal": 96,
+        "m5.xlarge": 4,
+        "m5.4xlarge": 16,
+        "m5.large": 2,
+        "m5.2xlarge": 8,
+        "m5.16xlarge": 64,
+}
+
     def __init__(self, config: Optional[SkyplaneConfig] = None, access_key: Optional[str] = None, secret_key: Optional[str] = None):
         """Loads AWS authentication details. If no access key is provided, it will try to load credentials using boto3"""
         if not config is None:
@@ -101,14 +112,13 @@ class AWSAuthentication:
     def fall_back_to_smaller_vm_if_neccessary(instance_type: str, quota_limit: int) -> Optional[str]:
         # TODO: Add the logic for partitioning the task into multiple vms if we fell back
         # Ex: if the config vm uses 32 vCPUs but the quota limit is 8 vCPUS, call add_task 4 times with the smaller vm
-        family = instance_type.split(".")[0]
-        if aws_vcpus[family][instance_type] <= quota_limit:
+        if AWSAuthentication._AWS_VCPUS[instance_type] <= quota_limit:
             return None  # don't need to fall back
 
         max_vcpus, max_instance = 0, None
-        for instance, vcpus in aws_vcpus[family]:
+        for instance, vcpus in AWSAuthentication._AWS_VCPUS:
             # Get the largest of the smaller VMs than the quota_limit
-            if instance.startswith(family) and vcpus < quota_limit and vcpus > max_vcpus:
+            if vcpus <= quota_limit and vcpus > max_vcpus:
                 max_vcpus = vcpus
                 max_instance = instance
         return max_instance  # None if no smaller VM exists

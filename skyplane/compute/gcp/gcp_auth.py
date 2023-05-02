@@ -8,10 +8,9 @@ from typing import Optional
 
 from skyplane.compute.server import key_root
 from skyplane.config import SkyplaneConfig
-from skyplane.config_paths import config_path, gcp_config_path, gcp_quota_path, gcp_instances_path
+from skyplane.config_paths import config_path, gcp_config_path, gcp_quota_path
 from skyplane.utils import logger, imports
 from skyplane.utils.retry import retry_backoff
-from skyplane.compute.vcpu_info import gcp_vcpus
 
 
 class GCPAuthentication:
@@ -81,7 +80,7 @@ class GCPAuthentication:
             return [r for r in map(str.strip, f.readlines()) if r]
 
     @staticmethod
-    def get_quota_limits_for(region: str) -> int:
+    def get_quota_limits_for(region: str, spot: bool = False) -> int:
         with gcp_quota_path.open("r") as f:
             quota_limits = json.load(f)
             return quota_limits[region]
@@ -91,17 +90,15 @@ class GCPAuthentication:
         # TODO: Add the logic for partitioning the task into multiple vms if we fell back
         # Ex: if the config vm uses 32 vCPUs but the quota limit is 8 vCPUS, call add_task 4 times with the smaller vm
 
-        # Hard coding the vCPUs since they follow a pattern
-        dash_split = instance_type.split("-")
-        launched_vcpus = dash_split[-1]
-        if launched_vcpus <= quota_limit:
+        # By default, using n2-standard series; hence, can just hard code the pattern
+        vcpus = int(instance_type.split("-")[-1])
+        if vcpus <= quota_limit:
             return None  # don't need to fall back
 
         # Find the greatest instance that is less than quota
-        family = "-".join(dash_split[:2])
-        for val in gcp_vcpus[family]:
-            if val < quota_limit:
-                return f"{family}-{val}"
+        for val in (128, 96, 80, 64, 48, 32, 16, 8, 4, 2):
+            if val <= quota_limit:
+                return f"n2-standard-{val}"
 
     @property
     def credentials(self):
