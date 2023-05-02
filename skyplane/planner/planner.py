@@ -24,6 +24,7 @@ class Planner:
 
 
 class UnicastDirectPlanner(Planner):
+    # DO NOT USE THIS - broken for single-region transfers
     def __init__(self, n_instances: int, n_connections: int):
         self.n_instances = n_instances
         self.n_connections = n_connections
@@ -138,12 +139,21 @@ class MulticastDirectPlanner(Planner):
                 dst_bucket = dst_iface.bucket()
                 dst_gateways = plan.get_region_gateways(dst_region_tag)
 
+                # special case where destination is same region as source
+                if dst_region_tag == src_region_tag:
+                    src_program.add_operator(
+                        GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
+                        parent_handle=mux_and,
+                        partition_id=partition_id,
+                    )
+                    continue
+
                 # can send to any gateway in region
                 mux_or = src_program.add_operator(GatewayMuxOr(), parent_handle=mux_and, partition_id=partition_id)
                 for i in range(self.n_instances):
                     private_ip = False
                     if dst_gateways[i].provider == "gcp" and src_provider == "gcp":
-                        print("Using private IP for GCP to GCP transfer", src_region_tag, dst_region_tag)
+                        # print("Using private IP for GCP to GCP transfer", src_region_tag, dst_region_tag)
                         private_ip = True
                     src_program.add_operator(
                         GatewaySend(
@@ -170,8 +180,8 @@ class MulticastDirectPlanner(Planner):
         # set gateway programs
         plan.set_gateway_program(src_region_tag, src_program)
         for dst_region_tag, program in dst_program.items():
-            plan.set_gateway_program(dst_region_tag, program)
-
+            if dst_region_tag != src_region_tag:  # don't overwrite
+                plan.set_gateway_program(dst_region_tag, program)
         return plan
 
 

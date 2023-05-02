@@ -96,7 +96,8 @@ class TopologyPlan:
         """Generate gateway program for all gateways in a region"""
         # TODO: eventually let gateways in same region have different programs
         for gateway in self.get_region_gateways(region_tag):
-            return gateway.generate_gateway_program()
+            assert gateway.gateway_program is not None, f"Gateway program for {region_tag} has not been set"
+            return gateway.gateway_program.to_json()
 
     def get_outgoing_paths(self, gateway_id: str):
         """Get all outgoing paths from a gateway"""
@@ -146,6 +147,8 @@ class TopologyPlan:
                 if isinstance(operator, GatewayReadObjectStore) or isinstance(operator, GatewayGenData):
                     nodes.append(gateway)
                     break
+
+        print("source instances", nodes, "all instances", list(self.gateways.values()))
         return nodes
 
     def per_region_count(self) -> Dict[str, int]:
