@@ -148,7 +148,6 @@ class TopologyPlan:
                     nodes.append(gateway)
                     break
 
-        print("source instances", nodes, "all instances", list(self.gateways.values()))
         return nodes
 
     def per_region_count(self) -> Dict[str, int]:
