@@ -11,35 +11,10 @@ from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import config_path, gcp_config_path, gcp_quota_path, gcp_instances_path
 from skyplane.utils import logger, imports
 from skyplane.utils.retry import retry_backoff
+from compute.vcpu_info import gcp_vcpus
 
 
 class GCPAuthentication:
-    # Hard coding the vcpu info since the api doesn't provide a clean way for this
-    _VCPUS_INFO = {
-        "n1-standard-1": 1,
-        "n1-standard-2": 2,
-        "n1-standard-4": 4,
-        "n1-standard-8": 8,
-        "n1-standard-16": 16,
-        "n1-standard-32": 32,
-        "n1-standard-64": 64,
-        "n1-standard-96": 96,
-        "n1-highcpu-2": 2,
-        "n1-highcpu-4": 4,
-        "n1-highcpu-8": 8,
-        "n1-highcpu-16": 16,
-        "n1-highcpu-32": 32,
-        "n1-highcpu-64": 64,
-        "n1-highcpu-96": 96,
-        "n1-highmem-2": 2,
-        "n1-highmem-4": 4,
-        "n1-highmem-8": 8,
-        "n1-highmem-16": 16,
-        "n1-highmem-32": 32,
-        "n1-highmem-64": 64,
-        "n1-highmem-96": 96,
-    }
-
     def __init__(self, config: Optional[SkyplaneConfig] = None):
         if not config == None:
             self.config = config
@@ -93,10 +68,6 @@ class GCPAuthentication:
         except Exception:
             logger.warning("Failed to retrieve GCP quota information. Skyplane will a conservative configuration.")
 
-        # Saving VCPUS_INFO
-        with gcp_instances_path.open("w") as f:
-            f.write(json.dumps(GCPAuthentication._VCPUS_INFO))
-
     @staticmethod
     def clear_region_config():
         with gcp_config_path.open("w") as f:
@@ -119,13 +90,16 @@ class GCPAuthentication:
     def fall_back_to_smaller_vm_if_neccessary(instance_type: str, quota_limit: int) -> Optional[str]:
         # TODO: Add the logic for partitioning the task into multiple vms if we fell back
         # Ex: if the config vm uses 32 vCPUs but the quota limit is 8 vCPUS, call add_task 4 times with the smaller vm
-        if GCPAuthentication._VCPUS_INFO[instance_type] <= quota_limit:
+
+        # Hard coding the vCPUs since they follow a pattern
+        dash_split = instance_type.split("-")
+        launched_vcpus = dash_split[-1]
+        if launched_vcpus <= quota_limit:
             return None  # don't need to fall back
 
         # Find the greatest instance that is less than quota
-        # Hard coding the vCPUs since they follow a pattern
-        family = "-".join(instance_type.split("-")[:2])
-        for val in (96, 64, 32, 16, 8, 4, 2, 1):
+        family = "-".join(dash_split[:2])
+        for val in gcp_vcpus[family]:
             if val < quota_limit:
                 return f"{family}-{val}"
 

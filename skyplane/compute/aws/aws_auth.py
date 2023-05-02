@@ -4,6 +4,7 @@ import json
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import config_path, aws_config_path, aws_quota_path, aws_instances_path
 from skyplane.utils import imports, fn, logger
+from compute.vcpu_info import aws_vcpus
 
 
 class AWSAuthentication:
@@ -69,23 +70,6 @@ class AWSAuthentication:
         with aws_quota_path.open("w") as f:
             f.write(json.dumps(region_infos, indent=2))
 
-        # instances with their vcpus information
-        with aws_instances_path.open("w") as f:
-            client = boto3.client("ec2", region_name="us-east-1")
-            response = client.describe_instance_types(MaxResults=100)
-            instance_types = response["InstanceTypes"]
-            while "NextToken" in response:
-                response = client.describe_instance_types(MaxResults=100, NextToken=response["NextToken"])
-                instance_types.extend(response["InstanceTypes"])
-            families = {}
-            for instance_type in instance_types:
-                instance_type_name = instance_type["InstanceType"]
-                family = instance_type_name.split(".")[0]
-                if family not in families:
-                    families[family] = {}
-                families[family][instance_type_name] = instance_type["VCpuInfo"]["DefaultVCpus"]
-            f.write(json.dumps(families, indent=2))
-
     def clear_region_config(self):
         with aws_config_path.open("w") as f:
             f.write("")
@@ -99,7 +83,7 @@ class AWSAuthentication:
             for region in f.read().split("\n"):
                 region_list.append(region)
             return region_list
-        
+
     @staticmethod
     def get_quota_limits_for(region: str, spot: bool = False) -> int:
         with aws_quota_path.open("r") as f:
@@ -115,20 +99,17 @@ class AWSAuthentication:
     def fall_back_to_smaller_vm_if_neccessary(instance_type: str, quota_limit: int) -> Optional[str]:
         # TODO: Add the logic for partitioning the task into multiple vms if we fell back
         # Ex: if the config vm uses 32 vCPUs but the quota limit is 8 vCPUS, call add_task 4 times with the smaller vm
-        with aws_instances_path.open("r") as f:
-            vcpus_info = json.load(f)
+        family = instance_type.split(".")[0]
+        if aws_vcpus[family][instance_type] <= quota_limit:
+            return None  # don't need to fall back
 
-            family = instance_type.split(".")[0]
-            if vcpus_info[family][instance_type] <= quota_limit:
-                return None  # don't need to fall back
-
-            max_vcpus, max_instance = 0, None
-            for instance, vcpus in vcpus_info[family]:
-                # Get the largest of the smaller VMs than the quota_limit
-                if instance.startswith(family) and vcpus < quota_limit and vcpus > max_vcpus:
-                    max_vcpus = vcpus
-                    max_instance = instance
-            return max_instance  # None if no smaller VM exists
+        max_vcpus, max_instance = 0, None
+        for instance, vcpus in aws_vcpus[family]:
+            # Get the largest of the smaller VMs than the quota_limit
+            if instance.startswith(family) and vcpus < quota_limit and vcpus > max_vcpus:
+                max_vcpus = vcpus
+                max_instance = instance
+        return max_instance  # None if no smaller VM exists
 
     @property
     def access_key(self):
