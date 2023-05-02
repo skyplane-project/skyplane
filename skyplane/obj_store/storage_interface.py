@@ -56,5 +56,8 @@ class StorageInterface:
 
             logger.fs.debug(f"attempting to create hdfs bucket {bucket}")
             return HDFSInterface(host=bucket)
+        elif region_tag.startswith("local"): 
+            from skyplane.obj_store.file_system_interface import FileSystemInterface
+            return FileSystemInterface()
         else:
             raise ValueError(f"Invalid region_tag {region_tag} - could not create interface")
