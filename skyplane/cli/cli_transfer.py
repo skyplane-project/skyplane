@@ -330,6 +330,10 @@ def cp(
     }
 
     cli = SkyplaneCLI(src_region_tag=src_region_tag, dst_region_tag=dst_region_tag, args=args)
+
+    if provider_src in ("local", "nfs") or provider_dst in ("local", "nfs"):
+        return 0 if cli.transfer_cp_onprem(src, dst, recursive) else 1
+
     if not cli.check_config():
         typer.secho(
             f"Skyplane configuration file is not valid. Please reset your config by running `rm {config_path}` and then rerunning `skyplane init` to fix.",
@@ -345,21 +349,7 @@ def cp(
         debug=debug,
     )
 
-    if provider_src in ("local", "nfs") and provider_dst in ("aws", "gcp", "azure"):
-        with dp.auto_deprovision():
-            dp.queue_copy(src, dst, recursive=recursive)
-            try:
-                if not cli.confirm_transfer(dp, 5, ask_to_confirm_transfer=not confirm):
-                    return 1
-                dp.provision(spinner=True)
-                dp.run(ProgressBarTransferHook())
-            except skyplane.exceptions.SkyplaneException as e:
-                console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
-                console.print(e.pretty_print_str())
-                UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
-                return 1
-        # return 0 if cli.transfer_cp_onprem(src, dst, recursive) else 1
-    elif provider_src in ("aws", "gcp", "azure", "hdfs") and provider_dst in ("aws", "gcp", "azure"):
+    if provider_src in ("aws", "gcp", "azure", "hdfs") and provider_dst in ("aws", "gcp", "azure"):
         # todo support ILP solver params
         dp = cli.make_dataplane(
             solver_type=solver,
