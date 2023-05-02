@@ -464,7 +464,7 @@ def init(
     disable_config_aws: bool = False,
     disable_config_azure: bool = False,
     disable_config_gcp: bool = False,
-    disable_config_ibm: bool = True, # TODO: eventuall enable IBM
+    disable_config_ibm: bool = True,  # TODO: eventuall enable IBM
 ):
     """
     It loads the configuration file, and if it doesn't exist, it creates a default one. Then it creates
