@@ -11,7 +11,7 @@ from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import config_path, gcp_config_path, gcp_quota_path, gcp_instances_path
 from skyplane.utils import logger, imports
 from skyplane.utils.retry import retry_backoff
-from compute.vcpu_info import gcp_vcpus
+from skyplane.compute.vcpu_info import gcp_vcpus
 
 
 class GCPAuthentication:

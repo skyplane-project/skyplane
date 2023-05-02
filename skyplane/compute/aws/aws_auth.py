@@ -4,7 +4,7 @@ import json
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import config_path, aws_config_path, aws_quota_path, aws_instances_path
 from skyplane.utils import imports, fn, logger
-from compute.vcpu_info import aws_vcpus
+from skyplane.compute.vcpu_info import aws_vcpus
 
 
 class AWSAuthentication:
