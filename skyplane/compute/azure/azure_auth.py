@@ -13,16 +13,6 @@ from skyplane.utils.definitions import is_gateway_env
 from skyplane.utils.fn import do_parallel
 
 
-{'Standard_D16_v5': 16,
- 'Standard_D2_v5': 2,
- 'Standard_D32_v5': 32,
- 'Standard_D4_v5': 4,
- 'Standard_D48_v5': 48,
- 'Standard_D64_v5': 64,
- 'Standard_D8_v5': 8,
- 'Standard_D96_v5': 96,}
-
-
 class AzureAuthentication:
     def __init__(self, config: Optional[SkyplaneConfig] = None):
         self.config = config if config is not None else SkyplaneConfig.load_config(config_path)
