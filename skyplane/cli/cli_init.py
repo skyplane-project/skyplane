@@ -464,7 +464,7 @@ def init(
     disable_config_aws: bool = False,
     disable_config_azure: bool = False,
     disable_config_gcp: bool = False,
-    disable_config_ibm: bool = False,
+    disable_config_ibm: bool = True, # TODO: eventuall enable IBM
 ):
     """
     It loads the configuration file, and if it doesn't exist, it creates a default one. Then it creates
@@ -522,7 +522,8 @@ def init(
             cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
 
     # load IBMCloud config
-    if not reinit_ibm:
+    if not disable_config_ibm and not reinit_ibm:
+        # TODO: fix IBM configuration to not fail on file finding
         typer.secho("\n(4) Configuring IBM Cloud:", fg="yellow", bold=True)
         if not disable_config_ibm:
             cloud_config = load_ibmcloud_config(cloud_config, force_init=reinit_ibm, non_interactive=non_interactive)
