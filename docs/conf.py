@@ -19,7 +19,7 @@ copyright = "2022, The Skyplane authors"
 author = "The Skyplane authors"
 
 release = "0.3"
-version = "0.3.0"
+version = "0.3.2"
 
 # -- General configuration
 
