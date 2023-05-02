@@ -56,6 +56,12 @@ class InsufficientVCPUException(SkyplaneException):
         return err
 
 
+class GatewayContainerStartException(SkyplaneException):
+    def pretty_print_str(self):
+        err = f"[red][bold]:x: GatewayContainerStartException:[/bold] {str(self)}[/red]"
+        return err
+
+
 class TransferFailedException(SkyplaneException):
     def __init__(self, message, failed_objects=None):
         super().__init__(message)

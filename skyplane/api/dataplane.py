@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 from skyplane import compute
+from skyplane.exceptions import GatewayContainerStartException
 from skyplane.api.tracker import TransferProgressTracker, TransferHook
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
@@ -200,11 +201,13 @@ class Dataplane:
         # create gateway logging dir
         gateway_program_dir = f"{self.log_dir}/programs"
         Path(gateway_program_dir).mkdir(exist_ok=True, parents=True)
+        logger.fs.info(f"Writing gateway programs to {gateway_program_dir}")
 
         # write gateway info file
         gateway_info_path = f"{gateway_program_dir}/gateway_info.json"
         with open(gateway_info_path, "w") as f:
             json.dump(self.topology.get_gateway_info_json(), f, indent=4)
+        logger.fs.info(f"Writing gateway info to {gateway_info_path}")
 
         # start gateways in parallel
         jobs = []
@@ -213,7 +216,11 @@ class Dataplane:
                 partial(self._start_gateway, gateway_docker_image, node, server, gateway_program_dir, authorize_ssh_pub_key, e2ee_key_bytes)
             )
         logger.fs.debug(f"[Dataplane.provision] Starting gateways on {len(jobs)} servers")
-        do_parallel(lambda fn: fn(), jobs, n=-1, spinner=spinner, spinner_persist=spinner, desc="Starting gateway container on VMs")
+        try:
+            do_parallel(lambda fn: fn(), jobs, n=-1, spinner=spinner, spinner_persist=spinner, desc="Starting gateway container on VMs")
+        except Exception as e:
+            self.copy_gateway_logs()
+            raise GatewayContainerStartException(f"Error starting gateways. Please check gateway logs {self.transfer_dir}")
 
     def copy_gateway_logs(self):
         # copy logs from all gateways in parallel
