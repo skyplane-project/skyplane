@@ -124,6 +124,9 @@ class AzureServer(Server):
         assert public_ip.name == AzureServer.ip_name(self.name)
         return public_ip.ip_address
 
+    def private_ip(self): 
+        return None
+
     @ignore_lru_cache()
     def instance_class(self):
         vm = self.get_virtual_machine()
