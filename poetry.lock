@@ -1791,6 +1791,18 @@ requests-oauthlib = ">=0.5.0"
 async = ["aiodns", "aiohttp (>=3.0)"]
 
 [[package]]
+name = "networkx"
+version = "2.6.3"
+description = "Python package for creating and manipulating graphs and networks"
+category = "main"
+optional = true
+python-versions = ">=3.7"
+files = [
+    {file = "networkx-2.6.3-py3-none-any.whl", hash = "sha256:80b6b89c77d1dfb64a4c7854981b60aeea6360ac02c6d4e4913319e0a313abef"},
+    {file = "networkx-2.6.3.tar.gz", hash = "sha256:c0946ed31d71f1b732b5aaa6da5a0388a345019af232ce2f49c766e2d6795c51"},
+]
+
+[[package]]
 name = "mypy-extensions"
 version = "1.0.0"
 description = "Type system extensions for programs checked with the mypy type checker."
@@ -2891,7 +2903,7 @@ azure = ["azure-identity", "azure-mgmt-authorization", "azure-mgmt-compute", "az
 gateway = ["flask", "lz4", "pynacl", "pyopenssl", "werkzeug"]
 gcp = ["google-api-python-client", "google-auth", "google-cloud-compute", "google-cloud-storage"]
 ibm = ["ibm-cloud-sdk-core", "ibm-cos-sdk", "ibm-vpc"]
-solver = ["cvxpy", "graphviz", "matplotlib", "numpy"]
+solver = ["networkx", "cvxpy", "graphviz", "matplotlib", "numpy"]
 
 [metadata]
 lock-version = "2.0"

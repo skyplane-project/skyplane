@@ -9,7 +9,7 @@ import sys
 from multiprocessing import Event, Queue
 from os import PathLike
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from skyplane.utils import logger
 
@@ -218,11 +218,11 @@ class GatewayDaemon:
                 elif op["op_type"] == "send":
                     # TODO: handle private ips for GCP->GCP
                     target_gateway_info = self.gateway_info[op["target_gateway_id"]]
-                    print("Gateway sender sending to ", target_gateway_info["private_ip_address"])
+                    print("Gateway sender sending to ", target_gateway_info["public_ip_address"])
                     operators[handle] = GatewaySender(
                         handle,
                         region=self.region,
-                        ip_addr=target_gateway_info["private_ip_address"],
+                        ip_addr=target_gateway_info["public_ip_address"],
                         input_queue=input_queue,
                         output_queue=output_queue,
                         error_event=self.error_event,

@@ -108,7 +108,7 @@ class GatewayProgram:
         parent_op = self._ops[parent_handle] if parent_handle else None
         ops_handles = []
         for op in ops:
-            ops_handles.append(self.add_operator(op, parent_op, partition_id))
+            ops_handles.append(self.add_operator(op, parent_op.handle, partition_id))
 
         return ops_handles
 
@@ -129,6 +129,8 @@ class GatewayProgram:
         """
         program_all = []
         for partition_id, op_list in self._plan.items():
+            partition_id = list(partition_id)  # convert tuple to list
+
             # build gateway program representation
             program = []
             for op in op_list:
@@ -138,11 +140,12 @@ class GatewayProgram:
             exists = False
             for p in program_all:
                 if p["value"] == program:  # equivalent partition exists
-                    p["partitions"].append(partition_id)
+                    for pid in partition_id:
+                        p["partitions"].append(pid)
                     exists = True
                     break
             if not exists:
-                program_all.append({"value": program, "partitions": [partition_id]})
+                program_all.append({"value": program, "partitions": partition_id})
 
         return program_all
 

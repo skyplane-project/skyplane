@@ -1,5 +1,4 @@
 import functools
-from pprint import pprint
 import json
 import time
 from abc import ABC
@@ -214,7 +213,7 @@ class TransferProgressTracker(Thread):
         }
         self.hooks.on_transfer_end()
 
-        start_time = int(time.time())
+        int(time.time())
         try:
             for job in self.jobs.values():
                 logger.fs.debug(f"[TransferProgressTracker] Finalizing job {job.uuid}")
@@ -229,7 +228,7 @@ class TransferProgressTracker(Thread):
                 session_start_timestamp_ms,
             )
             raise e
-        end_time = int(time.time())
+        int(time.time())
 
         # verify transfer
         try:

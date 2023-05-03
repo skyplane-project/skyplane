@@ -1,7 +1,7 @@
 import json
 import os
 import threading
-from collections import defaultdict, Counter
+from collections import defaultdict
 from datetime import datetime
 from functools import partial
 from datetime import datetime
@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional
 
 from skyplane import compute
 from skyplane.api.tracker import TransferProgressTracker, TransferHook
-from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
+from skyplane.api.transfer_job import TransferJob
 from skyplane.api.config import TransferConfig
 from skyplane.planner.topology import TopologyPlan, TopologyPlanGateway
 from skyplane.utils import logger
@@ -219,6 +219,8 @@ class Dataplane:
         # copy logs from all gateways in parallel
         def copy_log(instance):
             instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
+            print("Downloading files...: ", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
+            print("Downloading file....: ", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
             instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
             instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 

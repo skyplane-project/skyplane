@@ -1,9 +1,8 @@
 from dataclasses import dataclass
 
-from typing import Iterator, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from skyplane.obj_store.storage_interface import StorageInterface
-from skyplane.utils import logger
 
 
 @dataclass

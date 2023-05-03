@@ -7,8 +7,7 @@ from multiprocessing import Queue
 from multiprocessing.managers import DictProxy
 from queue import Empty
 from traceback import TracebackException
-from typing import Dict, List, Tuple, Optional
-import json
+from typing import Dict, List, Tuple
 from flask import Flask, jsonify, request
 from werkzeug.serving import make_server
 
