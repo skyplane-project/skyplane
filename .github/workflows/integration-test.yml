@@ -51,7 +51,7 @@ jobs:
         run: poetry install -E aws -E azure -E gcp
         if: steps.cache.outputs.cache-hit != 'true'
       - id: 'auth'
-        uses: 'google-github-actions/auth@v0'
+        uses: 'google-github-actions/auth@v1'
         with:
           credentials_json: '${{ secrets.GCP_CREDENTIALS_JSON }}'
       - name: Log into Azure
