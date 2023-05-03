@@ -25,21 +25,20 @@ class LocalFile:
 
 
 class FileSystemInterface(StorageInterface):
-
     def region_tag(self) -> str:
         return "local"
 
     def path(self) -> str:
-        return self.path
+        raise NotImplementedError()
 
     def list_files(self, prefix="") -> Iterator[LocalFile]:
-        raise os.listdir(prefix)
+        raise NotImplementedError()
 
     def get_file_size(self, file_name) -> int:
-        return os.path.get_size(file_name)
+        raise NotImplementedError()
 
     def get_file_last_modified(self, file_name):
-        return os.path.getmtime(file_name)
+        raise NotImplementedError()
 
     def cache_file_locally(self, src_file_path, dst_file_path):
         # Incases where the data may be on a remote filesystem, we want to cache it locally
@@ -49,8 +48,7 @@ class FileSystemInterface(StorageInterface):
         raise NotImplementedError()
 
     def delete_files(self, paths: List[str]):
-        for path in paths:
-            os.remove(path)
+        raise NotImplementedError()
 
     def initiate_multipart_upload(self, dst_object_name: str) -> str:
         raise ValueError("Multipart uploads not supported")

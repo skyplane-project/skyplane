@@ -103,9 +103,11 @@ class GCSInterface(ObjectStoreInterface):
             self._gcs_client.create_bucket(bucket, location=region_without_zone)
 
     def delete_bucket(self):
+        print("deleting bucket", self.bucket_name)
         for batch in batch_generator(self.list_objects(), 1000):
             self.delete_objects([obj.key for obj in batch])
         assert len(list(self.list_objects())) == 0, f"Bucket not empty after deleting all keys {list(self.list_objects())}"
+        print("no objects")
         self._gcs_client.get_bucket(self.bucket_name).delete()
 
     def list_objects(self, prefix="", region=None) -> Iterator[GCSObject]:

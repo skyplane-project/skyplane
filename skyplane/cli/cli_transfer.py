@@ -190,26 +190,22 @@ class SkyplaneCLI:
         logger.fs.debug(f"Using pipeline: {pipeline}")
         return pipeline
 
-    def confirm_transfer(self, pipeline: skyplane.Pipeline, src_region_tag: str, dest_region_tags: List[str], query_n: int = 5, ask_to_confirm_transfer=True) -> bool:
+    def confirm_transfer(
+        self, pipeline: skyplane.Pipeline, src_region_tag: str, dest_region_tags: List[str], query_n: int = 5, ask_to_confirm_transfer=True
+    ) -> bool:
         """Prompts the user to confirm their transfer by querying the first query_n files from the TransferJob"""
         if not len(pipeline.jobs_to_dispatch) > 0:
             typer.secho("No jobs to dispatch.")
             return False
         transfer_pair_gen = pipeline.jobs_to_dispatch[0].gen_transfer_pairs()  # type: ignore
         if len(dest_region_tags) == 1:
-            console.print(
-                f"[bold yellow]Will transfer objects from {src_region_tag} to {dest_region_tags[0]}[/bold yellow]"
-            )
-        else: 
-            console.print(
-                f"[bold yellow]Will transfer objects from {src_region_tag} to {dest_region_tags}[/bold yellow]"
-            )
+            console.print(f"[bold yellow]Will transfer objects from {src_region_tag} to {dest_region_tags[0]}[/bold yellow]")
+        else:
+            console.print(f"[bold yellow]Will transfer objects from {src_region_tag} to {dest_region_tags}[/bold yellow]")
 
         if src_region_tag.startswith("local") or dest_region_tags[0].startswith("local"):
-            # TODO: should still pass cost estimate 
-            console.print(
-                f"[yellow]Note: local transfers are not monitored by Skyplane[yellow]"
-            )
+            # TODO: should still pass cost estimate
+            console.print(f"[yellow]Note: local transfers are not monitored by Skyplane[yellow]")
             return True
 
         topology = pipeline.planner.plan(pipeline.jobs_to_dispatch)
@@ -302,14 +298,14 @@ def run_transfer(
     confirm: bool,
     max_instances: int,
     max_connections: int,
-    solver: str, 
+    solver: str,
     cmd: str,
 ):
     assert cmd == "cp" or cmd == "sync", f"Invalid command: {cmd}"
     if not debug:
         register_exception_handler()
     print_header()
-    
+
     provider_src, bucket_src, path_src = parse_path(src)
     provider_dst, bucket_dst, path_dst = parse_path(dst)
     src_region_tag = StorageInterface.create(f"{provider_src}:infer", bucket_src).region_tag()
@@ -336,10 +332,10 @@ def run_transfer(
 
     # create pipeline and queue transfer
     pipeline = cli.make_pipeline(planning_algorithm=solver, max_instances=max_instances)
-    if cli.args["cmd"] == "cp": 
+    if cli.args["cmd"] == "cp":
         pipeline.queue_copy(src, dst, recursive=recursive)
     else:
-        pipeline.queue_sync(src, dst, recursive=recursive)
+        pipeline.queue_sync(src, dst)
 
     # confirm transfer
     if not cli.confirm_transfer(pipeline, src_region_tag, [dst_region_tag], 5, ask_to_confirm_transfer=not confirm):
@@ -351,27 +347,21 @@ def run_transfer(
 
     # fall back options: local->cloud, cloud->local, small cloud->cloud transfers
     if provider_src == "local" or provider_dst == "local":
-        if cli.args["cmd"] == "cp": 
+        if cli.args["cmd"] == "cp":
             return 0 if cli.transfer_cp_onprem(src, dst, recursive) else 1
         else:
-            return 0 if cli.transfer_sync_onprem(src, dst, recursive) else 1
-    elif cloud_config.get_flag("native_cmd_enabled") and cli.estimate_small_transfer(
-        job, cloud_config.get_flag("native_cmd_threshold_gb") * GB
-    ):
-        # fallback option: transfer is too small 
-        if cli.args["cmd"] == "cp": 
-            job = CopyJob(src, dst, recursive=recursive) # TODO: rever to using pipeline
-            if cli.estimate_small_transfer(
-                job, cloud_config.get_flag("native_cmd_threshold_gb") * GB
-            ):
+            return 0 if cli.transfer_sync_onprem(src, dst) else 1
+    elif cloud_config.get_flag("native_cmd_enabled"):
+        # fallback option: transfer is too small
+        if cli.args["cmd"] == "cp":
+            job = CopyJob(src, [dst], recursive=recursive)  # TODO: rever to using pipeline
+            if cli.estimate_small_transfer(job, cloud_config.get_flag("native_cmd_threshold_gb") * GB):
                 small_transfer_status = cli.transfer_cp_small(src, dst, recursive)
                 return 0 if small_transfer_status else 1
         else:
-            job = SyncJob(src, dst, recursive=recursive)
-            if cli.estimate_small_transfer(
-                job, cloud_config.get_flag("native_cmd_threshold_gb") * GB
-            ):
-                small_transfer_status = cli.transfer_sync_small(src, dst, recursive)
+            job = SyncJob(src, [dst], recursive=recursive)
+            if cli.estimate_small_transfer(job, cloud_config.get_flag("native_cmd_threshold_gb") * GB):
+                small_transfer_status = cli.transfer_sync_small(src, dst)
                 return 0 if small_transfer_status else 1
 
     # dataplane must be created after transfers are queued
@@ -405,6 +395,7 @@ def run_transfer(
             console.print(e)
             UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
             force_deprovision(dp)
+
 
 def cp(
     src: str,
@@ -451,7 +442,8 @@ def cp(
     :param solver: The solver to use for the transfer (default: direct)
     :type solver: str
     """
-    run_transfer(src, dst, recursive, debug, multipart, confirm, max_instances, max_connections, solver, "cp")
+    return run_transfer(src, dst, recursive, debug, multipart, confirm, max_instances, max_connections, solver, "cp")
+
 
 def sync(
     src: str,
@@ -499,4 +491,4 @@ def sync(
     :param solver: The solver to use for the transfer (default: direct)
     :type solver: str
     """
-    run_transfer(src, dst, False, debug, multipart, confirm, max_instances, max_connections, solver, "sync")
+    return run_transfer(src, dst, False, debug, multipart, confirm, max_instances, max_connections, solver, "sync")

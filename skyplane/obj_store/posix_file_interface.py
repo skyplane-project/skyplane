@@ -54,10 +54,10 @@ class POSIXInterface(ObjectStoreInterface):
         return os.path.exists(obj_name)
 
     def region_tag(self) -> str:
-        return "gcp:us-central1-a"
+        return "local"
 
     def bucket(self) -> str:
-        return ""
+        return self.dir_path
 
     def create_bucket(self, region_tag: str):
         return None

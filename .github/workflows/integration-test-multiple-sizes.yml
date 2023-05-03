@@ -14,17 +14,17 @@ jobs:
       matrix:
         pairs:
           # AWS to AWS
-          - aws:us-east-1 aws:us-east-1
-          - aws:us-east-2 aws:us-west-2
+          - aws:us-east-1 aws:us-east-1 --multipart
+          - aws:us-east-2 aws:us-west-2 --multipart
           # GCP to GCP
-          - gcp:us-central1-a gcp:us-central1-a
-          - gcp:us-west1-a gcp:us-east1-a
+          - gcp:us-central1-a gcp:us-central1-a --multipart
+          - gcp:us-west1-a gcp:us-east1-a --multipart
           # Azure to Azure
           - azure:westus azure:westus
           - azure:eastus azure:westus
           # cross cloud tests
-          - aws:us-west-1 gcp:us-west2-a
-          - gcp:us-west2-a aws:us-west-1
+          - aws:us-west-1 gcp:us-west2-a --multipart
+          - gcp:us-west2-a aws:us-west-1 --multipart
           - aws:us-west-1 azure:westus
           - azure:westus aws:us-west-1
           - gcp:us-west2-a azure:westus
