@@ -47,6 +47,9 @@ class S3Interface(ObjectStoreInterface):
 
     def region_tag(self):
         return "aws:" + self.aws_region
+    
+    def bucket(self) -> str:
+        return self.bucket_name
 
     def set_requester_bool(self, requester: bool):
         self.requester_pays = requester
@@ -83,15 +86,13 @@ class S3Interface(ObjectStoreInterface):
             else:
                 s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": aws_region})
         else:
-            print("bucket already exists", aws_region, self.bucket_name)
+            logger.warning(f"Bucket {self.bucket} in region {aws_region} already exists")
 
     def delete_bucket(self):
-        print("deleting bucket", self.bucket_name)
         # delete 1000 keys at a time
         for batch in batch_generator(self.list_objects(), 1000):
             self.delete_objects([obj.key for obj in batch])
         assert len(list(self.list_objects())) == 0, f"Bucket not empty after deleting all keys {list(self.list_objects())}"
-        print("no objects")
         # delete bucket
         self._s3_client().delete_bucket(Bucket=self.bucket_name)
 
