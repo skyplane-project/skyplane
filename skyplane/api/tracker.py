@@ -1,6 +1,5 @@
 import functools
 from pprint import pprint
-from pprint import pprint
 import json
 import time
 from abc import ABC
@@ -216,13 +215,14 @@ class TransferProgressTracker(Thread):
         self.hooks.on_transfer_end()
 
         start_time = int(time.time())
+        print("transfer ended", transfer_stats)
         try:
             for job in self.jobs.values():
                 logger.fs.debug(f"[TransferProgressTracker] Finalizing job {job.uuid}")
                 job.finalize()
         except Exception as e:
             UsageClient.log_exception(
-                "finalize job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
+                "finalize job", e, args, self.dataplane.topology.src_region_tag, self.dataplane.topology.dest_region_tags[0], session_start_timestamp_ms
             )
             raise e
         end_time = int(time.time())
@@ -261,9 +261,11 @@ class TransferProgressTracker(Thread):
         sinks = region_sinks[region_tag]
         # for region_tag, sink_gateways in self.dataplane.topology.sink_gateways().items():
         # sink_regions = set([sink.region for sink in sinks])
+        print("pending", self.job_pending_chunk_ids)
         while any([len(self.job_pending_chunk_ids[job_uuid][region_tag]) > 0 for job_uuid in self.job_pending_chunk_ids]):
             # refresh shutdown status by running noop
             do_parallel(lambda i: i.run_command("echo 1"), self.dataplane.bound_nodes.values(), n=8)
+
 
             # check for errors and exit if there are any (while setting debug flags)
             errors = self.dataplane.check_error_logs()

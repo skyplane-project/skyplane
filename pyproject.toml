@@ -62,6 +62,7 @@ pynacl = { version = "^1.5.0", optional = true }
 pyopenssl = { version = "^22.0.0", optional = true }
 werkzeug = { version = "^2.1.2", optional = true }
 pyarrow = "^10.0.1"
+pytest = "^7.3.1"
 
 [tool.poetry.extras]
 aws = ["boto3"]

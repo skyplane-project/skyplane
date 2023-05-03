@@ -645,6 +645,7 @@ class CopyJob(TransferJob):
 
             # copy new multipart transfers to the multipart transfer list
             updated_len = len(chunker.multipart_upload_requests)
+            print(f"chunker.multipart_upload_requests: {chunker.multipart_upload_requests[n_multiparts:updated_len]}")
             self.multipart_transfer_list.extend(chunker.multipart_upload_requests[n_multiparts:updated_len])
             n_multiparts = updated_len
 
