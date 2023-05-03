@@ -28,7 +28,7 @@ def setup_buckets(region, n_files=1, file_size_mb=1, write=False):
             for i in range(n_files):
                 iface.upload_object(fpath, f"{prefix}/{i}", mime_type="text/plain")
 
-    return iface, bucket_name, prefix 
+    return iface, bucket_name, prefix
 
 
 def run(src_region, dest_region, n_files=1, file_size_mb=1, multipart=False):
