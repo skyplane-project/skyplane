@@ -7,7 +7,6 @@ env:
   SKYPLANE_USAGE_STATS_ENABLED: 0
 jobs:
   integration:
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request')
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 1
