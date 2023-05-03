@@ -59,4 +59,6 @@ def parse_path(path: str) -> Tuple[str, Optional[str], Optional[str]]:
     else:
         if not is_plausible_local_path(path):
             logger.warning(f"Local path '{path}' does not exist")
-        return "local", None, path
+
+        # path is subsitutute for bucket
+        return "local", path, path
