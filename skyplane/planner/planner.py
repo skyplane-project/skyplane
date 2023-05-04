@@ -88,34 +88,46 @@ class Planner:
         partition_ids: List[int],
         partition_offset: int,
         plan: TopologyPlan,
-        obj_store: Optional[Tuple[str, str]] = None,  # obj_store is None if this is not the source node
-        dst_op: Optional[GatewayReceive] = None,  # dst_op is None if this is not the destination node
+        bucket_info: Optional[Tuple[str, str]] = None,
+        dst_op: Optional[GatewayReceive] = None,
     ) -> bool:
-        if dst_op is not None:
-            receive_op = dst_op
-        else:
-            if obj_store is None:
-                # TODO: add generate data locally operator
-                receive_op = GatewayReceive()
-            else:
-                receive_op = GatewayReadObjectStore(
-                    bucket_name=obj_store[0], bucket_region=obj_store[1], num_connections=self.n_connections
-                )
-
-        # find set of regions to send to for all partitions in partition_ids
-        g = solution_graph
-
-        # partition_ids are ids that follow the same path from the out edges of the region
+        """
+        :param solution_graph: nx.DiGraph of solution
+        :param gateway_program: GatewayProgram of region to add operator to
+        :param region: region to add operator to
+        :param partition_ids: list of partition ids to add operator to
+        :param partition_offset: offset of partition ids
+        :param plan: TopologyPlan of solution [for getting gateway ids]
+        :param bucket_info: tuple of (bucket_name, bucket_region) for object store
+        :param dst_op: if None, then this is either the source node or a overlay node; otherwise, this is the destination overlay node
+        """
+        # partition_ids are set of ids that follow the same path from the out edges of the region
         any_id = partition_ids[0] - partition_offset
         next_regions = set([edge[1] for edge in g.out_edges(region, data=True) if str(any_id) in edge[-1]["partitions"]])
 
-        # if no regions to forward data to
+        # if partition_ids does not have a next region, then we cannot add an operator
         if len(next_regions) == 0:
             print(
                 f"Region {region}, any id: {any_id}, partition ids: {partition_ids}, has no next region to forward data to: {g.out_edges(region, data=True)}"
             )
-            return False
+            return
 
+        # identify if this is a destination overlay node or not
+        if dst_op is None:
+            # source node or overlay node
+            # TODO: add generate data locally operator
+            if bucket_info is None:
+                receive_op = GatewayReceive()
+            else:
+                receive_op = GatewayReadObjectStore(
+                    bucket_name=bucket_info[0], bucket_region=bucket_info[1], num_connections=self.n_connections
+                )
+        else:
+            # destination overlay node, dst_op is the parent node
+            receive_op = dst_op
+
+        # find set of regions to send to for all partitions in partition_ids
+        g = solution_graph
         region_to_id_map = {}
         for next_region in next_regions:
             region_to_id_map[next_region] = []
@@ -154,12 +166,9 @@ class Planner:
         else:
             # only send this partition to a single region
             assert len(region_to_id_map) == 1
-
             next_region = list(region_to_id_map.keys())[0]
             ids = [id for next_region_ids in region_to_id_map.values() for id in next_region_ids]
-
-            num_connections = int(self.n_connections / len(ids))
-            send_ops = [GatewaySend(target_gateway_id=id, region=next_region, num_connections=num_connections) for id in ids]
+            send_ops = [GatewaySend(target_gateway_id=id, region=next_region, num_connections=self.n_connections) for id in ids]
 
             # if num of gateways > 1, then connect to MUX_OR
             if len(ids) > 1:
@@ -195,26 +204,24 @@ class Planner:
 
         # if no regions to forward data to, write to the object store
         if len(next_regions) == 0:
-            gateway_program.add_operator(write_op, receive_op.handle, partition_id=tuple(partition_ids))
+            gateway_program.add_operator(write_op, parent_handle=receive_op.handle, partition_id=tuple(partition_ids))
 
         # otherwise, receive and write to the object store, then forward data to next regions
         else:
             mux_and_op = GatewayMuxAnd()
             # receive and write
-            gateway_program.add_operator(mux_and_op, receive_op.handle, partition_id=tuple(partition_ids))
-            gateway_program.add_operator(write_op, mux_and_op.handle, partition_id=tuple(partition_ids))
+            gateway_program.add_operator(mux_and_op, parent_handle=receive_op.handle, partition_id=tuple(partition_ids))
+            gateway_program.add_operator(write_op, parent_handle=mux_and_op.handle, partition_id=tuple(partition_ids))
 
             # forward: destination nodes are also forwarders
             self.add_src_or_overlay_operator(
                 solution_graph, gateway_program, region, partition_ids, partition_offset, plan, dst_op=mux_and_op
             )
 
-    def logical_plan_to_gateway_programs(
-        self,
-        jobs: List[TransferJob],
-        solution_graph: nx.graph,
-        num_partitions: int = 1,
-    ) -> TopologyPlan:
+    def logical_plan_to_topology_plan(self, jobs: List[TransferJob], solution_graph: nx.graph) -> TopologyPlan:
+        """
+        Given a logical plan, construct a gateway program for each region in the logical plan for the given jobs.
+        """
         # get source and destination regions
         src_ifaces, dst_ifaces = [job.src_iface for job in jobs], [job.dst_ifaces for job in jobs]
         src_region_tag = src_ifaces[0].region_tag()
@@ -240,7 +247,7 @@ class Planner:
                 partition_to_next_regions = {}
 
                 # give each job a different partition offset i, so we can read/write to different buckets
-                for j in range(i, i + num_partitions):
+                for j in range(i, i + self.n_partitions):
                     partition_to_next_regions[j] = set(
                         [edge[1] for edge in solution_graph.out_edges(node, data=True) if str(j) in edge[-1]["partitions"]]
                     )
@@ -287,12 +294,11 @@ class Planner:
 
         for node in solution_graph.nodes:
             plan.set_gateway_program(node, region_to_gateway_program[node])
-            # print(f"Gateway program for {node}: {region_to_gateway_program[node].to_dict()}")
 
         for edge in solution_graph.edges.data():
             src_region, dst_region = edge[0], edge[1]
             plan.cost_per_gb += compute.CloudProvider.get_transfer_cost(src_region, dst_region) * (
-                len(edge[-1]["partitions"]) / num_partitions
+                len(edge[-1]["partitions"]) / self.n_partitions
             )
 
         return plan
@@ -311,13 +317,12 @@ class MulticastDirectPlanner(Planner):
 
         for node in graph.nodes:
             graph.nodes[node]["num_vms"] = self.n_instances
-
         return graph
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         src_region_tag, dst_region_tags = self.verify_job_src_dsts(jobs)
         solution_graph = self.logical_plan(src_region_tag, dst_region_tags)
-        return self.logical_plan_to_gateway_programs(jobs, solution_graph)
+        return self.logical_plan_to_topology_plan(jobs, solution_graph)
 
 
 class MulticastILPPlanner(Planner):
@@ -340,7 +345,7 @@ class MulticastILPPlanner(Planner):
 
     def multicast_solution_to_nxgraph(self, solution: BroadcastSolution) -> nx.DiGraph:
         """
-        Convert ILP solution to BroadcastReplicationTopology
+        Convert ILP solution to logical plan in nx graph
         """
         v_result = solution.var_instances_per_region
         result = np.array(solution.var_edge_partitions)
@@ -557,7 +562,7 @@ class MulticastILPPlanner(Planner):
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         src_region_tag, dst_region_tags = self.verify_job_src_dsts(jobs, multicast=True)
         solution_graph = self.logical_plan(src_region_tag, dst_region_tags)
-        return self.logical_plan_to_gateway_programs(jobs, solution_graph)
+        return self.logical_plan_to_topology_plan(jobs, solution_graph)
 
 
 class MulticastMDSTPlanner(Planner):
@@ -586,7 +591,7 @@ class MulticastMDSTPlanner(Planner):
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         src_region_tag, dst_region_tags = self.verify_job_src_dsts(jobs, multicast=True)
         solution_graph = self.logical_plan(src_region_tag, dst_region_tags)
-        return self.logical_plan_to_gateway_programs(jobs, solution_graph)
+        return self.logical_plan_to_topology_plan(jobs, solution_graph)
 
 
 class UnicastDirectPlanner(Planner):
@@ -608,7 +613,7 @@ class UnicastDirectPlanner(Planner):
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         src_region_tag, dst_region_tag = self.verify_job_src_dsts(jobs)
         solution_graph = self.logical_plan(src_region_tag, dst_region_tag)
-        return self.logical_plan_to_gateway_programs(jobs, solution_graph)
+        return self.logical_plan_to_topology_plan(jobs, solution_graph)
 
 
 class UnicastILPPlanner(Planner):
@@ -637,7 +642,7 @@ class UnicastILPPlanner(Planner):
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         src_region_tag, dst_region_tag = self.verify_job_src_dsts(jobs)
         solution_graph = self.logical_plan(src_region_tag, dst_region_tag)
-        return self.logical_plan_to_gateway_programs(jobs, solution_graph)
+        return self.logical_plan_to_topology_plan(jobs, solution_graph)
 
 
 class UnicastRONSolverPlanner(Planner):

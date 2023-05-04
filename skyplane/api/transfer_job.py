@@ -270,7 +270,7 @@ class Chunker:
                     dest_provider, dest_region = dst_iface.region_tag().split(":")
                     try:
                         dest_key = self.map_object_key_prefix(src_prefix, obj.key, dst_prefix, recursive=recursive)
-                        # TODO: why is this here?
+                        # TODO: why is it changed here?
                         # dest_keys.append(dest_key[len(dst_prefix) :])
 
                         dest_keys.append(dest_key)

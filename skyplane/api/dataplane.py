@@ -8,6 +8,7 @@ from datetime import datetime
 
 import nacl.secret
 import nacl.utils
+import typer
 import urllib3
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
@@ -218,9 +219,10 @@ class Dataplane:
     def copy_gateway_logs(self):
         # copy logs from all gateways in parallel
         def copy_log(instance):
+            typer.secho(f"Downloading log: {self.transfer_dir}/gateway_{instance.uuid()}.stdout", fg="bright_black")
+            typer.secho(f"Downloading log: {self.transfer_dir}/gateway_{instance.uuid()}.stderr", fg="bright_black")
+
             instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
-            print("Downloading files...: ", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
-            print("Downloading file....: ", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
             instance.download_file("/tmp/gateway.stdout", self.transfer_dir / f"gateway_{instance.uuid()}.stdout")
             instance.download_file("/tmp/gateway.stderr", self.transfer_dir / f"gateway_{instance.uuid()}.stderr")
 
