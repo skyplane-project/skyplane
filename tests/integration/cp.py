@@ -72,7 +72,7 @@ def run(src_region, dest_region, n_files=1, file_size_mb=1, multipart=False):
         max_connections=1,
         solver="direct",
         solver_required_throughput_gbits=1,
-        debug=True # TODO: remove
+        debug=True,  # TODO: remove
     )
 
     # clean up path

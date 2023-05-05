@@ -671,13 +671,13 @@ class CopyJob(TransferJob):
 
                     # retry - sometimes slight delay before object store knows all parts are uploaded
                     retry_backoff(partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"]), initial_backoff=0.5)
-                   # while True:
-                   #     try:    
-                   #         obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"])
-                   #         break
-                   #     except Exception as e:
-                   #         logger.fs.warning(f"Failing to complete multipart upload {req['upload_id']} for key {req['key']}, retrying...")
-                   #         time.sleep(1)
+                # while True:
+                #     try:
+                #         obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"])
+                #         break
+                #     except Exception as e:
+                #         logger.fs.warning(f"Failing to complete multipart upload {req['upload_id']} for key {req['key']}, retrying...")
+                #         time.sleep(1)
 
             do_parallel(complete_fn, batches, n=8)
 

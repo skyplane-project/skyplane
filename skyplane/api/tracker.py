@@ -221,7 +221,12 @@ class TransferProgressTracker(Thread):
                 job.finalize()
         except Exception as e:
             UsageClient.log_exception(
-                "finalize job", e, args, self.dataplane.topology.src_region_tag, self.dataplane.topology.dest_region_tags[0], session_start_timestamp_ms
+                "finalize job",
+                e,
+                args,
+                self.dataplane.topology.src_region_tag,
+                self.dataplane.topology.dest_region_tags[0],
+                session_start_timestamp_ms,
             )
             raise e
         end_time = int(time.time())
@@ -264,7 +269,6 @@ class TransferProgressTracker(Thread):
             # refresh shutdown status by running noop
             do_parallel(lambda i: i.run_command("echo 1"), self.dataplane.bound_nodes.values(), n=8)
 
-
             # check for errors and exit if there are any (while setting debug flags)
             errors = self.dataplane.check_error_logs()
             if any(errors.values()):
@@ -289,7 +293,6 @@ class TransferProgressTracker(Thread):
             completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region_tag"].unique()) == set([region_tag]))
             completed_chunk_ids = completed_status[completed_status].index
 
-
             # update job_complete_chunk_ids and job_pending_chunk_ids
             # TODO: do chunk-tracking per-destination
             for job_uuid, job in self.jobs.items():
@@ -312,7 +315,7 @@ class TransferProgressTracker(Thread):
 
             # sleep
             time.sleep(0.05)
-        
+
     @property
     @functools.lru_cache(maxsize=1)
     def _chunk_to_job_map(self):
