@@ -54,6 +54,14 @@ class SkyplaneCLI:
         self.src_region_tag, self.dst_region_tag = src_region_tag, dst_region_tag
         self.args = args
         self.aws_config, self.azure_config, self.gcp_config, self.ibmcloud_config = self.to_api_config(skyplane_config or cloud_config)
+
+        # update config
+        # TODO: set remaining config params
+        if skyplane_config:
+            skyplane_config.set_flag("multipart_enabled", str(self.args["multipart"]))
+        if cloud_config:
+            cloud_config.set_flag("multipart_enabled", str(self.args["multipart"]))
+
         self.transfer_config = self.make_transfer_config(skyplane_config or cloud_config)
         self.client = skyplane.SkyplaneClient(
             aws_config=self.aws_config,
