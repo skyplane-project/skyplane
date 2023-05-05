@@ -80,7 +80,7 @@ class IBMCloudAuthentication:
             region_list[line[0]]["zones"].append({"zone_name": line[2], "zone_href": line[3]})
 
         return region_list
-    
+
     @staticmethod
     def get_quota_limits_for(region: str, spot: bool = False) -> Optional[int]:
         # TODO: Implement when ibmcloud is supported
@@ -90,7 +90,7 @@ class IBMCloudAuthentication:
     def fall_back_to_smaller_vm_if_neccessary(instance_type: str, quota_limit: int) -> Optional[str]:
         # TODO: Implement when ibm cloud is supported
         return None
-    
+
     @property
     def access_key(self):
         return self._access_key
