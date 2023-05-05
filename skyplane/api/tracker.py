@@ -1,6 +1,5 @@
 import functools
 from pprint import pprint
-from pprint import pprint
 import json
 import time
 from abc import ABC
@@ -222,7 +221,12 @@ class TransferProgressTracker(Thread):
                 job.finalize()
         except Exception as e:
             UsageClient.log_exception(
-                "finalize job", e, args, self.dataplane.src_region_tag, self.dataplane.dst_region_tag, session_start_timestamp_ms
+                "finalize job",
+                e,
+                args,
+                self.dataplane.topology.src_region_tag,
+                self.dataplane.topology.dest_region_tags[0],
+                session_start_timestamp_ms,
             )
             raise e
         end_time = int(time.time())
@@ -362,6 +366,7 @@ class TransferProgressTracker(Thread):
                 ]
             )
         logger.fs.debug(f"[TransferProgressTracker] Bytes remaining per job: {bytes_remaining_per_job}")
+        print(f"[TransferProgressTracker] Bytes remaining per job: {bytes_remaining_per_job}")
         return sum(bytes_remaining_per_job.values())
 
     def query_bytes_dispatched(self):

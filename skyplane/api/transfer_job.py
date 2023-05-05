@@ -1,4 +1,5 @@
 import json
+import time
 import typer
 import math
 import queue
@@ -18,6 +19,7 @@ from abc import ABC, abstractmethod
 
 import urllib3
 from rich import print as rprint
+from functools import partial
 
 from skyplane import exceptions
 from skyplane.api.config import TransferConfig
@@ -31,6 +33,7 @@ from skyplane.utils import logger
 from skyplane.utils.definitions import MB
 from skyplane.utils.fn import do_parallel
 from skyplane.utils.path import parse_path
+from skyplane.utils.retry import retry_backoff
 
 if TYPE_CHECKING:
     from skyplane.api.dataplane import Dataplane
@@ -665,7 +668,16 @@ class CopyJob(TransferJob):
             def complete_fn(batch):
                 for req in batch:
                     logger.fs.debug(f"Finalize upload id {req['upload_id']} for key {req['key']}")
-                    obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"])
+
+                    # retry - sometimes slight delay before object store knows all parts are uploaded
+                    retry_backoff(partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"]), initial_backoff=0.5)
+                # while True:
+                #     try:
+                #         obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"])
+                #         break
+                #     except Exception as e:
+                #         logger.fs.warning(f"Failing to complete multipart upload {req['upload_id']} for key {req['key']}, retrying...")
+                #         time.sleep(1)
 
             do_parallel(complete_fn, batches, n=8)
 

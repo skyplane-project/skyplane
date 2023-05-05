@@ -66,13 +66,13 @@ def run(src_region, dest_region, n_files=1, file_size_mb=1, multipart=False):
         map_path(src_region, src_bucket_name, src_prefix),
         map_path(dest_region, dest_bucket_name, dest_prefix),
         recursive=True,
-        debug=False,
         multipart=multipart,
         confirm=True,
         max_instances=1,
         max_connections=1,
         solver="direct",
         solver_required_throughput_gbits=1,
+        debug=True,  # TODO: remove
     )
 
     # clean up path
