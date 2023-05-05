@@ -1,4 +1,4 @@
-name: integration-test-multiple-sizes
+name: integration-test-local
 on: [push]
 concurrency: transfer-test
 env:
