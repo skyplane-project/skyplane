@@ -83,7 +83,9 @@ class GCPAuthentication:
     def get_quota_limits_for(region: str, spot: bool = False) -> int:
         with gcp_quota_path.open("r") as f:
             quota_limits = json.load(f)
-            return quota_limits[region]
+            region_family = "-".join(region.split("-")[:2])
+            if region_family in quota_limits:
+                return quota_limits[region_family]
 
     @staticmethod
     def fall_back_to_smaller_vm_if_neccessary(instance_type: str, quota_limit: int) -> Optional[str]:

@@ -5,10 +5,11 @@ from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import config_path, aws_config_path, aws_quota_path
 from skyplane.utils import imports, fn, logger
 
-class AWSAuthentication:
 
+class AWSAuthentication:
     # Only supporting "m5." instances for now
-    _AWS_VCPUS = {"m5.8xlarge": 32,
+    _AWS_VCPUS = {
+        "m5.8xlarge": 32,
         "m5.12xlarge": 48,
         "m5.24xlarge": 96,
         "m5.metal": 96,
@@ -17,7 +18,7 @@ class AWSAuthentication:
         "m5.large": 2,
         "m5.2xlarge": 8,
         "m5.16xlarge": 64,
-}
+    }
 
     def __init__(self, config: Optional[SkyplaneConfig] = None, access_key: Optional[str] = None, secret_key: Optional[str] = None):
         """Loads AWS authentication details. If no access key is provided, it will try to load credentials using boto3"""
@@ -116,7 +117,7 @@ class AWSAuthentication:
             return None  # don't need to fall back
 
         max_vcpus, max_instance = 0, None
-        for instance, vcpus in AWSAuthentication._AWS_VCPUS:
+        for instance, vcpus in AWSAuthentication._AWS_VCPUS.items():
             # Get the largest of the smaller VMs than the quota_limit
             if vcpus <= quota_limit and vcpus > max_vcpus:
                 max_vcpus = vcpus
