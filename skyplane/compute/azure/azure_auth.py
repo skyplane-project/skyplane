@@ -163,7 +163,11 @@ class AzureAuthentication:
         # Ex: if the config vm uses 32 vCPUs but the quota limit is 8 vCPUS, call add_task 4 times with the smaller vm
 
         # Since Azure instances follow a common pattern, we can just extract the vCPUs from the instance name
-        vcpus = int(re.search(r"\d+", instance_type).group())
+        vcpus = re.search(r"\d+", instance_type)
+        if vcpus is None:
+            return None
+
+        vcpus = int(vcpus.group())
         if vcpus <= quota_limit:
             return None  # don't need to fall back
 

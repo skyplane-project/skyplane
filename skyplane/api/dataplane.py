@@ -162,8 +162,8 @@ class Dataplane:
                 "gcp": compute.GCPAuthentication,
                 "ibmcloud": compute.IBMCloudAuthentication,
             }
-            for node in self.topology.gateway_nodes:
-                cloud_provider, region = node.region.split(":")
+            for node in self.topology.get_gateways():
+                cloud_provider, region = node.region_tag.split(":")
                 spot = getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances")
                 vm_type = getattr(self.transfer_config, f"{cloud_provider}_instance_class")
 
@@ -174,7 +174,7 @@ class Dataplane:
                     smaller_vm = auth.fall_back_to_smaller_vm_if_neccessary(instance_type=vm_type, quota_limit=quota_limit)
                     if smaller_vm is not None:
                         vm_type = smaller_vm
-                        logger.warning(f"Falling back to {smaller_vm} at node {node} due to the vCPU quota limit {quota_limit}")
+                        logger.warning(f"Falling back to {smaller_vm} at node {region} due to the vCPU quota limit {quota_limit}")
 
                 # TODO: Add the logic for partitioning the task into multiple vms if we fell back (in fall_back functions)
                 # Ex: if the config vm uses 32 vCPUs but the quota limit is 8 vCPUS, call add_task 4 times with the smaller vm
