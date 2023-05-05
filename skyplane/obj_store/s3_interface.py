@@ -197,6 +197,7 @@ class S3Interface(ObjectStoreInterface):
         checksum_args = dict(ContentMD5=b64_md5sum) if b64_md5sum else dict()
 
         try:
+            print(f"Uploading {dst_object_name} part number {part_number}")
             with open(src_file_path, "rb") as f:
                 if upload_id:
                     s3_client.upload_part(

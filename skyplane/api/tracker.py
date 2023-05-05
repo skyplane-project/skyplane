@@ -215,7 +215,6 @@ class TransferProgressTracker(Thread):
         self.hooks.on_transfer_end()
 
         start_time = int(time.time())
-        print("transfer ended", transfer_stats)
         try:
             for job in self.jobs.values():
                 logger.fs.debug(f"[TransferProgressTracker] Finalizing job {job.uuid}")
@@ -261,7 +260,6 @@ class TransferProgressTracker(Thread):
         sinks = region_sinks[region_tag]
         # for region_tag, sink_gateways in self.dataplane.topology.sink_gateways().items():
         # sink_regions = set([sink.region for sink in sinks])
-        print("pending", self.job_pending_chunk_ids)
         while any([len(self.job_pending_chunk_ids[job_uuid][region_tag]) > 0 for job_uuid in self.job_pending_chunk_ids]):
             # refresh shutdown status by running noop
             do_parallel(lambda i: i.run_command("echo 1"), self.dataplane.bound_nodes.values(), n=8)
@@ -291,6 +289,7 @@ class TransferProgressTracker(Thread):
             completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region_tag"].unique()) == set([region_tag]))
             completed_chunk_ids = completed_status[completed_status].index
 
+
             # update job_complete_chunk_ids and job_pending_chunk_ids
             # TODO: do chunk-tracking per-destination
             for job_uuid, job in self.jobs.items():
@@ -313,7 +312,7 @@ class TransferProgressTracker(Thread):
 
             # sleep
             time.sleep(0.05)
-
+        
     @property
     @functools.lru_cache(maxsize=1)
     def _chunk_to_job_map(self):
@@ -364,6 +363,7 @@ class TransferProgressTracker(Thread):
                 ]
             )
         logger.fs.debug(f"[TransferProgressTracker] Bytes remaining per job: {bytes_remaining_per_job}")
+        print(f"[TransferProgressTracker] Bytes remaining per job: {bytes_remaining_per_job}")
         return sum(bytes_remaining_per_job.values())
 
     def query_bytes_dispatched(self):
