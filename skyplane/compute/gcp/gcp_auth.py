@@ -80,7 +80,7 @@ class GCPAuthentication:
             return [r for r in map(str.strip, f.readlines()) if r]
 
     @staticmethod
-    def get_quota_limits_for(region: str, spot: bool = False) -> int:
+    def get_quota_limits_for(region: str, spot: bool = False) -> Optional[int]:
         with gcp_quota_path.open("r") as f:
             quota_limits = json.load(f)
             region_family = "-".join(region.split("-")[:2])

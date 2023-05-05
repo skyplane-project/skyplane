@@ -165,7 +165,7 @@ class Dataplane:
             for node in self.topology.gateway_nodes:
                 cloud_provider, region = node.region.split(":")
                 spot = getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances")
-                vm_type = self.transfer_config.get_flag(f"{cloud_provider}_instance_class")
+                vm_type = getattr(self.transfer_config, f"{cloud_provider}_instance_class")
 
                 # Fall back to smaller vm if necessary
                 auth = auths[cloud_provider]

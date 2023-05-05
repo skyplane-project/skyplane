@@ -151,7 +151,7 @@ class AzureAuthentication:
             return region_list
 
     @staticmethod
-    def get_quota_limits_for(region: str, spot: bool = False) -> int:
+    def get_quota_limits_for(region: str, spot: bool = False) -> Optional[int]:
         with open(azure_standardDv5_quota_path, "r") as f:
             quota_limits = json.load(f)
             if region in quota_limits:
