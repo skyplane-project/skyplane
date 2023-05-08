@@ -144,7 +144,16 @@ class GatewayDaemonAPI(threading.Thread):
 
                     # else:
                     #    print(f"[gateway_api] chunk {chunk_id}: after {handle} state = {elem['state']}")
-                self.chunk_status_log.append(elem)
+
+                # only update chunk status log with terminal operators
+                # otherwise, the client needs to filter chunk updates depending on whether the operator is terminal or not
+                # this would require us to inform the client about the terminal operators, whcih seems annoying (though doable)
+                # we can change this if we need to profile the chunk status progression through the DAG in detail
+                if elem["state"] == ChunkState.complete.name:
+                    if handle in self.terminal_operators[elem["partition"]]:
+                        self.chunk_status_log.append(elem)
+                else:
+                    self.chunk_status_log.append(elem)
 
     def run(self):
         self.server.serve_forever()

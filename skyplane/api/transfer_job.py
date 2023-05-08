@@ -1,4 +1,5 @@
 import json
+import time
 import typer
 import math
 import queue
@@ -18,6 +19,7 @@ from abc import ABC, abstractmethod
 
 import urllib3
 from rich import print as rprint
+from functools import partial
 
 from skyplane import exceptions
 from skyplane.api.config import TransferConfig
@@ -31,6 +33,7 @@ from skyplane.utils import logger
 from skyplane.utils.definitions import MB
 from skyplane.utils.fn import do_parallel
 from skyplane.utils.path import parse_path
+from skyplane.utils.retry import retry_backoff
 
 if TYPE_CHECKING:
     from skyplane.api.dataplane import Dataplane
@@ -554,21 +557,25 @@ class CopyJob(TransferJob):
             self._http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         return self._http_pool
 
-    def gen_transfer_pairs(self, chunker: Optional[Chunker] = None) -> Generator[TransferPair, None, None]:
+    def gen_transfer_pairs(
+        self,
+        chunker: Optional[Chunker] = None,
+        transfer_config: Optional[TransferConfig] = field(init=False, default_factory=lambda: TransferConfig()),
+    ) -> Generator[TransferPair, None, None]:
         """Generate transfer pairs for the transfer job.
 
         :param chunker: chunker that makes the chunk requests
         :type chunker: Chunker
         """
         if chunker is None:  # used for external access to transfer pair list
-            chunker = Chunker(self.src_iface, self.dst_ifaces, TransferConfig())
+            chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)  # TODO: should read in existing transfer config
         yield from chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, self.recursive, self._pre_filter_fn)
 
     def dispatch(
         self,
         dataplane: "Dataplane",
-        transfer_config: TransferConfig,
         dispatch_batch_size: int = 100,  # 6.4 GB worth of chunks
+        transfer_config: Optional[TransferConfig] = field(init=False, default_factory=lambda: TransferConfig()),
     ) -> Generator[Chunk, None, None]:
         """Dispatch transfer job to specified gateways.
 
@@ -665,7 +672,9 @@ class CopyJob(TransferJob):
             def complete_fn(batch):
                 for req in batch:
                     logger.fs.debug(f"Finalize upload id {req['upload_id']} for key {req['key']}")
-                    obj_store_interface.complete_multipart_upload(req["key"], req["upload_id"])
+
+                    # retry - sometimes slight delay before object store knows all parts are uploaded
+                    retry_backoff(partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"]), initial_backoff=0.5)
 
             do_parallel(complete_fn, batches, n=8)
 
@@ -733,14 +742,18 @@ class SyncJob(CopyJob):
             [not isinstance(iface, ObjectStoreInterface) for iface in self.dst_ifaces]
         ), "Destination must be a object store interface"
 
-    def gen_transfer_pairs(self, chunker: Optional[Chunker] = None) -> Generator[TransferPair, None, None]:
+    def gen_transfer_pairs(
+        self,
+        chunker: Optional[Chunker] = None,
+        transfer_config: Optional[TransferConfig] = field(init=False, default_factory=lambda: TransferConfig()),
+    ) -> Generator[TransferPair, None, None]:
         """Generate transfer pairs for the transfer job.
 
         :param chunker: chunker that makes the chunk requests
         :type chunker: Chunker
         """
         if chunker is None:  # used for external access to transfer pair list
-            chunker = Chunker(self.src_iface, self.dst_ifaces, TransferConfig())
+            chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
         transfer_pair_gen = chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, self.recursive, self._pre_filter_fn)
 
         # only single destination supported

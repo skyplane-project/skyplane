@@ -1,4 +1,4 @@
-name: integration-test-multiple-sizes
+name: integration-test-local
 on: [push]
 concurrency: transfer-test
 env:
@@ -7,27 +7,21 @@ env:
   SKYPLANE_USAGE_STATS_ENABLED: 0
 jobs:
   integration:
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request')
     runs-on: ubuntu-latest
     strategy:
-      max-parallel: 1
+      max-parallel: 8
       matrix:
         pairs:
-          # AWS to AWS
-          - aws:us-east-1 aws:us-east-1 --multipart
-          - aws:us-east-2 aws:us-west-2 --multipart
-          # GCP to GCP
-          - gcp:us-central1-a gcp:us-central1-a --multipart
-          - gcp:us-west1-a gcp:us-east1-a --multipart
-          # Azure to Azure
-          - azure:westus azure:westus
-          - azure:eastus azure:westus
-          # cross cloud tests
-          - aws:us-west-1 gcp:us-west2-a --multipart
-          - gcp:us-west2-a aws:us-west-1 --multipart
-          - aws:us-west-1 azure:westus
-          - azure:westus aws:us-west-1
-          - gcp:us-west2-a azure:westus
-          - azure:westus gcp:us-west2-a
+          # AWS
+          - aws:us-east-1 local
+          - local aws:us-east-2 
+          # GCP
+          - gcp:us-central1-a local
+          - local gcp:us-east1-a
+          # Azure
+          - azure:westus local
+          - local azure:westus
     timeout-minutes: 40
     env:
       STRATEGY_UUID: itest-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
@@ -63,11 +57,11 @@ jobs:
           poetry run skyplane init -y
           poetry run skyplane config set usage_stats false
       - name: Single small file test
-        run: poetry run python tests/integration/cp.py ${{ matrix.pairs }} --n-files 1 --file-size-mb 32
+        run: poetry run python tests/integration/cp_local.py ${{ matrix.pairs }} --n-files 1 --file-size-mb 32
       - name: 128 small files test
-        run: poetry run python tests/integration/cp.py ${{ matrix.pairs }} --n-files 128 --file-size-mb 1
+        run: poetry run python tests/integration/cp_local.py ${{ matrix.pairs }} --n-files 128 --file-size-mb 1
       - name: Single large file test
-        run: poetry run python tests/integration/cp.py ${{ matrix.pairs }} --n-files 1 --file-size-mb 2000
+        run: poetry run python tests/integration/cp_local.py ${{ matrix.pairs }} --n-files 1 --file-size-mb 2000
       - name: Cleanup GCP service account
         if: always()
         run: gcloud iam service-accounts delete ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com

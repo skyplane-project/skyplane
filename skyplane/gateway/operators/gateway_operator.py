@@ -568,5 +568,7 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
             ),
             max_retries=1,
         )
-        logger.debug(f"[obj_store:{self.worker_id}] Uploaded {chunk_req.chunk.chunk_id} to {self.bucket_name}")
+        logger.debug(
+            f"[obj_store:{self.worker_id}] Uploaded {chunk_req.chunk.chunk_id} partition {chunk_req.chunk.part_number} to {self.bucket_name}"
+        )
         return True
