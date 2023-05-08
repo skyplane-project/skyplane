@@ -312,7 +312,6 @@ class TransferProgressTracker(Thread):
                 self.job_pending_chunk_ids[job_uuid][region_tag] = self.job_pending_chunk_ids[job_uuid][region_tag].difference(
                     job_complete_chunk_ids
                 )
-
             # sleep
             time.sleep(0.05)
 
