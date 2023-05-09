@@ -319,6 +319,19 @@ def gcp_check(
     check_assert(cred, "GCP Python SDK credentials created")
     check_assert(sa_cred, "GCP Python SDK service account credentials created")
 
+    # check object store
+    rprint(f"\n{hline}\n[bold]Checking service account permissions [/bold]\n{hline}")
+    from skyplane.obj_store.object_store_interface import ObjectStoreInterface
+    iface = ObjectStoreInterface.create("gcp:infer", bucket)
+    iface.list_objects()
+    check_assert(iface.auth._service_credentials_file, "GCP service account credentials file set")
+
+    
+    cli = f"az role assignment list --assignee {cloud_config.azure_principal_id} --all"
+    retcode, stdout, stderr = run_cmd(cli.split(), debug=debug)
+    check_assert(retcode == 0, "Azure CLI UMI roles listed", debug_msg=stderr)
+ 
+
 
 @app.command()
 def azure_get_valid_skus(
