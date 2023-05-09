@@ -47,7 +47,6 @@ jobs:
           poetry run skyplane config set usage_stats false
   runner: 
     needs: [install]
-    max-parallel: 1
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 1
