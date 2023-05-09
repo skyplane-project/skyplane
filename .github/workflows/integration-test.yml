@@ -80,6 +80,7 @@ jobs:
         run: poetry run python tests/integration/cp.py ${{ matrix.pairs }} --n-files 1 --file-size-mb 2000
   cleanup: 
     needs: [install, runner]
+    steps: 
       - name: Cleanup GCP service account
         if: always()
         run: gcloud iam service-accounts delete --quiet ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
