@@ -96,6 +96,7 @@ class IBMCloudServer(Server):
             # ssh_username="ec2-user",
             ssh_username=self.vsi.ssh_credentials["username"],
             ssh_pkey=str(self.vsi.ssh_credentials["key_filename"]),
+            host_pkey_directories=[],
             local_bind_address=("127.0.0.1", 0),
             remote_bind_address=("127.0.0.1", remote_port),
         )

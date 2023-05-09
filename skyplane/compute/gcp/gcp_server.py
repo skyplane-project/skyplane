@@ -38,7 +38,7 @@ class GCPServer(Server):
             for i in instances["items"]:
                 if i["name"] == self.gcp_instance_name:
                     return i
-        raise ValueError(f"No instance found with name {self.gcp_instance_name}, {instances}")
+        raise ValueError(f"No instance found with name {self.gcp_instance_name}, {self.gcp_region}, {instances}")
 
     def get_instance_property(self, prop):
         instance = self.get_gcp_instance()
@@ -115,6 +115,7 @@ class GCPServer(Server):
             ssh_username=uname,
             ssh_pkey=str(self.ssh_private_key),
             ssh_private_key_password=ssh_key_password,
+            host_pkey_directories=[],
             local_bind_address=("127.0.0.1", 0),
             remote_bind_address=("127.0.0.1", remote_port),
         )

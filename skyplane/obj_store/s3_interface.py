@@ -24,6 +24,7 @@ class S3Interface(ObjectStoreInterface):
         self.requester_pays = False
         self.bucket_name = bucket_name
         self._cached_s3_clients = {}
+        self.provider = "aws"
 
     def path(self):
         return f"s3://{self.bucket_name}"
@@ -60,8 +61,14 @@ class S3Interface(ObjectStoreInterface):
         return self._cached_s3_clients[region]
 
     @imports.inject("botocore.exceptions", pip_extra="aws")
-    def bucket_exists(botocore_exceptions, self):
-        s3_client = self._s3_client("us-east-1")
+    def bucket_exists(botocore_exceptions, self, region=None):
+        if region is None:  # use current bucket region is available
+            try:
+                region = self.aws_region
+            except exceptions.MissingBucketException:
+                region = "us-east-1"
+
+        s3_client = self._s3_client(region)
         try:
             requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
             s3_client.list_objects_v2(Bucket=self.bucket_name, MaxKeys=1, **requester_pays)
@@ -73,30 +80,38 @@ class S3Interface(ObjectStoreInterface):
 
     def create_bucket(self, aws_region):
         s3_client = self._s3_client(aws_region)
-        if not self.bucket_exists():
+        if not self.bucket_exists(aws_region):
             if aws_region == "us-east-1":
                 s3_client.create_bucket(Bucket=self.bucket_name)
             else:
                 s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": aws_region})
+        else:
+            logger.warning(f"Bucket {self.bucket} in region {aws_region} already exists")
 
     def delete_bucket(self):
         # delete 1000 keys at a time
         for batch in batch_generator(self.list_objects(), 1000):
             self.delete_objects([obj.key for obj in batch])
         assert len(list(self.list_objects())) == 0, f"Bucket not empty after deleting all keys {list(self.list_objects())}"
-
         # delete bucket
         self._s3_client().delete_bucket(Bucket=self.bucket_name)
 
-    def list_objects(self, prefix="") -> Iterator[S3Object]:
-        paginator = self._s3_client().get_paginator("list_objects_v2")
+    def list_objects(self, prefix="", region=None) -> Iterator[S3Object]:
+        paginator = self._s3_client(region).get_paginator("list_objects_v2")
         requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
         page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix, **requester_pays)
         for page in page_iterator:
             objs = []
             for obj in page.get("Contents", []):
                 objs.append(
-                    S3Object("aws", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"], mime_type=obj.get("ContentType"))
+                    S3Object(
+                        obj["Key"],
+                        provider="aws",
+                        bucket=self.bucket_name,
+                        size=obj["Size"],
+                        last_modified=obj["LastModified"],
+                        mime_type=obj.get("ContentType"),
+                    )
                 )
             yield from objs
 

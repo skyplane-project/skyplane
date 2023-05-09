@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 from typing import Iterator, List, Optional
+from skyplane.obj_store.storage_interface import StorageInterface
+import os
 
 
 @dataclass
@@ -22,7 +24,10 @@ class LocalFile:
         raise NotImplementedError()
 
 
-class FileSystemInterface:
+class FileSystemInterface(StorageInterface):
+    def region_tag(self) -> str:
+        return "local"
+
     def path(self) -> str:
         raise NotImplementedError()
 

@@ -24,14 +24,13 @@ import time
 import logging
 import uuid
 import random
-from ibm_vpc import VpcV1
-from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
-from ibm_cloud_sdk_core import ApiException
 from concurrent.futures import ThreadPoolExecutor
 
 from skyplane.compute.ibmcloud.ibm_gen2.ssh_client import SSHClient
 from skyplane.compute.ibmcloud.ibm_gen2.constants import COMPUTE_CLI_MSG, CACHE_DIR
 from skyplane.compute.ibmcloud.ibm_gen2.utils import load_yaml_config, dump_yaml_config, delete_yaml_config
+
+from skyplane.utils import imports
 
 logger = logging.getLogger(__name__)
 
@@ -60,9 +59,10 @@ class IBMVPCBackend:
         self.workers = []
 
         self.iam_api_key = self.config.get("iam_api_key")
-        authenticator = IAMAuthenticator(self.iam_api_key, url=self.config.get("iam_endpoint"))
-        self.vpc_cli = VpcV1(VPC_API_VERSION, authenticator=authenticator)
-        self.vpc_cli.set_service_url(self.config["endpoint"] + "/v1")
+        self.vpc_cli = self.create_vpc_cli()
+        # authenticator = ibm_cloud_sdk_core.authenticators(self.iam_api_key, url=self.config.get("iam_endpoint"))
+        # self.vpc_cli = ibm_vpc.VpcV1(VPC_API_VERSION, authenticator=authenticator)
+        # self.vpc_cli.set_service_url(self.config["endpoint"] + "/v1")
 
         user_agent_string = "ibm_vpc_{}".format(self.config["user_agent"])
         self.vpc_cli._set_user_agent_header(user_agent_string)
@@ -72,6 +72,13 @@ class IBMVPCBackend:
 
         msg = COMPUTE_CLI_MSG.format("IBM VPC")
         logger.info(f"{msg} - Region: {self.region}")
+
+    @imports.inject("ibm_vpc", "ibm_cloud_sdk_core", pip_extra="ibmcloud")
+    def create_vpc_cli(ibm_vpc, ibm_cloud_sdk_core, self):
+        authenticator = ibm_cloud_sdk_core.authenticators(self.iam_api_key, url=self.config.get("iam_endpoint"))
+        vpc_cli = ibm_vpc.VpcV1(VPC_API_VERSION, authenticator=authenticator)
+        vpc_cli.set_service_url(self.config["endpoint"] + "/v1")
+        return vpc_cli
 
     def _load_vpc_data(self):
         """
@@ -92,7 +99,8 @@ class IBMVPCBackend:
         """
         dump_yaml_config(self.vpc_data_filename, self.vpc_data)
 
-    def _create_vpc(self):
+    @imports.inject("ibm_cloud_sdk_core", pip_extra="ibmcloud")
+    def _create_vpc(ibm_cloud_sdk_core, self):
         """
         Creates a new VPC
         """
@@ -108,7 +116,7 @@ class IBMVPCBackend:
                 self.config["security_group_id"] = self.vpc_data["security_group_id"]
                 print(self.config)
                 return
-            except ApiException:
+            except ibm_cloud_sdk_core.ApiException:
                 pass
 
         vpc_info = None
@@ -170,7 +178,8 @@ class IBMVPCBackend:
         if deploy_icmp_rule:
             self.vpc_cli.create_security_group_rule(self.config["security_group_id"], sg_rule_prototype_icmp)
 
-    def _create_ssh_key(self):
+    @imports.inject("ibm_cloud_sdk_core", pip_extra="ibmcloud")
+    def _create_ssh_key(ibm_cloud_sdk_core, self):
         if "ssh_key_id" in self.config:
             print("ssh_key_id in self.config")
             return
@@ -182,7 +191,7 @@ class IBMVPCBackend:
                 self.config["ssh_key_id"] = self.vpc_data["ssh_key_id"]
                 self.config["ssh_key_filename"] = self.vpc_data["ssh_key_filename"]
                 return
-            except ApiException:
+            except ibm_cloud_sdk_core.ApiException:
                 pass
 
         keyname = f"skyplane-key-{str(uuid.getnode())[-6:]}"
@@ -211,7 +220,7 @@ class IBMVPCBackend:
                 key_info = self.vpc_cli.create_key(
                     public_key=ssh_key_data, name=keyname, type="rsa", resource_group={"id": self.config["resource_group_id"]}
                 ).get_result()
-            except ApiException as e:
+            except ibm_cloud_sdk_core.ApiException as e:
                 logger.warn(e.message)
                 if "Key with name already exists" in e.message:
                     self.vpc_cli.delete_key(id=_get_ssh_key()["id"])
@@ -229,7 +238,8 @@ class IBMVPCBackend:
         self.config["ssh_key_id"] = key_info["id"]
         self.config["ssh_key_filename"] = key_filename
 
-    def _create_subnet(self):
+    @imports.inject("ibm_cloud_sdk_core", pip_extra="ibmcloud")
+    def _create_subnet(ibm_cloud_sdk_core, self):
         """
         Creates a new subnet
         """
@@ -247,7 +257,7 @@ class IBMVPCBackend:
                 self.config["subnet_id"] = self.vpc_data["subnet_id"]
                 self.config["zone_name"] = self.vpc_data["zone_name"]
                 return
-            except ApiException:
+            except ibm_cloud_sdk_core.ApiException:
                 pass
 
         subnet_name = f"skyplane-subnet-{self.vpc_key}"
@@ -273,7 +283,8 @@ class IBMVPCBackend:
         self.config["subnet_id"] = subnet_data["id"]
         self.config["zone_name"] = subnet_data["zone"]["name"]
 
-    def _create_gateway(self):
+    @imports.inject("ibm_cloud_sdk_core", pip_extra="ibmcloud")
+    def _create_gateway(ibm_cloud_sdk_core, self):
         """
         Crates a public gateway.
         Gateway is used by private nodes for accessing internet
@@ -286,7 +297,7 @@ class IBMVPCBackend:
                 self.vpc_cli.get_public_gateway(self.vpc_data["gateway_id"])
                 self.config["gateway_id"] = self.vpc_data["gateway_id"]
                 return
-            except ApiException:
+            except ibm_cloud_sdk_core.ApiException:
                 pass
 
         gateway_name = f"skyplane-gateway-{self.vpc_key}"
@@ -432,7 +443,8 @@ class IBMVPCBackend:
         }
         self._dump_vpc_data()
 
-    def _delete_vm_instances(self, all=False):
+    @imports.inject("ibm_cloud_sdk_core", pip_extra="ibmcloud")
+    def _delete_vm_instances(ibm_cloud_sdk_core, self, all=False):
         """
         Deletes all VM instances in the VPC
         """
@@ -444,7 +456,7 @@ class IBMVPCBackend:
             try:
                 logger.info(f"Deleting instance {ins_name}")
                 self.vpc_cli.delete_instance(ins_id)
-            except ApiException as err:
+            except ibm_cloud_sdk_core.ApiException as err:
                 if err.code == 404:
                     pass
                 else:
@@ -478,7 +490,8 @@ class IBMVPCBackend:
         while get_instances():
             time.sleep(1)
 
-    def _delete_subnet(self):
+    @imports.inject("ibm_cloud_sdk_core", pip_extra="ibmcloud")
+    def _delete_subnet(ibm_cloud_sdk_core, self):
         """
         Deletes all VM instances in the VPC
         """
@@ -495,7 +508,7 @@ class IBMVPCBackend:
 
             try:
                 self.vpc_cli.unset_subnet_public_gateway(self.vpc_data["subnet_id"])
-            except ApiException as err:
+            except ibm_cloud_sdk_core.ApiException as err:
                 if err.code == 404 or err.code == 400:
                     logger.debug(err)
                 else:
@@ -503,13 +516,14 @@ class IBMVPCBackend:
 
             try:
                 self.vpc_cli.delete_subnet(self.vpc_data["subnet_id"])
-            except ApiException as err:
+            except ibm_cloud_sdk_core.ApiException as err:
                 if err.code == 404 or err.code == 400:
                     logger.debug(err)
                 else:
                     raise err
 
-    def _delete_gateway(self):
+    @imports.inject("ibm_cloud_sdk_core", pip_extra="ibmcloud")
+    def _delete_gateway(ibm_cloud_sdk_core, self):
         """
         Deletes the public gateway
         """
@@ -525,13 +539,14 @@ class IBMVPCBackend:
             logger.info(f"Deleting gateway {gateway_name}")
             try:
                 self.vpc_cli.delete_public_gateway(self.vpc_data["gateway_id"])
-            except ApiException as err:
+            except ibm_cloud_sdk_core.ApiException as err:
                 if err.code == 404 or err.code == 400:
                     logger.debug(err)
                 else:
                     raise err
 
-    def _delete_ssh_key(self):
+    @imports.inject("ibm_cloud_sdk_core", pip_extra="ibmcloud")
+    def _delete_ssh_key(ibm_cloud_sdk_core, self):
         """
         Deletes the ssh key
         """
@@ -553,13 +568,14 @@ class IBMVPCBackend:
             logger.info(f"Deleting SSH key {keyname}")
             try:
                 self.vpc_cli.delete_key(id=self.vpc_data["ssh_key_id"])
-            except ApiException as err:
+            except ibm_cloud_sdk_core.ApiException as err:
                 if err.code == 404 or err.code == 400:
                     logger.debug(err)
                 else:
                     raise err
 
-    def _delete_vpc(self):
+    @imports.inject("ibm_cloud_sdk_core", pip_extra="ibmcloud")
+    def _delete_vpc(ibm_cloud_sdk_core, self):
         """
         Deletes the VPC
         """
@@ -573,7 +589,7 @@ class IBMVPCBackend:
             logger.info(f'Deleting VPC {self.vpc_data["vpc_id"]}')
             try:
                 self.vpc_cli.delete_vpc(self.vpc_data["vpc_id"])
-            except ApiException as err:
+            except ibm_cloud_sdk_core.ApiException as err:
                 if err.code == 404 or err.code == 400:
                     logger.debug(err)
                 else:
@@ -674,12 +690,15 @@ class IBMVPCInstance:
         else:
             return f"VM instance {self.name} ({ip})"
 
-    def _create_vpc_client(self):
+    @imports.inject("ibm_vpc", "ibm_cloud_sdk_core", pip_extra="ibmcloud")
+    def _create_vpc_client(ibm_vpc, ibm_cloud_sdk_core, self):
         """
         Creates an IBM VPC python-sdk instance
         """
-        authenticator = IAMAuthenticator(self.config.get("iam_api_key"), url=self.config.get("iam_endpoint"))
-        ibm_vpc_client = VpcV1(VPC_API_VERSION, authenticator=authenticator)
+        authenticator = ibm_cloud_sdk_core.authenticators.IAMAuthenticator(
+            self.config.get("iam_api_key"), url=self.config.get("iam_endpoint")
+        )
+        ibm_vpc_client = ibm_vpc.VpcV1(VPC_API_VERSION, authenticator=authenticator)
         ibm_vpc_client.set_service_url(self.config["endpoint"] + "/v1")
 
         # decorate instance public methods with except/retry logic
@@ -767,7 +786,8 @@ class IBMVPCInstance:
 
         raise TimeoutError(f"Readiness probe expired on {self}")
 
-    def _create_instance(self, user_data):
+    @imports.inject("ibm_cloud_sdk_core", pip_extra="ibmcloud")
+    def _create_instance(ibm_cloud_sdk_core, self, user_data):
         """
         Creates a new VM instance
         """
@@ -803,7 +823,7 @@ class IBMVPCInstance:
 
         try:
             resp = self.vpc_cli.create_instance(instance_prototype)
-        except ApiException as err:
+        except ibm_cloud_sdk_core.ApiException as err:
             if err.code == 400 and "already exists" in err.message:
                 return self.get_instance_data()
             elif err.code == 400 and "over quota" in err.message:
@@ -903,7 +923,8 @@ class IBMVPCInstance:
 
         return self.instance_id
 
-    def start(self):
+    @imports.inject("ibm_cloud_sdk_core", pip_extra="ibmcloud")
+    def start(ibm_cloud_sdk_core, self):
         """
         Starts the VM instance
         """
@@ -911,7 +932,7 @@ class IBMVPCInstance:
 
         try:
             self.vpc_cli.create_instance_action(self.instance_id, "start")
-        except ApiException as err:
+        except ibm_cloud_sdk_core.ApiException as err:
             if err.code == 404:
                 pass
             else:
@@ -919,14 +940,15 @@ class IBMVPCInstance:
 
         logger.debug("VM instance {} started successfully".format(self.name))
 
-    def _delete_instance(self):
+    @imports.inject("ibm_cloud_sdk_core", pip_extra="ibmcloud")
+    def _delete_instance(ibm_cloud_sdk_core, self):
         """
         Deletes the VM instacne and the associated volume
         """
         logger.debug("Deleting VM instance {}".format(self.name))
         try:
             self.vpc_cli.delete_instance(self.instance_id)
-        except ApiException as err:
+        except ibm_cloud_sdk_core.ApiException as err:
             if err.code == 404:
                 pass
             else:
@@ -935,14 +957,15 @@ class IBMVPCInstance:
         self.private_ip = None
         self.del_ssh_client()
 
-    def _stop_instance(self):
+    @imports.inject("ibm_cloud_sdk_core", pip_extra="ibmcloud")
+    def _stop_instance(ibm_cloud_sdk_core, self):
         """
         Stops the VM instance
         """
         logger.debug("Stopping VM instance {}".format(self.name))
         try:
             self.vpc_cli.create_instance_action(self.instance_id, "stop")
-        except ApiException as err:
+        except ibm_cloud_sdk_core.ApiException as err:
             if err.code == 404:
                 pass
             else:
@@ -1016,7 +1039,8 @@ def decorate_instance(instance, decorator):
     return instance
 
 
-def vpc_retry_on_except(func):
+@imports.inject("ibm_cloud_sdk_core", pip_extra="ibmcloud")
+def vpc_retry_on_except(ibm_cloud_sdk_core, func):
     RETRIES = 3
     SLEEP_FACTOR = 1.5
     MAX_SLEEP = 30
@@ -1038,7 +1062,7 @@ def vpc_retry_on_except(func):
         for i in range(RETRIES):
             try:
                 return func(*args, **kwargs)
-            except ApiException as err:
+            except ibm_cloud_sdk_core.ApiException as err:
                 if func.__name__ in IGNORED_404_METHODS and err.code == 404:
                     logger.debug((f"Got exception {err} when trying to invoke {func.__name__}, ignoring"))
                 else:

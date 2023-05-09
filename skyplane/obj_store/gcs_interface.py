@@ -27,6 +27,8 @@ class GCSInterface(ObjectStoreInterface):
         self.auth = compute.GCPAuthentication()
         self._gcs_client = self.auth.get_storage_client()
         self._requests_session = requests.Session()
+        self.provider = "gcp"
+        # self.region_tag = self.a
 
     def path(self):
         return f"gs://{self.bucket_name}"
@@ -106,10 +108,17 @@ class GCSInterface(ObjectStoreInterface):
         assert len(list(self.list_objects())) == 0, f"Bucket not empty after deleting all keys {list(self.list_objects())}"
         self._gcs_client.get_bucket(self.bucket_name).delete()
 
-    def list_objects(self, prefix="") -> Iterator[GCSObject]:
+    def list_objects(self, prefix="", region=None) -> Iterator[GCSObject]:
         blobs = self._gcs_client.list_blobs(self.bucket_name, prefix=prefix)
         for blob in blobs:
-            yield GCSObject("gcs", self.bucket_name, blob.name, blob.size, blob.updated, mime_type=getattr(blob, "content_type", None))
+            yield GCSObject(
+                blob.name,
+                provider="gcp",
+                bucket=self.bucket_name,
+                size=blob.size,
+                last_modified=blob.updated,
+                mime_type=getattr(blob, "content_type", None),
+            )
 
     def delete_objects(self, keys: List[str]):
         for key in keys:
@@ -218,17 +227,21 @@ class GCSInterface(ObjectStoreInterface):
             return
 
         # multipart upload
-        assert part_number is not None and upload_id is not None
+        assert part_number is not None, f"Part number cannot be none for multipart upload: {part_number}, {upload_id}"
+        assert upload_id is not None, f"Upload ID cannot be none for multipart upload: {part_number}, {upload_id}"
 
         # send XML api request
         headers = {"Content-MD5": b64_md5sum} if check_md5 else None
-        response = self.send_xml_request(
-            dst_object_name,
-            {"uploadId": upload_id, "partNumber": part_number},
-            "PUT",
-            headers=headers,
-            data=open(src_file_path, "rb"),
-        )
+        try:
+            response = self.send_xml_request(
+                dst_object_name,
+                {"uploadId": upload_id, "partNumber": part_number},
+                "PUT",
+                headers=headers,
+                data=open(src_file_path, "rb"),
+            )
+        except Exception as e:
+            raise ValueError(f"Failed to upload {dst_object_name} to bucket {self.bucket_name} upload id {upload_id}: {e}")
 
         # check response
         if "ETag" not in response.headers:

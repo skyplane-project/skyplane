@@ -37,7 +37,7 @@ def setup_buckets(src_region, dest_region, n_files=1, file_size_mb=1):
     return src_bucket_name, dest_bucket_name, src_prefix, dest_prefix
 
 
-def run(src_region, dest_region, n_files=1, file_size_mb=1, multipart=True):
+def run(src_region, dest_region, n_files=1, file_size_mb=1, multipart=False):
     logger.info(
         f"Running skyplane cp integration test with config "
         + f"src_region={src_region}, "

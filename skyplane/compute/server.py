@@ -1,5 +1,6 @@
 import json
 import logging
+from pprint import pprint
 import os
 import socket
 from contextlib import closing
@@ -13,10 +14,14 @@ from typing import Dict, Optional, Tuple
 from skyplane import compute
 from skyplane.compute.const_cmds import make_autoshutdown_script, make_dozzle_command, make_sysctl_tcp_tuning_command
 from skyplane.config_paths import config_path, cloud_config, __config_root__
+from skyplane.gateway.gateway_program import GatewayProgram
 from skyplane.utils import logger
 from skyplane.utils.fn import PathLike, wait_for
 from skyplane.utils.retry import retry_backoff
 from skyplane.utils.timer import Timer
+from skyplane.planner.topology import TopologyPlanGateway
+
+tmp_log_dir = Path("/tmp/skyplane")
 
 
 class ServerState(Enum):
@@ -282,8 +287,9 @@ class Server:
 
     def start_gateway(
         self,
-        outgoing_ports: Dict[str, int],  # maps ip to number of connections along route
         gateway_docker_image: str,
+        gateway_program_path: str,
+        gateway_info_path: str,
         log_viewer_port=8888,
         use_bbr=False,
         use_compression=False,
@@ -342,9 +348,20 @@ class Server:
             docker_envs["E2EE_KEY_FILE"] = f"/pkg/data/{e2ee_key_file}"
             docker_run_flags += f" -v /tmp/{e2ee_key_file}:/pkg/data/{e2ee_key_file}"
 
-        docker_run_flags += " " + " ".join(f"--env {k}={v}" for k, v in docker_envs.items())
+        # upload gateway programs and gateway info
+        gateway_program_file = os.path.basename(gateway_program_path).replace(":", "_")
+        gateway_info_file = os.path.basename(gateway_info_path).replace(":", "_")
+        self.upload_file(gateway_program_path, f"/tmp/{gateway_program_file}")  # upload gateway program
+        self.upload_file(gateway_info_path, f"/tmp/{gateway_info_file}")  # upload gateway info
+        docker_envs["GATEWAY_PROGRAM_FILE"] = f"/pkg/data/gateway_program.json"
+        docker_envs["GATEWAY_INFO_FILE"] = f"/pkg/data/gateway_info.json"
+        docker_run_flags += f" -v /tmp/{gateway_program_file}:/pkg/data/gateway_program.json"
+        docker_run_flags += f" -v /tmp/{gateway_info_file}:/pkg/data/gateway_info.json"
         gateway_daemon_cmd = f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
-        gateway_daemon_cmd += f" --outgoing-ports '{json.dumps(outgoing_ports)}'"
+
+        # update docker flags
+        docker_run_flags += " " + " ".join(f"--env {k}={v}" for k, v in docker_envs.items())
+
         gateway_daemon_cmd += f" --region {self.region_tag} {'--use-compression' if use_compression else ''}"
         gateway_daemon_cmd += f" {'--disable-e2ee' if e2ee_key_bytes is None else ''}"
         gateway_daemon_cmd += f" {'--disable-tls' if not use_socket_tls else ''}"

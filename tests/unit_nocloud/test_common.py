@@ -3,9 +3,9 @@ from skyplane.utils.path import parse_path
 
 def test_parse_path():
     # test local
-    assert parse_path("/") == ("local", None, "/")
-    assert parse_path("/tmp") == ("local", None, "/tmp")
-    assert parse_path("does-not-exist-0000000/file") == ("local", None, "does-not-exist-0000000/file")
+    assert parse_path("/") == ("local", "/", "/")
+    assert parse_path("/tmp") == ("local", "/tmp", "/tmp")
+    assert parse_path("does-not-exist-0000000/file") == ("local", "does-not-exist-0000000/file", "does-not-exist-0000000/file")
 
     # test s3://
     assert parse_path("s3://bucket") == ("aws", "bucket", "")
