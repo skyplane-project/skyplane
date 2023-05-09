@@ -201,6 +201,7 @@ class AzureServer(Server):
             ssh_username=uname,
             ssh_pkey=str(self.ssh_private_key),
             ssh_private_key_password=ssh_key_password,
+            host_pkey_directories=[],
             local_bind_address=("127.0.0.1", 0),
             remote_bind_address=("127.0.0.1", remote_port),
         )

@@ -156,6 +156,7 @@ class AWSServer(Server):
             # ssh_username="ec2-user",
             ssh_username=self.login_name,
             ssh_pkey=str(self.local_keyfile),
+            host_pkey_directories=[],
             local_bind_address=("127.0.0.1", 0),
             remote_bind_address=("127.0.0.1", remote_port),
         )
