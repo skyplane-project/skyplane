@@ -450,6 +450,7 @@ def cp(
     :param solver: The solver to use for the transfer (default: direct)
     :type solver: str
     """
+    print("copy")
     return run_transfer(src, dst, recursive, debug, multipart, confirm, max_instances, max_connections, solver, "cp")
 
 

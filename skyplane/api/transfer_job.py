@@ -265,6 +265,7 @@ class Chunker:
         logger.fs.debug(f"Querying objects in {self.src_iface.path()}")
         n_objs = 0
         for obj in self.src_iface.list_objects(src_prefix):
+            #print(obj, prefilter_fn(obj))
             if prefilter_fn is None or prefilter_fn(obj):
                 # collect list of destination objects
                 dest_objs = {}
@@ -295,7 +296,6 @@ class Chunker:
 
                 # assert that all destinations share the same post-fix key
                 assert len(list(set(dest_keys))) == 1, f"Destination keys {dest_keys} do not match"
-
                 n_objs += 1
                 yield TransferPair(src_obj=obj, dst_objs=dest_objs, dst_key=dest_keys[0])
 
@@ -328,9 +328,11 @@ class Chunker:
         # begin chunking loop
         for transfer_pair in transfer_pair_generator:
             src_obj = transfer_pair.src_obj
+            #print("src_obj", src_obj)
             if self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
                 multipart_send_queue.put(transfer_pair)
             else:
+                #print("chunk", transfer_pair)
                 yield GatewayMessage(
                     chunk=Chunk(
                         src_key=src_obj.key,
@@ -419,6 +421,7 @@ class Chunker:
         """
         for item in gen_in:
             out_list.append(item)
+            #print("tail", item)
             yield item
 
 
@@ -555,7 +558,8 @@ class CopyJob(TransferJob):
     def http_pool(self):
         """http connection pool"""
         if not hasattr(self, "_http_pool"):
-            self._http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
+            timeout = urllib3.util.Timeout(connect=10.0, read=None) # no read timeout
+            self._http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3), timeout=timeout)
         return self._http_pool
 
     def gen_transfer_pairs(
@@ -568,6 +572,7 @@ class CopyJob(TransferJob):
         :param chunker: chunker that makes the chunk requests
         :type chunker: Chunker
         """
+        #print("GENERATE PAIRS")
         if chunker is None:  # used for external access to transfer pair list
             chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)  # TODO: should read in existing transfer config
         yield from chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, self.recursive, self._pre_filter_fn)
@@ -588,11 +593,14 @@ class CopyJob(TransferJob):
         :type dispatch_batch_size: int
         """
         chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
+        #print("STARTING GENERATION")
         transfer_pair_generator = self.gen_transfer_pairs(chunker)  # returns TransferPair objects
+        #for transfer_pair in transfer_pair_generator:
+        #    print('generated', transfer_pair)
         gen_transfer_list = chunker.tail_generator(transfer_pair_generator, self.transfer_list)
         chunks = chunker.chunk(gen_transfer_list)
         # chunk_requests = chunker.to_chunk_requests(chunks)
-
+        #print("HERE")
         batches = chunker.batch_generator(
             chunker.prefetch_generator(chunks, buffer_size=dispatch_batch_size * 32), batch_size=dispatch_batch_size
         )
@@ -616,6 +624,10 @@ class CopyJob(TransferJob):
                             if region_tag == dst_gateway.region_tag:
                                 mappings[key] = id
 
+                    if len(list(mappings.keys())) == 0:
+                        # no mappings to send 
+                        continue 
+
                     # send mapping to gateway
                     reply = self.http_pool.request(
                         "POST",
@@ -635,26 +647,36 @@ class CopyJob(TransferJob):
             server = src_gateways[min_idx]
             n_bytes = sum([chunk.chunk_length_bytes for chunk in chunk_batch])
             bytes_dispatched[min_idx] += n_bytes
-            start = time.time()
             assert Chunk.from_dict(chunk_batch[0].as_dict()) == chunk_batch[0], f"Invalid chunk request: {chunk_batch[0].as_dict}"
-            reply = self.http_pool.request(
-                "POST",
-                f"{server.gateway_api_url}/api/v1/chunk_requests",
-                body=json.dumps([chunk.as_dict() for chunk in chunk_batch]).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-            )
-            end = time.time()
-            if reply.status != 200:
-                raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
-            logger.fs.debug(
-                f"Dispatched {len(batch)} chunk requests to {server.instance_name()} ({n_bytes} bytes) in {end - start:.2f} seconds"
-            )
+
+            n_added = 0
+            while n_added < len(chunk_batch):
+                start = time.time()
+                reply = self.http_pool.request(
+                    "POST",
+                    f"{server.gateway_api_url}/api/v1/chunk_requests",
+                    body=json.dumps([chunk.as_dict() for chunk in chunk_batch[n_added:]]).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                )
+                reply_json = json.loads(reply.data.decode('utf-8'))
+                print(n_added, len(chunk_batch), reply_json)
+                n_added += reply_json["n_added"]
+                end = time.time()
+                if reply.status != 200:
+                    raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
+                logger.fs.debug(
+                    f"Dispatched {len(batch)} chunk requests to {server.instance_name()} ({n_bytes} bytes) in {end - start:.2f} seconds"
+                )
+                time.sleep(1)
+
             yield from chunk_batch
 
             # copy new multipart transfers to the multipart transfer list
             updated_len = len(chunker.multipart_upload_requests)
             self.multipart_transfer_list.extend(chunker.multipart_upload_requests[n_multiparts:updated_len])
             n_multiparts = updated_len
+
+            time.sleep(0.5)
 
     def finalize(self):
         """Complete the multipart upload requests"""
@@ -755,6 +777,7 @@ class SyncJob(CopyJob):
         """
         if chunker is None:  # used for external access to transfer pair list
             chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
+        #print("SYNC GEN")
         transfer_pair_gen = chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, self.recursive, self._pre_filter_fn)
 
         # only single destination supported

@@ -276,9 +276,7 @@ class GatewaySender(GatewayOperator):
         chunk_reqs = [chunk_req]
         with Timer(f"pre-register chunks {chunk_ids} to {dst_host}"):
             # TODO: remove chunk request wrapper
-            register_body = json.dumps([c.chunk.as_dict() for c in chunk_reqs]).encode("utf-8")
-            print(f"[sender-{self.worker_id}]:{chunk_ids} register body {register_body}")
-            # while True:
+           # while True:
             #   try:
             #       response = self.http_pool.request(
             #           "POST", f"https://{dst_host}:8080/api/v1/chunk_requests", body=register_body, headers={"Content-Type": "application/json"}
@@ -287,13 +285,21 @@ class GatewaySender(GatewayOperator):
             #   except Exception as e:
             #       print("sender post error", e)
             #       time.sleep(1)
-
-            response = self.http_pool.request(
-                "POST", f"https://{dst_host}:8080/api/v1/chunk_requests", body=register_body, headers={"Content-Type": "application/json"}
-            )
-
-            assert response.status == 200 and json.loads(response.data.decode("utf-8")).get("status") == "ok"
-            print(f"[sender-{self.worker_id}]:{chunk_ids} registered chunks")
+            n_added = 0
+            while n_added < len(chunk_reqs):
+                register_body = json.dumps([c.chunk.as_dict() for c in chunk_reqs[n_added:]]).encode("utf-8")
+                print(f"[sender-{self.worker_id}]:{chunk_ids} register body {register_body}")
+                response = self.http_pool.request(
+                    "POST", f"https://{dst_host}:8080/api/v1/chunk_requests", body=register_body, headers={"Content-Type": "application/json"}
+                )
+                reply_json = json.loads(response.data.decode('utf-8'))
+                print(n_added, reply_json)
+                n_added += reply_json["n_added"]
+                assert response.status == 200 and json.loads(response.data.decode("utf-8")).get("status") == "ok"
+                if n_added == len(chunk_reqs):
+                    print(f"[sender-{self.worker_id}]:{chunk_ids} registered chunks")
+                else: 
+                    time.sleep(1)
 
         # contact server to set up socket connection
         if self.destination_ports.get(dst_host) is None:
@@ -475,7 +481,14 @@ class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
         # while self.chunk_store.remaining_bytes() < chunk_req.chunk.chunk_length_bytes * self.n_processes:
         #    time.sleep(0.1)
 
-        assert chunk_req.chunk.chunk_length_bytes > 0, f"Cannot have size 0 chunk {chunk_req.chunk}"
+        #assert chunk_req.chunk.chunk_length_bytes > 0, f"Cannot have size 0 chunk {chunk_req.chunk}" # actually ok 
+
+        if chunk_req.chunk.chunk_length_bytes == 0:
+            # nothing to do 
+            # create empty file
+            open(fpath, 'a').close()
+            return True
+
         while True:
             # if self.chunk_store.remaining_bytes() < chunk_req.chunk.chunk_length_bytes * self.n_processes:
             #    time.sleep(0.1)
@@ -499,7 +512,8 @@ class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
                     break
 
             except Exception as e:
-                logger.error(f"[obj_store:{self.worker_id}] {str(e)}")
+                logger.error(f"[obj_store:{self.worker_id}] Error reading key {chunk_req.chunk.src_key}: {str(e)}")
+                print(f"[obj_store:{self.worker_id}] Error reading key {chunk_req.chunk.src_key}: {str(e)}")
                 time.sleep(1)
 
         # update md5sum for chunk requests

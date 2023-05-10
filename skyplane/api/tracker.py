@@ -283,6 +283,8 @@ class TransferProgressTracker(Thread):
                 time.sleep(0.05)
                 continue
 
+            log_df.to_csv(f"chunk_status_{region_tag}.csv")
+
             # TODO: have visualization for completition across all destinations
             is_complete_rec = (
                 lambda row: row["state"] == ChunkState.complete

@@ -104,6 +104,7 @@ class GCPAuthentication:
     @staticmethod
     @imports.inject("google.auth", pip_extra="gcp")
     def get_adc_credential(google_auth, project_id=None):
+        print("getting adc credentials")
         try:
             inferred_cred, inferred_project = google_auth.default(quota_project_id=project_id)
         except google_auth.exceptions.DefaultCredentialsError as e:
