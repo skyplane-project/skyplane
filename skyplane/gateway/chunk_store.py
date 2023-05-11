@@ -51,7 +51,7 @@ class ChunkStore:
 
     def add_chunk_request(self, chunk_request: ChunkRequest, state: ChunkState = ChunkState.registered):
         """Enqueue new chunk request from Gateway API
-        :param chunk_request: ChunkRequest object 
+        :param chunk_request: ChunkRequest object
         :param state: ChunkState enum (registered, in_progress, complete)
 
         :return: size of Gateway queue

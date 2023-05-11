@@ -223,16 +223,16 @@ class GatewayDaemonAPI(threading.Thread):
                 chunk_req = ChunkRequest.from_dict(body)
                 self.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
                 qsize, succ = self.chunk_store.add_chunk_request(chunk_req, state)
-                if not succ: 
+                if not succ:
                     return 0, qsize, False
                 return 1, qsize, True
             elif isinstance(body, list):
-                added = 0 
+                added = 0
                 for row in body:
                     chunk_req = ChunkRequest.from_dict(row)
                     self.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
                     qsize, succ = self.chunk_store.add_chunk_request(chunk_req, state)
-                    if not succ: 
+                    if not succ:
                         return added, qsize, False
                     added += 1
                 return added, qsize, True

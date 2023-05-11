@@ -21,11 +21,10 @@ from skyplane.api.transfer_job import TransferJob
 class Planner:
     def plan(self) -> TopologyPlan:
         raise NotImplementedError
-    
 
-def assign_num_connections(source_gateway_ids: List[str], dest_gateway_ids: List[str], n_connections: int = 32): 
 
-    connection_map = {} # source_id: {dest_id: num_connections}
+def assign_num_connections(source_gateway_ids: List[str], dest_gateway_ids: List[str], n_connections: int = 32):
+    connection_map = {}  # source_id: {dest_id: num_connections}
 
     if len(source_gateway_ids) <= len(dest_gateway_ids):
         # more destinations than sources
@@ -36,14 +35,12 @@ def assign_num_connections(source_gateway_ids: List[str], dest_gateway_ids: List
         for dest_index in range(0, len(dest_gateway_ids), dest_per_source):
             connection_map[source_gateway_ids[source_index]] = {}
             connections_per_dest = int(n_connections / dest_per_source)
-            connection_map[source_gateway_ids[source_index]] = {dest_gateway_ids[dest_index + i]: connections_per_dest for i in range(dest_per_source)}
+            connection_map[source_gateway_ids[source_index]] = {
+                dest_gateway_ids[dest_index + i]: connections_per_dest for i in range(dest_per_source)
+            }
             source_index += 1
-    else: 
+    else:
         raise ValueError("Not implemeneted")
-        
-
-
-
 
 
 class UnicastDirectPlanner(Planner):

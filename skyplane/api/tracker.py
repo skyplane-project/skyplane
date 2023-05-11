@@ -156,13 +156,12 @@ class TransferProgressTracker(Thread):
                         self.job_pending_chunk_ids[job_uuid][region].add(chunk.chunk_id)
                     nchunks += 1
 
-                    ## TODO: remove - very hacky 
-                    #if nchunks % 1000 == 0:
+                    ## TODO: remove - very hacky
+                    # if nchunks % 1000 == 0:
                     #    try:
                     #        job.finalize()
                     #    except Exception as e:
                     #        print("Error finalizing", e)
-
 
                 logger.fs.debug(
                     f"[TransferProgressTracker] Job {job.uuid} dispatched with {len(self.job_chunk_requests[job_uuid])} chunk requests"
@@ -174,7 +173,7 @@ class TransferProgressTracker(Thread):
                 e,
                 args,
                 self.dataplane.topology.src_region_tag,
-                self.dataplane.topology.dest_region_tags[0], # TODO: support multiple destinations
+                self.dataplane.topology.dest_region_tags[0],  # TODO: support multiple destinations
                 session_start_timestamp_ms,
             )
             raise e

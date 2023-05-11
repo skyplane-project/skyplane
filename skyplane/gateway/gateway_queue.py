@@ -32,7 +32,7 @@ class GatewayANDQueue(GatewayQueue):
     def __init__(self, maxsize=10000):
         self.q = {}
         self.maxsize = maxsize
-        self.temp_q = Queue(maxsize) # temporarily store value
+        self.temp_q = Queue(maxsize)  # temporarily store value
 
     def register_handle(self, requester_handle):
         # create a queue per handle (operator)

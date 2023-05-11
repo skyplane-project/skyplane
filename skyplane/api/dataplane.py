@@ -80,11 +80,9 @@ class Dataplane:
         self.pending_transfers: List[TransferProgressTracker] = []
         self.bound_nodes: Dict[TopologyPlanGateway, compute.Server] = {}
 
-        # TODO: visualize topology here 
-        #from skyplane.utils.visualization import visualize_topology
-        #visualize_topology(self.topology)
-
-
+        # TODO: visualize topology here
+        # from skyplane.utils.visualization import visualize_topology
+        # visualize_topology(self.topology)
 
     def _start_gateway(
         self,
