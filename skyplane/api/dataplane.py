@@ -80,10 +80,6 @@ class Dataplane:
         self.pending_transfers: List[TransferProgressTracker] = []
         self.bound_nodes: Dict[TopologyPlanGateway, compute.Server] = {}
 
-        # TODO: visualize topology here
-        # from skyplane.utils.visualization import visualize_topology
-        # visualize_topology(self.topology)
-
     def _start_gateway(
         self,
         gateway_docker_image: str,
@@ -229,7 +225,6 @@ class Dataplane:
     def copy_gateway_logs(self):
         # copy logs from all gateways in parallel
         def copy_log(instance):
-            print("COPY LOGS", self.transfer_dir)
             out_file = self.transfer_dir / f"gateway_{instance.uuid()}.stdout"
             err_file = self.transfer_dir / f"gateway_{instance.uuid()}.stderr"
             logger.fs.info(f"[Dataplane.copy_gateway_logs] Copying logs from {instance.uuid()}: {out_file}")

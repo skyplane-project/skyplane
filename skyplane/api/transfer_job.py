@@ -265,7 +265,6 @@ class Chunker:
         logger.fs.debug(f"Querying objects in {self.src_iface.path()}")
         n_objs = 0
         for obj in self.src_iface.list_objects(src_prefix):
-            # print(obj, prefilter_fn(obj))
             if prefilter_fn is None or prefilter_fn(obj):
                 # collect list of destination objects
                 dest_objs = {}
@@ -297,7 +296,6 @@ class Chunker:
                 # assert that all destinations share the same post-fix key
                 assert len(list(set(dest_keys))) == 1, f"Destination keys {dest_keys} do not match"
                 n_objs += 1
-                print("Transfer:", obj.key, obj.size)
                 yield TransferPair(src_obj=obj, dst_objs=dest_objs, dst_key=dest_keys[0])
 
         if n_objs == 0:
@@ -329,11 +327,9 @@ class Chunker:
         # begin chunking loop
         for transfer_pair in transfer_pair_generator:
             src_obj = transfer_pair.src_obj
-            # print("src_obj", src_obj)
             if self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
                 multipart_send_queue.put(transfer_pair)
             else:
-                # print("chunk", transfer_pair)
                 yield GatewayMessage(
                     chunk=Chunk(
                         src_key=src_obj.key,
@@ -422,7 +418,6 @@ class Chunker:
         """
         for item in gen_in:
             out_list.append(item)
-            # print("tail", item)
             yield item
 
 
@@ -594,21 +589,15 @@ class CopyJob(TransferJob):
         :type dispatch_batch_size: int
         """
         chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
-        # print("STARTING GENERATION")
         transfer_pair_generator = self.gen_transfer_pairs(chunker)  # returns TransferPair objects
-        # for transfer_pair in transfer_pair_generator:
-        #    print('generated', transfer_pair)
         gen_transfer_list = chunker.tail_generator(transfer_pair_generator, self.transfer_list)
         chunks = chunker.chunk(gen_transfer_list)
-        # chunk_requests = chunker.to_chunk_requests(chunks)
-        # print("HERE")
         batches = chunker.batch_generator(
             chunker.prefetch_generator(chunks, buffer_size=dispatch_batch_size * 32), batch_size=dispatch_batch_size
         )
 
         # dispatch chunk requests
         src_gateways = dataplane.source_gateways()
-        bytes_dispatched = [0] * len(src_gateways)
         queue_size = [0] * len(src_gateways)
         n_multiparts = 0
         start = time.time()
@@ -647,11 +636,8 @@ class CopyJob(TransferJob):
             chunk_batch = [cr.chunk for cr in batch if cr.chunk is not None]
             min_idx = queue_size.index(min(queue_size))
             n_added = 0
-            start = time.time()
             while n_added < len(chunk_batch):
-                # min_idx = bytes_dispatched.index(min(bytes_dispatched))
                 # TODO: should update every source instance queue size
-                print("queue sizes", queue_size)
                 server = src_gateways[min_idx]
                 assert Chunk.from_dict(chunk_batch[0].as_dict()) == chunk_batch[0], f"Invalid chunk request: {chunk_batch[0].as_dict}"
 
@@ -669,26 +655,15 @@ class CopyJob(TransferJob):
                 if reply.status != 200:
                     raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
 
-                # n_bytes = sum([chunk.chunk_length_bytes for chunk in chunk_batch])
-                # bytes_dispatched[min_idx] += n_bytes
-
                 # dont try again with some gateway
                 min_idx = (min_idx + 1) % len(src_gateways)
 
-                # time.sleep(0.1)
-
-            end = time.time()
-            # logger.fs.debug(
-            #    f"Dispatched {len(batch)} chunk requests to {server.instance_name()} ({n_bytes} bytes) in {end - start:.2f} seconds"
-            # )
             yield from chunk_batch
 
             # copy new multipart transfers to the multipart transfer list
             updated_len = len(chunker.multipart_upload_requests)
             self.multipart_transfer_list.extend(chunker.multipart_upload_requests[n_multiparts:updated_len])
             n_multiparts = updated_len
-
-            time.sleep(0.5)
 
     def finalize(self):
         """Complete the multipart upload requests"""
@@ -707,15 +682,7 @@ class CopyJob(TransferJob):
             def complete_fn(batch):
                 for req in batch:
                     logger.fs.debug(f"Finalize upload id {req['upload_id']} for key {req['key']}")
-
                     retry_backoff(partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"]), initial_backoff=0.5)
-                    # try:
-                    #    # retry - sometimes slight delay before object store knows all parts are uploaded
-                    #    retry_backoff(partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"]), initial_backoff=0.5)
-                    #    print("Completed", req["key"])
-                    # except Exception as e:
-                    #    # TODO: remove
-                    #    print(f"Failed to complete {req['key']} with upload id {req['upload_id']}: {e}")
 
             do_parallel(complete_fn, batches, n=8)
 
@@ -794,7 +761,6 @@ class SyncJob(CopyJob):
         """
         if chunker is None:  # used for external access to transfer pair list
             chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
-        # print("SYNC GEN")
         transfer_pair_gen = chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, self.recursive, self._pre_filter_fn)
 
         # only single destination supported
