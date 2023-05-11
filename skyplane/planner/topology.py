@@ -63,6 +63,11 @@ class TopologyPlan:
         """Get all regions in the topology plan"""
         return list(set([gateway.region for gateway in self.gateways.values()]))
 
+    @property
+    def region_tags(self) -> List[str]:
+        """Get all region tags in the topology plan"""
+        return list(set([gateway.region_tag for gateway in self.gateways.values()]))
+
     def add_gateway(self, region_tag: str):
         """Create gateway in specified region"""
         gateway_id = region_tag + str(len([gateway for gateway in self.gateways.values() if gateway.region_tag == region_tag]))

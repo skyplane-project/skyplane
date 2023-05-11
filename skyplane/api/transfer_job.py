@@ -297,6 +297,7 @@ class Chunker:
                 # assert that all destinations share the same post-fix key
                 assert len(list(set(dest_keys))) == 1, f"Destination keys {dest_keys} do not match"
                 n_objs += 1
+                print("Transfer:", obj.key, obj.size)
                 yield TransferPair(src_obj=obj, dst_objs=dest_objs, dst_key=dest_keys[0])
 
         if n_objs == 0:
@@ -608,6 +609,7 @@ class CopyJob(TransferJob):
         # dispatch chunk requests
         src_gateways = dataplane.source_gateways()
         bytes_dispatched = [0] * len(src_gateways)
+        queue_size = [0] * len(src_gateways)
         n_multiparts = 0
         start = time.time()
 
@@ -643,15 +645,18 @@ class CopyJob(TransferJob):
 
             # send chunk requests to source gateways
             chunk_batch = [cr.chunk for cr in batch if cr.chunk is not None]
-            min_idx = bytes_dispatched.index(min(bytes_dispatched))
-            server = src_gateways[min_idx]
-            n_bytes = sum([chunk.chunk_length_bytes for chunk in chunk_batch])
-            bytes_dispatched[min_idx] += n_bytes
-            assert Chunk.from_dict(chunk_batch[0].as_dict()) == chunk_batch[0], f"Invalid chunk request: {chunk_batch[0].as_dict}"
-
+            min_idx = queue_size.index(min(queue_size))
             n_added = 0
+            start = time.time()
             while n_added < len(chunk_batch):
-                start = time.time()
+                
+                #min_idx = bytes_dispatched.index(min(bytes_dispatched))
+                # TODO: should update every source instance queue size 
+                print("queue sizes", queue_size)
+                server = src_gateways[min_idx]
+                assert Chunk.from_dict(chunk_batch[0].as_dict()) == chunk_batch[0], f"Invalid chunk request: {chunk_batch[0].as_dict}"
+
+                # TODO: make async 
                 reply = self.http_pool.request(
                     "POST",
                     f"{server.gateway_api_url}/api/v1/chunk_requests",
@@ -659,16 +664,25 @@ class CopyJob(TransferJob):
                     headers={"Content-Type": "application/json"},
                 )
                 reply_json = json.loads(reply.data.decode('utf-8'))
-                print(n_added, len(chunk_batch), reply_json)
+                print(server, min_idx, "added", n_added, len(chunk_batch), reply_json)
                 n_added += reply_json["n_added"]
-                end = time.time()
+                queue_size[min_idx] = reply_json["qsize"] # update queue size
                 if reply.status != 200:
                     raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
-                logger.fs.debug(
-                    f"Dispatched {len(batch)} chunk requests to {server.instance_name()} ({n_bytes} bytes) in {end - start:.2f} seconds"
-                )
-                time.sleep(1)
+                
+                #n_bytes = sum([chunk.chunk_length_bytes for chunk in chunk_batch])
+                #bytes_dispatched[min_idx] += n_bytes
+ 
 
+                # dont try again with some gateway 
+                min_idx = (min_idx + 1) % len(src_gateways)
+                
+                #time.sleep(0.1)
+
+            end = time.time()
+            #logger.fs.debug(
+            #    f"Dispatched {len(batch)} chunk requests to {server.instance_name()} ({n_bytes} bytes) in {end - start:.2f} seconds"
+            #)
             yield from chunk_batch
 
             # copy new multipart transfers to the multipart transfer list
@@ -696,8 +710,14 @@ class CopyJob(TransferJob):
                 for req in batch:
                     logger.fs.debug(f"Finalize upload id {req['upload_id']} for key {req['key']}")
 
-                    # retry - sometimes slight delay before object store knows all parts are uploaded
                     retry_backoff(partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"]), initial_backoff=0.5)
+                    #try:
+                    #    # retry - sometimes slight delay before object store knows all parts are uploaded
+                    #    retry_backoff(partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"]), initial_backoff=0.5)
+                    #    print("Completed", req["key"])
+                    #except Exception as e:
+                    #    # TODO: remove
+                    #    print(f"Failed to complete {req['key']} with upload id {req['upload_id']}: {e}")
 
             do_parallel(complete_fn, batches, n=8)
 
@@ -752,11 +772,10 @@ class SyncJob(CopyJob):
         self,
         src_path: str,
         dst_paths: List[str] or str,
-        recursive: bool = False,
         requester_pays: bool = False,
         uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
-        super().__init__(src_path, dst_paths, recursive, requester_pays, uuid)
+        super().__init__(src_path, dst_paths, True, requester_pays, uuid)
         self.transfer_list = []
         self.multipart_transfer_list = []
 

@@ -21,6 +21,29 @@ from skyplane.api.transfer_job import TransferJob
 class Planner:
     def plan(self) -> TopologyPlan:
         raise NotImplementedError
+    
+
+def assign_num_connections(source_gateway_ids: List[str], dest_gateway_ids: List[str], n_connections: int = 32): 
+
+    connection_map = {} # source_id: {dest_id: num_connections}
+
+    if len(source_gateway_ids) <= len(dest_gateway_ids):
+        # more destinations than sources
+        dest_per_source = round(len(dest_gateway_ids) / len(source_gateway_ids))
+        source_index = 0
+
+        # assign connections to each source
+        for dest_index in range(0, len(dest_gateway_ids), dest_per_source):
+            connection_map[source_gateway_ids[source_index]] = {}
+            connections_per_dest = int(n_connections / dest_per_source)
+            connection_map[source_gateway_ids[source_index]] = {dest_gateway_ids[dest_index + i]: connections_per_dest for i in range(dest_per_source)}
+            source_index += 1
+    else: 
+        raise ValueError("Not implemeneted")
+        
+
+
+
 
 
 class UnicastDirectPlanner(Planner):
@@ -159,7 +182,7 @@ class MulticastDirectPlanner(Planner):
                         GatewaySend(
                             target_gateway_id=dst_gateways[i].gateway_id,
                             region=dst_region_tag,
-                            num_connections=self.n_connections,
+                            num_connections=int(self.n_connections / len(dst_gateways)),
                             private_ip=private_ip,
                         ),
                         parent_handle=mux_or,
