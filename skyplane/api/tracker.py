@@ -147,21 +147,12 @@ class TransferProgressTracker(Thread):
                 self.job_pending_chunk_ids[job_uuid] = {region: set() for region in self.dataplane.topology.dest_region_tags}
                 self.job_complete_chunk_ids[job_uuid] = {region: set() for region in self.dataplane.topology.dest_region_tags}
 
-                nchunks = 0
                 for chunk in chunk_streams[job_uuid]:
                     chunks_dispatched = [chunk]
                     self.job_chunk_requests[job_uuid][chunk.chunk_id] = chunk
                     self.hooks.on_chunk_dispatched(chunks_dispatched)
                     for region in self.dataplane.topology.dest_region_tags:
                         self.job_pending_chunk_ids[job_uuid][region].add(chunk.chunk_id)
-                    nchunks += 1
-
-                    ## TODO: remove - very hacky
-                    # if nchunks % 1000 == 0:
-                    #    try:
-                    #        job.finalize()
-                    #    except Exception as e:
-                    #        print("Error finalizing", e)
 
                 logger.fs.debug(
                     f"[TransferProgressTracker] Job {job.uuid} dispatched with {len(self.job_chunk_requests[job_uuid])} chunk requests"
@@ -294,8 +285,6 @@ class TransferProgressTracker(Thread):
                 logger.warning("No chunk status log entries yet")
                 time.sleep(0.05)
                 continue
-
-            log_df.to_csv(f"chunk_status_{region_tag}.csv")
 
             # TODO: have visualization for completition across all destinations
             is_complete_rec = (

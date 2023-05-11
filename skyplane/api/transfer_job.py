@@ -568,7 +568,6 @@ class CopyJob(TransferJob):
         :param chunker: chunker that makes the chunk requests
         :type chunker: Chunker
         """
-        # print("GENERATE PAIRS")
         if chunker is None:  # used for external access to transfer pair list
             chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)  # TODO: should read in existing transfer config
         yield from chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, self.recursive, self._pre_filter_fn)

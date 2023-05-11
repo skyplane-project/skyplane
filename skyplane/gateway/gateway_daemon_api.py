@@ -226,7 +226,8 @@ class GatewayDaemonAPI(threading.Thread):
                 if not succ:
                     return 0, qsize, False
                 return 1, qsize, True
-            elif isinstance(body, list):
+            else:
+                assert isinstance(body, list), f"Body must be list, got {type(body)}"
                 added = 0
                 for row in body:
                     chunk_req = ChunkRequest.from_dict(row)
