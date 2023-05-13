@@ -155,35 +155,13 @@ class Dataplane:
             is_gcp_used = any(n.region_tag.startswith("gcp:") for n in self.topology.get_gateways())
             is_ibmcloud_used = any(n.region_tag.startswith("ibmcloud:") for n in self.topology.get_gateways())
 
-            # create VMs from the topology
-            auths = {
-                "aws": compute.AWSAuthentication,
-                "azure": compute.AzureAuthentication,
-                "gcp": compute.GCPAuthentication,
-                "ibmcloud": compute.IBMCloudAuthentication,
-            }
             for node in self.topology.get_gateways():
                 cloud_provider, region = node.region_tag.split(":")
-                spot = getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances")
-                vm_type = getattr(self.transfer_config, f"{cloud_provider}_instance_class")
-
-                # Fall back to smaller vm if necessary
-                auth = auths[cloud_provider]
-                quota_limit = auth.get_quota_limits_for(region, spot)
-                if quota_limit is not None:
-                    smaller_vm = auth.fall_back_to_smaller_vm_if_neccessary(instance_type=vm_type, quota_limit=quota_limit)
-                    if smaller_vm is not None:
-                        vm_type = smaller_vm
-                        logger.warning(f"Falling back to {smaller_vm} at node {region} due to the vCPU quota limit {quota_limit}")
-
-                # TODO: Add the logic for partitioning the task into multiple vms if we fell back (in fall_back functions)
-                # Ex: if the config vm uses 32 vCPUs but the quota limit is 8 vCPUS, call add_task 4 times with the smaller vm
-
                 self.provisioner.add_task(
                     cloud_provider=cloud_provider,
                     region=region,
-                    vm_type=vm_type,
-                    spot=spot,
+                    vm_type=node.vm_type,
+                    spot=getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances"),
                     autoterminate_minutes=self.transfer_config.autoterminate_minutes,
                 )
 

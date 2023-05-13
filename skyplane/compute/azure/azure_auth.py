@@ -151,32 +151,6 @@ class AzureAuthentication:
             return region_list
 
     @staticmethod
-    def get_quota_limits_for(region: str, spot: bool = False) -> Optional[int]:
-        with open(azure_standardDv5_quota_path, "r") as f:
-            quota_limits = json.load(f)
-            if region in quota_limits:
-                return quota_limits[region]
-
-    @staticmethod
-    def fall_back_to_smaller_vm_if_neccessary(instance_type: str, quota_limit: int) -> Optional[str]:
-        # TODO: Add the logic for partitioning the task into multiple vms if we fell back
-        # Ex: if the config vm uses 32 vCPUs but the quota limit is 8 vCPUS, call add_task 4 times with the smaller vm
-
-        # Since Azure instances follow a common pattern, we can just extract the vCPUs from the instance name
-        vcpus = re.search(r"\d+", instance_type)
-        if vcpus is None:
-            return None
-
-        vcpus = int(vcpus.group())
-        if vcpus <= quota_limit:
-            return None  # don't need to fall back
-
-        # Find the greatest instance that is less than quota
-        for val in (96, 64, 48, 32, 16, 8, 4, 2):
-            if val <= quota_limit:
-                return f"Standard_D{val}_v5"
-
-    @staticmethod
     def get_sku_mapping() -> Dict[str, List[str]]:
         try:
             f = open(azure_sku_path, "r")

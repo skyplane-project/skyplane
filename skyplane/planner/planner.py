@@ -1,8 +1,10 @@
 from importlib.resources import path
-from typing import List, Optional, Tuple
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Tuple
+import re
 
 from skyplane import compute
+from skyplane.api.config import TransferConfig
+from skyplane.utils import logger
 
 from skyplane.planner.topology import TopologyPlan
 from skyplane.gateway.gateway_program import (
@@ -16,11 +18,73 @@ from skyplane.gateway.gateway_program import (
 )
 
 from skyplane.api.transfer_job import TransferJob
+from skyplane.config_paths import aws_quota_path, gcp_quota_path, azure_standardDv5_quota_path
+import json
 
 
 class Planner:
+    # Only supporting "aws:m5.", "azure:StandardD_v5", and "gcp:n2-standard" instances for now
+    _AWS_VCPUS = (96, 64, 48, 32, 16, 8, 4, 2)
+    _AZURE_VCPUS = (96, 64, 48, 32, 16, 8, 4, 2)
+    _GCP_VCPUS = (128, 96, 80, 64, 48, 32, 16, 8, 4, 2)
+
     def plan(self) -> TopologyPlan:
         raise NotImplementedError
+
+    @staticmethod
+    def _fall_back_to_smaller_vm_if_neccessary(cloud_provider: str, instance_type: str, quota_limit: int) -> Optional[str]:
+        if cloud_provider not in ("aws", "azure", "gcp"):
+            raise ValueError(f"Invalid cloud provider '{cloud_provider}'")
+
+        num_vcpus, all_vcpus, vm_family = (
+            (re.search(r"\d+x", instance_type), Planner._AWS_VCPUS, "m5.{}large")
+            if cloud_provider == "aws"
+            else (re.search(r"\d+", instance_type), Planner._AZURE_VCPUS, "Standard_D{}_v5")
+            if cloud_provider == "azure"
+            else (int(instance_type.split("-")[-1]), Planner._GCP_VCPUS, "n2-standard-{}")
+        )
+
+        vm_portions = Planner._calculate_vcpu_portions(num_vcpus, quota_limit, all_vcpus)
+        if vm_portions is ():
+            return None
+
+        num_portions, vm_size = vm_portions
+        return (num_portions, vm_family.format(vm_size if cloud_provider != "aws" else f"{vm_size // 4}x" if vm_size // 4 else "2"))
+
+    @staticmethod
+    def _calculate_vcpu_portions(num_vcpus: int, quota_limit: int, vcpu_options: List[int]) -> Tuple:
+        # If the desired vCPU count is within the quota limit, don't fall back
+        if num_vcpus <= quota_limit:
+            return (1, num_vcpus)
+
+        # Otherwise, try to split the desired vCPU count into smaller portions that are within the quota limit and use the largest option
+        else:
+            for vcpu_count in vcpu_options:
+                if vcpu_count <= quota_limit and vcpu_count <= num_vcpus:
+                    portions = num_vcpus // vcpu_count
+                    remaining_vcpus = num_vcpus - (vcpu_count * portions)
+                    # If the remaining vCPUs are 0, use the current option to launch all portions
+                    if remaining_vcpus == 0:
+                        return (portions, vcpu_count)  # [vcpu_count] * portions
+        # Return an empty list if no valid vCPU portions were found
+        return ()
+
+    def _get_quota_limits_for(self, cloud_provider: str, region: str, spot: bool = False) -> Optional[int]:
+        quota_limits = self.quota_limits.get(cloud_provider)
+        if not quota_limits:
+            return None
+        if cloud_provider == "gcp":
+            region_family = "-".join(region.split("-")[:2])
+            if region_family in quota_limits:
+                return quota_limits[region_family]
+        elif cloud_provider == "azure":
+            if region in quota_limits:
+                return quota_limits[region]
+        elif cloud_provider == "aws":
+            for quota in quota_limits:
+                if quota["region_name"] == region:
+                    return quota["spot_standard_vcpus"] if spot else quota["on_demand_standard_vcpus"]
+        return None
 
 
 class UnicastDirectPlanner(Planner):
@@ -91,9 +155,25 @@ class UnicastDirectPlanner(Planner):
 
 
 class MulticastDirectPlanner(Planner):
-    def __init__(self, n_instances: int, n_connections: int):
+    n_instances: int
+    n_connection: int
+    quota_limit: Dict[str, any]
+    transfer_config: TransferConfig
+
+    def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig):
         self.n_instances = n_instances
         self.n_connections = n_connections
+        self.transfer_config = transfer_config
+
+        # Loading the quota information, add ibm cloud when it is supported
+        self.quota_limits = {}
+        with aws_quota_path.open("r") as f:
+            self.quota_limits["aws"] = json.load(f)
+        with gcp_quota_path.open("r") as f:
+            self.quota_limits["gcp"] = json.load(f)
+        with open(azure_standardDv5_quota_path, "r") as f:
+            self.quota_limits["azure"] = json.load(f)
+
         super().__init__()
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
@@ -105,12 +185,28 @@ class MulticastDirectPlanner(Planner):
             assert [iface.region_tag() for iface in job.dst_ifaces] == dst_region_tags, "Add jobs must have same destination set"
 
         plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=dst_region_tags)
-        # TODO: use VM limits to determine how many instances to create in each region
+
+        # Calculate the number of vms to launch based on the vcpu quota
+        cloud_provider, region = src_region_tag.split(":")
+        num_portions, vm_type = 1, getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances")  # default vm configuration
+        spot = getattr(self.transfer_config, f"{cloud_provider}_instance_class")
+        quota_limit = self._get_quota_limits_for(cloud_provider=cloud_provider, region=region, spot=spot)
+        if quota_limit is not None:
+            vm_portions = Planner._fall_back_to_smaller_vm_if_neccessary(
+                cloud_provider=cloud_provider, instance_type=vm_type, quota_limit=quota_limit
+            )
+            if vm_portions is not None:
+                num_portions, vm_type = vm_portions
+                if num_portions > 1:
+                    logger.warning(f"Falling back to {vm_type} at {region} due to the vCPU quota limit {quota_limit}")
+
+        # TODO: Calculate this separetly for the destination, too. Since they might be of different cloud providers.
+
         # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
-        for i in range(self.n_instances):
-            plan.add_gateway(src_region_tag)
+        for i in range(num_portions * self.n_instances):
+            plan.add_gateway(src_region_tag, vm_type)
             for dst_region_tag in dst_region_tags:
-                plan.add_gateway(dst_region_tag)
+                plan.add_gateway(dst_region_tag, vm_type)  # FIXME: Change the vm_type here
 
         # initialize gateway programs per region
         dst_program = {dst_region: GatewayProgram() for dst_region in dst_region_tags}
