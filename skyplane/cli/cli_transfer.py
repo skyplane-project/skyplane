@@ -10,7 +10,7 @@ from rich.progress import Progress, TextColumn, SpinnerColumn
 
 import skyplane
 from skyplane.api.config import TransferConfig, AWSConfig, GCPConfig, AzureConfig, IBMCloudConfig
-from skyplane.api.transfer_job import CopyJob
+from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.cli.impl.cp_replicate_fallback import (
     replicate_onprem_cp_cmd,
     replicate_onprem_sync_cmd,
@@ -21,7 +21,7 @@ from skyplane.cli.impl.common import print_header, console, print_stats_complete
 from skyplane.api.usage import UsageClient
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import cloud_config, config_path
-from skyplane.obj_store.object_store_interface import ObjectStoreInterface
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface, StorageInterface
 from skyplane.obj_store.file_system_interface import FileSystemInterface
 from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 from skyplane.utils import logger
@@ -54,6 +54,14 @@ class SkyplaneCLI:
         self.src_region_tag, self.dst_region_tag = src_region_tag, dst_region_tag
         self.args = args
         self.aws_config, self.azure_config, self.gcp_config, self.ibmcloud_config = self.to_api_config(skyplane_config or cloud_config)
+
+        # update config
+        # TODO: set remaining config params
+        if skyplane_config:
+            skyplane_config.set_flag("multipart_enabled", str(self.args["multipart"]))
+        if cloud_config:
+            cloud_config.set_flag("multipart_enabled", str(self.args["multipart"]))
+
         self.transfer_config = self.make_transfer_config(skyplane_config or cloud_config)
         self.client = skyplane.SkyplaneClient(
             aws_config=self.aws_config,
@@ -190,15 +198,24 @@ class SkyplaneCLI:
         logger.fs.debug(f"Using pipeline: {pipeline}")
         return pipeline
 
-    def confirm_transfer(self, pipeline: skyplane.Pipeline, dp: skyplane.Dataplane, query_n: int = 5, ask_to_confirm_transfer=True) -> bool:
+    def confirm_transfer(
+        self, pipeline: skyplane.Pipeline, src_region_tag: str, dest_region_tags: List[str], query_n: int = 5, ask_to_confirm_transfer=True
+    ) -> bool:
         """Prompts the user to confirm their transfer by querying the first query_n files from the TransferJob"""
         if not len(pipeline.jobs_to_dispatch) > 0:
             typer.secho("No jobs to dispatch.")
             return False
         transfer_pair_gen = pipeline.jobs_to_dispatch[0].gen_transfer_pairs()  # type: ignore
-        console.print(
-            f"[bold yellow]Will transfer objects from {dp.topology.src_region_tag} to {dp.topology.dest_region_tags}[/bold yellow]"
-        )
+        if len(dest_region_tags) == 1:
+            console.print(f"[bold yellow]Will transfer objects from {src_region_tag} to {dest_region_tags[0]}[/bold yellow]")
+        else:
+            console.print(f"[bold yellow]Will transfer objects from {src_region_tag} to {dest_region_tags}[/bold yellow]")
+
+        if src_region_tag.startswith("local") or dest_region_tags[0].startswith("local"):
+            # TODO: should still pass cost estimate
+            console.print(f"[yellow]Note: local transfers are not monitored by Skyplane[yellow]")
+            return True
+
         topology = pipeline.planner.plan(pipeline.jobs_to_dispatch)
         sorted_counts = sorted(topology.per_region_count().items(), key=lambda x: x[0])
         console.print(
@@ -248,12 +265,11 @@ class SkyplaneCLI:
             console.print("[green]Transfer starting[/green]")
             return True
 
-    def estimate_small_transfer(self, pipeline: skyplane.Pipeline, size_threshold_bytes: float, query_n: int = 1000) -> bool:
+    def estimate_small_transfer(self, job: TransferJob, size_threshold_bytes: float, query_n: int = 1000) -> bool:
         """Estimates if the transfer is small by querying up to `query_n` files from the TransferJob. If it exceeds
         the file size limit, then it will fall back to the cloud CLIs."""
-        if len(pipeline.jobs_to_dispatch) != 1:
-            return False
-        job = pipeline.jobs_to_dispatch[0]
+
+        # TODO: why shouldn't this include sync?
         if not isinstance(job, CopyJob):
             return False
         transfer_pair_gen = job.gen_transfer_pairs()
@@ -279,6 +295,114 @@ def force_deprovision(dp: skyplane.Dataplane):
     s = signal.signal(signal.SIGINT, signal.SIG_IGN)
     dp.deprovision()
     signal.signal(signal.SIGINT, s)
+
+
+def run_transfer(
+    src: str,
+    dst: str,
+    recursive: bool,
+    debug: bool,
+    multipart: bool,
+    confirm: bool,
+    max_instances: int,
+    max_connections: int,
+    solver: str,
+    cmd: str,
+):
+    assert cmd == "cp" or cmd == "sync", f"Invalid command: {cmd}"
+    if not debug:
+        register_exception_handler()
+    print_header()
+
+    provider_src, bucket_src, path_src = parse_path(src)
+    provider_dst, bucket_dst, path_dst = parse_path(dst)
+    src_region_tag = StorageInterface.create(f"{provider_src}:infer", bucket_src).region_tag()
+    dst_region_tag = StorageInterface.create(f"{provider_dst}:infer", bucket_dst).region_tag()
+    args = {
+        "cmd": cmd,
+        "recursive": True,
+        "debug": debug,
+        "multipart": multipart,
+        "confirm": confirm,
+        "max_instances": max_instances,
+        "max_connections": max_connections,
+        "solver": solver,
+    }
+
+    # create CLI object
+    cli = SkyplaneCLI(src_region_tag=src_region_tag, dst_region_tag=dst_region_tag, args=args)
+    if not cli.check_config():
+        typer.secho(
+            f"Skyplane configuration file is not valid. Please reset your config by running `rm {config_path}` and then rerunning `skyplane init` to fix.",
+            fg="red",
+        )
+        return 1
+
+    # create pipeline and queue transfer
+    pipeline = cli.make_pipeline(planning_algorithm=solver, max_instances=max_instances)
+    if cli.args["cmd"] == "cp":
+        pipeline.queue_copy(src, dst, recursive=recursive)
+    else:
+        pipeline.queue_sync(src, dst)
+
+    # confirm transfer
+    if not cli.confirm_transfer(pipeline, src_region_tag, [dst_region_tag], 5, ask_to_confirm_transfer=not confirm):
+        return 1
+
+    # local->local transfers not supported (yet)
+    if provider_src == "local" and provider_dst == "local":
+        raise NotImplementedError("Local->local transfers not supported (yet)")
+
+    # fall back options: local->cloud, cloud->local, small cloud->cloud transfers
+    if provider_src == "local" or provider_dst == "local":
+        if cli.args["cmd"] == "cp":
+            return 0 if cli.transfer_cp_onprem(src, dst, recursive) else 1
+        else:
+            return 0 if cli.transfer_sync_onprem(src, dst) else 1
+    elif cloud_config.get_flag("native_cmd_enabled"):
+        # fallback option: transfer is too small
+        if cli.args["cmd"] == "cp":
+            job = CopyJob(src, [dst], recursive=recursive)  # TODO: rever to using pipeline
+            if cli.estimate_small_transfer(job, cloud_config.get_flag("native_cmd_threshold_gb") * GB):
+                small_transfer_status = cli.transfer_cp_small(src, dst, recursive)
+                return 0 if small_transfer_status else 1
+        else:
+            job = SyncJob(src, [dst], recursive=recursive)
+            if cli.estimate_small_transfer(job, cloud_config.get_flag("native_cmd_threshold_gb") * GB):
+                small_transfer_status = cli.transfer_sync_small(src, dst)
+                return 0 if small_transfer_status else 1
+
+    # dataplane must be created after transfers are queued
+    dp = pipeline.create_dataplane(debug=debug)
+    with dp.auto_deprovision():
+        try:
+            dp.provision(spinner=True)
+            dp.run(pipeline.jobs_to_dispatch, hooks=ProgressBarTransferHook(dp.topology.dest_region_tags))
+        except KeyboardInterrupt:
+            logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt).")
+            console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")
+            try:
+                dp.copy_gateway_logs()
+                force_deprovision(dp)
+            except Exception as e:
+                logger.fs.exception(e)
+                console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+                console.print(e)
+                UsageClient.log_exception("cli_cp", e, args, cli.src_region_tag, cli.dst_region_tag)
+                console.print("[bold red]Deprovisioning was interrupted! VMs may still be running which will incur charges.[/bold red]")
+                console.print("[bold red]Please manually deprovision the VMs by running `skyplane deprovision`.[/bold red]")
+            return 1
+        except skyplane.exceptions.SkyplaneException as e:
+            console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+            console.print(e.pretty_print_str())
+            UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
+            force_deprovision(dp)
+        except Exception as e:
+            logger.fs.exception(e)
+            console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
+            console.print(e)
+            UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
+            force_deprovision(dp)
 
 
 def cp(
@@ -326,117 +450,7 @@ def cp(
     :param solver: The solver to use for the transfer (default: direct)
     :type solver: str
     """
-    if not debug:
-        register_exception_handler()
-    print_header()
-    provider_src, bucket_src, path_src = parse_path(src)
-    provider_dst, bucket_dst, path_dst = parse_path(dst)
-    if provider_src in ("local", "nfs"):
-        src_region_tag = FileSystemInterface.create(f"{provider_src}:infer", path_src).region_tag()
-    else:
-        src_region_tag = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src).region_tag()
-
-    if provider_dst in ("local", "nfs"):
-        dst_region_tag = FileSystemInterface.create(f"{provider_dst}:infer", path_dst).region_tag()
-    else:
-        dst_region_tag = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst).region_tag()
-
-    args = {
-        "cmd": "cp",
-        "recursive": recursive,
-        "debug": debug,
-        "multipart": multipart,
-        "confirm": confirm,
-        "max_instances": max_instances,
-        "max_connections": max_connections,
-        "solver": solver,
-    }
-
-    cli = SkyplaneCLI(src_region_tag=src_region_tag, dst_region_tag=dst_region_tag, args=args)
-    if not cli.check_config():
-        typer.secho(
-            f"Skyplane configuration file is not valid. Please reset your config by running `rm {config_path}` and then rerunning `skyplane init` to fix.",
-            fg="red",
-        )
-        return 1
-
-    # dp = cli.make_dataplane(
-    #    solver_type=solver,
-    #    n_vms=max_instances,
-    #    n_connections=max_connections,
-    #    solver_required_throughput_gbits=solver_required_throughput_gbits,
-    #    debug=debug,
-    # )
-    pipeline = cli.make_pipeline(planning_algorithm=solver, max_instances=max_instances)
-    pipeline.queue_copy(src, dst, recursive=recursive)
-
-    # dataplane must be created after transfers are queued
-    dp = pipeline.create_dataplane(debug=debug)
-
-    if provider_src in ("local", "nfs") and provider_dst in ("aws", "gcp", "azure"):
-        # manually create dataplane for queued transfer
-        with dp.auto_deprovision():
-            try:
-                if not cli.confirm_transfer(pipeline, dp, 5, ask_to_confirm_transfer=not confirm):
-                    return 1
-                dp.provision(spinner=True)
-                dp.run(pipeline.jobs_to_dispatch, hooks=ProgressBarTransferHook(dp.topology.dest_region_tags))
-            except skyplane.exceptions.SkyplaneException as e:
-                console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
-                console.print(e.pretty_print_str())
-                UsageClient.log_exception("cli_query_objstore", e, args, src_region_tag, dst_region_tag)
-                return 1
-        # return 0 if cli.transfer_cp_onprem(src, dst, recursive) else 1
-    elif provider_src in ("aws", "gcp", "azure", "hdfs", "ibmcloud") and provider_dst in ("aws", "gcp", "azure", "ibmcloud"):
-        # todo support ILP solver params
-        # dp = cli.make_dataplane(
-        #    solver_type=solver,
-        #    solver_required_throughput_gbits=solver_required_throughput_gbits,
-        #    n_vms=max_instances,
-        #    n_connections=max_connections,
-        #    debug=debug,
-        # )
-        with dp.auto_deprovision():
-            # dp.queue_copy(src, dst, recursive=recursive)
-            if cloud_config.get_flag("native_cmd_enabled") and cli.estimate_small_transfer(
-                pipeline, cloud_config.get_flag("native_cmd_threshold_gb") * GB
-            ):
-                small_transfer_status = cli.transfer_cp_small(src, dst, recursive)
-                if small_transfer_status:
-                    return 0
-            try:
-                if not cli.confirm_transfer(pipeline, dp, 5, ask_to_confirm_transfer=not confirm):
-                    return 1
-                dp.provision(spinner=True)
-                # dp.run(ProgressBarTransferHook())
-                dp.run(pipeline.jobs_to_dispatch, hooks=ProgressBarTransferHook(dp.topology.dest_region_tags))
-            except KeyboardInterrupt:
-                logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt).")
-                console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")
-                dp.copy_gateway_logs()
-                try:
-                    force_deprovision(dp)
-                except Exception as e:
-                    logger.fs.exception(e)
-                    console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
-                    console.print(e)
-                    UsageClient.log_exception("cli_cp", e, args, cli.src_region_tag, cli.dst_region_tag)
-                    console.print("[bold red]Deprovisioning was interrupted! VMs may still be running which will incur charges.[/bold red]")
-                    console.print("[bold red]Please manually deprovision the VMs by running `skyplane deprovision`.[/bold red]")
-                return 1
-            except skyplane.exceptions.SkyplaneException as e:
-                console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
-                console.print(e.pretty_print_str())
-                UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
-                force_deprovision(dp)
-            except Exception as e:
-                logger.fs.exception(e)
-                console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
-                console.print(e)
-                UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
-                force_deprovision(dp)
-        if dp.provisioned:
-            typer.secho("Dataplane is not deprovisioned! Run `skyplane deprovision` to force deprovision VMs.", fg="red")
+    return run_transfer(src, dst, recursive, debug, multipart, confirm, max_instances, max_connections, solver, "cp")
 
 
 def sync(
@@ -485,82 +499,4 @@ def sync(
     :param solver: The solver to use for the transfer (default: direct)
     :type solver: str
     """
-    if not debug:
-        register_exception_handler()
-    print_header()
-    provider_src, bucket_src, path_src = parse_path(src)
-    provider_dst, bucket_dst, path_dst = parse_path(dst)
-    src_region_tag = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src).region_tag()
-    dst_region_tag = ObjectStoreInterface.create(f"{provider_dst}:infer", bucket_dst).region_tag()
-    args = {
-        "cmd": "sync",
-        "recursive": True,
-        "debug": debug,
-        "multipart": multipart,
-        "confirm": confirm,
-        "max_instances": max_instances,
-        "max_connections": max_connections,
-        "solver": solver,
-    }
-
-    cli = SkyplaneCLI(src_region_tag=src_region_tag, dst_region_tag=dst_region_tag, args=args)
-    if not cli.check_config():
-        typer.secho(
-            f"Skyplane configuration file is not valid. Please reset your config by running `rm {config_path}` and then rerunning `skyplane init` to fix.",
-            fg="red",
-        )
-        return 1
-
-    if provider_src in ("local", "hdfs", "nfs") or provider_dst in ("local", "hdfs", "nfs"):
-        if provider_src == "hdfs" or provider_dst == "hdfs":
-            typer.secho("HDFS is not supported yet.", fg="red")
-            return 1
-        return 0 if cli.transfer_sync_onprem(src, dst) else 1
-    elif provider_src in ("aws", "gcp", "azure") and provider_dst in ("aws", "gcp", "azure"):
-        # todo support ILP solver params
-        print()
-        pipeline = cli.make_pipeline(planning_algorithm=solver, max_instances=max_instances)
-        pipeline.queue_sync(src, dst)
-
-        dp = pipeline.create_dataplane(debug=True)
-
-        with dp.auto_deprovision():
-            if cloud_config.get_flag("native_cmd_enabled") and cli.estimate_small_transfer(
-                pipeline, cloud_config.get_flag("native_cmd_threshold_gb") * GB
-            ):
-                small_transfer_status = cli.transfer_sync_small(src, dst)
-                if small_transfer_status:
-                    return 0
-            try:
-                console.print("[yellow]Note: sync must query the destination bucket to diff objects. This may take a while.[/yellow]")
-                if not cli.confirm_transfer(pipeline, dp, 5, ask_to_confirm_transfer=not confirm):
-                    return 1
-                dp.provision(spinner=True)
-                dp.run(pipeline.jobs_to_dispatch, hooks=ProgressBarTransferHook(dp.topology.dest_region_tags))
-            except KeyboardInterrupt:
-                logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt).")
-                console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")
-                dp.copy_gateway_logs()
-                try:
-                    force_deprovision(dp)
-                except Exception as e:
-                    logger.fs.exception(e)
-                    console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
-                    console.print(e)
-                    UsageClient.log_exception("cli_cp", e, args, cli.src_region_tag, cli.dst_region_tag)
-                    console.print("[bold red]Deprovisioning was interrupted! VMs may still be running which will incur charges.[/bold red]")
-                    console.print("[bold red]Please manually deprovision the VMs by running `skyplane deprovision`.[/bold red]")
-                return 1
-            except skyplane.exceptions.SkyplaneException as e:
-                console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
-                console.print(e.pretty_print_str())
-                UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
-                return 1
-            except Exception as e:
-                logger.fs.exception(e)
-                console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
-                console.print(e)
-                UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
-                force_deprovision(dp)
-        if dp.provisioned:
-            typer.secho("Dataplane is not deprovisioned! Run `skyplane deprovision` to force deprovision VMs.", fg="red")
+    return run_transfer(src, dst, False, debug, multipart, confirm, max_instances, max_connections, solver, "sync")
