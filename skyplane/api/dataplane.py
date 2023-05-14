@@ -160,7 +160,7 @@ class Dataplane:
                 self.provisioner.add_task(
                     cloud_provider=cloud_provider,
                     region=region,
-                    vm_type=node.vm_type,
+                    vm_type=node.vm_type or getattr(self.transfer_config, f"{cloud_provider}_instance_class"),
                     spot=getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances"),
                     autoterminate_minutes=self.transfer_config.autoterminate_minutes,
                 )
