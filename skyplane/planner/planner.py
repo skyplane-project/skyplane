@@ -35,7 +35,7 @@ class Planner:
     def _vm_to_vcpus(cloud_provider: str, vm: str) -> int:
         if cloud_provider == "aws":
             n_vcpus = re.findall(r"\d*x", vm)[0]
-            return 4 * int(n_vcpus.replace("x", "")) if "x" in n_vcpus else int(n_vcpus)
+            return 4 * int(n_vcpus.replace("x", "") or 1) if "x" in n_vcpus else int(n_vcpus)
         elif cloud_provider == "azure":
             n_vcpus = re.findall(r"\d+", vm)
             return int(n_vcpus[0])
