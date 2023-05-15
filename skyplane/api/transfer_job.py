@@ -648,7 +648,7 @@ class CopyJob(TransferJob):
                     headers={"Content-Type": "application/json"},
                 )
                 reply_json = json.loads(reply.data.decode("utf-8"))
-                print(server, min_idx, "added", n_added, len(chunk_batch), reply_json)
+                logger.fs.debug(f"Added {n_added} chunks to server {server}: {reply_json}")
                 n_added += reply_json["n_added"]
                 queue_size[min_idx] = reply_json["qsize"]  # update queue size
                 if reply.status != 200:

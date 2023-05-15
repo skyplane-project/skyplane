@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 import os
 from typing import List
 import queue
@@ -78,32 +79,22 @@ class GatewayOperator(ABC):
         self.worker_id = worker_id
         while not self.exit_flags[worker_id].is_set() and not self.error_event.is_set():
             try:
-                # print(f"[{self.handle}:{self.worker_id}] Waiting for chunk, queue size {self.input_queue.size()}")
                 # get chunk from input queue
                 try:
                     # will only get data for that handle
                     chunk_req = self.input_queue.get_nowait(self.handle)
-                    # print(f"[{self.handle}:{self.worker_id}] Getting chunk {chunk_req} from input queue")
                 except queue.Empty:
-                    # print(f"[{self.handle}:{self.worker_id}] Input queue empty")
                     continue
-
-                # print(f"[{self.handle}:{self.worker_id}] Got chunk {chunk_req.chunk.chunk_id}")
 
                 # TODO: status logging
                 self.chunk_store.log_chunk_state(chunk_req, ChunkState.in_progress, operator_handle=self.handle, worker_id=worker_id)
-                # print(f"[{self.handle}:{self.worker_id}] Updated chunk state {chunk_req.chunk.chunk_id}")
-
                 # process chunk
                 succ = self.process(chunk_req, *args)
 
                 # place in output queue
                 if succ:
-                    # print(f"[{self.handle}:{self.worker_id}] Placing chunk {chunk_req.chunk.chunk_id} in downstream queue")
-                    # print(self.handle)
                     self.chunk_store.log_chunk_state(chunk_req, ChunkState.complete, operator_handle=self.handle, worker_id=worker_id)
                     if self.output_queue is not None:
-                        # print(f"[{self.handle}:{self.worker_id}] Output queue is not None - not a terminal operator")
                         self.output_queue.put(chunk_req)
                     else:
                         print(f"[{self.handle}:{self.worker_id}] Output queue is None - terminal operator")
@@ -111,12 +102,10 @@ class GatewayOperator(ABC):
                 else:
                     # failed to process - re-queue
                     time.sleep(0.1)
-                    # print(f"[{self.handle}:{self.worker_id}] Failed to process - re-queueing {chunk_req.chunk.chunk_id}")
                     self.input_queue.put(chunk_req)
 
             except Exception as e:
                 logger.error(f"[{self.handle}:{self.worker_id}] Exception: {e}")
-                print(f"[{self.handle}:{self.worker_id}] Exception: {e}")
                 self.error_queue.put(traceback.format_exc())
                 self.error_event.set()
                 self.exit_flags[worker_id].set()
@@ -502,7 +491,7 @@ class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
         if chunk_req.chunk.chunk_length_bytes == 0:
             # nothing to do
             # create empty file
-            open(fpath, "a").close()
+            Path(fpath).touch()
             return True
 
         while True:
