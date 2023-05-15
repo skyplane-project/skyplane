@@ -159,7 +159,7 @@ class MulticastDirectPlanner(Planner):
                         GatewaySend(
                             target_gateway_id=dst_gateways[i].gateway_id,
                             region=dst_region_tag,
-                            num_connections=self.n_connections,
+                            num_connections=int(self.n_connections / len(dst_gateways)),
                             private_ip=private_ip,
                         ),
                         parent_handle=mux_or,
