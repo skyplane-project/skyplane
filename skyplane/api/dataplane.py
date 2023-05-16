@@ -155,6 +155,7 @@ class Dataplane:
             is_gcp_used = any(n.region_tag.startswith("gcp:") for n in self.topology.get_gateways())
             is_ibmcloud_used = any(n.region_tag.startswith("ibmcloud:") for n in self.topology.get_gateways())
 
+            # create VMs from the topology
             for node in self.topology.get_gateways():
                 cloud_provider, region = node.region_tag.split(":")
                 self.provisioner.add_task(
