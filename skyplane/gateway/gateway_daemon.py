@@ -36,12 +36,15 @@ class GatewayDaemon:
         self,
         region: str,
         chunk_dir: PathLike,
+        gateway_program_file: PathLike,
+        gateway_info_file: PathLike,
         max_incoming_ports=64,
         use_tls=True,
         use_e2ee=False,
     ):
         # read gateway program
-        gateway_program_path = Path(os.environ["GATEWAY_PROGRAM_FILE"]).expanduser()
+        #gateway_program_path = Path(os.environ["GATEWAY_PROGRAM_FILE"]).expanduser()
+        gateway_program_path = Path(gateway_program_file).expanduser()
         gateway_program = json.load(open(gateway_program_path, "r"))
 
         self.upload_id_map = Manager().dict()
@@ -49,7 +52,8 @@ class GatewayDaemon:
         pprint(gateway_program)
 
         # read gateway info
-        gateway_info_path = Path(os.environ["GATEWAY_INFO_FILE"]).expanduser()
+        #gateway_info_path = Path(os.environ["GATEWAY_INFO_FILE"]).expanduser()
+        gateway_info_path = Path(gateway_info_file).expanduser()
         self.gateway_info = json.load(open(gateway_info_path, "r"))
 
         print("starting gateway daemon", gateway_program_path)
@@ -343,6 +347,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Skyplane Gateway Daemon")
     parser.add_argument("--region", type=str, required=True, help="Region tag (provider:region")
     parser.add_argument("--chunk-dir", type=Path, default="/tmp/skyplane/chunks", help="Directory to store chunks")
+    parser.add_argument("--gateway-program-file", type=Path, required=True, help="Gateway program file")
+    parser.add_argument("--gateway-info-file", type=Path, required=True, help="Gateway info file")
     parser.add_argument("--disable-tls", action="store_true")
     parser.add_argument("--use-compression", action="store_true")  # TODO: remove
     parser.add_argument("--disable-e2ee", action="store_true")  # TODO: remove
@@ -352,6 +358,8 @@ if __name__ == "__main__":
     daemon = GatewayDaemon(
         region=args.region,
         chunk_dir=args.chunk_dir,
+        gateway_info_file=args.gateway_info_file,
+        gateway_program_file=args.gateway_program_file,
         use_tls=not args.disable_tls,
     )
     daemon.run()

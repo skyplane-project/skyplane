@@ -97,8 +97,12 @@ class MulticastDirectPlanner(Planner):
         super().__init__()
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
+
+        print(jobs[0].dst_ifaces[0].region_tag())
+        print(jobs[0].dst_ifaces[0])
         src_region_tag = jobs[0].src_iface.region_tag()
         dst_region_tags = [iface.region_tag() for iface in jobs[0].dst_ifaces]
+
         # jobs must have same sources and destinations
         for job in jobs[1:]:
             assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
