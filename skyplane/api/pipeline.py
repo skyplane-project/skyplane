@@ -68,7 +68,7 @@ class Pipeline:
         # planner
         self.planning_algorithm = planning_algorithm
         if self.planning_algorithm == "direct":
-            self.planner = MulticastDirectPlanner(self.max_instances, 32, self.transfer_config)
+            self.planner = MulticastDirectPlanner(self.max_instances, 64, self.transfer_config)
         else:
             raise ValueError(f"No such planning algorithm {planning_algorithm}")
 
@@ -159,7 +159,7 @@ class Pipeline:
         """
         if isinstance(dst, str):
             dst = [dst]
-        job = SyncJob(src, dst, recursive=True, requester_pays=self.transfer_config.requester_pays)
+        job = SyncJob(src, dst, requester_pays=self.transfer_config.requester_pays)
         logger.fs.debug(f"[SkyplaneClient] Queued sync job {job}")
         self.jobs_to_dispatch.append(job)
         return job.uuid

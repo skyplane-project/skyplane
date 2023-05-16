@@ -367,7 +367,7 @@ def run_transfer(
                 small_transfer_status = cli.transfer_cp_small(src, dst, recursive)
                 return 0 if small_transfer_status else 1
         else:
-            job = SyncJob(src, [dst], recursive=recursive)
+            job = SyncJob(src, [dst])
             if cli.estimate_small_transfer(job, cloud_config.get_flag("native_cmd_threshold_gb") * GB):
                 small_transfer_status = cli.transfer_sync_small(src, dst)
                 return 0 if small_transfer_status else 1
