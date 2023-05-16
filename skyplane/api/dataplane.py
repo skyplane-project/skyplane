@@ -91,6 +91,7 @@ class Dataplane:
         authorize_ssh_pub_key: Optional[str] = None,
         e2ee_key_bytes: Optional[str] = None,
         container_name: Optional[str] = "skyplane_gateway",
+        port: Optional[int] = 8081,
     ):
         print("CONTAINER", container_name)
         # map outgoing ports
@@ -136,7 +137,8 @@ class Dataplane:
             use_compression=self.transfer_config.use_compression,
             use_socket_tls=self.transfer_config.use_socket_tls,
             local=self.local, 
-            container_name=container_name
+            container_name=container_name, 
+            port=port
         )
 
     def provision(

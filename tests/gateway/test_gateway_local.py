@@ -23,7 +23,7 @@ class TestServer(Server):
 
     """Test Server runs a gateway container locally to simulate deployed gateways"""
 
-    def __init__(self, region_tag, log_dir=None, auto_shutdown_timeout_minutes: Optional[int] = None):
+    def __init__(self, region_tag, log_dir=None, auto_shutdown_timeout_minutes: Optional[int] = None, local_port = None):
         self.region_tag = region_tag  # format provider:region
         self.auto_shutdown_timeout_minutes = None
         self.command_log = []
@@ -31,6 +31,7 @@ class TestServer(Server):
         self.gateway_api_url = None
         self.init_log_files(log_dir)
         self.ssh_tunnels: Dict = {}
+        self.local_port = local_port
 
     def run_command(self, command) -> Tuple[str, str]:
         # execute command locally
@@ -61,10 +62,10 @@ class TestServer(Server):
         return f"test:{self.region_tag}"
 
     def public_ip(self):
-        return "localhost"
+        return f"localhost:{self.local_port}"
 
     def private_ip(self):
-        return "localhost"
+        return f"localhost:{self.local_port}"
     
 
 
@@ -125,8 +126,8 @@ topology = MulticastDirectPlanner(1, 64).plan([job])
 print([g.region_tag for g in topology.get_gateways()])
 print(topology.generate_gateway_program("test:source"))
 
-source_server = TestServer("test:source_region")
-dest_server = TestServer("test:dest_region")
+source_server = TestServer("test:source_region", local_port=8081)
+dest_server = TestServer("test:dest_region", local_port=8082)
 
 gateway_docker_image = "ghcr.io/sarahwooders/skyplane:local-2b6813cf236e4cf830e6bc00308eeb8e"
 print("docker image", gateway_docker_image)
@@ -139,7 +140,8 @@ dataplane.bound_nodes[topology.get_region_gateways("test:dest_region")[0]] = des
 
 # TODO: create local network 
 
-# set ip address for docker containers
+
+# set ip address for docker containers (for gateway info file generation)
 topology.set_ip_addresses(topology.get_region_gateways("test:source_region")[0].gateway_id, "skyplane_source", "skyplane_source")
 topology.set_ip_addresses(topology.get_region_gateways("test:dest_region")[0].gateway_id, "skyplane_dest", "skyplane_dest")
 
@@ -151,16 +153,19 @@ dataplane._start_gateway(
     gateway_node=topology.get_region_gateways("test:source_region")[0],
     gateway_server=source_server,
     gateway_log_dir=test_log_dir,
-    container_name="skyplane_source"
+    container_name="skyplane_source", 
+    port=8081
 )
 dataplane._start_gateway(
     gateway_docker_image=gateway_docker_image,
     gateway_node=topology.get_region_gateways("test:dest_region")[0],
     gateway_server=dest_server,
     gateway_log_dir=test_log_dir,
-    container_name="skyplane_dest"
+    container_name="skyplane_dest", 
+    port=8082
 )
 
 # dispatch chunks to source gateway
+
 
 # check chunk status on destination gateway

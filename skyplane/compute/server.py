@@ -296,7 +296,8 @@ class Server:
         e2ee_key_bytes=None,
         use_socket_tls=False,
         local=False,
-        container_name: Optional[str] = "skyplane_gateway"
+        container_name: Optional[str] = "skyplane_gateway", 
+        port: Optional[int] = 8081,
     ):
         print("SERVER", gateway_program_path, gateway_info_path)
         def check_stderr(tup):
@@ -376,7 +377,7 @@ class Server:
 
         # network 
         if local:
-            docker_run_flags += f" --network skyplane-network"
+            docker_run_flags += f" --network skyplane-network --expose 8081 -p {port}:8081"
         else: 
             docker_run_flags += f" --network host"
 
@@ -398,6 +399,8 @@ class Server:
         gateway_container_hash = start_out.strip().split("\n")[-1][:12]
         print("HASH", gateway_container_hash)
         if local: 
+            self.gateway_log_viewer_url = None
+            self.gateway_api_url = f"localhost:{port}"
             return 
         self.gateway_log_viewer_url = f"http://127.0.0.1:{self.tunnel_port(8888)}/container/{gateway_container_hash}"
         logger.fs.debug(f"{self.uuid()} log_viewer_url = {self.gateway_log_viewer_url}")
