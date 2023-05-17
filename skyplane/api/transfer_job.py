@@ -282,15 +282,17 @@ class Chunker:
                     except exceptions.MissingObjectException as e:
                         logger.fs.exception(e)
                         raise e from None
+                    
+                    dest_obj = dst_iface.create_object_repr(dest_key)
 
-                    if dest_provider == "aws":
-                        dest_obj = S3Object(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
-                    elif dest_provider == "azure":
-                        dest_obj = AzureBlobObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
-                    elif dest_provider == "gcp":
-                        dest_obj = GCSObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
-                    else:
-                        raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
+                    #if dest_provider == "aws":
+                    #    dest_obj = S3Object(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
+                    #elif dest_provider == "azure":
+                    #    dest_obj = AzureBlobObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
+                    #elif dest_provider == "gcp":
+                    #    dest_obj = GCSObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
+                    #else:
+                    #    raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
                     dest_objs[dst_iface.region_tag()] = dest_obj
 
                 # assert that all destinations share the same post-fix key
@@ -526,6 +528,7 @@ class TransferJob(ABC):
         :type obj: ObjectStoreObject
         """
         return True
+ 
 
 
 @dataclass
@@ -641,6 +644,7 @@ class CopyJob(TransferJob):
                 assert Chunk.from_dict(chunk_batch[0].as_dict()) == chunk_batch[0], f"Invalid chunk request: {chunk_batch[0].as_dict}"
 
                 # TODO: make async
+                print("SERVER", server.gateway_api_url)
                 reply = self.http_pool.request(
                     "POST",
                     f"{server.gateway_api_url}/api/v1/chunk_requests",
@@ -726,6 +730,86 @@ class CopyJob(TransferJob):
         for pair in self.gen_transfer_pairs():
             total_size += pair.src_obj.size
         return total_size / 1e9
+
+@dataclass
+class TestCopyJob(CopyJob): 
+
+    """Test copy which does not interact with object stores but uses random data generation on gateways"""
+    def __init__(
+        self,
+        src_path: str,
+        dst_paths: List[str] or str,
+        recursive: bool = False,
+        requester_pays: bool = False,
+        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
+        num_chunks: int = 10,
+        chunk_size_bytes: int = 1024,
+    ):
+        super().__init__(src_path, dst_paths, recursive, requester_pays, uuid)
+        self.num_chunks = num_chunks
+        self.chunk_size_bytes = chunk_size_bytes
+
+    def dispatch(
+        self,
+        dataplane: "Dataplane",
+        dispatch_batch_size: int = 100,  # 6.4 GB worth of chunks
+        transfer_config: Optional[TransferConfig] = field(init=False, default_factory=lambda: TransferConfig()),
+    ) -> Generator[Chunk, None, None]:
+        """Dispatch transfer job to specified gateways.
+
+        :param dataplane: dataplane that starts the transfer job
+        :type dataplane: Dataplane
+        :param transfer_config: the configuration during the transfer
+        :type transfer_config: TransferConfig
+        :param dispatch_batch_size: maximum size of the buffer to temporarily store the generators (default: 1000)
+        :type dispatch_batch_size: int
+        """
+        chunks = [
+            Chunk(
+                src_key=None,
+                dest_key=None, 
+                chunk_id=uuid.uuid4().hex,
+                chunk_length_bytes=self.chunk_size_bytes,
+                partition_id=str(0),  # TODO: fix this to distribute across multiple partitions
+            ) for i in range(self.num_chunks)
+        ]
+ 
+        batches = Chunker.batch_generator(
+            Chunker.prefetch_generator(chunks, buffer_size=dispatch_batch_size * 32), batch_size=dispatch_batch_size
+        )
+
+        # dispatch chunk requests
+        src_gateways = dataplane.source_gateways()
+        queue_size = [0] * len(src_gateways)
+
+        for chunk_batch in batches:
+            # send chunk requests to source gateways
+            min_idx = queue_size.index(min(queue_size))
+            n_added = 0
+            while n_added < len(chunk_batch):
+                # TODO: should update every source instance queue size
+                server = src_gateways[min_idx]
+                assert Chunk.from_dict(chunk_batch[0].as_dict()) == chunk_batch[0], f"Invalid chunk request: {chunk_batch[0].as_dict}"
+
+                # TODO: make async
+                print("SERVER", server.gateway_api_url)
+                reply = self.http_pool.request(
+                    "POST",
+                    f"{server.gateway_api_url}/api/v1/chunk_requests",
+                    body=json.dumps([chunk.as_dict() for chunk in chunk_batch[n_added:]]).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                )
+                reply_json = json.loads(reply.data.decode("utf-8"))
+                logger.fs.debug(f"Added {n_added} chunks to server {server}: {reply_json}")
+                n_added += reply_json["n_added"]
+                queue_size[min_idx] = reply_json["qsize"]  # update queue size
+                if reply.status != 200:
+                    raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
+
+                # dont try again with some gateway
+                min_idx = (min_idx + 1) % len(src_gateways)
+
+            yield from chunk_batch
 
 
 @dataclass

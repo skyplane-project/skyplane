@@ -266,6 +266,16 @@ class GatewayDaemon:
                         chunk_store=self.chunk_store,
                     )
                     total_p += 1
+                elif op["op_type"] == "gen_data": 
+                    operators[handle] = GatewayRandomDataGen(
+                        handle=handle,
+                        region=self.region,
+                        input_queue=input_queue,
+                        output_queue=output_queue,
+                        error_queue=self.error_queue,
+                        error_event=self.error_event,
+                        chunk_store=self.chunk_store,
+                    )
                 else:
                     raise ValueError(f"Unsupported op_type {op['op_type']}")
                 # recursively create for child operators

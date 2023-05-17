@@ -171,3 +171,7 @@ class AzureBlobInterface(ObjectStoreInterface):
                     f"Checksum mismatch for object {dst_object_name} in Azure container {self.container_name}, "
                     + f"expected {b64_md5sum}, got {blob_md5}"
                 )
+            
+    def create_object_repr(self, key: str) -> AzureBlobObject:
+        return AzureBlobObject(provider="azure", bucket=self.bucket_name, key=key)
+

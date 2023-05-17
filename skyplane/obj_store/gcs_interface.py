@@ -301,3 +301,7 @@ class GCSInterface(ObjectStoreInterface):
             # cancel upload
             response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "DELETE")
             raise exceptions.SkyplaneException("Failed to complete multipart upload") from e
+
+    def create_object_repr(self, key: str) -> GCSObject:
+        return GCSObject(provider="gcp", bucket=self.bucket_name, key=key)
+

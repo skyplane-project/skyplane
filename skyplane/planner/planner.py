@@ -13,9 +13,11 @@ from skyplane.gateway.gateway_program import (
     GatewayWriteObjectStore,
     GatewayReceive,
     GatewaySend,
+    GatewayGenData,
+    GatewayWriteLocal
 )
 
-from skyplane.api.transfer_job import TransferJob
+from skyplane.api.transfer_job import TransferJob, TestCopyJob
 
 
 class Planner:
@@ -145,11 +147,14 @@ class MulticastDirectPlanner(Planner):
 
                 # special case where destination is same region as source
                 if dst_region_tag == src_region_tag:
-                    src_program.add_operator(
-                        GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
-                        parent_handle=mux_and,
-                        partition_id=partition_id,
-                    )
+                    if isinstance(job, TestCopyJob):
+                        src_program.add_operator(GatewayGenData(), parent_handle=mux_and, partition_id=partition_id)
+                    else:
+                        src_program.add_operator(
+                            GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
+                            parent_handle=mux_and,
+                            partition_id=partition_id,
+                        )
                     continue
 
                 # can send to any gateway in region
@@ -172,11 +177,14 @@ class MulticastDirectPlanner(Planner):
 
                 # each gateway also recieves data from source
                 recv_op = dst_program[dst_region_tag].add_operator(GatewayReceive(), partition_id=partition_id)
-                dst_program[dst_region_tag].add_operator(
-                    GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
-                    parent_handle=recv_op,
-                    partition_id=partition_id,
-                )
+                if isinstance(job, TestCopyJob):
+                    dst_program[dst_region_tag].add_operator(GatewayWriteLocal(), parent_handle=recv_op, partition_id=partition_id)
+                else: 
+                    dst_program[dst_region_tag].add_operator(
+                        GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
+                        parent_handle=recv_op,
+                        partition_id=partition_id,
+                    )
 
                 # update cost per GB
                 plan.cost_per_gb += compute.CloudProvider.get_transfer_cost(src_region_tag, dst_region_tag)

@@ -20,6 +20,8 @@ from skyplane.utils.fn import PathLike, wait_for
 from skyplane.utils.retry import retry_backoff
 from skyplane.utils.timer import Timer
 from skyplane.planner.topology import TopologyPlanGateway
+from skyplane.config import SkyplaneConfig
+
 
 tmp_log_dir = Path("/tmp/skyplane")
 
@@ -96,6 +98,25 @@ class Server:
         self.gateway_api_url = None
         self.init_log_files(log_dir)
         self.ssh_tunnels: Dict = {}
+
+        # TODO: allow specified path 
+        self.config = SkyplaneConfig.default_config()
+
+        # setup authentication credentials 
+        self.auth = {}
+
+        if self.config.aws_enabled: 
+            from skyplane.compute.aws.aws_auth import AWSAuthentication
+            self.auth["aws"] = AWSAuthentication()
+        if self.config.gcp_enabled: 
+            from skyplane.compute.gcp.gcp_auth import GCPAuthentication
+            self.auth["gcp"] = GCPAuthentication()
+        if self.config.azure_enabled:
+            from skyplane.compute.azure.azure_auth import AzureAuthentication
+            self.auth["azure"] = AzureAuthentication()
+        if self.config.ibmcloud_enabled:
+            from skyplane.compute.ibmcloud.ibmcloud_auth import IBMCloudAuthentication
+            self.auth["ibmcloud"] = IBMCloudAuthentication()
 
     def __repr__(self):
         return f"Server({self.uuid()})"
@@ -336,17 +357,25 @@ class Server:
         docker_run_flags += " --mount type=tmpfs,dst=/skyplane,tmpfs-size=250000000"
         docker_run_flags += f" -v /tmp/{config_path.name}:/pkg/data/{config_path.name}"
 
+        # we copy all credentials to all VMs in order to support object store access across clouds (e.g. for one-sided transfers)
+        # we can add a least privledge option in the future where we rely on compute service accounts instead in the future
+
         # copy service account files
-        if self.provider == "gcp":
-            service_key_path = compute.GCPAuthentication().get_service_account_key_path()
+        #if self.provider == "gcp":
+        if "gcp" in self.auth:
+            #service_key_path = compute.GCPAuthentication().get_service_account_key_path()
+            service_key_path = self.auth["gcp"].get_service_account_key_path()
             service_key_file = os.path.basename(service_key_path)
             self.upload_file(service_key_path, f"/tmp/{service_key_file}")
             docker_envs["GCP_SERVICE_ACCOUNT_FILE"] = f"/pkg/data/{service_key_file}"
             docker_run_flags += f" -v /tmp/{service_key_file}:/pkg/data/{service_key_file}"
 
         # set default region for boto3 on AWS
-        if self.provider == "aws":
+        #if self.provider == "aws":
+        if "aws" in self.auth:
             docker_envs["AWS_DEFAULT_REGION"] = self.region_tag.split(":")[1]
+            docker_envs["AWS_ACCESS_KEY_ID"] = self.auth["aws"].access_key_id
+            docker_envs["AWS_SECRET_ACCESS_KEY"] = self.auth["aws"].secret_access_key
 
         # copy E2EE keys
         if e2ee_key_bytes is not None:
@@ -400,7 +429,6 @@ class Server:
         print("HASH", gateway_container_hash)
         if local: 
             self.gateway_log_viewer_url = None
-            self.gateway_api_url = f"localhost:{port}"
             return 
         self.gateway_log_viewer_url = f"http://127.0.0.1:{self.tunnel_port(8888)}/container/{gateway_container_hash}"
         logger.fs.debug(f"{self.uuid()} log_viewer_url = {self.gateway_log_viewer_url}")

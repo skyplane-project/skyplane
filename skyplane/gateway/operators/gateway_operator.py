@@ -380,7 +380,7 @@ class GatewayRandomDataGen(GatewayOperator):
     def process(self, chunk_req: ChunkRequest):
         # wait until enough space available
         fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
-        size_bytes = int(self.size_mb * MB)
+        size_bytes = chunk_req.chunk.chunk_length_bytes
         assert size_bytes > 0, f"Invalid size {size_bytes} for fallocate"
 
         while True:
