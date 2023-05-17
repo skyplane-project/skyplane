@@ -300,17 +300,12 @@ class MulticastDirectPlanner(Planner):
         if config_vcpus <= quota_limit:
             return config_vcpus, quota_limit // config_vcpus
 
-        # Perform binary search to find the largest vcpu count that is less than the quota limit
-        left = 0
-        right = len(Planner._VCPUS) - 1
         vcpus = None
-        while left <= right:
-            mid = (left + right) // 2
-            if Planner._VCPUS[mid] <= quota_limit:
-                vcpus = Planner._VCPUS[mid]
-                right = mid - 1
-            else:
-                left = mid + 1
+        for value in Planner._VCPUS:
+            if value <= quota_limit:
+                vcpus = value
+                print(region_tag, vcpus, quota_limit)
+                break
 
         # shouldn't happen, but just in case we use more complicated vm types in the future
         if vcpus is None:
