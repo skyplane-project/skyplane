@@ -298,7 +298,7 @@ class MulticastDirectPlanner(Planner):
         config_vm_type = getattr(self.transfer_config, f"{cloud_provider}_instance_class")
         config_vcpus = Planner._vm_to_vcpus(cloud_provider, config_vm_type)
         if config_vcpus <= quota_limit:
-            return config_vcpus, 1  # TODO: read this 1 from the config file
+            return config_vcpus, quota_limit // config_vcpus
 
         # Perform binary search to find the largest vcpu count that is less than the quota limit
         left = 0
