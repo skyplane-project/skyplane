@@ -313,6 +313,11 @@ class MulticastDirectPlanner(Planner):
 
         # number of instances allowed by the quota with the selected vm type
         n_instances = quota_limit // vcpus
+        logger.warning(
+            f"Falling back to instance class `{Planner._vcpus_to_vm(cloud_provider, vcpus)}` at {region_tag} "
+            f"due to cloud vCPU limit of {quota_limit}. You can visit https://skyplane.org/en/latest/increase_vcpus.html "
+            "to learn more about how to increase your cloud vCPU limits for any cloud provider."
+        )
         return (vcpus, n_instances)
 
 
