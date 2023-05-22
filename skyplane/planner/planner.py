@@ -18,7 +18,6 @@ from skyplane.gateway.gateway_program import (
 )
 
 from skyplane.api.transfer_job import TransferJob
-from skyplane.config_paths import aws_quota_path, gcp_quota_path, azure_standardDv5_quota_path
 import json
 
 from skyplane.utils.fn import do_parallel
@@ -152,11 +151,11 @@ class MulticastDirectPlanner(Planner):
 
         # Loading the quota information, add ibm cloud when it is supported
         self.quota_limits = {}
-        with aws_quota_path.open("r") as f:
+        with self.transfer_config.aws_vcpu_file.open("r") as f:
             self.quota_limits["aws"] = json.load(f)
-        with gcp_quota_path.open("r") as f:
+        with self.transfer_config.gcp_vcpu_file.open("r") as f:
             self.quota_limits["gcp"] = json.load(f)
-        with open(azure_standardDv5_quota_path, "r") as f:
+        with self.transfer_config.azure_vcpu_file.open("r") as f:
             self.quota_limits["azure"] = json.load(f)
 
         super().__init__()
@@ -175,6 +174,8 @@ class MulticastDirectPlanner(Planner):
         # tuples of (vcpus, n_instances)
         vm_info = do_parallel(self._calculate_vm_types, [src_region_tag] + dst_region_tags)  # type: ignore
         vm_types = {v[0]: Planner._vcpus_to_vm(cloud_provider=v[0].split(":")[0], vcpus=v[1][0]) for v in vm_info}  # type: ignore
+
+        # Taking the minimum so that we can use the same number of instances for both source and destination
         n_instances = min(v[1][1] for v in vm_info)  # type: ignore
 
         # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
@@ -257,7 +258,14 @@ class MulticastDirectPlanner(Planner):
 
     def _get_quota_limits_for(self, cloud_provider: str, region: str, spot: bool = False) -> Optional[int]:
         """Gets the quota info from the saved files. Returns None if quota_info isn't loaded during `skyplane init`
-        or if the quota info doesn't include the region
+        or if the quota info doesn't include the region.
+
+        :param cloud_provider: name of the cloud provider of the region
+        :type cloud_provider: str
+        :param region: name of the region for which to get the quota for
+        :type region: int
+        :param spot: whether to use spot specified by the user config (default: False)
+        :type spot: bool
         """
         quota_limits = self.quota_limits[cloud_provider]
         if not quota_limits:
@@ -279,10 +287,11 @@ class MulticastDirectPlanner(Planner):
 
     def _calculate_vm_types(self, region_tag: str) -> Optional[Tuple[int, int]]:
         """Calculates the largest allowed vm type according to the regional quota limit as well as
-        how many of these vm types can we launch to avoid QUOTA_EXCEEDED errors. Returns:
-            - vcpus: Number of vcpus used by the selected vm type
-            - n_instances: Number of instance allowed by the quota limit
-        Returns None if quota information wasn't properly loaded or allowed vcpu list is wrong.
+        how many of these vm types can we launch to avoid QUOTA_EXCEEDED errors. Returns None if quota
+        information wasn't properly loaded or allowed vcpu list is wrong.
+
+        :param region_tag: tag of the node we are calculating the above for, example -> "aws:us-east-1"
+        :type region_tag: str
         """
         cloud_provider, region = region_tag.split(":")
 
@@ -304,7 +313,6 @@ class MulticastDirectPlanner(Planner):
         for value in Planner._VCPUS:
             if value <= quota_limit:
                 vcpus = value
-                print(region_tag, vcpus, quota_limit)
                 break
 
         # shouldn't happen, but just in case we use more complicated vm types in the future
