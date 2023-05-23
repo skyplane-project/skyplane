@@ -98,22 +98,22 @@ class MulticastDirectPlanner(Planner):
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         src_region_tag = jobs[0].src_iface.region_tag()
-        dst_region_tags = [iface.region_tag() for iface in jobs[0].dst_ifaces]
+        dst_tags = jobs[0].dst_ifaces
         # jobs must have same sources and destinations
         for job in jobs[1:]:
             assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
-            assert [iface.region_tag() for iface in job.dst_ifaces] == dst_region_tags, "Add jobs must have same destination set"
+            #assert [iface.region_tag() for iface in job.dst_ifaces] == dst_region_tags, "Add jobs must have same destination set"
 
-        plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=dst_region_tags)
+        plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=dst_tags)
         # TODO: use VM limits to determine how many instances to create in each region
         # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
         for i in range(self.n_instances):
             plan.add_gateway(src_region_tag)
-            for dst_region_tag in dst_region_tags:
-                plan.add_gateway(dst_region_tag)
+            for dst_tag in dst_tags:
+                plan.add_gateway(dst_tag.region_tag())
 
         # initialize gateway programs per region
-        dst_program = {dst_region: GatewayProgram() for dst_region in dst_region_tags}
+        dst_program = {dst_tag: GatewayProgram() for dst_tag in dst_tags}
         src_program = GatewayProgram()
 
         # iterate through all jobs
@@ -167,8 +167,8 @@ class MulticastDirectPlanner(Planner):
                     )
 
                 # each gateway also recieves data from source
-                recv_op = dst_program[dst_region_tag].add_operator(GatewayReceive(), partition_id=partition_id)
-                dst_program[dst_region_tag].add_operator(
+                recv_op = dst_program[dst_iface].add_operator(GatewayReceive(), partition_id=partition_id)
+                dst_program[dst_iface].add_operator(
                     GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
                     parent_handle=recv_op,
                     partition_id=partition_id,
@@ -179,8 +179,8 @@ class MulticastDirectPlanner(Planner):
 
         # set gateway programs
         plan.set_gateway_program(src_region_tag, src_program)
-        for dst_region_tag, program in dst_program.items():
-            if dst_region_tag != src_region_tag:  # don't overwrite
+        for dst_tag, program in dst_program.items():
+            if dst_tag.region_tag() != src_region_tag:  # don't overwrite
                 plan.set_gateway_program(dst_region_tag, program)
         return plan
 
