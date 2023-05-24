@@ -1,5 +1,6 @@
 import json
 import time
+import time
 import typer
 import math
 import queue
@@ -294,7 +295,6 @@ class Chunker:
 
                 # assert that all destinations share the same post-fix key
                 assert len(list(set(dest_keys))) == 1, f"Destination keys {dest_keys} do not match"
-
                 n_objs += 1
                 yield TransferPair(src_obj=obj, dst_objs=dest_objs, dst_key=dest_keys[0])
 
@@ -554,7 +554,8 @@ class CopyJob(TransferJob):
     def http_pool(self):
         """http connection pool"""
         if not hasattr(self, "_http_pool"):
-            self._http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
+            timeout = urllib3.util.Timeout(connect=10.0, read=None)  # no read timeout
+            self._http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3), timeout=timeout)
         return self._http_pool
 
     def gen_transfer_pairs(
@@ -590,15 +591,13 @@ class CopyJob(TransferJob):
         transfer_pair_generator = self.gen_transfer_pairs(chunker)  # returns TransferPair objects
         gen_transfer_list = chunker.tail_generator(transfer_pair_generator, self.transfer_list)
         chunks = chunker.chunk(gen_transfer_list)
-        # chunk_requests = chunker.to_chunk_requests(chunks)
-
         batches = chunker.batch_generator(
             chunker.prefetch_generator(chunks, buffer_size=dispatch_batch_size * 32), batch_size=dispatch_batch_size
         )
 
         # dispatch chunk requests
         src_gateways = dataplane.source_gateways()
-        bytes_dispatched = [0] * len(src_gateways)
+        queue_size = [0] * len(src_gateways)
         n_multiparts = 0
         start = time.time()
 
@@ -615,6 +614,10 @@ class CopyJob(TransferJob):
                             if region_tag == dst_gateway.region_tag:
                                 mappings[key] = id
 
+                    if len(list(mappings.keys())) == 0:
+                        # no mappings to send
+                        continue
+
                     # send mapping to gateway
                     reply = self.http_pool.request(
                         "POST",
@@ -630,24 +633,30 @@ class CopyJob(TransferJob):
 
             # send chunk requests to source gateways
             chunk_batch = [cr.chunk for cr in batch if cr.chunk is not None]
-            min_idx = bytes_dispatched.index(min(bytes_dispatched))
-            server = src_gateways[min_idx]
-            n_bytes = sum([chunk.chunk_length_bytes for chunk in chunk_batch])
-            bytes_dispatched[min_idx] += n_bytes
-            start = time.time()
-            assert Chunk.from_dict(chunk_batch[0].as_dict()) == chunk_batch[0], f"Invalid chunk request: {chunk_batch[0].as_dict}"
-            reply = self.http_pool.request(
-                "POST",
-                f"{server.gateway_api_url}/api/v1/chunk_requests",
-                body=json.dumps([chunk.as_dict() for chunk in chunk_batch]).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-            )
-            end = time.time()
-            if reply.status != 200:
-                raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
-            logger.fs.debug(
-                f"Dispatched {len(batch)} chunk requests to {server.instance_name()} ({n_bytes} bytes) in {end - start:.2f} seconds"
-            )
+            min_idx = queue_size.index(min(queue_size))
+            n_added = 0
+            while n_added < len(chunk_batch):
+                # TODO: should update every source instance queue size
+                server = src_gateways[min_idx]
+                assert Chunk.from_dict(chunk_batch[0].as_dict()) == chunk_batch[0], f"Invalid chunk request: {chunk_batch[0].as_dict}"
+
+                # TODO: make async
+                reply = self.http_pool.request(
+                    "POST",
+                    f"{server.gateway_api_url}/api/v1/chunk_requests",
+                    body=json.dumps([chunk.as_dict() for chunk in chunk_batch[n_added:]]).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                )
+                reply_json = json.loads(reply.data.decode("utf-8"))
+                logger.fs.debug(f"Added {n_added} chunks to server {server}: {reply_json}")
+                n_added += reply_json["n_added"]
+                queue_size[min_idx] = reply_json["qsize"]  # update queue size
+                if reply.status != 200:
+                    raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
+
+                # dont try again with some gateway
+                min_idx = (min_idx + 1) % len(src_gateways)
+
             yield from chunk_batch
 
             # copy new multipart transfers to the multipart transfer list
@@ -672,8 +681,6 @@ class CopyJob(TransferJob):
             def complete_fn(batch):
                 for req in batch:
                     logger.fs.debug(f"Finalize upload id {req['upload_id']} for key {req['key']}")
-
-                    # retry - sometimes slight delay before object store knows all parts are uploaded
                     retry_backoff(partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"]), initial_backoff=0.5)
 
             do_parallel(complete_fn, batches, n=8)
@@ -729,11 +736,10 @@ class SyncJob(CopyJob):
         self,
         src_path: str,
         dst_paths: List[str] or str,
-        recursive: bool = False,
         requester_pays: bool = False,
         uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
-        super().__init__(src_path, dst_paths, recursive, requester_pays, uuid)
+        super().__init__(src_path, dst_paths, True, requester_pays, uuid)
         self.transfer_list = []
         self.multipart_transfer_list = []
 

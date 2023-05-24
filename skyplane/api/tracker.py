@@ -146,22 +146,25 @@ class TransferProgressTracker(Thread):
                 self.job_chunk_requests[job_uuid] = {}
                 self.job_pending_chunk_ids[job_uuid] = {region: set() for region in self.dataplane.topology.dest_region_tags}
                 self.job_complete_chunk_ids[job_uuid] = {region: set() for region in self.dataplane.topology.dest_region_tags}
+
                 for chunk in chunk_streams[job_uuid]:
                     chunks_dispatched = [chunk]
                     self.job_chunk_requests[job_uuid][chunk.chunk_id] = chunk
                     self.hooks.on_chunk_dispatched(chunks_dispatched)
                     for region in self.dataplane.topology.dest_region_tags:
                         self.job_pending_chunk_ids[job_uuid][region].add(chunk.chunk_id)
+
                 logger.fs.debug(
                     f"[TransferProgressTracker] Job {job.uuid} dispatched with {len(self.job_chunk_requests[job_uuid])} chunk requests"
                 )
+
         except Exception as e:
             UsageClient.log_exception(
                 "dispatch job",
                 e,
                 args,
                 self.dataplane.topology.src_region_tag,
-                self.dataplane.topology.dest_region_tags,
+                self.dataplane.topology.dest_region_tags[0],  # TODO: support multiple destinations
                 session_start_timestamp_ms,
             )
             raise e
