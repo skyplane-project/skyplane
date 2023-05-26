@@ -63,3 +63,14 @@ class StorageInterface:
             return POSIXInterface(bucket)
         else:
             raise ValueError(f"Invalid region_tag {region_tag} - could not create interface")
+
+    @staticmethod
+    def create_region_tags(provider_dsts, bucket_dsts):
+        if isinstance(provider_dsts, str):
+            provider_dsts = [provider_dsts]
+
+        dst_region_tags = []
+        for provider_dst, bucket_dst in zip(provider_dsts, bucket_dsts):
+            tag = StorageInterface.create(f"{provider_dst}:infer", bucket_dst).region_tag()
+            dst_region_tags.append(tag)
+        return dst_region_tags

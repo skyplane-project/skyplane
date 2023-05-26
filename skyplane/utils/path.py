@@ -1,7 +1,6 @@
 import re
 from pathlib import Path
 from typing import Optional, Tuple
-
 from skyplane.utils import logger
 
 
@@ -62,3 +61,14 @@ def parse_path(path: str) -> Tuple[str, Optional[str], Optional[str]]:
 
         # path is subsitutute for bucket
         return "local", path, path
+
+
+def parse_multi_paths(paths):
+    if isinstance(paths, str):
+        paths = [paths]
+
+    parsed_paths = []
+    for path in paths:
+        p = parse_path(path)
+        parsed_paths.append(p)
+    return list(zip(*parsed_paths))

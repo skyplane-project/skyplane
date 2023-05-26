@@ -21,12 +21,11 @@ from skyplane.cli.impl.common import print_header, console, print_stats_complete
 from skyplane.api.usage import UsageClient
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import cloud_config, config_path
-from skyplane.obj_store.object_store_interface import ObjectStoreInterface, StorageInterface
-from skyplane.obj_store.file_system_interface import FileSystemInterface
+from skyplane.obj_store.object_store_interface import StorageInterface
 from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 from skyplane.utils import logger
 from skyplane.utils.definitions import GB, format_bytes
-from skyplane.utils.path import parse_path
+from skyplane.utils.path import parse_path, parse_multi_paths
 
 
 @dataclass
@@ -50,8 +49,8 @@ class TransferStats:
 
 
 class SkyplaneCLI:
-    def __init__(self, src_region_tag: str, dst_region_tag: str, args: Dict[str, Any], skyplane_config: Optional[SkyplaneConfig] = None):
-        self.src_region_tag, self.dst_region_tag = src_region_tag, dst_region_tag
+    def __init__(self, src_region_tag: str, dst_region_tags: List[str], args: Dict[str, Any], skyplane_config: Optional[SkyplaneConfig] = None):
+        self.src_region_tag, self.dst_region_tags = src_region_tag, dst_region_tags
         self.args = args
         self.aws_config, self.azure_config, self.gcp_config, self.ibmcloud_config = self.to_api_config(skyplane_config or cloud_config)
 
@@ -103,7 +102,8 @@ class SkyplaneCLI:
         return aws_config, azure_config, gcp_config, ibmcloud_config
 
     def make_transfer_config(self, config: SkyplaneConfig) -> TransferConfig:
-        intraregion = self.src_region_tag == self.dst_region_tag
+        # intraregion = self.src_region_tag == self.dst_region_tag
+        intraregion = self.src_region_tag
         return TransferConfig(
             autoterminate_minutes=config.get_flag("autoshutdown_minutes"),
             requester_pays=config.get_flag("requester_pays"),
@@ -131,7 +131,7 @@ class SkyplaneCLI:
             return True
         except skyplane.exceptions.BadConfigException as e:
             logger.exception(e)
-            UsageClient.log_exception("cli_check_config", e, self.args, self.src_region_tag, self.dst_region_tag)
+            UsageClient.log_exception("cli_check_config", e, self.args, self.src_region_tag, self.dst_region_tags)
             return False
 
     def transfer_cp_onprem(self, src: str, dst: str, recursive: bool) -> bool:
@@ -144,7 +144,7 @@ class SkyplaneCLI:
             if rc == 0:
                 print_stats_completed(request_time, None)
                 transfer_stats = TransferStats(monitor_status="completed", total_runtime_s=request_time, throughput_gbits=0)
-                UsageClient.log_transfer(transfer_stats.to_dict(), self.args, self.src_region_tag, self.dst_region_tag)
+                UsageClient.log_transfer(transfer_stats.to_dict(), self.args, self.src_region_tag, self.dst_region_tags)
             return True
         else:
             typer.secho("Transfer not supported", fg="red")
@@ -160,7 +160,7 @@ class SkyplaneCLI:
             if rc == 0:
                 print_stats_completed(request_time, None)
                 transfer_stats = TransferStats(monitor_status="completed", total_runtime_s=request_time, throughput_gbits=0)
-                UsageClient.log_transfer(transfer_stats.to_dict(), self.args, self.src_region_tag, self.dst_region_tag)
+                UsageClient.log_transfer(transfer_stats.to_dict(), self.args, self.src_region_tag, self.dst_region_tags)
             return True
         else:
             typer.secho("Transfer not supported", fg="red")
@@ -299,7 +299,7 @@ def force_deprovision(dp: skyplane.Dataplane):
 
 def run_transfer(
     src: str,
-    dst: str,
+    dst: List[str],
     recursive: bool,
     debug: bool,
     multipart: bool,
@@ -315,9 +315,10 @@ def run_transfer(
     print_header()
 
     provider_src, bucket_src, path_src = parse_path(src)
-    provider_dst, bucket_dst, path_dst = parse_path(dst)
+    provider_dsts, bucket_dsts, path_dsts = parse_multi_paths(dst)
     src_region_tag = StorageInterface.create(f"{provider_src}:infer", bucket_src).region_tag()
-    dst_region_tag = StorageInterface.create(f"{provider_dst}:infer", bucket_dst).region_tag()
+    dst_region_tags = StorageInterface.create_region_tags(provider_dsts, bucket_dsts)
+
     args = {
         "cmd": cmd,
         "recursive": True,
@@ -330,7 +331,7 @@ def run_transfer(
     }
 
     # create CLI object
-    cli = SkyplaneCLI(src_region_tag=src_region_tag, dst_region_tag=dst_region_tag, args=args)
+    cli = SkyplaneCLI(src_region_tag=src_region_tag, dst_region_tags=dst_region_tags, args=args)
     if not cli.check_config():
         typer.secho(
             f"Skyplane configuration file is not valid. Please reset your config by running `rm {config_path}` and then rerunning `skyplane init` to fix.",
@@ -346,15 +347,15 @@ def run_transfer(
         pipeline.queue_sync(src, dst)
 
     # confirm transfer
-    if not cli.confirm_transfer(pipeline, src_region_tag, [dst_region_tag], 5, ask_to_confirm_transfer=not confirm):
+    if not cli.confirm_transfer(pipeline, src_region_tag, dst_region_tags, 5, ask_to_confirm_transfer=not confirm):
         return 1
 
     # local->local transfers not supported (yet)
-    if provider_src == "local" and provider_dst == "local":
+    if provider_src == "local" and dst_region_tags[0] == "local":
         raise NotImplementedError("Local->local transfers not supported (yet)")
 
     # fall back options: local->cloud, cloud->local, small cloud->cloud transfers
-    if provider_src == "local" or provider_dst == "local":
+    if provider_src == "local" or provider_dsts[0] == "local":
         if cli.args["cmd"] == "cp":
             return 0 if cli.transfer_cp_onprem(src, dst, recursive) else 1
         else:
@@ -388,20 +389,20 @@ def run_transfer(
                 logger.fs.exception(e)
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e)
-                UsageClient.log_exception("cli_cp", e, args, cli.src_region_tag, cli.dst_region_tag)
+                UsageClient.log_exception("cli_cp", e, args, cli.src_region_tag, cli.dst_region_tags)
                 console.print("[bold red]Deprovisioning was interrupted! VMs may still be running which will incur charges.[/bold red]")
                 console.print("[bold red]Please manually deprovision the VMs by running `skyplane deprovision`.[/bold red]")
             return 1
         except skyplane.exceptions.SkyplaneException as e:
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
             console.print(e.pretty_print_str())
-            UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
+            UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tags)
             force_deprovision(dp)
         except Exception as e:
             logger.fs.exception(e)
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
             console.print(e)
-            UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
+            UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tags)
             force_deprovision(dp)
 
 
