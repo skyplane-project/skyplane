@@ -136,7 +136,7 @@ class UsageClient:
         exception: Exception,
         args: Optional[Dict] = None,
         src_region_tag: Optional[str] = None,
-        dest_region_tag: Optional[str] = None,  # TODO: fix this for mult-dest
+        dest_region_tags: Optional[List[str]] = None,  # TODO: fix this for mult-dest
         session_start_timestamp_ms: Optional[int] = None,
     ):
         if cls.enabled():
@@ -146,7 +146,7 @@ class UsageClient:
                 error_dict=error_dict,
                 arguments_dict=args,
                 src_region_tag=src_region_tag,
-                dest_region_tag=dest_region_tag,
+                dest_region_tags=dest_region_tags,
                 session_start_timestamp_ms=session_start_timestamp_ms,
             )
             destination = client.write_usage_data(stats)
@@ -158,7 +158,7 @@ class UsageClient:
         transfer_stats: Optional[Dict],
         args: Optional[Dict] = None,
         src_region_tag: Optional[str] = None,
-        dest_region_tags: Optional[str] = None,
+        dest_region_tags: Optional[List[str]] = None,
         session_start_timestamp_ms: Optional[int] = None,
     ):
         if cls.enabled():
@@ -250,7 +250,7 @@ class UsageClient:
         arguments_dict: Optional[Dict] = None,
         transfer_stats: Optional[Dict] = None,
         src_region_tag: Optional[str] = None,
-        dest_region_tags: Optional[str] = None,
+        dest_region_tags: Optional[List[str]] = None,
         session_start_timestamp_ms: Optional[int] = None,
     ):
         if src_region_tag is None:
@@ -261,7 +261,9 @@ class UsageClient:
             dest_provider, dest_region = None, None
         else:
             # TODO: have usage stats view for multiple destinations
-            dest_provider, dest_region = dest_region_tags[0].split(":")
+            dest_region_tag = [dest_region_tag.split(":") for dest_region_tag in dest_region_tags]
+            dest_provider, dest_region = list(zip(*dest_region_tag))
+            dest_provider, dest_region = ','.join(dest_provider), ','.join(dest_region)
 
         return UsageStatsToReport(
             skyplane_version=skyplane.__version__,
@@ -284,7 +286,7 @@ class UsageClient:
         error_dict: Dict,
         arguments_dict: Optional[Dict] = None,
         src_region_tag: Optional[str] = None,
-        dest_region_tag: Optional[str] = None,
+        dest_region_tags: Optional[List[str]] = None,
         session_start_timestamp_ms: Optional[int] = None,
     ):
         if src_region_tag is None:
@@ -292,10 +294,12 @@ class UsageClient:
         else:
             src_provider, src_region = src_region_tag.split(":")
 
-        if dest_region_tag is None:
+        if dest_region_tags is None:
             dest_provider, dest_region = None, None
         else:
-            dest_provider, dest_region = dest_region_tag.split(":")
+            dest_region_tag = [dest_region_tag.split(":") for dest_region_tag in dest_region_tags]
+            dest_provider, dest_region = list(zip(*dest_region_tag))
+            dest_provider, dest_region = ','.join(dest_provider), ','.join(dest_region)
 
         return UsageStatsToReport(
             skyplane_version=skyplane.__version__,

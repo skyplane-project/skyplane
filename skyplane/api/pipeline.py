@@ -1,27 +1,24 @@
-import json
-import time
-import os
 import threading
-from collections import defaultdict, Counter
-from datetime import datetime
-from functools import partial
 from datetime import datetime
 
-import nacl.secret
-import nacl.utils
 import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 from skyplane import compute
-from skyplane.api.tracker import TransferProgressTracker, TransferHook
+from skyplane.api.tracker import TransferProgressTracker
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
 
-from skyplane.planner.planner import MulticastDirectPlanner
+from skyplane.planner.planner import (
+    MulticastDirectPlanner,
+    UnicastDirectPlanner,
+    UnicastILPPlanner,
+    MulticastILPPlanner,
+    MulticastMDSTPlanner,
+)
 from skyplane.planner.topology import TopologyPlanGateway
 from skyplane.utils import logger
-from skyplane.utils.definitions import gateway_docker_image, tmp_log_dir
-from skyplane.utils.fn import PathLike, do_parallel
+from skyplane.utils.definitions import tmp_log_dir
 
 from skyplane.api.dataplane import Dataplane
 
@@ -39,6 +36,7 @@ class Pipeline:
         transfer_config: TransferConfig,
         # cloud_regions: dict,
         max_instances: Optional[int] = 1,
+        num_connections: Optional[int] = 32,
         planning_algorithm: Optional[str] = "direct",
         debug: Optional[bool] = False,
     ):
@@ -67,8 +65,18 @@ class Pipeline:
 
         # planner
         self.planning_algorithm = planning_algorithm
+
         if self.planning_algorithm == "direct":
-            self.planner = MulticastDirectPlanner(self.max_instances, 64)
+            # TODO: should find some ways to merge direct / Ndirect
+            self.planner = UnicastDirectPlanner(self.max_instances, num_connections)
+        elif self.planning_algorithm == "Ndirect":
+            self.planner = MulticastDirectPlanner(self.max_instances, num_connections)
+        elif self.planning_algorithm == "MDST":
+            self.planner = MulticastMDSTPlanner(self.max_instances, num_connections)
+        elif self.planning_algorithm == "ILP":
+            self.planning_algorithm = MulticastILPPlanner(self.max_instances, num_connections)
+        elif self.planning_algorithm == "UnicastILP":
+            self.planning_algorithm = UnicastILPPlanner(self.max_instances, num_connections)
         else:
             raise ValueError(f"No such planning algorithm {planning_algorithm}")
 
@@ -112,7 +120,7 @@ class Pipeline:
             # copy gateway logs
             if debug:
                 dp.copy_gateway_logs()
-        except Exception as e:
+        except Exception:
             dp.copy_gateway_logs()
         dp.deprovision(spinner=True)
         return dp
