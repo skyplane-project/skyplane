@@ -221,7 +221,7 @@ class AzureCloudProvider(CloudProvider):
             if clean_up_orphans:
                 instances_to_terminate = []
                 for vnet in network_client.virtual_networks.list(AzureServer.resource_group_name):
-                    if vnet.tags.get("skyplane", None) == "true" and AzureServer.is_valid_vnet_name(vnet.name):
+                    if vnet.tags and vnet.tags.get("skyplane", None) == "true" and AzureServer.is_valid_vnet_name(vnet.name):
                         name = AzureServer.base_name_from_vnet_name(vnet.name)
                         s = AzureServer(name, assume_exists=False)
                         if not s.is_valid():
