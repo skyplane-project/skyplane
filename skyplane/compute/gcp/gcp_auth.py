@@ -25,11 +25,17 @@ class GCPAuthentication:
     @imports.inject("googleapiclient.discovery", pip_extra="gcp")
     def save_region_config(discovery, self):
         if self.project_id is None:
-            print(
-                f"    No project ID detected when trying to save GCP region list! Consquently, the GCP region list is empty. Run 'skyplane init --reinit-gcp' or file an issue to remedy this."
-            )
-            self.clear_region_config()
-            return
+            if self.service_account_credentials: 
+                service_json = json.load(open(self.service_account_credentials))
+                assert "project_id" in service_json, f"Service account file {self.service_account_credentials} does not container project_id"
+                self.project_id = service_json["project_id"]
+            else:
+                print("Storage client", self.get_storage_client())
+                print(
+                    f"    No project ID detected when trying to save GCP region list! Also no {self.service_account_credentials}. Consquently, the GCP region list is empty. Run 'skyplane init --reinit-gcp' or file an issue to remedy this."
+                )
+                self.clear_region_config()
+                return
         with gcp_config_path.open("w") as f:
             region_list = []
             credentials = self.credentials

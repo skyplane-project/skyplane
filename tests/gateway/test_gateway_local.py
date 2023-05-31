@@ -1,4 +1,5 @@
 from typing import Any, Iterator, Tuple, Dict, Optional, List
+import time
 import docker
 import argparse
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
@@ -26,6 +27,7 @@ class TestServer(Server):
     """Test Server runs a gateway container locally to simulate deployed gateways"""
 
     def __init__(self, region_tag, log_dir=None, auto_shutdown_timeout_minutes: Optional[int] = None, local_port = None, gateway_api_url = None):
+        print("CREATE TEST SERVER")
         super().__init__(region_tag, log_dir, auto_shutdown_timeout_minutes)
         self.command_log = []
         self.gateway_log_viewer_url = None
@@ -70,6 +72,16 @@ class TestServer(Server):
         return f"localhost:{self.local_port}"
 
 
+def wait_container_running(container_name):
+    client = docker.from_env()
+    while True:
+        container = client.containers.get(container_name)
+        print("container", container, container.status)
+        if container.status == "running":
+            return True
+        print(f"Waiting for container {container_name} to start")
+        time.sleep(1)
+     
 def remove_container_if_running(container_name): 
     client = docker.from_env()
     if check_container_running(container_name):
@@ -168,7 +180,7 @@ def run(gateway_docker_image, restart_gateways):
     #print("PREFIX", job.src_prefix, job.dst_prefixes)
 
     # this does not work since docker bridge network cannot access internet
-    job = CopyJob("s3://feature-store-datasets/wikipedia/doc_pkl/", ["gs://feature-store-datasets/wikipedia/doc_pkl/"], recursive=True)
+    job = CopyJob("s3://feature-store-datasets/yahoo/", ["gs://feature-store-datasets/wikipedia/yahoo/"], recursive=True)
 
     topology = MulticastDirectPlanner(1, 64).plan([job])
     print([g.region_tag for g in topology.get_gateways()])
@@ -177,8 +189,6 @@ def run(gateway_docker_image, restart_gateways):
     source_server = TestServer(topology.src_region_tag, local_port=8081)
     dest_server = TestServer(topology.dest_region_tags[0], local_port=8082)
 
-    gateway_docker_image = "ghcr.io/sarahwooders/skyplane:local-2b6813cf236e4cf830e6bc00308eeb8e"
-    print("docker image", gateway_docker_image)
     test_log_dir = "test_logs/"
 
     # bind dataplane to docker servers
@@ -215,6 +225,8 @@ def run(gateway_docker_image, restart_gateways):
             container_name="skyplane_dest", 
             port=8082
         )
+
+    
     dataplane.provisioned = True
 
     # dispatch chunks to source gateway

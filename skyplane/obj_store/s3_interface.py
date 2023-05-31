@@ -43,6 +43,7 @@ class S3Interface(ObjectStoreInterface):
                 logger.warning(f"Bucket location {self.bucket_name} is not public. Assuming region is {default_region}")
                 return default_region
             logger.warning(f"Specified bucket {self.bucket_name} does not exist, got AWS error: {e}")
+            print("Error getting AWS region", e)
             raise exceptions.MissingBucketException(f"S3 bucket {self.bucket_name} does not exist") from e
 
     def region_tag(self):

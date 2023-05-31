@@ -645,15 +645,18 @@ class CopyJob(TransferJob):
 
                 # TODO: make async
                 print("SERVER", server.gateway_api_url)
+                st = time.time()
                 reply = self.http_pool.request(
                     "POST",
                     f"{server.gateway_api_url}/api/v1/chunk_requests",
                     body=json.dumps([chunk.as_dict() for chunk in chunk_batch[n_added:]]).encode("utf-8"),
                     headers={"Content-Type": "application/json"},
                 )
+                et = time.time()
                 reply_json = json.loads(reply.data.decode("utf-8"))
-                logger.fs.debug(f"Added {n_added} chunks to server {server}: {reply_json}")
                 n_added += reply_json["n_added"]
+                logger.fs.debug(f"Added {n_added} chunks to server {server}: {reply_json}")
+                print(f"Added {n_added} chunks to server {server} in {et-st}: {reply_json}")
                 queue_size[min_idx] = reply_json["qsize"]  # update queue size
                 if reply.status != 200:
                     raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")

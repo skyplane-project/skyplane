@@ -23,6 +23,12 @@ class AWSAuthentication:
             self._access_key = None
             self._secret_key = None
 
+        # cached credentials 
+        # TODO: fix this as its very messy 
+        self.__cached_credentials = {}
+
+        print("AWS AUTH CONFIG MODE", self.config_mode, self._access_key)
+
     def _get_ec2_vm_quota(self, region) -> Dict[str, int]:
         """Given the region, get the maximum number of vCPU that can be launched.
 
@@ -103,22 +109,16 @@ class AWSAuthentication:
     @imports.inject("boto3", pip_extra="aws")
     def infer_credentials(boto3, self):
         # todo load temporary credentials from STS
-        cached_credential = getattr(self.__cached_credentials, "boto3_credential", None)
-        if cached_credential is None:
-            session = boto3.Session()
-            credentials = session.get_credentials()
-            if credentials:
-                credentials = credentials.get_frozen_credentials()
-                cached_credential = (credentials.access_key, credentials.secret_key)
-            setattr(self.__cached_credentials, "boto3_credential", cached_credential)
-        return cached_credential if cached_credential else (None, None)
+        print("INFER CRED")
+        session = boto3.Session()
+        credentials = session.get_credentials()
+        credentials = credentials.get_frozen_credentials()
+        print("OUTPUT", credentials.access_key, credentials.secret_key)
+        return credentials.access_key, credentials.secret_key
 
     @imports.inject("boto3", pip_extra="aws")
     def get_boto3_session(boto3, self, aws_region: Optional[str] = None):
-        if self.config_mode == "manual":
-            return boto3.Session(aws_access_key_id=self.access_key, aws_secret_access_key=self.secret_key, region_name=aws_region)
-        else:
-            return boto3.Session(region_name=aws_region)
+        return boto3.Session(aws_access_key_id=self.access_key, aws_secret_access_key=self.secret_key, region_name=aws_region)
 
     def get_boto3_resource(self, service_name, aws_region=None):
         return self.get_boto3_session().resource(service_name, region_name=aws_region)

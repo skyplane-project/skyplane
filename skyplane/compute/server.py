@@ -21,6 +21,7 @@ from skyplane.utils.retry import retry_backoff
 from skyplane.utils.timer import Timer
 from skyplane.planner.topology import TopologyPlanGateway
 from skyplane.config import SkyplaneConfig
+from skyplane.config_paths import config_path
 
 
 tmp_log_dir = Path("/tmp/skyplane")
@@ -91,6 +92,7 @@ class Server:
     """Abstract server class to support basic SSH operations"""
 
     def __init__(self, region_tag, log_dir=None, auto_shutdown_timeout_minutes: Optional[int] = None):
+        print("CALL SERVER INIT")
         self.region_tag = region_tag  # format provider:region
         self.auto_shutdown_timeout_minutes = auto_shutdown_timeout_minutes
         self.command_log = []
@@ -100,10 +102,12 @@ class Server:
         self.ssh_tunnels: Dict = {}
 
         # TODO: allow specified path 
-        self.config = SkyplaneConfig.default_config()
+        self.config = SkyplaneConfig.load_config(config_path)
 
         # setup authentication credentials 
         self.auth = {}
+
+        print("AWS ENABLED", self.config.aws_enabled)
 
         if self.config.aws_enabled: 
             from skyplane.compute.aws.aws_auth import AWSAuthentication
@@ -374,8 +378,10 @@ class Server:
         #if self.provider == "aws":
         if "aws" in self.auth:
             docker_envs["AWS_DEFAULT_REGION"] = self.region_tag.split(":")[1]
-            docker_envs["AWS_ACCESS_KEY_ID"] = self.auth["aws"].access_key_id
-            docker_envs["AWS_SECRET_ACCESS_KEY"] = self.auth["aws"].secret_access_key
+            docker_envs["AWS_ACCESS_KEY_ID"] = self.auth["aws"].access_key
+            docker_envs["AWS_SECRET_ACCESS_KEY"] = self.auth["aws"].secret_key
+
+        print("DOCKER ENDS", docker_envs)
 
         # copy E2EE keys
         if e2ee_key_bytes is not None:
@@ -429,11 +435,11 @@ class Server:
         print("HASH", gateway_container_hash)
         if local: 
             self.gateway_log_viewer_url = None
-            return 
-        self.gateway_log_viewer_url = f"http://127.0.0.1:{self.tunnel_port(8888)}/container/{gateway_container_hash}"
-        logger.fs.debug(f"{self.uuid()} log_viewer_url = {self.gateway_log_viewer_url}")
-        self.gateway_api_url = f"http://127.0.0.1:{self.tunnel_port(8080 + 1)}"
-        logger.fs.debug(f"{self.uuid()} gateway_api_url = {self.gateway_api_url}")
+        else:
+            self.gateway_log_viewer_url = f"http://127.0.0.1:{self.tunnel_port(8888)}/container/{gateway_container_hash}"
+            logger.fs.debug(f"{self.uuid()} log_viewer_url = {self.gateway_log_viewer_url}")
+            self.gateway_api_url = f"http://127.0.0.1:{self.tunnel_port(8080 + 1)}"
+            logger.fs.debug(f"{self.uuid()} gateway_api_url = {self.gateway_api_url}")
 
         # wait for gateways to start (check status API)
         http_pool = urllib3.PoolManager()
