@@ -61,9 +61,11 @@ class StorageInterface:
             from skyplane.obj_store.posix_file_interface import POSIXInterface
 
             return POSIXInterface(bucket)
-        elif region_tag.startswith("cloudflare"):
+        elif region_tag.startswith("r2"):
             from skyplane.obj_store.r2_interface import R2Interface
+            print('bucket', bucket)
             account, bucket = bucket.split("/", 1)  # <storage_account>/<container>
+            print(account, bucket)
             return R2Interface(account, bucket)
         else:
             raise ValueError(f"Invalid region_tag {region_tag} - could not create interface")

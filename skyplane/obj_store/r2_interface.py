@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import os
+import boto3
 from functools import lru_cache
 
 from typing import Iterator, List, Optional, Tuple
@@ -12,7 +13,8 @@ from skyplane.config_paths import cloud_config
 from skyplane.utils import logger, imports
 from skyplane.utils.generator import batch_generator
 
-
+from skyplane.config_paths import config_path
+from skyplane.config import SkyplaneConfig
 
 class R2Object(ObjectStoreObject):
     def full_path(self):
@@ -22,17 +24,23 @@ class R2Object(ObjectStoreObject):
 
 class R2Interface(ObjectStoreInterface):
     def __init__(self, account_id: str, bucket_name: str):
-        self.endpoint_url = f'https://{account_id}.r2.cloudflarestorage.com',
-        self.auth = compute.AWSAuthentication()
-        self._s3_client = boto3.resource(
-            's3',
-            endpoint_url = self.endpoint_url,
-            aws_access_key_id = self.auth.aws_access_key,
-            aws_secret_access_key = self.auth.aws_secret_key
-        )
+        self.config = SkyplaneConfig.load_config(config_path)
+        print("CONFIG CLOUDFLARE", self.config.cloudflare_access_key_id)
+        self.endpoint_url = f'https://{account_id}.r2.cloudflarestorage.com'
+        try:
+            print(self.endpoint_url, self.config.cloudflare_access_key_id, self.config.cloudflare_secret_access_key)
+            self._s3_client = boto3.resource(
+                's3',
+                endpoint_url = self.endpoint_url,
+                aws_access_key_id = self.config.cloudflare_access_key_id,
+                aws_secret_access_key = self.config.cloudflare_secret_access_key,
+            )
+        except Exception as e:
+            print("EXCEPTION", e)
         self.requester_pays = False
         self.bucket_name = bucket_name
         self.provider = "cloudflare"
+        print("creted interface")
 
     def path(self):
         return f"{self.endpoint_url}/{self.bucket_name}"
@@ -48,12 +56,6 @@ class R2Interface(ObjectStoreInterface):
 
     @imports.inject("botocore.exceptions", pip_extra="aws")
     def bucket_exists(botocore_exceptions, self, region=None):
-        if region is None:  # use current bucket region is available
-            try:
-                region = self.aws_region
-            except exceptions.MissingBucketException:
-                region = "us-east-1"
-
         try:
             requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
             self._s3_client.list_objects_v2(Bucket=self.bucket_name, MaxKeys=1, **requester_pays)
@@ -80,7 +82,7 @@ class R2Interface(ObjectStoreInterface):
         # delete bucket
         self._s3_client.delete_bucket(Bucket=self.bucket_name)
 
-    def list_objects(self, prefix="", region=None) -> Iterator[S3Object]:
+    def list_objects(self, prefix="", region=None) -> Iterator[R2Object]:
         paginator = self._s3_client.get_paginator("list_objects_v2")
         requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
         page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix, **requester_pays)
@@ -88,7 +90,7 @@ class R2Interface(ObjectStoreInterface):
             objs = []
             for obj in page.get("Contents", []):
                 objs.append(
-                    S3Object(
+                    R2Object(
                         obj["Key"],
                         provider="aws",
                         bucket=self.bucket_name,

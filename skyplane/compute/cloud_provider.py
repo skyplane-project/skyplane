@@ -25,6 +25,8 @@ class CloudProvider:
         src_provider, _ = src_key.split(":")
         if src_key == dst_key or src_provider == "cos":
             return 0.0
+        elif src_provider == "cloudflare": 
+            return 0.0 # TODO: fix this for other clouds
         if src_provider == "aws":
             from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 
