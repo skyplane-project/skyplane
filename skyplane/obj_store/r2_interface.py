@@ -16,24 +16,25 @@ from skyplane.utils.generator import batch_generator
 from skyplane.config_paths import config_path
 from skyplane.config import SkyplaneConfig
 
+
 class R2Object(ObjectStoreObject):
     def full_path(self):
         account_name, bucket_name = self.bucket.split("/")
-        return os.path.join(f'https://{account_id}.r2.cloudflarestorage.com', bucket_name, self.key)
+        return os.path.join(f"https://{account_id}.r2.cloudflarestorage.com", bucket_name, self.key)
 
 
 class R2Interface(ObjectStoreInterface):
     def __init__(self, account_id: str, bucket_name: str):
         self.config = SkyplaneConfig.load_config(config_path)
         print("CONFIG CLOUDFLARE", self.config.cloudflare_access_key_id)
-        self.endpoint_url = f'https://{account_id}.r2.cloudflarestorage.com'
+        self.endpoint_url = f"https://{account_id}.r2.cloudflarestorage.com"
         try:
             print(self.endpoint_url, self.config.cloudflare_access_key_id, self.config.cloudflare_secret_access_key)
             self._s3_client = boto3.resource(
-                's3',
-                endpoint_url = self.endpoint_url,
-                aws_access_key_id = self.config.cloudflare_access_key_id,
-                aws_secret_access_key = self.config.cloudflare_secret_access_key,
+                "s3",
+                endpoint_url=self.endpoint_url,
+                aws_access_key_id=self.config.cloudflare_access_key_id,
+                aws_secret_access_key=self.config.cloudflare_secret_access_key,
             )
         except Exception as e:
             print("EXCEPTION", e)

@@ -263,12 +263,12 @@ class SkyplaneConfig:
         if self.ibmcloud_resource_group_id:
             config.set("ibmcloud", "ibmcloud_resource_group_id", self.ibmcloud_resource_group_id)
 
-        if "cloudflare" not in config: 
+        if "cloudflare" not in config:
             config.add_section("cloudflare")
         config.set("cloudflare", "cloudflare_enabled", str(self.cloudflare_enabled))
-        if self.cloudflare_access_key_id: 
+        if self.cloudflare_access_key_id:
             config.set("cloudflare", "cloudflare_access_key_id", self.cloudflare_access_key_id)
-        if self.cloudflare_secret_access_key: 
+        if self.cloudflare_secret_access_key:
             config.set("cloudflare", "cloudflare_secret_access_key", self.cloudflare_secret_access_key)
 
         if "azure" not in config:

@@ -63,7 +63,8 @@ class StorageInterface:
             return POSIXInterface(bucket)
         elif region_tag.startswith("r2"):
             from skyplane.obj_store.r2_interface import R2Interface
-            print('bucket', bucket)
+
+            print("bucket", bucket)
             account, bucket = bucket.split("/", 1)  # <storage_account>/<container>
             print(account, bucket)
             return R2Interface(account, bucket)

@@ -186,7 +186,6 @@ class MulticastDirectPlanner(Planner):
 
 
 class DirectPlannerSourceOneSided(Planner):
-
     def __init__(self, n_instances: int, n_connections: int):
         self.n_instances = n_instances
         self.n_connections = n_connections
@@ -249,7 +248,7 @@ class DirectPlannerSourceOneSided(Planner):
 
 
 class DirectPlannerDestOneSided(Planner):
-    """ Planner that only creates instances in the destination region """
+    """Planner that only creates instances in the destination region"""
 
     def __init__(self, n_instances: int, n_connections: int):
         self.n_instances = n_instances
@@ -284,7 +283,7 @@ class DirectPlannerDestOneSided(Planner):
 
             # give each job a different partition id, so we can read/write to different buckets
             # use job UUID as partition id
-            partition_id = str(job.uuid) #jobs.index(job)
+            partition_id = str(job.uuid)  # jobs.index(job)
             print(job, job.src_path, "partition", partition_id)
 
             # send to all destination
@@ -314,8 +313,6 @@ class DirectPlannerDestOneSided(Planner):
         for dst_region_tag, program in dst_program.items():
             plan.set_gateway_program(dst_region_tag, program)
         return plan
-
-
 
 
 class UnicastILPPlanner(Planner):

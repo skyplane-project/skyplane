@@ -311,7 +311,7 @@ class Server:
         # copy cloud configuration
         docker_envs = {"SKYPLANE_IS_GATEWAY": "1"}
         if config_path.exists():
-            print("CONFIG FILE", config_path.name) # TODO: read cloud credentails from config file
+            print("CONFIG FILE", config_path.name)  # TODO: read cloud credentails from config file
             self.upload_file(config_path, f"/tmp/{config_path.name}")
             docker_envs["SKYPLANE_CONFIG"] = f"/pkg/data/{config_path.name}"
 

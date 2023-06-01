@@ -62,11 +62,12 @@ def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> Sk
         typer.secho("    Disabling AWS support", fg="blue")
         return config
 
+
 def load_cloudflare_config(config: SkyplaneConfig, non_interactive: bool = False) -> SkyplaneConfig:
     if typer.confirm("    Do you want to configure Cloudflare support in Skyplane?", default=True):
         config.cloudflare_access_key_id = typer.prompt("    Enter the R2 access key ID")
         config.cloudflare_secret_access_key = typer.prompt("    Enter the R2 secret access key")
-    else: 
+    else:
         config.cloudflare_enabled = False
         typer.secho("    Disabling Cloudflare support", fg="blue")
     return config
@@ -470,12 +471,12 @@ def init(
     reinit_azure: bool = False,
     reinit_gcp: bool = False,
     reinit_ibm: bool = False,
-    reinit_cloudflare: bool = False, 
+    reinit_cloudflare: bool = False,
     disable_config_aws: bool = False,
     disable_config_azure: bool = False,
     disable_config_gcp: bool = False,
     disable_config_ibm: bool = True,  # TODO: eventuall enable IBM
-    disable_config_cloudflare: bool = False, 
+    disable_config_cloudflare: bool = False,
 ):
     """
     It loads the configuration file, and if it doesn't exist, it creates a default one. Then it creates
@@ -533,7 +534,7 @@ def init(
             cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
 
     # load cloudflare config
-    if not reinit_cloudflare: 
+    if not reinit_cloudflare:
         typer.secho("\n(1) configuring cloudflare R2:", fg="yellow", bold=True)
         if not disable_config_aws:
             cloud_config = load_cloudflare_config(cloud_config, non_interactive=non_interactive)
