@@ -661,14 +661,13 @@ class CopyJob(TransferJob):
                     body=json.dumps([chunk.as_dict() for chunk in chunk_batch[n_added:]]).encode("utf-8"),
                     headers={"Content-Type": "application/json"},
                 )
+                if reply.status != 200:
+                    raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
                 reply_json = json.loads(reply.data.decode("utf-8"))
                 logger.fs.debug(f"Added {n_added} chunks to server {server}: {reply_json}")
                 n_added += reply_json["n_added"]
                 queue_size[min_idx] = reply_json["qsize"]  # update queue size
-                if reply.status != 200:
-                    raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
-
-                # dont try again with some gateway
+                                # dont try again with some gateway
                 min_idx = (min_idx + 1) % len(src_gateways)
 
             yield from chunk_batch

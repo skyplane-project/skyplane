@@ -282,9 +282,7 @@ class DirectPlannerDestOneSided(Planner):
             src_region_tag = job.src_iface.region_tag()
             src_provider = src_region_tag.split(":")[0]
 
-            # give each job a different partition id, so we can read/write to different buckets
-            # use job UUID as partition id
-            partition_id = str(job.uuid)  # jobs.index(job)
+            partition_id = jobs.index(job)
             print(job, job.src_path, "partition", partition_id)
 
             # send to all destination

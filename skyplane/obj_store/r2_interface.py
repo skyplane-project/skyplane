@@ -26,29 +26,21 @@ class R2Object(ObjectStoreObject):
 class R2Interface(ObjectStoreInterface):
     def __init__(self, account_id: str, bucket_name: str):
         self.config = SkyplaneConfig.load_config(config_path)
-        print("CONFIG CLOUDFLARE", self.config.cloudflare_access_key_id)
         self.endpoint_url = f"https://{account_id}.r2.cloudflarestorage.com"
         try:
-            print(self.endpoint_url, self.config.cloudflare_access_key_id, self.config.cloudflare_secret_access_key)
             self._s3_client = boto3.client("s3", endpoint_url=self.endpoint_url, aws_access_key_id=self.config.cloudflare_access_key_id, aws_secret_access_key=self.config.cloudflare_secret_access_key)
-            #boto3.resource(
-            #    "s3",
-            #    endpoint_url=self.endpoint_url,
-            #    aws_access_key_id=self.config.cloudflare_access_key_id,
-            #    aws_secret_access_key=self.config.cloudflare_secret_access_key,
-            #)
         except Exception as e:
-            print(f"EXCEPTION: endpoint {self.endpoint_url}", e)
+            raise ValueError("Error with connecting to {self.endpoint_url}: {e}")
         self.requester_pays = False
         self.bucket_name = bucket_name
         self.account_id = account_id
         self.provider = "cloudflare"
-        print("creted interface")
 
     def path(self):
         return f"{self.endpoint_url}/{self.bucket_name}"
 
     def region_tag(self):
+        # no regions in cloudflare
         return "cloudflare:infer"
 
     def bucket(self) -> str:
@@ -106,13 +98,11 @@ class R2Interface(ObjectStoreInterface):
         for page in page_iterator:
             objs = []
             for obj in page.get("Contents", []):
-                if len(obj["Key"]) == 0: # skip empty keys 
-                    continue 
                 objs.append(
                     R2Object(
                         obj["Key"],
                         provider="aws",
-                        bucket=self.bucket_name,
+                        bucket=self.bucket(),
                         size=obj["Size"],
                         last_modified=obj["LastModified"],
                         mime_type=obj.get("ContentType"),
