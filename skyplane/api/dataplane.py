@@ -109,10 +109,6 @@ class Dataplane:
         # write gateway programs
         gateway_program_filename = Path(f"{gateway_log_dir}/gateway_program_{gateway_node.gateway_id}.json")
         with open(gateway_program_filename, "w") as f:
-            from pprint import pprint
-
-            pprint(self.topology.get_gateway_info_json())
-
             f.write(gateway_node.gateway_program.to_json())
 
         # start gateway

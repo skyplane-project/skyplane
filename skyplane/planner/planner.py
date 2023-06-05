@@ -194,7 +194,6 @@ class DirectPlannerSourceOneSided(Planner):
         super().__init__()
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        print("Using one sided planner!")
         src_region_tag = jobs[0].src_iface.region_tag()
         dst_region_tags = [iface.region_tag() for iface in jobs[0].dst_ifaces]
         # jobs must have same sources and destinations
@@ -260,7 +259,6 @@ class DirectPlannerDestOneSided(Planner):
         # only create in destination region
         src_region_tag = jobs[0].src_iface.region_tag()
         dst_region_tags = [iface.region_tag() for iface in jobs[0].dst_ifaces]
-        print("planner dst region", dst_region_tags, jobs[0].dst_ifaces)
         # jobs must have same sources and destinations
         for job in jobs[1:]:
             assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
@@ -283,7 +281,6 @@ class DirectPlannerDestOneSided(Planner):
             src_provider = src_region_tag.split(":")[0]
 
             partition_id = jobs.index(job)
-            print(job, job.src_path, "partition", partition_id)
 
             # send to all destination
             dst_prefixes = job.dst_prefixes

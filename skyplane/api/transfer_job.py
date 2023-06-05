@@ -628,7 +628,6 @@ class CopyJob(TransferJob):
                         "POST",
                         f"{dst_gateway.gateway_api_url}/api/v1/upload_id_maps",
                         body=json.dumps(mappings).encode("utf-8"),
-                        # body=json.dumps(message.upload_id_mapping).encode("utf-8"),
                         headers={"Content-Type": "application/json"},
                     )
                     # TODO: assume that only destination nodes would write to the obj store

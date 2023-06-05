@@ -556,7 +556,7 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
             handle, region, bucket_name, bucket_region, input_queue, output_queue, error_event, error_queue, n_processes, chunk_store
         )
         self.chunk_store = chunk_store
-        self.upload_id_map = upload_id_map  # [bucket_region] # TODO: this seems sus...
+        self.upload_id_map = upload_id_map
         self.prefix = prefix
 
     def process(self, chunk_req: ChunkRequest):
@@ -569,10 +569,8 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         obj_store_interface = self.get_obj_store_interface(self.bucket_region, self.bucket_name)
 
         if chunk_req.chunk.multi_part:
-            upload_id_key = self.bucket_region + chunk_req.chunk.src_key
-            # assert chunk_req.chunk.src_key in self.upload_id_map, f"Upload id for {chunk_req.chunk.src_key} not found {self.upload_id_map}"
+            upload_id_key = self.bucket_region + chunk_req.chunk.src_key  # format for upload id key
             assert upload_id_key in self.upload_id_map, f"Upload id for {upload_id_key} not found {self.upload_id_map}"
-            # upload_id = self.upload_id_map[chunk_req.chunk.src_key]
             upload_id = self.upload_id_map[upload_id_key]
         else:
             upload_id = None
