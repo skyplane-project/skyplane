@@ -47,10 +47,10 @@ class TopologyPlanGateway:
         self.gateway_program = gateway_program
 
     def write_operators(self) -> List[GatewayWriteObjectStore]:
-        """Get all write operators in the gateway program""" 
+        """Get all write operators in the gateway program"""
         # TODO: include other write operator types
         return [op for op in self.gateway_program.get_operators() if isinstance(op, GatewayWriteObjectStore)]
-    
+
 
 class TopologyPlan:
     """
@@ -142,14 +142,13 @@ class TopologyPlan:
         nodes = {}
         for gateway in self.gateways.values():
             for operator in gateway.gateway_program.get_operators():
-
                 # dont include if wrong region
-                if isinstance(operator, GatewayWriteObjectStore): 
+                if isinstance(operator, GatewayWriteObjectStore):
                     if region_tag is not None and operator.bucket_region != region_tag:
-                        continue 
+                        continue
                 if isinstance(operator, GatewayWriteLocal):
                     if region_tag is not None and gateway.region_tag != region_tag:
-                        continue 
+                        continue
 
                 if isinstance(operator, GatewayWriteObjectStore) or isinstance(operator, GatewayWriteLocal):
                     if gateway.region_tag not in nodes:
@@ -176,5 +175,5 @@ class TopologyPlan:
             counts[node.region_tag] = counts.get(node.region_tag, 0) + 1
         return counts
 
-    def to_dict(self): 
+    def to_dict(self):
         return {gateway_id: gateway.gateway_program.to_dict() for gateway_id, gateway in self.gateways.items()}

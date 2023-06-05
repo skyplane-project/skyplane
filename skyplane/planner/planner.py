@@ -186,7 +186,7 @@ class MulticastDirectPlanner(Planner):
 
 
 class DirectPlannerSourceOneSided(Planner):
-    """ Planner that only creates VMs in the source region"""
+    """Planner that only creates VMs in the source region"""
 
     def __init__(self, n_instances: int, n_connections: int):
         self.n_instances = n_instances

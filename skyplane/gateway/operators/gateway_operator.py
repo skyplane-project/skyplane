@@ -424,9 +424,9 @@ class GatewayObjStoreOperator(GatewayOperator):
     def __init__(
         self,
         handle: str,
-        region: str, 
-        bucket_name: str, 
-        bucket_region: str, 
+        region: str,
+        bucket_name: str,
+        bucket_region: str,
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
@@ -459,16 +459,16 @@ class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
     def __init__(
         self,
         handle: str,
-        region: str, 
-        bucket_name: str, 
-        bucket_region: str, 
+        region: str,
+        bucket_name: str,
+        bucket_region: str,
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
         error_queue: Queue,
         n_processes: int = 32,
         chunk_store: Optional[ChunkStore] = None,
-   ):
+    ):
         super().__init__(
             handle, region, bucket_name, bucket_region, input_queue, output_queue, error_event, error_queue, n_processes, chunk_store
         )
@@ -540,9 +540,9 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
     def __init__(
         self,
         handle: str,
-        region: str, 
+        region: str,
         bucket_name: str,
-        bucket_region: str, 
+        bucket_region: str,
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
@@ -550,13 +550,13 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         upload_id_map: DictProxy,  # map of upload_id mappings from client
         n_processes: Optional[int] = 32,
         chunk_store: Optional[ChunkStore] = None,
-       prefix: Optional[str] = "",
+        prefix: Optional[str] = "",
     ):
         super().__init__(
             handle, region, bucket_name, bucket_region, input_queue, output_queue, error_event, error_queue, n_processes, chunk_store
         )
         self.chunk_store = chunk_store
-        self.upload_id_map = upload_id_map #[bucket_region] # TODO: this seems sus... 
+        self.upload_id_map = upload_id_map  # [bucket_region] # TODO: this seems sus...
         self.prefix = prefix
 
     def process(self, chunk_req: ChunkRequest):
@@ -570,9 +570,9 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
 
         if chunk_req.chunk.multi_part:
             upload_id_key = self.bucket_region + chunk_req.chunk.src_key
-            #assert chunk_req.chunk.src_key in self.upload_id_map, f"Upload id for {chunk_req.chunk.src_key} not found {self.upload_id_map}"
+            # assert chunk_req.chunk.src_key in self.upload_id_map, f"Upload id for {chunk_req.chunk.src_key} not found {self.upload_id_map}"
             assert upload_id_key in self.upload_id_map, f"Upload id for {upload_id_key} not found {self.upload_id_map}"
-            #upload_id = self.upload_id_map[chunk_req.chunk.src_key]
+            # upload_id = self.upload_id_map[chunk_req.chunk.src_key]
             upload_id = self.upload_id_map[upload_id_key]
         else:
             upload_id = None

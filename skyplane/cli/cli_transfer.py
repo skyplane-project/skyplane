@@ -317,15 +317,13 @@ def run_transfer(
     provider_src, bucket_src, path_src = parse_path(src)
     provider_dst, bucket_dst, path_dst = parse_path(dst)
 
-    # update planner for one-sided transfer 
-    # somet process for other cloud providers with no VM support 
+    # update planner for one-sided transfer
+    # somet process for other cloud providers with no VM support
     assert provider_src != "cloudflare" or provider_dst != "cloudflare", "Cannot transfer between two Cloudflare buckets"
-    if provider_src == "cloudflare": 
+    if provider_src == "cloudflare":
         solver = "dst_one_sided"
     elif provider_dst == "cloudflare":
         solver = "src_one_sided"
-
-    print("USIng SOLVER", solver, provider_src, provider_dst)
 
     src_region_tag = StorageInterface.create(f"{provider_src}:infer", bucket_src).region_tag()
     dst_region_tag = StorageInterface.create(f"{provider_dst}:infer", bucket_dst).region_tag()

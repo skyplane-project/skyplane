@@ -16,11 +16,11 @@ from skyplane.utils.generator import batch_generator
 from skyplane.config_paths import config_path
 from skyplane.config import SkyplaneConfig
 
+
 class R2Object(ObjectStoreObject):
     def full_path(self):
         account_name, bucket_name = self.bucket.split("/")
         return os.path.join(f"https://{account_name}.r2.cloudflarestorage.com", bucket_name, self.key)
-
 
 
 class R2Interface(ObjectStoreInterface):
@@ -28,7 +28,12 @@ class R2Interface(ObjectStoreInterface):
         self.config = SkyplaneConfig.load_config(config_path)
         self.endpoint_url = f"https://{account_id}.r2.cloudflarestorage.com"
         try:
-            self._s3_client = boto3.client("s3", endpoint_url=self.endpoint_url, aws_access_key_id=self.config.cloudflare_access_key_id, aws_secret_access_key=self.config.cloudflare_secret_access_key)
+            self._s3_client = boto3.client(
+                "s3",
+                endpoint_url=self.endpoint_url,
+                aws_access_key_id=self.config.cloudflare_access_key_id,
+                aws_secret_access_key=self.config.cloudflare_secret_access_key,
+            )
         except Exception as e:
             raise ValueError("Error with connecting to {self.endpoint_url}: {e}")
         self.requester_pays = False
@@ -51,10 +56,10 @@ class R2Interface(ObjectStoreInterface):
 
     @imports.inject("botocore.exceptions", pip_extra="aws")
     def bucket_exists(botocore_exceptions, self, region=None):
-        #for bucket in self._s3_client.buckets.all():
+        # for bucket in self._s3_client.buckets.all():
         #    if bucket.name == self.bucket_name:
         #        return True
-        #return False
+        # return False
         try:
             requester_pays = {"RequestPayer": "requester"} if self.requester_pays else {}
             self._s3_client.list_objects_v2(Bucket=self.bucket_name, MaxKeys=1, **requester_pays)
@@ -82,11 +87,11 @@ class R2Interface(ObjectStoreInterface):
         self._s3_client.delete_bucket(Bucket=self.bucket_name)
 
     def list_objects(self, prefix="", region=None) -> Iterator[R2Object]:
-        #for obj in self._s3_client.Bucket(self.bucket).objects.all(): 
+        # for obj in self._s3_client.Bucket(self.bucket).objects.all():
         #    yield R2Object(
-        #        obj["Key"], 
-        #        provider="cloudflare", 
-        #        bucket=self.bucket(), 
+        #        obj["Key"],
+        #        provider="cloudflare",
+        #        bucket=self.bucket(),
         #        size=obj["Size"],
         #        last_modified=obj["LastModified"],
         #        mime_type=obj.get("ContentType"),
