@@ -1,4 +1,5 @@
 import base64
+from collections import defaultdict
 import hashlib
 import os
 from functools import lru_cache
@@ -10,6 +11,8 @@ from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.azure_storage_account_interface import AzureStorageAccountInterface
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger, imports
+
+from azure.storage.blob import BlobServiceClient, BlobType
 
 
 class AzureBlobObject(ObjectStoreObject):
@@ -25,6 +28,8 @@ class AzureBlobInterface(ObjectStoreInterface):
         self.account_name = account_name
         self.container_name = container_name
         self.max_concurrency = max_concurrency  # parallel upload/downloads, seems to cause issues if too high
+
+        self.block_ids_mapping = defaultdict(list)  # Keep tracks of the block_ids to stage for a blob multipart upload
 
     def path(self):
         return f"https://{self.account_name}.blob.core.windows.net/{self.container_name}"
@@ -149,25 +154,96 @@ class AzureBlobInterface(ObjectStoreInterface):
 
     @imports.inject("azure.storage.blob", pip_extra="azure")
     def upload_object(azure_blob, self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None, mime_type=None):
-        if part_number is not None or upload_id is not None:
-            # todo implement multipart upload
-            raise NotImplementedError("Multipart upload is not implemented for Azure")
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
-        with open(src_file_path, "rb") as f:
-            print(f"Uploading {src_file_path} to {dst_object_name}")
-            blob_client = self.container_client.upload_blob(
-                name=dst_object_name,
-                data=f,
-                length=os.path.getsize(src_file_path),
-                max_concurrency=self.max_concurrency,
-                overwrite=True,
-                content_settings=azure_blob.ContentSettings(content_type=mime_type),
-            )
-        if check_md5:
-            b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
-            blob_md5 = blob_client.get_blob_properties().properties.content_settings.content_md5
-            if b64_md5sum != blob_md5:
-                raise exceptions.ChecksumMismatchException(
-                    f"Checksum mismatch for object {dst_object_name} in Azure container {self.container_name}, "
-                    + f"expected {b64_md5sum}, got {blob_md5}"
+        blob_client = self.container_client.get_blob_client(dst_object_name)
+
+        try:
+            if part_number is not None and upload_id is not None:
+                # multipart upload
+                with open(src_file_path, "rb") as f:
+                    block_id = AzureBlobInterface._id_to_base64_encoding(part_number)
+                    blob_client.stage_block(block_id, f.read())
+                    self.block_ids_mapping[upload_id].append(block_id)
+
+                # raise NotImplementedError("Multipart upload is not implemented for Azure")
+
+            # single upload
+            with open(src_file_path, "rb") as f:
+                print(f"Uploading {src_file_path} to {dst_object_name}")
+                blob_client.upload_blob(
+                    data=f,
+                    blob_type=BlobType.BlockBlob,
+                    overwrite=True,
+                    content_settings=azure_blob.ContentSettings(content_type=mime_type),
                 )
+
+            # check MD5 if required
+            if check_md5:
+                b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
+                blob_md5 = blob_client.get_blob_properties().properties.content_settings.content_md5
+                if b64_md5sum != blob_md5:
+                    raise exceptions.ChecksumMismatchException(
+                        f"Checksum mismatch for object {dst_object_name} in Azure container {self.container_name}, "
+                        + f"expected {b64_md5sum}, got {blob_md5}"
+                    )
+        except Exception as e:
+            # FIXME: Not sure what type of error to put here
+            raise ValueError(f"Failed to upload {dst_object_name} to bucket {self.bucket_name} upload id {upload_id}: {e}")
+
+    def initiate_multipart_upload(self, dst_object_name: str, mime_type: Optional[str] = None) -> str:
+        """
+        Azure does not have an equivalent function to return an upload ID like s3 and gcs do.
+        Blocks in Azure are uploaded and associated with an ID, and can then be committed in a single operation to create the blob.
+        We will just return the dst_object_name (blob name) as the "upload_id" to keep the return type consistent for the multipart thread.
+        """
+
+        assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
+
+        return dst_object_name
+
+    def complete_multipart_upload(self, dst_object_name: str, upload_id: str) -> None:
+        """
+        In Azure, after all blocks of a blob are uploaded with their unique block_id,
+        we need to put Block List to create the blob. This function is used in finalize() after dispatch()
+        The block_ids should be kept track of during the upload process, as Azure does not provide a method to list uploaded blocks.
+        """
+
+        assert upload_id == dst_object_name, "In Azure, upload_id should be the same as the blob name."
+
+        # Fetch the list of block_ids
+        # This list is populated while you are uploading blocks in the _run_multipart_chunk_thread method.
+        block_list = self._get_block_list_for_upload(upload_id)
+
+        blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=dst_object_name)
+        try:
+            # The below operation will create the blob from the uploaded blocks.
+            blob_client.commit_block_list(block_list)
+        except Exception as e:
+            raise exceptions.SkyplaneException(f"Failed to complete multipart upload for {dst_object_name}: {str(e)}")
+
+    @staticmethod
+    def _id_to_base64_encoding(id: int) -> str:
+        block_id = format(id, "06")  # pad with zeros to get consistent length
+        block_id = block_id.encode("utf-8")
+        block_id = base64.b64encode(block_id).decode("utf-8")
+        return block_id
+
+    def _get_block_list_for_upload(self, upload_id: str):
+        return self.block_ids_mapping.get(upload_id, [])
+
+
+"""
+
+More things to consider about this implementation:
+
+Upload ID handling: Azure doesn't really have a concept equivalent to AWS's upload IDs. 
+Instead, blobs are created immediately and blocks are associated with a blob via block IDs. 
+Your workaround of using the blob name as the upload ID is a creative solution, and should 
+work as long as blob names are unique across all concurrent multi-part uploads. If not, 
+you might experience issues with block ID mapping.
+
+Block IDs: It's worth noting that Azure requires block IDs to be of the same length. 
+You've appropriately handled this by formatting the IDs to be of length 6. If the part numbers 
+exceed this length (i.e., you have more than 999999 parts), you might run into issues.
+
+"""
