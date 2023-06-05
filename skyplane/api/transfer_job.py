@@ -27,6 +27,7 @@ from skyplane.api.config import TransferConfig
 from skyplane.chunk import Chunk, ChunkRequest
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.obj_store.gcs_interface import GCSObject
+from skyplane.obj_store.r2_interface import R2Object
 from skyplane.obj_store.storage_interface import StorageInterface
 from skyplane.obj_store.object_store_interface import ObjectStoreObject, ObjectStoreInterface
 from skyplane.obj_store.s3_interface import S3Object
@@ -56,7 +57,7 @@ class TransferPair:
 class GatewayMessage:
     def __init__(self, chunk: Optional[Chunk] = None, upload_id_mapping: Optional[Dict[str, Tuple[str, str]]] = None):
         self.chunk = chunk
-        self.upload_id_mapping = upload_id_mapping
+        self.upload_id_mapping = upload_id_mapping # region_tag: (upload_id, dst_key) # TODO: map both bucket + region to enable multiple buckets per region
 
 
 class Chunker:
@@ -289,6 +290,8 @@ class Chunker:
                         dest_obj = AzureBlobObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
                     elif dest_provider == "gcp":
                         dest_obj = GCSObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
+                    elif dest_provider == "cloudflare": 
+                        dest_obj = R2Object(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
                     else:
                         raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
                     dest_objs[dst_iface.region_tag()] = dest_obj
@@ -330,6 +333,9 @@ class Chunker:
             if self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
                 multipart_send_queue.put(transfer_pair)
             else:
+                if transfer_pair.src_obj.size == 0: 
+                    logger.fs.debug(f"Skipping empty object {src_obj.key}")
+                    continue
                 yield GatewayMessage(
                     chunk=Chunk(
                         src_key=src_obj.key,
@@ -605,24 +611,32 @@ class CopyJob(TransferJob):
             # send upload_id mappings to sink gateways
             upload_id_batch = [cr for cr in batch if cr.upload_id_mapping is not None]
             region_dst_gateways = dataplane.sink_gateways()
+            print("sinks", region_dst_gateways)
             for region_tag, dst_gateways in region_dst_gateways.items():
                 for dst_gateway in dst_gateways:
-                    # collect upload id mappings per region
+
+                    ## collect list of regions that the gateway will write to (may not correspond to isntance region)
+                    #write_regions = dataplane.topology.get[op.bucket_region for op in dst_gateway.write_operators()]
+
+                    ## collect upload id mappings per region
                     mappings = {}
                     for message in upload_id_batch:
                         for region_tag, (key, id) in message.upload_id_mapping.items():
-                            if region_tag == dst_gateway.region_tag:
-                                mappings[key] = id
+                            if region_tag not in mappings: 
+                                mappings[region_tag] = {}
+                            mappings[region_tag][key] = id
 
-                    if len(list(mappings.keys())) == 0:
-                        # no mappings to send
-                        continue
+                    #if len(list(mappings.keys())) == 0:
+                    #    # no mappings to send
+                    #    continue
 
                     # send mapping to gateway
+                    print("sending mappings", mappings)
                     reply = self.http_pool.request(
                         "POST",
                         f"{dst_gateway.gateway_api_url}/api/v1/upload_id_maps",
                         body=json.dumps(mappings).encode("utf-8"),
+                        #body=json.dumps(message.upload_id_mapping).encode("utf-8"),
                         headers={"Content-Type": "application/json"},
                     )
                     # TODO: assume that only destination nodes would write to the obj store
@@ -705,6 +719,8 @@ class CopyJob(TransferJob):
             if dst_keys:
                 # failed_keys = [obj.key for obj in dst_keys.values()]
                 failed_keys = list(dst_keys.keys())
+                if failed_keys == [""]:
+                    return  # ignore empty key
                 raise exceptions.TransferFailedException(
                     f"Destination {dst_iface.region_tag()} bucket {dst_iface.bucket()}: {len(dst_keys)} objects failed verification {failed_keys}"
                 )

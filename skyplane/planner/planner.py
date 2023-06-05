@@ -186,12 +186,15 @@ class MulticastDirectPlanner(Planner):
 
 
 class DirectPlannerSourceOneSided(Planner):
+    """ Planner that only creates VMs in the source region"""
+
     def __init__(self, n_instances: int, n_connections: int):
         self.n_instances = n_instances
         self.n_connections = n_connections
         super().__init__()
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
+        print("Using one sided planner!")
         src_region_tag = jobs[0].src_iface.region_tag()
         dst_region_tags = [iface.region_tag() for iface in jobs[0].dst_ifaces]
         # jobs must have same sources and destinations
@@ -204,8 +207,6 @@ class DirectPlannerSourceOneSided(Planner):
         # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
         for i in range(self.n_instances):
             plan.add_gateway(src_region_tag)
-            for dst_region_tag in dst_region_tags:
-                plan.add_gateway(dst_region_tag)
 
         # initialize gateway programs per region
         src_program = GatewayProgram()

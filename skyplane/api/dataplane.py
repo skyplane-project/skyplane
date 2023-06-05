@@ -109,6 +109,9 @@ class Dataplane:
         # write gateway programs
         gateway_program_filename = Path(f"{gateway_log_dir}/gateway_program_{gateway_node.gateway_id}.json")
         with open(gateway_program_filename, "w") as f:
+            from pprint import pprint 
+            pprint(self.topology.get_gateway_info_json())
+ 
             f.write(gateway_node.gateway_program.to_json())
 
         # start gateway
@@ -158,6 +161,7 @@ class Dataplane:
             # create VMs from the topology
             for node in self.topology.get_gateways():
                 cloud_provider, region = node.region_tag.split(":")
+                assert cloud_provider != "cloudflare", f"Cannot create VMs in certain cloud providers: check planner output {self.topology.to_dict()}"
                 self.provisioner.add_task(
                     cloud_provider=cloud_provider,
                     region=region,
@@ -206,7 +210,7 @@ class Dataplane:
         # write gateway info file
         gateway_info_path = f"{gateway_program_dir}/gateway_info.json"
         with open(gateway_info_path, "w") as f:
-            json.dump(self.topology.get_gateway_info_json(), f, indent=4)
+           json.dump(self.topology.get_gateway_info_json(), f, indent=4)
         logger.fs.info(f"Writing gateway info to {gateway_info_path}")
 
         # start gateways in parallel
@@ -288,10 +292,10 @@ class Dataplane:
         """Returns a list of source gateway nodes"""
         return [self.bound_nodes[n] for n in self.topology.source_instances()] if self.provisioned else []
 
-    def sink_gateways(self) -> Dict[str, List[compute.Server]]:
+    def sink_gateways(self, region_tag: Optional[str] = None) -> Dict[str, List[compute.Server]]:
         """Returns a list of sink gateway nodes"""
         return (
-            {region: [self.bound_nodes[n] for n in nodes] for region, nodes in self.topology.sink_instances().items()}
+            {region: [self.bound_nodes[n] for n in nodes] for region, nodes in self.topology.sink_instances(region_tag).items()}
             if self.provisioned
             else {}
         )

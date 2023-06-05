@@ -313,9 +313,10 @@ class GatewayDaemonAPI(threading.Thread):
             # update upload id mapping
             print(request.json)
             upload_ids = request.json
-            for key, id in upload_ids.items():
-                self.upload_id_map[key] = id
-
+            for region_tag in upload_ids.keys():
+                #assert region_tag in self.upload_id_map, f"Region tag {region_tag} not found in upload id map {self.upload_id_map}"
+                for key, upload_id in upload_ids[region_tag].items():
+                    self.upload_id_map[region_tag + key] = upload_id
             print(f"Added upload id mappings {upload_ids}")
 
             return jsonify({"status": "ok"})

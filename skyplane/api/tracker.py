@@ -129,11 +129,11 @@ class TransferProgressTracker(Thread):
             "cmd": ",".join([job.__class__.__name__ for job in self.jobs.values()]),
             "recursive": ",".join([str(job.recursive) for job in self.jobs.values()]),
             "multipart": self.transfer_config.multipart_enabled,
-            "instances_per_region": 1,  # TODO: read this from config file
-            "src_instance_type": getattr(self.transfer_config, f"{src_cloud_provider}_instance_class"),
-            "dst_instance_type": getattr(self.transfer_config, f"{dst_cloud_provider}_instance_class"),
-            "src_spot_instance": getattr(self.transfer_config, f"{src_cloud_provider}_use_spot_instances"),
-            "dst_spot_instance": getattr(self.transfer_config, f"{dst_cloud_provider}_use_spot_instances"),
+            #"instances_per_region": 1,  # TODO: read this from config file
+            #"src_instance_type": getattr(self.transfer_config, f"{src_cloud_provider}_instance_class"),
+            #"dst_instance_type": #getattr(self.transfer_config, f"{dst_cloud_provider}_instance_class"),
+            #"src_spot_instance": getattr(self.transfer_config, f"{src_cloud_provider}_use_spot_instances"),
+            #"dst_spot_instance": getattr(self.transfer_config, f"{dst_cloud_provider}_use_spot_instances"),
         }
         session_start_timestamp_ms = int(time.time() * 1000)
         try:
@@ -264,8 +264,14 @@ class TransferProgressTracker(Thread):
     def monitor_transfer(pd, self, region_tag):
         """Monitor the tranfer by copying remote gateway logs and show transfer stats by hooks"""
         # todo implement transfer monitoring to update job_complete_chunk_ids and job_pending_chunk_ids while the transfer is in progress
-        region_sinks = self.dataplane.topology.sink_instances()
-        sinks = region_sinks[region_tag]
+
+        # regions that are sinks for specific region tag 
+        # TODO: should eventualy map bucket to list of instances 
+        sinks = [n for nodes in self.dataplane.topology.sink_instances(region_tag).values() for n in nodes]
+        print("sinks", sinks)
+
+        #region_sinks = list(self.dataplane.topology.sink_instances(region_tag).keys())
+        #sinks = self.dataplane.topology.dest_region_tags #region_sinks[region_tag]
         # for region_tag, sink_gateways in self.dataplane.topology.sink_gateways().items():
         # sink_regions = set([sink.region for sink in sinks])
         while any([len(self.job_pending_chunk_ids[job_uuid][region_tag]) > 0 for job_uuid in self.job_pending_chunk_ids]):
@@ -281,6 +287,8 @@ class TransferProgressTracker(Thread):
                 raise exceptions.SkyplaneGatewayException("Transfer failed with errors", errors)
 
             log_df = pd.DataFrame(self._query_chunk_status())
+            #print(log_df)
+            log_df.to_csv("log_df.csv")
             if log_df.empty:
                 logger.warning("No chunk status log entries yet")
                 time.sleep(0.05)
@@ -289,12 +297,15 @@ class TransferProgressTracker(Thread):
             # TODO: have visualization for completition across all destinations
             is_complete_rec = (
                 lambda row: row["state"] == ChunkState.complete
-                # and row["instance"] in [s.instance for s in sinks]
-                and row["region_tag"] in [s.region_tag for s in sinks]
+                and row["instance"] in [s.gateway_id for s in sinks]
+                #and row["region_tag"] in region_sinks
             )
             sink_status_df = log_df[log_df.apply(is_complete_rec, axis=1)]
-            completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: set(x["region_tag"].unique()) == set([region_tag]))
-            completed_chunk_ids = completed_status[completed_status].index
+            #print(sink_status_df.chunk_id.unique())
+            completed_chunk_ids = list(set(sink_status_df.chunk_id.unique()))
+            #completed_status = sink_status_df.groupby("chunk_id").apply(lambda x: True) #set(x["region_tag"].unique()) == set([region_tag]))
+            #completed_chunk_ids = [completed_status].index
+            #print("completed", completed_chunk_ids)
 
             # update job_complete_chunk_ids and job_pending_chunk_ids
             # TODO: do chunk-tracking per-destination

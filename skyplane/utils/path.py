@@ -22,7 +22,7 @@ def parse_path(path: str) -> Tuple[str, Optional[str], Optional[str]]:
         if match is None:
             raise ValueError(f"Invalid Azure path: {path}")
         account, bucket, blob_path = match.groups()
-        return "r2", f"{account}/{bucket}", blob_path
+        return "cloudflare", f"{account}/{bucket}", blob_path
     elif path.startswith("cos://"):
         provider, parsed = path[:3], path[6:]
         if len(parsed) == 0:
