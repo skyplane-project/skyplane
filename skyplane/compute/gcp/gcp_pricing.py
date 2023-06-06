@@ -30,7 +30,7 @@ class GCPPricing:
                 return 0.15
             else:
                 return 0.08
-        elif dst_provider in ["aws", "azure"] and premium_tier:
+        elif dst_provider in ["aws", "azure", "cloudflare"] and premium_tier:
             is_dst_australia = (dst == "ap-southeast-2") if dst_provider == "aws" else (dst.startswith("australia"))
             # singapore or tokyo or osaka
             if src_continent == "asia" and (src_region == "southeast2" or src_region == "northeast1" or src_region == "northeast2"):
@@ -43,7 +43,7 @@ class GCPPricing:
                 return 0.19 if is_dst_australia else 0.147
             else:
                 return 0.19 if is_dst_australia else 0.12
-        elif dst_provider in ["aws", "azure"] and not premium_tier:
+        elif dst_provider in ["aws", "azure", "cloudflare"] and not premium_tier:
             if src_continent == "us" or src_continent == "europe" or src_continent == "northamerica":
                 return 0.085
             elif src_continent == "southamerica" or src_continent == "australia":

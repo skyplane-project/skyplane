@@ -52,6 +52,11 @@ class TopologyPlanGateway:
         """Set the gateway program for the gateway"""
         self.gateway_program = gateway_program
 
+    def write_operators(self) -> List[GatewayWriteObjectStore]:
+        """Get all write operators in the gateway program"""
+        # TODO: include other write operator types
+        return [op for op in self.gateway_program.get_operators() if isinstance(op, GatewayWriteObjectStore)]
+
 
 class TopologyPlan:
     """
@@ -138,11 +143,19 @@ class TopologyPlan:
             }
         return gateway_info
 
-    def sink_instances(self) -> Dict[str, List[TopologyPlanGateway]]:
+    def sink_instances(self, region_tag: Optional[str] = None) -> Dict[str, List[TopologyPlanGateway]]:
         """Return list of gateways that have a sink operator (GatewayWriteObjectStore, GatewayWriteLocal)"""
         nodes = {}
         for gateway in self.gateways.values():
             for operator in gateway.gateway_program.get_operators():
+                # dont include if wrong region
+                if isinstance(operator, GatewayWriteObjectStore):
+                    if region_tag is not None and operator.bucket_region != region_tag:
+                        continue
+                if isinstance(operator, GatewayWriteLocal):
+                    if region_tag is not None and gateway.region_tag != region_tag:
+                        continue
+
                 if isinstance(operator, GatewayWriteObjectStore) or isinstance(operator, GatewayWriteLocal):
                     if gateway.region_tag not in nodes:
                         nodes[gateway.region_tag] = []
@@ -167,3 +180,6 @@ class TopologyPlan:
         for node in self.get_gateways():
             counts[node.region_tag] = counts.get(node.region_tag, 0) + 1
         return counts
+
+    def to_dict(self):
+        return {gateway_id: gateway.gateway_program.to_dict() for gateway_id, gateway in self.gateways.items()}
