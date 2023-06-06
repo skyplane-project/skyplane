@@ -54,9 +54,9 @@ jobs:
           poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
           poetry run skyplane config set native_cmd_enabled false
           cat ~/.skyplane/config
-          poetry run skyplane init -y
+          poetry run skyplane init -y --disable-config-cloudflare
           poetry run skyplane config set usage_stats false
-      - name: Single small file test
+      - name: Single small file test 
         run: poetry run python tests/integration/cp_local.py ${{ matrix.pairs }} --n-files 1 --file-size-mb 32
       - name: 128 small files test
         run: poetry run python tests/integration/cp_local.py ${{ matrix.pairs }} --n-files 128 --file-size-mb 1
@@ -86,7 +86,7 @@ jobs:
       - name: Skyplane init
         run: |
           skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
-          skyplane init -y --disable-config-azure
+          skyplane init -y --disable-config-azure --disable-config-cloudflare
           skyplane config set usage_stats false
       - name: Deprovision
         run: skyplane deprovision
