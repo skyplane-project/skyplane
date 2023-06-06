@@ -65,7 +65,7 @@ class GCPAuthentication:
                             continue
                         region_name = region["name"]
                         for quota_item in region["quotas"]:
-                            if quota_item["metric"] == "CPUS":
+                            if quota_item["metric"] == "N2_CPUS":  # Initially only concerned with N2 limits
                                 region_to_vcpus[region_name] = quota_item["limit"]
                                 break
                     request = service.regions().list_next(previous_request=request, previous_response=response)

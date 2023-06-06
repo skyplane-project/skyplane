@@ -4,6 +4,9 @@ from typing import Optional, List
 
 from skyplane import compute
 
+from skyplane.config_paths import aws_quota_path, gcp_quota_path, azure_standardDv5_quota_path
+from pathlib import Path
+
 
 class AuthenticationConfig:
     def make_auth_provider(self):

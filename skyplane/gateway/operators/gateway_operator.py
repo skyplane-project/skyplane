@@ -427,14 +427,14 @@ class GatewayObjStoreOperator(GatewayOperator):
         self,
         handle: str,
         region: str,
+        bucket_name: str,
+        bucket_region: str,
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
         error_queue: Queue,
         n_processes: Optional[int] = 1,
         chunk_store: Optional[ChunkStore] = None,
-        bucket_name: Optional[str] = None,
-        bucket_region: Optional[str] = None,
     ):
         super().__init__(handle, region, input_queue, output_queue, error_event, error_queue, chunk_store, n_processes)
         self.bucket_name = bucket_name
@@ -462,17 +462,17 @@ class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
         self,
         handle: str,
         region: str,
+        bucket_name: str,
+        bucket_region: str,
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
         error_queue: Queue,
         n_processes: int = 32,
         chunk_store: Optional[ChunkStore] = None,
-        bucket_name: Optional[str] = None,
-        bucket_region: Optional[str] = None,
     ):
         super().__init__(
-            handle, region, input_queue, output_queue, error_event, error_queue, n_processes, chunk_store, bucket_name, bucket_region
+            handle, region, bucket_name, bucket_region, input_queue, output_queue, error_event, error_queue, n_processes, chunk_store
         )
 
     def process(self, chunk_req: ChunkRequest, **args):
@@ -544,6 +544,8 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         self,
         handle: str,
         region: str,
+        bucket_name: str,
+        bucket_region: str,
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
@@ -551,12 +553,10 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         upload_id_map: DictProxy,  # map of upload_id mappings from client
         n_processes: Optional[int] = 32,
         chunk_store: Optional[ChunkStore] = None,
-        bucket_name: Optional[str] = None,
-        bucket_region: Optional[str] = None,
         prefix: Optional[str] = "",
     ):
         super().__init__(
-            handle, region, input_queue, output_queue, error_event, error_queue, n_processes, chunk_store, bucket_name, bucket_region
+            handle, region, bucket_name, bucket_region, input_queue, output_queue, error_event, error_queue, n_processes, chunk_store
         )
         self.chunk_store = chunk_store
         self.upload_id_map = upload_id_map
@@ -572,8 +572,9 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         obj_store_interface = self.get_obj_store_interface(self.bucket_region, self.bucket_name)
 
         if chunk_req.chunk.multi_part:
-            assert chunk_req.chunk.src_key in self.upload_id_map, f"Upload id for {chunk_req.chunk.src_key} not found {self.upload_id_map}"
-            upload_id = self.upload_id_map[chunk_req.chunk.src_key]
+            upload_id_key = self.bucket_region + chunk_req.chunk.src_key  # format for upload id key
+            assert upload_id_key in self.upload_id_map, f"Upload id for {upload_id_key} not found {self.upload_id_map}"
+            upload_id = self.upload_id_map[upload_id_key]
         else:
             upload_id = None
 

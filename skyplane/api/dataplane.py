@@ -176,10 +176,13 @@ class Dataplane:
             # create VMs from the topology
             for node in self.topology.get_gateways():
                 cloud_provider, region = node.region_tag.split(":")
+                assert (
+                    cloud_provider != "cloudflare"
+                ), f"Cannot create VMs in certain cloud providers: check planner output {self.topology.to_dict()}"
                 self.provisioner.add_task(
                     cloud_provider=cloud_provider,
                     region=region,
-                    vm_type=getattr(self.transfer_config, f"{cloud_provider}_instance_class"),
+                    vm_type=node.vm_type or getattr(self.transfer_config, f"{cloud_provider}_instance_class"),
                     spot=getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances"),
                     autoterminate_minutes=self.transfer_config.autoterminate_minutes,
                 )
@@ -302,10 +305,10 @@ class Dataplane:
         """Returns a list of source gateway nodes"""
         return [self.bound_nodes[n] for n in self.topology.source_instances()] if self.provisioned else []
 
-    def sink_gateways(self) -> Dict[str, List[compute.Server]]:
+    def sink_gateways(self, region_tag: Optional[str] = None) -> Dict[str, List[compute.Server]]:
         """Returns a list of sink gateway nodes"""
         return (
-            {region: [self.bound_nodes[n] for n in nodes] for region, nodes in self.topology.sink_instances().items()}
+            {region: [self.bound_nodes[n] for n in nodes] for region, nodes in self.topology.sink_instances(region_tag).items()}
             if self.provisioned
             else {}
         )
