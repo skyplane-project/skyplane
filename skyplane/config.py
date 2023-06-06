@@ -126,7 +126,12 @@ class SkyplaneConfig:
     @classmethod
     def default_config(cls) -> "SkyplaneConfig":
         return cls(
-            aws_enabled=False, azure_enabled=False, gcp_enabled=False, ibmcloud_enabled=False, anon_clientid=cls.generate_machine_id()
+            aws_enabled=False,
+            azure_enabled=False,
+            gcp_enabled=False,
+            ibmcloud_enabled=False,
+            cloudflare_enabled=False,
+            anon_clientid=cls.generate_machine_id(),
         )
 
     @classmethod

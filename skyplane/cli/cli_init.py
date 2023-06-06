@@ -496,7 +496,8 @@ def init(
     :type disable_config_gcp: bool
     :param disable_config_ibm: If true, will disable IBM Cloud configuration (may still be enabled if environment variables are set)
     :type disable_config_ibm: bool
-
+    :param disable_config_cloudflare: If true, will disable Cloudflare configuration (may still be enabled if environment variables are set)
+    :type disable_config_cloudflare: bool
     """
     print_header()
 
