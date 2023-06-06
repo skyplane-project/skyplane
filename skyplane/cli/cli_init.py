@@ -64,7 +64,7 @@ def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> Sk
 
 
 def load_cloudflare_config(config: SkyplaneConfig, non_interactive: bool = False) -> SkyplaneConfig:
-    if typer.confirm("    Do you want to configure Cloudflare support in Skyplane?", default=True):
+    if non_interactive or typer.confirm("    Do you want to configure Cloudflare support in Skyplane?", default=True):
         config.cloudflare_access_key_id = typer.prompt("    Enter the R2 access key ID")
         config.cloudflare_secret_access_key = typer.prompt("    Enter the R2 secret access key")
     else:

@@ -20,7 +20,7 @@ def parse_path(path: str) -> Tuple[str, Optional[str], Optional[str]]:
         regex = re.compile(r"https?://([^/]+).r2.cloudflarestorage.com/([^/]+)/?(.*)")
         match = regex.match(path)
         if match is None:
-            raise ValueError(f"Invalid Azure path: {path}")
+            raise ValueError(f"Invalid Cloudflare path: {path}")
         account, bucket, blob_path = match.groups()
         return "cloudflare", f"{account}/{bucket}", blob_path
     elif path.startswith("cos://"):

@@ -57,9 +57,9 @@ class TransferPair:
 class GatewayMessage:
     def __init__(self, chunk: Optional[Chunk] = None, upload_id_mapping: Optional[Dict[str, Tuple[str, str]]] = None):
         self.chunk = chunk
-        self.upload_id_mapping = (
-            upload_id_mapping  # region_tag: (upload_id, dst_key) # TODO: map both bucket + region to enable multiple buckets per region
-        )
+        # TODO: currently, the mapping ID is per-region, however this should be per-bucket, as there may be multiple
+        # target buckets in the same region
+        self.upload_id_mapping = upload_id_mapping  # region_tag: (upload_id, dst_key)
 
 
 class Chunker:
