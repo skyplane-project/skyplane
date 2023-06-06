@@ -6,7 +6,7 @@ from skyplane.gateway.gateway_program import (
     GatewayGenData,
     GatewayReadObjectStore,
 )
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 
 class TopologyPlanGateway:
@@ -15,9 +15,10 @@ class TopologyPlanGateway:
     Represents a gateway in the topology plan.
     """
 
-    def __init__(self, region_tag: str, gateway_id: str):
+    def __init__(self, region_tag: str, gateway_id: str, gateway_vm: Optional[str]):
         self.region_tag = region_tag
         self.gateway_id = gateway_id
+        self.gateway_vm = gateway_vm
         self.gateway_program = None
 
         # ip addresses
@@ -33,6 +34,11 @@ class TopologyPlanGateway:
     def region(self):
         """Get the region of the gateway"""
         return self.region_tag.split(":")[1]
+
+    @property
+    def vm_type(self):
+        """Get the vm type of the gateway"""
+        return self.gateway_vm
 
     def set_private_ip_address(self, private_ip_address: str):
         """Set the IP address of the gateway (not determined until provisioning is complete)"""
@@ -68,11 +74,11 @@ class TopologyPlan:
         """Get all region tags in the topology plan"""
         return list(set([gateway.region_tag for gateway in self.gateways.values()]))
 
-    def add_gateway(self, region_tag: str):
+    def add_gateway(self, region_tag: str, vm_type: Optional[str] = None):
         """Create gateway in specified region"""
         gateway_id = region_tag + str(len([gateway for gateway in self.gateways.values() if gateway.region_tag == region_tag]))
         assert gateway_id not in self.gateways, f"Gateway id {gateway_id} in {self.gateways}"
-        gateway = TopologyPlanGateway(region_tag, gateway_id)
+        gateway = TopologyPlanGateway(region_tag, gateway_id, vm_type)
         self.gateways[gateway_id] = gateway
         return gateway
 
