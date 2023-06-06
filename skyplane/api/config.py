@@ -89,11 +89,6 @@ class TransferConfig:
     ibmcloud_instance_class: str = "bx2-2x8"
     gcp_use_premium_network: bool = True
 
-    aws_vcpu_file: Path = aws_quota_path
-    gcp_vcpu_file: Path = gcp_quota_path
-    azure_vcpu_file: Path = azure_standardDv5_quota_path
-    # TODO: add ibmcloud when the quota info is available
-
     # multipart config
     multipart_enabled: bool = True
     multipart_threshold_mb: int = 128
