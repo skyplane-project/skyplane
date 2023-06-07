@@ -94,6 +94,8 @@ class Dataplane:
         port: Optional[int] = 8081,
     ):
         print("CONTAINER", container_name)
+        print("nodes", self.bound_nodes)
+        print(gateway_node)
         # map outgoing ports
         setup_args = {}
         for gateway_id, n_conn in self.topology.get_outgoing_paths(gateway_node.gateway_id).items():
@@ -245,6 +247,7 @@ class Dataplane:
             out_file = self.transfer_dir / f"gateway_{instance.uuid()}.stdout"
             err_file = self.transfer_dir / f"gateway_{instance.uuid()}.stderr"
             logger.fs.info(f"[Dataplane.copy_gateway_logs] Copying logs from {instance.uuid()}: {out_file}")
+            print(f"[Dataplane.copy_gateway_logs] Copying logs from {instance.uuid()}: {out_file}")
             instance.run_command(f"sudo docker logs -t {container_name} 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
             instance.download_file("/tmp/gateway.stdout", out_file)
             instance.download_file("/tmp/gateway.stderr", err_file)

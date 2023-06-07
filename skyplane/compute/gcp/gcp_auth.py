@@ -19,8 +19,8 @@ class GCPAuthentication:
             self.config = config
         else:
             self.config = SkyplaneConfig.load_config(config_path)
+        print("Loaded config", self.config, self.config, self.config.gcp_project_id)
         self._credentials = None
-        self._service_credentials_file = None
 
     @imports.inject("googleapiclient.discovery", pip_extra="gcp")
     def save_region_config(discovery, self):
@@ -104,7 +104,7 @@ class GCPAuthentication:
     def project_id(self):
         assert (
             self.config.gcp_project_id is not None
-        ), "No project ID detected. Run 'skyplane init --reinit-gcp' or file an issue to remedy this."
+        ), f"No project ID detected. Run 'skyplane init --reinit-gcp' or file an issue to remedy this {self.config}."
         return self.config.gcp_project_id
 
     @staticmethod
@@ -152,6 +152,7 @@ class GCPAuthentication:
         if "GCP_SERVICE_ACCOUNT_FILE" in os.environ:
             key_path = Path(os.environ["GCP_SERVICE_ACCOUNT_FILE"]).expanduser()
         else:
+            print("No env GCP_SERVICE_ACCOUNT_FILE")
             # include project_id in path in case there are multiple service keys for multiple projects
             key_path = key_root / "gcp" / self.project_id / "service_account_key.json"
         return key_path
@@ -262,7 +263,7 @@ class GCPAuthentication:
     def get_storage_client(storage, self):
         # TODO: cache storage account clinet
         # check that storage account works
-        return storage.Client.from_service_account_json(self.service_account_credentials)
+        return storage.Client.from_service_account_json(self.service_account_key_path)
 
     def get_gcp_instances(self, gcp_region: str):
         return self.get_gcp_client().instances().list(project=self.project_id, zone=gcp_region).execute()

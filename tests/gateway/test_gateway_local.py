@@ -1,4 +1,6 @@
 from typing import Any, Iterator, Tuple, Dict, Optional, List
+import shutil
+from skyplane.api.config import TransferConfig
 import time
 import docker
 import argparse
@@ -46,11 +48,24 @@ class TestServer(Server):
 
     def download_file(self, remote_path, local_path):
         """Pretend to download a file from the server"""
-        pass
+        # Create the necessary directories in the local path
+        local_directory = os.path.dirname(local_path)
+        os.makedirs(local_directory, exist_ok=True)
+
+        # Copy the file from the remote path to the local path
+        shutil.copy2(remote_path, local_path)
 
     def upload_file(self, local_path, remote_path):
         """Pretend to upload a file to the server"""
-        return 
+        #shutil.copyfile(local_path, remote_path)
+
+        # Create the necessary directories in the local path
+        remote_directory = os.path.dirname(remote_path)
+        if remote_directory != remote_path: 
+            os.makedirs(remote_directory, exist_ok=True)
+
+        # Copy the file from the remote path to the local path
+        shutil.copy2(local_path, remote_path)
 
     def write_file(self, content_bytes, remote_path):
         """Write a file on the server"""
@@ -180,9 +195,9 @@ def run(gateway_docker_image, restart_gateways):
     #print("PREFIX", job.src_prefix, job.dst_prefixes)
 
     # this does not work since docker bridge network cannot access internet
-    job = CopyJob("s3://feature-store-datasets/yahoo/", ["gs://feature-store-datasets/wikipedia/yahoo/"], recursive=True)
+    job = CopyJob("s3://feature-store-datasets/yahoo/processed_yahoo/A1/", ["gs://38046a6749df436886491a95cacdebb8/yahoo/"], recursive=True)
 
-    topology = MulticastDirectPlanner(1, 64).plan([job])
+    topology = MulticastDirectPlanner(1, 64, TransferConfig()).plan([job])
     print([g.region_tag for g in topology.get_gateways()])
     #print(topology.generate_gateway_program("test:source"))
 
@@ -195,6 +210,9 @@ def run(gateway_docker_image, restart_gateways):
     dataplane = Dataplane("test", topology, Provisioner("test"), transfer_config=TransferConfig(), log_dir=test_log_dir, local=True)
     dataplane.bound_nodes[topology.get_region_gateways(topology.src_region_tag)[0]] = source_server
     dataplane.bound_nodes[topology.get_region_gateways(topology.dest_region_tags[0])[0]] = dest_server
+    print("GATEWAYS", topology.gateways)
+    print("dataplane nodes", dataplane.bound_nodes)
+    print("dest", topology.get_region_gateways(topology.dest_region_tags[0])[0])
 
     # set ip address for docker containers (for gateway info file generation)
     topology.set_ip_addresses(topology.get_region_gateways(topology.src_region_tag)[0].gateway_id, "skyplane_source", "skyplane_source")
@@ -217,6 +235,7 @@ def run(gateway_docker_image, restart_gateways):
     if restart_gateways or not check_container_running("skyplane_dest"):
         if check_container_running("skyplane_dest"):
             remove_container_if_running("skyplane_dest")
+        print("dest", topology.get_region_gateways(topology.dest_region_tags[0])[0])
         dataplane._start_gateway(
             gateway_docker_image=gateway_docker_image,
             gateway_node=topology.get_region_gateways(topology.dest_region_tags[0])[0],
@@ -230,7 +249,11 @@ def run(gateway_docker_image, restart_gateways):
     dataplane.provisioned = True
 
     # dispatch chunks to source gateway
-    dataplane.run([job])
+    try:
+        dataplane.run([job])
+    except Exception as e: 
+        print("Transfer error, copying logs...")
+        dataplane.copy_logs()
 
 
 # check chunk status on destination gateway

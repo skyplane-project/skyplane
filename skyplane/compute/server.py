@@ -325,6 +325,8 @@ class Server:
         port: Optional[int] = 8081,
     ):
         print("SERVER", gateway_program_path, gateway_info_path)
+        docker_envs = {"SKYPLANE_IS_GATEWAY": "1"}
+
         def check_stderr(tup):
             assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
 
@@ -338,12 +340,6 @@ class Server:
             # start log viewer
             self.run_command(make_dozzle_command(log_viewer_port))
 
-        # copy cloud configuration
-        docker_envs = {"SKYPLANE_IS_GATEWAY": "1"}
-        if config_path.exists():
-            self.upload_file(config_path, f"/tmp/{config_path.name}")
-            docker_envs["SKYPLANE_CONFIG"] = f"/pkg/data/{config_path.name}"
-
         # fix issue 312, retry boto3 credential calls to instance metadata service
         if self.provider == "aws":
             docker_envs["AWS_METADATA_SERVICE_NUM_ATTEMPTS"] = "4"
@@ -356,6 +352,7 @@ class Server:
             logger.fs.debug(f"{desc_prefix} docker pull in {t.elapsed}")
             logger.fs.debug(f"{desc_prefix}: Starting gateway container")
 
+        
         docker_run_flags = f"-d --log-driver=local --log-opt max-file=16 --ipc=host --ulimit nofile={1024 * 1024}"
         #docker_run_flags += " --mount type=tmpfs,dst=/skyplane,tmpfs-size=$(($(free -b  | head -n2 | tail -n1 | awk '{print $2}')/2))"
         docker_run_flags += " --mount type=tmpfs,dst=/skyplane,tmpfs-size=250000000"
@@ -363,6 +360,15 @@ class Server:
 
         # we copy all credentials to all VMs in order to support object store access across clouds (e.g. for one-sided transfers)
         # we can add a least privledge option in the future where we rely on compute service accounts instead in the future
+        
+        # copy cloud configuration
+        print("CONFIG PATH", config_path.exists(), config_path)
+        if config_path.exists():
+            print("uploading", f"/tmp/{config_path.name}")
+            self.upload_file(config_path, f"/tmp/{config_path.name}")
+            docker_envs["SKYPLANE_CONFIG"] = f"/pkg/data/{config_path.name}"
+            print("CONFIG PATH NAME", config_path.name)
+            docker_run_flags += f" -v /tmp/{config_path.name}:/pkg/data/{config_path.name}"
 
         # copy service account files
         #if self.provider == "gcp":
