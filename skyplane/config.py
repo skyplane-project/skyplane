@@ -245,8 +245,6 @@ class SkyplaneConfig:
         if path.exists():
             config.read(os.path.expanduser(path))
 
-        print("CONFIG", self.cloudflare_enabled, self.cloudflare_access_key_id, self.cloudflare_secret_access_key)
-
         if "aws" not in config:
             config.add_section("aws")
         config.set("aws", "aws_enabled", str(self.aws_enabled))
