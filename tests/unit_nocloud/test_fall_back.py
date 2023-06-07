@@ -86,4 +86,3 @@ def test_fall_back_multiple_limits_and_types():
 
             assert vm_types == expected_vm_types, f"vm types are calculated wrong {vm_types}"
             assert n_instances == expected_n_instances, f"n_instances are calculated wrong {n_instances}"
-    print("Test succeeded!")
