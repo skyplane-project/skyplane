@@ -173,4 +173,4 @@ class AzureBlobInterface(ObjectStoreInterface):
                 )
 
     def create_object_repr(self, key: str) -> AzureBlobObject:
-        return AzureBlobObject(provider="azure", bucket=self.bucket_name, key=key)
+        return AzureBlobObject(provider=self.provider, bucket=self.bucket(), key=key)

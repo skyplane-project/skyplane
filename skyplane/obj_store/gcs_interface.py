@@ -303,4 +303,4 @@ class GCSInterface(ObjectStoreInterface):
             raise exceptions.SkyplaneException("Failed to complete multipart upload") from e
 
     def create_object_repr(self, key: str) -> GCSObject:
-        return GCSObject(provider="gcp", bucket=self.bucket_name, key=key)
+        return GCSObject(provider=self.provider, bucket=self.bucket(), key=key)

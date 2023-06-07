@@ -287,15 +287,6 @@ class Chunker:
                         raise e from None
 
                     dest_obj = dst_iface.create_object_repr(dest_key)
-
-                    # if dest_provider == "aws":
-                    #    dest_obj = S3Object(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
-                    # elif dest_provider == "azure":
-                    #    dest_obj = AzureBlobObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
-                    # elif dest_provider == "gcp":
-                    #    dest_obj = GCSObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
-                    # else:
-                    #    raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
                     dest_objs[dst_iface.region_tag()] = dest_obj
 
                 # assert that all destinations share the same post-fix key
@@ -646,7 +637,6 @@ class CopyJob(TransferJob):
                 assert Chunk.from_dict(chunk_batch[0].as_dict()) == chunk_batch[0], f"Invalid chunk request: {chunk_batch[0].as_dict}"
 
                 # TODO: make async
-                print("SERVER", server.gateway_api_url)
                 st = time.time()
                 reply = self.http_pool.request(
                     "POST",
@@ -659,8 +649,7 @@ class CopyJob(TransferJob):
                 et = time.time()
                 reply_json = json.loads(reply.data.decode("utf-8"))
                 n_added += reply_json["n_added"]
-                logger.fs.debug(f"Added {n_added} chunks to server {server}: {reply_json}")
-                print(f"Added {n_added} chunks to server {server} in {et-st}: {reply_json}")
+                logger.fs.debug(f"Added {n_added} chunks to server {server} in {et-st}: {reply_json}")
                 queue_size[min_idx] = reply_json["qsize"]  # update queue size
                 # dont try again with some gateway
                 min_idx = (min_idx + 1) % len(src_gateways)
