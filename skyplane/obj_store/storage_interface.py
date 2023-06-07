@@ -71,4 +71,3 @@ class StorageInterface:
 
     def create_object_repr(self, key: str):
         raise NotImplementedError()
-

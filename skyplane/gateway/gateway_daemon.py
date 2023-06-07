@@ -43,7 +43,7 @@ class GatewayDaemon:
         use_e2ee=False,
     ):
         # read gateway program
-        #gateway_program_path = Path(os.environ["GATEWAY_PROGRAM_FILE"]).expanduser()
+        # gateway_program_path = Path(os.environ["GATEWAY_PROGRAM_FILE"]).expanduser()
         gateway_program_path = Path(gateway_program_file).expanduser()
         gateway_program = json.load(open(gateway_program_path, "r"))
 
@@ -52,7 +52,7 @@ class GatewayDaemon:
         pprint(gateway_program)
 
         # read gateway info
-        #gateway_info_path = Path(os.environ["GATEWAY_INFO_FILE"]).expanduser()
+        # gateway_info_path = Path(os.environ["GATEWAY_INFO_FILE"]).expanduser()
         gateway_info_path = Path(gateway_info_file).expanduser()
         self.gateway_info = json.load(open(gateway_info_path, "r"))
 
@@ -266,7 +266,7 @@ class GatewayDaemon:
                         chunk_store=self.chunk_store,
                     )
                     total_p += 1
-                elif op["op_type"] == "gen_data": 
+                elif op["op_type"] == "gen_data":
                     operators[handle] = GatewayRandomDataGen(
                         handle=handle,
                         region=self.region,

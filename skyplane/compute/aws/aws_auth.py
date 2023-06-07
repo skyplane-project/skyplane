@@ -23,11 +23,9 @@ class AWSAuthentication:
             self._access_key = None
             self._secret_key = None
 
-        # cached credentials 
-        # TODO: fix this as its very messy 
+        # cached credentials
+        # TODO: fix this as its very messy
         self.__cached_credentials = {}
-
-        print("AWS AUTH CONFIG MODE", self.config_mode, self._access_key)
 
     def _get_ec2_vm_quota(self, region) -> Dict[str, int]:
         """Given the region, get the maximum number of vCPU that can be launched.
@@ -109,11 +107,9 @@ class AWSAuthentication:
     @imports.inject("boto3", pip_extra="aws")
     def infer_credentials(boto3, self):
         # todo load temporary credentials from STS
-        print("INFER CRED")
         session = boto3.Session()
         credentials = session.get_credentials()
         credentials = credentials.get_frozen_credentials()
-        print("OUTPUT", credentials.access_key, credentials.secret_key)
         return credentials.access_key, credentials.secret_key
 
     @imports.inject("boto3", pip_extra="aws")

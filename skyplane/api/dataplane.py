@@ -49,7 +49,7 @@ class Dataplane:
         transfer_config: TransferConfig,
         log_dir: str,
         debug: bool = True,
-        local: bool = False 
+        local: bool = False,
     ):
         """
         :param clientid: the uuid of the local host to create the dataplane
@@ -133,14 +133,14 @@ class Dataplane:
             # setup_args,
             gateway_docker_image=gateway_docker_image,
             gateway_program_path=os.path.abspath(str(gateway_program_filename)),
-            gateway_info_path=os.path.abspath(os.path.join(gateway_log_dir, "gateway_info.json")), 
+            gateway_info_path=os.path.abspath(os.path.join(gateway_log_dir, "gateway_info.json")),
             e2ee_key_bytes=None,  # TODO: remove
             use_bbr=self.transfer_config.use_bbr,  # TODO: remove
             use_compression=self.transfer_config.use_compression,
             use_socket_tls=self.transfer_config.use_socket_tls,
-            local=self.local, 
-            container_name=container_name, 
-            port=port
+            local=self.local,
+            container_name=container_name,
+            port=port,
         )
 
     def provision(
@@ -226,8 +226,6 @@ class Dataplane:
         Path(gateway_program_dir).mkdir(exist_ok=True, parents=True)
         logger.fs.info(f"Writing gateway programs to {gateway_program_dir}")
 
-
-
         # start gateways in parallel
         jobs = []
         for node, server in gateway_bound_nodes.items():
@@ -241,9 +239,9 @@ class Dataplane:
             self.copy_gateway_logs()
             raise GatewayContainerStartException(f"Error starting gateways. Please check gateway logs {self.transfer_dir}")
 
-    def copy_gateway_logs(self):
+    def copy_gateway_logs(self, container_name: Optional[str] = "skyplane_gateway"):
         # copy logs from all gateways in parallel
-        def copy_log(instance, container_name: Optional[str] = "skyplane_gateway"):
+        def copy_log(instance):
             out_file = self.transfer_dir / f"gateway_{instance.uuid()}.stdout"
             err_file = self.transfer_dir / f"gateway_{instance.uuid()}.stderr"
             logger.fs.info(f"[Dataplane.copy_gateway_logs] Copying logs from {instance.uuid()}: {out_file}")

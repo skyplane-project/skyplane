@@ -40,7 +40,7 @@ _FLAG_TYPES = {
     "requester_pays": bool,
     "native_cmd_enabled": bool,
     "native_cmd_threshold_gb": int,
-    "tmpdir": str, 
+    "tmpdir": str,
 }
 
 _DEFAULT_FLAGS = {
@@ -246,8 +246,6 @@ class SkyplaneConfig:
         config = configparser.ConfigParser()
         if path.exists():
             config.read(os.path.expanduser(path))
-
-        print("CONFIG", self.cloudflare_enabled, self.cloudflare_access_key_id, self.cloudflare_secret_access_key)
 
         if "aws" not in config:
             config.add_section("aws")

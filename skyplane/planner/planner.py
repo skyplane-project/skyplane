@@ -17,7 +17,7 @@ from skyplane.gateway.gateway_program import (
     GatewayReceive,
     GatewaySend,
     GatewayGenData,
-    GatewayWriteLocal
+    GatewayWriteLocal,
 )
 
 from skyplane.api.transfer_job import TransferJob, TestCopyJob
@@ -167,7 +167,6 @@ class MulticastDirectPlanner(Planner):
         super().__init__(transfer_config)
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-
         print(jobs[0].dst_ifaces[0].region_tag())
         print(jobs[0].dst_ifaces[0])
         src_region_tag = jobs[0].src_iface.region_tag()
@@ -224,7 +223,7 @@ class MulticastDirectPlanner(Planner):
                 # special case where destination is same region as source
                 if dst_region_tag == src_region_tag:
                     if isinstance(job, TestCopyJob):
-                        src_program.add_operator(GatewayGenData(64), parent_handle=mux_and, partition_id=partition_id) 
+                        src_program.add_operator(GatewayGenData(64), parent_handle=mux_and, partition_id=partition_id)
                     else:
                         src_program.add_operator(
                             GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
@@ -255,7 +254,7 @@ class MulticastDirectPlanner(Planner):
                 recv_op = dst_program[dst_region_tag].add_operator(GatewayReceive(), partition_id=partition_id)
                 if isinstance(job, TestCopyJob):
                     dst_program[dst_region_tag].add_operator(GatewayWriteLocal(), parent_handle=recv_op, partition_id=partition_id)
-                else: 
+                else:
                     dst_program[dst_region_tag].add_operator(
                         GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
                         parent_handle=recv_op,

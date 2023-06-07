@@ -304,4 +304,3 @@ class GCSInterface(ObjectStoreInterface):
 
     def create_object_repr(self, key: str) -> GCSObject:
         return GCSObject(provider="gcp", bucket=self.bucket_name, key=key)
-

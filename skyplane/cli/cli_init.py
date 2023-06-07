@@ -535,8 +535,8 @@ def init(
             cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
 
     # load cloudflare config
-    if not reinit_cloudflare:
-        typer.secho("\n(1) configuring cloudflare R2:", fg="yellow", bold=True)
+    if not reinit_cloudflare:  # TODO: fix reinit logic
+        typer.secho("\n(1) Configuring Cloudflare R2:", fg="yellow", bold=True)
         if not disable_config_aws:
             cloud_config = load_cloudflare_config(cloud_config, non_interactive=non_interactive)
 

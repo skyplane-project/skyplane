@@ -101,25 +101,29 @@ class Server:
         self.init_log_files(log_dir)
         self.ssh_tunnels: Dict = {}
 
-        # TODO: allow specified path 
+        # TODO: allow specified path
         self.config = SkyplaneConfig.load_config(config_path)
 
-        # setup authentication credentials 
+        # setup authentication credentials
         self.auth = {}
 
         print("AWS ENABLED", self.config.aws_enabled)
 
-        if self.config.aws_enabled: 
+        if self.config.aws_enabled:
             from skyplane.compute.aws.aws_auth import AWSAuthentication
+
             self.auth["aws"] = AWSAuthentication()
-        if self.config.gcp_enabled: 
+        if self.config.gcp_enabled:
             from skyplane.compute.gcp.gcp_auth import GCPAuthentication
+
             self.auth["gcp"] = GCPAuthentication()
         if self.config.azure_enabled:
             from skyplane.compute.azure.azure_auth import AzureAuthentication
+
             self.auth["azure"] = AzureAuthentication()
         if self.config.ibmcloud_enabled:
             from skyplane.compute.ibmcloud.ibmcloud_auth import IBMCloudAuthentication
+
             self.auth["ibmcloud"] = IBMCloudAuthentication()
 
     def __repr__(self):
@@ -321,7 +325,7 @@ class Server:
         e2ee_key_bytes=None,
         use_socket_tls=False,
         local=False,
-        container_name: Optional[str] = "skyplane_gateway", 
+        container_name: Optional[str] = "skyplane_gateway",
         port: Optional[int] = 8081,
     ):
         print("SERVER", gateway_program_path, gateway_info_path)
@@ -352,15 +356,14 @@ class Server:
             logger.fs.debug(f"{desc_prefix} docker pull in {t.elapsed}")
             logger.fs.debug(f"{desc_prefix}: Starting gateway container")
 
-        
         docker_run_flags = f"-d --log-driver=local --log-opt max-file=16 --ipc=host --ulimit nofile={1024 * 1024}"
-        #docker_run_flags += " --mount type=tmpfs,dst=/skyplane,tmpfs-size=$(($(free -b  | head -n2 | tail -n1 | awk '{print $2}')/2))"
+        # docker_run_flags += " --mount type=tmpfs,dst=/skyplane,tmpfs-size=$(($(free -b  | head -n2 | tail -n1 | awk '{print $2}')/2))"
         docker_run_flags += " --mount type=tmpfs,dst=/skyplane,tmpfs-size=250000000"
         docker_run_flags += f" -v /tmp/{config_path.name}:/pkg/data/{config_path.name}"
 
         # we copy all credentials to all VMs in order to support object store access across clouds (e.g. for one-sided transfers)
         # we can add a least privledge option in the future where we rely on compute service accounts instead in the future
-        
+
         # copy cloud configuration
         print("CONFIG PATH", config_path.exists(), config_path)
         if config_path.exists():
@@ -371,9 +374,9 @@ class Server:
             docker_run_flags += f" -v /tmp/{config_path.name}:/pkg/data/{config_path.name}"
 
         # copy service account files
-        #if self.provider == "gcp":
+        # if self.provider == "gcp":
         if "gcp" in self.auth:
-            #service_key_path = compute.GCPAuthentication().get_service_account_key_path()
+            # service_key_path = compute.GCPAuthentication().get_service_account_key_path()
             service_key_path = self.auth["gcp"].get_service_account_key_path()
             service_key_file = os.path.basename(service_key_path)
             self.upload_file(service_key_path, f"/tmp/{service_key_file}")
@@ -381,7 +384,7 @@ class Server:
             docker_run_flags += f" -v /tmp/{service_key_file}:/pkg/data/{service_key_file}"
 
         # set default region for boto3 on AWS
-        #if self.provider == "aws":
+        # if self.provider == "aws":
         if "aws" in self.auth:
             docker_envs["AWS_DEFAULT_REGION"] = self.region_tag.split(":")[1]
             docker_envs["AWS_ACCESS_KEY_ID"] = self.auth["aws"].access_key
@@ -396,19 +399,18 @@ class Server:
             docker_envs["E2EE_KEY_FILE"] = f"/pkg/data/{e2ee_key_file}"
             docker_run_flags += f" -v /tmp/{e2ee_key_file}:/pkg/data/{e2ee_key_file}"
 
-        
-        if local: 
+        if local:
             docker_run_flags += f" -v {gateway_program_path}:/pkg/data/gateway_program.json"
             docker_run_flags += f" -v {gateway_info_path}:/pkg/data/gateway_info.json"
-        else: 
+        else:
             # upload gateway programs and gateway info
             gateway_program_file = os.path.basename(gateway_program_path).replace(":", "_")
             gateway_info_file = os.path.basename(gateway_info_path).replace(":", "_")
 
             self.upload_file(gateway_program_path, f"/tmp/{gateway_program_file}")  # upload gateway program
             self.upload_file(gateway_info_path, f"/tmp/{gateway_info_file}")  # upload gateway info
-            #docker_envs["GATEWAY_PROGRAM_FILE"] = f"/pkg/data/gateway_program.json"
-            #docker_envs["GATEWAY_INFO_FILE"] = f"/pkg/data/gateway_info.json"
+            # docker_envs["GATEWAY_PROGRAM_FILE"] = f"/pkg/data/gateway_program.json"
+            # docker_envs["GATEWAY_INFO_FILE"] = f"/pkg/data/gateway_info.json"
             docker_run_flags += f" -v /tmp/{gateway_program_file}:/pkg/data/gateway_program.json"
             docker_run_flags += f" -v /tmp/{gateway_info_file}:/pkg/data/gateway_info.json"
         gateway_daemon_cmd = f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
@@ -416,10 +418,10 @@ class Server:
         # update docker flags
         docker_run_flags += " " + " ".join(f"--env {k}={v}" for k, v in docker_envs.items())
 
-        # network 
+        # network
         if local:
             docker_run_flags += f" --network skyplane-network --expose 8081 -p {port}:8081"
-        else: 
+        else:
             docker_run_flags += f" --network host"
 
         gateway_daemon_cmd += f" --gateway-program-file /pkg/data/gateway_program.json"
@@ -439,7 +441,7 @@ class Server:
         print("start out", start_out)
         gateway_container_hash = start_out.strip().split("\n")[-1][:12]
         print("HASH", gateway_container_hash)
-        if local: 
+        if local:
             self.gateway_log_viewer_url = None
         else:
             self.gateway_log_viewer_url = f"http://127.0.0.1:{self.tunnel_port(8888)}/container/{gateway_container_hash}"

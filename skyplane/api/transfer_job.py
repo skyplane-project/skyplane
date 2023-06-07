@@ -285,16 +285,16 @@ class Chunker:
                     except exceptions.MissingObjectException as e:
                         logger.fs.exception(e)
                         raise e from None
-                    
+
                     dest_obj = dst_iface.create_object_repr(dest_key)
 
-                    #if dest_provider == "aws":
+                    # if dest_provider == "aws":
                     #    dest_obj = S3Object(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
-                    #elif dest_provider == "azure":
+                    # elif dest_provider == "azure":
                     #    dest_obj = AzureBlobObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
-                    #elif dest_provider == "gcp":
+                    # elif dest_provider == "gcp":
                     #    dest_obj = GCSObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
-                    #else:
+                    # else:
                     #    raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
                     dest_objs[dst_iface.region_tag()] = dest_obj
 
@@ -534,7 +534,6 @@ class TransferJob(ABC):
         :type obj: ObjectStoreObject
         """
         return True
- 
 
 
 @dataclass
@@ -738,10 +737,12 @@ class CopyJob(TransferJob):
             total_size += pair.src_obj.size
         return total_size / 1e9
 
+
 @dataclass
-class TestCopyJob(CopyJob): 
+class TestCopyJob(CopyJob):
 
     """Test copy which does not interact with object stores but uses random data generation on gateways"""
+
     def __init__(
         self,
         src_path: str,
@@ -774,13 +775,14 @@ class TestCopyJob(CopyJob):
         chunks = [
             Chunk(
                 src_key=None,
-                dest_key=None, 
+                dest_key=None,
                 chunk_id=uuid.uuid4().hex,
                 chunk_length_bytes=self.chunk_size_bytes,
                 partition_id=str(0),  # TODO: fix this to distribute across multiple partitions
-            ) for i in range(self.num_chunks)
+            )
+            for i in range(self.num_chunks)
         ]
- 
+
         batches = Chunker.batch_generator(
             Chunker.prefetch_generator(chunks, buffer_size=dispatch_batch_size * 32), batch_size=dispatch_batch_size
         )
