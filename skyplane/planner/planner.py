@@ -149,13 +149,13 @@ class Planner:
         based on their quota limits and calculates the number of vms to launch in all regions by conservatively
         taking the minimum of all regions to stay consistent.
 
-        :param src_region_tag: the source region tag
-        :type src_region_tag: str
-        :param dst_region_tags: a list of the destination region tags
-        :type dst_region_tags: List[str]
+        :param src_region_tag: the source region tag (default: None)
+        :type src_region_tag: Optional[str]
+        :param dst_region_tags: a list of the destination region tags (defualt: None)
+        :type dst_region_tags: Optional[List[str]]
         """
         # One of them has to provided
-        assert src_region_tag is not None or dst_region_tags is not None
+        assert src_region_tag is not None or dst_region_tags is not None, "There needs to be at least one source or destination"
         src_tags = [src_region_tag] if src_region_tag is not None else []
         dst_tags = dst_region_tags or []
 
@@ -192,7 +192,6 @@ class UnicastDirectPlanner(Planner):
         # Dynammically calculate n_instances based on quota limits
         vm_types, n_instances = self._get_vm_type_and_instances(src_region_tag=src_region_tag, dst_region_tags=[dst_region_tag])
 
-        # TODO: use VM limits to determine how many instances to create in each region
         # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
         for i in range(n_instances):
             plan.add_gateway(src_region_tag, vm_types[src_region_tag])
@@ -334,128 +333,6 @@ class MulticastDirectPlanner(Planner):
         for dst_region_tag, program in dst_program.items():
             if dst_region_tag != src_region_tag:  # don't overwrite
                 plan.set_gateway_program(dst_region_tag, program)
-        return plan
-
-
-class DirectPlannerSourceOneSided(MulticastDirectPlanner):
-    """Planner that only creates VMs in the source region"""
-
-    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        src_region_tag = jobs[0].src_iface.region_tag()
-        dst_region_tags = [iface.region_tag() for iface in jobs[0].dst_ifaces]
-        # jobs must have same sources and destinations
-        for job in jobs[1:]:
-            assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
-            assert [iface.region_tag() for iface in job.dst_ifaces] == dst_region_tags, "Add jobs must have same destination set"
-
-        plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=dst_region_tags)
-
-        # Dynammically calculate n_instances based on quota limits
-        vm_types, n_instances = self._get_vm_type_and_instances(src_region_tag=src_region_tag)
-
-        # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
-        for i in range(n_instances):
-            plan.add_gateway(src_region_tag, vm_types[src_region_tag])
-
-        # initialize gateway programs per region
-        src_program = GatewayProgram()
-
-        # iterate through all jobs
-        for job in jobs:
-            src_bucket = job.src_iface.bucket()
-            src_region_tag = job.src_iface.region_tag()
-            src_provider = src_region_tag.split(":")[0]
-
-            # give each job a different partition id, so we can read/write to different buckets
-            partition_id = jobs.index(job)
-
-            # source region gateway program
-            obj_store_read = src_program.add_operator(
-                GatewayReadObjectStore(src_bucket, src_region_tag, self.n_connections), partition_id=partition_id
-            )
-            # send to all destination
-            mux_and = src_program.add_operator(GatewayMuxAnd(), parent_handle=obj_store_read, partition_id=partition_id)
-            dst_prefixes = job.dst_prefixes
-            for i in range(len(job.dst_ifaces)):
-                dst_iface = job.dst_ifaces[i]
-                dst_prefix = dst_prefixes[i]
-                dst_region_tag = dst_iface.region_tag()
-                dst_bucket = dst_iface.bucket()
-                dst_gateways = plan.get_region_gateways(dst_region_tag)
-
-                # special case where destination is same region as source
-                src_program.add_operator(
-                    GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
-                    parent_handle=mux_and,
-                    partition_id=partition_id,
-                )
-                # update cost per GB
-                plan.cost_per_gb += compute.CloudProvider.get_transfer_cost(src_region_tag, dst_region_tag)
-
-        # set gateway programs
-        plan.set_gateway_program(src_region_tag, src_program)
-        return plan
-
-
-class DirectPlannerDestOneSided(MulticastDirectPlanner):
-    """Planner that only creates instances in the destination region"""
-
-    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        # only create in destination region
-        src_region_tag = jobs[0].src_iface.region_tag()
-        dst_region_tags = [iface.region_tag() for iface in jobs[0].dst_ifaces]
-        # jobs must have same sources and destinations
-        for job in jobs[1:]:
-            assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
-            assert [iface.region_tag() for iface in job.dst_ifaces] == dst_region_tags, "Add jobs must have same destination set"
-
-        plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=dst_region_tags)
-
-        # Dynammically calculate n_instances based on quota limits
-        vm_types, n_instances = self._get_vm_type_and_instances(dst_region_tags=dst_region_tags)
-
-        # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
-        for i in range(n_instances):
-            for dst_region_tag in dst_region_tags:
-                plan.add_gateway(dst_region_tag, vm_types[dst_region_tag])
-
-        # initialize gateway programs per region
-        dst_program = {dst_region: GatewayProgram() for dst_region in dst_region_tags}
-
-        # iterate through all jobs
-        for job in jobs:
-            src_bucket = job.src_iface.bucket()
-            src_region_tag = job.src_iface.region_tag()
-            src_provider = src_region_tag.split(":")[0]
-
-            partition_id = jobs.index(job)
-
-            # send to all destination
-            dst_prefixes = job.dst_prefixes
-            for i in range(len(job.dst_ifaces)):
-                dst_iface = job.dst_ifaces[i]
-                dst_prefix = dst_prefixes[i]
-                dst_region_tag = dst_iface.region_tag()
-                dst_bucket = dst_iface.bucket()
-                dst_gateways = plan.get_region_gateways(dst_region_tag)
-
-                # source region gateway program
-                obj_store_read = dst_program[dst_region_tag].add_operator(
-                    GatewayReadObjectStore(src_bucket, src_region_tag, self.n_connections), partition_id=partition_id
-                )
-
-                dst_program[dst_region_tag].add_operator(
-                    GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
-                    parent_handle=obj_store_read,
-                    partition_id=partition_id,
-                )
-
-                # update cost per GB
-                plan.cost_per_gb += compute.CloudProvider.get_transfer_cost(src_region_tag, dst_region_tag)
-
-        # set gateway programs
-        for dst_region_tag, program in dst_program.items():
-            plan.set_gateway_program(dst_region_tag, program)
         return plan
 
 
