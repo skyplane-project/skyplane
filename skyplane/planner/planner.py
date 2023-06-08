@@ -1,7 +1,6 @@
 from collections import defaultdict
 from importlib.resources import path
 from typing import Dict, List, Optional, Tuple, Tuple
-import re
 import os
 import csv
 
@@ -24,11 +23,42 @@ from skyplane.api.transfer_job import TransferJob
 import json
 
 from skyplane.utils.fn import do_parallel
+from skyplane.config_paths import config_path, azure_standardDv5_quota_path, aws_quota_path, gcp_quota_path
+from skyplane.config import SkyplaneConfig
 
 
 class Planner:
     # Only supporting "aws:m5.", "azure:StandardD_v5", and "gcp:n2-standard" instances for now
     _VCPUS = (96, 64, 48, 32, 16, 8, 4, 2)
+
+    def __init__(self, transfer_config: TransferConfig):
+        self.transfer_config = transfer_config
+        self.config = SkyplaneConfig.load_config(config_path)
+
+        # Loading the quota information, add ibm cloud when it is supported
+        self.quota_limits = {}
+        if os.path.exists(aws_quota_path):
+            with aws_quota_path.open("r") as f:
+                self.quota_limits["aws"] = json.load(f)
+        if os.path.exists(azure_standardDv5_quota_path):
+            with azure_standardDv5_quota_path.open("r") as f:
+                self.quota_limits["azure"] = json.load(f)
+        if os.path.exists(gcp_quota_path):
+            with gcp_quota_path.open("r") as f:
+                self.quota_limits["gcp"] = json.load(f)
+
+        # Loading the vcpu information - a dictionary of dictionaries
+        # {"cloud_provider": {"instance_name": vcpu_cost}}
+        self.vcpu_info = defaultdict(dict)
+        with path("skyplane.data", "vcpu_info.csv") as file_path:
+            with open(file_path, "r") as csvfile:
+                reader = csv.reader(csvfile)
+                next(reader)  # Skip the header row
+
+                for row in reader:
+                    instance_name, cloud_provider, vcpu_cost = row
+                    vcpu_cost = int(vcpu_cost)
+                    self.vcpu_info[cloud_provider][instance_name] = vcpu_cost
 
     def plan(self) -> TopologyPlan:
         raise NotImplementedError
@@ -212,14 +242,12 @@ class UnicastDirectPlanner(Planner):
 
 
 class MulticastDirectPlanner(Planner):
-    n_instances: int
-    n_connections: int
-    transfer_config: TransferConfig
 
     def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig):
+
+        super().__init__(transfer_config)
         self.n_instances = n_instances
         self.n_connections = n_connections
-        self.transfer_config = transfer_config
 
         # Loading the quota information, add ibm cloud when it is supported
         self.quota_limits = {}
@@ -230,7 +258,6 @@ class MulticastDirectPlanner(Planner):
         with self.transfer_config.azure_vcpu_file.open("r") as f:
             self.quota_limits["azure"] = json.load(f)
 
-        super().__init__()
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         src_region_tag = jobs[0].src_iface.region_tag()
@@ -324,13 +351,8 @@ class MulticastDirectPlanner(Planner):
         return plan
 
 
-class DirectPlannerSourceOneSided(Planner):
+class DirectPlannerSourceOneSided(MulticastDirectPlanner):
     """Planner that only creates VMs in the source region"""
-
-    def __init__(self, n_instances: int, n_connections: int):
-        self.n_instances = n_instances
-        self.n_connections = n_connections
-        super().__init__()
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         src_region_tag = jobs[0].src_iface.region_tag()
@@ -389,13 +411,8 @@ class DirectPlannerSourceOneSided(Planner):
         return plan
 
 
-class DirectPlannerDestOneSided(Planner):
+class DirectPlannerDestOneSided(MulticastDirectPlanner):
     """Planner that only creates instances in the destination region"""
-
-    def __init__(self, n_instances: int, n_connections: int):
-        self.n_instances = n_instances
-        self.n_connections = n_connections
-        super().__init__()
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         # only create in destination region
@@ -455,44 +472,3 @@ class DirectPlannerDestOneSided(Planner):
             plan.set_gateway_program(dst_region_tag, program)
         return plan
 
-
-class UnicastILPPlanner(Planner):
-    def __init__(self, n_instances: int, n_connections: int, required_throughput_gbits: float):
-        self.n_instances = n_instances
-        self.n_connections = n_connections
-        self.solver_required_throughput_gbits = required_throughput_gbits
-        super().__init__()
-
-    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        raise NotImplementedError("ILP solver not implemented yet")
-
-
-class MulticastILPPlanner(Planner):
-    def __init__(self, n_instances: int, n_connections: int, required_throughput_gbits: float):
-        self.n_instances = n_instances
-        self.n_connections = n_connections
-        self.solver_required_throughput_gbits = required_throughput_gbits
-        super().__init__()
-
-    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        raise NotImplementedError("ILP solver not implemented yet")
-
-
-class MulticastMDSTPlanner(Planner):
-    def __init__(self, n_instances: int, n_connections: int):
-        self.n_instances = n_instances
-        self.n_connections = n_connections
-        super().__init__()
-
-    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        raise NotImplementedError("MDST solver not implemented yet")
-
-
-class MulticastSteinerTreePlanner(Planner):
-    def __init__(self, n_instances: int, n_connections: int):
-        self.n_instances = n_instances
-        self.n_connections = n_connections
-        super().__init__()
-
-    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        raise NotImplementedError("Steiner tree solver not implemented yet")
