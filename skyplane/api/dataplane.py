@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 from skyplane import compute
+from skyplane.api.tracker import TransferProgressTracker
 from skyplane.exceptions import GatewayContainerStartException
 from skyplane.api.tracker import TransferProgressTracker, TransferHook
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
@@ -93,9 +94,6 @@ class Dataplane:
         container_name: Optional[str] = "skyplane_gateway",
         port: Optional[int] = 8081,
     ):
-        print("CONTAINER", container_name)
-        print("nodes", self.bound_nodes)
-        print(gateway_node)
         # map outgoing ports
         setup_args = {}
         for gateway_id, n_conn in self.topology.get_outgoing_paths(gateway_node.gateway_id).items():
@@ -115,7 +113,6 @@ class Dataplane:
 
         # write gateway info file
         gateway_info_path = Path(f"{gateway_log_dir}/gateway_info.json")
-        print("GATEWAY INFO", gateway_info_path)
         with open(gateway_info_path, "w") as f:
             json.dump(self.topology.get_gateway_info_json(), f, indent=4)
         logger.fs.info(f"Writing gateway info to {gateway_info_path}")
@@ -124,9 +121,6 @@ class Dataplane:
         gateway_program_filename = Path(f"{gateway_log_dir}/gateway_program_{gateway_node.gateway_id}.json".replace(":", "-"))
         with open(gateway_program_filename, "w") as f:
             f.write(gateway_node.gateway_program.to_json())
-
-        print("gateway program filename: ", gateway_program_filename)
-        print("gateway info path: ", f"{gateway_log_dir}/gateway_info.json")
 
         # start gateway
         gateway_server.start_gateway(
@@ -244,7 +238,6 @@ class Dataplane:
         out_file = self.transfer_dir / f"gateway_{instance.uuid()}.stdout"
         err_file = self.transfer_dir / f"gateway_{instance.uuid()}.stderr"
         logger.fs.info(f"[Dataplane.copy_gateway_logs] Copying logs from {instance.uuid()}: {out_file}")
-        print(f"[Dataplane.copy_gateway_logs] Copying logs from {instance.uuid()}: {out_file}")
         instance.run_command(f"sudo docker logs -t {container_name} 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
         instance.download_file("/tmp/gateway.stdout", out_file)
         instance.download_file("/tmp/gateway.stderr", err_file)

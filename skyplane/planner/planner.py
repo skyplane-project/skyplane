@@ -187,7 +187,7 @@ class MulticastDirectPlanner(Planner):
 
             # Taking the minimum so that we can use the same number of instances for both source and destination
             n_instances = min(self.n_instances, min(v[1][1] for v in vm_info))  # type: ignore
-        else: 
+        else:
             n_instances = self.n_instances
             vm_types = None
 
@@ -212,10 +212,8 @@ class MulticastDirectPlanner(Planner):
 
             # source region gateway program
             if isinstance(job, TestCopyJob):
-                obj_store_read = src_program.add_operator(
-                    GatewayGenData(64), partition_id=partition_id
-                )
-            else: 
+                obj_store_read = src_program.add_operator(GatewayGenData(64), partition_id=partition_id)
+            else:
                 obj_store_read = src_program.add_operator(
                     GatewayReadObjectStore(src_bucket, src_region_tag, self.n_connections), partition_id=partition_id
                 )

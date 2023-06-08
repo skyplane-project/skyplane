@@ -4,6 +4,7 @@ from skyplane.api.config import TransferConfig
 import time
 import docker
 import argparse
+from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.api.config import TransferConfig
 from skyplane.utils.fn import PathLike
@@ -15,78 +16,14 @@ from skyplane.api.transfer_job import CopyJob, TestCopyJob
 from skyplane.api.provisioner import Provisioner
 import subprocess
 
+from tests.gateway.test_server import TestServer
+from tests.gateway.test_interface import TestInterface
+
+
 """
 
-This test module creates local docker containers that run gateway code. 
-
-For testing, we create an artificial region call "test", and create a TestInterface (the ObjectStore interface) that simulates interacting with an object store, and 
-a "test:region" region tag that identifies artificial regions to deploy gateway docker containers to. 
+This test module creates local docker containers that run gateway code. Gateways interface with real object stores. 
 """
-
-
-class TestServer(Server):
-
-    """Test Server runs a gateway container locally to simulate deployed gateways"""
-
-    def __init__(
-        self, region_tag, log_dir=None, auto_shutdown_timeout_minutes: Optional[int] = None, local_port=None, gateway_api_url=None
-    ):
-        print("CREATE TEST SERVER")
-        super().__init__(region_tag, log_dir, auto_shutdown_timeout_minutes)
-        self.command_log = []
-        self.gateway_log_viewer_url = None
-        self.gateway_api_url = None
-        self.init_log_files(log_dir)
-        self.ssh_tunnels: Dict = {}
-        self.local_port = local_port
-        self.gateway_api_url = f"http://127.0.0.1:{self.local_port}"
-
-    def run_command(self, command) -> Tuple[str, str]:
-        # execute command locally
-        print("command:", command)
-        result = subprocess.run(command, shell=True, capture_output=True, encoding="utf8")
-        print("resutl", result, result.stderr, result.stdout)
-        return result.stdout, result.stderr
-
-    def download_file(self, remote_path, local_path):
-        """Pretend to download a file from the server"""
-        # Create the necessary directories in the local path
-        local_directory = os.path.dirname(local_path)
-        os.makedirs(local_directory, exist_ok=True)
-
-        # Copy the file from the remote path to the local path
-        shutil.copy2(remote_path, local_path)
-
-    def upload_file(self, local_path, remote_path):
-        """Pretend to upload a file to the server"""
-        # shutil.copyfile(local_path, remote_path)
-
-        # Create the necessary directories in the local path
-        remote_directory = os.path.dirname(remote_path)
-        if remote_directory != remote_path:
-            os.makedirs(remote_directory, exist_ok=True)
-
-        # Copy the file from the remote path to the local path
-        shutil.copy2(local_path, remote_path)
-
-    def write_file(self, content_bytes, remote_path):
-        """Write a file on the server"""
-        print(remote_path)
-        with open(remote_path, "wb") as f:
-            f.write(content_bytes)
-
-    def copy_public_key(self, pub_key_path: PathLike):
-        """Pretend to append public key to authorized_keys file on server."""
-        pass
-
-    def uuid(self):
-        return f"test:{self.region_tag}"
-
-    def public_ip(self):
-        return f"localhost:{self.local_port}"
-
-    def private_ip(self):
-        return f"localhost:{self.local_port}"
 
 
 def wait_container_running(container_name):
@@ -177,14 +114,14 @@ def run(gateway_docker_image: str, restart_gateways: bool):
 
     # run dataplane
     try:
-        dataplane.run([job])
+        dataplane.run([job], hooks=ProgressBarTransferHook(topology.dest_region_tags))
     except KeyboardInterrupt:
         print("Keyboard interrupt: copying logs...")
     except Exception as e:
         raise e
     finally:
-        dataplane.copy_logs("skyplane_source")
-        dataplane.copy_logs("skyplane_dest")
+        dataplane.copy_gateway_log(source_server, "skyplane_source")
+        dataplane.copy_gateway_log(dest_server, "skyplane_dest")
 
 
 # check chunk status on destination gateway

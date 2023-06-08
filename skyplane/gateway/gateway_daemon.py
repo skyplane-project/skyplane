@@ -256,7 +256,7 @@ class GatewayDaemon:
                     )
                     total_p += op["num_connections"]
                 elif op["op_type"] == "write_local":
-                    operators[handle] = GatewayWriteLocal( # TODO: add path 
+                    operators[handle] = GatewayWriteLocal(  # TODO: add path
                         handle=handle,
                         region=self.region,
                         input_queue=input_queue,

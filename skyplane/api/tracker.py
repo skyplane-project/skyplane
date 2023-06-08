@@ -215,7 +215,7 @@ class TransferProgressTracker(Thread):
             "total_runtime_s": e2e_end_time - e2e_start_time,
             "throughput_gbits": self.query_bytes_dispatched() / (e2e_end_time - e2e_start_time) / GB * 8,
         }
-        self.hooks.on_transfer_end(transfer_stats)
+        self.hooks.on_transfer_end()
 
         start_time = int(time.time())
         try:

@@ -92,4 +92,3 @@ class R2Interface(S3Interface):
 
     def create_object_repr(self, key: str) -> R2Object:
         return R2Object(provider=self.provider, bucket=self.bucket(), key=key)
-

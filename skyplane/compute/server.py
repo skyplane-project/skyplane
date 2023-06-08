@@ -92,7 +92,6 @@ class Server:
     """Abstract server class to support basic SSH operations"""
 
     def __init__(self, region_tag, log_dir=None, auto_shutdown_timeout_minutes: Optional[int] = None):
-        print("CALL SERVER INIT")
         self.region_tag = region_tag  # format provider:region
         self.auto_shutdown_timeout_minutes = auto_shutdown_timeout_minutes
         self.command_log = []
@@ -106,8 +105,6 @@ class Server:
 
         # setup authentication credentials
         self.auth = {}
-
-        print("AWS ENABLED", self.config.aws_enabled)
 
         if self.config.aws_enabled:
             from skyplane.compute.aws.aws_auth import AWSAuthentication
@@ -328,7 +325,6 @@ class Server:
         container_name: Optional[str] = "skyplane_gateway",
         port: Optional[int] = 8081,
     ):
-        print("SERVER", gateway_program_path, gateway_info_path)
         docker_envs = {"SKYPLANE_IS_GATEWAY": "1"}
 
         def check_stderr(tup):
@@ -365,12 +361,9 @@ class Server:
         # we can add a least privledge option in the future where we rely on compute service accounts instead in the future
 
         # copy cloud configuration
-        print("CONFIG PATH", config_path.exists(), config_path)
         if config_path.exists():
-            print("uploading", f"/tmp/{config_path.name}")
             self.upload_file(config_path, f"/tmp/{config_path.name}")
             docker_envs["SKYPLANE_CONFIG"] = f"/pkg/data/{config_path.name}"
-            print("CONFIG PATH NAME", config_path.name)
             docker_run_flags += f" -v /tmp/{config_path.name}:/pkg/data/{config_path.name}"
 
         # copy service account files
@@ -389,8 +382,6 @@ class Server:
             docker_envs["AWS_DEFAULT_REGION"] = self.region_tag.split(":")[1]
             docker_envs["AWS_ACCESS_KEY_ID"] = self.auth["aws"].access_key
             docker_envs["AWS_SECRET_ACCESS_KEY"] = self.auth["aws"].secret_key
-
-        print("DOCKER ENDS", docker_envs)
 
         # copy E2EE keys
         if e2ee_key_bytes is not None:
@@ -438,9 +429,7 @@ class Server:
         assert not start_err.strip(), f"Error starting gateway:\n{start_out.strip()}\n{start_err.strip()}"
         logger.fs.debug(desc_prefix + f": Gateway started {start_out.strip()}")
 
-        print("start out", start_out)
         gateway_container_hash = start_out.strip().split("\n")[-1][:12]
-        print("HASH", gateway_container_hash)
         if local:
             self.gateway_log_viewer_url = None
         else:
