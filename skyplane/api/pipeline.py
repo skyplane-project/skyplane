@@ -17,7 +17,7 @@ from skyplane.api.tracker import TransferProgressTracker, TransferHook
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
 
-from skyplane.planner.planner import MulticastDirectPlanner
+from skyplane.planner.planner import MulticastDirectPlanner, DirectPlannerSourceOneSided, DirectPlannerDestOneSided
 from skyplane.planner.topology import TopologyPlanGateway
 from skyplane.utils import logger
 from skyplane.utils.definitions import gateway_docker_image, tmp_log_dir
@@ -69,6 +69,10 @@ class Pipeline:
         self.planning_algorithm = planning_algorithm
         if self.planning_algorithm == "direct":
             self.planner = MulticastDirectPlanner(self.max_instances, 64)
+        elif self.planning_algorithm == "src_one_sided":
+            self.planner = DirectPlannerSourceOneSided(self.max_instances, 64)
+        elif self.planning_algorithm == "dst_one_sided":
+            self.planner = DirectPlannerDestOneSided(self.max_instances, 64)
         else:
             raise ValueError(f"No such planning algorithm {planning_algorithm}")
 
