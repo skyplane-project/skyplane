@@ -2,13 +2,13 @@ import argparse
 import os
 import tempfile
 import uuid
-from skyplane.utils.definitions import MB
+from skyplane.utils.definitions import KB
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.cli.cli import sync
 from skyplane.utils import logger
 
 
-def setup_buckets(src_region, dest_region, n_files=1, file_size_mb=1):
+def setup_buckets(src_region, dest_region, n_files=1, file_size_kb=1):
     src_provider, src_zone = src_region.split(":")
     dest_provider, dest_zone = dest_region.split(":")
     if src_provider == "azure":
@@ -30,14 +30,14 @@ def setup_buckets(src_region, dest_region, n_files=1, file_size_mb=1):
     with tempfile.NamedTemporaryFile() as tmp:
         fpath = tmp.name
         with open(fpath, "wb+") as f:
-            f.write(os.urandom(int(file_size_mb * MB)))
+            f.write(os.urandom(int(file_size_kb * KB)))
         for i in range(n_files):
             src_interface.upload_object(fpath, f"{src_prefix}/{i}", mime_type="text/plain")
 
     return src_bucket_name, dest_bucket_name, src_prefix, dest_prefix
 
 
-def run(src_region, dest_region, n_files=1, file_size_mb=1, multipart=False):
+def run(src_region, dest_region, n_files=1, file_size_kb=1, multipart=False):
     logger.info(
         f"Running skyplane sync integration test with config "
         + f"src_region={src_region}, "
@@ -47,7 +47,7 @@ def run(src_region, dest_region, n_files=1, file_size_mb=1, multipart=False):
         + f"multipart={multipart}"
     )
     src_bucket_name, dest_bucket_name, src_prefix, dest_prefix = setup_buckets(
-        src_region, dest_region, n_files=n_files, file_size_mb=file_size_mb
+        src_region, dest_region, n_files=n_files, file_size_kb=file_size_kb
     )
 
     def map_path(region, bucket, prefix):
@@ -90,9 +90,9 @@ if __name__ == "__main__":
     parser.add_argument("src", help="source region")
     parser.add_argument("dest", help="destination region")
     parser.add_argument("--n-files", type=int, default=1)
-    parser.add_argument("--file-size-mb", type=int, default=1)
+    parser.add_argument("--file-size-kb", type=int, default=1)
     parser.add_argument("--multipart", action="store_true")
     args = parser.parse_args()
 
-    return_code = run(args.src, args.dest, n_files=args.n_files, file_size_mb=args.file_size_mb, multipart=args.multipart)
+    return_code = run(args.src, args.dest, n_files=args.n_files, file_size_kb=args.file_size_kb, multipart=args.multipart)
     exit(return_code)

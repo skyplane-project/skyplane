@@ -63,7 +63,7 @@ jobs:
           poetry run skyplane init -y --disable-config-cloudflare
           poetry run skyplane config set usage_stats false
       - name: 1000000 small files test
-        run: poetry run python tests/integration/sync.py ${{ matrix.pairs }} --n-files 10000000 --file-size-mb 0.001
+        run: poetry run python tests/integration/sync.py ${{ matrix.pairs }} --n-files 10000000 --file-size-kb 1
       - name: Cleanup GCP service account
         if: always()
         run: gcloud iam service-accounts delete ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
