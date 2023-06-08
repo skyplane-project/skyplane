@@ -29,8 +29,7 @@ class TestInterface(ObjectStoreInterface):
 
     def list_objects(self, prefix="") -> Iterator[Any]:
         for key in ["obj1", "obj2", "obj3"]:
-            obj = self.create_object_repr(key)
-            obj.size = 100
+            obj = self.create_object_repr(key=key, size=100, last_modified="2020-01-01")
             yield obj
 
     def get_obj_size(self, obj_name) -> int:
@@ -67,5 +66,7 @@ class TestInterface(ObjectStoreInterface):
     def complete_multipart_upload(self, dst_object_name: str, upload_id: str) -> None:
         return
 
-    def create_object_repr(self, key: str) -> TestObject:
-        return TestObject(provider="test", bucket=self.bucket_name, key=key)
+    def create_object_repr(
+        self, key: str, size: Optional[int] = None, last_modified: Optional[str] = None, mime_type: Optional[str] = None
+    ) -> TestObject:
+        return TestObject(provider="test", bucket=self.bucket_name, key=key, size=size, last_modified=last_modified, mime_type=mime_type)
