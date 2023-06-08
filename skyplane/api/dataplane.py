@@ -239,18 +239,19 @@ class Dataplane:
             self.copy_gateway_logs()
             raise GatewayContainerStartException(f"Error starting gateways. Please check gateway logs {self.transfer_dir}")
 
-    def copy_gateway_logs(self, container_name: Optional[str] = "skyplane_gateway"):
-        # copy logs from all gateways in parallel
-        def copy_log(instance):
-            out_file = self.transfer_dir / f"gateway_{instance.uuid()}.stdout"
-            err_file = self.transfer_dir / f"gateway_{instance.uuid()}.stderr"
-            logger.fs.info(f"[Dataplane.copy_gateway_logs] Copying logs from {instance.uuid()}: {out_file}")
-            print(f"[Dataplane.copy_gateway_logs] Copying logs from {instance.uuid()}: {out_file}")
-            instance.run_command(f"sudo docker logs -t {container_name} 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
-            instance.download_file("/tmp/gateway.stdout", out_file)
-            instance.download_file("/tmp/gateway.stderr", err_file)
+    def copy_gateway_log(self, instance, container_name: Optional[str] = "skyplane_gateway"):
+        # copy log from single gateway
+        out_file = self.transfer_dir / f"gateway_{instance.uuid()}.stdout"
+        err_file = self.transfer_dir / f"gateway_{instance.uuid()}.stderr"
+        logger.fs.info(f"[Dataplane.copy_gateway_logs] Copying logs from {instance.uuid()}: {out_file}")
+        print(f"[Dataplane.copy_gateway_logs] Copying logs from {instance.uuid()}: {out_file}")
+        instance.run_command(f"sudo docker logs -t {container_name} 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
+        instance.download_file("/tmp/gateway.stdout", out_file)
+        instance.download_file("/tmp/gateway.stderr", err_file)
 
-        do_parallel(copy_log, self.bound_nodes.values(), n=-1)
+    def copy_gateway_logs(self):
+        # copy logs from all gateways in parallel
+        do_parallel(self.copy_gateway_log, self.bound_nodes.values(), n=-1)
 
     def deprovision(self, max_jobs: int = 64, spinner: bool = False):
         """

@@ -59,8 +59,9 @@ class GatewayReceive(GatewayOperator):
 
 
 class GatewayGenData(GatewayOperator):
-    def __init__(self):
+    def __init__(self, size_mb: int):
         super().__init__("gen_data")
+        self.size_mb = size_mb
 
 
 class GatewayReadObjectStore(GatewayOperator):

@@ -155,6 +155,9 @@ class TestServer(Server):
 
     def private_ip(self):
         return f"localhost:{self.local_port}"
+    
+    def instance_name(self):
+        return self.region_tag
 
 
 def wait_container_running(container_name):
@@ -254,8 +257,8 @@ def run(gateway_docker_image: str, restart_gateways: bool):
     except Exception as e:
         raise e
     finally:
-        dataplane.copy_logs("skyplane_source")
-        dataplane.copy_logs("skyplane_dest")
+        dataplane.copy_gateway_log(source_server, "skyplane_source")
+        dataplane.copy_gateway_log(dest_server, "skyplane_dest")
 
 
 # check chunk status on destination gateway
