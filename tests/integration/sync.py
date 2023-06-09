@@ -5,6 +5,7 @@ import uuid
 from skyplane.utils.definitions import KB
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.cli.cli import sync
+from skyplane.config_paths import cloud_config
 from skyplane.utils import logger
 
 
@@ -37,7 +38,7 @@ def setup_buckets(src_region, dest_region, n_files=1, file_size_kb=1):
     return src_bucket_name, dest_bucket_name, src_prefix, dest_prefix
 
 
-def run(src_region, dest_region, n_files=1, file_size_kb=1, multipart=False):
+def run(src_region, dest_region, n_files=1, file_size_kb=1, multipart=False, autoshowdown_minutes=15):
     logger.info(
         f"Running skyplane sync integration test with config "
         + f"src_region={src_region}, "
@@ -45,7 +46,9 @@ def run(src_region, dest_region, n_files=1, file_size_kb=1, multipart=False):
         + f"n_files={n_files}, "
         + f"file_size_kb={file_size_kb}, "
         + f"multipart={multipart}"
+        + f"autoshowdown_minutes={autoshowdown_minutes}"
     )
+    cloud_config.set_flag("autoshutdown_minutes", autoshowdown_minutes)
     src_bucket_name, dest_bucket_name, src_prefix, dest_prefix = setup_buckets(
         src_region, dest_region, n_files=n_files, file_size_kb=file_size_kb
     )
@@ -92,7 +95,8 @@ if __name__ == "__main__":
     parser.add_argument("--n-files", type=int, default=1)
     parser.add_argument("--file-size-kb", type=int, default=1)
     parser.add_argument("--multipart", action="store_true")
+    parser.add_argument("--autoshutdown", type=int, default=15)
     args = parser.parse_args()
 
-    return_code = run(args.src, args.dest, n_files=args.n_files, file_size_kb=args.file_size_kb, multipart=args.multipart)
+    return_code = run(args.src, args.dest, n_files=args.n_files, file_size_kb=args.file_size_kb, multipart=args.multipart, autoshowdown_minutes=args.autoshutdown)
     exit(return_code)
