@@ -299,8 +299,6 @@ class TransferProgressTracker(Thread):
             # update job_complete_chunk_ids and job_pending_chunk_ids
             # TODO: do chunk-tracking per-destination
             for job_uuid, job in self.jobs.items():
-                # pinging server during item listing
-                do_parallel(lambda i: i.run_command("echo 1"), self.dataplane.bound_nodes.values(), n=8)
                 job_complete_chunk_ids = set(chunk_id for chunk_id in completed_chunk_ids if self._chunk_to_job_map[chunk_id] == job_uuid)
                 new_chunk_ids = (
                     self.job_complete_chunk_ids[job_uuid][region_tag]

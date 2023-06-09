@@ -239,6 +239,7 @@ class Chunker:
         self,
         src_prefix: str,
         dst_prefixes: List[str],
+        dataplane: "Dataplane",
         recursive: bool,
         prefilter_fn: Optional[Callable[[ObjectStoreObject], bool]] = None,  # TODO: change to StorageObject
     ) -> Generator[TransferPair, None, None]:
@@ -268,6 +269,7 @@ class Chunker:
         logger.fs.debug(f"Querying objects in {self.src_iface.path()}")
         n_objs = 0
         for obj in self.src_iface.list_objects(src_prefix):
+            do_parallel(lambda i: i.run_command("echo 1"), dataplane.bound_nodes.values(), n=8)
             if prefilter_fn is None or prefilter_fn(obj):
                 # collect list of destination objects
                 dest_objs = {}
@@ -569,6 +571,7 @@ class CopyJob(TransferJob):
     def gen_transfer_pairs(
         self,
         chunker: Optional[Chunker] = None,
+        dataplane: Optional["Dataplane"] = None,
         transfer_config: Optional[TransferConfig] = field(init=False, default_factory=lambda: TransferConfig()),
     ) -> Generator[TransferPair, None, None]:
         """Generate transfer pairs for the transfer job.
@@ -578,7 +581,7 @@ class CopyJob(TransferJob):
         """
         if chunker is None:  # used for external access to transfer pair list
             chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)  # TODO: should read in existing transfer config
-        yield from chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, self.recursive, self._pre_filter_fn)
+        yield from chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, dataplane, self.recursive, self._pre_filter_fn)
 
     def dispatch(
         self,
@@ -595,8 +598,8 @@ class CopyJob(TransferJob):
         :param dispatch_batch_size: maximum size of the buffer to temporarily store the generators (default: 1000)
         :type dispatch_batch_size: int
         """
-        chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
-        transfer_pair_generator = self.gen_transfer_pairs(chunker)  # returns TransferPair objects
+        chunker = Chunker(self.src_iface, self.dst_ifaces, dataplane, transfer_config)
+        transfer_pair_generator = self.gen_transfer_pairs(chunker, dataplane)  # returns TransferPair objects
         gen_transfer_list = chunker.tail_generator(transfer_pair_generator, self.transfer_list)
         chunks = chunker.chunk(gen_transfer_list)
         batches = chunker.batch_generator(
@@ -757,6 +760,7 @@ class SyncJob(CopyJob):
     def gen_transfer_pairs(
         self,
         chunker: Optional[Chunker] = None,
+        dataplane: Optional["Dataplane"] = None,
         transfer_config: Optional[TransferConfig] = field(init=False, default_factory=lambda: TransferConfig()),
     ) -> Generator[TransferPair, None, None]:
         """Generate transfer pairs for the transfer job.
@@ -766,7 +770,7 @@ class SyncJob(CopyJob):
         """
         if chunker is None:  # used for external access to transfer pair list
             chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
-        transfer_pair_gen = chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, self.recursive, self._pre_filter_fn)
+        transfer_pair_gen = chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, dataplane, self.recursive, self._pre_filter_fn)
 
         # only single destination supported
         assert len(self.dst_ifaces) == 1, "Only single destination supported for sync job"
