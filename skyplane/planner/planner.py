@@ -156,9 +156,6 @@ class Planner:
         :param dst_region_tags: a list of the destination region tags (defualt: None)
         :type dst_region_tags: Optional[List[str]]
         """
-        # no instance limits for test jobs
-        if src_region_tag.split(":")[0] == "test": 
-            return None, None
         # One of them has to provided
         assert src_region_tag is not None or dst_region_tags is not None, "There needs to be at least one source or destination"
         src_tags = [src_region_tag] if src_region_tag is not None else []
@@ -263,9 +260,11 @@ class MulticastDirectPlanner(Planner):
         plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=dst_region_tags)
 
         # Dynammically calculate n_instances based on quota limits
-        vm_types, n_instances = self._get_vm_type_and_instances(src_region_tag=src_region_tag, dst_region_tags=dst_region_tags)
-        if n_instances is None: 
+        if src_region_tag.split(":")[0] == "test":
+            vm_types = None
             n_instances = self.n_instances
+        else:
+            vm_types, n_instances = self._get_vm_type_and_instances(src_region_tag=src_region_tag, dst_region_tags=dst_region_tags)
 
         # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
         for i in range(n_instances):
