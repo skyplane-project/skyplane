@@ -156,20 +156,18 @@ class AzureBlobInterface(ObjectStoreInterface):
     def upload_object(azure_blob, self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None, mime_type=None):
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         blob_client = self.container_client.get_blob_client(dst_object_name)
+        print(f"Uploading {src_file_path} to {dst_object_name}")
 
         try:
+            # multipart upload
             if part_number is not None and upload_id is not None:
-                # multipart upload
                 with open(src_file_path, "rb") as f:
                     block_id = AzureBlobInterface._id_to_base64_encoding(part_number)
-                    blob_client.stage_block(block_id, f.read())
+                    blob_client.stage_block(block_id, f.read())  # stage the block
                     self.block_ids_mapping[upload_id].append(block_id)
-
-                # raise NotImplementedError("Multipart upload is not implemented for Azure")
 
             # single upload
             with open(src_file_path, "rb") as f:
-                print(f"Uploading {src_file_path} to {dst_object_name}")
                 blob_client.upload_blob(
                     data=f,
                     blob_type=BlobType.BlockBlob,
@@ -187,14 +185,19 @@ class AzureBlobInterface(ObjectStoreInterface):
                         + f"expected {b64_md5sum}, got {blob_md5}"
                     )
         except Exception as e:
-            # FIXME: Not sure what type of error to put here
             raise ValueError(f"Failed to upload {dst_object_name} to bucket {self.bucket_name} upload id {upload_id}: {e}")
 
     def initiate_multipart_upload(self, dst_object_name: str, mime_type: Optional[str] = None) -> str:
-        """
-        Azure does not have an equivalent function to return an upload ID like s3 and gcs do.
+        """Azure does not have an equivalent function to return an upload ID like s3 and gcs do.
         Blocks in Azure are uploaded and associated with an ID, and can then be committed in a single operation to create the blob.
         We will just return the dst_object_name (blob name) as the "upload_id" to keep the return type consistent for the multipart thread.
+        When the blocks/parts are uploaded/staged in the gateway, they are associated with the dst_object_name in the
+        self.block_ids_mapping dictionary and will be commited together upon completion
+
+        :param dst_object_name: name of the destination object, also our psuedo-uploadID
+        :type dst_object_name: str
+        :param mime_type: unused in this function but is kept for consistency with the other interfaces (default: None)
+        :type mime_type: str
         """
 
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
@@ -202,10 +205,13 @@ class AzureBlobInterface(ObjectStoreInterface):
         return dst_object_name
 
     def complete_multipart_upload(self, dst_object_name: str, upload_id: str) -> None:
-        """
-        In Azure, after all blocks of a blob are uploaded with their unique block_id,
-        we need to put Block List to create the blob. This function is used in finalize() after dispatch()
-        The block_ids should be kept track of during the upload process, as Azure does not provide a method to list uploaded blocks.
+        """After all blocks of a blob are uploaded/staged with their unique block_id and when the self.block_id_mappings
+        is populated with these block_ids, in order to complete the multipart upload, we commit them together.
+
+        :param dst_object_name: name of the destination object, also is used to index into our block mappings
+        :type dst_object_name: str
+        :param upload_id: upload_id to index into our block id mappings, should be the same as the dst_object_name in Azure
+        :Type upload_id: str
         """
 
         assert upload_id == dst_object_name, "In Azure, upload_id should be the same as the blob name."
@@ -223,12 +229,23 @@ class AzureBlobInterface(ObjectStoreInterface):
 
     @staticmethod
     def _id_to_base64_encoding(id: int) -> str:
+        """Azure expects all blockIDs to be Base64 strings. This function serves to convert the part numbers to
+        base64-encoded strings. Used within upload_object
+
+        :param id: part number of the block, determined while splitting the date into chunks before the transfer
+        :type id: int
+        """
         block_id = format(id, "06")  # pad with zeros to get consistent length
         block_id = block_id.encode("utf-8")
         block_id = base64.b64encode(block_id).decode("utf-8")
         return block_id
 
     def _get_block_list_for_upload(self, upload_id: str):
+        """Gets the block id mappings for a particular destination object
+
+        :param upload_id: upload_ids in Azure are the destionation object names
+        :type upload_id: str
+        """
         return self.block_ids_mapping.get(upload_id, [])
 
 
