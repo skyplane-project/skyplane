@@ -163,14 +163,16 @@ class AzureBlobInterface(ObjectStoreInterface):
             if part_number is not None and upload_id is not None:
                 with open(src_file_path, "rb") as f:
                     block_id = AzureBlobInterface._id_to_base64_encoding(part_number)
-                    blob_client.stage_block(block_id, f.read())  # stage the block
+                    blob_client.stage_block(block_id=block_id, data=f, length=os.path.getsize(src_file_path))  # stage the block
                     self.block_ids_mapping[upload_id].append(block_id)
 
             # single upload
             with open(src_file_path, "rb") as f:
                 blob_client.upload_blob(
+                    name=dst_object_name,
                     data=f,
-                    blob_type=BlobType.BlockBlob,
+                    length=os.path.getsize(src_file_path),
+                    max_concurrency=self.max_concurrency,
                     overwrite=True,
                     content_settings=azure_blob.ContentSettings(content_type=mime_type),
                 )
@@ -219,6 +221,12 @@ class AzureBlobInterface(ObjectStoreInterface):
         # Fetch the list of block_ids
         # This list is populated while you are uploading blocks in the _run_multipart_chunk_thread method.
         block_list = self._get_block_list_for_upload(upload_id)
+
+        # Check if block_list is empty
+        if block_list == []:
+            raise exceptions.SkyplaneException(
+                f"There must be a non-empty block list to complete the multipart upload for {dst_object_name}"
+            )
 
         blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=dst_object_name)
         try:
