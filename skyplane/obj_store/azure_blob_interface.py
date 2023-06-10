@@ -255,12 +255,12 @@ More things to consider about this implementation:
 
 Upload ID handling: Azure doesn't really have a concept equivalent to AWS's upload IDs. 
 Instead, blobs are created immediately and blocks are associated with a blob via block IDs. 
-Your workaround of using the blob name as the upload ID is a creative solution, and should 
+My workaround of using the blob name as the upload ID should 
 work as long as blob names are unique across all concurrent multi-part uploads. If not, 
-you might experience issues with block ID mapping.
+this might experience issues with block ID mapping.
 
 Block IDs: It's worth noting that Azure requires block IDs to be of the same length. 
-You've appropriately handled this by formatting the IDs to be of length 6. If the part numbers 
-exceed this length (i.e., you have more than 999999 parts), you might run into issues.
+I've appropriately handled this by formatting the IDs to be of length 6. If the part numbers 
+exceed this length (i.e., I have more than 999999 parts), this might run into issues.
 
 """
