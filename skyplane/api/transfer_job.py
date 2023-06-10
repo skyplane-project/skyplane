@@ -27,6 +27,7 @@ from skyplane.api.config import TransferConfig
 from skyplane.chunk import Chunk, ChunkRequest
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.obj_store.gcs_interface import GCSObject
+from skyplane.obj_store.r2_interface import R2Object
 from skyplane.obj_store.storage_interface import StorageInterface
 from skyplane.obj_store.object_store_interface import ObjectStoreObject, ObjectStoreInterface
 from skyplane.obj_store.s3_interface import S3Object
@@ -56,7 +57,9 @@ class TransferPair:
 class GatewayMessage:
     def __init__(self, chunk: Optional[Chunk] = None, upload_id_mapping: Optional[Dict[str, Tuple[str, str]]] = None):
         self.chunk = chunk
-        self.upload_id_mapping = upload_id_mapping
+        # TODO: currently, the mapping ID is per-region, however this should be per-bucket, as there may be multiple
+        # target buckets in the same region
+        self.upload_id_mapping = upload_id_mapping  # region_tag: (upload_id, dst_key)
 
 
 class Chunker:
@@ -289,6 +292,8 @@ class Chunker:
                         dest_obj = AzureBlobObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
                     elif dest_provider == "gcp":
                         dest_obj = GCSObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
+                    elif dest_provider == "cloudflare":
+                        dest_obj = R2Object(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
                     else:
                         raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
                     dest_objs[dst_iface.region_tag()] = dest_obj
@@ -330,6 +335,9 @@ class Chunker:
             if self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
                 multipart_send_queue.put(transfer_pair)
             else:
+                if transfer_pair.src_obj.size == 0:
+                    logger.fs.debug(f"Skipping empty object {src_obj.key}")
+                    continue
                 yield GatewayMessage(
                     chunk=Chunk(
                         src_key=src_obj.key,
@@ -607,16 +615,13 @@ class CopyJob(TransferJob):
             region_dst_gateways = dataplane.sink_gateways()
             for region_tag, dst_gateways in region_dst_gateways.items():
                 for dst_gateway in dst_gateways:
-                    # collect upload id mappings per region
+                    # collect upload id mappings
                     mappings = {}
                     for message in upload_id_batch:
                         for region_tag, (key, id) in message.upload_id_mapping.items():
-                            if region_tag == dst_gateway.region_tag:
-                                mappings[key] = id
-
-                    if len(list(mappings.keys())) == 0:
-                        # no mappings to send
-                        continue
+                            if region_tag not in mappings:
+                                mappings[region_tag] = {}
+                            mappings[region_tag][key] = id
 
                     # send mapping to gateway
                     reply = self.http_pool.request(
@@ -647,13 +652,12 @@ class CopyJob(TransferJob):
                     body=json.dumps([chunk.as_dict() for chunk in chunk_batch[n_added:]]).encode("utf-8"),
                     headers={"Content-Type": "application/json"},
                 )
+                if reply.status != 200:
+                    raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
                 reply_json = json.loads(reply.data.decode("utf-8"))
                 logger.fs.debug(f"Added {n_added} chunks to server {server}: {reply_json}")
                 n_added += reply_json["n_added"]
                 queue_size[min_idx] = reply_json["qsize"]  # update queue size
-                if reply.status != 200:
-                    raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
-
                 # dont try again with some gateway
                 min_idx = (min_idx + 1) % len(src_gateways)
 
@@ -705,6 +709,8 @@ class CopyJob(TransferJob):
             if dst_keys:
                 # failed_keys = [obj.key for obj in dst_keys.values()]
                 failed_keys = list(dst_keys.keys())
+                if failed_keys == [""]:
+                    return  # ignore empty key
                 raise exceptions.TransferFailedException(
                     f"Destination {dst_iface.region_tag()} bucket {dst_iface.bucket()}: {len(dst_keys)} objects failed verification {failed_keys}"
                 )

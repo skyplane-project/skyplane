@@ -101,6 +101,7 @@ class SkyplaneConfig:
     aws_enabled: bool
     azure_enabled: bool
     gcp_enabled: bool
+    cloudflare_enabled: bool
     ibmcloud_enabled: bool
     anon_clientid: str
     azure_principal_id: Optional[str] = None
@@ -108,6 +109,8 @@ class SkyplaneConfig:
     azure_resource_group: Optional[str] = None
     azure_umi_name: Optional[str] = None
     azure_client_id: Optional[str] = None
+    cloudflare_access_key_id: Optional[str] = None
+    cloudflare_secret_access_key: Optional[str] = None
     gcp_project_id: Optional[str] = None
     ibmcloud_access_id: Optional[str] = None
     ibmcloud_secret_key: Optional[str] = None
@@ -123,7 +126,12 @@ class SkyplaneConfig:
     @classmethod
     def default_config(cls) -> "SkyplaneConfig":
         return cls(
-            aws_enabled=False, azure_enabled=False, gcp_enabled=False, ibmcloud_enabled=False, anon_clientid=cls.generate_machine_id()
+            aws_enabled=False,
+            azure_enabled=False,
+            gcp_enabled=False,
+            ibmcloud_enabled=False,
+            cloudflare_enabled=False,
+            anon_clientid=cls.generate_machine_id(),
         )
 
     @classmethod
@@ -164,6 +172,17 @@ class SkyplaneConfig:
             if "umi_name" in config["azure"]:
                 azure_umi_name = config.get("azure", "umi_name")
 
+        cloudflare_enabled = False
+        cloudflare_access_key_id = None
+        cloudflare_secret_access_key = None
+        if "cloudflare" in config:
+            if "cloudflare_enabled" in config["cloudflare"]:
+                cloudflare_enabled = config.getboolean("cloudflare", "cloudflare_enabled")
+            if "cloudflare_access_key_id" in config["cloudflare"]:
+                cloudflare_access_key_id = config.get("cloudflare", "cloudflare_access_key_id")
+            if "cloudflare_secret_access_key" in config["cloudflare"]:
+                cloudflare_secret_access_key = config.get("cloudflare", "cloudflare_secret_access_key")
+
         gcp_enabled = False
         gcp_project_id = None
         if "gcp" in config:
@@ -195,12 +214,15 @@ class SkyplaneConfig:
             azure_enabled=azure_enabled,
             gcp_enabled=gcp_enabled,
             ibmcloud_enabled=ibmcloud_enabled,
+            cloudflare_enabled=cloudflare_enabled,
             anon_clientid=anon_clientid,
             azure_principal_id=azure_principal_id,
             azure_subscription_id=azure_subscription_id,
             azure_client_id=azure_client_id,
             azure_resource_group=azure_resource_group,
             azure_umi_name=azure_umi_name,
+            cloudflare_access_key_id=cloudflare_access_key_id,
+            cloudflare_secret_access_key=cloudflare_secret_access_key,
             gcp_project_id=gcp_project_id,
             ibmcloud_access_id=ibmcloud_access_id,
             ibmcloud_secret_key=ibmcloud_secret_key,
@@ -243,6 +265,14 @@ class SkyplaneConfig:
             config.set("ibmcloud", "ibmcloud_secret_key", self.ibmcloud_secret_key)
         if self.ibmcloud_resource_group_id:
             config.set("ibmcloud", "ibmcloud_resource_group_id", self.ibmcloud_resource_group_id)
+
+        if "cloudflare" not in config:
+            config.add_section("cloudflare")
+        config.set("cloudflare", "cloudflare_enabled", str(self.cloudflare_enabled))
+        if self.cloudflare_access_key_id:
+            config.set("cloudflare", "cloudflare_access_key_id", self.cloudflare_access_key_id)
+        if self.cloudflare_secret_access_key:
+            config.set("cloudflare", "cloudflare_secret_access_key", self.cloudflare_secret_access_key)
 
         if "azure" not in config:
             config.add_section("azure")

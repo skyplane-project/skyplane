@@ -106,8 +106,8 @@ class S3Interface(ObjectStoreInterface):
                 objs.append(
                     S3Object(
                         obj["Key"],
-                        provider="aws",
-                        bucket=self.bucket_name,
+                        provider=self.provider,
+                        bucket=self.bucket(),
                         size=obj["Size"],
                         last_modified=obj["LastModified"],
                         mime_type=obj.get("ContentType"),
