@@ -536,8 +536,8 @@ def init(
 
     # load cloudflare config
     if not reinit_cloudflare:  # TODO: fix reinit logic
-        typer.secho("\n(1) Configuring Cloudflare R2:", fg="yellow", bold=True)
-        if not disable_config_aws:
+        typer.secho("\n(4) Configuring Cloudflare R2:", fg="yellow", bold=True)
+        if not disable_config_cloudflare:
             cloud_config = load_cloudflare_config(cloud_config, non_interactive=non_interactive)
 
     # load IBMCloud config
