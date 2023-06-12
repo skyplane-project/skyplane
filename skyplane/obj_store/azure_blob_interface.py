@@ -4,7 +4,7 @@ import hashlib
 import os
 from functools import lru_cache
 
-from typing import Iterator, List, Optional, Tuple
+from typing import Any, Iterator, List, Optional, Tuple
 
 from skyplane import exceptions, compute
 from skyplane.exceptions import NoSuchObjectException
@@ -203,7 +203,7 @@ class AzureBlobInterface(ObjectStoreInterface):
 
         return dst_object_name
 
-    def complete_multipart_upload(self, dst_object_name: str, upload_id: str, custom_data: Optional[any] = None) -> None:
+    def complete_multipart_upload(self, dst_object_name: str, upload_id: str, custom_data: Optional[Any] = None) -> None:
         """After all blocks of a blob are uploaded/staged with their unique block_id and when the self.block_id_mappings
         is populated with these block_ids, in order to complete the multipart upload, we commit them together.
 
@@ -236,19 +236,5 @@ class AzureBlobInterface(ObjectStoreInterface):
         block_id = base64.b64encode(block_id).decode("utf-8")
         return block_id
 
-
-"""
-
-More things to consider about this implementation:
-
-Upload ID handling: Azure doesn't really have a concept equivalent to AWS's upload IDs. 
-Instead, blobs are created immediately and blocks are associated with a blob via block IDs. 
-My workaround of using the blob name as the upload ID should 
-work as long as blob names are unique across all concurrent multi-part uploads. If not, 
-this might experience issues with block ID mapping.
-
-Block IDs: It's worth noting that Azure requires block IDs to be of the same length. 
-I've appropriately handled this by formatting the IDs to be of length 6. If the part numbers 
-exceed this length (i.e., I have more than 999999 parts), this might run into issues.
-
-"""
+    def create_object_repr(self, key: str) -> AzureBlobObject:
+        return AzureBlobObject(provider=self.provider, bucket=self.bucket(), key=key)

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from typing import Iterator, List, Optional, Tuple
+from typing import Any, Iterator, List, Optional, Tuple
 
 from skyplane.obj_store.storage_interface import StorageInterface
 from skyplane.utils import logger
@@ -82,5 +82,5 @@ class ObjectStoreInterface(StorageInterface):
     def initiate_multipart_upload(self, dst_object_name: str, mime_type: Optional[str] = None) -> str:
         raise ValueError("Multipart uploads not supported")
 
-    def complete_multipart_upload(self, dst_object_name: str, upload_id: str, custom_data: Optional[any] = None) -> None:
+    def complete_multipart_upload(self, dst_object_name: str, upload_id: str, custom_data: Optional[Any] = None) -> None:
         raise ValueError("Multipart uploads not supported")

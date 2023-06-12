@@ -3,7 +3,7 @@ import sys
 import os
 from pyarrow import fs
 from dataclasses import dataclass
-from typing import Iterator, List, Optional
+from typing import Any, Iterator, List, Optional
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger
@@ -150,7 +150,7 @@ class HDFSInterface(ObjectStoreInterface):
     def initiate_multipart_upload(self, dst_object_name: str, mime_type: Optional[str] = None) -> str:
         raise NotImplementedError(f"Multipart upload is not supported for the POSIX file system.")
 
-    def complete_multipart_upload(self, dst_object_name: str, upload_id: str, custom_data: Optional[any] = None) -> None:
+    def complete_multipart_upload(self, dst_object_name: str, upload_id: str, custom_data: Optional[Any] = None) -> None:
         raise NotImplementedError(f"Multipart upload is not supported for the POSIX file system.")
 
     @lru_cache(maxsize=1024)

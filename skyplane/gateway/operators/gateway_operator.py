@@ -214,7 +214,7 @@ class GatewaySender(GatewayOperator):
         def wait_for_chunks():
             cr_status = {}
             for ip, ip_chunk_ids in self.sent_chunk_ids.items():
-                response = self.http_pool.request("GET", f"https://{ip}:8080/api/v1/incomplete_chunk_requests")
+                response = self.http_pool.request("GET", f"http://{ip}:8081/api/v1/incomplete_chunk_requests")
                 assert response.status == 200, f"{response.status} {response.data}"
                 host_state = json.loads(response.data.decode("utf-8"))["chunk_requests"]
                 for chunk_id in ip_chunk_ids:
@@ -240,12 +240,12 @@ class GatewaySender(GatewayOperator):
         # close servers
         logger.info(f"[sender:{worker_id}] exiting, closing servers")
         for dst_host, dst_port in self.destination_ports.items():
-            response = self.http_pool.request("DELETE", f"https://{dst_host}:8080/api/v1/servers/{dst_port}")
+            response = self.http_pool.request("DELETE", f"http://{dst_host}:8081/api/v1/servers/{dst_port}")
             assert response.status == 200 and json.loads(response.data.decode("utf-8")) == {"status": "ok"}
             logger.info(f"[sender:{worker_id}] closed destination socket {dst_host}:{dst_port}")
 
     def make_socket(self, dst_host):
-        response = self.http_pool.request("POST", f"https://{dst_host}:8080/api/v1/servers")
+        response = self.http_pool.request("POST", f"http://{dst_host}:8081/api/v1/servers")
         assert response.status == 200, f"{response.status} {response.data.decode('utf-8')}"
         self.destination_ports[dst_host] = int(json.loads(response.data.decode("utf-8"))["server_port"])
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -271,6 +271,7 @@ class GatewaySender(GatewayOperator):
 
         chunk_ids = [chunk_req.chunk.chunk_id]
         chunk_reqs = [chunk_req]
+        print(f"Registering chunks from GatewaySend")
         try:
             with Timer(f"pre-register chunks {chunk_ids} to {dst_host}"):
                 # TODO: remove chunk request wrapper
@@ -287,9 +288,10 @@ class GatewaySender(GatewayOperator):
                 while n_added < len(chunk_reqs):
                     register_body = json.dumps([c.chunk.as_dict() for c in chunk_reqs[n_added:]]).encode("utf-8")
                     # print(f"[sender-{self.worker_id}]:{chunk_ids} register body {register_body}")
+                    print("Sending chunk requests", f"http://{dst_host}:8081/api/v1/chunk_requests")
                     response = self.http_pool.request(
                         "POST",
-                        f"https://{dst_host}:8080/api/v1/chunk_requests",
+                        f"http://{dst_host}:8081/api/v1/chunk_requests",
                         body=register_body,
                         headers={"Content-Type": "application/json"},
                     )
@@ -380,7 +382,7 @@ class GatewayRandomDataGen(GatewayOperator):
     def process(self, chunk_req: ChunkRequest):
         # wait until enough space available
         fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
-        size_bytes = int(self.size_mb * MB)
+        size_bytes = chunk_req.chunk.chunk_length_bytes
         assert size_bytes > 0, f"Invalid size {size_bytes} for fallocate"
 
         while True:
@@ -533,6 +535,7 @@ class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
             recieved_chunk_size == chunk_req.chunk.chunk_length_bytes
         ), f"Downloaded chunk {chunk_req.chunk.chunk_id} to {fpath} has incorrect size (expected {chunk_req.chunk.chunk_length_bytes} but got {recieved_chunk_size}, {chunk_req.chunk.chunk_length_bytes})"
         logger.debug(f"[obj_store:{self.worker_id}] Downloaded {chunk_req.chunk.chunk_id} from {self.bucket_name}")
+        print(f"[obj_store:{self.worker_id}] Downloaded {chunk_req.chunk.chunk_id} from {self.bucket_name}")
         return True
 
 

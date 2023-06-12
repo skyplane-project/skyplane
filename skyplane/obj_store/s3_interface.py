@@ -3,7 +3,7 @@ import hashlib
 import os
 from functools import lru_cache
 
-from typing import Iterator, List, Optional, Tuple
+from typing import Any, Iterator, List, Optional, Tuple
 
 from skyplane import exceptions, compute
 from skyplane.exceptions import NoSuchObjectException
@@ -43,6 +43,7 @@ class S3Interface(ObjectStoreInterface):
                 logger.warning(f"Bucket location {self.bucket_name} is not public. Assuming region is {default_region}")
                 return default_region
             logger.warning(f"Specified bucket {self.bucket_name} does not exist, got AWS error: {e}")
+            print("Error getting AWS region", e)
             raise exceptions.MissingBucketException(f"S3 bucket {self.bucket_name} does not exist") from e
 
     def region_tag(self):
@@ -114,6 +115,9 @@ class S3Interface(ObjectStoreInterface):
                     )
                 )
             yield from objs
+
+    def create_object_repr(self, key: str) -> S3Object:
+        return S3Object(provider=self.provider, bucket=self.bucket(), key=key)
 
     def delete_objects(self, keys: List[str]):
         s3_client = self._s3_client()
@@ -227,7 +231,7 @@ class S3Interface(ObjectStoreInterface):
         else:
             raise exceptions.SkyplaneException(f"Failed to initiate multipart upload for {dst_object_name}: {response}")
 
-    def complete_multipart_upload(self, dst_object_name, upload_id, custom_data: Optional[any] = None):
+    def complete_multipart_upload(self, dst_object_name, upload_id, custom_data: Optional[Any] = None):
         s3_client = self._s3_client()
         all_parts = []
         while True:

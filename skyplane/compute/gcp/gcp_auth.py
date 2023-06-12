@@ -20,20 +20,25 @@ class GCPAuthentication:
         else:
             self.config = SkyplaneConfig.load_config(config_path)
         self._credentials = None
-        self._service_credentials_file = None
+        self._service_account_email = None
 
     @imports.inject("googleapiclient.discovery", pip_extra="gcp")
     def save_region_config(discovery, self):
         if self.project_id is None:
-            print(
-                f"    No project ID detected when trying to save GCP region list! Consquently, the GCP region list is empty. Run 'skyplane init --reinit-gcp' or file an issue to remedy this."
-            )
-            self.clear_region_config()
-            return
+            if self.service_account_key_path:
+                service_json = json.load(open(self.service_account_key_path))
+                assert "project_id" in service_json, f"Service account file {self.service_account_key_path} does not container project_id"
+                self.project_id = service_json["project_id"]
+            else:
+                print(
+                    f"    No project ID detected when trying to save GCP region list! Also no {self.service_account_key_path}. Consquently, the GCP region list is empty. Run 'skyplane init --reinit-gcp' or file an issue to remedy this."
+                )
+                self.clear_region_config()
+                return
         with gcp_config_path.open("w") as f:
             region_list = []
             credentials = self.credentials
-            service_account_credentials_file = self.service_account_credentials  # force creation of file
+            service_account_key_path = self.get_service_account_key(self.service_account_email)  # force creation of file
             service = discovery.build("compute", "beta", credentials=credentials)
             request = service.zones().list(project=self.project_id)
             while request is not None:
@@ -85,20 +90,20 @@ class GCPAuthentication:
             self._credentials, _ = self.get_adc_credential(self.project_id)
         return self._credentials
 
-    @property
-    def service_account_credentials(self):
-        if self._service_credentials_file is None:
-            self._service_account_email = self.create_service_account(self.service_account_name)
-            # create service key
-            self._service_credentials_file = self.get_service_account_key(self._service_account_email)
+    # @property
+    # def service_account_credentials(self):
+    #    if self._service_credentials_file is None:
+    #        self._service_account_email = self.create_service_account(self.service_account_name)
+    #        # create service key
+    #        self._service_credentials_file = self.get_service_account_key(self._service_account_email)
 
-        return self._service_credentials_file
+    #    return self._service_credentials_file
 
     @property
     def project_id(self):
         assert (
             self.config.gcp_project_id is not None
-        ), "No project ID detected. Run 'skyplane init --reinit-gcp' or file an issue to remedy this."
+        ), f"No project ID detected. Run 'skyplane init --reinit-gcp' or file an issue to remedy this {self.config}."
         return self.config.gcp_project_id
 
     @staticmethod
@@ -142,6 +147,12 @@ class GCPAuthentication:
         return self.config.get_flag("gcp_service_account_name")
 
     @property
+    def service_account_email(self):
+        if not self._service_account_email:
+            self._service_account_email = self.create_service_account(self.service_account_name)
+        return self._service_account_email
+
+    @property
     def service_account_key_path(self):
         if "GCP_SERVICE_ACCOUNT_FILE" in os.environ:
             key_path = Path(os.environ["GCP_SERVICE_ACCOUNT_FILE"]).expanduser()
@@ -150,14 +161,13 @@ class GCPAuthentication:
             key_path = key_root / "gcp" / self.project_id / "service_account_key.json"
         return key_path
 
-    def get_service_account_key_path(self):
-        return self.service_account_key_path
-
-    def get_service_account_key(self, service_account_email):
-        service = self.get_gcp_client(service_name="iam")
+    def get_service_account_key(self, service_account_email: str):
+        """Get service account key file for a given service account email."""
 
         # write key file
         if not os.path.exists(self.service_account_key_path):
+            print(f"    Creating service account key: {self.service_account_key_path}")
+            service = self.get_gcp_client(service_name="iam")
             # list existing keys
             keys = service.projects().serviceAccounts().keys().list(name="projects/-/serviceAccounts/" + service_account_email).execute()
 
@@ -256,7 +266,7 @@ class GCPAuthentication:
     def get_storage_client(storage, self):
         # TODO: cache storage account clinet
         # check that storage account works
-        return storage.Client.from_service_account_json(self.service_account_credentials)
+        return storage.Client.from_service_account_json(self.service_account_key_path)
 
     def get_gcp_instances(self, gcp_region: str):
         return self.get_gcp_client().instances().list(project=self.project_id, zone=gcp_region).execute()

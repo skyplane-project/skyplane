@@ -17,9 +17,11 @@ from skyplane.gateway.gateway_program import (
     GatewayWriteObjectStore,
     GatewayReceive,
     GatewaySend,
+    GatewayGenData,
+    GatewayWriteLocal,
 )
 
-from skyplane.api.transfer_job import TransferJob
+from skyplane.api.transfer_job import TransferJob, TestCopyJob
 import json
 
 from skyplane.utils.fn import do_parallel
@@ -247,6 +249,7 @@ class MulticastDirectPlanner(Planner):
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         src_region_tag = jobs[0].src_iface.region_tag()
         dst_region_tags = [iface.region_tag() for iface in jobs[0].dst_ifaces]
+
         # jobs must have same sources and destinations
         for job in jobs[1:]:
             assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
@@ -255,13 +258,17 @@ class MulticastDirectPlanner(Planner):
         plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=dst_region_tags)
 
         # Dynammically calculate n_instances based on quota limits
-        vm_types, n_instances = self._get_vm_type_and_instances(src_region_tag=src_region_tag, dst_region_tags=dst_region_tags)
+        if src_region_tag.split(":")[0] == "test":
+            vm_types = None
+            n_instances = self.n_instances
+        else:
+            vm_types, n_instances = self._get_vm_type_and_instances(src_region_tag=src_region_tag, dst_region_tags=dst_region_tags)
 
         # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
         for i in range(n_instances):
-            plan.add_gateway(src_region_tag, vm_types[src_region_tag])
+            plan.add_gateway(src_region_tag, vm_types[src_region_tag] if vm_types else None)
             for dst_region_tag in dst_region_tags:
-                plan.add_gateway(dst_region_tag, vm_types[dst_region_tag])
+                plan.add_gateway(dst_region_tag, vm_types[dst_region_tag] if vm_types else None)
 
         # initialize gateway programs per region
         dst_program = {dst_region: GatewayProgram() for dst_region in dst_region_tags}
@@ -277,9 +284,14 @@ class MulticastDirectPlanner(Planner):
             partition_id = jobs.index(job)
 
             # source region gateway program
-            obj_store_read = src_program.add_operator(
-                GatewayReadObjectStore(src_bucket, src_region_tag, self.n_connections), partition_id=partition_id
-            )
+            if isinstance(job, TestCopyJob):
+                # TODO: in the future, have more flexibility with the chunk size
+                # TODO: add support for simulated object stores
+                obj_store_read = src_program.add_operator(GatewayGenData(64), partition_id=partition_id)
+            else:
+                obj_store_read = src_program.add_operator(
+                    GatewayReadObjectStore(src_bucket, src_region_tag, self.n_connections), partition_id=partition_id
+                )
             # send to all destination
             mux_and = src_program.add_operator(GatewayMuxAnd(), parent_handle=obj_store_read, partition_id=partition_id)
             dst_prefixes = job.dst_prefixes
@@ -292,11 +304,14 @@ class MulticastDirectPlanner(Planner):
 
                 # special case where destination is same region as source
                 if dst_region_tag == src_region_tag:
-                    src_program.add_operator(
-                        GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
-                        parent_handle=mux_and,
-                        partition_id=partition_id,
-                    )
+                    if isinstance(job, TestCopyJob):
+                        src_program.add_operator(GatewayWriteLocal(), parent_handle=mux_and, partition_id=partition_id)
+                    else:
+                        src_program.add_operator(
+                            GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
+                            parent_handle=mux_and,
+                            partition_id=partition_id,
+                        )
                     continue
 
                 # can send to any gateway in region
@@ -319,11 +334,14 @@ class MulticastDirectPlanner(Planner):
 
                 # each gateway also recieves data from source
                 recv_op = dst_program[dst_region_tag].add_operator(GatewayReceive(), partition_id=partition_id)
-                dst_program[dst_region_tag].add_operator(
-                    GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
-                    parent_handle=recv_op,
-                    partition_id=partition_id,
-                )
+                if isinstance(job, TestCopyJob):
+                    dst_program[dst_region_tag].add_operator(GatewayWriteLocal(), parent_handle=recv_op, partition_id=partition_id)
+                else:
+                    dst_program[dst_region_tag].add_operator(
+                        GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
+                        parent_handle=recv_op,
+                        partition_id=partition_id,
+                    )
 
                 # update cost per GB
                 plan.cost_per_gb += compute.CloudProvider.get_transfer_cost(src_region_tag, dst_region_tag)

@@ -6,7 +6,7 @@ from functools import lru_cache
 from xml.etree import ElementTree
 
 import requests
-from typing import Iterator, List, Optional, Tuple
+from typing import Any, Iterator, List, Optional, Tuple
 
 from skyplane import exceptions, compute
 from skyplane.config_paths import cloud_config
@@ -254,7 +254,7 @@ class GCSInterface(ObjectStoreInterface):
         response = self.send_xml_request(dst_object_name, {"uploads": None}, "POST", content_type=mime_type)
         return ElementTree.fromstring(response.content)[2].text
 
-    def complete_multipart_upload(self, dst_object_name, upload_id, custom_data: Optional[any] = None):
+    def complete_multipart_upload(self, dst_object_name, upload_id, custom_data: Optional[Any] = None):
         # get parts
         xml_data = ElementTree.Element("CompleteMultipartUpload")
         next_part_number_marker = None
@@ -301,3 +301,6 @@ class GCSInterface(ObjectStoreInterface):
             # cancel upload
             response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "DELETE")
             raise exceptions.SkyplaneException("Failed to complete multipart upload") from e
+
+    def create_object_repr(self, key: str) -> GCSObject:
+        return GCSObject(provider=self.provider, bucket=self.bucket(), key=key)

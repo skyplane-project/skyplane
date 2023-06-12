@@ -2,7 +2,7 @@ import base64
 import hashlib
 import os
 from functools import lru_cache
-from typing import Iterator, List, Optional, Tuple
+from typing import Any, Iterator, List, Optional, Tuple
 
 
 from skyplane import exceptions
@@ -217,7 +217,7 @@ class COSInterface(ObjectStoreInterface):
         else:
             raise exceptions.SkyplaneException(f"Failed to initiate multipart upload for {dst_object_name}: {response}")
 
-    def complete_multipart_upload(self, dst_object_name, upload_id, custom_data: Optional[any] = None):
+    def complete_multipart_upload(self, dst_object_name, upload_id, custom_data: Optional[Any] = None):
         print("complete multipart upload")
         cos_client = self._cos_client()
         all_parts = []
