@@ -695,9 +695,13 @@ class CopyJob(TransferJob):
                     custom_data = None
                     # Get the blockID mappings if destination interface is AzureBlobInterface
                     if isinstance(obj_store_interface, AzureBlobInterface):
-                        custom_data = req["parts"] # already base64 encoded during chunking
+                        custom_data = req["parts"]  # already base64 encoded during chunking
 
-                    retry_backoff(partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"]), custom_data=custom_data, initial_backoff=0.5)
+                    retry_backoff(
+                        partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"]),
+                        custom_data=custom_data,
+                        initial_backoff=0.5,
+                    )
 
             do_parallel(complete_fn, batches, n=8)
 
