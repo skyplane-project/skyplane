@@ -62,11 +62,12 @@ def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> Sk
         typer.secho("    Disabling AWS support", fg="blue")
         return config
 
+
 def load_cloudflare_config(config: SkyplaneConfig, non_interactive: bool = False) -> SkyplaneConfig:
-    if typer.confirm("    Do you want to configure Cloudflare support in Skyplane?", default=True):
+    if non_interactive or typer.confirm("    Do you want to configure Cloudflare support in Skyplane?", default=True):
         config.cloudflare_access_key_id = typer.prompt("    Enter the R2 access key ID")
         config.cloudflare_secret_access_key = typer.prompt("    Enter the R2 secret access key")
-    else: 
+    else:
         config.cloudflare_enabled = False
         typer.secho("    Disabling Cloudflare support", fg="blue")
     return config
@@ -471,10 +472,12 @@ def init(
     reinit_gcp: bool = False,
     reinit_ibm: bool = False,
     reinit_cloudflare: bool = False, 
+    reinit_cloudflare: bool = False,
     disable_config_aws: bool = False,
     disable_config_azure: bool = False,
     disable_config_gcp: bool = False,
     disable_config_ibm: bool = True,  # TODO: eventuall enable IBM
+    disable_config_cloudflare: bool = False,
     disable_config_cloudflare: bool = False, 
 ):
     """
@@ -495,7 +498,8 @@ def init(
     :type disable_config_gcp: bool
     :param disable_config_ibm: If true, will disable IBM Cloud configuration (may still be enabled if environment variables are set)
     :type disable_config_ibm: bool
-
+    :param disable_config_cloudflare: If true, will disable Cloudflare configuration (may still be enabled if environment variables are set)
+    :type disable_config_cloudflare: bool
     """
     print_header()
 
@@ -510,7 +514,7 @@ def init(
 
     # load AWS config
     if not (reinit_azure or reinit_gcp or reinit_ibm):
-        typer.secho("\n(1) configuring aws:", fg="yellow", bold=True)
+        typer.secho("\n(1) configuring AWS:", fg="yellow", bold=True)
         if not disable_config_aws:
             cloud_config = load_aws_config(cloud_config, non_interactive=non_interactive)
 
@@ -533,9 +537,9 @@ def init(
             cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
 
     # load cloudflare config
-    if not reinit_cloudflare: 
-        typer.secho("\n(1) configuring cloudflare R2:", fg="yellow", bold=True)
-        if not disable_config_aws:
+    if not reinit_cloudflare:  # TODO: fix reinit logic
+        typer.secho("\n(4) Configuring Cloudflare R2:", fg="yellow", bold=True)
+        if not disable_config_cloudflare:
             cloud_config = load_cloudflare_config(cloud_config, non_interactive=non_interactive)
 
     # load IBMCloud config

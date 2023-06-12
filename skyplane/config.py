@@ -40,6 +40,7 @@ _FLAG_TYPES = {
     "requester_pays": bool,
     "native_cmd_enabled": bool,
     "native_cmd_threshold_gb": int,
+    "tmpdir": str,
 }
 
 _DEFAULT_FLAGS = {
@@ -75,6 +76,7 @@ _DEFAULT_FLAGS = {
     "requester_pays": False,
     "native_cmd_enabled": True,
     "native_cmd_threshold_gb": 2,
+    "tmpdir": "/tmp",
 }
 
 
@@ -102,6 +104,7 @@ class SkyplaneConfig:
     azure_enabled: bool
     gcp_enabled: bool
     cloudflare_enabled: bool
+    cloudflare_enabled: bool
     ibmcloud_enabled: bool
     anon_clientid: str
     azure_principal_id: Optional[str] = None
@@ -126,7 +129,12 @@ class SkyplaneConfig:
     @classmethod
     def default_config(cls) -> "SkyplaneConfig":
         return cls(
-            aws_enabled=False, azure_enabled=False, gcp_enabled=False, ibmcloud_enabled=False, anon_clientid=cls.generate_machine_id()
+            aws_enabled=False,
+            azure_enabled=False,
+            gcp_enabled=False,
+            ibmcloud_enabled=False,
+            cloudflare_enabled=False,
+            anon_clientid=cls.generate_machine_id(),
         )
 
     @classmethod
@@ -263,12 +271,12 @@ class SkyplaneConfig:
         if self.ibmcloud_resource_group_id:
             config.set("ibmcloud", "ibmcloud_resource_group_id", self.ibmcloud_resource_group_id)
 
-        if "cloudflare" not in config: 
+        if "cloudflare" not in config:
             config.add_section("cloudflare")
         config.set("cloudflare", "cloudflare_enabled", str(self.cloudflare_enabled))
-        if self.cloudflare_access_key_id: 
+        if self.cloudflare_access_key_id:
             config.set("cloudflare", "cloudflare_access_key_id", self.cloudflare_access_key_id)
-        if self.cloudflare_secret_access_key: 
+        if self.cloudflare_secret_access_key:
             config.set("cloudflare", "cloudflare_secret_access_key", self.cloudflare_secret_access_key)
 
         if "azure" not in config:

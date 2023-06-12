@@ -19,9 +19,9 @@ def parse_path(path: str) -> Tuple[str, Optional[str], Optional[str]]:
         regex = re.compile(r"https?://([^/]+).r2.cloudflarestorage.com/([^/]+)/?(.*)")
         match = regex.match(path)
         if match is None:
-            raise ValueError(f"Invalid Azure path: {path}")
+            raise ValueError(f"Invalid Cloudflare path: {path}")
         account, bucket, blob_path = match.groups()
-        return "r2", f"{account}/{bucket}", blob_path
+        return "cloudflare", f"{account}/{bucket}", blob_path
     elif path.startswith("cos://"):
         provider, parsed = path[:3], path[6:]
         if len(parsed) == 0:
@@ -62,6 +62,13 @@ def parse_path(path: str) -> Tuple[str, Optional[str], Optional[str]]:
             raise ValueError(f"Invalid HDFS path: {path}")
         host, path = match.groups()
         return "hdfs", host, path
+    elif path.startswith("test://"):
+        regex = re.compile(r"test://([^/]+)/?(.*)")
+        match = regex.match(path)
+        if match is None:
+            raise ValueError(f"Invalid test path: {path}")
+        host, path = match.groups()
+        return "test", host, path
     else:
         if not is_plausible_local_path(path):
             logger.warning(f"Local path '{path}' does not exist")

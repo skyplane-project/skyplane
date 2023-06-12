@@ -25,6 +25,8 @@ class CloudProvider:
         src_provider, _ = src_key.split(":")
         if src_key == dst_key or src_provider == "cos":
             return 0.0
+        elif src_provider == "cloudflare":
+            return 0.0  # TODO: fix this for other clouds
         if src_provider == "aws":
             from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 
@@ -44,6 +46,8 @@ class CloudProvider:
             from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 
             return GCPCloudProvider.get_transfer_cost(f"gcp:{_}", dst_key, premium_tier)
+        elif src_provider == "test":
+            return 0
         else:
             raise ValueError(f"Unknown provider {src_provider}")
 

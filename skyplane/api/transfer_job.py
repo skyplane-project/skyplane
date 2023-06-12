@@ -27,6 +27,7 @@ from skyplane.api.config import TransferConfig
 from skyplane.chunk import Chunk, ChunkRequest
 from skyplane.obj_store.azure_blob_interface import AzureBlobObject
 from skyplane.obj_store.gcs_interface import GCSObject
+from skyplane.obj_store.r2_interface import R2Object
 from skyplane.obj_store.storage_interface import StorageInterface
 from skyplane.obj_store.object_store_interface import ObjectStoreObject, ObjectStoreInterface
 from skyplane.obj_store.s3_interface import S3Object
@@ -56,7 +57,9 @@ class TransferPair:
 class GatewayMessage:
     def __init__(self, chunk: Optional[Chunk] = None, upload_id_mapping: Optional[Dict[str, Tuple[str, str]]] = None):
         self.chunk = chunk
-        self.upload_id_mapping = upload_id_mapping
+        # TODO: currently, the mapping ID is per-region, however this should be per-bucket, as there may be multiple
+        # target buckets in the same region
+        self.upload_id_mapping = upload_id_mapping  # region_tag: (upload_id, dst_key)
 
 
 class Chunker:
@@ -283,14 +286,7 @@ class Chunker:
                         logger.fs.exception(e)
                         raise e from None
 
-                    if dest_provider == "aws":
-                        dest_obj = S3Object(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
-                    elif dest_provider == "azure":
-                        dest_obj = AzureBlobObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
-                    elif dest_provider == "gcp":
-                        dest_obj = GCSObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
-                    else:
-                        raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
+                    dest_obj = dst_iface.create_object_repr(dest_key)
                     dest_objs[dst_iface.region_tag()] = dest_obj
 
                 # assert that all destinations share the same post-fix key
@@ -330,6 +326,9 @@ class Chunker:
             if self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
                 multipart_send_queue.put(transfer_pair)
             else:
+                if transfer_pair.src_obj.size == 0:
+                    logger.fs.debug(f"Skipping empty object {src_obj.key}")
+                    continue
                 yield GatewayMessage(
                     chunk=Chunk(
                         src_key=src_obj.key,
@@ -490,7 +489,7 @@ class TransferJob(ABC):
     @property
     def dst_ifaces(self) -> List[StorageInterface]:
         """Return the destination object store interface"""
-        if not hasattr(self, "_dst_iface"):
+        if not hasattr(self, "_dst_ifaces"):
             if self.transfer_type == "unicast":
                 provider_dst, bucket_dst, _ = parse_path(self.dst_paths[0])
                 self._dst_ifaces = [StorageInterface.create(f"{provider_dst}:infer", bucket_dst)]
@@ -607,16 +606,13 @@ class CopyJob(TransferJob):
             region_dst_gateways = dataplane.sink_gateways()
             for region_tag, dst_gateways in region_dst_gateways.items():
                 for dst_gateway in dst_gateways:
-                    # collect upload id mappings per region
+                    # collect upload id mappings
                     mappings = {}
                     for message in upload_id_batch:
                         for region_tag, (key, id) in message.upload_id_mapping.items():
-                            if region_tag == dst_gateway.region_tag:
-                                mappings[key] = id
-
-                    if len(list(mappings.keys())) == 0:
-                        # no mappings to send
-                        continue
+                            if region_tag not in mappings:
+                                mappings[region_tag] = {}
+                            mappings[region_tag][key] = id
 
                     # send mapping to gateway
                     reply = self.http_pool.request(
@@ -641,19 +637,20 @@ class CopyJob(TransferJob):
                 assert Chunk.from_dict(chunk_batch[0].as_dict()) == chunk_batch[0], f"Invalid chunk request: {chunk_batch[0].as_dict}"
 
                 # TODO: make async
+                st = time.time()
                 reply = self.http_pool.request(
                     "POST",
                     f"{server.gateway_api_url}/api/v1/chunk_requests",
                     body=json.dumps([chunk.as_dict() for chunk in chunk_batch[n_added:]]).encode("utf-8"),
                     headers={"Content-Type": "application/json"},
                 )
-                reply_json = json.loads(reply.data.decode("utf-8"))
-                logger.fs.debug(f"Added {n_added} chunks to server {server}: {reply_json}")
-                n_added += reply_json["n_added"]
-                queue_size[min_idx] = reply_json["qsize"]  # update queue size
                 if reply.status != 200:
                     raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
-
+                et = time.time()
+                reply_json = json.loads(reply.data.decode("utf-8"))
+                n_added += reply_json["n_added"]
+                logger.fs.debug(f"Added {n_added} chunks to server {server} in {et-st}: {reply_json}")
+                queue_size[min_idx] = reply_json["qsize"]  # update queue size
                 # dont try again with some gateway
                 min_idx = (min_idx + 1) % len(src_gateways)
 
@@ -705,6 +702,8 @@ class CopyJob(TransferJob):
             if dst_keys:
                 # failed_keys = [obj.key for obj in dst_keys.values()]
                 failed_keys = list(dst_keys.keys())
+                if failed_keys == [""]:
+                    return  # ignore empty key
                 raise exceptions.TransferFailedException(
                     f"Destination {dst_iface.region_tag()} bucket {dst_iface.bucket()}: {len(dst_keys)} objects failed verification {failed_keys}"
                 )
@@ -726,6 +725,27 @@ class CopyJob(TransferJob):
         for pair in self.gen_transfer_pairs():
             total_size += pair.src_obj.size
         return total_size / 1e9
+
+
+@dataclass
+class TestCopyJob(CopyJob):
+    # TODO: remove this class (unnecessary since we have TestObjectStore object)
+
+    """Test copy which does not interact with object stores but uses random data generation on gateways"""
+
+    def __init__(
+        self,
+        src_path: str,
+        dst_paths: List[str] or str,
+        recursive: bool = False,
+        requester_pays: bool = False,
+        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
+        num_chunks: int = 10,
+        chunk_size_bytes: int = 1024,
+    ):
+        super().__init__(src_path, dst_paths, recursive, requester_pays, uuid)
+        self.num_chunks = num_chunks
+        self.chunk_size_bytes = chunk_size_bytes
 
 
 @dataclass
