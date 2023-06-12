@@ -1,5 +1,4 @@
 import base64
-from collections import defaultdict
 import hashlib
 import os
 from functools import lru_cache
@@ -11,8 +10,7 @@ from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.azure_storage_account_interface import AzureStorageAccountInterface
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger, imports
-
-from azure.storage.blob import BlobServiceClient, BlobType
+from azure.storage.blob import ContentSettings
 
 
 class AzureBlobObject(ObjectStoreObject):
@@ -152,11 +150,15 @@ class AzureBlobInterface(ObjectStoreInterface):
 
     @imports.inject("azure.storage.blob", pip_extra="azure")
     def upload_object(azure_blob, self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None, mime_type=None):
+        """Uses the BlobClient instead of ContainerClient since BlobClient allows for
+        block/part level manipulation for multi-part uploads
+        """
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
-        blob_client = self.container_client.get_blob_client(dst_object_name)
         print(f"Uploading {src_file_path} to {dst_object_name}")
 
         try:
+            blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=dst_object_name)
+
             # multipart upload
             if part_number is not None and upload_id is not None:
                 with open(src_file_path, "rb") as f:
@@ -174,15 +176,15 @@ class AzureBlobInterface(ObjectStoreInterface):
                     content_settings=azure_blob.ContentSettings(content_type=mime_type),
                 )
 
-            # check MD5 if required
-            if check_md5:
-                b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
-                blob_md5 = blob_client.get_blob_properties().properties.content_settings.content_md5
-                if b64_md5sum != blob_md5:
-                    raise exceptions.ChecksumMismatchException(
-                        f"Checksum mismatch for object {dst_object_name} in Azure container {self.container_name}, "
-                        + f"expected {b64_md5sum}, got {blob_md5}"
-                    )
+                # check MD5 if required
+                if check_md5:
+                    b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
+                    blob_md5 = blob_client.get_blob_properties().properties.content_settings.content_md5
+                    if b64_md5sum != blob_md5:
+                        raise exceptions.ChecksumMismatchException(
+                            f"Checksum mismatch for object {dst_object_name} in Azure container {self.container_name}, "
+                            + f"expected {b64_md5sum}, got {blob_md5}"
+                        )
         except Exception as e:
             raise ValueError(f"Failed to upload {dst_object_name} to bucket {self.bucket_name} upload id {upload_id}: {e}")
 
@@ -190,8 +192,6 @@ class AzureBlobInterface(ObjectStoreInterface):
         """Azure does not have an equivalent function to return an upload ID like s3 and gcs do.
         Blocks in Azure are uploaded and associated with an ID, and can then be committed in a single operation to create the blob.
         We will just return the dst_object_name (blob name) as the "upload_id" to keep the return type consistent for the multipart thread.
-        When the blocks/parts are uploaded/staged in the gateway, they are associated with the dst_object_name in the
-        self.block_ids_mapping dictionary and will be commited together upon completion
 
         :param dst_object_name: name of the destination object, also our psuedo-uploadID
         :type dst_object_name: str
@@ -203,23 +203,30 @@ class AzureBlobInterface(ObjectStoreInterface):
 
         return dst_object_name
 
-    def complete_multipart_upload(self, dst_object_name: str, upload_id: str, custom_data: Optional[Any] = None) -> None:
-        """After all blocks of a blob are uploaded/staged with their unique block_id and when the self.block_id_mappings
-        is populated with these block_ids, in order to complete the multipart upload, we commit them together.
+    @imports.inject("azure.storage.blob", pip_extra="azure")
+    def complete_multipart_upload(azure_blob, self, dst_object_name: str, upload_id: str, custom_data: Optional[Any] = None) -> None:
+        """After all blocks of a blob are uploaded/staged with their unique block_id,
+        in order to complete the multipart upload, we commit them together.
 
         :param dst_object_name: name of the destination object, also is used to index into our block mappings
         :type dst_object_name: str
         :param upload_id: upload_id to index into our block id mappings, should be the same as the dst_object_name in Azure
-        :Type upload_id: str
+        :type upload_id: str
+        :param custom_data: In Azure, this custom data is the blockID list (parts) and the object mime_type from the TransferJob instance (default: None)
+        :type custom_data: Optional[Any]
         """
 
         assert upload_id == dst_object_name, "In Azure, upload_id should be the same as the blob name."
-        assert isinstance(custom_data, list) and custom_data != [], "In Azure, the custom data should be a non-empty list of block_ids"
+        assert custom_data is not None, "In Azure, the custom data should exist for multipart"
+
+        # Decouple the custom data
+        block_list, mime_type = custom_data
+        assert block_list != [], "The blockID list shouldn't be empty for Azure multipart"
 
         blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=dst_object_name)
         try:
             # The below operation will create the blob from the uploaded blocks.
-            blob_client.commit_block_list(custom_data)
+            blob_client.commit_block_list(block_list=block_list, content_settings=azure_blob.ContentSettings(content_type=mime_type))
         except Exception as e:
             raise exceptions.SkyplaneException(f"Failed to complete multipart upload for {dst_object_name}: {str(e)}")
 
