@@ -227,7 +227,7 @@ class S3Interface(ObjectStoreInterface):
         else:
             raise exceptions.SkyplaneException(f"Failed to initiate multipart upload for {dst_object_name}: {response}")
 
-    def complete_multipart_upload(self, dst_object_name, upload_id):
+    def complete_multipart_upload(self, dst_object_name, upload_id, custom_data: Optional[any] = None):
         s3_client = self._s3_client()
         all_parts = []
         while True:

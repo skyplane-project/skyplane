@@ -29,8 +29,6 @@ class AzureBlobInterface(ObjectStoreInterface):
         self.container_name = container_name
         self.max_concurrency = max_concurrency  # parallel upload/downloads, seems to cause issues if too high
 
-        self.block_ids_mapping = defaultdict(list)  # Keep tracks of the block_ids to stage for a blob multipart upload
-
     def path(self):
         return f"https://{self.account_name}.blob.core.windows.net/{self.container_name}"
 
@@ -162,9 +160,8 @@ class AzureBlobInterface(ObjectStoreInterface):
             # multipart upload
             if part_number is not None and upload_id is not None:
                 with open(src_file_path, "rb") as f:
-                    block_id = AzureBlobInterface._id_to_base64_encoding(part_number)
+                    block_id = AzureBlobInterface.id_to_base64_encoding(part_number)
                     blob_client.stage_block(block_id=block_id, data=f, length=os.path.getsize(src_file_path))  # stage the block
-                    self.block_ids_mapping[upload_id].append(block_id)
 
             # single upload
             with open(src_file_path, "rb") as f:
@@ -206,7 +203,7 @@ class AzureBlobInterface(ObjectStoreInterface):
 
         return dst_object_name
 
-    def complete_multipart_upload(self, dst_object_name: str, upload_id: str) -> None:
+    def complete_multipart_upload(self, dst_object_name: str, upload_id: str, custom_data: Optional[any] = None) -> None:
         """After all blocks of a blob are uploaded/staged with their unique block_id and when the self.block_id_mappings
         is populated with these block_ids, in order to complete the multipart upload, we commit them together.
 
@@ -217,44 +214,27 @@ class AzureBlobInterface(ObjectStoreInterface):
         """
 
         assert upload_id == dst_object_name, "In Azure, upload_id should be the same as the blob name."
-
-        # Fetch the list of block_ids
-        # This list is populated while you are uploading blocks in the _run_multipart_chunk_thread method.
-        block_list = self._get_block_list_for_upload(upload_id)
-
-        # Check if block_list is empty
-        if block_list == []:
-            raise exceptions.SkyplaneException(
-                f"There must be a non-empty block list to complete the multipart upload for {dst_object_name}"
-            )
+        assert isinstance(custom_data, list) and custom_data != [], "In Azure, the custom data should be a non-empty list of block_ids"
 
         blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=dst_object_name)
         try:
             # The below operation will create the blob from the uploaded blocks.
-            blob_client.commit_block_list(block_list)
+            blob_client.commit_block_list(custom_data)
         except Exception as e:
             raise exceptions.SkyplaneException(f"Failed to complete multipart upload for {dst_object_name}: {str(e)}")
 
     @staticmethod
-    def _id_to_base64_encoding(id: int) -> str:
+    def id_to_base64_encoding(part_number: int) -> str:
         """Azure expects all blockIDs to be Base64 strings. This function serves to convert the part numbers to
         base64-encoded strings. Used within upload_object
 
-        :param id: part number of the block, determined while splitting the date into chunks before the transfer
-        :type id: int
+        :param part_number: part number of the block, determined while splitting the date into chunks before the transfer
+        :type part_number: int
         """
-        block_id = format(id, "06")  # pad with zeros to get consistent length
+        block_id = format(part_number, "06")  # pad with zeros to get consistent length
         block_id = block_id.encode("utf-8")
         block_id = base64.b64encode(block_id).decode("utf-8")
         return block_id
-
-    def _get_block_list_for_upload(self, upload_id: str):
-        """Gets the block id mappings for a particular destination object
-
-        :param upload_id: upload_ids in Azure are the destionation object names
-        :type upload_id: str
-        """
-        return self.block_ids_mapping.get(upload_id, [])
 
 
 """

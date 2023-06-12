@@ -25,7 +25,7 @@ from functools import partial
 from skyplane import exceptions
 from skyplane.api.config import TransferConfig
 from skyplane.chunk import Chunk, ChunkRequest
-from skyplane.obj_store.azure_blob_interface import AzureBlobObject
+from skyplane.obj_store.azure_blob_interface import AzureBlobInterface, AzureBlobObject
 from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.r2_interface import R2Object
 from skyplane.obj_store.storage_interface import StorageInterface
@@ -158,8 +158,14 @@ class Chunker:
                     region = dest_iface.region_tag()
                     dest_object = dest_objects[region]
                     _, upload_id = upload_id_mapping[region]
+
+                    iface_parts = parts
+                    # Convert parts to base64 if destination interface is AzureBlobInterface
+                    if isinstance(dest_iface, AzureBlobInterface):
+                        iface_parts = list(map(lambda part_num: AzureBlobInterface.id_to_base64_encoding(part_num), iface_parts))
+
                     self.multipart_upload_requests.append(
-                        dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket)
+                        dict(upload_id=upload_id, key=dest_object.key, parts=iface_parts, region=region, bucket=bucket)
                     )
             else:
                 mime_type = None
@@ -685,7 +691,13 @@ class CopyJob(TransferJob):
             def complete_fn(batch):
                 for req in batch:
                     logger.fs.debug(f"Finalize upload id {req['upload_id']} for key {req['key']}")
-                    retry_backoff(partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"]), initial_backoff=0.5)
+
+                    custom_data = None
+                    # Get the blockID mappings if destination interface is AzureBlobInterface
+                    if isinstance(obj_store_interface, AzureBlobInterface):
+                        custom_data = req["parts"] # already base64 encoded during chunking
+
+                    retry_backoff(partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"]), custom_data=custom_data, initial_backoff=0.5)
 
             do_parallel(complete_fn, batches, n=8)
 

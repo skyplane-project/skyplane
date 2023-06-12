@@ -139,7 +139,7 @@ class POSIXInterface(ObjectStoreInterface):
     def initiate_multipart_upload(self, dst_object_name: str, mime_type: Optional[str] = None) -> str:
         raise NotImplementedError(f"Multipart upload is not supported for the POSIX file system.")
 
-    def complete_multipart_upload(self, dst_object_name: str, upload_id: str) -> None:
+    def complete_multipart_upload(self, dst_object_name: str, upload_id: str, custom_data: Optional[any] = None) -> None:
         raise NotImplementedError(f"Multipart upload is not supported for the POSIX file system.")
 
     @lru_cache(maxsize=1024)
