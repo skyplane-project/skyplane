@@ -358,8 +358,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Skyplane Gateway Daemon")
     parser.add_argument("--region", type=str, required=True, help="Region tag (provider:region")
     parser.add_argument("--chunk-dir", type=Path, default="/tmp/skyplane/chunks", help="Directory to store chunks")
-    parser.add_argument("--gateway-program-file", type=Path, required=True, help="Gateway program file")
-    parser.add_argument("--gateway-info-file", type=Path, required=True, help="Gateway info file")
+    parser.add_argument("--gateway-program-file", type=Path, default="/pkg/data/gateway_program.json", help="Gateway program file")
+    parser.add_argument("--gateway-info-file", type=Path, default="/pkg/data/gateway_info.json", help="Gateway info file")
     parser.add_argument("--disable-tls", action="store_true")
     parser.add_argument("--use-compression", action="store_true")  # TODO: remove
     parser.add_argument("--disable-e2ee", action="store_true")  # TODO: remove

@@ -247,8 +247,6 @@ class MulticastDirectPlanner(Planner):
         super().__init__(transfer_config)
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        print(jobs[0].dst_ifaces[0].region_tag())
-        print(jobs[0].dst_ifaces[0])
         src_region_tag = jobs[0].src_iface.region_tag()
         dst_region_tags = [iface.region_tag() for iface in jobs[0].dst_ifaces]
 
@@ -287,6 +285,8 @@ class MulticastDirectPlanner(Planner):
 
             # source region gateway program
             if isinstance(job, TestCopyJob):
+                # TODO: in the future, have more flexibility with the chunk size
+                # TODO: add support for simulated object stores
                 obj_store_read = src_program.add_operator(GatewayGenData(64), partition_id=partition_id)
             else:
                 obj_store_read = src_program.add_operator(
