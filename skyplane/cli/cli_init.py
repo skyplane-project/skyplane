@@ -471,14 +471,12 @@ def init(
     reinit_azure: bool = False,
     reinit_gcp: bool = False,
     reinit_ibm: bool = False,
-    reinit_cloudflare: bool = False, 
     reinit_cloudflare: bool = False,
     disable_config_aws: bool = False,
     disable_config_azure: bool = False,
     disable_config_gcp: bool = False,
     disable_config_ibm: bool = True,  # TODO: eventuall enable IBM
     disable_config_cloudflare: bool = False,
-    disable_config_cloudflare: bool = False, 
 ):
     """
     It loads the configuration file, and if it doesn't exist, it creates a default one. Then it creates
