@@ -98,5 +98,12 @@ if __name__ == "__main__":
     parser.add_argument("--autoshutdown", type=int, default=15)
     args = parser.parse_args()
 
-    return_code = run(args.src, args.dest, n_files=args.n_files, file_size_kb=args.file_size_kb, multipart=args.multipart, autoshowdown_minutes=args.autoshutdown)
+    return_code = run(
+        args.src,
+        args.dest,
+        n_files=args.n_files,
+        file_size_kb=args.file_size_kb,
+        multipart=args.multipart,
+        autoshowdown_minutes=args.autoshutdown,
+    )
     exit(return_code)
