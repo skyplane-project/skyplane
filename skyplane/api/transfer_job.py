@@ -159,14 +159,15 @@ class Chunker:
                     dest_object = dest_objects[region]
                     _, upload_id = upload_id_mapping[region]
 
-                    iface_parts = parts
-                    # Convert parts to base64 if destination interface is AzureBlobInterface
+                    custom_data = None
+                    # Convert parts to base64 and store mime_type if destination interface is AzureBlobInterface
                     if isinstance(dest_iface, AzureBlobInterface):
-                        iface_parts = list(map(lambda part_num: AzureBlobInterface.id_to_base64_encoding(part_num), iface_parts))
+                        block_ids = list(map(lambda part_num: AzureBlobInterface.id_to_base64_encoding(part_num), parts))
+                        custom_data = (block_ids, mime_type)
 
                     # Mime type is passed for Azure
                     self.multipart_upload_requests.append(
-                        dict(upload_id=upload_id, key=dest_object.key, parts=iface_parts, region=region, bucket=bucket, mime_type=mime_type)
+                        dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket, custom_data=custom_data)
                     )
             else:
                 mime_type = None
@@ -685,15 +686,8 @@ class CopyJob(TransferJob):
             def complete_fn(batch):
                 for req in batch:
                     logger.fs.debug(f"Finalize upload id {req['upload_id']} for key {req['key']}")
-
-                    custom_data = None
-                    # Package the blockID mappings and the mime_type into a custom_data
-                    # if destination interface is AzureBlobInterface
-                    if isinstance(obj_store_interface, AzureBlobInterface):
-                        custom_data = (req["parts"], req["mime_type"])  # parts are already base64 encoded during chunking
-
                     retry_backoff(
-                        partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"], custom_data),
+                        partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"], req["custom_data"]),
                         initial_backoff=0.5,
                     )
 
