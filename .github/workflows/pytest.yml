@@ -154,7 +154,6 @@ jobs:
           poetry install -E gateway -E solver -E aws -E azure -E gcp -E ibm
           poetry run pip install -r requirements-dev.txt
           poetry run sudo apt install default-jdk
-          poetry run wget https://archive.apache.org/dist/hadoop/core/hadoop-3.3.0/hadoop-3.3.0.tar.gz -P /tmp && tar -xzf /tmp/hadoop-3.3.0.tar.gz -C /tmp && sudo mv /tmp/hadoop-3.3.0 /usr/local/hadoop && rm /tmp/hadoop-3.3.0.tar.gz
         if: steps.cache.outputs.cache-hit != 'true'
       - id: 'auth'
         uses: 'google-github-actions/auth@v0'
