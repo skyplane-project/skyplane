@@ -512,7 +512,7 @@ def init(
 
     # load AWS config
     if not (reinit_azure or reinit_gcp or reinit_ibm):
-        typer.secho("\n(1) configuring AWS:", fg="yellow", bold=True)
+        typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)
         if not disable_config_aws:
             cloud_config = load_aws_config(cloud_config, non_interactive=non_interactive)
 

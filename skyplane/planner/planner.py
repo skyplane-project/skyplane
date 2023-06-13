@@ -116,11 +116,14 @@ class Planner:
             cloud_provider=cloud_provider, region=region, spot=getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances")
         )
 
+        config_vm_type = getattr(self.transfer_config, f"{cloud_provider}_instance_class")
+
         # No quota limits (quota limits weren't initialized properly during skyplane init)
         if quota_limit is None:
-            return None
+            logger.warning(f"Quota limit file not found for {region_tag}")
+            # return default instance type and number of instances
+            return config_vm_type, self.n_instances
 
-        config_vm_type = getattr(self.transfer_config, f"{cloud_provider}_instance_class")
         config_vcpus = self._vm_to_vcpus(cloud_provider, config_vm_type)
         if config_vcpus <= quota_limit:
             return config_vm_type, quota_limit // config_vcpus
@@ -156,10 +159,15 @@ class Planner:
         :param dst_region_tags: a list of the destination region tags (defualt: None)
         :type dst_region_tags: Optional[List[str]]
         """
+
         # One of them has to provided
         assert src_region_tag is not None or dst_region_tags is not None, "There needs to be at least one source or destination"
         src_tags = [src_region_tag] if src_region_tag is not None else []
         dst_tags = dst_region_tags or []
+
+        assert len(src_region_tag.split(":")) == 2, f"Source region tag {src_region_tag} must be in the form of `cloud_provider:region`"
+        assert len(dst_region_tags[0].split(":")) == 2, f"Destination region tag {dst_region_tags} must be in the form of `cloud_provider:region`"
+
 
         # do_parallel returns tuples of (region_tag, (vm_type, n_instances))
         vm_info = do_parallel(self._calculate_vm_types, src_tags + dst_tags)
@@ -184,6 +192,10 @@ class UnicastDirectPlanner(Planner):
 
         src_region_tag = jobs[0].src_iface.region_tag()
         dst_region_tag = jobs[0].dst_ifaces[0].region_tag()
+
+        assert len(src_region_tag.split(":")) == 2, f"Source region tag {src_region_tag} must be in the form of `cloud_provider:region`"
+        assert len(dst_region_tag.split(":")) == 2, f"Destination region tag {dst_region_tag} must be in the form of `cloud_provider:region`"
+
         # jobs must have same sources and destinations
         for job in jobs[1:]:
             assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
