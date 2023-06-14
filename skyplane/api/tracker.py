@@ -42,10 +42,6 @@ class TransferHook(ABC):
         """Ending the dispatch job"""
         raise NotImplementedError()
 
-    def on_dispatch_error(self):
-        """Showing dispatch error"""
-        raise NotImplementedError()
-
     def on_chunk_completed(self, chunks: List[Chunk], region_tag: Optional[str] = None):
         """Chunks are all transferred"""
         raise NotImplementedError()
@@ -72,9 +68,6 @@ class EmptyTransferHook(TransferHook):
         return
 
     def on_dispatch_end(self):
-        return
-
-    def on_dispatch_error(self):
         return
 
     def on_chunk_completed(self, chunks: List[Chunk], region_tag: Optional[str] = None):

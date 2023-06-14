@@ -44,10 +44,6 @@ class ProgressBarTransferHook(TransferHook):
             self.dispatch_task, description=f" {self.chunks_dispatched} chunks (~{format_bytes(self.bytes_dispatched)} dispatched)"
         )
 
-    def on_dispatch_error(self, error):
-        console.log(error)
-        self.spinner.stop()
-
     def on_dispatch_end(self):
         self.spinner.stop()
         self.pbar = Progress(
