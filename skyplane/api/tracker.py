@@ -1,10 +1,12 @@
 import functools
+import signal
+
 from pprint import pprint
 import json
 import time
 from abc import ABC
 from datetime import datetime
-from threading import Thread
+from threading import Thread, Event
 
 import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional, Set
@@ -39,6 +41,10 @@ class TransferHook(ABC):
     def on_dispatch_end(self):
         """Ending the dispatch job"""
         raise NotImplementedError()
+    
+    def on_dispatch_error(self): 
+        """Showing dispatch error"""
+        raise NotImplementedError()
 
     def on_chunk_completed(self, chunks: List[Chunk], region_tag: Optional[str] = None):
         """Chunks are all transferred"""
@@ -67,6 +73,9 @@ class EmptyTransferHook(TransferHook):
 
     def on_dispatch_end(self):
         return
+    
+    def on_dispatch_error(self): 
+        return 
 
     def on_chunk_completed(self, chunks: List[Chunk], region_tag: Optional[str] = None):
         return
@@ -96,6 +105,12 @@ class TransferProgressTracker(Thread):
         self.dataplane = dataplane
         self.jobs = {job.uuid: job for job in jobs}
         self.transfer_config = transfer_config
+
+        # exit handling
+        self.exit_flag = Event()
+        def signal_handler(signal, frame):
+            self.exit_flag.set()
+        signal.signal(signal.SIGINT, signal_handler)
 
         if hooks is None:
             self.hooks = EmptyTransferHook()
@@ -148,6 +163,10 @@ class TransferProgressTracker(Thread):
                 self.job_complete_chunk_ids[job_uuid] = {region: set() for region in self.dataplane.topology.dest_region_tags}
 
                 for chunk in chunk_streams[job_uuid]:
+                    if self.exit_flag.is_set():
+                        logger.fs.debug(f"[TransferProgressTracker] Exiting due to signal")
+                        self.hooks.on_dispatch_error("Exiting due to signal")
+                        return 
                     chunks_dispatched = [chunk]
                     self.job_chunk_requests[job_uuid][chunk.chunk_id] = chunk
                     self.hooks.on_chunk_dispatched(chunks_dispatched)

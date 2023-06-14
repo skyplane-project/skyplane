@@ -20,7 +20,6 @@ class AzureServer(Server):
     resource_group_location = "westus2"
 
     def __init__(self, name: str, key_root: PathLike = key_root / "azure", log_dir=None, ssh_private_key=None, assume_exists=True):
-        self.auth = AzureAuthentication()
         self.name = name
         self.location = None
 
@@ -32,6 +31,7 @@ class AzureServer(Server):
             region_tag = "azure:UNKNOWN"
 
         super().__init__(region_tag, log_dir=log_dir)
+        assert "azure" in self.auth, f"Azure Server created but not authenticated with Azure"
 
         key_root = Path(key_root)
         key_root.mkdir(parents=True, exist_ok=True)
@@ -85,7 +85,7 @@ class AzureServer(Server):
         return AzureServer.vm_name(name) + "-nic"
 
     def get_virtual_machine(self):
-        compute_client = self.auth.get_compute_client()
+        compute_client = self.auth["azure"].get_compute_client()
         vm = compute_client.virtual_machines.get(AzureServer.resource_group_name, AzureServer.vm_name(self.name))
 
         # Sanity checks
@@ -106,7 +106,7 @@ class AzureServer(Server):
         return f"{self.region_tag}:{self.name}"
 
     def instance_state(self) -> ServerState:
-        compute_client = self.auth.get_compute_client()
+        compute_client = self.auth["azure"].get_compute_client()
         vm_instance_view = compute_client.virtual_machines.instance_view(AzureServer.resource_group_name, AzureServer.vm_name(self.name))
         statuses = vm_instance_view.statuses
         for status in statuses:
@@ -116,7 +116,7 @@ class AzureServer(Server):
 
     @ignore_lru_cache()
     def public_ip(self):
-        network_client = self.auth.get_network_client()
+        network_client = self.auth["azure"].get_network_client()
         public_ip = network_client.public_ip_addresses.get(AzureServer.resource_group_name, AzureServer.ip_name(self.name))
 
         # Sanity checks
@@ -147,10 +147,10 @@ class AzureServer(Server):
         return "PREMIUM"
 
     def terminate_instance_impl(self):
-        compute_client = self.auth.get_compute_client()
-        network_client = self.auth.get_network_client()
+        compute_client = self.auth["azure"].get_compute_client()
+        network_client = self.auth["azure"].get_network_client()
 
-        self.auth.get_authorization_client()
+        self.auth["azure"].get_authorization_client()
         self.get_virtual_machine()
 
         vm_poller = compute_client.virtual_machines.begin_delete(AzureServer.resource_group_name, self.vm_name(self.name))
