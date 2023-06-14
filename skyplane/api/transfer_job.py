@@ -109,11 +109,9 @@ class Chunker:
 
     def stop(self):
         """Stops all threads"""
-        print("stopping all threads")
         self.multipart_exit_event.set()
         for t in self.multipart_chunk_threads:
             t.join()
-            print("done multipart", t)
 
     def _run_multipart_chunk_thread(
         self,
@@ -340,22 +338,6 @@ class Chunker:
                 t.start()
                 self.multipart_chunk_threads.append(t)
 
-        #multipart_send_queue: Queue[TransferPair] = Queue()
-        #multipart_chunk_queue: Queue[GatewayMessage] = Queue()
-        #multipart_exit_event = threading.Event()
-        #multipart_chunk_threads = []
-
-        ## start chunking threads
-        #if self.transfer_config.multipart_enabled:
-        #    for _ in range(self.concurrent_multipart_chunk_threads):
-        #        t = threading.Thread(
-        #            target=self._run_multipart_chunk_thread,
-        #            args=(multipart_exit_event, multipart_send_queue, multipart_chunk_queue),
-        #            daemon=False,
-        #        )
-        #        t.start()
-        #        multipart_chunk_threads.append(t)
-
         # begin chunking loop
         for transfer_pair in transfer_pair_generator:
             src_obj = transfer_pair.src_obj
@@ -489,7 +471,6 @@ class TransferJob(ABC):
         self.recursive = recursive
         self.requester_pays = requester_pays
         self.uuid = uuid
-        print("TRANSFER TYPE", self.transfer_type, self.dst_paths)
 
     @property
     def transfer_type(self) -> str:
@@ -531,13 +512,11 @@ class TransferJob(ABC):
         if not hasattr(self, "_dst_ifaces"):
             if self.transfer_type == "unicast":
                 provider_dst, bucket_dst, _ = parse_path(self.dst_paths[0])
-                print("parse", parse_path(self.dst_paths[0]))
                 self._dst_ifaces = [StorageInterface.create(f"{provider_dst}:infer", bucket_dst)]
             else:
                 self._dst_ifaces = []
                 for path in self.dst_paths:
                     provider_dst, bucket_dst, _ = parse_path(path)
-                    print("parse", parse_path(path))
                     self._dst_ifaces.append(StorageInterface.create(f"{provider_dst}:infer", bucket_dst))
         return self._dst_ifaces
 
@@ -593,7 +572,6 @@ class CopyJob(TransferJob):
         self.chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)  # TODO: should read in existing transfer config
 
     def stop(self):
-        print("stop chunker")
         self.chunker.stop()
 
     @property

@@ -169,7 +169,6 @@ class TransferProgressTracker(Thread):
                         logger.fs.debug(f"[TransferProgressTracker] Exiting due to signal")
                         self.hooks.on_dispatch_end()
                         self.hooks.on_transfer_end()
-                        print("stop job")
                         job.stop() # stop threads in chunk stream
                         return
                     chunks_dispatched = [chunk]

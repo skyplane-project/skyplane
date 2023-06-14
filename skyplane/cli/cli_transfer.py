@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional, List
 
 import typer
 from rich.progress import Progress, TextColumn, SpinnerColumn
+from rich import print as rprint
 
 import skyplane
 from skyplane.api.config import TransferConfig, AWSConfig, GCPConfig, AzureConfig, IBMCloudConfig
@@ -292,8 +293,8 @@ class SkyplaneCLI:
 
 
 def force_deprovision(dp: skyplane.Dataplane):
+    rprint(f"\n:x: [bold red]Force deprovisioning dataplane[/bold red]")
     s = signal.signal(signal.SIGINT, signal.SIG_IGN)
-    print("force deprovision")
     dp.deprovision(spinner=True)
     signal.signal(signal.SIGINT, s)
 
