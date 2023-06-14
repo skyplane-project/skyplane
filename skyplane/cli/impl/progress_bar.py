@@ -47,7 +47,6 @@ class ProgressBarTransferHook(TransferHook):
     def on_dispatch_error(self, error):
         console.log(error)
         self.spinner.stop()
-        raise exceptions.SkyplaneGatewayException("Dispatch failed with error", error)
 
     def on_dispatch_end(self):
         self.spinner.stop()

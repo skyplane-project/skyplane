@@ -268,10 +268,14 @@ class Dataplane:
                     logger.fs.warning(f"Before deprovisioning, waiting for jobs to finish: {list(task.jobs.keys())}")
                     task.join()
                     print("task finished")
+                    for thread in threading.enumerate(): 
+                        print("Remaining", thread.name)
             except KeyboardInterrupt:
                 logger.warning("Interrupted while waiting for transfers to finish, deprovisioning anyway.")
                 raise
             finally:
+                print(spinner)
+                print('deprovisoning')
                 self.provisioner.deprovision(
                     max_jobs=max_jobs,
                     spinner=spinner,

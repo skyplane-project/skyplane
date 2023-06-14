@@ -147,9 +147,7 @@ class Planner:
         )
         return (vm_type, n_instances)
 
-    def _get_vm_type_and_instances(
-        self, src_region_tag: Optional[str] = None, dst_region_tags: Optional[List[str]] = None
-    ) -> Tuple[Dict[str, str], int]:
+    def _get_vm_type_and_instances(self, src_region_tag: str, dst_region_tags: str) -> Tuple[Dict[str, str], int]:
         """Dynamically calculates the vm type each region can use (both the source region and all destination regions)
         based on their quota limits and calculates the number of vms to launch in all regions by conservatively
         taking the minimum of all regions to stay consistent.
@@ -161,13 +159,16 @@ class Planner:
         """
 
         # One of them has to provided
-        assert src_region_tag is not None or dst_region_tags is not None, "There needs to be at least one source or destination"
-        src_tags = [src_region_tag] if src_region_tag is not None else []
-        dst_tags = dst_region_tags or []
+        # assert src_region_tag is not None or dst_region_tags is not None, "There needs to be at least one source or destination"
+        src_tags = [src_region_tag]  # if src_region_tag is not None else []
+        dst_tags = dst_region_tags  # or []
+
+        print(src_region_tag, dst_region_tags)
 
         assert len(src_region_tag.split(":")) == 2, f"Source region tag {src_region_tag} must be in the form of `cloud_provider:region`"
-        assert len(dst_region_tags[0].split(":")) == 2, f"Destination region tag {dst_region_tags} must be in the form of `cloud_provider:region`"
-
+        assert (
+            len(dst_region_tags[0].split(":")) == 2
+        ), f"Destination region tag {dst_region_tags} must be in the form of `cloud_provider:region`"
 
         # do_parallel returns tuples of (region_tag, (vm_type, n_instances))
         vm_info = do_parallel(self._calculate_vm_types, src_tags + dst_tags)
@@ -194,7 +195,9 @@ class UnicastDirectPlanner(Planner):
         dst_region_tag = jobs[0].dst_ifaces[0].region_tag()
 
         assert len(src_region_tag.split(":")) == 2, f"Source region tag {src_region_tag} must be in the form of `cloud_provider:region`"
-        assert len(dst_region_tag.split(":")) == 2, f"Destination region tag {dst_region_tag} must be in the form of `cloud_provider:region`"
+        assert (
+            len(dst_region_tag.split(":")) == 2
+        ), f"Destination region tag {dst_region_tag} must be in the form of `cloud_provider:region`"
 
         # jobs must have same sources and destinations
         for job in jobs[1:]:

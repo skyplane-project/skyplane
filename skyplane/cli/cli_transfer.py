@@ -293,7 +293,8 @@ class SkyplaneCLI:
 
 def force_deprovision(dp: skyplane.Dataplane):
     s = signal.signal(signal.SIGINT, signal.SIG_IGN)
-    dp.deprovision()
+    print("force deprovision")
+    dp.deprovision(spinner=True)
     signal.signal(signal.SIGINT, s)
 
 

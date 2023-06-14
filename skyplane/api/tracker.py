@@ -41,8 +41,8 @@ class TransferHook(ABC):
     def on_dispatch_end(self):
         """Ending the dispatch job"""
         raise NotImplementedError()
-    
-    def on_dispatch_error(self): 
+
+    def on_dispatch_error(self):
         """Showing dispatch error"""
         raise NotImplementedError()
 
@@ -73,9 +73,9 @@ class EmptyTransferHook(TransferHook):
 
     def on_dispatch_end(self):
         return
-    
-    def on_dispatch_error(self): 
-        return 
+
+    def on_dispatch_error(self):
+        return
 
     def on_chunk_completed(self, chunks: List[Chunk], region_tag: Optional[str] = None):
         return
@@ -108,8 +108,10 @@ class TransferProgressTracker(Thread):
 
         # exit handling
         self.exit_flag = Event()
+
         def signal_handler(signal, frame):
             self.exit_flag.set()
+
         signal.signal(signal.SIGINT, signal_handler)
 
         if hooks is None:
@@ -165,8 +167,11 @@ class TransferProgressTracker(Thread):
                 for chunk in chunk_streams[job_uuid]:
                     if self.exit_flag.is_set():
                         logger.fs.debug(f"[TransferProgressTracker] Exiting due to signal")
-                        self.hooks.on_dispatch_error("Exiting due to signal")
-                        return 
+                        self.hooks.on_dispatch_end()
+                        self.hooks.on_transfer_end()
+                        print("stop job")
+                        job.stop() # stop threads in chunk stream
+                        return
                     chunks_dispatched = [chunk]
                     self.job_chunk_requests[job_uuid][chunk.chunk_id] = chunk
                     self.hooks.on_chunk_dispatched(chunks_dispatched)

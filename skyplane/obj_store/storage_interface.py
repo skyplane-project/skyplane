@@ -63,6 +63,7 @@ class StorageInterface:
             return POSIXInterface(bucket)
         elif region_tag.startswith("cloudflare"):
             from skyplane.obj_store.r2_interface import R2Interface
+
             account, bucket = bucket.split("/", 1)  # <storage_account>/<container>
             return R2Interface(account, bucket)
         else:
