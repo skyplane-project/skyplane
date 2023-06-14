@@ -79,12 +79,16 @@ jobs:
       STRATEGY_UUID: itest-d-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v1
+      - name: Install poetry
+        run: pipx install poetry
       - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
-      - name: Install skyplane from pypi
-        run: pip install skyplane[aws,azure,gcp]
+          cache: "poetry"
+      - name: Install dependencies
+        run: poetry install -E aws -E azure -E gcp
+        if: steps.cache.outputs.cache-hit != 'true'
       - id: 'auth'
         uses: 'google-github-actions/auth@v1'
         with:
