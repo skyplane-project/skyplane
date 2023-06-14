@@ -91,11 +91,11 @@ jobs:
           credentials_json: '${{ secrets.GCP_CREDENTIALS_JSON }}'
       - name: Skyplane init
         run: |
-          skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
-          skyplane init -y --disable-config-azure --disable-config-cloudflare
-          skyplane config set usage_stats false
+          poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
+          poetry run skyplane init -y --disable-config-azure --disable-config-cloudflare
+          poetry run skyplane config set usage_stats false
       - name: Deprovision
-        run: skyplane deprovision
+        run: poetry run skyplane deprovision
       - name: Delete matching S3 buckets
         run: |
           for pattern in "test-skyplane-" "skyplane-integration-us-east-1-" "integrationus-east-1-"; do
