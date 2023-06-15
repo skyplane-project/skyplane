@@ -598,7 +598,7 @@ class CopyJob(TransferJob):
         :param dispatch_batch_size: maximum size of the buffer to temporarily store the generators (default: 1000)
         :type dispatch_batch_size: int
         """
-        chunker = Chunker(self.src_iface, self.dst_ifaces, dataplane, transfer_config)
+        chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
         transfer_pair_generator = self.gen_transfer_pairs(chunker, dataplane)  # returns TransferPair objects
         gen_transfer_list = chunker.tail_generator(transfer_pair_generator, self.transfer_list)
         chunks = chunker.chunk(gen_transfer_list)
