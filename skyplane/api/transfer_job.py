@@ -162,7 +162,7 @@ class Chunker:
                     custom_data = None
                     # Convert parts to base64 and store mime_type if destination interface is AzureBlobInterface
                     if isinstance(dest_iface, AzureBlobInterface):
-                        block_ids = list(map(lambda part_num: AzureBlobInterface.id_to_base64_encoding(part_num), parts))
+                        block_ids = list(map(lambda part_num: AzureBlobInterface.id_to_base64_encoding(part_num, dest_object.key), parts))
                         custom_data = (block_ids, mime_type)
 
                     self.multipart_upload_requests.append(

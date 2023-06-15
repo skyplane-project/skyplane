@@ -13,6 +13,9 @@ from skyplane.utils import logger, imports
 from azure.storage.blob import ContentSettings
 
 
+MAX_BLOCK_DIGITS = 5
+
+
 class AzureBlobObject(ObjectStoreObject):
     def full_path(self):
         account_name, container_name = self.bucket.split("/")
@@ -162,7 +165,7 @@ class AzureBlobInterface(ObjectStoreInterface):
             # multipart upload
             if part_number is not None and upload_id is not None:
                 with open(src_file_path, "rb") as f:
-                    block_id = AzureBlobInterface.id_to_base64_encoding(part_number)
+                    block_id = AzureBlobInterface.id_to_base64_encoding(part_number=part_number, dest_key=dst_object_name)
                     blob_client.stage_block(block_id=block_id, data=f, length=os.path.getsize(src_file_path))  # stage the block
                     return
 
@@ -232,18 +235,21 @@ class AzureBlobInterface(ObjectStoreInterface):
             raise exceptions.SkyplaneException(f"Failed to complete multipart upload for {dst_object_name}: {str(e)}")
 
     @staticmethod
-    def id_to_base64_encoding(part_number: int) -> str:
+    def id_to_base64_encoding(part_number: int, dest_key: str) -> str:
         """Azure expects all blockIDs to be Base64 strings. This function serves to convert the part numbers to
-        base64-encoded strings. Used within upload_object
+        base64-encoded strings of the same length. The maximum number of blocks one blob supports in Azure is
+        50,000 blocks, so the maximum length to pad zeroes to will be (#digits in 50,000 = len("50000") = 5) + len(dest_key)
 
         :param part_number: part number of the block, determined while splitting the date into chunks before the transfer
         :type part_number: int
+        :param dest_key: destination object key, used to distinguish between different objects during concurrent uploads to the same container
         """
-        block_id = format(part_number, "06")  # pad with zeros to get consistent length
+        max_length = MAX_BLOCK_DIGITS + len(dest_key)
+        block_id = f"{part_number}{dest_key}"
+        block_id = block_id.ljust(max_length, "0")  # pad with zeroes to get consistent length
         block_id = block_id.encode("utf-8")
         block_id = base64.b64encode(block_id).decode("utf-8")
         return block_id
 
     def create_object_repr(self, key: str) -> AzureBlobObject:
-        self.provider = "azure"
         return AzureBlobObject(provider=self.provider, bucket=self.bucket(), key=key)
