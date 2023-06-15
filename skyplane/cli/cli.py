@@ -44,7 +44,7 @@ def deprovision(
     instances = query_instances()
     if filter_client_id:
         instances = [instance for instance in instances if instance.tags().get("skyplaneclientid") == filter_client_id]
-
+    print(instances)
     if instances:
         typer.secho(f"Deprovisioning {len(instances)} instances", fg="yellow", bold=True)
         do_parallel(lambda instance: instance.terminate_instance(), instances, desc="Deprovisioning", spinner=True, spinner_persist=True)

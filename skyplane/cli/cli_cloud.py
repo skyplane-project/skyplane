@@ -3,6 +3,7 @@ Cloud convenience interface
 """
 
 import json
+import uuid
 import subprocess
 import time
 from collections import defaultdict
@@ -260,6 +261,7 @@ def azure_check(
     role_idx = [i for i, r in enumerate(roles) if r["scope"] == f"/subscriptions/{account_subscription}"]
     check_assert(len(role_idx) >= 1, "Skyplane storage account role assigned to UMI")
     role_names = [roles[i]["roleDefinitionName"] for i in role_idx]
+    print(role_names)
     rprint(f"[bright_black]Skyplane storage account roles: {role_names}[/bright_black]")
     check_assert("Storage Blob Data Contributor" in role_names, "Skyplane storage account has Blob Data Contributor role assigned to UMI")
     check_assert("Storage Account Contributor" in role_names, "Skyplane storage account has Account Contributor role assigned to UMI")
@@ -280,6 +282,30 @@ def azure_check(
 
     iface = AzureBlobInterface(account, container)
     print(iface.container_client.get_container_properties())
+
+    # check if writeable
+    rprint(f"\n{hline}\n[bold]Checking Skyplane AzureBlobInterface write access[/bold]\n{hline}")
+    import tempfile
+    import random
+    import string
+
+    def generate_random_string(length):
+        """Generate a random string of given length"""
+        letters = string.ascii_letters
+        return "".join(random.choice(letters) for _ in range(length))
+
+    def create_temp_file(size):
+        """Create a temporary file with random data"""
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file_path = temp_file.name
+            random_data = generate_random_string(size)
+            temp_file.write(random_data.encode())
+        return temp_file_path
+
+    tmp_file = create_temp_file(1024)
+    tmp_object = f"skyplane-{uuid.uuid4()}"
+    iface.upload_object(tmp_file, tmp_object)
+    iface.delete_objects([tmp_object])
 
 
 @app.command()

@@ -63,7 +63,8 @@ def check_container_running(container_name):
 
 def run(gateway_docker_image: str, restart_gateways: bool):
     """Run the gateway docker image locally"""
-    job = CopyJob("s3://feature-store-datasets/yahoo/processed_yahoo/A1/", ["gs://38046a6749df436886491a95cacdebb8/yahoo/"], recursive=True)
+    # job = CopyJob("s3://feature-store-datasets/yahoo/processed_yahoo/A1/", ["gs://38046a6749df436886491a95cacdebb8/yahoo/"], recursive=True)
+    job = CopyJob("gs://skyplane-test-bucket/files_100000_size_4_mb/", "s3://integrationus-west-2-4450f073/", recursive=True)
 
     topology = MulticastDirectPlanner(1, 64, TransferConfig()).plan([job])
     print([g.region_tag for g in topology.get_gateways()])
