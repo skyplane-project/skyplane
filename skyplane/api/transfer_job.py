@@ -586,23 +586,18 @@ class CopyJob(TransferJob):
 
     def gen_transfer_pairs(
         self,
-        chunker: Optional[Chunker] = None,
-        transfer_config: Optional[TransferConfig] = None,
     ) -> Generator[TransferPair, None, None]:
         """Generate transfer pairs for the transfer job.
 
         :param chunker: chunker that makes the chunk requests
         :type chunker: Chunker
         """
-        # if chunker is None:  # used for external access to transfer pair list
-        #    chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)  # TODO: should read in existing transfer config
         yield from self.chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, self.recursive, self._pre_filter_fn)
 
     def dispatch(
         self,
         dataplane: "Dataplane",
         dispatch_batch_size: int = 100,  # 6.4 GB worth of chunks
-        transfer_config: Optional[TransferConfig] = None,
     ) -> Generator[Chunk, None, None]:
         """Dispatch transfer job to specified gateways.
 
@@ -614,7 +609,7 @@ class CopyJob(TransferJob):
         :type dispatch_batch_size: int
         """
         # chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
-        transfer_pair_generator = self.gen_transfer_pairs(self.chunker)  # returns TransferPair objects
+        transfer_pair_generator = self.gen_transfer_pairs()  # returns TransferPair objects
         gen_transfer_list = self.chunker.tail_generator(transfer_pair_generator, self.transfer_list)
         chunks = self.chunker.chunk(gen_transfer_list)
         batches = self.chunker.batch_generator(
@@ -799,17 +794,13 @@ class SyncJob(CopyJob):
 
     def gen_transfer_pairs(
         self,
-        chunker: Optional[Chunker] = None,
-        transfer_config: Optional[TransferConfig] = field(init=False, default_factory=lambda: TransferConfig()),
     ) -> Generator[TransferPair, None, None]:
         """Generate transfer pairs for the transfer job.
 
         :param chunker: chunker that makes the chunk requests
         :type chunker: Chunker
         """
-        if chunker is None:  # used for external access to transfer pair list
-            chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
-        transfer_pair_gen = chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, self.recursive, self._pre_filter_fn)
+        transfer_pair_gen = self.chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, self.recursive, self._pre_filter_fn)
 
         # only single destination supported
         assert len(self.dst_ifaces) == 1, "Only single destination supported for sync job"

@@ -164,8 +164,6 @@ class Planner:
         src_tags = [src_region_tag]  # if src_region_tag is not None else []
         dst_tags = dst_region_tags  # or []
 
-        print(src_region_tag, dst_region_tags)
-
         assert len(src_region_tag.split(":")) == 2, f"Source region tag {src_region_tag} must be in the form of `cloud_provider:region`"
         assert (
             len(dst_region_tags[0].split(":")) == 2

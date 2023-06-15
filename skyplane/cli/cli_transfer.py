@@ -373,12 +373,12 @@ def run_transfer(
     elif cloud_config.get_flag("native_cmd_enabled"):
         # fallback option: transfer is too small
         if cli.args["cmd"] == "cp":
-            job = CopyJob(src, [dst], recursive=recursive)  # TODO: rever to using pipeline
+            job = CopyJob(src, [dst], recursive=recursive, transfer_config=cli.transfer_config)  # TODO: rever to using pipeline
             if cli.estimate_small_transfer(job, cloud_config.get_flag("native_cmd_threshold_gb") * GB):
                 small_transfer_status = cli.transfer_cp_small(src, dst, recursive)
                 return 0 if small_transfer_status else 1
         else:
-            job = SyncJob(src, [dst])
+            job = SyncJob(src, [dst], transfer_config=cli.transfer_config)
             if cli.estimate_small_transfer(job, cloud_config.get_flag("native_cmd_threshold_gb") * GB):
                 small_transfer_status = cli.transfer_sync_small(src, dst)
                 return 0 if small_transfer_status else 1
