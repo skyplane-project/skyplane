@@ -165,7 +165,6 @@ class Chunker:
                         block_ids = list(map(lambda part_num: AzureBlobInterface.id_to_base64_encoding(part_num), parts))
                         custom_data = (block_ids, mime_type)
 
-                    # Mime type is passed for Azure
                     self.multipart_upload_requests.append(
                         dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket, custom_data=custom_data)
                     )

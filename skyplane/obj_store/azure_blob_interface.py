@@ -164,11 +164,11 @@ class AzureBlobInterface(ObjectStoreInterface):
                 with open(src_file_path, "rb") as f:
                     block_id = AzureBlobInterface.id_to_base64_encoding(part_number)
                     blob_client.stage_block(block_id=block_id, data=f, length=os.path.getsize(src_file_path))  # stage the block
+                    return
 
             # single upload
             with open(src_file_path, "rb") as f:
                 blob_client.upload_blob(
-                    name=dst_object_name,
                     data=f,
                     length=os.path.getsize(src_file_path),
                     max_concurrency=self.max_concurrency,
@@ -186,7 +186,7 @@ class AzureBlobInterface(ObjectStoreInterface):
                             + f"expected {b64_md5sum}, got {blob_md5}"
                         )
         except Exception as e:
-            raise ValueError(f"Failed to upload {dst_object_name} to bucket {self.bucket_name} upload id {upload_id}: {e}")
+            raise ValueError(f"Failed to upload {dst_object_name} to bucket {self.container_name} upload id {upload_id}: {e}")
 
     def initiate_multipart_upload(self, dst_object_name: str, mime_type: Optional[str] = None) -> str:
         """Azure does not have an equivalent function to return an upload ID like s3 and gcs do.
@@ -222,6 +222,7 @@ class AzureBlobInterface(ObjectStoreInterface):
         # Decouple the custom data
         block_list, mime_type = custom_data
         assert block_list != [], "The blockID list shouldn't be empty for Azure multipart"
+        block_list = list(map(lambda block_id: azure_blob.BlobBlock(block_id=block_id), block_list))
 
         blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=dst_object_name)
         try:
@@ -244,4 +245,5 @@ class AzureBlobInterface(ObjectStoreInterface):
         return block_id
 
     def create_object_repr(self, key: str) -> AzureBlobObject:
+        self.provider = "azure"
         return AzureBlobObject(provider=self.provider, bucket=self.bucket(), key=key)
