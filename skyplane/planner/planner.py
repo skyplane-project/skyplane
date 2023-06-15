@@ -176,7 +176,8 @@ class MulticastDirectPlanner(Planner):
         vm_types = {v[0]: Planner._vcpus_to_vm(cloud_provider=v[0].split(":")[0], vcpus=v[1][0]) for v in vm_info}  # type: ignore
 
         # Taking the minimum so that we can use the same number of instances for both source and destination
-        n_instances = min(v[1][1] for v in vm_info)  # type: ignore
+        n_instances = min(self.n_instances, min(v[1][1] for v in vm_info))  # type: ignore
+        print("n_instances", n_instances)
 
         # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
         for i in range(n_instances):
