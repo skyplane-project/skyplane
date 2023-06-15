@@ -220,6 +220,12 @@ class Dataplane:
         Path(gateway_program_dir).mkdir(exist_ok=True, parents=True)
         logger.fs.info(f"Writing gateway programs to {gateway_program_dir}")
 
+        # write gateway info file
+        gateway_info_path = f"{gateway_program_dir}/gateway_info.json"
+        with open(gateway_info_path, "w") as f:
+            json.dump(self.topology.get_gateway_info_json(), f, indent=4)
+        logger.fs.info(f"Writing gateway info to {gateway_info_path}")
+
         # start gateways in parallel
         jobs = []
         for node, server in gateway_bound_nodes.items():
