@@ -33,6 +33,7 @@ class Planner:
     def __init__(self, transfer_config: TransferConfig):
         self.transfer_config = transfer_config
         self.config = SkyplaneConfig.load_config(config_path)
+        self.n_instances = self.config.get_flag("max_instances")
 
         # Loading the quota information, add ibm cloud when it is supported
         self.quota_limits = {}
@@ -147,7 +148,7 @@ class Planner:
         )
         return (vm_type, n_instances)
 
-    def _get_vm_type_and_instances(self, src_region_tag: str, dst_region_tags: str) -> Tuple[Dict[str, str], int]:
+    def _get_vm_type_and_instances(self, src_region_tag: str, dst_region_tags: List[str]) -> Tuple[Dict[str, str], int]:
         """Dynamically calculates the vm type each region can use (both the source region and all destination regions)
         based on their quota limits and calculates the number of vms to launch in all regions by conservatively
         taking the minimum of all regions to stay consistent.
@@ -257,9 +258,9 @@ class UnicastDirectPlanner(Planner):
 
 class MulticastDirectPlanner(Planner):
     def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig):
+        super().__init__(transfer_config)
         self.n_instances = n_instances
         self.n_connections = n_connections
-        super().__init__(transfer_config)
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         src_region_tag = jobs[0].src_iface.region_tag()
@@ -383,7 +384,7 @@ class DirectPlannerSourceOneSided(MulticastDirectPlanner):
         plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=dst_region_tags)
 
         # Dynammically calculate n_instances based on quota limits
-        vm_types, n_instances = self._get_vm_type_and_instances(src_region_tag=src_region_tag)
+        vm_types, n_instances = self._get_vm_type_and_instances(src_region_tag, dst_region_tags)
 
         # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
         for i in range(n_instances):
@@ -444,7 +445,7 @@ class DirectPlannerDestOneSided(MulticastDirectPlanner):
         plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=dst_region_tags)
 
         # Dynammically calculate n_instances based on quota limits
-        vm_types, n_instances = self._get_vm_type_and_instances(dst_region_tags=dst_region_tags)
+        vm_types, n_instances = self._get_vm_type_and_instances(src_region_tag, dst_region_tags)
 
         # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
         for i in range(n_instances):

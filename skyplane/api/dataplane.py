@@ -267,7 +267,7 @@ class Dataplane:
                 for task in self.pending_transfers:
                     logger.fs.warning(f"Before deprovisioning, waiting for jobs to finish: {list(task.jobs.keys())}")
                     task.join()
-                    for thread in threading.enumerate(): 
+                    for thread in threading.enumerate():
                         assert "_run_multipart_chunk_thread" not in thread.name, f"thread {thread.name} is still running"
             except KeyboardInterrupt:
                 logger.warning("Interrupted while waiting for transfers to finish, deprovisioning anyway.")

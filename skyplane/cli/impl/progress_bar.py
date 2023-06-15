@@ -70,5 +70,4 @@ class ProgressBarTransferHook(TransferHook):
 
     def on_transfer_error(self, error):
         console.log(error)
-        self.pbar.stop()
         raise exceptions.SkyplaneGatewayException("Transfer failed with error", error)

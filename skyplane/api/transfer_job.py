@@ -104,8 +104,8 @@ class Chunker:
             self.multipart_exit_event.set()
             for t in self.multipart_chunk_threads:
                 t.join()
-        signal.signal(signal.SIGINT, signal_handler)
 
+        signal.signal(signal.SIGINT, signal_handler)
 
     def stop(self):
         """Stops all threads"""
@@ -395,7 +395,7 @@ class Chunker:
         if len(batch) > 0:
             yield batch
 
-    #@staticmethod
+    # @staticmethod
     def prefetch_generator(self, gen_in: Generator[T, None, None], buffer_size: int) -> Generator[T, None, None]:
         """
         Prefetches from generator while handing StopIteration to ensure items yield immediately.
@@ -412,7 +412,7 @@ class Chunker:
 
         def prefetch():
             for item in gen_in:
-                if self.multipart_exit_event.is_set(): # exit with exit event
+                if self.multipart_exit_event.is_set():  # exit with exit event
                     break
                 queue.put(item)
             queue.put(sentinel)
@@ -464,6 +464,7 @@ class TransferJob(ABC):
         dst_paths: List[str] or str,
         recursive: bool = False,
         requester_pays: bool = False,
+        transfer_config: Optional[TransferConfig] = None,
         uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
         self.src_path = src_path
@@ -471,6 +472,7 @@ class TransferJob(ABC):
         self.recursive = recursive
         self.requester_pays = requester_pays
         self.uuid = uuid
+        self.transfer_config = transfer_config if transfer_config else TransferConfig()
 
     @property
     def transfer_type(self) -> str:
@@ -566,10 +568,10 @@ class CopyJob(TransferJob):
         transfer_config: Optional[TransferConfig] = None,
         uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
-        super().__init__(src_path, dst_paths, recursive, requester_pays, uuid)
+        super().__init__(src_path, dst_paths, recursive, requester_pays, transfer_config, uuid)
         self.transfer_list = []
         self.multipart_transfer_list = []
-        self.chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)  # TODO: should read in existing transfer config
+        self.chunker = Chunker(self.src_iface, self.dst_ifaces, self.transfer_config)  # TODO: should read in existing transfer config
 
     def stop(self):
         self.chunker.stop()
@@ -592,7 +594,7 @@ class CopyJob(TransferJob):
         :param chunker: chunker that makes the chunk requests
         :type chunker: Chunker
         """
-        #if chunker is None:  # used for external access to transfer pair list
+        # if chunker is None:  # used for external access to transfer pair list
         #    chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)  # TODO: should read in existing transfer config
         yield from self.chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, self.recursive, self._pre_filter_fn)
 
@@ -611,7 +613,7 @@ class CopyJob(TransferJob):
         :param dispatch_batch_size: maximum size of the buffer to temporarily store the generators (default: 1000)
         :type dispatch_batch_size: int
         """
-        #chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
+        # chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
         transfer_pair_generator = self.gen_transfer_pairs(self.chunker)  # returns TransferPair objects
         gen_transfer_list = self.chunker.tail_generator(transfer_pair_generator, self.transfer_list)
         chunks = self.chunker.chunk(gen_transfer_list)
@@ -764,11 +766,12 @@ class TestCopyJob(CopyJob):
         dst_paths: List[str] or str,
         recursive: bool = False,
         requester_pays: bool = False,
+        transfer_config: Optional[TransferConfig] = None,
         uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
         num_chunks: int = 10,
         chunk_size_bytes: int = 1024,
     ):
-        super().__init__(src_path, dst_paths, recursive, requester_pays, uuid)
+        super().__init__(src_path, dst_paths, recursive, requester_pays, transfer_config, uuid)
         self.num_chunks = num_chunks
         self.chunk_size_bytes = chunk_size_bytes
 
@@ -782,9 +785,10 @@ class SyncJob(CopyJob):
         src_path: str,
         dst_paths: List[str] or str,
         requester_pays: bool = False,
+        transfer_config: Optional[TransferConfig] = None,
         uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
-        super().__init__(src_path, dst_paths, True, requester_pays, uuid)
+        super().__init__(src_path, dst_paths, True, requester_pays, transfer_config, uuid)
         self.transfer_list = []
         self.multipart_transfer_list = []
 
