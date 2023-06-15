@@ -68,7 +68,7 @@ class Pipeline:
         # planner
         self.planning_algorithm = planning_algorithm
         if self.planning_algorithm == "direct":
-            self.planner = MulticastDirectPlanner(self.max_instances, 64)
+            self.planner = MulticastDirectPlanner(self.max_instances, 64, self.transfer_config)
         elif self.planning_algorithm == "src_one_sided":
             self.planner = DirectPlannerSourceOneSided(self.max_instances, 64)
         elif self.planning_algorithm == "dst_one_sided":
