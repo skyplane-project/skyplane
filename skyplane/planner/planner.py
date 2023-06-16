@@ -34,6 +34,7 @@ class Planner:
     def __init__(self, transfer_config: TransferConfig):
         self.transfer_config = transfer_config
         self.config = SkyplaneConfig.load_config(config_path)
+        self.n_instances = self.config.get_flag("max_instances")
 
         # Loading the quota information, add ibm cloud when it is supported
         self.quota_limits = {}
@@ -117,11 +118,13 @@ class Planner:
             cloud_provider=cloud_provider, region=region, spot=getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances")
         )
 
+        config_vm_type = getattr(self.transfer_config, f"{cloud_provider}_instance_class")
+
         # No quota limits (quota limits weren't initialized properly during skyplane init)
         if quota_limit is None:
-            return None
+            logger.warning(f"Quota information for {cloud_provider} wasn't loaded properly during `skyplane init`, using defaults.")
+            return config_vm_type, self.n_instances
 
-        config_vm_type = getattr(self.transfer_config, f"{cloud_provider}_instance_class")
         config_vcpus = self._vm_to_vcpus(cloud_provider, config_vm_type)
         if config_vcpus <= quota_limit:
             return config_vm_type, quota_limit // config_vcpus
@@ -133,8 +136,7 @@ class Planner:
                 break
 
         # shouldn't happen, but just in case we use more complicated vm types in the future
-        if vm_type is None or vcpus is None:
-            return None
+        assert vm_type is not None and vcpus is not None
 
         # number of instances allowed by the quota with the selected vm type
         n_instances = quota_limit // vcpus
@@ -267,6 +269,7 @@ class MulticastDirectPlanner(Planner):
             assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
             assert [iface.region_tag() for iface in job.dst_ifaces] == dst_region_tags, "Add jobs must have same destination set"
 
+        print("REGION TAGS", src_region_tag, dst_region_tags)
         plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=dst_region_tags)
 
         # Dynammically calculate n_instances based on quota limits

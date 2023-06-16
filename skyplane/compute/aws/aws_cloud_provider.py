@@ -229,7 +229,8 @@ class AWSCloudProvider(CloudProvider):
                     elif "VcpuLimitExceeded" in str(e):
                         raise skyplane_exceptions.InsufficientVCPUException() from e
                     elif "Invalid IAM Instance Profile name" in str(e):
-                        logger.warning(str(e))
+                        # TODO: suppress this 
+                        logger.(str(e))
                     elif "InsufficientInstanceCapacity" in str(e):
                         # try another subnet
                         current_subnet_id = (current_subnet_id + 1) % len(subnets)

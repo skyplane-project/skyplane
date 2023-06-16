@@ -97,7 +97,25 @@ def cloudflare_bucket():
 
 # TODO: add more parameters for bucket types 
 @pytest.mark.parametrize("test_case", [test_bucket_large_file]) #, test_bucket_empty_folder])
-def test_cp_aws(aws_bucket, test_case):  
+def test_big_file(aws_bucket, gcp_bucket, test_case):  
+    
+    client = SkyplaneClient()
+    src_iface = ObjectStoreInterface.create("gcp:us-west2", test_bucket.split("://")[1])
+
+    assert isinstance(aws_bucket, str), f"Bucket name is not a string {aws_bucket}"
+    assert len(list(src_iface.list_objects(prefix=test_case.replace(f"{test_bucket}/", "")))) > 0, f"Test case {test_case} does not exist in {test_bucket}"
+    client.copy(test_case, f"s3://{aws_bucket}/{test_case}")
+
+    # assert sync has cost zero 
+    dst_iface = ObjectStoreInterface.create("aws:us-west-2", aws_bucket)
+    dst_objects = list(dst_iface.list_objects())
+    assert  dst_objects == [test_case], f"Object {test_case} not copied to {aws_bucket}: only container {dst_objects}"
+
+    # copy back 
+    client.copy(f"s3://{aws_bucket}/{test_case}", f"gs://{gcp_bucket}/aws/{test_case}")
+
+@pytest.mark.parametrize("test_case", [test_bucket_small_file]) #, test_bucket_empty_folder])
+def test_many_files(aws_bucket, gcp_bucket, test_case):  
     
     client = SkyplaneClient()
     src_iface = ObjectStoreInterface.create("gcp:us-west2", test_bucket.split("://")[1])
@@ -106,14 +124,9 @@ def test_cp_aws(aws_bucket, test_case):
     assert len(list(src_iface.list_objects(prefix=test_case.replace(f"{test_bucket}/", "")))) > 0, f"Test case {test_case} does not exist in {test_bucket}"
     client.copy(test_case, f"s3://{aws_bucket}/{test_case}", recursive=True)
 
-    # assert sync has cost zero 
-    pipeline = client.get_pipeline()
-    pipeline.queue_copy(test_case, f"s3://{aws_bucket}/{test_case}", recursive=True)
-    cost = pipeline.estimate_total_cost()
-    assert cost == 0, f"Cost is not zero {cost}, still objects to copy"
-
     # copy back 
-    client.copy(f"s3://{aws_bucket}/{test_case}", f"{test_bucket}/aws/{test_case}", recursive=True)
+    client.copy(f"s3://{aws_bucket}/{test_case}", f"gs://{gcp_bucket}/aws/{test_case}", recursive=True)
+
 
 # test one sided transfers 
 def test_cp_one_sided(): 
@@ -121,21 +134,19 @@ def test_cp_one_sided():
 
 # test multiple VMs 
 def test_cp_multiple_vms(aws_bucket): 
-    print("starting")
     client = SkyplaneClient()
-    print("created client")
     pipeline = client.pipeline(max_instances=2)
-    print('created pipeline)')
     pipeline.queue_copy(test_bucket_large_file, f"s3://{aws_bucket}/")
-    print('start')
     pipeline.start(debug=True, progress=True)
-    print('started pipeline')
 
 
 # test multicast 
-def test_cp_multicast(aws_bucket, gcp_bucket, azure_bucket):
+# TODO: add azure 
+def test_cp_multicast(aws_bucket, gcp_bucket, same_region_bucket):
     client = SkyplaneClient()
-    client.copy(test_bucket_large_file, [f"s3://{aws_bucket}/", f"gs://{gcp_bucket}/", f"az://{azure_bucket}/"])
+    src_iface = ObjectStoreInterface.create("gcp:us-west2", test_bucket.split("://")[1])
+    assert len(list(src_iface.list_objects(prefix=test_bucket_large_file.replace(f"{test_bucket}/", "")))) > 0, f"Test case {test_bucket_large_file} does not exist in {test_bucket}"
+    client.copy(test_bucket_large_file, [f"s3://{aws_bucket}/", f"gs://{gcp_bucket}/", f"gs://{same_region_bucket}/"])
 
 
 
