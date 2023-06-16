@@ -14,6 +14,7 @@ REGIONS = {
 }
 QUOTA_FILE = "test_quota_file"
 
+
 @pytest.mark.skip(reason="Shared function")
 def run_quota_tests(tests):
     for test in tests:
@@ -39,6 +40,7 @@ def run_quota_tests(tests):
     if os.path.exists(QUOTA_FILE):
         # Delete the temporary quota file
         os.remove(QUOTA_FILE)
+
 
 def test_fall_back_no_quota_limit_exists():
     # 1. Test for when the quota limit file doesn't exist
