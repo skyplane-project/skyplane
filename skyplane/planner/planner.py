@@ -30,22 +30,27 @@ from skyplane.config import SkyplaneConfig
 
 
 class Planner:
-    def __init__(self, transfer_config: TransferConfig):
+    def __init__(self, transfer_config: TransferConfig, quota_limits_file: Optional[str] = None):
         self.transfer_config = transfer_config
         self.config = SkyplaneConfig.load_config(config_path)
         self.n_instances = self.config.get_flag("max_instances")
 
         # Loading the quota information, add ibm cloud when it is supported
-        self.quota_limits = {}
-        if os.path.exists(aws_quota_path):
-            with aws_quota_path.open("r") as f:
-                self.quota_limits["aws"] = json.load(f)
-        if os.path.exists(azure_standardDv5_quota_path):
-            with azure_standardDv5_quota_path.open("r") as f:
-                self.quota_limits["azure"] = json.load(f)
-        if os.path.exists(gcp_quota_path):
-            with gcp_quota_path.open("r") as f:
-                self.quota_limits["gcp"] = json.load(f)
+        quota_limits = {}
+        if quota_limits_file is not None:
+            with open(quota_limits_file, "r") as f:
+                quota_limits = json.load(f)
+        else:
+            if os.path.exists(aws_quota_path):
+                with aws_quota_path.open("r") as f:
+                    quota_limits["aws"] = json.load(f)
+            if os.path.exists(azure_standardDv5_quota_path):
+                with azure_standardDv5_quota_path.open("r") as f:
+                    quota_limits["azure"] = json.load(f)
+            if os.path.exists(gcp_quota_path):
+                with gcp_quota_path.open("r") as f:
+                    quota_limits["gcp"] = json.load(f)
+        self.quota_limits = quota_limits
 
         # Loading the vcpu information - a dictionary of dictionaries
         # {"cloud_provider": {"instance_name": vcpu_cost}}
@@ -84,10 +89,9 @@ class Planner:
         :param spot: whether to use spot specified by the user config (default: False)
         :type spot: bool
         """
-        quota_limits = self.quota_limits[cloud_provider]
+        quota_limits = self.quota_limits.get(cloud_provider, None)
         if not quota_limits:
             # User needs to reinitialize to save the quota information
-            logger.warning(f"Please run `skyplane init --reinit-{cloud_provider}` to load the quota information")
             return None
         if cloud_provider == "gcp":
             region_family = "-".join(region.split("-")[:2])
@@ -121,7 +125,9 @@ class Planner:
 
         # No quota limits (quota limits weren't initialized properly during skyplane init)
         if quota_limit is None:
-            logger.warning(f"Quota limit file not found for {region_tag}")
+            logger.warning(
+                f"Quota limit file not found for {region_tag}. Try running `skyplane init --reinit-{cloud_provider}` to load the quota information"
+            )
             # return default instance type and number of instances
             return config_vm_type, self.n_instances
 
@@ -180,10 +186,10 @@ class Planner:
 
 class UnicastDirectPlanner(Planner):
     # DO NOT USE THIS - broken for single-region transfers
-    def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig):
+    def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig, quota_limits_file: Optional[str] = None):
+        super().__init__(transfer_config, quota_limits_file)
         self.n_instances = n_instances
         self.n_connections = n_connections
-        super().__init__(transfer_config)
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         # make sure only single destination
@@ -255,8 +261,8 @@ class UnicastDirectPlanner(Planner):
 
 
 class MulticastDirectPlanner(Planner):
-    def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig):
-        super().__init__(transfer_config)
+    def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig, quota_limits_file: Optional[str] = None):
+        super().__init__(transfer_config, quota_limits_file)
         self.n_instances = n_instances
         self.n_connections = n_connections
 
