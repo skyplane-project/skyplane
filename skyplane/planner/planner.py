@@ -244,9 +244,7 @@ class UnicastDirectPlanner(Planner):
 
 
 class MulticastDirectPlanner(Planner):
-
     def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig):
-
         super().__init__(transfer_config)
         self.n_instances = n_instances
         self.n_connections = n_connections
@@ -259,7 +257,6 @@ class MulticastDirectPlanner(Planner):
             self.quota_limits["gcp"] = json.load(f)
         with self.transfer_config.azure_vcpu_file.open("r") as f:
             self.quota_limits["azure"] = json.load(f)
-
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         src_region_tag = jobs[0].src_iface.region_tag()
@@ -474,4 +471,3 @@ class DirectPlannerDestOneSided(MulticastDirectPlanner):
         for dst_region_tag, program in dst_program.items():
             plan.set_gateway_program(dst_region_tag, program)
         return plan
-
