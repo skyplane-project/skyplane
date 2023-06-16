@@ -1,4 +1,5 @@
 import json
+import signal
 import time
 import time
 import typer
@@ -69,7 +70,7 @@ class Chunker:
         self,
         src_iface: StorageInterface,
         dst_ifaces: List[StorageInterface],
-        transfer_config: TransferConfig,
+        transfer_config: Optional[TransferConfig] = None,
         concurrent_multipart_chunk_threads: Optional[int] = 64,
         num_partitions: Optional[int] = 1,
     ):
@@ -89,6 +90,28 @@ class Chunker:
         self.multipart_upload_requests = []
         self.concurrent_multipart_chunk_threads = concurrent_multipart_chunk_threads
         self.num_partitions = num_partitions
+        if transfer_config is None:
+            self.transfer_config = TransferConfig()
+
+        # threads for multipart uploads
+        self.multipart_send_queue: Queue[TransferPair] = Queue()
+        self.multipart_chunk_queue: Queue[GatewayMessage] = Queue()
+        self.multipart_exit_event = threading.Event()
+        self.multipart_chunk_threads = []
+
+        # handle exit signal
+        def signal_handler(signal, frame):
+            self.multipart_exit_event.set()
+            for t in self.multipart_chunk_threads:
+                t.join()
+
+        signal.signal(signal.SIGINT, signal_handler)
+
+    def stop(self):
+        """Stops all threads"""
+        self.multipart_exit_event.set()
+        for t in self.multipart_chunk_threads:
+            t.join()
 
     def _run_multipart_chunk_thread(
         self,
@@ -288,16 +311,7 @@ class Chunker:
                         logger.fs.exception(e)
                         raise e from None
 
-                    if dest_provider == "aws":
-                        dest_obj = S3Object(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
-                    elif dest_provider == "azure":
-                        dest_obj = AzureBlobObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
-                    elif dest_provider == "gcp":
-                        dest_obj = GCSObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
-                    elif dest_provider == "cloudflare":
-                        dest_obj = R2Object(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
-                    else:
-                        raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
+                    dest_obj = dst_iface.create_object_repr(dest_key)
                     dest_objs[dst_iface.region_tag()] = dest_obj
 
                 # assert that all destinations share the same post-fix key
@@ -315,27 +329,22 @@ class Chunker:
         :param transfer_pair_generator: generator of pairs of objects to transfer
         :type transfer_pair_generator: Generator
         """
-        multipart_send_queue: Queue[TransferPair] = Queue()
-        multipart_chunk_queue: Queue[GatewayMessage] = Queue()
-        multipart_exit_event = threading.Event()
-        multipart_chunk_threads = []
-
         # start chunking threads
         if self.transfer_config.multipart_enabled:
             for _ in range(self.concurrent_multipart_chunk_threads):
                 t = threading.Thread(
                     target=self._run_multipart_chunk_thread,
-                    args=(multipart_exit_event, multipart_send_queue, multipart_chunk_queue),
+                    args=(self.multipart_exit_event, self.multipart_send_queue, self.multipart_chunk_queue),
                     daemon=False,
                 )
                 t.start()
-                multipart_chunk_threads.append(t)
+                self.multipart_chunk_threads.append(t)
 
         # begin chunking loop
         for transfer_pair in transfer_pair_generator:
             src_obj = transfer_pair.src_obj
             if self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
-                multipart_send_queue.put(transfer_pair)
+                self.multipart_send_queue.put(transfer_pair)
             else:
                 if transfer_pair.src_obj.size == 0:
                     logger.fs.debug(f"Skipping empty object {src_obj.key}")
@@ -352,25 +361,25 @@ class Chunker:
 
             if self.transfer_config.multipart_enabled:
                 # drain multipart chunk queue and yield with updated chunk IDs
-                while not multipart_chunk_queue.empty():
-                    yield multipart_chunk_queue.get()
+                while not self.multipart_chunk_queue.empty():
+                    yield self.multipart_chunk_queue.get()
 
         if self.transfer_config.multipart_enabled:
             # wait for processing multipart requests to finish
             logger.fs.debug("Waiting for multipart threads to finish")
             # while not multipart_send_queue.empty():
             # TODO: may be an issue waiting for this in case of force-quit
-            while not multipart_send_queue.empty():
-                logger.fs.debug(f"Remaining in multipart queue: sent {multipart_send_queue.qsize()}")
+            while not self.multipart_send_queue.empty():
+                logger.fs.debug(f"Remaining in multipart queue: sent {self.multipart_send_queue.qsize()}")
                 time.sleep(0.1)
             # send sentinel to all threads
-            multipart_exit_event.set()
-            for thread in multipart_chunk_threads:
+            self.multipart_exit_event.set()
+            for thread in self.multipart_chunk_threads:
                 thread.join()
 
             # drain multipart chunk queue and yield with updated chunk IDs
-            while not multipart_chunk_queue.empty():
-                yield multipart_chunk_queue.get()
+            while not self.multipart_chunk_queue.empty():
+                yield self.multipart_chunk_queue.get()
 
     @staticmethod
     def batch_generator(gen_in: Generator[T, None, None], batch_size: int) -> Generator[List[T], None, None]:
@@ -388,8 +397,8 @@ class Chunker:
         if len(batch) > 0:
             yield batch
 
-    @staticmethod
-    def prefetch_generator(gen_in: Generator[T, None, None], buffer_size: int) -> Generator[T, None, None]:
+    # @staticmethod
+    def prefetch_generator(self, gen_in: Generator[T, None, None], buffer_size: int) -> Generator[T, None, None]:
         """
         Prefetches from generator while handing StopIteration to ensure items yield immediately.
         Start a thread to prefetch items from the generator and put them in a queue. Upon StopIteration,
@@ -405,6 +414,8 @@ class Chunker:
 
         def prefetch():
             for item in gen_in:
+                if self.multipart_exit_event.is_set():  # exit with exit event
+                    break
                 queue.put(item)
             queue.put(sentinel)
 
@@ -455,13 +466,15 @@ class TransferJob(ABC):
         dst_paths: List[str] or str,
         recursive: bool = False,
         requester_pays: bool = False,
+        transfer_config: Optional[TransferConfig] = None,
         uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
         self.src_path = src_path
-        self.dst_paths = dst_paths
+        self.dst_paths = dst_paths if isinstance(dst_paths, list) else [dst_paths]
         self.recursive = recursive
         self.requester_pays = requester_pays
         self.uuid = uuid
+        self.transfer_config = transfer_config if transfer_config else TransferConfig()
 
     @property
     def transfer_type(self) -> str:
@@ -500,7 +513,7 @@ class TransferJob(ABC):
     @property
     def dst_ifaces(self) -> List[StorageInterface]:
         """Return the destination object store interface"""
-        if not hasattr(self, "_dst_iface"):
+        if not hasattr(self, "_dst_ifaces"):
             if self.transfer_type == "unicast":
                 provider_dst, bucket_dst, _ = parse_path(self.dst_paths[0])
                 self._dst_ifaces = [StorageInterface.create(f"{provider_dst}:infer", bucket_dst)]
@@ -554,11 +567,16 @@ class CopyJob(TransferJob):
         dst_paths: List[str] or str,
         recursive: bool = False,
         requester_pays: bool = False,
+        transfer_config: Optional[TransferConfig] = None,
         uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
-        super().__init__(src_path, dst_paths, recursive, requester_pays, uuid)
+        super().__init__(src_path, dst_paths, recursive, requester_pays, transfer_config, uuid)
         self.transfer_list = []
         self.multipart_transfer_list = []
+        self.chunker = Chunker(self.src_iface, self.dst_ifaces, self.transfer_config)  # TODO: should read in existing transfer config
+
+    def stop(self):
+        self.chunker.stop()
 
     @property
     def http_pool(self):
@@ -570,24 +588,19 @@ class CopyJob(TransferJob):
 
     def gen_transfer_pairs(
         self,
-        chunker: Optional[Chunker] = None,
-        dataplane: Optional["Dataplane"] = None,
-        transfer_config: Optional[TransferConfig] = field(init=False, default_factory=lambda: TransferConfig()),
+        dataplane: Optional["Dataplane"] = None
     ) -> Generator[TransferPair, None, None]:
         """Generate transfer pairs for the transfer job.
 
         :param chunker: chunker that makes the chunk requests
         :type chunker: Chunker
         """
-        if chunker is None:  # used for external access to transfer pair list
-            chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)  # TODO: should read in existing transfer config
-        yield from chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, dataplane, self.recursive, self._pre_filter_fn)
+        yield from self.chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, dataplane, self.recursive, self._pre_filter_fn)
 
     def dispatch(
         self,
         dataplane: "Dataplane",
         dispatch_batch_size: int = 100,  # 6.4 GB worth of chunks
-        transfer_config: Optional[TransferConfig] = field(init=False, default_factory=lambda: TransferConfig()),
     ) -> Generator[Chunk, None, None]:
         """Dispatch transfer job to specified gateways.
 
@@ -598,12 +611,12 @@ class CopyJob(TransferJob):
         :param dispatch_batch_size: maximum size of the buffer to temporarily store the generators (default: 1000)
         :type dispatch_batch_size: int
         """
-        chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
-        transfer_pair_generator = self.gen_transfer_pairs(chunker, dataplane)  # returns TransferPair objects
-        gen_transfer_list = chunker.tail_generator(transfer_pair_generator, self.transfer_list)
-        chunks = chunker.chunk(gen_transfer_list)
-        batches = chunker.batch_generator(
-            chunker.prefetch_generator(chunks, buffer_size=dispatch_batch_size * 32), batch_size=dispatch_batch_size
+        # chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
+        transfer_pair_generator = self.gen_transfer_pairs(dataplane)  # returns TransferPair objects
+        gen_transfer_list = self.chunker.tail_generator(transfer_pair_generator, self.transfer_list)
+        chunks = self.chunker.chunk(gen_transfer_list)
+        batches = self.chunker.batch_generator(
+            self.chunker.prefetch_generator(chunks, buffer_size=dispatch_batch_size * 32), batch_size=dispatch_batch_size
         )
 
         # dispatch chunk requests
@@ -649,6 +662,7 @@ class CopyJob(TransferJob):
                 assert Chunk.from_dict(chunk_batch[0].as_dict()) == chunk_batch[0], f"Invalid chunk request: {chunk_batch[0].as_dict}"
 
                 # TODO: make async
+                st = time.time()
                 reply = self.http_pool.request(
                     "POST",
                     f"{server.gateway_api_url}/api/v1/chunk_requests",
@@ -657,9 +671,10 @@ class CopyJob(TransferJob):
                 )
                 if reply.status != 200:
                     raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
+                et = time.time()
                 reply_json = json.loads(reply.data.decode("utf-8"))
-                logger.fs.debug(f"Added {n_added} chunks to server {server}: {reply_json}")
                 n_added += reply_json["n_added"]
+                logger.fs.debug(f"Added {n_added} chunks to server {server} in {et-st}: {reply_json}")
                 queue_size[min_idx] = reply_json["qsize"]  # update queue size
                 # dont try again with some gateway
                 min_idx = (min_idx + 1) % len(src_gateways)
@@ -667,8 +682,8 @@ class CopyJob(TransferJob):
             yield from chunk_batch
 
             # copy new multipart transfers to the multipart transfer list
-            updated_len = len(chunker.multipart_upload_requests)
-            self.multipart_transfer_list.extend(chunker.multipart_upload_requests[n_multiparts:updated_len])
+            updated_len = len(self.chunker.multipart_upload_requests)
+            self.multipart_transfer_list.extend(self.chunker.multipart_upload_requests[n_multiparts:updated_len])
             n_multiparts = updated_len
 
     def finalize(self):
@@ -738,6 +753,28 @@ class CopyJob(TransferJob):
 
 
 @dataclass
+class TestCopyJob(CopyJob):
+    # TODO: remove this class (unnecessary since we have TestObjectStore object)
+
+    """Test copy which does not interact with object stores but uses random data generation on gateways"""
+
+    def __init__(
+        self,
+        src_path: str,
+        dst_paths: List[str] or str,
+        recursive: bool = False,
+        requester_pays: bool = False,
+        transfer_config: Optional[TransferConfig] = None,
+        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
+        num_chunks: int = 10,
+        chunk_size_bytes: int = 1024,
+    ):
+        super().__init__(src_path, dst_paths, recursive, requester_pays, transfer_config, uuid)
+        self.num_chunks = num_chunks
+        self.chunk_size_bytes = chunk_size_bytes
+
+
+@dataclass
 class SyncJob(CopyJob):
     """sync job that copies the source objects that does not exist in the destination bucket to the destination"""
 
@@ -746,9 +783,10 @@ class SyncJob(CopyJob):
         src_path: str,
         dst_paths: List[str] or str,
         requester_pays: bool = False,
+        transfer_config: Optional[TransferConfig] = None,
         uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
-        super().__init__(src_path, dst_paths, True, requester_pays, uuid)
+        super().__init__(src_path, dst_paths, True, requester_pays, transfer_config, uuid)
         self.transfer_list = []
         self.multipart_transfer_list = []
 
@@ -759,20 +797,14 @@ class SyncJob(CopyJob):
 
     def gen_transfer_pairs(
         self,
-        chunker: Optional[Chunker] = None,
         dataplane: Optional["Dataplane"] = None,
-        transfer_config: Optional[TransferConfig] = field(init=False, default_factory=lambda: TransferConfig()),
     ) -> Generator[TransferPair, None, None]:
         """Generate transfer pairs for the transfer job.
 
         :param chunker: chunker that makes the chunk requests
         :type chunker: Chunker
         """
-        if chunker is None:  # used for external access to transfer pair list
-            chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
-        transfer_pair_gen = chunker.transfer_pair_generator(
-            self.src_prefix, self.dst_prefixes, dataplane, self.recursive, self._pre_filter_fn
-        )
+        transfer_pair_gen = self.chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, dataplane, self.recursive, self._pre_filter_fn)
 
         # only single destination supported
         assert len(self.dst_ifaces) == 1, "Only single destination supported for sync job"
