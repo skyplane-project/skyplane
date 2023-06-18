@@ -17,7 +17,16 @@ You can also run skyplane from a Python API client. To copy a single object or f
 import skyplane
 
 client = skyplane.SkyplaneClient()
+
+# single destination 
 client.copy(src="s3://bucket-src/key", dst="s3://bucket-dst/key", recursive=False)
+
+# multiple destinations
+client.copy(
+    src="s3://bucket-src/key", 
+    dst=["s3://bucket-dst1/key", "s3://bucket-dst2/key"], 
+    recursive=False
+)
 ```
 This will create a skyplane dataplane (i.e. cluster), execute the transfer, and tear down the cluster upon completion. 
 

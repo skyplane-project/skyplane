@@ -24,8 +24,7 @@ Contents
    quickstart
    configure
    architecture
-   performance_stats_collection
-   on-prem_setup
+   permissions
    faq
 
 .. toctree::
@@ -42,6 +41,7 @@ Contents
    build_from_source
    contributing
    debugging
+   programmable_gateway
 
 .. toctree::
    :maxdepth: 2
@@ -55,6 +55,7 @@ Contents
    :caption: Learn More 
 
    benchmark
+   on-prem_setup
    performance_stats_collection
    roadmap
 
