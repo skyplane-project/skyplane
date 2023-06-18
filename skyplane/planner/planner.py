@@ -117,6 +117,7 @@ class Planner:
         quota_limit = self._get_quota_limits_for(
             cloud_provider=cloud_provider, region=region, spot=getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances")
         )
+        print("QUOTA LIMIT", region_tag, quota_limit)
 
         config_vm_type = getattr(self.transfer_config, f"{cloud_provider}_instance_class")
 

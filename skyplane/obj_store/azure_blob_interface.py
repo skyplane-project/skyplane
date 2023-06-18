@@ -26,6 +26,9 @@ class AzureBlobInterface(ObjectStoreInterface):
         self.container_name = container_name
         self.max_concurrency = max_concurrency  # parallel upload/downloads, seems to cause issues if too high
 
+    def provider(self):
+        return "azure"
+
     def path(self):
         return f"https://{self.account_name}.blob.core.windows.net/{self.container_name}"
 
