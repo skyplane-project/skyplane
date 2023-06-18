@@ -40,6 +40,7 @@ _FLAG_TYPES = {
     "requester_pays": bool,
     "native_cmd_enabled": bool,
     "native_cmd_threshold_gb": int,
+    "tmpdir": str,
 }
 
 _DEFAULT_FLAGS = {
@@ -75,6 +76,7 @@ _DEFAULT_FLAGS = {
     "requester_pays": False,
     "native_cmd_enabled": True,
     "native_cmd_threshold_gb": 2,
+    "tmpdir": "/tmp",
 }
 
 

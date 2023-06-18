@@ -1,10 +1,12 @@
 import functools
+import signal
+
 from pprint import pprint
 import json
 import time
 from abc import ABC
 from datetime import datetime
-from threading import Thread
+from threading import Thread, Event
 
 import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional, Set
@@ -97,6 +99,14 @@ class TransferProgressTracker(Thread):
         self.jobs = {job.uuid: job for job in jobs}
         self.transfer_config = transfer_config
 
+        # exit handling
+        self.exit_flag = Event()
+
+        def signal_handler(signal, frame):
+            self.exit_flag.set()
+
+        signal.signal(signal.SIGINT, signal_handler)
+
         if hooks is None:
             self.hooks = EmptyTransferHook()
         else:
@@ -138,9 +148,7 @@ class TransferProgressTracker(Thread):
         session_start_timestamp_ms = int(time.time() * 1000)
         try:
             # pre-dispatch chunks to begin pre-buffering chunks
-            chunk_streams = {
-                job_uuid: job.dispatch(self.dataplane, transfer_config=self.transfer_config) for job_uuid, job in self.jobs.items()
-            }
+            chunk_streams = {job_uuid: job.dispatch(self.dataplane) for job_uuid, job in self.jobs.items()}
             for job_uuid, job in self.jobs.items():
                 logger.fs.debug(f"[TransferProgressTracker] Dispatching job {job.uuid}")
                 self.job_chunk_requests[job_uuid] = {}
@@ -148,6 +156,12 @@ class TransferProgressTracker(Thread):
                 self.job_complete_chunk_ids[job_uuid] = {region: set() for region in self.dataplane.topology.dest_region_tags}
 
                 for chunk in chunk_streams[job_uuid]:
+                    if self.exit_flag.is_set():
+                        logger.fs.debug(f"[TransferProgressTracker] Exiting due to signal")
+                        self.hooks.on_dispatch_end()
+                        self.hooks.on_transfer_end()
+                        job.stop()  # stop threads in chunk stream
+                        return
                     chunks_dispatched = [chunk]
                     self.job_chunk_requests[job_uuid][chunk.chunk_id] = chunk
                     self.hooks.on_chunk_dispatched(chunks_dispatched)

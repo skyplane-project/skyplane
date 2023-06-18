@@ -68,3 +68,6 @@ class StorageInterface:
             return R2Interface(account, bucket)
         else:
             raise ValueError(f"Invalid region_tag {region_tag} - could not create interface")
+
+    def create_object_repr(self, key: str):
+        raise NotImplementedError()

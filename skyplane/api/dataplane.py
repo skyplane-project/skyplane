@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 from skyplane import compute
+from skyplane.api.tracker import TransferProgressTracker
 from skyplane.exceptions import GatewayContainerStartException
 from skyplane.api.tracker import TransferProgressTracker, TransferHook
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
@@ -49,6 +50,7 @@ class Dataplane:
         transfer_config: TransferConfig,
         log_dir: str,
         debug: bool = True,
+        local: bool = False,
     ):
         """
         :param clientid: the uuid of the local host to create the dataplane
@@ -70,6 +72,7 @@ class Dataplane:
         self.log_dir = Path(log_dir)
         self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
         self.transfer_dir.mkdir(exist_ok=True, parents=True)
+        self.local = local
 
         # transfer logs
         self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -88,6 +91,8 @@ class Dataplane:
         gateway_log_dir: Optional[PathLike],
         authorize_ssh_pub_key: Optional[str] = None,
         e2ee_key_bytes: Optional[str] = None,
+        container_name: Optional[str] = "skyplane_gateway",
+        port: Optional[int] = 8081,
     ):
         # map outgoing ports
         setup_args = {}
@@ -106,8 +111,14 @@ class Dataplane:
         if authorize_ssh_pub_key:
             gateway_server.copy_public_key(authorize_ssh_pub_key)
 
+        # write gateway info file
+        gateway_info_path = Path(f"{gateway_log_dir}/gateway_info.json")
+        with open(gateway_info_path, "w") as f:
+            json.dump(self.topology.get_gateway_info_json(), f, indent=4)
+        logger.fs.info(f"Writing gateway info to {gateway_info_path}")
+
         # write gateway programs
-        gateway_program_filename = Path(f"{gateway_log_dir}/gateway_program_{gateway_node.gateway_id}.json")
+        gateway_program_filename = Path(f"{gateway_log_dir}/gateway_program_{gateway_node.gateway_id}.json".replace(":", "-"))
         with open(gateway_program_filename, "w") as f:
             f.write(gateway_node.gateway_program.to_json())
 
@@ -115,12 +126,15 @@ class Dataplane:
         gateway_server.start_gateway(
             # setup_args,
             gateway_docker_image=gateway_docker_image,
-            gateway_program_path=str(gateway_program_filename),
-            gateway_info_path=f"{gateway_log_dir}/gateway_info.json",
+            gateway_program_path=os.path.abspath(str(gateway_program_filename)),
+            gateway_info_path=os.path.abspath(os.path.join(gateway_log_dir, "gateway_info.json")),
             e2ee_key_bytes=None,  # TODO: remove
             use_bbr=self.transfer_config.use_bbr,  # TODO: remove
             use_compression=self.transfer_config.use_compression,
             use_socket_tls=self.transfer_config.use_socket_tls,
+            local=self.local,
+            container_name=container_name,
+            port=port,
         )
 
     def provision(
@@ -206,12 +220,6 @@ class Dataplane:
         Path(gateway_program_dir).mkdir(exist_ok=True, parents=True)
         logger.fs.info(f"Writing gateway programs to {gateway_program_dir}")
 
-        # write gateway info file
-        gateway_info_path = f"{gateway_program_dir}/gateway_info.json"
-        with open(gateway_info_path, "w") as f:
-            json.dump(self.topology.get_gateway_info_json(), f, indent=4)
-        logger.fs.info(f"Writing gateway info to {gateway_info_path}")
-
         # start gateways in parallel
         jobs = []
         for node, server in gateway_bound_nodes.items():
@@ -225,19 +233,20 @@ class Dataplane:
             self.copy_gateway_logs()
             raise GatewayContainerStartException(f"Error starting gateways. Please check gateway logs {self.transfer_dir}")
 
+    def copy_gateway_log(self, instance, container_name: Optional[str] = "skyplane_gateway"):
+        # copy log from single gateway
+        out_file = self.transfer_dir / f"gateway_{instance.uuid()}.stdout"
+        err_file = self.transfer_dir / f"gateway_{instance.uuid()}.stderr"
+        logger.fs.info(f"[Dataplane.copy_gateway_logs] Copying logs from {instance.uuid()}: {out_file}")
+        instance.run_command(f"sudo docker logs -t {container_name} 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
+        instance.download_file("/tmp/gateway.stdout", out_file)
+        instance.download_file("/tmp/gateway.stderr", err_file)
+
     def copy_gateway_logs(self):
         # copy logs from all gateways in parallel
-        def copy_log(instance):
-            out_file = self.transfer_dir / f"gateway_{instance.uuid()}.stdout"
-            err_file = self.transfer_dir / f"gateway_{instance.uuid()}.stderr"
-            logger.fs.info(f"[Dataplane.copy_gateway_logs] Copying logs from {instance.uuid()}: {out_file}")
-            instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
-            instance.download_file("/tmp/gateway.stdout", out_file)
-            instance.download_file("/tmp/gateway.stderr", err_file)
+        do_parallel(self.copy_gateway_log, self.bound_nodes.values(), n=-1)
 
-        do_parallel(copy_log, self.bound_nodes.values(), n=-1)
-
-    def deprovision(self, max_jobs: int = 64, spinner: bool = False):
+    def deprovision(self, max_jobs: int = 64, spinner: bool = True):
         """
         Deprovision the remote gateways
 
@@ -258,6 +267,8 @@ class Dataplane:
                 for task in self.pending_transfers:
                     logger.fs.warning(f"Before deprovisioning, waiting for jobs to finish: {list(task.jobs.keys())}")
                     task.join()
+                    for thread in threading.enumerate():
+                        assert "_run_multipart_chunk_thread" not in thread.name, f"thread {thread.name} is still running"
             except KeyboardInterrupt:
                 logger.warning("Interrupted while waiting for transfers to finish, deprovisioning anyway.")
                 raise
