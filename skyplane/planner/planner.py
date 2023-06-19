@@ -285,8 +285,9 @@ class MulticastDirectPlanner(Planner):
 
             # source region gateway program
             obj_store_read = src_program.add_operator(
-                GatewayReadObjectStore(src_bucket, src_region_tag, self.n_connections), partition_id=partition_id)
-                
+                GatewayReadObjectStore(src_bucket, src_region_tag, self.n_connections), partition_id=partition_id
+            )
+
             # send to all destination
             mux_and = src_program.add_operator(GatewayMuxAnd(), parent_handle=obj_store_read, partition_id=partition_id)
             dst_prefixes = job.dst_prefixes
