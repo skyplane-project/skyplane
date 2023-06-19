@@ -36,15 +36,12 @@ class GatewayDaemon:
         self,
         region: str,
         chunk_dir: PathLike,
-        gateway_program_file: PathLike,
-        gateway_info_file: PathLike,
         max_incoming_ports=64,
         use_tls=True,
         use_e2ee=False,
     ):
         # read gateway program
-        # gateway_program_path = Path(os.environ["GATEWAY_PROGRAM_FILE"]).expanduser()
-        gateway_program_path = Path(gateway_program_file).expanduser()
+        gateway_program_path = Path(os.environ["GATEWAY_PROGRAM_FILE"]).expanduser()
         gateway_program = json.load(open(gateway_program_path, "r"))
 
         self.upload_id_map = Manager().dict()
@@ -52,8 +49,7 @@ class GatewayDaemon:
         pprint(gateway_program)
 
         # read gateway info
-        # gateway_info_path = Path(os.environ["GATEWAY_INFO_FILE"]).expanduser()
-        gateway_info_path = Path(gateway_info_file).expanduser()
+        gateway_info_path = Path(os.environ["GATEWAY_INFO_FILE"]).expanduser()
         self.gateway_info = json.load(open(gateway_info_path, "r"))
 
         print("starting gateway daemon", gateway_program_path)
@@ -256,7 +252,7 @@ class GatewayDaemon:
                     )
                     total_p += op["num_connections"]
                 elif op["op_type"] == "write_local":
-                    operators[handle] = GatewayWriteLocal(  # TODO: add path
+                    operators[handle] = GatewayWriteLocal(
                         handle=handle,
                         region=self.region,
                         input_queue=input_queue,
@@ -266,17 +262,6 @@ class GatewayDaemon:
                         chunk_store=self.chunk_store,
                     )
                     total_p += 1
-                elif op["op_type"] == "gen_data":
-                    operators[handle] = GatewayRandomDataGen(
-                        handle=handle,
-                        region=self.region,
-                        size_mb=op["size_mb"],
-                        input_queue=input_queue,
-                        output_queue=output_queue,
-                        error_queue=self.error_queue,
-                        error_event=self.error_event,
-                        chunk_store=self.chunk_store,
-                    )
                 else:
                     raise ValueError(f"Unsupported op_type {op['op_type']}")
                 # recursively create for child operators
@@ -358,8 +343,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Skyplane Gateway Daemon")
     parser.add_argument("--region", type=str, required=True, help="Region tag (provider:region")
     parser.add_argument("--chunk-dir", type=Path, default="/tmp/skyplane/chunks", help="Directory to store chunks")
-    parser.add_argument("--gateway-program-file", type=Path, default="/pkg/data/gateway_program.json", help="Gateway program file")
-    parser.add_argument("--gateway-info-file", type=Path, default="/pkg/data/gateway_info.json", help="Gateway info file")
     parser.add_argument("--disable-tls", action="store_true")
     parser.add_argument("--use-compression", action="store_true")  # TODO: remove
     parser.add_argument("--disable-e2ee", action="store_true")  # TODO: remove
@@ -369,8 +352,6 @@ if __name__ == "__main__":
     daemon = GatewayDaemon(
         region=args.region,
         chunk_dir=args.chunk_dir,
-        gateway_info_file=args.gateway_info_file,
-        gateway_program_file=args.gateway_program_file,
         use_tls=not args.disable_tls,
     )
     daemon.run()

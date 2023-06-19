@@ -207,7 +207,7 @@ class AzureBlobInterface(ObjectStoreInterface):
         return dst_object_name
 
     @imports.inject("azure.storage.blob", pip_extra="azure")
-    def complete_multipart_upload(azure_blob, self, dst_object_name: str, upload_id: str, custom_data: Optional[Any] = None) -> None:
+    def complete_multipart_upload(azure_blob, self, dst_object_name: str, upload_id: str, metadata: Optional[Any] = None) -> None:
         """After all blocks of a blob are uploaded/staged with their unique block_id,
         in order to complete the multipart upload, we commit them together.
 
@@ -215,15 +215,15 @@ class AzureBlobInterface(ObjectStoreInterface):
         :type dst_object_name: str
         :param upload_id: upload_id to index into our block id mappings, should be the same as the dst_object_name in Azure
         :type upload_id: str
-        :param custom_data: In Azure, this custom data is the blockID list (parts) and the object mime_type from the TransferJob instance (default: None)
-        :type custom_data: Optional[Any]
+        :param metadata: In Azure, this custom data is the blockID list (parts) and the object mime_type from the TransferJob instance (default: None)
+        :type metadata: Optional[Any]
         """
 
         assert upload_id == dst_object_name, "In Azure, upload_id should be the same as the blob name."
-        assert custom_data is not None, "In Azure, the custom data should exist for multipart"
+        assert metadata is not None, "In Azure, the custom data should exist for multipart"
 
         # Decouple the custom data
-        block_list, mime_type = custom_data
+        block_list, mime_type = metadata
         assert block_list != [], "The blockID list shouldn't be empty for Azure multipart"
         block_list = list(map(lambda block_id: azure_blob.BlobBlock(block_id=block_id), block_list))
 

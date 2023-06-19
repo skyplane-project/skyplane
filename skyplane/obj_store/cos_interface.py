@@ -217,7 +217,7 @@ class COSInterface(ObjectStoreInterface):
         else:
             raise exceptions.SkyplaneException(f"Failed to initiate multipart upload for {dst_object_name}: {response}")
 
-    def complete_multipart_upload(self, dst_object_name, upload_id, custom_data: Optional[Any] = None):
+    def complete_multipart_upload(self, dst_object_name, upload_id, metadata: Optional[Any] = None):
         print("complete multipart upload")
         cos_client = self._cos_client()
         all_parts = []

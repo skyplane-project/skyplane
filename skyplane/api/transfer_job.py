@@ -159,14 +159,14 @@ class Chunker:
                     dest_object = dest_objects[region]
                     _, upload_id = upload_id_mapping[region]
 
-                    custom_data = None
+                    metadata = None
                     # Convert parts to base64 and store mime_type if destination interface is AzureBlobInterface
                     if isinstance(dest_iface, AzureBlobInterface):
                         block_ids = list(map(lambda part_num: AzureBlobInterface.id_to_base64_encoding(part_num, dest_object.key), parts))
-                        custom_data = (block_ids, mime_type)
+                        metadata = (block_ids, mime_type)
 
                     self.multipart_upload_requests.append(
-                        dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket, custom_data=custom_data)
+                        dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket, metadata=metadata)
                     )
             else:
                 mime_type = None
@@ -686,7 +686,7 @@ class CopyJob(TransferJob):
                 for req in batch:
                     logger.fs.debug(f"Finalize upload id {req['upload_id']} for key {req['key']}")
                     retry_backoff(
-                        partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"], req["custom_data"]),
+                        partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"], req["metadata"]),
                         initial_backoff=0.5,
                     )
 

@@ -54,9 +54,9 @@ jobs:
           poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
           poetry run skyplane config set native_cmd_enabled false
           cat ~/.skyplane/config
-          poetry run skyplane init -y --disable-config-cloudflare
+          poetry run skyplane init -y
           poetry run skyplane config set usage_stats false
-      - name: Single small file test 
+      - name: Single small file test
         run: poetry run python tests/integration/cp_local.py ${{ matrix.pairs }} --n-files 1 --file-size-mb 32
       - name: 128 small files test
         run: poetry run python tests/integration/cp_local.py ${{ matrix.pairs }} --n-files 128 --file-size-mb 1
@@ -73,23 +73,36 @@ jobs:
       STRATEGY_UUID: itest-d-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v1
+      - name: Install poetry
+        run: pipx install poetry
       - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
-      - name: Install skyplane from pypi
-        run: pip install skyplane[aws,azure,gcp]
+          cache: "poetry"
+      - name: Set Poetry config
+        run: |
+          poetry config virtualenvs.in-project false
+          poetry config virtualenvs.path ~/.virtualenvs
+      - name: Install dependencies
+        run: poetry install -E aws -E azure -E gcp
+        if: steps.cache.outputs.cache-hit != 'true'
       - id: 'auth'
         uses: 'google-github-actions/auth@v1'
         with:
           credentials_json: '${{ secrets.GCP_CREDENTIALS_JSON }}'
       - name: Skyplane init
         run: |
-          skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
-          skyplane init -y --disable-config-azure --disable-config-cloudflare
-          skyplane config set usage_stats false
+          poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
+          poetry run skyplane init -y --disable-config-azure --disable-config-cloudflare
+          poetry run skyplane config set usage_stats false
       - name: Deprovision
-        run: skyplane deprovision
+        run: poetry run skyplane deprovision
+      - name: Delete matching S3 buckets
+        run: |
+          for pattern in "test-skyplane-" "skyplane-integration-us-east-1-" "integrationus-east-1-"; do
+            aws s3api list-buckets --query "Buckets[?starts_with(Name, \`${pattern}\`) == \`true\`].Name" --output text | tr '\t' '\n' | while read bucket; do aws s3 rb "s3://$bucket" --force; done
+          done
       - name: Cleanup GCP service account
         if: always()
         run: gcloud iam service-accounts delete --quiet ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com

@@ -7,7 +7,6 @@ RUN --mount=type=cache,target=/var/cache/apt apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# TODO: uncomment when on-prem is re-enabled
 ##install HDFS Onprem Packages
 #RUN apt-get update && \
 #    apt-get install -y openjdk-11-jdk && \
@@ -48,7 +47,7 @@ RUN (echo 'net.ipv4.ip_local_port_range = 12000 65535' >> /etc/sysctl.conf) \
 COPY scripts/requirements-gateway.txt /tmp/requirements-gateway.txt
 
 #Onprem: Install Hostname Resolution for HDFS
-#COPY scripts/on_prem/hostname /tmp/hostname
+COPY scripts/on_prem/hostname /tmp/hostname
 
 RUN --mount=type=cache,target=/root/.cache/pip pip3 install --no-cache-dir -r /tmp/requirements-gateway.txt && rm -r /tmp/requirements-gateway.txt
 

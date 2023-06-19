@@ -254,7 +254,7 @@ class GCSInterface(ObjectStoreInterface):
         response = self.send_xml_request(dst_object_name, {"uploads": None}, "POST", content_type=mime_type)
         return ElementTree.fromstring(response.content)[2].text
 
-    def complete_multipart_upload(self, dst_object_name, upload_id, custom_data: Optional[Any] = None):
+    def complete_multipart_upload(self, dst_object_name, upload_id, metadata: Optional[Any] = None):
         # get parts
         xml_data = ElementTree.Element("CompleteMultipartUpload")
         next_part_number_marker = None
