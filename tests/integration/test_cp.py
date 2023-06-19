@@ -127,7 +127,9 @@ def test_azure(azure_bucket, gcp_bucket, test_case, recursive):
     client.copy(f"{azure_bucket.path()}/{test_case}", f"gs://{gcp_bucket.bucket()}/azure/", recursive=recursive)
 
 
-@pytest.mark.parametrize("test_case, recursive", [(test_bucket_medium_file, True)])
+@pytest.mark.parametrize(
+    "test_case, recursive", [(test_bucket_medium_file, True), (test_bucket_large_file, False), (test_bucket_small_file, True)]
+)
 def test_aws(aws_bucket, gcp_bucket, test_case, recursive):
     """
     Test copying a big file to different cloud providers
@@ -135,7 +137,6 @@ def test_aws(aws_bucket, gcp_bucket, test_case, recursive):
     :param gcp_bucket: gcp bucket to copy FROM dstiface
     :param test_case: test case from test_bucket to copy from
     """
-    print("DEST", aws_bucket.path(), gcp_bucket.path())
     client = SkyplaneClient()
     src_iface = ObjectStoreInterface.create("gcp:us-west2", test_bucket.split("://")[1])
 
@@ -143,16 +144,70 @@ def test_aws(aws_bucket, gcp_bucket, test_case, recursive):
     assert (
         len(list(src_iface.list_objects(prefix=test_case.replace(f"{test_bucket}/", "")))) > 0
     ), f"Test case {test_case} does not exist in {test_bucket}"
-    print("test case", test_case)
     client.copy(test_case, f"{aws_bucket.path()}/{test_case}", recursive=recursive)
 
     # assert sync has cost zero
     dst_objects = list(aws_bucket.list_objects())
     assert len(dst_objects) > 0, f"Object {test_case} not copied to {aws_bucket.bucket()}: only container {dst_objects}"
 
-    print(f"gs://{gcp_bucket}/azure/{test_case}")
     # copy back
-    client.copy(f"{aws_bucket.path()}/{test_case}", f"gs://{gcp_bucket.bucket()}/azure/", recursive=recursive)
+    client.copy(f"{aws_bucket.path()}/{test_case}", f"gs://{gcp_bucket.bucket()}/aws/", recursive=recursive)
+
+
+@pytest.mark.parametrize(
+    "test_case, recursive", [(test_bucket_medium_file, True), (test_bucket_large_file, False), (test_bucket_small_file, True)]
+)
+def test_cloudflare(cloudflare_bucket, gcp_bucket, test_case, recursive):
+    """
+    Test copying a big file to different cloud providers
+    :param cloudflare_bucket: destination interface
+    :param gcp_bucket: gcp bucket to copy FROM dstiface
+    :param test_case: test case from test_bucket to copy from
+    """
+    client = SkyplaneClient()
+    src_iface = ObjectStoreInterface.create("gcp:us-west2", test_bucket.split("://")[1])
+
+    assert isinstance(cloudflare_bucket.bucket(), str), f"Bucket name is not a string {cloudflare_bucket.bucket()}"
+    assert (
+        len(list(src_iface.list_objects(prefix=test_case.replace(f"{test_bucket}/", "")))) > 0
+    ), f"Test case {test_case} does not exist in {test_bucket}"
+    client.copy(test_case, f"{cloudflare_bucket.path()}/{test_case}", recursive=recursive)
+
+    # assert sync has cost zero
+    dst_objects = list(cloudflare_bucket.list_objects())
+    assert len(dst_objects) > 0, f"Object {test_case} not copied to {cloudflare_bucket.bucket()}: only container {dst_objects}"
+
+    # copy back
+    client.copy(f"{cloudflare_bucket.path()}/{test_case}", f"gs://{gcp_bucket.bucket()}/cloudflare/", recursive=recursive)
+
+
+@pytest.mark.parametrize(
+    "test_case, recursive", [(test_bucket_medium_file, True), (test_bucket_large_file, False), (test_bucket_small_file, True)]
+)
+def test_gcp(gcp_bucket, test_case, recursive):
+    """
+    Test copying a big file to different cloud providers
+    :param gcp_bucket: destination interface
+    :param gcp_bucket: gcp bucket to copy FROM dstiface
+    :param test_case: test case from test_bucket to copy from
+    """
+    client = SkyplaneClient()
+    src_iface = ObjectStoreInterface.create("gcp:us-west2", test_bucket.split("://")[1])
+
+    assert isinstance(gcp_bucket.bucket(), str), f"Bucket name is not a string {gcp_bucket.bucket()}"
+    assert (
+        len(list(src_iface.list_objects(prefix=test_case.replace(f"{test_bucket}/", "")))) > 0
+    ), f"Test case {test_case} does not exist in {test_bucket}"
+    client.copy(test_case, f"{gcp_bucket.path()}/{test_case}", recursive=recursive)
+
+    # assert sync has cost zero
+    dst_objects = list(gcp_bucket.list_objects())
+    assert len(dst_objects) > 0, f"Object {test_case} not copied to {gcp_bucket.bucket()}: only container {dst_objects}"
+
+
+def test_same_region(same_region_bucket):
+    client = SkyplaneClient()
+    client.copy(test_bucket_large_file, f"{same_region_bucket.path()}")
 
 
 def test_pipeline(gcp_bucket):
