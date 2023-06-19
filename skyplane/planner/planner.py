@@ -176,10 +176,10 @@ class Planner:
 
 class UnicastDirectPlanner(Planner):
     # DO NOT USE THIS - broken for single-region transfers
-    def __init__(self, n_instances: int, n_connections: int):
+    def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig):
+        super().__init__(transfer_config)
         self.n_instances = n_instances
         self.n_connections = n_connections
-        super().__init__()
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         # make sure only single destination

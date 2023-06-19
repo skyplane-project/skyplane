@@ -283,7 +283,7 @@ def azure_check(
     print(iface.container_client.get_container_properties())
 
     # write object temorarily
-       # check skyplane AzureBlobInterface
+    # check skyplane AzureBlobInterface
     print(f"\n{hline}\n[bold]Checking Skyplane AzureBlobInterface[/bold]\n{hline}")
     from skyplane.obj_store.azure_blob_interface import AzureBlobInterface
 
@@ -313,7 +313,6 @@ def azure_check(
     tmp_object = f"skyplane-{uuid.uuid4()}"
     iface.upload_object(tmp_file, tmp_object)
     iface.delete_objects([tmp_object])
- 
 
 
 @app.command()

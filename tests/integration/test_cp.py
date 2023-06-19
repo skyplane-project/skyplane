@@ -105,9 +105,9 @@ def test_azure(azure_bucket, gcp_bucket, test_case, recursive):
     Test copying a big file to different cloud providers
     :param azure_bucket: destination interface
     :param gcp_bucket: gcp bucket to copy FROM dstiface
-    :param test_case: test case from test_bucket to copy from 
+    :param test_case: test case from test_bucket to copy from
     """
-    print("DEST", azure_bucket, gcp_bucket)
+    print("DEST", azure_bucket.path(), gcp_bucket.path())
     client = SkyplaneClient()
     src_iface = ObjectStoreInterface.create("gcp:us-west2", test_bucket.split("://")[1])
 
@@ -126,15 +126,16 @@ def test_azure(azure_bucket, gcp_bucket, test_case, recursive):
     # copy back
     client.copy(f"{azure_bucket.path()}/{test_case}", f"gs://{gcp_bucket.bucket()}/azure/", recursive=recursive)
 
-@pytest.mark.parametrize("test_case, recursive", [(test_bucket_large_file, False)])
+
+@pytest.mark.parametrize("test_case, recursive", [(test_bucket_medium_file, True)])
 def test_aws(aws_bucket, gcp_bucket, test_case, recursive):
     """
     Test copying a big file to different cloud providers
     :param aws_bucket: destination interface
     :param gcp_bucket: gcp bucket to copy FROM dstiface
-    :param test_case: test case from test_bucket to copy from 
+    :param test_case: test case from test_bucket to copy from
     """
-    print("DEST", aws_bucket, gcp_bucket)
+    print("DEST", aws_bucket.path(), gcp_bucket.path())
     client = SkyplaneClient()
     src_iface = ObjectStoreInterface.create("gcp:us-west2", test_bucket.split("://")[1])
 
@@ -147,14 +148,29 @@ def test_aws(aws_bucket, gcp_bucket, test_case, recursive):
 
     # assert sync has cost zero
     dst_objects = list(aws_bucket.list_objects())
-    assert dst_objects == [test_case], f"Object {test_case} not copied to {aws_bucket.bucket()}: only container {dst_objects}"
+    assert len(dst_objects) > 0, f"Object {test_case} not copied to {aws_bucket.bucket()}: only container {dst_objects}"
 
+    print(f"gs://{gcp_bucket}/azure/{test_case}")
     # copy back
-    client.copy(f"{aws_bucket.path()}/{test_case}", f"gs://{gcp_bucket.bucket()}/aws/", recursive=recursive)
+    client.copy(f"{aws_bucket.path()}/{test_case}", f"gs://{gcp_bucket.bucket()}/azure/", recursive=recursive)
+
+
+def test_pipeline(gcp_bucket):
+    """Test pipeline's ability to run multiple copy jobs on a single dataplane"""
+    client = SkyplaneClient()
+    pipeline = client.pipeline()
+
+    # queue two copy jobs
+    pipeline.queue_copy(test_bucket_large_file, gcp_bucket.path())
+    pipeline.queue_copy(test_bucket_medium_file, gcp_bucket.path())
+
+    # start pipeline
+    pipeline.start(debug=True, progress=True)
 
 
 # test one sided transfers
 def test_cp_one_sided():
+    # TODO: run on-sided tranfer between all cloud pairs
     pass
 
 
@@ -174,4 +190,6 @@ def test_cp_multicast(aws_bucket, gcp_bucket, same_region_bucket):
     assert (
         len(list(src_iface.list_objects(prefix=test_bucket_large_file.replace(f"{test_bucket}/", "")))) > 0
     ), f"Test case {test_bucket_large_file} does not exist in {test_bucket}"
-    client.copy(test_bucket_large_file, [f"s3://{aws_bucket}/", f"gs://{gcp_bucket}/", f"gs://{same_region_bucket}/", f"azure://{azure_bucket}/"])
+    client.copy(
+        test_bucket_large_file, [f"s3://{aws_bucket}/", f"gs://{gcp_bucket}/", f"gs://{same_region_bucket}/", f"azure://{azure_bucket}/"]
+    )

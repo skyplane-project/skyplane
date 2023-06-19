@@ -100,11 +100,8 @@ class Chunker:
         while not exit_event.is_set():
             try:
                 transfer_pair = in_queue.get(block=False, timeout=0.1)
-                print("GOT TRANSFER PAIR")
             except queue.Empty:
                 continue
-
-            print("start thread")
 
             src_object = transfer_pair.src_obj
             dest_objects = transfer_pair.dst_objs
@@ -116,7 +113,7 @@ class Chunker:
                 for dest_iface in self.dst_ifaces:
                     dest_object = dest_objects[dest_iface.region_tag()]
                     upload_id = dest_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
-                    print(f"Created upload id for key {dest_object.key} with upload id {upload_id} for bucket {dest_iface.bucket_name}")
+                    # print(f"Created upload id for key {dest_object.key} with upload id {upload_id} for bucket {dest_iface.bucket_name}")
                     # store mapping between key and upload id for each region
                     upload_id_mapping[dest_iface.region_tag()] = (src_object.key, upload_id)
                 out_queue_chunks.put(GatewayMessage(upload_id_mapping=upload_id_mapping))  # send to output queue
@@ -266,13 +263,11 @@ class Chunker:
         for dst_iface in self.dst_ifaces:
             if not dst_iface.bucket_exists():
                 raise exceptions.MissingBucketException(f"Destination bucket {dst_iface.path()} does not exist or is not readable.")
-        
+
         # query all source region objects
         logger.fs.debug(f"Querying objects in {self.src_iface.path()}")
-        print("PREFIX", src_prefix)
         n_objs = 0
         for obj in self.src_iface.list_objects(src_prefix):
-            print('obj', obj)
             if prefilter_fn is None or prefilter_fn(obj):
                 # collect list of destination objects
                 dest_objs = {}
@@ -323,10 +318,8 @@ class Chunker:
         multipart_exit_event = threading.Event()
         multipart_chunk_threads = []
 
- 
-        # TODO: remove after azure multipart implemented 
-        azure_dest = any([dst_iface.provider() == "azure" for dst_iface in self.dst_ifaces])
-        print([dst_iface.provider() == "azure" for dst_iface in self.dst_ifaces])
+        # TODO: remove after azure multipart implemented
+        azure_dest = any([dst_iface.provider == "azure" for dst_iface in self.dst_ifaces])
 
         # start chunking threads
         if not azure_dest and self.transfer_config.multipart_enabled:
@@ -342,11 +335,13 @@ class Chunker:
         # begin chunking loop
         for transfer_pair in transfer_pair_generator:
             src_obj = transfer_pair.src_obj
-            if not azure_dest and self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
-                print("MULTIPART", transfer_pair)
+            if (
+                not azure_dest
+                and self.transfer_config.multipart_enabled
+                and src_obj.size > self.transfer_config.multipart_threshold_mb * MB
+            ):
                 multipart_send_queue.put(transfer_pair)
             else:
-                print("NO MULTIPART")
                 if transfer_pair.src_obj.size == 0:
                     logger.fs.debug(f"Skipping empty object {src_obj.key}")
                     continue
@@ -815,7 +810,6 @@ class SyncJob(CopyJob):
                 if dest_obj.key in self._found_dest_objs:
                     dest_obj.size = self._found_dest_objs[dest_obj.key].size
                     dest_obj.last_modified = self._found_dest_objs[dest_obj.key].last_modified
-                print("par", src_obj, dest_obj)
                 yield src_obj, dest_obj
 
     @classmethod
