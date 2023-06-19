@@ -338,7 +338,7 @@ def gcp_check(
         rprint(f"[bright_black]GCP Python SDK auth: {auth}[/bright_black]")
     check_assert(auth, "GCP Python SDK auth created")
     cred = auth.credentials
-    sa_cred = auth.service_account_key_path
+    sa_cred = auth.service_account_credentials
     if debug:
         rprint(f"[bright_black]GCP Python SDK credentials: {cred}[/bright_black]")
         rprint(f"[bright_black]GCP Python SDK service account credentials: {sa_cred}[/bright_black]")

@@ -3,7 +3,7 @@ import hashlib
 import os
 from functools import lru_cache
 
-from typing import Iterator, List, Optional, Tuple
+from typing import Any, Iterator, List, Optional, Tuple
 
 from skyplane import exceptions, compute
 from skyplane.exceptions import NoSuchObjectException
@@ -231,7 +231,7 @@ class S3Interface(ObjectStoreInterface):
         else:
             raise exceptions.SkyplaneException(f"Failed to initiate multipart upload for {dst_object_name}: {response}")
 
-    def complete_multipart_upload(self, dst_object_name, upload_id):
+    def complete_multipart_upload(self, dst_object_name, upload_id, metadata: Optional[Any] = None):
         s3_client = self._s3_client()
         all_parts = []
         while True:

@@ -20,9 +20,6 @@ from skyplane.utils.fn import PathLike, wait_for
 from skyplane.utils.retry import retry_backoff
 from skyplane.utils.timer import Timer
 from skyplane.planner.topology import TopologyPlanGateway
-from skyplane.config import SkyplaneConfig
-from skyplane.config_paths import config_path
-
 
 tmp_log_dir = Path("/tmp/skyplane")
 
@@ -99,29 +96,6 @@ class Server:
         self.gateway_api_url = None
         self.init_log_files(log_dir)
         self.ssh_tunnels: Dict = {}
-
-        # TODO: allow specified path
-        self.config = SkyplaneConfig.load_config(config_path)
-
-        # setup authentication credentials
-        self.auth = {}
-
-        if self.config.aws_enabled:
-            from skyplane.compute.aws.aws_auth import AWSAuthentication
-
-            self.auth["aws"] = AWSAuthentication()
-        if self.config.gcp_enabled:
-            from skyplane.compute.gcp.gcp_auth import GCPAuthentication
-
-            self.auth["gcp"] = GCPAuthentication()
-        if self.config.azure_enabled:
-            from skyplane.compute.azure.azure_auth import AzureAuthentication
-
-            self.auth["azure"] = AzureAuthentication()
-        if self.config.ibmcloud_enabled:
-            from skyplane.compute.ibmcloud.ibmcloud_auth import IBMCloudAuthentication
-
-            self.auth["ibmcloud"] = IBMCloudAuthentication()
 
     def __repr__(self):
         return f"Server({self.uuid()})"
@@ -321,24 +295,24 @@ class Server:
         use_compression=False,
         e2ee_key_bytes=None,
         use_socket_tls=False,
-        local=False,
-        container_name: Optional[str] = "skyplane_gateway",
-        port: Optional[int] = 8081,
     ):
-        docker_envs = {"SKYPLANE_IS_GATEWAY": "1"}
-
         def check_stderr(tup):
             assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
 
         desc_prefix = f"Starting gateway {self.uuid()}, host: {self.public_ip()}"
 
         # increase TCP connections, enable BBR optionally and raise file limits
-        if not local:
-            check_stderr(self.run_command(make_sysctl_tcp_tuning_command(cc="bbr" if use_bbr else "cubic")))
-            retry_backoff(self.install_docker, exception_class=RuntimeError)
+        check_stderr(self.run_command(make_sysctl_tcp_tuning_command(cc="bbr" if use_bbr else "cubic")))
+        retry_backoff(self.install_docker, exception_class=RuntimeError)
 
-            # start log viewer
-            self.run_command(make_dozzle_command(log_viewer_port))
+        # start log viewer
+        self.run_command(make_dozzle_command(log_viewer_port))
+
+        # copy cloud configuration
+        docker_envs = {"SKYPLANE_IS_GATEWAY": "1"}
+        if config_path.exists():
+            self.upload_file(config_path, f"/tmp/{config_path.name}")
+            docker_envs["SKYPLANE_CONFIG"] = f"/pkg/data/{config_path.name}"
 
         # fix issue 312, retry boto3 credential calls to instance metadata service
         if self.provider == "aws":
@@ -346,42 +320,26 @@ class Server:
             docker_envs["AWS_METADATA_SERVICE_TIMEOUT"] = "10"
 
         # pull docker image and start container
-        if not local:
-            with Timer() as t:
-                retry_backoff(partial(self.pull_docker, gateway_docker_image), exception_class=RuntimeError)
-            logger.fs.debug(f"{desc_prefix} docker pull in {t.elapsed}")
-            logger.fs.debug(f"{desc_prefix}: Starting gateway container")
+        with Timer() as t:
+            retry_backoff(partial(self.pull_docker, gateway_docker_image), exception_class=RuntimeError)
 
-        docker_run_flags = f"-d --log-driver=local --log-opt max-file=16 --ipc=host --ulimit nofile={1024 * 1024}"
-        # docker_run_flags += " --mount type=tmpfs,dst=/skyplane,tmpfs-size=$(($(free -b  | head -n2 | tail -n1 | awk '{print $2}')/2))"
-        docker_run_flags += " --mount type=tmpfs,dst=/skyplane,tmpfs-size=250000000"
+        logger.fs.debug(f"{desc_prefix} docker pull in {t.elapsed}")
+        logger.fs.debug(f"{desc_prefix}: Starting gateway container")
+        docker_run_flags = f"-d --log-driver=local --log-opt max-file=16 --ipc=host --network=host --ulimit nofile={1024 * 1024}"
+        docker_run_flags += " --mount type=tmpfs,dst=/skyplane,tmpfs-size=$(($(free -b  | head -n2 | tail -n1 | awk '{print $2}')/2))"
         docker_run_flags += f" -v /tmp/{config_path.name}:/pkg/data/{config_path.name}"
 
-        # we copy all credentials to all VMs in order to support object store access across clouds (e.g. for one-sided transfers)
-        # we can add a least privledge option in the future where we rely on compute service accounts instead in the future
-
-        # copy cloud configuration
-        if config_path.exists():
-            self.upload_file(config_path, f"/tmp/{config_path.name}")
-            docker_envs["SKYPLANE_CONFIG"] = f"/pkg/data/{config_path.name}"
-            docker_run_flags += f" -v /tmp/{config_path.name}:/pkg/data/{config_path.name}"
-
         # copy service account files
-        # if self.provider == "gcp":
-        if "gcp" in self.auth:
-            # service_key_path = compute.GCPAuthentication().get_service_account_key_path()
-            service_key_path = self.auth["gcp"].service_account_key_path
+        if self.provider == "gcp":
+            service_key_path = compute.GCPAuthentication().get_service_account_key_path()
             service_key_file = os.path.basename(service_key_path)
             self.upload_file(service_key_path, f"/tmp/{service_key_file}")
             docker_envs["GCP_SERVICE_ACCOUNT_FILE"] = f"/pkg/data/{service_key_file}"
             docker_run_flags += f" -v /tmp/{service_key_file}:/pkg/data/{service_key_file}"
 
         # set default region for boto3 on AWS
-        # if self.provider == "aws":
-        if "aws" in self.auth:
+        if self.provider == "aws":
             docker_envs["AWS_DEFAULT_REGION"] = self.region_tag.split(":")[1]
-            docker_envs["AWS_ACCESS_KEY_ID"] = self.auth["aws"].access_key
-            docker_envs["AWS_SECRET_ACCESS_KEY"] = self.auth["aws"].secret_key
 
         # copy E2EE keys
         if e2ee_key_bytes is not None:
@@ -390,53 +348,37 @@ class Server:
             docker_envs["E2EE_KEY_FILE"] = f"/pkg/data/{e2ee_key_file}"
             docker_run_flags += f" -v /tmp/{e2ee_key_file}:/pkg/data/{e2ee_key_file}"
 
-        if local:
-            docker_run_flags += f" -v {gateway_program_path}:/pkg/data/gateway_program.json"
-            docker_run_flags += f" -v {gateway_info_path}:/pkg/data/gateway_info.json"
-        else:
-            # upload gateway programs and gateway info
-            gateway_program_file = os.path.basename(gateway_program_path).replace(":", "_")
-            gateway_info_file = os.path.basename(gateway_info_path).replace(":", "_")
-
-            self.upload_file(gateway_program_path, f"/tmp/{gateway_program_file}")  # upload gateway program
-            self.upload_file(gateway_info_path, f"/tmp/{gateway_info_file}")  # upload gateway info
-            # docker_envs["GATEWAY_PROGRAM_FILE"] = f"/pkg/data/gateway_program.json"
-            # docker_envs["GATEWAY_INFO_FILE"] = f"/pkg/data/gateway_info.json"
-            docker_run_flags += f" -v /tmp/{gateway_program_file}:/pkg/data/gateway_program.json"
-            docker_run_flags += f" -v /tmp/{gateway_info_file}:/pkg/data/gateway_info.json"
+        # upload gateway programs and gateway info
+        gateway_program_file = os.path.basename(gateway_program_path).replace(":", "_")
+        gateway_info_file = os.path.basename(gateway_info_path).replace(":", "_")
+        self.upload_file(gateway_program_path, f"/tmp/{gateway_program_file}")  # upload gateway program
+        self.upload_file(gateway_info_path, f"/tmp/{gateway_info_file}")  # upload gateway info
+        docker_envs["GATEWAY_PROGRAM_FILE"] = f"/pkg/data/gateway_program.json"
+        docker_envs["GATEWAY_INFO_FILE"] = f"/pkg/data/gateway_info.json"
+        docker_run_flags += f" -v /tmp/{gateway_program_file}:/pkg/data/gateway_program.json"
+        docker_run_flags += f" -v /tmp/{gateway_info_file}:/pkg/data/gateway_info.json"
         gateway_daemon_cmd = f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
 
         # update docker flags
         docker_run_flags += " " + " ".join(f"--env {k}={v}" for k, v in docker_envs.items())
 
-        # network
-        if local:
-            docker_run_flags += f" --network skyplane-network --expose 8081 -p {port}:8081"
-        else:
-            docker_run_flags += f" --network host"
-
-        gateway_daemon_cmd += f" --gateway-program-file /pkg/data/gateway_program.json"
-        gateway_daemon_cmd += f" --gateway-info-file /pkg/data/gateway_info.json"
         gateway_daemon_cmd += f" --region {self.region_tag} {'--use-compression' if use_compression else ''}"
         gateway_daemon_cmd += f" {'--disable-e2ee' if e2ee_key_bytes is None else ''}"
         gateway_daemon_cmd += f" {'--disable-tls' if not use_socket_tls else ''}"
         escaped_gateway_daemon_cmd = gateway_daemon_cmd.replace('"', '\\"')
         docker_launch_cmd = (
-            f'sudo docker run {docker_run_flags} --name {container_name} {gateway_docker_image} /bin/bash -c "{escaped_gateway_daemon_cmd}"'
+            f'sudo docker run {docker_run_flags} --name skyplane_gateway {gateway_docker_image} /bin/bash -c "{escaped_gateway_daemon_cmd}"'
         )
         logger.fs.info(f"{desc_prefix}: {docker_launch_cmd}")
         start_out, start_err = self.run_command(docker_launch_cmd)
-        assert not start_err.strip(), f"Error starting gateway:\n{start_out.strip()}\n{start_err.strip()}"
         logger.fs.debug(desc_prefix + f": Gateway started {start_out.strip()}")
+        assert not start_err.strip(), f"Error starting gateway:\n{start_out.strip()}\n{start_err.strip()}"
 
         gateway_container_hash = start_out.strip().split("\n")[-1][:12]
-        if local:
-            self.gateway_log_viewer_url = None
-        else:
-            self.gateway_log_viewer_url = f"http://127.0.0.1:{self.tunnel_port(8888)}/container/{gateway_container_hash}"
-            logger.fs.debug(f"{self.uuid()} log_viewer_url = {self.gateway_log_viewer_url}")
-            self.gateway_api_url = f"http://127.0.0.1:{self.tunnel_port(8080 + 1)}"
-            logger.fs.debug(f"{self.uuid()} gateway_api_url = {self.gateway_api_url}")
+        self.gateway_log_viewer_url = f"http://127.0.0.1:{self.tunnel_port(8888)}/container/{gateway_container_hash}"
+        logger.fs.debug(f"{self.uuid()} log_viewer_url = {self.gateway_log_viewer_url}")
+        self.gateway_api_url = f"http://127.0.0.1:{self.tunnel_port(8080 + 1)}"
+        logger.fs.debug(f"{self.uuid()} gateway_api_url = {self.gateway_api_url}")
 
         # wait for gateways to start (check status API)
         http_pool = urllib3.PoolManager()
@@ -456,7 +398,7 @@ class Server:
         except TimeoutError as e:
             logger.fs.error(f"Gateway {self.instance_name()} is not ready {e}")
             logger.fs.warning(desc_prefix + " gateway launch command: " + docker_launch_cmd)
-            logs, err = self.run_command(f"sudo docker logs {container_name} --tail=100")
+            logs, err = self.run_command(f"sudo docker logs skyplane_gateway --tail=100")
             logger.fs.error(f"Docker logs: {logs}\nerr: {err}")
             logger.fs.exception(e)
             raise e from None
