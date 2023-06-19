@@ -7,7 +7,6 @@ from typing import Dict, Any, Optional, List
 
 import typer
 from rich.progress import Progress, TextColumn, SpinnerColumn
-from rich import print as rprint
 
 import skyplane
 from skyplane.api.config import TransferConfig, AWSConfig, GCPConfig, AzureConfig, IBMCloudConfig
@@ -293,9 +292,8 @@ class SkyplaneCLI:
 
 
 def force_deprovision(dp: skyplane.Dataplane):
-    rprint(f"\n:x: [bold red]Force deprovisioning dataplane[/bold red]")
     s = signal.signal(signal.SIGINT, signal.SIG_IGN)
-    dp.deprovision(spinner=True)
+    dp.deprovision()
     signal.signal(signal.SIGINT, s)
 
 
@@ -373,12 +371,12 @@ def run_transfer(
     elif cloud_config.get_flag("native_cmd_enabled"):
         # fallback option: transfer is too small
         if cli.args["cmd"] == "cp":
-            job = CopyJob(src, [dst], recursive=recursive, transfer_config=cli.transfer_config)  # TODO: rever to using pipeline
+            job = CopyJob(src, [dst], recursive=recursive)  # TODO: rever to using pipeline
             if cli.estimate_small_transfer(job, cloud_config.get_flag("native_cmd_threshold_gb") * GB):
                 small_transfer_status = cli.transfer_cp_small(src, dst, recursive)
                 return 0 if small_transfer_status else 1
         else:
-            job = SyncJob(src, [dst], transfer_config=cli.transfer_config)
+            job = SyncJob(src, [dst])
             if cli.estimate_small_transfer(job, cloud_config.get_flag("native_cmd_threshold_gb") * GB):
                 small_transfer_status = cli.transfer_sync_small(src, dst)
                 return 0 if small_transfer_status else 1

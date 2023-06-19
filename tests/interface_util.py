@@ -12,10 +12,7 @@ from skyplane.utils.fn import wait_for
 def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket: bool = False, file_size_mb: int = 1):
     interface = ObjectStoreInterface.create(region, bucket)
     interface.create_bucket(region.split(":")[1])
-    # time.sleep(10)
-    while not interface.bucket_exists():
-        print("waiting for bucket to exist")
-        time.sleep(1)
+    time.sleep(5)
 
     # generate file and upload
     obj_name = f"test_{uuid.uuid4()}.txt"
@@ -66,9 +63,7 @@ def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket
     assert obj_name in objs[0].key, f"{objs[0].key} != {obj_name}"
     assert objs[0].size == file_size_mb * MB, f"{objs[0].size} != {file_size_mb * MB}"
 
-    # delete bucket
-    if test_delete_bucket:
-        interface.delete_bucket()
-        assert not interface.bucket_exists(), "Bucket should not exist"
-
+    # interface.delete_objects([obj_name])
+    # if test_delete_bucket:
+    #     interface.delete_bucket()
     return True

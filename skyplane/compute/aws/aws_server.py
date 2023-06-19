@@ -24,8 +24,8 @@ class AWSServer(Server):
     def __init__(self, region_tag, instance_id, log_dir=None):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "aws"
-        assert "aws" in self.auth, f"AWS Server created but not authenticated with AWS"
-        self.key_manager = AWSKeyManager(self.auth["aws"])
+        self.auth = AWSAuthentication()
+        self.key_manager = AWSKeyManager(self.auth)
         self.aws_region = self.region_tag.split(":")[1]
         self.instance_id = instance_id
 
@@ -33,7 +33,7 @@ class AWSServer(Server):
     @functools.lru_cache(maxsize=None)
     def login_name(self) -> str:
         # update the login name according to AMI
-        ec2 = self.auth["aws"].get_boto3_resource("ec2", self.aws_region)
+        ec2 = self.auth.get_boto3_resource("ec2", self.aws_region)
         ec2client = ec2.meta.client
         image_info = ec2client.describe_images(ImageIds=[ec2.Instance(self.instance_id).image_id])
         if [r["Name"] for r in image_info["Images"]][0].split("/")[0] == "ubuntu":
@@ -52,7 +52,7 @@ class AWSServer(Server):
         return f"{self.region_tag}:{self.instance_id}"
 
     def get_boto3_instance_resource(self):
-        ec2 = self.auth["aws"].get_boto3_resource("ec2", self.aws_region)
+        ec2 = self.auth.get_boto3_resource("ec2", self.aws_region)
         return ec2.Instance(self.instance_id)
 
     @ignore_lru_cache()
@@ -101,7 +101,7 @@ class AWSServer(Server):
         return f"AWSServer(region_tag={self.region_tag}, instance_id={self.instance_id})"
 
     def terminate_instance_impl(self):
-        iam = self.auth["aws"].get_boto3_resource("iam")
+        iam = self.auth.get_boto3_resource("iam")
 
         # get instance profile name that is associated with this instance
         profile = self.get_boto3_instance_resource().iam_instance_profile

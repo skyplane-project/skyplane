@@ -19,7 +19,7 @@ class GCPServer(Server):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "gcp", f"Region name doesn't match pattern gcp:<region> {self.region_tag}"
         self.gcp_region = self.region_tag.split(":")[1]
-        assert "gcp" in self.auth, f"GCP Server created but not authenticated with GCP"
+        self.auth = GCPAuthentication()
         self.gcp_instance_name = instance_name
         key_root = Path(key_root)
         key_root.mkdir(parents=True, exist_ok=True)
@@ -33,7 +33,7 @@ class GCPServer(Server):
 
     @lru_cache(maxsize=1)
     def get_gcp_instance(self):
-        instances = self.auth["gcp"].get_gcp_instances(self.gcp_region)
+        instances = self.auth.get_gcp_instances(self.gcp_region)
         if "items" in instances:
             for i in instances["items"]:
                 if i["name"] == self.gcp_instance_name:
@@ -79,8 +79,8 @@ class GCPServer(Server):
         return f"GCPServer(region_tag={self.region_tag}, instance_name={self.gcp_instance_name})"
 
     def terminate_instance_impl(self):
-        self.auth["gcp"].get_gcp_client().instances().delete(
-            project=self.auth["gcp"].project_id, zone=self.gcp_region, instance=self.instance_name()
+        self.auth.get_gcp_client().instances().delete(
+            project=self.auth.project_id, zone=self.gcp_region, instance=self.instance_name()
         ).execute()
 
     def get_ssh_client_impl(self, uname="skyplane", ssh_key_password="skyplane"):
