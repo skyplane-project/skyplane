@@ -738,27 +738,6 @@ class CopyJob(TransferJob):
 
 
 @dataclass
-class TestCopyJob(CopyJob):
-    # TODO: remove this class (unnecessary since we have TestObjectStore object)
-
-    """Test copy which does not interact with object stores but uses random data generation on gateways"""
-
-    def __init__(
-        self,
-        src_path: str,
-        dst_paths: List[str] or str,
-        recursive: bool = False,
-        requester_pays: bool = False,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
-        num_chunks: int = 10,
-        chunk_size_bytes: int = 1024,
-    ):
-        super().__init__(src_path, dst_paths, recursive, requester_pays, uuid)
-        self.num_chunks = num_chunks
-        self.chunk_size_bytes = chunk_size_bytes
-
-
-@dataclass
 class SyncJob(CopyJob):
     """sync job that copies the source objects that does not exist in the destination bucket to the destination"""
 
