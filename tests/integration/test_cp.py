@@ -99,6 +99,9 @@ def cloudflare_bucket():
 
 
 # TODO: add more parameters for bucket types
+#@pytest.mark.parametrize( # tests large objects
+#    "test_case, recursive", [(test_bucket_medium_file, True), (test_bucket_large_file, False), (test_bucket_small_file, True)]
+#)
 @pytest.mark.parametrize("test_case, recursive", [(test_bucket_medium_file, True)])
 def test_azure(azure_bucket, gcp_bucket, test_case, recursive):
     """
@@ -110,6 +113,7 @@ def test_azure(azure_bucket, gcp_bucket, test_case, recursive):
     print("DEST", azure_bucket.path(), gcp_bucket.path())
     client = SkyplaneClient()
     src_iface = ObjectStoreInterface.create("gcp:us-west2", test_bucket.split("://")[1])
+    print(azure_bucket.path())
 
     assert isinstance(azure_bucket.bucket(), str), f"Bucket name is not a string {azure_bucket.bucket()}"
     assert (
@@ -139,6 +143,8 @@ def test_aws(aws_bucket, gcp_bucket, test_case, recursive):
     """
     client = SkyplaneClient()
     src_iface = ObjectStoreInterface.create("gcp:us-west2", test_bucket.split("://")[1])
+    print("test case:", test_case)
+    print(aws_bucket.path())
 
     assert isinstance(aws_bucket.bucket(), str), f"Bucket name is not a string {aws_bucket.bucket()}"
     assert (
@@ -205,22 +211,36 @@ def test_gcp(gcp_bucket, test_case, recursive):
     assert len(dst_objects) > 0, f"Object {test_case} not copied to {gcp_bucket.bucket()}: only container {dst_objects}"
 
 
+@pytest.mark.timeout(60*20)
 def test_same_region(same_region_bucket):
     client = SkyplaneClient()
     client.copy(test_bucket_large_file, f"{same_region_bucket.path()}")
 
 
+@pytest.mark.timeout(60*20)
 def test_pipeline(gcp_bucket):
     """Test pipeline's ability to run multiple copy jobs on a single dataplane"""
     client = SkyplaneClient()
     pipeline = client.pipeline()
 
     # queue two copy jobs
-    pipeline.queue_copy(test_bucket_large_file, gcp_bucket.path())
-    pipeline.queue_copy(test_bucket_medium_file, gcp_bucket.path())
+    pipeline.queue_copy(test_bucket_large_file, f"{gcp_bucket.path()}/large/")
+    pipeline.queue_copy(test_bucket_medium_file, f"{gcp_bucket.path()}/medium/", recursive=True)
 
     # start pipeline
-    pipeline.start(debug=True, progress=True)
+    try:
+        pipeline.start(debug=True, progress=True)
+    except Exception as e:
+        print(e)
+        raise e
+
+    assert len(list(gcp_bucket.list_objects(prefix="large/"))) > 0, f"No data from {test_bucket_large_file} transferred"
+    assert len(list(gcp_bucket.list_objects(prefix="medium/"))) > 0, f"No data from {test_bucket_medium_file} transferred"
+
+    print("arge", list(gcp_bucket.list_objects(prefix="large/")))
+    print("medium", list(gcp_bucket.list_objects(prefix="medium/")))
+
+
 
 
 # test one sided transfers
@@ -230,6 +250,7 @@ def test_cp_one_sided():
 
 
 # test multiple VMs
+@pytest.mark.timeout(60*20)
 def test_cp_multiple_vms(aws_bucket):
     client = SkyplaneClient()
     pipeline = client.pipeline(max_instances=2)
@@ -239,6 +260,7 @@ def test_cp_multiple_vms(aws_bucket):
 
 # test multicast
 # TODO: add azure
+@pytest.mark.timeout(60*20)
 def test_cp_multicast(aws_bucket, gcp_bucket, same_region_bucket):
     client = SkyplaneClient()
     src_iface = ObjectStoreInterface.create("gcp:us-west2", test_bucket.split("://")[1])

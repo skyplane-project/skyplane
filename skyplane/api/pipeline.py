@@ -101,6 +101,7 @@ class Pipeline:
         ## create dataplane from plan
         # dp = Dataplane(self.clientid, topo, self.provisioner, self.transfer_config, self.transfer_dir, debug=debug)
         dp = self.create_dataplane(debug)
+        print("pipeline", self.jobs_to_dispatch)
         try:
             dp.provision(spinner=True)
             if progress:

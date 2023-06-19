@@ -113,7 +113,7 @@ class Chunker:
                 for dest_iface in self.dst_ifaces:
                     dest_object = dest_objects[dest_iface.region_tag()]
                     upload_id = dest_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
-                    # print(f"Created upload id for key {dest_object.key} with upload id {upload_id} for bucket {dest_iface.bucket_name}")
+                    print(f"Created upload id for key {dest_object.key} with upload id {upload_id} for bucket {dest_iface.bucket_name}")
                     # store mapping between key and upload id for each region
                     upload_id_mapping[dest_iface.region_tag()] = (src_object.key, upload_id)
                 out_queue_chunks.put(GatewayMessage(upload_id_mapping=upload_id_mapping))  # send to output queue
@@ -460,13 +460,16 @@ class TransferJob(ABC):
         dst_paths: List[str] or str,
         recursive: bool = False,
         requester_pays: bool = False,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
+        job_id: Optional[str] = None 
     ):
         self.src_path = src_path
         self.dst_paths = dst_paths
         self.recursive = recursive
         self.requester_pays = requester_pays
-        self.uuid = uuid
+        if job_id is None:
+            self.uuid = str(uuid.uuid4())
+        else:
+            self.uuid = job_id
 
     @property
     def transfer_type(self) -> str:
@@ -559,9 +562,9 @@ class CopyJob(TransferJob):
         dst_paths: List[str] or str,
         recursive: bool = False,
         requester_pays: bool = False,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
+        job_id: Optional[str] = None 
     ):
-        super().__init__(src_path, dst_paths, recursive, requester_pays, uuid)
+        super().__init__(src_path, dst_paths, recursive, requester_pays, job_id)
         self.transfer_list = []
         self.multipart_transfer_list = []
 
@@ -750,9 +753,9 @@ class SyncJob(CopyJob):
         src_path: str,
         dst_paths: List[str] or str,
         requester_pays: bool = False,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
+        job_id: Optional[str] = None
     ):
-        super().__init__(src_path, dst_paths, True, requester_pays, uuid)
+        super().__init__(src_path, dst_paths, True, requester_pays, job_id)
         self.transfer_list = []
         self.multipart_transfer_list = []
 

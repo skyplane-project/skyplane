@@ -141,6 +141,8 @@ class TransferProgressTracker(Thread):
             chunk_streams = {
                 job_uuid: job.dispatch(self.dataplane, transfer_config=self.transfer_config) for job_uuid, job in self.jobs.items()
             }
+            print("JOBS", self.jobs)
+            print(chunk_streams, "jobs", self.jobs)
             for job_uuid, job in self.jobs.items():
                 logger.fs.debug(f"[TransferProgressTracker] Dispatching job {job.uuid}")
                 self.job_chunk_requests[job_uuid] = {}
@@ -276,6 +278,7 @@ class TransferProgressTracker(Thread):
             # check for errors and exit if there are any (while setting debug flags)
             errors = self.dataplane.check_error_logs()
             if any(errors.values()):
+                print("errors", errors)
                 logger.warning("Copying gateway logs...")
                 self.dataplane.copy_gateway_logs()
                 self.errors = errors

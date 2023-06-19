@@ -64,6 +64,8 @@ class Dataplane:
         self.topology = topology
         self.provisioner = provisioner
         self.transfer_config = transfer_config
+        # disable for azure 
+        # TODO: remove this 
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         self.provisioning_lock = threading.Lock()
         self.provisioned = False
@@ -234,7 +236,7 @@ class Dataplane:
             instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
             instance.download_file("/tmp/gateway.stdout", out_file)
             instance.download_file("/tmp/gateway.stderr", err_file)
-
+        print("COPY GATEWAY LOGS")
         do_parallel(copy_log, self.bound_nodes.values(), n=-1)
 
     def deprovision(self, max_jobs: int = 64, spinner: bool = False):
@@ -307,6 +309,7 @@ class Dataplane:
         """
         if not self.provisioned:
             logger.error("Dataplane must be pre-provisioned. Call dataplane.provision() before starting a transfer")
+        print("discord", jobs)
         tracker = TransferProgressTracker(self, jobs, self.transfer_config, hooks)
         self.pending_transfers.append(tracker)
         tracker.start()

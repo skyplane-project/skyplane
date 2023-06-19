@@ -45,8 +45,12 @@ class S3Interface(ObjectStoreInterface):
             if "An error occurred (AccessDenied) when calling the GetBucketLocation operation" in str(e):
                 logger.warning(f"Bucket location {self.bucket_name} is not public. Assuming region is {default_region}")
                 return default_region
-            logger.warning(f"Specified bucket {self.bucket_name} does not exist, got AWS error: {e}")
-            raise exceptions.MissingBucketException(f"S3 bucket {self.bucket_name} does not exist") from e
+            elif "An error occurred (InvalidAccessKeyId) when calling" in str(e):
+                logger.warning(f"Invalid AWS credentials. Check to make sure credentials configured properly.")
+                raise exceptions.PermissionsException(f"Invalid AWS credentials for accessing bucket {self.bucket_name}") 
+            else:
+                logger.warning(f"Specified bucket {self.bucket_name} does not exist, got AWS error: {e}")
+                raise exceptions.MissingBucketException(f"S3 bucket {self.bucket_name} does not exist") from e
 
     def region_tag(self):
         return "aws:" + self.aws_region
