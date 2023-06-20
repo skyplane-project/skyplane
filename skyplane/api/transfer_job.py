@@ -505,7 +505,7 @@ class TransferJob(ABC):
     @property
     def dst_ifaces(self) -> List[StorageInterface]:
         """Return the destination object store interface"""
-        if not hasattr(self, "_dst_ifaces"):
+        if not hasattr(self, "_dst_iface"):
             if self.transfer_type == "unicast":
                 provider_dst, bucket_dst, _ = parse_path(self.dst_paths[0])
                 self._dst_ifaces = [StorageInterface.create(f"{provider_dst}:infer", bucket_dst)]

@@ -1,4 +1,3 @@
-# Quota fall back helper functions and constants
 import json
 import os
 
