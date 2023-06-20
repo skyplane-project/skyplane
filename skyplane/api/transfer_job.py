@@ -1,5 +1,4 @@
 import json
-import signal
 import time
 import time
 import typer
@@ -70,7 +69,7 @@ class Chunker:
         self,
         src_iface: StorageInterface,
         dst_ifaces: List[StorageInterface],
-        transfer_config: Optional[TransferConfig] = None,
+        transfer_config: TransferConfig,
         concurrent_multipart_chunk_threads: Optional[int] = 64,
         num_partitions: Optional[int] = 1,
     ):
@@ -90,28 +89,6 @@ class Chunker:
         self.multipart_upload_requests = []
         self.concurrent_multipart_chunk_threads = concurrent_multipart_chunk_threads
         self.num_partitions = num_partitions
-        if transfer_config is None:
-            self.transfer_config = TransferConfig()
-
-        # threads for multipart uploads
-        self.multipart_send_queue: Queue[TransferPair] = Queue()
-        self.multipart_chunk_queue: Queue[GatewayMessage] = Queue()
-        self.multipart_exit_event = threading.Event()
-        self.multipart_chunk_threads = []
-
-        # handle exit signal
-        def signal_handler(signal, frame):
-            self.multipart_exit_event.set()
-            for t in self.multipart_chunk_threads:
-                t.join()
-
-        signal.signal(signal.SIGINT, signal_handler)
-
-    def stop(self):
-        """Stops all threads"""
-        self.multipart_exit_event.set()
-        for t in self.multipart_chunk_threads:
-            t.join()
 
     def _run_multipart_chunk_thread(
         self,
@@ -334,22 +311,27 @@ class Chunker:
         :param transfer_pair_generator: generator of pairs of objects to transfer
         :type transfer_pair_generator: Generator
         """
+        multipart_send_queue: Queue[TransferPair] = Queue()
+        multipart_chunk_queue: Queue[GatewayMessage] = Queue()
+        multipart_exit_event = threading.Event()
+        multipart_chunk_threads = []
+
         # start chunking threads
         if self.transfer_config.multipart_enabled:
             for _ in range(self.concurrent_multipart_chunk_threads):
                 t = threading.Thread(
                     target=self._run_multipart_chunk_thread,
-                    args=(self.multipart_exit_event, self.multipart_send_queue, self.multipart_chunk_queue),
+                    args=(multipart_exit_event, multipart_send_queue, multipart_chunk_queue),
                     daemon=False,
                 )
                 t.start()
-                self.multipart_chunk_threads.append(t)
+                multipart_chunk_threads.append(t)
 
         # begin chunking loop
         for transfer_pair in transfer_pair_generator:
             src_obj = transfer_pair.src_obj
             if self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
-                self.multipart_send_queue.put(transfer_pair)
+                multipart_send_queue.put(transfer_pair)
             else:
                 if transfer_pair.src_obj.size == 0:
                     logger.fs.debug(f"Skipping empty object {src_obj.key}")
@@ -366,25 +348,25 @@ class Chunker:
 
             if self.transfer_config.multipart_enabled:
                 # drain multipart chunk queue and yield with updated chunk IDs
-                while not self.multipart_chunk_queue.empty():
-                    yield self.multipart_chunk_queue.get()
+                while not multipart_chunk_queue.empty():
+                    yield multipart_chunk_queue.get()
 
         if self.transfer_config.multipart_enabled:
             # wait for processing multipart requests to finish
             logger.fs.debug("Waiting for multipart threads to finish")
             # while not multipart_send_queue.empty():
             # TODO: may be an issue waiting for this in case of force-quit
-            while not self.multipart_send_queue.empty():
-                logger.fs.debug(f"Remaining in multipart queue: sent {self.multipart_send_queue.qsize()}")
+            while not multipart_send_queue.empty():
+                logger.fs.debug(f"Remaining in multipart queue: sent {multipart_send_queue.qsize()}")
                 time.sleep(0.1)
             # send sentinel to all threads
-            self.multipart_exit_event.set()
-            for thread in self.multipart_chunk_threads:
+            multipart_exit_event.set()
+            for thread in multipart_chunk_threads:
                 thread.join()
 
             # drain multipart chunk queue and yield with updated chunk IDs
-            while not self.multipart_chunk_queue.empty():
-                yield self.multipart_chunk_queue.get()
+            while not multipart_chunk_queue.empty():
+                yield multipart_chunk_queue.get()
 
     @staticmethod
     def batch_generator(gen_in: Generator[T, None, None], batch_size: int) -> Generator[List[T], None, None]:
@@ -402,8 +384,8 @@ class Chunker:
         if len(batch) > 0:
             yield batch
 
-    # @staticmethod
-    def prefetch_generator(self, gen_in: Generator[T, None, None], buffer_size: int) -> Generator[T, None, None]:
+    @staticmethod
+    def prefetch_generator(gen_in: Generator[T, None, None], buffer_size: int) -> Generator[T, None, None]:
         """
         Prefetches from generator while handing StopIteration to ensure items yield immediately.
         Start a thread to prefetch items from the generator and put them in a queue. Upon StopIteration,
@@ -419,8 +401,6 @@ class Chunker:
 
         def prefetch():
             for item in gen_in:
-                if self.multipart_exit_event.is_set():  # exit with exit event
-                    break
                 queue.put(item)
             queue.put(sentinel)
 
@@ -471,15 +451,13 @@ class TransferJob(ABC):
         dst_paths: List[str] or str,
         recursive: bool = False,
         requester_pays: bool = False,
-        transfer_config: Optional[TransferConfig] = None,
         uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
         self.src_path = src_path
-        self.dst_paths = dst_paths if isinstance(dst_paths, list) else [dst_paths]
+        self.dst_paths = dst_paths
         self.recursive = recursive
         self.requester_pays = requester_pays
         self.uuid = uuid
-        self.transfer_config = transfer_config if transfer_config else TransferConfig()
 
     @property
     def transfer_type(self) -> str:
@@ -572,16 +550,11 @@ class CopyJob(TransferJob):
         dst_paths: List[str] or str,
         recursive: bool = False,
         requester_pays: bool = False,
-        transfer_config: Optional[TransferConfig] = None,
         uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
-        super().__init__(src_path, dst_paths, recursive, requester_pays, transfer_config, uuid)
+        super().__init__(src_path, dst_paths, recursive, requester_pays, uuid)
         self.transfer_list = []
         self.multipart_transfer_list = []
-        self.chunker = Chunker(self.src_iface, self.dst_ifaces, self.transfer_config)  # TODO: should read in existing transfer config
-
-    def stop(self):
-        self.chunker.stop()
 
     @property
     def http_pool(self):
@@ -593,18 +566,23 @@ class CopyJob(TransferJob):
 
     def gen_transfer_pairs(
         self,
+        chunker: Optional[Chunker] = None,
+        transfer_config: Optional[TransferConfig] = field(init=False, default_factory=lambda: TransferConfig()),
     ) -> Generator[TransferPair, None, None]:
         """Generate transfer pairs for the transfer job.
 
         :param chunker: chunker that makes the chunk requests
         :type chunker: Chunker
         """
-        yield from self.chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, self.recursive, self._pre_filter_fn)
+        if chunker is None:  # used for external access to transfer pair list
+            chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)  # TODO: should read in existing transfer config
+        yield from chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, self.recursive, self._pre_filter_fn)
 
     def dispatch(
         self,
         dataplane: "Dataplane",
         dispatch_batch_size: int = 100,  # 6.4 GB worth of chunks
+        transfer_config: Optional[TransferConfig] = field(init=False, default_factory=lambda: TransferConfig()),
     ) -> Generator[Chunk, None, None]:
         """Dispatch transfer job to specified gateways.
 
@@ -615,12 +593,12 @@ class CopyJob(TransferJob):
         :param dispatch_batch_size: maximum size of the buffer to temporarily store the generators (default: 1000)
         :type dispatch_batch_size: int
         """
-        # chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
-        transfer_pair_generator = self.gen_transfer_pairs()  # returns TransferPair objects
-        gen_transfer_list = self.chunker.tail_generator(transfer_pair_generator, self.transfer_list)
-        chunks = self.chunker.chunk(gen_transfer_list)
-        batches = self.chunker.batch_generator(
-            self.chunker.prefetch_generator(chunks, buffer_size=dispatch_batch_size * 32), batch_size=dispatch_batch_size
+        chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
+        transfer_pair_generator = self.gen_transfer_pairs(chunker)  # returns TransferPair objects
+        gen_transfer_list = chunker.tail_generator(transfer_pair_generator, self.transfer_list)
+        chunks = chunker.chunk(gen_transfer_list)
+        batches = chunker.batch_generator(
+            chunker.prefetch_generator(chunks, buffer_size=dispatch_batch_size * 32), batch_size=dispatch_batch_size
         )
 
         # dispatch chunk requests
@@ -686,8 +664,8 @@ class CopyJob(TransferJob):
             yield from chunk_batch
 
             # copy new multipart transfers to the multipart transfer list
-            updated_len = len(self.chunker.multipart_upload_requests)
-            self.multipart_transfer_list.extend(self.chunker.multipart_upload_requests[n_multiparts:updated_len])
+            updated_len = len(chunker.multipart_upload_requests)
+            self.multipart_transfer_list.extend(chunker.multipart_upload_requests[n_multiparts:updated_len])
             n_multiparts = updated_len
 
     def finalize(self):
@@ -768,10 +746,9 @@ class SyncJob(CopyJob):
         src_path: str,
         dst_paths: List[str] or str,
         requester_pays: bool = False,
-        transfer_config: Optional[TransferConfig] = None,
         uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
-        super().__init__(src_path, dst_paths, True, requester_pays, transfer_config, uuid)
+        super().__init__(src_path, dst_paths, True, requester_pays, uuid)
         self.transfer_list = []
         self.multipart_transfer_list = []
 
@@ -782,13 +759,17 @@ class SyncJob(CopyJob):
 
     def gen_transfer_pairs(
         self,
+        chunker: Optional[Chunker] = None,
+        transfer_config: Optional[TransferConfig] = field(init=False, default_factory=lambda: TransferConfig()),
     ) -> Generator[TransferPair, None, None]:
         """Generate transfer pairs for the transfer job.
 
         :param chunker: chunker that makes the chunk requests
         :type chunker: Chunker
         """
-        transfer_pair_gen = self.chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, self.recursive, self._pre_filter_fn)
+        if chunker is None:  # used for external access to transfer pair list
+            chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
+        transfer_pair_gen = chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, self.recursive, self._pre_filter_fn)
 
         # only single destination supported
         assert len(self.dst_ifaces) == 1, "Only single destination supported for sync job"
