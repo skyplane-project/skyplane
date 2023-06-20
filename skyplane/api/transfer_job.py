@@ -25,7 +25,7 @@ from functools import partial
 from skyplane import exceptions
 from skyplane.api.config import TransferConfig
 from skyplane.chunk import Chunk, ChunkRequest
-from skyplane.obj_store.azure_blob_interface import AzureBlobObject
+from skyplane.obj_store.azure_blob_interface import AzureBlobInterface, AzureBlobObject
 from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.r2_interface import R2Object
 from skyplane.obj_store.storage_interface import StorageInterface
@@ -158,8 +158,15 @@ class Chunker:
                     region = dest_iface.region_tag()
                     dest_object = dest_objects[region]
                     _, upload_id = upload_id_mapping[region]
+
+                    metadata = None
+                    # Convert parts to base64 and store mime_type if destination interface is AzureBlobInterface
+                    if isinstance(dest_iface, AzureBlobInterface):
+                        block_ids = list(map(lambda part_num: AzureBlobInterface.id_to_base64_encoding(part_num, dest_object.key), parts))
+                        metadata = (block_ids, mime_type)
+
                     self.multipart_upload_requests.append(
-                        dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket)
+                        dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket, metadata=metadata)
                     )
             else:
                 mime_type = None
@@ -646,6 +653,7 @@ class CopyJob(TransferJob):
                 assert Chunk.from_dict(chunk_batch[0].as_dict()) == chunk_batch[0], f"Invalid chunk request: {chunk_batch[0].as_dict}"
 
                 # TODO: make async
+                st = time.time()
                 reply = self.http_pool.request(
                     "POST",
                     f"{server.gateway_api_url}/api/v1/chunk_requests",
@@ -654,9 +662,10 @@ class CopyJob(TransferJob):
                 )
                 if reply.status != 200:
                     raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
+                et = time.time()
                 reply_json = json.loads(reply.data.decode("utf-8"))
-                logger.fs.debug(f"Added {n_added} chunks to server {server}: {reply_json}")
                 n_added += reply_json["n_added"]
+                logger.fs.debug(f"Added {n_added} chunks to server {server} in {et-st}: {reply_json}")
                 queue_size[min_idx] = reply_json["qsize"]  # update queue size
                 # dont try again with some gateway
                 min_idx = (min_idx + 1) % len(src_gateways)
@@ -685,7 +694,10 @@ class CopyJob(TransferJob):
             def complete_fn(batch):
                 for req in batch:
                     logger.fs.debug(f"Finalize upload id {req['upload_id']} for key {req['key']}")
-                    retry_backoff(partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"]), initial_backoff=0.5)
+                    retry_backoff(
+                        partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"], req["metadata"]),
+                        initial_backoff=0.5,
+                    )
 
             do_parallel(complete_fn, batches, n=8)
 
