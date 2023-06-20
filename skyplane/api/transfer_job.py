@@ -293,7 +293,16 @@ class Chunker:
                         logger.fs.exception(e)
                         raise e from None
 
-                    dest_obj = dst_iface.create_object_repr(dest_key)
+                    if dest_provider == "aws":
+                        dest_obj = S3Object(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
+                    elif dest_provider == "azure":
+                        dest_obj = AzureBlobObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
+                    elif dest_provider == "gcp":
+                        dest_obj = GCSObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
+                    elif dest_provider == "cloudflare":
+                        dest_obj = R2Object(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
+                    else:
+                        raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
                     dest_objs[dst_iface.region_tag()] = dest_obj
 
                 # assert that all destinations share the same post-fix key

@@ -116,9 +116,6 @@ class S3Interface(ObjectStoreInterface):
                 )
             yield from objs
 
-    def create_object_repr(self, key: str) -> S3Object:
-        return S3Object(provider=self.provider, bucket=self.bucket(), key=key)
-
     def delete_objects(self, keys: List[str]):
         s3_client = self._s3_client()
         while keys:
