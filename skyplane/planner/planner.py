@@ -17,8 +17,6 @@ from skyplane.gateway.gateway_program import (
     GatewayWriteObjectStore,
     GatewayReceive,
     GatewaySend,
-    GatewayGenData,
-    GatewayWriteLocal,
 )
 
 from skyplane.api.transfer_job import TransferJob
