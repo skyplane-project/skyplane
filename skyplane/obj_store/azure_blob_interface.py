@@ -250,6 +250,3 @@ class AzureBlobInterface(ObjectStoreInterface):
         block_id = block_id.encode("utf-8")
         block_id = base64.b64encode(block_id).decode("utf-8")
         return block_id
-
-    def create_object_repr(self, key: str) -> AzureBlobObject:
-        return AzureBlobObject(provider=self.provider, bucket=self.bucket(), key=key)
