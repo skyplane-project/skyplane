@@ -219,7 +219,7 @@ def test_same_region(same_region_bucket):
 
 @pytest.mark.timeout(60*20)
 def test_pipeline(gcp_bucket):
-    """Test pipeline's ability to run multiple copy jobs on a single dataplane"""
+"""Test pipeline's ability to run multiple copy jobs on a single dataplane"""
     client = SkyplaneClient()
     pipeline = client.pipeline()
 

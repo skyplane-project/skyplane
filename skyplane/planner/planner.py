@@ -213,7 +213,7 @@ class UnicastDirectPlanner(Planner):
             dst_bucket = job.dst_ifaces[0].bucket()
 
             # give each job a different partition id, so we can read/write to different buckets
-            partition_id = jobs.index(job)
+            partition_id = job.uuid
 
             # source region gateway program
             obj_store_read = src_program.add_operator(
@@ -288,7 +288,7 @@ class MulticastDirectPlanner(Planner):
             src_provider = src_region_tag.split(":")[0]
 
             # give each job a different partition id, so we can read/write to different buckets
-            partition_id = jobs.index(job)
+            partition_id = job.uuid
 
             # source region gateway program
             obj_store_read = src_program.add_operator(
@@ -380,7 +380,7 @@ class DirectPlannerSourceOneSided(MulticastDirectPlanner):
             src_provider = src_region_tag.split(":")[0]
 
             # give each job a different partition id, so we can read/write to different buckets
-            partition_id = jobs.index(job)
+            partition_id = job.uuid
 
             # source region gateway program
             obj_store_read = src_program.add_operator(
@@ -441,7 +441,7 @@ class DirectPlannerDestOneSided(MulticastDirectPlanner):
             src_region_tag = job.src_iface.region_tag()
             src_provider = src_region_tag.split(":")[0]
 
-            partition_id = jobs.index(job)
+            partition_id = job.uuid
 
             # send to all destination
             dst_prefixes = job.dst_prefixes

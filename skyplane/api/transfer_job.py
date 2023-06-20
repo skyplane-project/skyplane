@@ -268,6 +268,7 @@ class Chunker:
         logger.fs.debug(f"Querying objects in {self.src_iface.path()}")
         n_objs = 0
         for obj in self.src_iface.list_objects(src_prefix):
+            print(obj)
             if prefilter_fn is None or prefilter_fn(obj):
                 # collect list of destination objects
                 dest_objs = {}
@@ -334,6 +335,7 @@ class Chunker:
 
         # begin chunking loop
         for transfer_pair in transfer_pair_generator:
+            #print("transfer_pair", transfer_pair.src_obj.key, transfer_pair.dst_objs)
             src_obj = transfer_pair.src_obj
             if (
                 not azure_dest
@@ -460,7 +462,7 @@ class TransferJob(ABC):
         dst_paths: List[str] or str,
         recursive: bool = False,
         requester_pays: bool = False,
-        job_id: Optional[str] = None 
+        job_id: Optional[str] = None, 
     ):
         self.src_path = src_path
         self.dst_paths = dst_paths
@@ -648,6 +650,9 @@ class CopyJob(TransferJob):
 
             # send chunk requests to source gateways
             chunk_batch = [cr.chunk for cr in batch if cr.chunk is not None]
+            # TODO: allow multiple partition ids per chunk 
+            for chunk in chunk_batch:  # assign job UUID as partition ID 
+                chunk.partition_id = self.uuid
             min_idx = queue_size.index(min(queue_size))
             n_added = 0
             while n_added < len(chunk_batch):
@@ -656,6 +661,7 @@ class CopyJob(TransferJob):
                 assert Chunk.from_dict(chunk_batch[0].as_dict()) == chunk_batch[0], f"Invalid chunk request: {chunk_batch[0].as_dict}"
 
                 # TODO: make async
+                print("dispatch chunks", [chunk.as_dict() for chunk in chunk_batch[n_added:]])
                 reply = self.http_pool.request(
                     "POST",
                     f"{server.gateway_api_url}/api/v1/chunk_requests",
@@ -694,10 +700,13 @@ class CopyJob(TransferJob):
 
             def complete_fn(batch):
                 for req in batch:
-                    logger.fs.debug(f"Finalize upload id {req['upload_id']} for key {req['key']}")
+                    logger.fs.debug(f"Finalize upload id {req['upload_id']} for key {req['key']} bucket {bucket}")
                     retry_backoff(partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"]), initial_backoff=0.5)
 
             do_parallel(complete_fn, batches, n=8)
+
+        # TODO: Do NOT do this if we are pipelining multiple transfers - remove just what was completed
+        self.multipart_transfer_list = [] 
 
     def verify(self):
         """Verify the integrity of the transfered destination objects"""
@@ -805,7 +814,9 @@ class SyncJob(CopyJob):
             dest_prefix = dest_prefixes[i]
             logger.fs.debug(f"Querying objects in {dst_iface.bucket()}")
             if not hasattr(self, "_found_dest_objs"):
+                print("isting")
                 self._found_dest_objs = {obj.key: obj for obj in dst_iface.list_objects(dest_prefix)}
+                print("done")
             for pair in transfer_pairs:
                 src_obj = pair.src_obj
                 dest_obj = list(pair.dst_objs.values())[0]
@@ -813,6 +824,7 @@ class SyncJob(CopyJob):
                 if dest_obj.key in self._found_dest_objs:
                     dest_obj.size = self._found_dest_objs[dest_obj.key].size
                     dest_obj.last_modified = self._found_dest_objs[dest_obj.key].last_modified
+                print(src_obj, dest_obj)
                 yield src_obj, dest_obj
 
     @classmethod
