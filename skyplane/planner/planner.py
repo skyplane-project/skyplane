@@ -17,6 +17,8 @@ from skyplane.gateway.gateway_program import (
     GatewayWriteObjectStore,
     GatewayReceive,
     GatewaySend,
+    GatewayGenData,
+    GatewayWriteLocal,
 )
 
 from skyplane.api.transfer_job import TransferJob
@@ -28,9 +30,6 @@ from skyplane.config import SkyplaneConfig
 
 
 class Planner:
-    # Only supporting "aws:m5.", "azure:StandardD_v5", and "gcp:n2-standard" instances for now
-    _VCPUS = (96, 64, 48, 32, 16, 8, 4, 2)
-
     def __init__(self, transfer_config: TransferConfig):
         self.transfer_config = transfer_config
         self.config = SkyplaneConfig.load_config(config_path)
@@ -173,10 +172,10 @@ class Planner:
 
 class UnicastDirectPlanner(Planner):
     # DO NOT USE THIS - broken for single-region transfers
-    def __init__(self, n_instances: int, n_connections: int):
+    def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig):
         self.n_instances = n_instances
         self.n_connections = n_connections
-        super().__init__()
+        super().__init__(transfer_config)
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         # make sure only single destination
@@ -242,26 +241,15 @@ class UnicastDirectPlanner(Planner):
 
 
 class MulticastDirectPlanner(Planner):
-
     def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig):
-
-        super().__init__(transfer_config)
         self.n_instances = n_instances
         self.n_connections = n_connections
-
-        # Loading the quota information, add ibm cloud when it is supported
-        self.quota_limits = {}
-        with self.transfer_config.aws_vcpu_file.open("r") as f:
-            self.quota_limits["aws"] = json.load(f)
-        with self.transfer_config.gcp_vcpu_file.open("r") as f:
-            self.quota_limits["gcp"] = json.load(f)
-        with self.transfer_config.azure_vcpu_file.open("r") as f:
-            self.quota_limits["azure"] = json.load(f)
-
+        super().__init__(transfer_config)
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         src_region_tag = jobs[0].src_iface.region_tag()
         dst_region_tags = [iface.region_tag() for iface in jobs[0].dst_ifaces]
+
         # jobs must have same sources and destinations
         for job in jobs[1:]:
             assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
@@ -270,13 +258,17 @@ class MulticastDirectPlanner(Planner):
         plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=dst_region_tags)
 
         # Dynammically calculate n_instances based on quota limits
-        vm_types, n_instances = self._get_vm_type_and_instances(src_region_tag=src_region_tag, dst_region_tags=dst_region_tags)
+        if src_region_tag.split(":")[0] == "test":
+            vm_types = None
+            n_instances = self.n_instances
+        else:
+            vm_types, n_instances = self._get_vm_type_and_instances(src_region_tag=src_region_tag, dst_region_tags=dst_region_tags)
 
         # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
         for i in range(n_instances):
-            plan.add_gateway(src_region_tag, vm_types[src_region_tag])
+            plan.add_gateway(src_region_tag, vm_types[src_region_tag] if vm_types else None)
             for dst_region_tag in dst_region_tags:
-                plan.add_gateway(dst_region_tag, vm_types[dst_region_tag])
+                plan.add_gateway(dst_region_tag, vm_types[dst_region_tag] if vm_types else None)
 
         # initialize gateway programs per region
         dst_program = {dst_region: GatewayProgram() for dst_region in dst_region_tags}
@@ -295,6 +287,7 @@ class MulticastDirectPlanner(Planner):
             obj_store_read = src_program.add_operator(
                 GatewayReadObjectStore(src_bucket, src_region_tag, self.n_connections), partition_id=partition_id
             )
+
             # send to all destination
             mux_and = src_program.add_operator(GatewayMuxAnd(), parent_handle=obj_store_read, partition_id=partition_id)
             dst_prefixes = job.dst_prefixes
@@ -472,3 +465,22 @@ class DirectPlannerDestOneSided(MulticastDirectPlanner):
             plan.set_gateway_program(dst_region_tag, program)
         return plan
 
+
+class UnicastILPPlanner(Planner):
+    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
+        raise NotImplementedError("ILP solver not implemented yet")
+
+
+class MulticastILPPlanner(Planner):
+    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
+        raise NotImplementedError("ILP solver not implemented yet")
+
+
+class MulticastMDSTPlanner(Planner):
+    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
+        raise NotImplementedError("MDST solver not implemented yet")
+
+
+class MulticastSteinerTreePlanner(Planner):
+    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
+        raise NotImplementedError("Steiner tree solver not implemented yet")
