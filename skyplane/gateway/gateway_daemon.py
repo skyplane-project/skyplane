@@ -36,9 +36,10 @@ class GatewayDaemon:
         self,
         region: str,
         chunk_dir: PathLike,
-        max_incoming_ports=64,
+        max_incoming_ports=128,
         use_tls=True,
-        use_e2ee=False,
+        use_e2ee=True,  # TODO: read from operator field
+        use_compression=True,  # TODO: read from operator field
     ):
         # read gateway program
         gateway_program_path = Path(os.environ["GATEWAY_PROGRAM_FILE"]).expanduser()
@@ -71,6 +72,7 @@ class GatewayDaemon:
             e2ee_key_path = Path(os.environ["E2EE_KEY_FILE"]).expanduser()
             with open(e2ee_key_path, "rb") as f:
                 self.e2ee_key_bytes = f.read()
+            print("Server side E2EE key loaded: ", self.e2ee_key_bytes)
         else:
             self.e2ee_key_bytes = None
 
@@ -88,7 +90,7 @@ class GatewayDaemon:
             error_queue=self.error_queue,
             max_pending_chunks=max_incoming_ports,
             use_tls=self.use_tls,
-            use_compression=False,  # use_compression,
+            use_compression=use_compression,
             e2ee_key_bytes=self.e2ee_key_bytes,
         )
 
@@ -184,7 +186,7 @@ class GatewayDaemon:
                         region=self.region,
                         input_queue=input_queue,
                         output_queue=output_queue,
-                        n_processes=1,  # dummy wait thread, not actual reciever
+                        n_processes=1,  # dummy wait thread, not actual receiver
                         chunk_store=self.chunk_store,
                         error_event=self.error_event,
                         error_queue=self.error_queue,
@@ -230,7 +232,7 @@ class GatewayDaemon:
                         error_queue=self.error_queue,
                         chunk_store=self.chunk_store,
                         use_tls=self.use_tls,
-                        use_compression=False,  # operator["compress"],
+                        use_compression=op["compress"],
                         e2ee_key_bytes=self.e2ee_key_bytes,
                         n_processes=op["num_connections"],
                     )

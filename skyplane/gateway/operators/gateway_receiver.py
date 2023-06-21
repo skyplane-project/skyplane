@@ -3,6 +3,7 @@ import signal
 import socket
 import ssl
 import time
+import lz4.frame
 import traceback
 from contextlib import closing
 from multiprocessing import Event, Process, Value, Queue
@@ -152,8 +153,8 @@ class GatewayReceiver:
             # TODO: this wont work
             # chunk_request = self.chunk_store.get_chunk_request(chunk_header.chunk_id)
 
-            # should_decrypt = self.e2ee_secretbox is not None and chunk_request.dst_region == self.region
-            # should_decompress = chunk_header.is_compressed and chunk_request.dst_region == self.region
+            should_decrypt = self.e2ee_secretbox is not None  # and chunk_request.dst_region == self.region
+            should_decompress = chunk_header.is_compressed  # and chunk_request.dst_region == self.region
 
             # wait for space
             # while self.chunk_store.remaining_bytes() < chunk_header.data_len * self.max_pending_chunks:
@@ -170,7 +171,7 @@ class GatewayReceiver:
                 fpath = self.chunk_store.get_chunk_file_path(chunk_header.chunk_id)
                 with fpath.open("wb") as f:
                     socket_data_len = chunk_header.data_len
-                    chunk_received_size = 0
+                    chunk_received_size, chunk_received_size_decompressed = 0, 0
                     to_write = bytearray(socket_data_len)
                     to_write_view = memoryview(to_write)
                     while socket_data_len > 0:
@@ -187,6 +188,18 @@ class GatewayReceiver:
                         )
                     to_write = bytes(to_write)
 
+                    if should_decrypt:
+                        to_write = self.e2ee_secretbox.decrypt(to_write)
+                        print(f"[receiver:{server_port}]:{chunk_header.chunk_id} Decrypting {len(to_write)} bytes")
+
+                    if should_decompress:
+                        data_batch_decompressed = lz4.frame.decompress(to_write)
+                        chunk_received_size_decompressed += len(data_batch_decompressed)
+                        to_write = data_batch_decompressed
+                        print(
+                            f"[receiver:{server_port}]:{chunk_header.chunk_id} Decompressing {len(to_write)} bytes to {chunk_received_size_decompressed} bytes"
+                        )
+
                     # try to write data until successful
                     while True:
                         try:
@@ -194,15 +207,17 @@ class GatewayReceiver:
                             f.write(to_write)
                             f.flush()
 
+                            # check write succeeds
+                            assert os.path.exists(fpath)
+
                             # check size
                             file_size = os.path.getsize(fpath)
-                            if file_size == chunk_header.data_len:
+                            if file_size == chunk_header.raw_data_len:
                                 break
-                            elif file_size >= chunk_header.data_len:
-                                raise ValueError(f"[Gateway] File size {file_size} greater than chunk size {chunk_header.data_len}")
+                            elif file_size >= chunk_header.raw_data_len:
+                                raise ValueError(f"[Gateway] File size {file_size} greater than chunk size {chunk_header.raw_data_len}")
                         except Exception as e:
                             print(e)
-
                         print(
                             f"[receiver:{server_port}]: No remaining space with bytes {self.chunk_store.remaining_bytes()} data len {chunk_header.data_len} max pending {self.max_pending_chunks}, total space {init_space}"
                         )

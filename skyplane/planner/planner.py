@@ -220,13 +220,19 @@ class UnicastDirectPlanner(Planner):
             mux_or = src_program.add_operator(GatewayMuxOr(), parent_handle=obj_store_read, partition_id=partition_id)
             for i in range(n_instances):
                 src_program.add_operator(
-                    GatewaySend(target_gateway_id=dst_gateways[i].gateway_id, region=src_region_tag, num_connections=self.n_connections),
+                    GatewaySend(
+                        target_gateway_id=dst_gateways[i].gateway_id,
+                        region=src_region_tag,
+                        num_connections=self.n_connections,
+                        compress=True,
+                        encrypt=True,
+                    ),
                     parent_handle=mux_or,
                     partition_id=partition_id,
                 )
 
             # dst region gateway program
-            recv_op = dst_program.add_operator(GatewayReceive(), partition_id=partition_id)
+            recv_op = dst_program.add_operator(GatewayReceive(decompress=True, decrypt=True), partition_id=partition_id)
             dst_program.add_operator(
                 GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections), parent_handle=recv_op, partition_id=partition_id
             )
@@ -242,22 +248,20 @@ class UnicastDirectPlanner(Planner):
 
 
 class MulticastDirectPlanner(Planner):
-
     def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig):
-
         super().__init__(transfer_config)
         self.n_instances = n_instances
         self.n_connections = n_connections
+        self.transfer_config = transfer_config
 
         # Loading the quota information, add ibm cloud when it is supported
-        self.quota_limits = {}
-        with self.transfer_config.aws_vcpu_file.open("r") as f:
-            self.quota_limits["aws"] = json.load(f)
-        with self.transfer_config.gcp_vcpu_file.open("r") as f:
-            self.quota_limits["gcp"] = json.load(f)
-        with self.transfer_config.azure_vcpu_file.open("r") as f:
-            self.quota_limits["azure"] = json.load(f)
-
+        # self.quota_limits = {}
+        # with self.transfer_config.aws_vcpu_file.open("r") as f:
+        #     self.quota_limits["aws"] = json.load(f)
+        # with self.transfer_config.gcp_vcpu_file.open("r") as f:
+        #     self.quota_limits["gcp"] = json.load(f)
+        # with self.transfer_config.azure_vcpu_file.open("r") as f:
+        #     self.quota_limits["azure"] = json.load(f)
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         src_region_tag = jobs[0].src_iface.region_tag()
@@ -327,13 +331,18 @@ class MulticastDirectPlanner(Planner):
                             region=dst_region_tag,
                             num_connections=int(self.n_connections / len(dst_gateways)),
                             private_ip=private_ip,
+                            compress=self.transfer_config.use_compression,
+                            encrypt=self.transfer_config.use_e2ee,
                         ),
                         parent_handle=mux_or,
                         partition_id=partition_id,
                     )
 
                 # each gateway also recieves data from source
-                recv_op = dst_program[dst_region_tag].add_operator(GatewayReceive(), partition_id=partition_id)
+                recv_op = dst_program[dst_region_tag].add_operator(
+                    GatewayReceive(decompress=self.transfer_config.use_compression, decrypt=self.transfer_config.use_e2ee),
+                    partition_id=partition_id,
+                )
                 dst_program[dst_region_tag].add_operator(
                     GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
                     parent_handle=recv_op,
@@ -471,4 +480,3 @@ class DirectPlannerDestOneSided(MulticastDirectPlanner):
         for dst_region_tag, program in dst_program.items():
             plan.set_gateway_program(dst_region_tag, program)
         return plan
-
