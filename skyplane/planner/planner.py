@@ -264,12 +264,11 @@ class UnicastDirectPlanner(Planner):
 
 
 class MulticastDirectPlanner(Planner):
-  
     def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig, quota_limits_file: Optional[str] = None):
         super().__init__(transfer_config, quota_limits_file)
         self.n_instances = n_instances
         self.n_connections = n_connections
-        
+
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         src_region_tag = jobs[0].src_iface.region_tag()
         dst_region_tags = [iface.region_tag() for iface in jobs[0].dst_ifaces]
