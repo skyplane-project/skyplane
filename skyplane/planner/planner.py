@@ -28,24 +28,27 @@ from skyplane.config import SkyplaneConfig
 
 
 class Planner:
-    # Only supporting "aws:m5.", "azure:StandardD_v5", and "gcp:n2-standard" instances for now
-    _VCPUS = (96, 64, 48, 32, 16, 8, 4, 2)
-
-    def __init__(self, transfer_config: TransferConfig):
+    def __init__(self, transfer_config: TransferConfig, quota_limits_file: Optional[str] = None):
         self.transfer_config = transfer_config
         self.config = SkyplaneConfig.load_config(config_path)
+        self.n_instances = self.config.get_flag("max_instances")
 
         # Loading the quota information, add ibm cloud when it is supported
-        self.quota_limits = {}
-        if os.path.exists(aws_quota_path):
-            with aws_quota_path.open("r") as f:
-                self.quota_limits["aws"] = json.load(f)
-        if os.path.exists(azure_standardDv5_quota_path):
-            with azure_standardDv5_quota_path.open("r") as f:
-                self.quota_limits["azure"] = json.load(f)
-        if os.path.exists(gcp_quota_path):
-            with gcp_quota_path.open("r") as f:
-                self.quota_limits["gcp"] = json.load(f)
+        quota_limits = {}
+        if quota_limits_file is not None:
+            with open(quota_limits_file, "r") as f:
+                quota_limits = json.load(f)
+        else:
+            if os.path.exists(aws_quota_path):
+                with aws_quota_path.open("r") as f:
+                    quota_limits["aws"] = json.load(f)
+            if os.path.exists(azure_standardDv5_quota_path):
+                with azure_standardDv5_quota_path.open("r") as f:
+                    quota_limits["azure"] = json.load(f)
+            if os.path.exists(gcp_quota_path):
+                with gcp_quota_path.open("r") as f:
+                    quota_limits["gcp"] = json.load(f)
+        self.quota_limits = quota_limits
 
         # Loading the vcpu information - a dictionary of dictionaries
         # {"cloud_provider": {"instance_name": vcpu_cost}}
@@ -84,10 +87,9 @@ class Planner:
         :param spot: whether to use spot specified by the user config (default: False)
         :type spot: bool
         """
-        quota_limits = self.quota_limits[cloud_provider]
+        quota_limits = self.quota_limits.get(cloud_provider, None)
         if not quota_limits:
             # User needs to reinitialize to save the quota information
-            logger.warning(f"Please run `skyplane init --reinit-{cloud_provider}` to load the quota information")
             return None
         if cloud_provider == "gcp":
             region_family = "-".join(region.split("-")[:2])
@@ -117,11 +119,16 @@ class Planner:
             cloud_provider=cloud_provider, region=region, spot=getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances")
         )
 
+        config_vm_type = getattr(self.transfer_config, f"{cloud_provider}_instance_class")
+
         # No quota limits (quota limits weren't initialized properly during skyplane init)
         if quota_limit is None:
-            return None
+            logger.warning(
+                f"Quota limit file not found for {region_tag}. Try running `skyplane init --reinit-{cloud_provider}` to load the quota information"
+            )
+            # return default instance type and number of instances
+            return config_vm_type, self.n_instances
 
-        config_vm_type = getattr(self.transfer_config, f"{cloud_provider}_instance_class")
         config_vcpus = self._vm_to_vcpus(cloud_provider, config_vm_type)
         if config_vcpus <= quota_limit:
             return config_vm_type, quota_limit // config_vcpus
@@ -145,9 +152,7 @@ class Planner:
         )
         return (vm_type, n_instances)
 
-    def _get_vm_type_and_instances(
-        self, src_region_tag: Optional[str] = None, dst_region_tags: Optional[List[str]] = None
-    ) -> Tuple[Dict[str, str], int]:
+    def _get_vm_type_and_instances(self, src_region_tag: str, dst_region_tags: List[str]) -> Tuple[Dict[str, str], int]:
         """Dynamically calculates the vm type each region can use (both the source region and all destination regions)
         based on their quota limits and calculates the number of vms to launch in all regions by conservatively
         taking the minimum of all regions to stay consistent.
@@ -157,10 +162,16 @@ class Planner:
         :param dst_region_tags: a list of the destination region tags (defualt: None)
         :type dst_region_tags: Optional[List[str]]
         """
+
         # One of them has to provided
-        assert src_region_tag is not None or dst_region_tags is not None, "There needs to be at least one source or destination"
-        src_tags = [src_region_tag] if src_region_tag is not None else []
-        dst_tags = dst_region_tags or []
+        # assert src_region_tag is not None or dst_region_tags is not None, "There needs to be at least one source or destination"
+        src_tags = [src_region_tag]  # if src_region_tag is not None else []
+        dst_tags = dst_region_tags  # or []
+
+        assert len(src_region_tag.split(":")) == 2, f"Source region tag {src_region_tag} must be in the form of `cloud_provider:region`"
+        assert (
+            len(dst_region_tags[0].split(":")) == 2
+        ), f"Destination region tag {dst_region_tags} must be in the form of `cloud_provider:region`"
 
         # do_parallel returns tuples of (region_tag, (vm_type, n_instances))
         vm_info = do_parallel(self._calculate_vm_types, src_tags + dst_tags)
@@ -173,10 +184,10 @@ class Planner:
 
 class UnicastDirectPlanner(Planner):
     # DO NOT USE THIS - broken for single-region transfers
-    def __init__(self, n_instances: int, n_connections: int):
+    def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig, quota_limits_file: Optional[str] = None):
+        super().__init__(transfer_config, quota_limits_file)
         self.n_instances = n_instances
         self.n_connections = n_connections
-        super().__init__()
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         # make sure only single destination
@@ -185,6 +196,12 @@ class UnicastDirectPlanner(Planner):
 
         src_region_tag = jobs[0].src_iface.region_tag()
         dst_region_tag = jobs[0].dst_ifaces[0].region_tag()
+
+        assert len(src_region_tag.split(":")) == 2, f"Source region tag {src_region_tag} must be in the form of `cloud_provider:region`"
+        assert (
+            len(dst_region_tag.split(":")) == 2
+        ), f"Destination region tag {dst_region_tag} must be in the form of `cloud_provider:region`"
+
         # jobs must have same sources and destinations
         for job in jobs[1:]:
             assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
@@ -248,24 +265,16 @@ class UnicastDirectPlanner(Planner):
 
 
 class MulticastDirectPlanner(Planner):
-    def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig):
-        super().__init__(transfer_config)
+    def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig, quota_limits_file: Optional[str] = None):
+        super().__init__(transfer_config, quota_limits_file)
         self.n_instances = n_instances
         self.n_connections = n_connections
         self.transfer_config = transfer_config
 
-        # Loading the quota information, add ibm cloud when it is supported
-        # self.quota_limits = {}
-        # with self.transfer_config.aws_vcpu_file.open("r") as f:
-        #     self.quota_limits["aws"] = json.load(f)
-        # with self.transfer_config.gcp_vcpu_file.open("r") as f:
-        #     self.quota_limits["gcp"] = json.load(f)
-        # with self.transfer_config.azure_vcpu_file.open("r") as f:
-        #     self.quota_limits["azure"] = json.load(f)
-
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         src_region_tag = jobs[0].src_iface.region_tag()
         dst_region_tags = [iface.region_tag() for iface in jobs[0].dst_ifaces]
+
         # jobs must have same sources and destinations
         for job in jobs[1:]:
             assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
@@ -274,13 +283,17 @@ class MulticastDirectPlanner(Planner):
         plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=dst_region_tags)
 
         # Dynammically calculate n_instances based on quota limits
-        vm_types, n_instances = self._get_vm_type_and_instances(src_region_tag=src_region_tag, dst_region_tags=dst_region_tags)
+        if src_region_tag.split(":")[0] == "test":
+            vm_types = None
+            n_instances = self.n_instances
+        else:
+            vm_types, n_instances = self._get_vm_type_and_instances(src_region_tag=src_region_tag, dst_region_tags=dst_region_tags)
 
         # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
         for i in range(n_instances):
-            plan.add_gateway(src_region_tag, vm_types[src_region_tag])
+            plan.add_gateway(src_region_tag, vm_types[src_region_tag] if vm_types else None)
             for dst_region_tag in dst_region_tags:
-                plan.add_gateway(dst_region_tag, vm_types[dst_region_tag])
+                plan.add_gateway(dst_region_tag, vm_types[dst_region_tag] if vm_types else None)
 
         # initialize gateway programs per region
         dst_program = {dst_region: GatewayProgram() for dst_region in dst_region_tags}
@@ -299,6 +312,7 @@ class MulticastDirectPlanner(Planner):
             obj_store_read = src_program.add_operator(
                 GatewayReadObjectStore(src_bucket, src_region_tag, self.n_connections), partition_id=partition_id
             )
+
             # send to all destination
             mux_and = src_program.add_operator(GatewayMuxAnd(), parent_handle=obj_store_read, partition_id=partition_id)
             dst_prefixes = job.dst_prefixes
@@ -374,7 +388,7 @@ class DirectPlannerSourceOneSided(MulticastDirectPlanner):
         plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=dst_region_tags)
 
         # Dynammically calculate n_instances based on quota limits
-        vm_types, n_instances = self._get_vm_type_and_instances(src_region_tag=src_region_tag)
+        vm_types, n_instances = self._get_vm_type_and_instances(src_region_tag, dst_region_tags)
 
         # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
         for i in range(n_instances):
@@ -435,7 +449,7 @@ class DirectPlannerDestOneSided(MulticastDirectPlanner):
         plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=dst_region_tags)
 
         # Dynammically calculate n_instances based on quota limits
-        vm_types, n_instances = self._get_vm_type_and_instances(dst_region_tags=dst_region_tags)
+        vm_types, n_instances = self._get_vm_type_and_instances(src_region_tag, dst_region_tags)
 
         # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
         for i in range(n_instances):
@@ -480,3 +494,23 @@ class DirectPlannerDestOneSided(MulticastDirectPlanner):
         for dst_region_tag, program in dst_program.items():
             plan.set_gateway_program(dst_region_tag, program)
         return plan
+
+
+class UnicastILPPlanner(Planner):
+    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
+        raise NotImplementedError("ILP solver not implemented yet")
+
+
+class MulticastILPPlanner(Planner):
+    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
+        raise NotImplementedError("ILP solver not implemented yet")
+
+
+class MulticastMDSTPlanner(Planner):
+    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
+        raise NotImplementedError("MDST solver not implemented yet")
+
+
+class MulticastSteinerTreePlanner(Planner):
+    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
+        raise NotImplementedError("Steiner tree solver not implemented yet")
