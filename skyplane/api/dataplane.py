@@ -64,8 +64,8 @@ class Dataplane:
         self.topology = topology
         self.provisioner = provisioner
         self.transfer_config = transfer_config
-        # disable for azure 
-        # TODO: remove this 
+        # disable for azure
+        # TODO: remove this
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         self.provisioning_lock = threading.Lock()
         self.provisioned = False
@@ -236,6 +236,7 @@ class Dataplane:
             instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
             instance.download_file("/tmp/gateway.stdout", out_file)
             instance.download_file("/tmp/gateway.stderr", err_file)
+
         print("COPY GATEWAY LOGS")
         do_parallel(copy_log, self.bound_nodes.values(), n=-1)
 

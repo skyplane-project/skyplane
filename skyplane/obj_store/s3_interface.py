@@ -47,7 +47,7 @@ class S3Interface(ObjectStoreInterface):
                 return default_region
             elif "An error occurred (InvalidAccessKeyId) when calling" in str(e):
                 logger.warning(f"Invalid AWS credentials. Check to make sure credentials configured properly.")
-                raise exceptions.PermissionsException(f"Invalid AWS credentials for accessing bucket {self.bucket_name}") 
+                raise exceptions.PermissionsException(f"Invalid AWS credentials for accessing bucket {self.bucket_name}")
             else:
                 logger.warning(f"Specified bucket {self.bucket_name} does not exist, got AWS error: {e}")
                 raise exceptions.MissingBucketException(f"S3 bucket {self.bucket_name} does not exist") from e

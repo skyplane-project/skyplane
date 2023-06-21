@@ -113,7 +113,7 @@ class GatewayProgram:
     def get_operators(self) -> List[GatewayOperator]:
         return list(self._ops.values())
 
-    def add_operators(self, ops: List[GatewayOperator], parent_handle: Optional[str] = None, partition_id: Optional[int] = 0):
+    def add_operators(self, ops: List[GatewayOperator], parent_handle: Optional[str] = None, partition_id: Optional[str] = "default"):
         parent_op = self._ops[parent_handle] if parent_handle else None
         ops_handles = []
         for op in ops:
@@ -121,7 +121,7 @@ class GatewayProgram:
 
         return ops_handles
 
-    def add_operator(self, op: GatewayOperator, parent_handle: Optional[str] = None, partition_id: Optional[int] = 0):
+    def add_operator(self, op: GatewayOperator, parent_handle: Optional[str] = None, partition_id: Optional[str] = "default"):
         parent_op = self._ops[parent_handle] if parent_handle else None
         if not parent_op:  # root operation
             self._plan[partition_id].append(op)
