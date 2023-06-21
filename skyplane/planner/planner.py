@@ -140,8 +140,7 @@ class Planner:
                 break
 
         # shouldn't happen, but just in case we use more complicated vm types in the future
-        if vm_type is None or vcpus is None:
-            return None
+        assert vm_type is not None and vcpus is not None
 
         # number of instances allowed by the quota with the selected vm type
         n_instances = quota_limit // vcpus
@@ -228,7 +227,7 @@ class UnicastDirectPlanner(Planner):
             dst_bucket = job.dst_ifaces[0].bucket()
 
             # give each job a different partition id, so we can read/write to different buckets
-            partition_id = jobs.index(job)
+            partition_id = job.uuid
 
             # source region gateway program
             obj_store_read = src_program.add_operator(
@@ -259,11 +258,12 @@ class UnicastDirectPlanner(Planner):
 
 
 class MulticastDirectPlanner(Planner):
+  
     def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig, quota_limits_file: Optional[str] = None):
         super().__init__(transfer_config, quota_limits_file)
         self.n_instances = n_instances
         self.n_connections = n_connections
-
+        
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         src_region_tag = jobs[0].src_iface.region_tag()
         dst_region_tags = [iface.region_tag() for iface in jobs[0].dst_ifaces]
@@ -299,7 +299,7 @@ class MulticastDirectPlanner(Planner):
             src_provider = src_region_tag.split(":")[0]
 
             # give each job a different partition id, so we can read/write to different buckets
-            partition_id = jobs.index(job)
+            partition_id = job.uuid
 
             # source region gateway program
             obj_store_read = src_program.add_operator(
@@ -392,7 +392,7 @@ class DirectPlannerSourceOneSided(MulticastDirectPlanner):
             src_provider = src_region_tag.split(":")[0]
 
             # give each job a different partition id, so we can read/write to different buckets
-            partition_id = jobs.index(job)
+            partition_id = job.uuid
 
             # source region gateway program
             obj_store_read = src_program.add_operator(
@@ -453,7 +453,7 @@ class DirectPlannerDestOneSided(MulticastDirectPlanner):
             src_region_tag = job.src_iface.region_tag()
             src_provider = src_region_tag.split(":")[0]
 
-            partition_id = jobs.index(job)
+            partition_id = job.uuid
 
             # send to all destination
             dst_prefixes = job.dst_prefixes
@@ -482,23 +482,3 @@ class DirectPlannerDestOneSided(MulticastDirectPlanner):
         for dst_region_tag, program in dst_program.items():
             plan.set_gateway_program(dst_region_tag, program)
         return plan
-
-
-class UnicastILPPlanner(Planner):
-    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        raise NotImplementedError("ILP solver not implemented yet")
-
-
-class MulticastILPPlanner(Planner):
-    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        raise NotImplementedError("ILP solver not implemented yet")
-
-
-class MulticastMDSTPlanner(Planner):
-    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        raise NotImplementedError("MDST solver not implemented yet")
-
-
-class MulticastSteinerTreePlanner(Planner):
-    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        raise NotImplementedError("Steiner tree solver not implemented yet")
