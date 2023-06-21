@@ -39,7 +39,7 @@ class Pipeline:
         transfer_config: TransferConfig,
         # cloud_regions: dict,
         max_instances: Optional[int] = 1,
-        n_connections: Optional[int] = 128,
+        n_connections: Optional[int] = 64,
         planning_algorithm: Optional[str] = "direct",
         debug: Optional[bool] = False,
     ):

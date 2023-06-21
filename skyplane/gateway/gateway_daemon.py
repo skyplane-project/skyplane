@@ -36,7 +36,7 @@ class GatewayDaemon:
         self,
         region: str,
         chunk_dir: PathLike,
-        max_incoming_ports=128,
+        max_incoming_ports=64,
         use_tls=True,
         use_e2ee=True,  # TODO: read from operator field
         use_compression=True,  # TODO: read from operator field
