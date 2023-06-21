@@ -22,7 +22,7 @@ from skyplane.gateway.operators.gateway_operator import (
     GatewayWriteLocal,
     GatewayObjStoreReadOperator,
     GatewayObjStoreWriteOperator,
-    GatewayWaitReciever,
+    GatewayWaitReceiver,
 )
 from skyplane.gateway.operators.gateway_receiver import GatewayReceiver
 from skyplane.utils import logger
@@ -81,7 +81,7 @@ class GatewayDaemon:
         self.num_required_terminal = {}
         self.operators = self.create_gateway_operators(gateway_program)
 
-        # single gateway reciever
+        # single gateway receiver
         self.gateway_receiver = GatewayReceiver(
             "reciever",
             region=region,
@@ -180,8 +180,8 @@ class GatewayDaemon:
 
                 # create operators
                 if op["op_type"] == "receive":
-                    # wait for chunks from reciever
-                    operators[handle] = GatewayWaitReciever(
+                    # wait for chunks from receiver
+                    operators[handle] = GatewayWaitReceiver(
                         handle=handle,
                         region=self.region,
                         input_queue=input_queue,

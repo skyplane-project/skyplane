@@ -122,11 +122,11 @@ class GatewayOperator(ABC):
         pass
 
 
-class GatewayWaitReciever(GatewayOperator):
+class GatewayWaitReceiver(GatewayOperator):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    # TODO: alternative (potentially better performnace) implementation: connect via queue with GatewayReciever to listen
+    # TODO: alternative (potentially better performnace) implementation: connect via queue with GatewayReceiver to listen
     # for download completition events - join with chunk request queue from ChunkStore
     def process(self, chunk_req: ChunkRequest):
         chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id)
