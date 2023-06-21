@@ -3,6 +3,7 @@ Cloud convenience interface
 """
 
 import json
+import uuid
 import subprocess
 import time
 from collections import defaultdict
@@ -280,6 +281,38 @@ def azure_check(
 
     iface = AzureBlobInterface(account, container)
     print(iface.container_client.get_container_properties())
+
+    # write object temorarily
+    # check skyplane AzureBlobInterface
+    print(f"\n{hline}\n[bold]Checking Skyplane AzureBlobInterface[/bold]\n{hline}")
+    from skyplane.obj_store.azure_blob_interface import AzureBlobInterface
+
+    iface = AzureBlobInterface(account, container)
+    print(iface.container_client.get_container_properties())
+
+    # check if writeable
+    rprint(f"\n{hline}\n[bold]Checking Skyplane AzureBlobInterface write access[/bold]\n{hline}")
+    import tempfile
+    import random
+    import string
+
+    def generate_random_string(length):
+        """Generate a random string of given length"""
+        letters = string.ascii_letters
+        return "".join(random.choice(letters) for _ in range(length))
+
+    def create_temp_file(size):
+        """Create a temporary file with random data"""
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file_path = temp_file.name
+            random_data = generate_random_string(size)
+            temp_file.write(random_data.encode())
+        return temp_file_path
+
+    tmp_file = create_temp_file(1024)
+    tmp_object = f"skyplane-{uuid.uuid4()}"
+    iface.upload_object(tmp_file, tmp_object)
+    iface.delete_objects([tmp_object])
 
 
 @app.command()

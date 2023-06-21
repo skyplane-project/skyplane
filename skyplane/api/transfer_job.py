@@ -325,8 +325,11 @@ class Chunker:
         multipart_exit_event = threading.Event()
         multipart_chunk_threads = []
 
+        # TODO: remove after azure multipart implemented
+        azure_dest = any([dst_iface.provider == "azure" for dst_iface in self.dst_ifaces])
+
         # start chunking threads
-        if self.transfer_config.multipart_enabled:
+        if not azure_dest and self.transfer_config.multipart_enabled:
             for _ in range(self.concurrent_multipart_chunk_threads):
                 t = threading.Thread(
                     target=self._run_multipart_chunk_thread,
@@ -338,8 +341,13 @@ class Chunker:
 
         # begin chunking loop
         for transfer_pair in transfer_pair_generator:
+            # print("transfer_pair", transfer_pair.src_obj.key, transfer_pair.dst_objs)
             src_obj = transfer_pair.src_obj
-            if self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
+            if (
+                not azure_dest
+                and self.transfer_config.multipart_enabled
+                and src_obj.size > self.transfer_config.multipart_threshold_mb * MB
+            ):
                 multipart_send_queue.put(transfer_pair)
             else:
                 if transfer_pair.src_obj.size == 0:
@@ -460,13 +468,16 @@ class TransferJob(ABC):
         dst_paths: List[str] or str,
         recursive: bool = False,
         requester_pays: bool = False,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
+        job_id: Optional[str] = None,
     ):
         self.src_path = src_path
         self.dst_paths = dst_paths
         self.recursive = recursive
         self.requester_pays = requester_pays
-        self.uuid = uuid
+        if job_id is None:
+            self.uuid = str(uuid.uuid4())
+        else:
+            self.uuid = job_id
 
     @property
     def transfer_type(self) -> str:
@@ -559,9 +570,9 @@ class CopyJob(TransferJob):
         dst_paths: List[str] or str,
         recursive: bool = False,
         requester_pays: bool = False,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
+        job_id: Optional[str] = None,
     ):
-        super().__init__(src_path, dst_paths, recursive, requester_pays, uuid)
+        super().__init__(src_path, dst_paths, recursive, requester_pays, job_id)
         self.transfer_list = []
         self.multipart_transfer_list = []
 
@@ -645,6 +656,9 @@ class CopyJob(TransferJob):
 
             # send chunk requests to source gateways
             chunk_batch = [cr.chunk for cr in batch if cr.chunk is not None]
+            # TODO: allow multiple partition ids per chunk
+            for chunk in chunk_batch:  # assign job UUID as partition ID
+                chunk.partition_id = self.uuid
             min_idx = queue_size.index(min(queue_size))
             n_added = 0
             while n_added < len(chunk_batch):
@@ -701,6 +715,9 @@ class CopyJob(TransferJob):
 
             do_parallel(complete_fn, batches, n=8)
 
+        # TODO: Do NOT do this if we are pipelining multiple transfers - remove just what was completed
+        self.multipart_transfer_list = []
+
     def verify(self):
         """Verify the integrity of the transfered destination objects"""
 
@@ -750,14 +767,8 @@ class CopyJob(TransferJob):
 class SyncJob(CopyJob):
     """sync job that copies the source objects that does not exist in the destination bucket to the destination"""
 
-    def __init__(
-        self,
-        src_path: str,
-        dst_paths: List[str] or str,
-        requester_pays: bool = False,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
-    ):
-        super().__init__(src_path, dst_paths, True, requester_pays, uuid)
+    def __init__(self, src_path: str, dst_paths: List[str] or str, requester_pays: bool = False, job_id: Optional[str] = None):
+        super().__init__(src_path, dst_paths, True, requester_pays, job_id)
         self.transfer_list = []
         self.multipart_transfer_list = []
 

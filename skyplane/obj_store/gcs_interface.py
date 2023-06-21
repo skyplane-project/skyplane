@@ -27,8 +27,10 @@ class GCSInterface(ObjectStoreInterface):
         self.auth = compute.GCPAuthentication()
         self._gcs_client = self.auth.get_storage_client()
         self._requests_session = requests.Session()
-        self.provider = "gcp"
-        # self.region_tag = self.a
+
+    @property
+    def provider(self):
+        return "gcp"
 
     def path(self):
         return f"gs://{self.bucket_name}"
