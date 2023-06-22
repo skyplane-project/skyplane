@@ -131,7 +131,7 @@ class SkyplaneCLI:
             return True
         except skyplane.exceptions.BadConfigException as e:
             logger.exception(e)
-            UsageClient.log_exception("cli_check_config", e, self.args, self.src_region_tag, self.dst_region_tag)
+            UsageClient.log_exception("cli_check_config", e, self.args, self.src_region_tag, [self.dst_region_tag])
             return False
 
     def transfer_cp_onprem(self, src: str, dst: str, recursive: bool) -> bool:
@@ -144,7 +144,7 @@ class SkyplaneCLI:
             if rc == 0:
                 print_stats_completed(request_time, None)
                 transfer_stats = TransferStats(monitor_status="completed", total_runtime_s=request_time, throughput_gbits=0)
-                UsageClient.log_transfer(transfer_stats.to_dict(), self.args, self.src_region_tag, self.dst_region_tag)
+                UsageClient.log_transfer(transfer_stats.to_dict(), self.args, self.src_region_tag, [self.dst_region_tag])
             return True
         else:
             typer.secho("Transfer not supported", fg="red")
@@ -160,7 +160,7 @@ class SkyplaneCLI:
             if rc == 0:
                 print_stats_completed(request_time, None)
                 transfer_stats = TransferStats(monitor_status="completed", total_runtime_s=request_time, throughput_gbits=0)
-                UsageClient.log_transfer(transfer_stats.to_dict(), self.args, self.src_region_tag, self.dst_region_tag)
+                UsageClient.log_transfer(transfer_stats.to_dict(), self.args, self.src_region_tag, [self.dst_region_tag])
             return True
         else:
             typer.secho("Transfer not supported", fg="red")
@@ -397,20 +397,20 @@ def run_transfer(
                 logger.fs.exception(e)
                 console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
                 console.print(e)
-                UsageClient.log_exception("cli_cp", e, args, cli.src_region_tag, cli.dst_region_tag)
+                UsageClient.log_exception("cli_cp", e, args, cli.src_region_tag, [cli.dst_region_tag])
                 console.print("[bold red]Deprovisioning was interrupted! VMs may still be running which will incur charges.[/bold red]")
                 console.print("[bold red]Please manually deprovision the VMs by running `skyplane deprovision`.[/bold red]")
             return 1
         except skyplane.exceptions.SkyplaneException as e:
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
             console.print(e.pretty_print_str())
-            UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
+            UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, [cli.dst_region_tag])
             force_deprovision(dp)
         except Exception as e:
             logger.fs.exception(e)
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
             console.print(e)
-            UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, cli.dst_region_tag)
+            UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, [cli.dst_region_tag])
             force_deprovision(dp)
 
 
