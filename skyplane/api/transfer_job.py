@@ -712,6 +712,7 @@ class CopyJob(TransferJob):
                         partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"], req["metadata"]),
                         initial_backoff=0.5,
                     )
+
             do_parallel(complete_fn, batches, n=8)
 
         # TODO: Do NOT do this if we are pipelining multiple transfers - remove just what was completed
