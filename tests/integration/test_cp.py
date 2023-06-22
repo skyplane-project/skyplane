@@ -23,7 +23,7 @@ def setup_bucket(region_tag):
     if provider == "azure" or provider == "cloudflare":
         bucket_name = f"{str(uuid.uuid4())[:8]}/{str(uuid.uuid4()).replace('-', '')}"
     else:
-        bucket_name = f"integration{region}-{str(uuid.uuid4())[:8]}"
+        bucket_name = f"skyplane-integration-{region}-{str(uuid.uuid4())[:8]}"
 
     # create bucket
     try:
