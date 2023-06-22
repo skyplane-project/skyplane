@@ -707,17 +707,11 @@ class CopyJob(TransferJob):
 
             def complete_fn(batch):
                 for req in batch:
-<<<<<<< HEAD
-                    logger.fs.debug(f"Finalize upload id {req['upload_id']} for key {req['key']} bucket {bucket}")
-                    retry_backoff(partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"]), initial_backoff=0.5)
-=======
                     logger.fs.debug(f"Finalize upload id {req['upload_id']} for key {req['key']}")
                     retry_backoff(
                         partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"], req["metadata"]),
                         initial_backoff=0.5,
                     )
->>>>>>> upstream/0.3.1-release
-
             do_parallel(complete_fn, batches, n=8)
 
         # TODO: Do NOT do this if we are pipelining multiple transfers - remove just what was completed
