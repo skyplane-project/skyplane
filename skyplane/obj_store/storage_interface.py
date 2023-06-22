@@ -64,6 +64,7 @@ class StorageInterface:
             # from skyplane.obj_store.file_system_interface import FileSystemInterface
             from skyplane.obj_store.posix_file_interface import POSIXInterface
 
+            print("CREATE LOCAL INTERFA")
             return POSIXInterface(bucket)
         elif region_tag.startswith("cloudflare"):
             from skyplane.obj_store.r2_interface import R2Interface

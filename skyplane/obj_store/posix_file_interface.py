@@ -54,7 +54,8 @@ class POSIXInterface(ObjectStoreInterface):
         return os.path.exists(obj_name)
 
     def region_tag(self) -> str:
-        return "local"
+        print("region tag", self.path)
+        return f"local:{self.path()}"
 
     def bucket(self) -> str:
         return self.dir_path
