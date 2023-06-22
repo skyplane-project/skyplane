@@ -65,8 +65,13 @@ def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> Sk
 
 def load_cloudflare_config(config: SkyplaneConfig, non_interactive: bool = False) -> SkyplaneConfig:
     if non_interactive or typer.confirm("    Do you want to configure Cloudflare support in Skyplane?", default=True):
-        config.cloudflare_access_key_id = typer.prompt("    Enter the R2 access key ID")
-        config.cloudflare_secret_access_key = typer.prompt("    Enter the R2 secret access key")
+        if "R2_ACCESS_KEY_ID" in os.environ and "R2_SECRET_ACCESS_KEY" in os.environ:
+            config.cloudflare_access_key_id = os.environ["R2_ACCESS_KEY_ID"]
+            config.cloudflare_secret_access_key = os.environ["R2_SECRET_ACCESS_KEY"]
+            typer.secho(f"Read Cloudflare R2 keys for enviornment variables.", fg="blue")
+        else:
+            config.cloudflare_access_key_id = typer.prompt("    Enter the R2 access key ID")
+            config.cloudflare_secret_access_key = typer.prompt("    Enter the R2 secret access key")
     else:
         config.cloudflare_enabled = False
         typer.secho("    Disabling Cloudflare support", fg="blue")
