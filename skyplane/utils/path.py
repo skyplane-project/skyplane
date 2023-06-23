@@ -66,6 +66,8 @@ def parse_path(path: str) -> Tuple[str, Optional[str], Optional[str]]:
     else:
         if not is_plausible_local_path(path):
             logger.warning(f"Local path '{path}' does not exist")
+        if path.startswith("az://"):
+            logger.warning(f"Did you mean azure://...? If not, assuming local path.")
 
         # path is subsitutute for bucket
         return "local", path, path

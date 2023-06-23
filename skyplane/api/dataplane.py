@@ -64,6 +64,8 @@ class Dataplane:
         self.topology = topology
         self.provisioner = provisioner
         self.transfer_config = transfer_config
+        # disable for azure
+        # TODO: remove this
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
         self.provisioning_lock = threading.Lock()
         self.provisioned = False

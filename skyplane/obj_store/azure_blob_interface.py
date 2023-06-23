@@ -3,13 +3,17 @@ import hashlib
 import os
 from functools import lru_cache
 
-from typing import Iterator, List, Optional, Tuple
+from typing import Any, Iterator, List, Optional, Tuple
 
 from skyplane import exceptions, compute
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.azure_storage_account_interface import AzureStorageAccountInterface
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger, imports
+from azure.storage.blob import ContentSettings
+
+
+MAX_BLOCK_DIGITS = 5
 
 
 class AzureBlobObject(ObjectStoreObject):
@@ -25,6 +29,10 @@ class AzureBlobInterface(ObjectStoreInterface):
         self.account_name = account_name
         self.container_name = container_name
         self.max_concurrency = max_concurrency  # parallel upload/downloads, seems to cause issues if too high
+
+    @property
+    def provider(self):
+        return "azure"
 
     def path(self):
         return f"https://{self.account_name}.blob.core.windows.net/{self.container_name}"
@@ -149,25 +157,100 @@ class AzureBlobInterface(ObjectStoreInterface):
 
     @imports.inject("azure.storage.blob", pip_extra="azure")
     def upload_object(azure_blob, self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None, mime_type=None):
-        if part_number is not None or upload_id is not None:
-            # todo implement multipart upload
-            raise NotImplementedError("Multipart upload is not implemented for Azure")
+        """Uses the BlobClient instead of ContainerClient since BlobClient allows for
+        block/part level manipulation for multi-part uploads
+        """
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
-        with open(src_file_path, "rb") as f:
-            print(f"Uploading {src_file_path} to {dst_object_name}")
-            blob_client = self.container_client.upload_blob(
-                name=dst_object_name,
-                data=f,
-                length=os.path.getsize(src_file_path),
-                max_concurrency=self.max_concurrency,
-                overwrite=True,
-                content_settings=azure_blob.ContentSettings(content_type=mime_type),
-            )
-        if check_md5:
-            b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
-            blob_md5 = blob_client.get_blob_properties().properties.content_settings.content_md5
-            if b64_md5sum != blob_md5:
-                raise exceptions.ChecksumMismatchException(
-                    f"Checksum mismatch for object {dst_object_name} in Azure container {self.container_name}, "
-                    + f"expected {b64_md5sum}, got {blob_md5}"
+        print(f"Uploading {src_file_path} to {dst_object_name}")
+
+        try:
+            blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=dst_object_name)
+
+            # multipart upload
+            if part_number is not None and upload_id is not None:
+                with open(src_file_path, "rb") as f:
+                    block_id = AzureBlobInterface.id_to_base64_encoding(part_number=part_number, dest_key=dst_object_name)
+                    blob_client.stage_block(block_id=block_id, data=f, length=os.path.getsize(src_file_path))  # stage the block
+                    return
+
+            # single upload
+            with open(src_file_path, "rb") as f:
+                blob_client.upload_blob(
+                    data=f,
+                    length=os.path.getsize(src_file_path),
+                    max_concurrency=self.max_concurrency,
+                    overwrite=True,
+                    content_settings=azure_blob.ContentSettings(content_type=mime_type),
                 )
+
+                # check MD5 if required
+                if check_md5:
+                    b64_md5sum = base64.b64encode(check_md5).decode("utf-8") if check_md5 else None
+                    blob_md5 = blob_client.get_blob_properties().properties.content_settings.content_md5
+                    if b64_md5sum != blob_md5:
+                        raise exceptions.ChecksumMismatchException(
+                            f"Checksum mismatch for object {dst_object_name} in Azure container {self.container_name}, "
+                            + f"expected {b64_md5sum}, got {blob_md5}"
+                        )
+        except Exception as e:
+            raise ValueError(f"Failed to upload {dst_object_name} to bucket {self.container_name} upload id {upload_id}: {e}")
+
+    def initiate_multipart_upload(self, dst_object_name: str, mime_type: Optional[str] = None) -> str:
+        """Azure does not have an equivalent function to return an upload ID like s3 and gcs do.
+        Blocks in Azure are uploaded and associated with an ID, and can then be committed in a single operation to create the blob.
+        We will just return the dst_object_name (blob name) as the "upload_id" to keep the return type consistent for the multipart thread.
+
+        :param dst_object_name: name of the destination object, also our psuedo-uploadID
+        :type dst_object_name: str
+        :param mime_type: unused in this function but is kept for consistency with the other interfaces (default: None)
+        :type mime_type: str
+        """
+
+        assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
+
+        return dst_object_name
+
+    @imports.inject("azure.storage.blob", pip_extra="azure")
+    def complete_multipart_upload(azure_blob, self, dst_object_name: str, upload_id: str, metadata: Optional[Any] = None) -> None:
+        """After all blocks of a blob are uploaded/staged with their unique block_id,
+        in order to complete the multipart upload, we commit them together.
+
+        :param dst_object_name: name of the destination object, also is used to index into our block mappings
+        :type dst_object_name: str
+        :param upload_id: upload_id to index into our block id mappings, should be the same as the dst_object_name in Azure
+        :type upload_id: str
+        :param metadata: In Azure, this custom data is the blockID list (parts) and the object mime_type from the TransferJob instance (default: None)
+        :type metadata: Optional[Any]
+        """
+
+        assert upload_id == dst_object_name, "In Azure, upload_id should be the same as the blob name."
+        assert metadata is not None, "In Azure, the custom data should exist for multipart"
+
+        # Decouple the custom data
+        block_list, mime_type = metadata
+        assert block_list != [], "The blockID list shouldn't be empty for Azure multipart"
+        block_list = list(map(lambda block_id: azure_blob.BlobBlock(block_id=block_id), block_list))
+
+        blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=dst_object_name)
+        try:
+            # The below operation will create the blob from the uploaded blocks.
+            blob_client.commit_block_list(block_list=block_list, content_settings=azure_blob.ContentSettings(content_type=mime_type))
+        except Exception as e:
+            raise exceptions.SkyplaneException(f"Failed to complete multipart upload for {dst_object_name}: {str(e)}")
+
+    @staticmethod
+    def id_to_base64_encoding(part_number: int, dest_key: str) -> str:
+        """Azure expects all blockIDs to be Base64 strings. This function serves to convert the part numbers to
+        base64-encoded strings of the same length. The maximum number of blocks one blob supports in Azure is
+        50,000 blocks, so the maximum length to pad zeroes to will be (#digits in 50,000 = len("50000") = 5) + len(dest_key)
+
+        :param part_number: part number of the block, determined while splitting the date into chunks before the transfer
+        :type part_number: int
+        :param dest_key: destination object key, used to distinguish between different objects during concurrent uploads to the same container
+        """
+        max_length = MAX_BLOCK_DIGITS + len(dest_key)
+        block_id = f"{part_number}{dest_key}"
+        block_id = block_id.ljust(max_length, "0")  # pad with zeroes to get consistent length
+        block_id = block_id.encode("utf-8")
+        block_id = base64.b64encode(block_id).decode("utf-8")
+        return block_id

@@ -26,7 +26,7 @@ from functools import partial
 from skyplane import exceptions
 from skyplane.api.config import TransferConfig
 from skyplane.chunk import Chunk, ChunkRequest
-from skyplane.obj_store.azure_blob_interface import AzureBlobObject
+from skyplane.obj_store.azure_blob_interface import AzureBlobInterface, AzureBlobObject
 from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.r2_interface import R2Object
 from skyplane.obj_store.storage_interface import StorageInterface
@@ -181,8 +181,15 @@ class Chunker:
                     region = dest_iface.region_tag()
                     dest_object = dest_objects[region]
                     _, upload_id = upload_id_mapping[region]
+
+                    metadata = None
+                    # Convert parts to base64 and store mime_type if destination interface is AzureBlobInterface
+                    if isinstance(dest_iface, AzureBlobInterface):
+                        block_ids = list(map(lambda part_num: AzureBlobInterface.id_to_base64_encoding(part_num, dest_object.key), parts))
+                        metadata = (block_ids, mime_type)
+
                     self.multipart_upload_requests.append(
-                        dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket)
+                        dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket, metadata=metadata)
                     )
             else:
                 mime_type = None
@@ -329,8 +336,16 @@ class Chunker:
         :param transfer_pair_generator: generator of pairs of objects to transfer
         :type transfer_pair_generator: Generator
         """
+        multipart_send_queue: Queue[TransferPair] = Queue()
+        multipart_chunk_queue: Queue[GatewayMessage] = Queue()
+        multipart_exit_event = threading.Event()
+        multipart_chunk_threads = []
+
+        # TODO: remove after azure multipart implemented
+        azure_dest = any([dst_iface.provider == "azure" for dst_iface in self.dst_ifaces])
+
         # start chunking threads
-        if self.transfer_config.multipart_enabled:
+        if not azure_dest and self.transfer_config.multipart_enabled:
             for _ in range(self.concurrent_multipart_chunk_threads):
                 t = threading.Thread(
                     target=self._run_multipart_chunk_thread,
@@ -342,9 +357,14 @@ class Chunker:
 
         # begin chunking loop
         for transfer_pair in transfer_pair_generator:
+            # print("transfer_pair", transfer_pair.src_obj.key, transfer_pair.dst_objs)
             src_obj = transfer_pair.src_obj
-            if self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
-                self.multipart_send_queue.put(transfer_pair)
+            if (
+                not azure_dest
+                and self.transfer_config.multipart_enabled
+                and src_obj.size > self.transfer_config.multipart_threshold_mb * MB
+            ):
+                multipart_send_queue.put(transfer_pair)
             else:
                 if transfer_pair.src_obj.size == 0:
                     logger.fs.debug(f"Skipping empty object {src_obj.key}")
@@ -466,15 +486,17 @@ class TransferJob(ABC):
         dst_paths: List[str] or str,
         recursive: bool = False,
         requester_pays: bool = False,
-        transfer_config: Optional[TransferConfig] = None,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
+        job_id: Optional[str] = None,
     ):
         self.src_path = src_path
         self.dst_paths = dst_paths if isinstance(dst_paths, list) else [dst_paths]
         self.recursive = recursive
         self.requester_pays = requester_pays
-        self.uuid = uuid
-        self.transfer_config = transfer_config if transfer_config else TransferConfig()
+        
+        if job_id is None:
+            self.uuid = str(uuid.uuid4())
+        else:
+            self.uuid = job_id
 
     @property
     def transfer_type(self) -> str:
@@ -567,10 +589,9 @@ class CopyJob(TransferJob):
         dst_paths: List[str] or str,
         recursive: bool = False,
         requester_pays: bool = False,
-        transfer_config: Optional[TransferConfig] = None,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
+        job_id: Optional[str] = None,
     ):
-        super().__init__(src_path, dst_paths, recursive, requester_pays, transfer_config, uuid)
+        super().__init__(src_path, dst_paths, recursive, requester_pays, job_id)
         self.transfer_list = []
         self.multipart_transfer_list = []
         self.chunker = Chunker(self.src_iface, self.dst_ifaces, self.transfer_config)  # TODO: should read in existing transfer config
@@ -654,6 +675,9 @@ class CopyJob(TransferJob):
 
             # send chunk requests to source gateways
             chunk_batch = [cr.chunk for cr in batch if cr.chunk is not None]
+            # TODO: allow multiple partition ids per chunk
+            for chunk in chunk_batch:  # assign job UUID as partition ID
+                chunk.partition_id = self.uuid
             min_idx = queue_size.index(min(queue_size))
             n_added = 0
             while n_added < len(chunk_batch):
@@ -703,9 +727,15 @@ class CopyJob(TransferJob):
             def complete_fn(batch):
                 for req in batch:
                     logger.fs.debug(f"Finalize upload id {req['upload_id']} for key {req['key']}")
-                    retry_backoff(partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"]), initial_backoff=0.5)
+                    retry_backoff(
+                        partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"], req["metadata"]),
+                        initial_backoff=0.5,
+                    )
 
             do_parallel(complete_fn, batches, n=8)
+
+        # TODO: Do NOT do this if we are pipelining multiple transfers - remove just what was completed
+        self.multipart_transfer_list = []
 
     def verify(self):
         """Verify the integrity of the transfered destination objects"""
@@ -778,15 +808,8 @@ class TestCopyJob(CopyJob):
 class SyncJob(CopyJob):
     """sync job that copies the source objects that does not exist in the destination bucket to the destination"""
 
-    def __init__(
-        self,
-        src_path: str,
-        dst_paths: List[str] or str,
-        requester_pays: bool = False,
-        transfer_config: Optional[TransferConfig] = None,
-        uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
-    ):
-        super().__init__(src_path, dst_paths, True, requester_pays, transfer_config, uuid)
+    def __init__(self, src_path: str, dst_paths: List[str] or str, requester_pays: bool = False, job_id: Optional[str] = None):
+        super().__init__(src_path, dst_paths, True, requester_pays, job_id)
         self.transfer_list = []
         self.multipart_transfer_list = []
 

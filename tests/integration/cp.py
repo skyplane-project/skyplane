@@ -14,7 +14,7 @@ def setup_buckets(src_region, dest_region, n_files=1, file_size_mb=1):
     if src_provider == "azure":
         src_bucket_name = f"integration{src_zone}/{str(uuid.uuid4()).replace('-', '')}"
     else:
-        src_bucket_name = f"integration{src_zone}-{str(uuid.uuid4())[:8]}"
+        src_bucket_name = f"skyplane-integration-{src_zone}-{str(uuid.uuid4())[:8]}"
     if dest_provider == "azure":
         dest_bucket_name = f"integration{dest_zone}/{str(uuid.uuid4()).replace('-', '')}"
     else:

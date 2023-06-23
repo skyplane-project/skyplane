@@ -4,12 +4,14 @@ concurrency: transfer-test
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
   SKYPLANE_USAGE_STATS_ENABLED: 0
 jobs:
   integration:
     runs-on: ubuntu-latest
     strategy:
-      max-parallel: 1
+      max-parallel: 4
       matrix:
         pairs:
           # AWS to AWS
@@ -96,7 +98,7 @@ jobs:
       - name: Skyplane init
         run: |
           poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
-          poetry run skyplane init -y --disable-config-azure --disable-config-cloudflare
+          poetry run skyplane init -y --disable-config-azure 
           poetry run skyplane config set usage_stats false
       - name: Deprovision
         run: poetry run skyplane deprovision

@@ -39,7 +39,10 @@ class R2Interface(S3Interface):
         self.requester_pays = False
         self.bucket_name = bucket_name
         self.account_id = account_id
-        self.provider = "cloudflare"
+
+    @property
+    def provider(self):
+        return "cloudflare"
 
     def path(self):
         return f"{self.endpoint_url}/{self.bucket_name}"
