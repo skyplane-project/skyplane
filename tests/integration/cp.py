@@ -12,11 +12,11 @@ def setup_buckets(src_region, dest_region, n_files=1, file_size_mb=1):
     src_provider, src_zone = src_region.split(":")
     dest_provider, dest_zone = dest_region.split(":")
     if src_provider == "azure":
-        src_bucket_name = f"sarahintegration{src_zone}/{str(uuid.uuid4()).replace('-', '')}"
+        src_bucket_name = f"integration{src_zone}/{str(uuid.uuid4()).replace('-', '')}"
     else:
         src_bucket_name = f"skyplane-integration-{src_zone}-{str(uuid.uuid4())[:8]}"
     if dest_provider == "azure":
-        dest_bucket_name = f"sarahintegration{dest_zone}/{str(uuid.uuid4()).replace('-', '')}"
+        dest_bucket_name = f"integration{dest_zone}/{str(uuid.uuid4()).replace('-', '')}"
     else:
         dest_bucket_name = f"skyplane-integration-{dest_zone}-{str(uuid.uuid4())[:8]}"
     logger.debug(f"creating buckets {src_bucket_name} and {dest_bucket_name}")
