@@ -25,12 +25,8 @@ from functools import partial
 from skyplane import exceptions
 from skyplane.api.config import TransferConfig
 from skyplane.chunk import Chunk, ChunkRequest
-from skyplane.obj_store.azure_blob_interface import AzureBlobInterface, AzureBlobObject
-from skyplane.obj_store.gcs_interface import GCSObject
-from skyplane.obj_store.r2_interface import R2Object
 from skyplane.obj_store.storage_interface import StorageInterface
 from skyplane.obj_store.object_store_interface import ObjectStoreObject, ObjectStoreInterface
-from skyplane.obj_store.s3_interface import S3Object
 from skyplane.utils import logger
 from skyplane.utils.definitions import MB
 from skyplane.utils.fn import do_parallel
@@ -161,7 +157,9 @@ class Chunker:
 
                     metadata = None
                     # Convert parts to base64 and store mime_type if destination interface is AzureBlobInterface
-                    if isinstance(dest_iface, AzureBlobInterface):
+                    if dest_iface.provider == "azure":
+                        from skyplane.obj_store.azure_blob_interface import AzureBlobInterface
+
                         block_ids = list(map(lambda part_num: AzureBlobInterface.id_to_base64_encoding(part_num, dest_object.key), parts))
                         metadata = (block_ids, mime_type)
 
@@ -294,12 +292,20 @@ class Chunker:
                         raise e from None
 
                     if dest_provider == "aws":
+                        from skyplane.obj_store.s3_interface import S3Object
+
                         dest_obj = S3Object(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
                     elif dest_provider == "azure":
+                        from skyplane.obj_store.azure_blob_interface import AzureBlobObject
+
                         dest_obj = AzureBlobObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
                     elif dest_provider == "gcp":
+                        from skyplane.obj_store.gcs_interface import GCSObject
+
                         dest_obj = GCSObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
                     elif dest_provider == "cloudflare":
+                        from skyplane.obj_store.r2_interface import R2Object
+
                         dest_obj = R2Object(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
                     else:
                         raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
