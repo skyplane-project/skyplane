@@ -33,7 +33,7 @@ class R2Interface(S3Interface):
                 endpoint_url=self.endpoint_url,
                 aws_access_key_id=self.config.cloudflare_access_key_id,
                 aws_secret_access_key=self.config.cloudflare_secret_access_key,
-                region_name="auto", # explicity set region, otherwise may be read from AWS boto3 env 
+                region_name="auto",  # explicity set region, otherwise may be read from AWS boto3 env
             )
         except Exception as e:
             raise ValueError("Error with connecting to {self.endpoint_url}: {e}")
