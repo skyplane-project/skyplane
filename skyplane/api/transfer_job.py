@@ -636,10 +636,6 @@ class CopyJob(TransferJob):
                                 mappings[region_tag] = {}
                             mappings[region_tag][key] = id
 
-                    if len(list(mappings.keys())) == 0:
-                        # no mappings to send
-                        continue
-
                     # send mapping to gateway
                     reply = self.http_pool.request(
                         "POST",
@@ -770,7 +766,7 @@ class TestCopyJob(CopyJob):
         num_chunks: int = 10,
         chunk_size_bytes: int = 1024,
     ):
-        super().__init__(src_path, dst_paths, recursive, requester_pays, transfer_config, uuid)
+        super().__init__(src_path, dst_paths, recursive, requester_pays, uuid)
         self.num_chunks = num_chunks
         self.chunk_size_bytes = chunk_size_bytes
 
@@ -787,7 +783,7 @@ class SyncJob(CopyJob):
         transfer_config: Optional[TransferConfig] = None,
         uuid: str = field(init=False, default_factory=lambda: str(uuid.uuid4())),
     ):
-        super().__init__(src_path, dst_paths, True, requester_pays, transfer_config, uuid)
+        super().__init__(src_path, dst_paths, True, requester_pays, uuid)
         self.transfer_list = []
         self.multipart_transfer_list = []
 

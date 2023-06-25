@@ -44,6 +44,11 @@ class ProgressBarTransferHook(TransferHook):
             self.dispatch_task, description=f" {self.chunks_dispatched} chunks (~{format_bytes(self.bytes_dispatched)} dispatched)"
         )
 
+    def on_dispatch_error(self, error):
+        console.log(error)
+        self.spinner.stop()
+        raise exceptions.SkyplaneGatewayException("Dispatch failed with error", error)
+
     def on_dispatch_end(self):
         self.spinner.stop()
         self.pbar = Progress(
@@ -70,4 +75,5 @@ class ProgressBarTransferHook(TransferHook):
 
     def on_transfer_error(self, error):
         console.log(error)
+        self.pbar.stop()
         raise exceptions.SkyplaneGatewayException("Transfer failed with error", error)

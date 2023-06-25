@@ -207,6 +207,8 @@ class Provisioner:
         gcp_provisioned = any([task.cloud_provider == "gcp" for task in provision_tasks])
         ibmcloud_provisioned = any([task.cloud_provider == "ibmcloud" for task in provision_tasks])
 
+        print("GCP PROVISION", gcp_provisioned)
+
         # configure regions
         if aws_provisioned:
             do_parallel(
@@ -250,6 +252,7 @@ class Provisioner:
             if gcp_provisioned:
 
                 def authorize_gcp_gateways():
+                    print("authorize", public_ips, private_ips)
                     self.gcp_firewall_rules.add(self.gcp.authorize_gateways(public_ips + private_ips))
 
                 authorize_ip_jobs.append(authorize_gcp_gateways)

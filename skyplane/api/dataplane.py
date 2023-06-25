@@ -220,6 +220,12 @@ class Dataplane:
         Path(gateway_program_dir).mkdir(exist_ok=True, parents=True)
         logger.fs.info(f"Writing gateway programs to {gateway_program_dir}")
 
+        # write gateway info file
+        gateway_info_path = f"{gateway_program_dir}/gateway_info.json"
+        with open(gateway_info_path, "w") as f:
+            json.dump(self.topology.get_gateway_info_json(), f, indent=4)
+        logger.fs.info(f"Writing gateway info to {gateway_info_path}")
+
         # start gateways in parallel
         jobs = []
         for node, server in gateway_bound_nodes.items():
@@ -267,8 +273,7 @@ class Dataplane:
                 for task in self.pending_transfers:
                     logger.fs.warning(f"Before deprovisioning, waiting for jobs to finish: {list(task.jobs.keys())}")
                     task.join()
-                    for thread in threading.enumerate():
-                        assert "_run_multipart_chunk_thread" not in thread.name, f"thread {thread.name} is still running"
+                    print("task finished")
             except KeyboardInterrupt:
                 logger.warning("Interrupted while waiting for transfers to finish, deprovisioning anyway.")
                 raise

@@ -15,7 +15,6 @@ def parse_path(path: str) -> Tuple[str, Optional[str], Optional[str]]:
         if path_test.parent.exists():
             return True
         return False
-
     if (path.startswith("https://") or path.startswith("http://")) and "r2.cloudflarestorage.com" in path:
         regex = re.compile(r"https?://([^/]+).r2.cloudflarestorage.com/([^/]+)/?(.*)")
         match = regex.match(path)
