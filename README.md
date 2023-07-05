@@ -1,12 +1,27 @@
-<picture>
-    <source srcset="docs/_static/logo-dark-mode.png" media="(prefers-color-scheme: dark)">
-    <img src="docs/_static/logo-light-mode.png" width="300" />
-</picture>
+<p align="center">
+    <picture>
+        <source srcset="docs/_static/logo-dark-mode.png" media="(prefers-color-scheme: dark)">
+        <img src="docs/_static/logo-light-mode.png" width="300" />
+    </picture>
+</p>
 
-[![Join Slack](https://img.shields.io/badge/-Join%20Skyplane%20Slack-blue?logo=slack)](https://join.slack.com/t/skyplaneworkspace/shared_invite/zt-1cxmedcuc-GwIXLGyHTyOYELq7KoOl6Q)
-[![integration-test](https://github.com/skyplane-project/skyplane/actions/workflows/integration-test.yml/badge.svg)](https://github.com/skyplane-project/skyplane/actions/workflows/integration-test.yml)
-[![docker](https://github.com/skyplane-project/skyplane/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/skyplane-project/skyplane/actions/workflows/docker-publish.yml)
-[![docs](https://readthedocs.org/projects/skyplane/badge/?version=latest)](https://skyplane.readthedocs.io/en/latest/?badge=latest)
+<p align="center">
+  <a href="https://join.slack.com/t/skyplaneworkspace/shared_invite/zt-1cxmedcuc-GwIXLGyHTyOYELq7KoOl6Q"> 
+    <img alt="Join Slack" src="https://img.shields.io/badge/-Join%20Skyplane%20Slack-blue?logo=slack">
+  </a>
+  
+  <a href="https://github.com/skyplane-project/skyplane/actions/workflows/integration-test.yml"> 
+    <img alt="integration-test" src="https://github.com/skyplane-project/skyplane/actions/workflows/integration-test.yml/badge.svg">
+  </a>
+  
+  <a href="https://github.com/skyplane-project/skyplane/actions/workflows/docker-publish.yml"> 
+    <img alt="docker" src="https://github.com/skyplane-project/skyplane/actions/workflows/docker-publish.yml/badge.svg">
+  </a>
+  
+  <a href="https://skyplane.readthedocs.io/en/latest/?badge=latest"> 
+    <img alt="docs" src="https://readthedocs.org/projects/skyplane/badge/?version=latest">
+  </a>
+</p>
 
 **🔥 Blazing fast bulk data transfers between any cloud 🔥**
 
