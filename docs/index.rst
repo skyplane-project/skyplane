@@ -24,8 +24,7 @@ Contents
    quickstart
    configure
    architecture
-   performance_stats_collection
-   on-prem_setup
+   permissions
    faq
 
 .. toctree::
@@ -56,6 +55,7 @@ Contents
 
    benchmark
    performance_stats_collection
+   on-prem_setup
    roadmap
 
 .. toctree::
