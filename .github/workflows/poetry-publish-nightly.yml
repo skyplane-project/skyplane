@@ -2,6 +2,7 @@ name: poetry-publish-nightly
 on:
   schedule:
     - cron: '39 23 * * *'
+  workflow_dispatch:
 
 jobs:
   # nightly release check from https://stackoverflow.com/a/67527144
@@ -30,7 +31,7 @@ jobs:
         with:
           python-version: 3.8
       - name: Install Poetry
-        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.1
+        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.5.1
       - name: Cache Poetry virtualenv
         uses: actions/cache@v1
         id: cache
@@ -75,7 +76,7 @@ jobs:
         with:
           python-version: 3.8
       - name: Install Poetry
-        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.2.1
+        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.5.1
       - name: Cache Poetry virtualenv
         uses: actions/cache@v1
         id: cache
@@ -96,7 +97,7 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
       - name: Build package under skyplane-dev name
         run: |
-          export RELEASEDATE=$(date +%Y%m%d)
+          export RELEASEDATE=$(date +%Y%m%d%H%M)
           echo "gateway_version = 'nightly-$RELEASEDATE'" > skyplane/gateway_version.py
           sed -i 's/name = "skyplane"/name = "skyplane-nightly"/g' pyproject.toml
           sed -i "s/version = \"\([0-9]\+\.[0-9]\+\.[0-9]\+\)\(.*\)\"/version = \"\1.dev$RELEASEDATE\"/" pyproject.toml

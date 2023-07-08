@@ -7,7 +7,6 @@ RUN --mount=type=cache,target=/var/cache/apt apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# TODO: uncomment when on-prem is re-enabled
 ##install HDFS Onprem Packages
 #RUN apt-get update && \
 #    apt-get install -y openjdk-11-jdk && \

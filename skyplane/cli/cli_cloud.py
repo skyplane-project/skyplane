@@ -283,6 +283,14 @@ def azure_check(
     iface = AzureBlobInterface(account, container)
     print(iface.container_client.get_container_properties())
 
+    # write object temorarily
+    # check skyplane AzureBlobInterface
+    print(f"\n{hline}\n[bold]Checking Skyplane AzureBlobInterface[/bold]\n{hline}")
+    from skyplane.obj_store.azure_blob_interface import AzureBlobInterface
+
+    iface = AzureBlobInterface(account, container)
+    print(iface.container_client.get_container_properties())
+
     # check if writeable
     rprint(f"\n{hline}\n[bold]Checking Skyplane AzureBlobInterface write access[/bold]\n{hline}")
     import tempfile

@@ -6,6 +6,10 @@ class StorageInterface:
     def bucket(self) -> str:
         return self.bucket_name
 
+    @property
+    def provider(self) -> str:
+        raise NotImplementedError()
+
     def region_tag(self) -> str:
         raise NotImplementedError()
 
