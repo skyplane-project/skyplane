@@ -14,7 +14,7 @@ def setup_buckets(region, n_files=1, file_size_mb=1, write=False):
     if provider == "azure":
         bucket_name = f"integration{zone}/{str(uuid.uuid4()).replace('-', '')}"
     else:
-        bucket_name = f"integration{zone}-{str(uuid.uuid4())[:8]}"
+        bucket_name = f"skyplane-integration-{zone}-{str(uuid.uuid4())[:8]}"
     logger.debug(f"creating buckets {bucket_name}")
     iface = ObjectStoreInterface.create(region, bucket_name)
     iface.create_bucket(zone)

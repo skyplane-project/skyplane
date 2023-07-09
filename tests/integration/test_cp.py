@@ -23,7 +23,7 @@ def setup_bucket(region_tag):
     if provider == "azure" or provider == "cloudflare":
         bucket_name = f"{str(uuid.uuid4())[:8]}/{str(uuid.uuid4()).replace('-', '')}"
     else:
-        bucket_name = f"integration{region}-{str(uuid.uuid4())[:8]}"
+        bucket_name = f"skyplane-integration-{region}-{str(uuid.uuid4())[:8]}"
 
     # create bucket
     try:
@@ -265,6 +265,4 @@ def test_cp_multicast(aws_bucket, gcp_bucket, same_region_bucket):
     assert (
         len(list(src_iface.list_objects(prefix=test_bucket_large_file.replace(f"{test_bucket}/", "")))) > 0
     ), f"Test case {test_bucket_large_file} does not exist in {test_bucket}"
-    client.copy(
-        test_bucket_large_file, [f"s3://{aws_bucket}/", f"gs://{gcp_bucket}/", f"gs://{same_region_bucket}/", f"azure://{azure_bucket}/"]
-    )
+    client.copy(test_bucket_large_file, [aws_bucket.path(), gcp_bucket.path(), same_region_bucket.path()])

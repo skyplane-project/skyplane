@@ -7,7 +7,7 @@ from skyplane.api.dataplane import Dataplane
 from skyplane.api.pipeline import Pipeline
 from skyplane.api.tracker import TransferHook
 
-__version__ = "0.3.1"
+__version__ = "0.3.2"
 __root__ = Path(__file__).parent.parent
 __all__ = [
     "__version__",
