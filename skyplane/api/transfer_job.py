@@ -159,6 +159,7 @@ class Chunker:
                     # Convert parts to base64 and store mime_type if destination interface is AzureBlobInterface
                     if dest_iface.provider == "azure":
                         from skyplane.obj_store.azure_blob_interface import AzureBlobInterface
+
                         block_ids = list(map(lambda part_num: AzureBlobInterface.id_to_base64_encoding(part_num, dest_object.key), parts))
                         metadata = (block_ids, mime_type)
 
