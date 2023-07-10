@@ -236,7 +236,7 @@ class Dataplane:
             instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
             instance.download_file("/tmp/gateway.stdout", out_file)
             instance.download_file("/tmp/gateway.stderr", err_file)
-            
+
         do_parallel(copy_log, self.bound_nodes.values(), n=-1)
 
     def deprovision(self, max_jobs: int = 64, spinner: bool = False):
