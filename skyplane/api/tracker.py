@@ -262,7 +262,6 @@ class TransferProgressTracker(Thread):
                 self.dataplane.topology.dest_region_tags,
                 session_start_timestamp_ms,
             )
-            print("transfer stats", transfer_stats)
             print_stats_completed(total_runtime_s=transfer_stats["total_runtime_s"], throughput_gbits=transfer_stats["throughput_gbits"])
 
     @imports.inject("pandas")
