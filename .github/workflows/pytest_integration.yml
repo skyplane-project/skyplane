@@ -27,7 +27,9 @@ jobs:
           poetry config virtualenvs.in-project false
           poetry config virtualenvs.path ~/.virtualenvs
       - name: Install Dependencies
-        run: poetry install -E aws -E azure -E gcp
+        run: |
+          poetry install -E gateway -E solver -E aws -E azure -E gcp -E ibm
+          poetry run pip install -r requirements-dev.txt
         if: steps.cache.outputs.cache-hit != 'true'
       - id: 'auth'
         uses: 'google-github-actions/auth@v1'
@@ -52,7 +54,7 @@ jobs:
   deprovision:
     runs-on: ubuntu-latest
     if: ${{ always() }}
-    needs: [integration]
+    needs: [pytest-integration]
     env:
       STRATEGY_UUID: itest-d-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
