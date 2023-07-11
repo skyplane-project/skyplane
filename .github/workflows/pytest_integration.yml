@@ -10,7 +10,7 @@ on:
 env:
   SKYPLANE_USAGE_STATS_ENABLED: 0
 jobs:
-  test-integration:
+  pytest-integration:
     # do not run on pull_request_target since it should be triggered by pull_request
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request')
     runs-on: ubuntu-latest
@@ -60,7 +60,7 @@ jobs:
   deprovision:
     runs-on: ubuntu-latest
     if: ${{ always() }}
-    needs: [integration]
+    needs: [pytest-integration]
     env:
       STRATEGY_UUID: itest-d-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
