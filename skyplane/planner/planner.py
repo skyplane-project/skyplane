@@ -63,22 +63,6 @@ class Planner:
                     vcpu_cost = int(vcpu_cost)
                     self.vcpu_info[cloud_provider][instance_name] = vcpu_cost
 
-    # def __init__(self, transfer_config: TransferConfig):
-    #    self.transfer_config = transfer_config
-    #    self.config = SkyplaneConfig.load_config(config_path)
-
-    #    # Loading the quota information, add ibm cloud when it is supported
-    #    self.quota_limits = {}
-    #    if os.path.exists(aws_quota_path):
-    #        with aws_quota_path.open("r") as f:
-    #            self.quota_limits["aws"] = json.load(f)
-    #    if os.path.exists(azure_standardDv5_quota_path):
-    #        with azure_standardDv5_quota_path.open("r") as f:
-    #            self.quota_limits["azure"] = json.load(f)
-    #    if os.path.exists(gcp_quota_path):
-    #        with gcp_quota_path.open("r") as f:
-    #            self.quota_limits["gcp"] = json.load(f)
-
     def plan(self) -> TopologyPlan:
         raise NotImplementedError
 
