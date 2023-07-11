@@ -1,5 +1,6 @@
 name: pytest-integration
 on:
+  workflow_dispatch:
   push:
     branches: [ main ]
     # Publish semver tags as releases.
