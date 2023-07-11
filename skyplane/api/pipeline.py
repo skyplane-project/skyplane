@@ -70,19 +70,11 @@ class Pipeline:
         # planner
         self.planning_algorithm = planning_algorithm
         if self.planning_algorithm == "direct":
-<<<<<<< HEAD
             self.planner = MulticastDirectPlanner(self.max_instances, self.n_connections, self.transfer_config)
         elif self.planning_algorithm == "src_one_sided":
             self.planner = DirectPlannerSourceOneSided(self.max_instances, self.n_connections, self.transfer_config)
         elif self.planning_algorithm == "dst_one_sided":
             self.planner = DirectPlannerDestOneSided(self.max_instances, self.n_connections, self.transfer_config)
-=======
-            self.planner = MulticastDirectPlanner(self.max_instances, 64, self.transfer_config)
-        elif self.planning_algorithm == "src_one_sided":
-            self.planner = DirectPlannerSourceOneSided(self.max_instances, 64, self.transfer_config)
-        elif self.planning_algorithm == "dst_one_sided":
-            self.planner = DirectPlannerDestOneSided(self.max_instances, 64, self.transfer_config)
->>>>>>> b265310 (Fix inconsistencies between VCPU and R2 merge  (#857))
         else:
             raise ValueError(f"No such planning algorithm {planning_algorithm}")
 

@@ -1,0 +1,200 @@
+name: pytest-integration
+on:
+  push:
+    branches: [ main ]
+    # Publish semver tags as releases.
+    tags: [ '*.*.*' ]
+  pull_request:
+  pull_request_target:
+    types: [labeled]
+env:
+  SKYPLANE_USAGE_STATS_ENABLED: 0
+jobs:
+  test-integration:
+    # do not run on pull_request_target since it should be triggered by pull_request
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request')
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+    steps:
+      - uses: actions/checkout@v1
+      - name: Install poetry
+        run: pipx install poetry
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+          cache: "poetry"
+      - name: Set Poetry config
+        run: |
+          poetry config virtualenvs.in-project false
+          poetry config virtualenvs.path ~/.virtualenvs
+      - name: Install Dependencies
+        run: |
+          poetry install -E gateway -E solver -E aws -E azure -E gcp -E ibm
+          poetry run pip install -r requirements-dev.txt
+        if: steps.cache.outputs.cache-hit != 'true'
+      - name: Log into Azure
+        uses: azure/login@v1
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v0'
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS_JSON }}'
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v0'
+        with:
+          project_id: '${{ secrets.GCP_PROJECT_ID }}'
+          export_default_credentials: true
+      - name: Run cloud tests
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          poetry run skyplane init -y --disable-config-azure --disable-config-gcp --disable-config-ibm --disable-config-cloudflare
+          poetry run skyplane config set usage_stats false
+          poetry run pytest -s tests/integration/test_cp
+  deprovision:
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs: [integration]
+    env:
+      STRATEGY_UUID: itest-d-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v1
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+      - name: Install skyplane from pypi
+        run: pip install skyplane[aws,azure,gcp]
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v0'
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS_JSON }}'
+      - name: Skyplane init
+        run: |
+          poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
+          poetry run skyplane init -y --disable-config-azure
+          poetry run skyplane config set usage_stats false
+      - name: Deprovision
+        run: poetry run skyplane deprovision
+      - name: Delete matching S3 buckets
+        run: |
+          for pattern in "test-skyplane-" "skyplane-integration-us-east-1-" "integrationus-east-1-"; do
+            aws s3api list-buckets --query "Buckets[?starts_with(Name, \`${pattern}\`) == \`true\`].Name" --output text | tr '\t' '\n' | while read bucket; do aws s3 rb "s3://$bucket" --force; done
+          done
+      - name: Cleanup GCP service account
+        if: always()
+        run: gcloud iam service-accounts delete --quiet ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+
+  test-aws:
+    # run if push to main or pull request by contributor or pull request target with label 'safe to test' (to avoid running on forks)
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'safe to test'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Install poetry
+        run: pipx install poetry
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+          cache: "poetry"
+      - name: Set Poetry config
+        run: |
+          poetry config virtualenvs.in-project false
+          poetry config virtualenvs.path ~/.virtualenvs
+      - name: Install Dependencies
+        run: |
+          poetry install -E gateway -E solver -E aws -E azure -E gcp -E ibm
+          poetry run pip install -r requirements-dev.txt
+        if: steps.cache.outputs.cache-hit != 'true'
+      - name: Run cloud tests
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          poetry run skyplane init -y --disable-config-azure --disable-config-gcp --disable-config-ibm --disable-config-cloudflare
+          poetry run skyplane config set usage_stats false
+          poetry run pytest -s tests/unit_aws
+  test-azure:
+    # run if push to main or pull request by contributor or pull request target with label 'safe to test' (to avoid running on forks)
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'safe to test'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Install poetry
+        run: pipx install poetry
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+          cache: "poetry"
+      - name: Set Poetry config
+        run: |
+          poetry config virtualenvs.in-project false
+          poetry config virtualenvs.path ~/.virtualenvs
+      - name: Log into Azure
+        uses: azure/login@v1
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+      - name: Install Dependencies
+        run: |
+          poetry install -E gateway -E solver -E aws -E azure -E gcp -E ibm
+          poetry run pip install -r requirements-dev.txt
+        if: steps.cache.outputs.cache-hit != 'true'
+      - name: Run cloud tests
+        run: |
+          poetry run pip freeze
+          poetry run skyplane init -y --disable-config-aws --disable-config-gcp --disable-config-ibm --disable-config-cloudflare
+          poetry run skyplane config set usage_stats false
+          poetry run pytest -s tests/unit_azure
+  test-gcp:
+    # run if push to main or pull request or pull request target with label 'safe to test' (to avoid running on forks)
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'safe to test'))
+    runs-on: ubuntu-latest
+    env:
+      STRATEGY_UUID: pytest-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v1
+      - name: Install poetry
+        run: pipx install poetry
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+          cache: "poetry"
+      - name: Set Poetry config
+        run: |
+          poetry config virtualenvs.in-project false
+          poetry config virtualenvs.path ~/.virtualenvs
+          
+      - name: Install Dependencies
+        run: |
+          poetry install -E gateway -E solver -E aws -E azure -E gcp -E ibm
+          poetry run pip install -r requirements-dev.txt
+          poetry run sudo apt install default-jdk
+        if: steps.cache.outputs.cache-hit != 'true'
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v0'
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS_JSON }}'
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v0'
+        with:
+          project_id: '${{ secrets.GCP_PROJECT_ID }}'
+          export_default_credentials: true
+      - name: Run cloud tests
+        run: |
+          poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
+          poetry run skyplane init -y --disable-config-aws --disable-config-azure --disable-config-ibm --disable-config-cloudflare
+          poetry run skyplane config set usage_stats false
+          poetry run pytest -s tests/unit_gcs
+      - name: Cleanup GCP service account
+        if: always()
+        run: gcloud iam service-accounts delete ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com

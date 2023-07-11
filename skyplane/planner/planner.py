@@ -1,13 +1,8 @@
 from collections import defaultdict
 from importlib.resources import path
 from typing import Dict, List, Optional, Tuple, Tuple
-<<<<<<< HEAD
 import os
 import csv
-=======
-import re
-import os
->>>>>>> b265310 (Fix inconsistencies between VCPU and R2 merge  (#857))
 
 from skyplane import compute
 from skyplane.api.config import TransferConfig
@@ -68,21 +63,21 @@ class Planner:
                     vcpu_cost = int(vcpu_cost)
                     self.vcpu_info[cloud_provider][instance_name] = vcpu_cost
 
-    def __init__(self, transfer_config: TransferConfig):
-        self.transfer_config = transfer_config
-        self.config = SkyplaneConfig.load_config(config_path)
+    #def __init__(self, transfer_config: TransferConfig):
+    #    self.transfer_config = transfer_config
+    #    self.config = SkyplaneConfig.load_config(config_path)
 
-        # Loading the quota information, add ibm cloud when it is supported
-        self.quota_limits = {}
-        if os.path.exists(aws_quota_path):
-            with aws_quota_path.open("r") as f:
-                self.quota_limits["aws"] = json.load(f)
-        if os.path.exists(azure_standardDv5_quota_path):
-            with azure_standardDv5_quota_path.open("r") as f:
-                self.quota_limits["azure"] = json.load(f)
-        if os.path.exists(gcp_quota_path):
-            with gcp_quota_path.open("r") as f:
-                self.quota_limits["gcp"] = json.load(f)
+    #    # Loading the quota information, add ibm cloud when it is supported
+    #    self.quota_limits = {}
+    #    if os.path.exists(aws_quota_path):
+    #        with aws_quota_path.open("r") as f:
+    #            self.quota_limits["aws"] = json.load(f)
+    #    if os.path.exists(azure_standardDv5_quota_path):
+    #        with azure_standardDv5_quota_path.open("r") as f:
+    #            self.quota_limits["azure"] = json.load(f)
+    #    if os.path.exists(gcp_quota_path):
+    #        with gcp_quota_path.open("r") as f:
+    #            self.quota_limits["gcp"] = json.load(f)
 
     def plan(self) -> TopologyPlan:
         raise NotImplementedError
@@ -289,17 +284,10 @@ class UnicastDirectPlanner(Planner):
 
 
 class MulticastDirectPlanner(Planner):
-<<<<<<< HEAD
     def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig, quota_limits_file: Optional[str] = None):
         super().__init__(transfer_config, quota_limits_file)
         self.n_instances = n_instances
         self.n_connections = n_connections
-=======
-    def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig):
-        self.n_instances = n_instances
-        self.n_connections = n_connections
-        super().__init__(transfer_config)
->>>>>>> b265310 (Fix inconsistencies between VCPU and R2 merge  (#857))
 
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         src_region_tag = jobs[0].src_iface.region_tag()
@@ -467,125 +455,6 @@ class DirectPlannerSourceOneSided(MulticastDirectPlanner):
 class DirectPlannerDestOneSided(MulticastDirectPlanner):
     """Planner that only creates instances in the destination region"""
 
-<<<<<<< HEAD
-=======
-    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        # only create in destination region
-        src_region_tag = jobs[0].src_iface.region_tag()
-        dst_region_tags = [iface.region_tag() for iface in jobs[0].dst_ifaces]
-        # jobs must have same sources and destinations
-        for job in jobs[1:]:
-            assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
-            assert [iface.region_tag() for iface in job.dst_ifaces] == dst_region_tags, "Add jobs must have same destination set"
-
-        plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=dst_region_tags)
-        # TODO: use VM limits to determine how many instances to create in each region
-        # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
-        for i in range(self.n_instances):
-            for dst_region_tag in dst_region_tags:
-                plan.add_gateway(dst_region_tag)
-
-        # initialize gateway programs per region
-        dst_program = {dst_region: GatewayProgram() for dst_region in dst_region_tags}
-
-        # iterate through all jobs
-        for job in jobs:
-            src_bucket = job.src_iface.bucket()
-            src_region_tag = job.src_iface.region_tag()
-            src_provider = src_region_tag.split(":")[0]
-
-            partition_id = jobs.index(job)
-
-            # send to all destination
-            dst_prefixes = job.dst_prefixes
-            for i in range(len(job.dst_ifaces)):
-                dst_iface = job.dst_ifaces[i]
-                dst_prefix = dst_prefixes[i]
-                dst_region_tag = dst_iface.region_tag()
-                dst_bucket = dst_iface.bucket()
-                dst_gateways = plan.get_region_gateways(dst_region_tag)
-
-                # source region gateway program
-                obj_store_read = dst_program[dst_region_tag].add_operator(
-                    GatewayReadObjectStore(src_bucket, src_region_tag, self.n_connections), partition_id=partition_id
-                )
-
-                dst_program[dst_region_tag].add_operator(
-                    GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
-                    parent_handle=obj_store_read,
-                    partition_id=partition_id,
-                )
-
-                # update cost per GB
-                plan.cost_per_gb += compute.CloudProvider.get_transfer_cost(src_region_tag, dst_region_tag)
-
-        # set gateway programs
-        for dst_region_tag, program in dst_program.items():
-            plan.set_gateway_program(dst_region_tag, program)
-        return plan
-
-
-class DirectPlannerSourceOneSided(MulticastDirectPlanner):
-    """Planner that only creates VMs in the source region"""
-
-    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        src_region_tag = jobs[0].src_iface.region_tag()
-        dst_region_tags = [iface.region_tag() for iface in jobs[0].dst_ifaces]
-        # jobs must have same sources and destinations
-        for job in jobs[1:]:
-            assert job.src_iface.region_tag() == src_region_tag, "All jobs must have same source region"
-            assert [iface.region_tag() for iface in job.dst_ifaces] == dst_region_tags, "Add jobs must have same destination set"
-
-        plan = TopologyPlan(src_region_tag=src_region_tag, dest_region_tags=dst_region_tags)
-        # TODO: use VM limits to determine how many instances to create in each region
-        # TODO: support on-sided transfers but not requiring VMs to be created in source/destination regions
-        for i in range(self.n_instances):
-            plan.add_gateway(src_region_tag)
-
-        # initialize gateway programs per region
-        src_program = GatewayProgram()
-
-        # iterate through all jobs
-        for job in jobs:
-            src_bucket = job.src_iface.bucket()
-            src_region_tag = job.src_iface.region_tag()
-            src_provider = src_region_tag.split(":")[0]
-
-            # give each job a different partition id, so we can read/write to different buckets
-            partition_id = jobs.index(job)
-
-            # source region gateway program
-            obj_store_read = src_program.add_operator(
-                GatewayReadObjectStore(src_bucket, src_region_tag, self.n_connections), partition_id=partition_id
-            )
-            # send to all destination
-            mux_and = src_program.add_operator(GatewayMuxAnd(), parent_handle=obj_store_read, partition_id=partition_id)
-            dst_prefixes = job.dst_prefixes
-            for i in range(len(job.dst_ifaces)):
-                dst_iface = job.dst_ifaces[i]
-                dst_prefix = dst_prefixes[i]
-                dst_region_tag = dst_iface.region_tag()
-                dst_bucket = dst_iface.bucket()
-                dst_gateways = plan.get_region_gateways(dst_region_tag)
-
-                # special case where destination is same region as source
-                src_program.add_operator(
-                    GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
-                    parent_handle=mux_and,
-                    partition_id=partition_id,
-                )
-                # update cost per GB
-                plan.cost_per_gb += compute.CloudProvider.get_transfer_cost(src_region_tag, dst_region_tag)
-
-        # set gateway programs
-        plan.set_gateway_program(src_region_tag, src_program)
-        return plan
-
-
-class DirectPlannerDestOneSided(MulticastDirectPlanner):
-    """Planner that only creates instances in the destination region"""
-
->>>>>>> b265310 (Fix inconsistencies between VCPU and R2 merge  (#857))
     def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
         # only create in destination region
         src_region_tag = jobs[0].src_iface.region_tag()
@@ -643,26 +512,3 @@ class DirectPlannerDestOneSided(MulticastDirectPlanner):
         for dst_region_tag, program in dst_program.items():
             plan.set_gateway_program(dst_region_tag, program)
         return plan
-<<<<<<< HEAD
-=======
-
-
-class UnicastILPPlanner(Planner):
-    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        raise NotImplementedError("ILP solver not implemented yet")
-
-
-class MulticastILPPlanner(Planner):
-    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        raise NotImplementedError("ILP solver not implemented yet")
-
-
-class MulticastMDSTPlanner(Planner):
-    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        raise NotImplementedError("MDST solver not implemented yet")
-
-
-class MulticastSteinerTreePlanner(Planner):
-    def plan(self, jobs: List[TransferJob]) -> TopologyPlan:
-        raise NotImplementedError("Steiner tree solver not implemented yet")
->>>>>>> b265310 (Fix inconsistencies between VCPU and R2 merge  (#857))

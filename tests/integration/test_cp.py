@@ -101,11 +101,9 @@ def cloudflare_bucket():
     iface.delete_bucket()
 
 
-# TODO: add more parameters for bucket types
-# @pytest.mark.parametrize( # tests large objects
-#    "test_case, recursive", [(test_bucket_medium_file, True), (test_bucket_large_file, False), (test_bucket_small_file, True)]
-# )
-@pytest.mark.parametrize("test_case, recursive", [(test_bucket_medium_file, True)])
+@pytest.mark.parametrize( # tests large objects
+   "test_case, recursive", [(test_bucket_medium_file, True), (test_bucket_large_file, False), (test_bucket_small_file, True)]
+)
 def test_azure(azure_bucket, gcp_bucket, test_case, recursive):
     """
     Test copying a big file to different cloud providers
@@ -113,23 +111,19 @@ def test_azure(azure_bucket, gcp_bucket, test_case, recursive):
     :param gcp_bucket: gcp bucket to copy FROM dstiface
     :param test_case: test case from test_bucket to copy from
     """
-    print("DEST", azure_bucket.path(), gcp_bucket.path())
     client = SkyplaneClient()
     src_iface = ObjectStoreInterface.create("gcp:us-west2", test_bucket.split("://")[1])
-    print(azure_bucket.path())
 
     assert isinstance(azure_bucket.bucket(), str), f"Bucket name is not a string {azure_bucket.bucket()}"
     assert (
         len(list(src_iface.list_objects(prefix=test_case.replace(f"{test_bucket}/", "")))) > 0
     ), f"Test case {test_case} does not exist in {test_bucket}"
-    print("test case", test_case)
     client.copy(test_case, f"{azure_bucket.path()}/{test_case}", recursive=recursive)
 
     # assert sync has cost zero
     dst_objects = list(azure_bucket.list_objects())
     assert len(dst_objects) > 0, f"Object {test_case} not copied to {azure_bucket.bucket()}: only container {dst_objects}"
 
-    print(f"gs://{gcp_bucket}/azure/{test_case}")
     # copy back
     client.copy(f"{azure_bucket.path()}/{test_case}", f"gs://{gcp_bucket.bucket()}/azure/", recursive=recursive)
 
