@@ -2,9 +2,6 @@ name: pytest-integration
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
-    # Publish semver tags as releases.
-    tags: [ '*.*.*' ]
   pull_request:
   pull_request_target:
     types: [labeled]
