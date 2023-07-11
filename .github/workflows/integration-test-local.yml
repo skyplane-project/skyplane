@@ -97,7 +97,7 @@ jobs:
           poetry run skyplane init -y --disable-config-azure --disable-config-cloudflare
           poetry run skyplane config set usage_stats false
       - name: Deprovision
-        run: poetry run skyplane deprovision
+        run: poetry run skyplane deprovision --all
       - name: Delete matching S3 buckets
         run: |
           for pattern in "test-skyplane-" "skyplane-integration-" "integrationus-east-1-"; do
