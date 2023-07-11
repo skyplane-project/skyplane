@@ -63,7 +63,7 @@ class Planner:
                     vcpu_cost = int(vcpu_cost)
                     self.vcpu_info[cloud_provider][instance_name] = vcpu_cost
 
-    #def __init__(self, transfer_config: TransferConfig):
+    # def __init__(self, transfer_config: TransferConfig):
     #    self.transfer_config = transfer_config
     #    self.config = SkyplaneConfig.load_config(config_path)
 

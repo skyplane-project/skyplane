@@ -101,8 +101,8 @@ def cloudflare_bucket():
     iface.delete_bucket()
 
 
-@pytest.mark.parametrize( # tests large objects
-   "test_case, recursive", [(test_bucket_medium_file, True), (test_bucket_large_file, False), (test_bucket_small_file, True)]
+@pytest.mark.parametrize(  # tests large objects
+    "test_case, recursive", [(test_bucket_medium_file, True), (test_bucket_large_file, False), (test_bucket_small_file, True)]
 )
 def test_azure(azure_bucket, gcp_bucket, test_case, recursive):
     """

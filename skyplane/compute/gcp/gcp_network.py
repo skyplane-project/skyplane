@@ -63,17 +63,16 @@ class GCPNetwork:
         compute = self.auth.get_gcp_client()
         request = compute.firewalls().list(project=self.auth.project_id)
         response = request.execute()
-        if "items" not in response: 
+        if "items" not in response:
             # no firewall rules found
-            return 
+            return
 
         # Delete each firewall rule
-        for rule in response['items']:
-            if rule["network"] == f"https://www.googleapis.com/compute/v1/projects/{self.auth.project_id}/global/networks/{self.vpc_name}": 
-                rule_name = rule['name']
-                print(f'Deleting firewall rule: {rule_name}')
+        for rule in response["items"]:
+            if rule["network"] == f"https://www.googleapis.com/compute/v1/projects/{self.auth.project_id}/global/networks/{self.vpc_name}":
+                rule_name = rule["name"]
+                print(f"Deleting firewall rule: {rule_name}")
                 compute.firewalls().delete(project=self.auth.project_id, firewall=rule_name).execute()
-
 
     @imports.inject("googleapiclient.errors", pip_extra="gcp")
     def get_firewall_rule(errors, self, firewall_rule_name):
