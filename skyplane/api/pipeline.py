@@ -123,6 +123,18 @@ class Pipeline:
         dp.deprovision(spinner=True)
         return dp
 
+    def start_async(self, debug=False):
+        dp = self.create_dataplane(debug)
+        try:
+            dp.provision(spinner=False)
+            tracker = dp.run_async(self.jobs_to_dispatch)
+            if debug:
+                dp.copy_gateway_logs()
+            return tracker
+        except Exception as e:
+            dp.copy_gateway_logs()
+            return
+
     def queue_copy(
         self,
         src: str,
