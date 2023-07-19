@@ -26,6 +26,7 @@ Contents
    architecture
    permissions
    faq
+   increase_vcpus
 
 .. toctree::
    :maxdepth: 2
