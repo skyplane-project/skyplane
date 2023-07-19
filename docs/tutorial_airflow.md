@@ -48,31 +48,26 @@ class SkyplaneOperator(BaseOperator):
 def execute(self, context):
     pass
 ```
-Inside the `execute` function, we can instantiate a Skyplane client to create a dataplane and execute transfers: 
+Inside the `execute` function, we can instantiate a Skyplane client to create a pipeline and execute transfers: 
 ```
 
 def execute(self, context):
     client = SkyplaneClient(aws_config=self.aws_config, gcp_config=self.gcp_config, azure_config=self.azure_config)
-    dp = client.dataplane(self.src_provider, self.src_region, self.dst_provider, self.dst_region, n_vms=1)
-    with dp.auto_deprovision():
-        dp.provision()
-        dp.queue_copy(self.src_bucket, self.dst_bucket, recursive=True)
-        tracker = dp.run_async()
+    pipeline = client.pipeline()
+    pipeline.queue_copy(self.src_bucket, self.dst_bucket, recursive=True)
+    tracker = pipeline.start_async()
 ```
 We can also add reporting on the transfer: 
 ```
-    with dp.auto_deprovision():
-        ...
-        print("Waiting for transfer to complete...")
-        while True:
-            bytes_remaining = tracker.query_bytes_remaining()
-            if bytes_remaining is None:
-                print(f"{timestamp} Transfer not yet started")
-            elif bytes_remaining > 0:
-                print(f"{(bytes_remaining / (2 ** 30)):.2f}GB left")
-            else:
-                break
-            time.sleep(1)
-        tracker.join()
-        print("Transfer complete!")
+    while True:
+        bytes_remaining = tracker.query_bytes_remaining()
+        if bytes_remaining is None:
+            print(f"{timestamp} Transfer not yet started")
+        elif bytes_remaining > 0:
+            print(f"{(bytes_remaining / (2 ** 30)):.2f}GB left")
+        else:
+            break
+        time.sleep(1)
+    tracker.join()
+    print("Transfer complete!")
 ```
