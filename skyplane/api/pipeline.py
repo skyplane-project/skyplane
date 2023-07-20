@@ -39,6 +39,7 @@ class Pipeline:
         transfer_config: TransferConfig,
         # cloud_regions: dict,
         max_instances: Optional[int] = 1,
+        n_connections: Optional[int] = 64,
         planning_algorithm: Optional[str] = "direct",
         debug: Optional[bool] = False,
     ):
@@ -54,6 +55,7 @@ class Pipeline:
         # self.cloud_regions = cloud_regions
         # TODO: set max instances with VM CPU limits and/or config
         self.max_instances = max_instances
+        self.n_connections = n_connections
         self.provisioner = provisioner
         self.transfer_config = transfer_config
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
@@ -68,11 +70,11 @@ class Pipeline:
         # planner
         self.planning_algorithm = planning_algorithm
         if self.planning_algorithm == "direct":
-            self.planner = MulticastDirectPlanner(self.max_instances, 64, self.transfer_config)
+            self.planner = MulticastDirectPlanner(self.max_instances, self.n_connections, self.transfer_config)
         elif self.planning_algorithm == "src_one_sided":
-            self.planner = DirectPlannerSourceOneSided(self.max_instances, 64, self.transfer_config)
+            self.planner = DirectPlannerSourceOneSided(self.max_instances, self.n_connections, self.transfer_config)
         elif self.planning_algorithm == "dst_one_sided":
-            self.planner = DirectPlannerDestOneSided(self.max_instances, 64, self.transfer_config)
+            self.planner = DirectPlannerDestOneSided(self.max_instances, self.n_connections, self.transfer_config)
         else:
             raise ValueError(f"No such planning algorithm {planning_algorithm}")
 
@@ -120,6 +122,18 @@ class Pipeline:
             dp.copy_gateway_logs()
         dp.deprovision(spinner=True)
         return dp
+
+    def start_async(self, debug=False):
+        dp = self.create_dataplane(debug)
+        try:
+            dp.provision(spinner=False)
+            tracker = dp.run_async(self.jobs_to_dispatch)
+            if debug:
+                dp.copy_gateway_logs()
+            return tracker
+        except Exception as e:
+            dp.copy_gateway_logs()
+            return
 
     def queue_copy(
         self,

@@ -119,7 +119,7 @@ class Dataplane:
             gateway_docker_image=gateway_docker_image,
             gateway_program_path=str(gateway_program_filename),
             gateway_info_path=f"{gateway_log_dir}/gateway_info.json",
-            e2ee_key_bytes=None,  # TODO: remove
+            e2ee_key_bytes=e2ee_key_bytes,  # TODO: remove
             use_bbr=self.transfer_config.use_bbr,  # TODO: remove
             use_compression=self.transfer_config.use_compression,
             use_socket_tls=self.transfer_config.use_socket_tls,

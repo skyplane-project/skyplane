@@ -331,11 +331,8 @@ class Chunker:
         multipart_exit_event = threading.Event()
         multipart_chunk_threads = []
 
-        # TODO: remove after azure multipart implemented
-        azure_dest = any([dst_iface.provider == "azure" for dst_iface in self.dst_ifaces])
-
         # start chunking threads
-        if not azure_dest and self.transfer_config.multipart_enabled:
+        if self.transfer_config.multipart_enabled:
             for _ in range(self.concurrent_multipart_chunk_threads):
                 t = threading.Thread(
                     target=self._run_multipart_chunk_thread,
@@ -349,11 +346,7 @@ class Chunker:
         for transfer_pair in transfer_pair_generator:
             # print("transfer_pair", transfer_pair.src_obj.key, transfer_pair.dst_objs)
             src_obj = transfer_pair.src_obj
-            if (
-                not azure_dest
-                and self.transfer_config.multipart_enabled
-                and src_obj.size > self.transfer_config.multipart_threshold_mb * MB
-            ):
+            if self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
                 multipart_send_queue.put(transfer_pair)
             else:
                 if transfer_pair.src_obj.size == 0:
