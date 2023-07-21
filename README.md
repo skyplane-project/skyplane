@@ -10,8 +10,8 @@
     <img alt="Join Slack" src="https://img.shields.io/badge/-Join%20Skyplane%20Slack-blue?logo=slack">
   </a>
   
-  <a href="https://github.com/skyplane-project/skyplane/actions/workflows/integration-test.yml"> 
-    <img alt="integration-test" src="https://github.com/skyplane-project/skyplane/actions/workflows/integration-test.yml/badge.svg">
+  <a href="https://github.com/skyplane-project/skyplane/actions/workflows/integration-test-multiple-sizes.yml"> 
+    <img alt="integration-test" src="https://github.com/skyplane-project/skyplane/actions/workflows/integration-test-multiple-sizes.yml/badge.svg">
   </a>
   
   <a href="https://github.com/skyplane-project/skyplane/actions/workflows/docker-publish.yml"> 
