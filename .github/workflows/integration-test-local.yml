@@ -97,10 +97,10 @@ jobs:
           poetry run skyplane init -y --disable-config-azure --disable-config-cloudflare
           poetry run skyplane config set usage_stats false
       - name: Deprovision
-        run: poetry run skyplane deprovision
+        run: poetry run skyplane deprovision --all
       - name: Delete matching S3 buckets
         run: |
-          for pattern in "test-skyplane-" "skyplane-integration-us-east-1-" "integrationus-east-1-"; do
+          for pattern in "test-skyplane-" "skyplane-integration-" "integrationus-east-1-"; do
             aws s3api list-buckets --query "Buckets[?starts_with(Name, \`${pattern}\`) == \`true\`].Name" --output text | tr '\t' '\n' | while read bucket; do aws s3 rb "s3://$bucket" --force; done
           done
       - name: Cleanup GCP service account

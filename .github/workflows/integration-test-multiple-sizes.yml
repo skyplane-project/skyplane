@@ -21,15 +21,15 @@ jobs:
           - gcp:us-central1-a gcp:us-central1-a --multipart
           - gcp:us-west1-a gcp:us-east1-a --multipart
           # Azure to Azure
-          - azure:westus azure:westus
-          - azure:eastus azure:westus
+          - azure:westus azure:westus --multipart
+          - azure:eastus azure:westus --multipart
           # cross cloud tests
           - aws:us-west-1 gcp:us-west2-a --multipart
           - gcp:us-west2-a aws:us-west-1 --multipart
-          - aws:us-west-1 azure:westus
-          - azure:westus aws:us-west-1
-          - gcp:us-west2-a azure:westus
-          - azure:westus gcp:us-west2-a
+          - aws:us-west-1 azure:westus --multipart
+          - azure:westus aws:us-west-1 --multipart
+          - gcp:us-west2-a azure:westus --multipart
+          - azure:westus gcp:us-west2-a --multipart
     timeout-minutes: 40
     env:
       STRATEGY_UUID: itest-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
@@ -104,7 +104,7 @@ jobs:
         run: poetry run skyplane deprovision
       - name: Delete matching S3 buckets
         run: |
-          for pattern in "test-skyplane-" "skyplane-integration-us-east-1-" "integrationus-east-1-"; do
+          for pattern in "test-skyplane-" "skyplane-integration-" "integrationus-east-1-"; do
             aws s3api list-buckets --query "Buckets[?starts_with(Name, \`${pattern}\`) == \`true\`].Name" --output text | tr '\t' '\n' | while read bucket; do aws s3 rb "s3://$bucket" --force; done
           done
       - name: Cleanup GCP service account
