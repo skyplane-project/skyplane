@@ -6,6 +6,8 @@ For Skyplane development, we use a variety of tools to check for code quality an
 pip install -r requirements-dev.txt
 ```
 
+> <sub> **_NOTE:_** This requires Python version 3.9 or above. </sub>
+
 ## Setting up a developer environment
 
 Skyplane is composed of the client (runs locally on a user's laptop) and gateway VMs (runs in respective clouds). Normally, the gateways use a pre-built nightly Docker image containing the latest build of the Skyplane gateway code (`public.ecr.aws/s6m1p0n8/skyplane:edge`). However, if you modify the gateway source (under `skyplane/gateway`), you will need to rebuild the gateway Docker image and push it to a container registry.
