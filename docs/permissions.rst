@@ -1,6 +1,6 @@
-***************
+*********************
 Required Permissions 
-***************
+*********************
 
 Skyplane runs in your own cloud accounts and does interact with an external service to run transfers. However the cloud account you are running Skyplane in must have permissions to interact with object storage and create VMs to execute transfers.
 
