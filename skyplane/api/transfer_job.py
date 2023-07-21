@@ -170,25 +170,6 @@ class Chunker:
                 mime_type = None
                 raise NotImplementedError("Multipart not implement for non-object store interfaces")
 
-    # def to_chunk_requests(self, gen_in: Generator[Chunk, None, None]) -> Generator[ChunkRequest, None, None]:
-    #    """Converts a generator of chunks to a generator of chunk requests.
-
-    #    :param gen_in: generator that generates chunk requests
-    #    :type gen_in: Generator
-    #    """
-    #    src_region = self.src_iface.region_tag()
-    #    src_bucket = self.src_iface.bucket()
-    #    for chunk in gen_in:
-    #        yield ChunkRequest(
-    #            chunk=chunk,
-    #            src_region=src_region,
-    #            #dst_region=dest_region,
-    #            src_object_store_bucket=src_bucket,
-    #            #dst_object_store_bucket=dest_bucket,
-    #            src_type="object_store",
-    #            #dst_type="object_store",
-    #        )
-
     @staticmethod
     def map_object_key_prefix(source_prefix: str, source_key: str, dest_prefix: str, recursive: bool = False):
         """
@@ -244,6 +225,7 @@ class Chunker:
         self,
         src_prefix: str,
         dst_prefixes: List[str],
+        dataplane: "Dataplane",
         recursive: bool,
         prefilter_fn: Optional[Callable[[ObjectStoreObject], bool]] = None,  # TODO: change to StorageObject
     ) -> Generator[TransferPair, None, None]:
@@ -251,8 +233,10 @@ class Chunker:
 
         :param src_prefix: source bucket folder prefix
         :type src_prefix: string
-        :param dst_prefix: destination bucket folder prefix
-        :type dst_prefix: string
+        :param dst_prefixes: destination bucket folder prefixes
+        :type dst_prefix: List[string]
+        :param dataplane: dataplane for the transfer
+        :type dataplane: skyplane.api.Dataplane
         :param recursive: if true, will copy objects at folder prefix recursively
         :type recursive: bool
         :param prefilter_fn: filters out objects whose prefixes do not match the filter function (default: None)
@@ -273,6 +257,7 @@ class Chunker:
         logger.fs.debug(f"Querying objects in {self.src_iface.path()}")
         n_objs = 0
         for obj in self.src_iface.list_objects(src_prefix):
+            do_parallel(lambda i: i.run_command("echo 1"), dataplane.bound_nodes.values(), n=8)
             if prefilter_fn is None or prefilter_fn(obj):
                 # collect list of destination objects
                 dest_objs = {}
@@ -586,6 +571,7 @@ class CopyJob(TransferJob):
     def gen_transfer_pairs(
         self,
         chunker: Optional[Chunker] = None,
+        dataplane: Optional["Dataplane"] = None,
         transfer_config: Optional[TransferConfig] = field(init=False, default_factory=lambda: TransferConfig()),
     ) -> Generator[TransferPair, None, None]:
         """Generate transfer pairs for the transfer job.
@@ -595,7 +581,7 @@ class CopyJob(TransferJob):
         """
         if chunker is None:  # used for external access to transfer pair list
             chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)  # TODO: should read in existing transfer config
-        yield from chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, self.recursive, self._pre_filter_fn)
+        yield from chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, dataplane, self.recursive, self._pre_filter_fn)
 
     def dispatch(
         self,
@@ -613,7 +599,7 @@ class CopyJob(TransferJob):
         :type dispatch_batch_size: int
         """
         chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
-        transfer_pair_generator = self.gen_transfer_pairs(chunker)  # returns TransferPair objects
+        transfer_pair_generator = self.gen_transfer_pairs(chunker, dataplane)  # returns TransferPair objects
         gen_transfer_list = chunker.tail_generator(transfer_pair_generator, self.transfer_list)
         chunks = chunker.chunk(gen_transfer_list)
         batches = chunker.batch_generator(

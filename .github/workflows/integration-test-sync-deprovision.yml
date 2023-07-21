@@ -1,0 +1,97 @@
+name: integration-test-sync-deprovision
+on: [push]
+concurrency: transfer-test
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  SKYPLANE_USAGE_STATS_ENABLED: 0
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1
+      matrix:
+        pairs:
+          # AWS to AWS
+          - aws:us-east-1 aws:us-east-1 --multipart
+          - aws:us-east-2 aws:us-west-2 --multipart
+          # GCP to GCP
+          - gcp:us-central1-a gcp:us-central1-a --multipart
+          - gcp:us-west1-a gcp:us-east1-a --multipart
+          # Azure to Azure
+          - azure:westus azure:westus
+          - azure:eastus azure:westus
+          # cross cloud tests
+          - aws:us-west-1 gcp:us-west2-a --multipart
+          - gcp:us-west2-a aws:us-west-1 --multipart
+          - aws:us-west-1 azure:westus
+          - azure:westus aws:us-west-1
+          - gcp:us-west2-a azure:westus
+          - azure:westus gcp:us-west2-a
+    timeout-minutes: 40
+    env:
+      STRATEGY_UUID: itest-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
+    steps:
+      - uses: actions/checkout@v1
+      - name: Install poetry
+        run: pipx install poetry
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+          cache: "poetry"
+      - name: Set Poetry config
+        run: |
+          poetry config virtualenvs.in-project false
+          poetry config virtualenvs.path ~/.virtualenvs
+      - name: Install Dependencies
+        run: poetry install -E aws -E azure -E gcp
+        if: steps.cache.outputs.cache-hit != 'true'
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v1'
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS_JSON }}'
+      - name: Log into Azure
+        uses: azure/login@v1
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+      - name: Skyplane init
+        run: |
+          poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
+          poetry run skyplane config set native_cmd_enabled false
+          cat ~/.skyplane/config
+          poetry run skyplane init -y --disable-config-cloudflare
+          poetry run skyplane config set usage_stats false
+      - name: 1000000 small files test
+        run: poetry run python tests/integration/sync.py ${{ matrix.pairs }} --n-files 10000000 --file-size-kb 1 --autoshutdown 1
+      - name: Cleanup GCP service account
+        if: always()
+        run: gcloud iam service-accounts delete ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+  deprovision:
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs: [integration]
+    env:
+      STRATEGY_UUID: itest-d-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v1
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+      - name: Install skyplane from pypi
+        run: pip install skyplane[aws,azure,gcp]
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v1'
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS_JSON }}'
+      - name: Skyplane init
+        run: |
+          skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
+          skyplane init -y --disable-config-azure
+          skyplane config set usage_stats false
+      - name: Deprovision
+        run: skyplane deprovision
+      - name: Cleanup GCP service account
+        if: always()
+        run: gcloud iam service-accounts delete --quiet ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
