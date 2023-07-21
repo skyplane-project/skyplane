@@ -63,7 +63,7 @@ class IBMCloudConfig(AuthenticationConfig):
 
 @dataclass(frozen=True)
 class TransferConfig:
-    """Configuration for a specific transfer""" 
+    """Configuration for a specific transfer"""
 
     autoterminate_minutes: int = 15
     requester_pays: bool = False
