@@ -765,6 +765,7 @@ class SyncJob(CopyJob):
     def gen_transfer_pairs(
         self,
         chunker: Optional[Chunker] = None,
+        dataplane: Optional["Dataplane"] = None,
         transfer_config: Optional[TransferConfig] = field(init=False, default_factory=lambda: TransferConfig()),
     ) -> Generator[TransferPair, None, None]:
         """Generate transfer pairs for the transfer job.
@@ -774,7 +775,7 @@ class SyncJob(CopyJob):
         """
         if chunker is None:  # used for external access to transfer pair list
             chunker = Chunker(self.src_iface, self.dst_ifaces, transfer_config)
-        transfer_pair_gen = chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, self.recursive, self._pre_filter_fn)
+        transfer_pair_gen = chunker.transfer_pair_generator(self.src_prefix, self.dst_prefixes, dataplane, self.recursive, self._pre_filter_fn)
 
         # only single destination supported
         assert len(self.dst_ifaces) == 1, "Only single destination supported for sync job"
