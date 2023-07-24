@@ -65,8 +65,8 @@ class SkyplaneCLI:
             cloud_config.set_flag("multipart_enabled", str(self.args["multipart"]))
             cloud_config.set_flag("autoshutdown_minutes", str(self.args["autoshutdown_minutes"]))
 
-        transfer_config.multipart_enabled = self.args["multipart"]
-        transfer_config.autoterminate_minutes = self.args["autoshutdown_minutes"]
+        self.transfer_config.multipart_enabled = self.args["multipart"]
+        self.transfer_config.autoterminate_minutes = self.args["autoshutdown_minutes"]
 
         self.client = skyplane.SkyplaneClient(
             aws_config=self.aws_config,
