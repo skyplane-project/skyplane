@@ -9,7 +9,7 @@ import typer
 from rich.progress import Progress, TextColumn, SpinnerColumn
 
 import skyplane
-from skyplane.api.config import TransferConfig, AWSConfig, GCPConfig, AzureConfig, IBMCloudConfig
+from skyplane.api.transfer_config import TransferConfig, AWSConfig, GCPConfig, AzureConfig, IBMCloudConfig
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.cli.impl.cp_replicate_fallback import (
     replicate_onprem_cp_cmd,
@@ -54,15 +54,20 @@ class SkyplaneCLI:
         self.src_region_tag, self.dst_region_tag = src_region_tag, dst_region_tag
         self.args = args
         self.aws_config, self.azure_config, self.gcp_config, self.ibmcloud_config = self.to_api_config(skyplane_config or cloud_config)
+        self.transfer_config = TransferConfig()
 
         # update config
         # TODO: set remaining config params
         if skyplane_config:
             skyplane_config.set_flag("multipart_enabled", str(self.args["multipart"]))
+            skyplane_config.set_flag("autoshutdown_minutes", str(self.args["autoshutdown_minutes"]))
         if cloud_config:
             cloud_config.set_flag("multipart_enabled", str(self.args["multipart"]))
+            cloud_config.set_flag("autoshutdown_minutes", str(self.args["autoshutdown_minutes"]))
 
-        self.transfer_config = self.make_transfer_config(skyplane_config or cloud_config)
+        transfer_config.multipart_enabled = self.args["multipart"]
+        transfer_config.autoterminate_minutes = self.args["autoshutdown_minutes"]
+
         self.client = skyplane.SkyplaneClient(
             aws_config=self.aws_config,
             azure_config=self.azure_config,
