@@ -257,7 +257,8 @@ class Chunker:
         logger.fs.debug(f"Querying objects in {self.src_iface.path()}")
         n_objs = 0
         for obj in self.src_iface.list_objects(src_prefix):
-            do_parallel(lambda i: i.run_command("echo 1"), dataplane.bound_nodes.values(), n=8)
+            if dataplane.bound_nodes:   
+                do_parallel(lambda i: i.run_command("echo 1"), dataplane.bound_nodes.values(), n=8)
             if prefilter_fn is None or prefilter_fn(obj):
                 # collect list of destination objects
                 dest_objs = {}
