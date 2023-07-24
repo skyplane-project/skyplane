@@ -1,7 +1,7 @@
 ﻿skyplane.api.config
 ===================
 
-.. automodule:: skyplane.api.config
+.. automodule:: skyplane.api.transfer_config
 
    
    
