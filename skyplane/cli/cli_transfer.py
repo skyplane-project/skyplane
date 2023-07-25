@@ -60,10 +60,10 @@ class SkyplaneCLI:
         # TODO: set remaining config params
         if skyplane_config:
             skyplane_config.set_flag("multipart_enabled", str(self.args["multipart"]))
-            self.transfer_config.multipart_enabled = skyplane_config.get_flag("multipart")
+            self.transfer_config.multipart_enabled = skyplane_config.get_flag("multipart_enabled")
         if cloud_config:
             cloud_config.set_flag("multipart_enabled", str(self.args["multipart"]))
-            self.transfer_config.multipart_enabled = cloud_config.get_flag("multipart")
+            self.transfer_config.multipart_enabled = cloud_config.get_flag("multipart_enabled")
 
         self.client = skyplane.SkyplaneClient(
             aws_config=self.aws_config,
