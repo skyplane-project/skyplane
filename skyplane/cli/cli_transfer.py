@@ -62,7 +62,7 @@ class SkyplaneCLI:
         if cloud_config:
             cloud_config.set_flag("multipart_enabled", str(self.args["multipart"]))
 
-        self.transfer_config = make_transfer_config(skyplane_config or cloud_config)
+        self.transfer_config = self.make_transfer_config(skyplane_config or cloud_config)
 
         self.client = skyplane.SkyplaneClient(
             aws_config=self.aws_config,
