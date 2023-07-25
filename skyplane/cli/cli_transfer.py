@@ -54,16 +54,15 @@ class SkyplaneCLI:
         self.src_region_tag, self.dst_region_tag = src_region_tag, dst_region_tag
         self.args = args
         self.aws_config, self.azure_config, self.gcp_config, self.ibmcloud_config = self.to_api_config(skyplane_config or cloud_config)
-        self.transfer_config = TransferConfig()
 
         # update config
         # TODO: set remaining config params
         if skyplane_config:
             skyplane_config.set_flag("multipart_enabled", str(self.args["multipart"]))
-            self.transfer_config.multipart_enabled = skyplane_config.get_flag("multipart_enabled")
         if cloud_config:
             cloud_config.set_flag("multipart_enabled", str(self.args["multipart"]))
-            self.transfer_config.multipart_enabled = cloud_config.get_flag("multipart_enabled")
+
+        self.transfer_config = make_transfer_config(skyplane_config or cloud_config)
 
         self.client = skyplane.SkyplaneClient(
             aws_config=self.aws_config,
@@ -105,26 +104,10 @@ class SkyplaneCLI:
         return aws_config, azure_config, gcp_config, ibmcloud_config
 
     def make_transfer_config(self, config: SkyplaneConfig) -> TransferConfig:
-        intraregion = self.src_region_tag == self.dst_region_tag
         return TransferConfig(
             autoterminate_minutes=config.get_flag("autoshutdown_minutes"),
             requester_pays=config.get_flag("requester_pays"),
-            use_bbr=config.get_flag("bbr"),
-            use_compression=config.get_flag("compress") if not intraregion else False,
-            use_e2ee=config.get_flag("encrypt_e2e") if not intraregion else False,
-            use_socket_tls=config.get_flag("encrypt_socket_tls") if not intraregion else False,
-            aws_use_spot_instances=config.get_flag("aws_use_spot_instances"),
-            azure_use_spot_instances=config.get_flag("azure_use_spot_instances"),
-            gcp_use_spot_instances=config.get_flag("gcp_use_spot_instances"),
-            aws_instance_class=config.get_flag("aws_instance_class"),
-            azure_instance_class=config.get_flag("azure_instance_class"),
-            gcp_instance_class=config.get_flag("gcp_instance_class"),
-            ibmcloud_instance_class=config.get_flag("ibmcloud_instance_class"),
-            gcp_use_premium_network=config.get_flag("gcp_use_premium_network"),
             multipart_enabled=config.get_flag("multipart_enabled"),
-            multipart_threshold_mb=config.get_flag("multipart_min_threshold_mb"),
-            multipart_chunk_size_mb=config.get_flag("multipart_chunk_size_mb"),
-            multipart_max_chunks=config.get_flag("multipart_max_chunks"),
         )
 
     def check_config(self) -> bool:
