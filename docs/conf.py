@@ -48,7 +48,10 @@ extensions = [
     # 'matplotlib.sphinxext.plot_directive',
 ]
 
-intersphinx_mapping = {"python": ("https://docs.python.org/3/", None), "sphinx": ("https://www.sphinx-doc.org/en/master/", None)}
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3/", None),
+    "sphinx": ("https://www.sphinx-doc.org/en/master/", None),
+}
 intersphinx_disabled_domains = ["std"]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -78,7 +81,11 @@ exclude_patterns = ["build", "_build", "Thumbs.db", ".DS_Store", "README.md"]
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 html_theme = "furo"
-html_theme_options = {"light_logo": "logo-light-mode.png", "dark_logo": "logo-dark-mode.png", "sidebar_hide_name": True}
+html_theme_options = {
+    "light_logo": "logo-light-mode.png",
+    "dark_logo": "logo-dark-mode.png",
+    "sidebar_hide_name": True,
+}
 html_favicon = "_static/favicon.ico"
 html_static_path = ["_static"]
 

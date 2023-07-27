@@ -42,7 +42,10 @@ def split_list(l):
 
 
 def start_iperf3_client(
-    arg_pair: Tuple[compute.Server, compute.Server], iperf3_log_dir: Path, iperf3_runtime: int, iperf3_connections: int
+    arg_pair: Tuple[compute.Server, compute.Server],
+    iperf3_log_dir: Path,
+    iperf3_runtime: int,
+    iperf3_connections: int,
 ):
     instance_src, instance_dst = arg_pair
     tag = f"{instance_src.region_tag}:{instance_src.network_tier()}_{instance_dst.region_tag}:{instance_dst.network_tier()}"
@@ -65,7 +68,11 @@ def start_iperf3_client(
             f.write(stderr)
         logger.error(f"{tag} stderr: {stderr}")
 
-    out_rec = dict(tag=tag, stdout_path=str(iperf3_log_dir / f"{tag}.stdout"), stderr_path=str(iperf3_log_dir / f"{tag}.stderr"))
+    out_rec = dict(
+        tag=tag,
+        stdout_path=str(iperf3_log_dir / f"{tag}.stdout"),
+        stderr_path=str(iperf3_log_dir / f"{tag}.stderr"),
+    )
     try:
         result = json.loads(stdout)
         out_rec["throughput_sent"] = result["end"]["sum_sent"]["bits_per_second"]
@@ -87,7 +94,8 @@ def start_iperf3_client(
 
 def throughput_grid(
     resume: Optional[Path] = typer.Option(
-        None, help="Resume from a past result. Pass the resulting CSV for the past result to resume. Default is None."
+        None,
+        help="Resume from a past result. Pass the resulting CSV for the past result to resume. Default is None.",
     ),
     copy_resume_file: bool = typer.Option(True, help="Copy the resume file to the output CSV. Default is True."),
     # regions
@@ -265,7 +273,12 @@ def throughput_grid(
     raw_iperf3_log_dir = log_dir / "raw_iperf3_logs"
 
     # ask for confirmation
-    typer.secho(f"\nExperiment configuration: (total pairs = {len(instance_pairs)})", fg="red", err=True, bold=True)
+    typer.secho(
+        f"\nExperiment configuration: (total pairs = {len(instance_pairs)})",
+        fg="red",
+        err=True,
+        bold=True,
+    )
     for group_idx, group in enumerate(groups):
         typer.secho(f"\tGroup {group_idx}: ({len(group)} items)", fg="green", bold=True)
         for instance_pair in group:
@@ -273,10 +286,20 @@ def throughput_grid(
                 f"\t{instance_pair[0].region_tag}:{instance_pair[0].network_tier()} -> {instance_pair[1].region_tag}:{instance_pair[1].network_tier()}"
             )
     gbyte_sent = len(instance_pairs) * 5.0 / 8 * iperf3_runtime
-    typer.secho(f"\niperf_runtime={iperf3_runtime}, iperf3_connections={iperf3_connections}", fg="blue")
-    typer.secho(f"Approximate runtime: {len(groups) * (10 + iperf3_runtime)}s (assuming 10s startup time)", fg="blue")
+    typer.secho(
+        f"\niperf_runtime={iperf3_runtime}, iperf3_connections={iperf3_connections}",
+        fg="blue",
+    )
+    typer.secho(
+        f"Approximate runtime: {len(groups) * (10 + iperf3_runtime)}s (assuming 10s startup time)",
+        fg="blue",
+    )
     typer.secho(f"Approximate data to send: {gbyte_sent:.2f}GB (assuming 5Gbps)", fg="blue")
-    typer.secho(f"Approximate cost: ${gbyte_sent * 0.1:.2f} (assuming $0.10/GB)", fg="red", err=True)
+    typer.secho(
+        f"Approximate cost: ${gbyte_sent * 0.1:.2f} (assuming $0.10/GB)",
+        fg="red",
+        err=True,
+    )
     logger.debug(f"Experiment tag: {experiment_tag}")
     logger.debug(f"Log directory: {log_dir}")
     sys.stdout.flush()
@@ -304,7 +327,10 @@ def throughput_grid(
             iperf3_runtime=iperf3_runtime,
         )
         rec = start_iperf3_client(
-            instance_pair, iperf3_log_dir=raw_iperf3_log_dir, iperf3_runtime=iperf3_runtime, iperf3_connections=iperf3_connections
+            instance_pair,
+            iperf3_log_dir=raw_iperf3_log_dir,
+            iperf3_runtime=iperf3_runtime,
+            iperf3_connections=iperf3_connections,
         )
         if rec is not None:
             result_rec.update(rec)
@@ -323,7 +349,13 @@ def throughput_grid(
         for group_idx, group in enumerate(groups):
             tag_fmt = lambda x: f"{x[0].region_tag}:{x[0].network_tier()} to {x[1].region_tag}:{x[1].network_tier()}"
             results = do_parallel(
-                client_fn, group, spinner=False, desc=f"Parallel eval group {group_idx}", n=-1, arg_fmt=tag_fmt, return_args=False
+                client_fn,
+                group,
+                spinner=False,
+                desc=f"Parallel eval group {group_idx}",
+                n=-1,
+                arg_fmt=tag_fmt,
+                return_args=False,
             )
             new_througput_results.extend([rec for rec in results if rec is not None])
 
@@ -478,7 +510,12 @@ def latency_grid(
     log_dir = data_dir / "logs" / "latency_grid" / f"{experiment_tag}"
 
     # ask for confirmation
-    typer.secho(f"\nExperiment configuration: (total pairs = {len(instance_pairs)})", fg="red", err=True, bold=True)
+    typer.secho(
+        f"\nExperiment configuration: (total pairs = {len(instance_pairs)})",
+        fg="red",
+        err=True,
+        bold=True,
+    )
     logger.debug(f"Experiment tag: {experiment_tag}")
     logger.debug(f"Log directory: {log_dir}")
     sys.stdout.flush()
@@ -503,7 +540,12 @@ def latency_grid(
         if isinstance(instance_src, compute.GCPServer):
             ping_cmd = f"docker run --net=host alpine {ping_cmd}"
         ping_result_stdout, ping_result_stderr = instance_src.run_command(ping_cmd)
-        values = list(map(float, ping_result_stdout.strip().split("\n")[-1].split(" = ")[-1][:-3].split("/")))
+        values = list(
+            map(
+                float,
+                ping_result_stdout.strip().split("\n")[-1].split(" = ")[-1][:-3].split("/"),
+            )
+        )
         try:
             if len(values) == 4:
                 (min_rtt, avg_rtt, max_rtt, mdev_rtt) = values

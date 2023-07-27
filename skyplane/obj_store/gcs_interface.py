@@ -11,7 +11,10 @@ from typing import Any, Iterator, List, Optional, Tuple
 from skyplane import exceptions, compute
 from skyplane.config_paths import cloud_config
 from skyplane.exceptions import NoSuchObjectException
-from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
+from skyplane.obj_store.object_store_interface import (
+    ObjectStoreInterface,
+    ObjectStoreObject,
+)
 from skyplane.utils import logger
 from skyplane.utils.generator import batch_generator
 
@@ -162,7 +165,12 @@ class GCSInterface(ObjectStoreInterface):
 
         # generate signed URL
         url = blob.generate_signed_url(
-            version="v4", expiration=expiration, method=method, content_type=content_type, query_parameters=params, headers=headers
+            version="v4",
+            expiration=expiration,
+            method=method,
+            content_type=content_type,
+            query_parameters=params,
+            headers=headers,
         )
 
         # prepare request
@@ -180,7 +188,13 @@ class GCSInterface(ObjectStoreInterface):
         return response
 
     def download_object(
-        self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5=False
+        self,
+        src_object_name,
+        dst_file_path,
+        offset_bytes=None,
+        size_bytes=None,
+        write_at_offset=False,
+        generate_md5=False,
     ) -> Tuple[Optional[str], Optional[bytes]]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         src_object_name = src_object_name if src_object_name[0] != "/" else src_object_name
@@ -209,7 +223,15 @@ class GCSInterface(ObjectStoreInterface):
         mime_type = blob.content_type
         return mime_type, md5
 
-    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None, mime_type=None):
+    def upload_object(
+        self,
+        src_file_path,
+        dst_object_name,
+        part_number=None,
+        upload_id=None,
+        check_md5=None,
+        mime_type=None,
+    ):
         src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
         dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
         os.path.getsize(src_file_path)
@@ -267,7 +289,12 @@ class GCSInterface(ObjectStoreInterface):
                 response = self.send_xml_request(dst_object_name, {"uploadId": upload_id}, "GET")
             else:
                 response = self.send_xml_request(
-                    dst_object_name, {"uploadId": upload_id, "part-number-marker": next_part_number_marker}, "GET"
+                    dst_object_name,
+                    {
+                        "uploadId": upload_id,
+                        "part-number-marker": next_part_number_marker,
+                    },
+                    "GET",
                 )
 
             # build request xml tree
@@ -297,7 +324,11 @@ class GCSInterface(ObjectStoreInterface):
         try:
             # complete multipart upload
             response = self.send_xml_request(
-                dst_object_name, {"uploadId": upload_id}, "POST", data=xml_data, content_type="application/xml"
+                dst_object_name,
+                {"uploadId": upload_id},
+                "POST",
+                data=xml_data,
+                content_type="application/xml",
             )
         except Exception as e:
             # cancel upload

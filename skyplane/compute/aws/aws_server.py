@@ -144,7 +144,10 @@ class AWSServer(Server):
     def get_sftp_client(self):
         t = paramiko.Transport((self.public_ip(), 22))
         # t.connect(username="ec2-user", pkey=paramiko.RSAKey.from_private_key_file(str(self.local_keyfile)))
-        t.connect(username=self.login_name, pkey=paramiko.RSAKey.from_private_key_file(str(self.local_keyfile)))
+        t.connect(
+            username=self.login_name,
+            pkey=paramiko.RSAKey.from_private_key_file(str(self.local_keyfile)),
+        )
         return paramiko.SFTPClient.from_transport(t)
 
     def open_ssh_tunnel_impl(self, remote_port):

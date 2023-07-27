@@ -13,10 +13,19 @@ def check_exception_raised(func, exception_type, exception_msg=None):
 
 def test_map_object_single_file():
     assert Chunker.map_object_key_prefix("foo/a.txt", "foo/a.txt", "bar") == "bar"
-    check_exception_raised(lambda: Chunker.map_object_key_prefix("foo/a.txt", "foo/b.txt", "bar"), exceptions.MissingObjectException)
+    check_exception_raised(
+        lambda: Chunker.map_object_key_prefix("foo/a.txt", "foo/b.txt", "bar"),
+        exceptions.MissingObjectException,
+    )
     assert Chunker.map_object_key_prefix("foo/a.txt", "foo/a.txt", "bar/") == "bar/a.txt"
-    check_exception_raised(lambda: Chunker.map_object_key_prefix("foo/", "bar", "foo/a.txt", "bar"), exceptions.MissingObjectException)
-    check_exception_raised(lambda: Chunker.map_object_key_prefix("foo", "foo/a.txt", "bar"), exceptions.MissingObjectException)
+    check_exception_raised(
+        lambda: Chunker.map_object_key_prefix("foo/", "bar", "foo/a.txt", "bar"),
+        exceptions.MissingObjectException,
+    )
+    check_exception_raised(
+        lambda: Chunker.map_object_key_prefix("foo", "foo/a.txt", "bar"),
+        exceptions.MissingObjectException,
+    )
 
 
 def test_map_object_recursive():
@@ -24,23 +33,35 @@ def test_map_object_recursive():
     assert Chunker.map_object_key_prefix("foo/", "foo/b.txt", "bar", recursive=True) == "bar/b.txt"
     assert Chunker.map_object_key_prefix("foo", "foo/c.txt", "bar", recursive=True) == "bar/c.txt"
     check_exception_raised(
-        lambda: Chunker.map_object_key_prefix("foo", "fooc.txt", "bar", recursive=True), exceptions.MissingObjectException
+        lambda: Chunker.map_object_key_prefix("foo", "fooc.txt", "bar", recursive=True),
+        exceptions.MissingObjectException,
     )
     check_exception_raised(
-        lambda: Chunker.map_object_key_prefix("foo/a.txt", "foo/a.txt", "bar", recursive=True), exceptions.MissingObjectException
+        lambda: Chunker.map_object_key_prefix("foo/a.txt", "foo/a.txt", "bar", recursive=True),
+        exceptions.MissingObjectException,
     )
     check_exception_raised(
-        lambda: Chunker.map_object_key_prefix("foo/a.txt", "foo/b.txt", "bar/", recursive=True), exceptions.MissingObjectException
+        lambda: Chunker.map_object_key_prefix("foo/a.txt", "foo/b.txt", "bar/", recursive=True),
+        exceptions.MissingObjectException,
     )
     assert Chunker.map_object_key_prefix("bar/foo/", "bar/foo/b.txt", "bar", recursive=True) == "bar/b.txt"
 
 
 def test_map_objects_no_dir():
     assert Chunker.map_object_key_prefix("foo/a.txt", "foo/a.txt", "bar") == "bar"
-    check_exception_raised(lambda: Chunker.map_object_key_prefix("foo/a.txt", "foo/b.txt", "bar"), exceptions.MissingObjectException)
+    check_exception_raised(
+        lambda: Chunker.map_object_key_prefix("foo/a.txt", "foo/b.txt", "bar"),
+        exceptions.MissingObjectException,
+    )
     assert Chunker.map_object_key_prefix("foo/a.txt", "foo/a.txt", "bar/") == "bar/a.txt"
-    check_exception_raised(lambda: Chunker.map_object_key_prefix("foo/", "bar", "foo/a.txt", "bar"), exceptions.MissingObjectException)
-    check_exception_raised(lambda: Chunker.map_object_key_prefix("foo", "foo/a.txt", "bar"), exceptions.MissingObjectException)
+    check_exception_raised(
+        lambda: Chunker.map_object_key_prefix("foo/", "bar", "foo/a.txt", "bar"),
+        exceptions.MissingObjectException,
+    )
+    check_exception_raised(
+        lambda: Chunker.map_object_key_prefix("foo", "foo/a.txt", "bar"),
+        exceptions.MissingObjectException,
+    )
 
 
 def test_map_objects_no_prefix_non_recursive():
@@ -49,12 +70,24 @@ def test_map_objects_no_prefix_non_recursive():
     assert Chunker.map_object_key_prefix("a.txt", "a.txt", "/") == "a.txt"
     assert Chunker.map_object_key_prefix("foo/a.txt", "foo/a.txt", "") == "a.txt"
     assert Chunker.map_object_key_prefix("foo/a.txt", "foo/a.txt", "/") == "a.txt"
-    check_exception_raised(lambda: Chunker.map_object_key_prefix("foo/a.txt", "foo/b.txt", ""), exceptions.MissingObjectException)
+    check_exception_raised(
+        lambda: Chunker.map_object_key_prefix("foo/a.txt", "foo/b.txt", ""),
+        exceptions.MissingObjectException,
+    )
 
     # source no prefix
-    check_exception_raised(lambda: Chunker.map_object_key_prefix("", "foo/b.txt", ""), exceptions.MissingObjectException)
-    check_exception_raised(lambda: Chunker.map_object_key_prefix("/", "foo/b.txt", ""), exceptions.MissingObjectException)
-    check_exception_raised(lambda: Chunker.map_object_key_prefix("", "foo/b.txt", "bar"), exceptions.MissingObjectException)
+    check_exception_raised(
+        lambda: Chunker.map_object_key_prefix("", "foo/b.txt", ""),
+        exceptions.MissingObjectException,
+    )
+    check_exception_raised(
+        lambda: Chunker.map_object_key_prefix("/", "foo/b.txt", ""),
+        exceptions.MissingObjectException,
+    )
+    check_exception_raised(
+        lambda: Chunker.map_object_key_prefix("", "foo/b.txt", "bar"),
+        exceptions.MissingObjectException,
+    )
 
 
 def test_map_objects_no_prefix_recursive():
@@ -69,7 +102,8 @@ def test_map_objects_no_prefix_recursive():
     assert Chunker.map_object_key_prefix("foo", "foo/bar/baz.txt", "qux", recursive=True) == "qux/bar/baz.txt"
     assert Chunker.map_object_key_prefix("foo/", "foo/bar/baz.txt", "qux", recursive=True) == "qux/bar/baz.txt"
     check_exception_raised(
-        lambda: Chunker.map_object_key_prefix("foo", "foobar/baz.txt", "", recursive=True), exceptions.MissingObjectException
+        lambda: Chunker.map_object_key_prefix("foo", "foobar/baz.txt", "", recursive=True),
+        exceptions.MissingObjectException,
     )
 
 

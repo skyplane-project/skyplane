@@ -45,7 +45,12 @@ class AzureCloudProvider(CloudProvider):
     @staticmethod
     def lookup_continent(region: str) -> str:
         lookup_dict = {
-            "oceania": {"australiaeast", "australiacentral", "australiasoutheast", "australiacentral2"},
+            "oceania": {
+                "australiaeast",
+                "australiacentral",
+                "australiasoutheast",
+                "australiacentral2",
+            },
             "asia": {
                 "qatarcentral",
                 "eastasia",
@@ -159,10 +164,18 @@ class AzureCloudProvider(CloudProvider):
             # intracontinental transfer
             if src_continent == dst_continent:
                 # Between regions within North America, Between regions within Europe
-                if src_continent in {"north-america", "europe"} and dst_continent in {"north-america", "europe"}:
+                if src_continent in {"north-america", "europe"} and dst_continent in {
+                    "north-america",
+                    "europe",
+                }:
                     return 0.02
                 # Between regions within Asia, Between regions within Oceania, Between regions within Middle East and Africa
-                elif src_continent in {"asia", "oceania", "middle-east", "africa"} and dst_continent in {
+                elif src_continent in {
+                    "asia",
+                    "oceania",
+                    "middle-east",
+                    "africa",
+                } and dst_continent in {
                     "asia",
                     "oceania",
                     "middle-east",
@@ -235,13 +248,20 @@ class AzureCloudProvider(CloudProvider):
                     )
             return
         rg_result = resource_client.resource_groups.create_or_update(
-            AzureServer.resource_group_name, {"location": AzureServer.resource_group_location, "tags": {"skyplane": "true"}}
+            AzureServer.resource_group_name,
+            {
+                "location": AzureServer.resource_group_location,
+                "tags": {"skyplane": "true"},
+            },
         )
         assert rg_result.name == AzureServer.resource_group_name
 
     # This code, along with some code in azure_server.py, is based on
     # https://github.com/ucbrise/mage-scripts/blob/main/azure_cloud.py.
-    @imports.inject("azure.mgmt.compute.models.ResourceIdentityType", "azure.core.exceptions.HttpResponseError")
+    @imports.inject(
+        "azure.mgmt.compute.models.ResourceIdentityType",
+        "azure.core.exceptions.HttpResponseError",
+    )
     def provision_instance(
         ResourceIdentityType,
         HttpResponseError,
@@ -277,7 +297,11 @@ class AzureCloudProvider(CloudProvider):
             poller = network_client.virtual_networks.begin_create_or_update(
                 resource_group,
                 AzureServer.vnet_name(name),
-                {"location": location, "tags": {"skyplane": "true"}, "address_space": {"address_prefixes": ["10.0.0.0/24"]}},
+                {
+                    "location": location,
+                    "tags": {"skyplane": "true"},
+                    "address_space": {"address_prefixes": ["10.0.0.0/24"]},
+                },
             )
             poller.result()
 
@@ -312,7 +336,10 @@ class AzureCloudProvider(CloudProvider):
                 resource_group,
                 AzureServer.vnet_name(name),
                 AzureServer.subnet_name(name),
-                {"address_prefix": "10.0.0.0/26", "network_security_group": {"id": nsg_result.id}},
+                {
+                    "address_prefix": "10.0.0.0/26",
+                    "network_security_group": {"id": nsg_result.id},
+                },
             )
 
             # Create a public IPv4 address for this instance
@@ -340,7 +367,11 @@ class AzureCloudProvider(CloudProvider):
                     "location": location,
                     "tags": tags,
                     "ip_configurations": [
-                        {"name": name + "-ip", "subnet": {"id": subnet_result.id}, "public_ip_address": {"id": public_ip_result.id}}
+                        {
+                            "name": name + "-ip",
+                            "subnet": {"id": subnet_result.id},
+                            "public_ip_address": {"id": public_ip_result.id},
+                        }
                     ],
                     "enable_accelerated_networking": True,
                 },
@@ -368,14 +399,24 @@ class AzureCloudProvider(CloudProvider):
                                 "sku": "aks-engine-ubuntu-1804-202112",
                                 "version": "latest",
                             },
-                            "os_disk": {"create_option": "FromImage", "delete_option": "Delete"},
+                            "os_disk": {
+                                "create_option": "FromImage",
+                                "delete_option": "Delete",
+                            },
                         },
                         "os_profile": {
                             "computer_name": AzureServer.vm_name(name),
                             "admin_username": uname,
                             "linux_configuration": {
                                 "disable_password_authentication": True,
-                                "ssh": {"public_keys": [{"path": f"/home/{uname}/.ssh/authorized_keys", "key_data": pub_key}]},
+                                "ssh": {
+                                    "public_keys": [
+                                        {
+                                            "path": f"/home/{uname}/.ssh/authorized_keys",
+                                            "key_data": pub_key,
+                                        }
+                                    ]
+                                },
                             },
                         },
                         "network_profile": {"network_interfaces": [{"id": nic_result.id}]},
@@ -399,7 +440,10 @@ class AzureCloudProvider(CloudProvider):
                     if self.is_confidential_instance_type(vm_size):
                         vm_params["security_profile"] = {
                             "security_type": "ConfidentialVM",
-                            "uefi_settings": {"v_tpm_enabled": True, "secure_boot_enabled": True},
+                            "uefi_settings": {
+                                "v_tpm_enabled": True,
+                                "secure_boot_enabled": True,
+                            },
                         }
                         vm_params["storage_profile"]["os_disk"].update(
                             {

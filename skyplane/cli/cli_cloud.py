@@ -80,10 +80,19 @@ def aws_datasync(src_bucket: str, dst_bucket: str, path: str):
         typer.secho("Creating datasync-role", fg="green")
         policy = {
             "Version": "2012-10-17",
-            "Statement": [{"Effect": "Allow", "Principal": {"Service": "datasync.amazonaws.com"}, "Action": "sts:AssumeRole"}],
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"Service": "datasync.amazonaws.com"},
+                    "Action": "sts:AssumeRole",
+                }
+            ],
         }
         response = iam_client.create_role(RoleName="datasync-role", AssumeRolePolicyDocument=json.dumps(policy))
-    iam_client.attach_role_policy(RoleName="datasync-role", PolicyArn="arn:aws:iam::aws:policy/AWSDataSyncFullAccess")
+    iam_client.attach_role_policy(
+        RoleName="datasync-role",
+        PolicyArn="arn:aws:iam::aws:policy/AWSDataSyncFullAccess",
+    )
     # attach s3:ListBucket to datasync-role
     iam_client.attach_role_policy(RoleName="datasync-role", PolicyArn="arn:aws:iam::aws:policy/AmazonS3FullAccess")
 
@@ -96,12 +105,16 @@ def aws_datasync(src_bucket: str, dst_bucket: str, path: str):
 
     ds_client_src = aws_auth.get_boto3_client("datasync", src_region)
     src_response = ds_client_src.create_location_s3(
-        S3BucketArn=f"arn:aws:s3:::{src_bucket}", Subdirectory=path, S3Config={"BucketAccessRoleArn": iam_arn}
+        S3BucketArn=f"arn:aws:s3:::{src_bucket}",
+        Subdirectory=path,
+        S3Config={"BucketAccessRoleArn": iam_arn},
     )
     src_s3_arn = src_response["LocationArn"]
     ds_client_dst = aws_auth.get_boto3_client("datasync", dst_region)
     dst_response = ds_client_dst.create_location_s3(
-        S3BucketArn=f"arn:aws:s3:::{dst_bucket}", Subdirectory=path, S3Config={"BucketAccessRoleArn": iam_arn}
+        S3BucketArn=f"arn:aws:s3:::{dst_bucket}",
+        Subdirectory=path,
+        S3Config={"BucketAccessRoleArn": iam_arn},
     )
     dst_s3_arn = dst_response["LocationArn"]
 
@@ -110,7 +123,12 @@ def aws_datasync(src_bucket: str, dst_bucket: str, path: str):
             SourceLocationArn=src_s3_arn,
             DestinationLocationArn=dst_s3_arn,
             Name=f"{src_bucket}-{dst_bucket}-{path}",
-            Options={"BytesPerSecond": -1, "OverwriteMode": "ALWAYS", "TransferMode": "ALL", "VerifyMode": "NONE"},
+            Options={
+                "BytesPerSecond": -1,
+                "OverwriteMode": "ALWAYS",
+                "TransferMode": "ALL",
+                "VerifyMode": "NONE",
+            },
         )
         task_arn = create_task_response["TaskArn"]
     except ds_client_dst.exceptions.InvalidRequestException:
@@ -152,7 +170,14 @@ def aws_datasync(src_bucket: str, dst_bucket: str, path: str):
     gbps = transfer_size_gb * 8 / transfer_duration_s
     typer.secho(f"DataSync response: {task_execution_response}", fg="green")
     typer.secho(
-        json.dumps(dict(transfer_size_gb=transfer_size_gb, transfer_duration_s=transfer_duration_s, gbps=gbps, total_runtime_s=t.elapsed)),
+        json.dumps(
+            dict(
+                transfer_size_gb=transfer_size_gb,
+                transfer_duration_s=transfer_duration_s,
+                gbps=gbps,
+                total_runtime_s=t.elapsed,
+            )
+        ),
         fg="white",
     )
 
@@ -192,7 +217,10 @@ def azure_check(
     if debug:
         rprint(f"[bright_black]Skyplane subscription: {cloud_config.azure_subscription_id}[/bright_black]")
     check_assert(retcode == 0, "Azure CLI has subscription set", debug_msg=stderr)
-    check_assert(stdout.replace('"', "").strip() == cloud_config.azure_subscription_id, "Azure CLI has correct subscription set")
+    check_assert(
+        stdout.replace('"', "").strip() == cloud_config.azure_subscription_id,
+        "Azure CLI has correct subscription set",
+    )
 
     # check Azure UMIs
     rprint(f"\n{hline}\n[bold]Checking Azure UMIs...[/bold]\n{hline}")
@@ -209,8 +237,14 @@ def azure_check(
     umi = parsed[matched_umi_idx[0]]
     if debug:
         rprint(f"[bright_black]Skyplane UMI: {umi}[/bright_black]")
-    check_assert(umi["clientId"] == cloud_config.azure_client_id, "Skyplane UMI has correct client ID")
-    check_assert(umi["principalId"] == cloud_config.azure_principal_id, "Skyplane UMI has correct principal ID")
+    check_assert(
+        umi["clientId"] == cloud_config.azure_client_id,
+        "Skyplane UMI has correct client ID",
+    )
+    check_assert(
+        umi["principalId"] == cloud_config.azure_principal_id,
+        "Skyplane UMI has correct principal ID",
+    )
     if debug:
         rprint(f"[bright_black]Skyplane UMI tenant ID: {umi['tenantId']}[/bright_black]")
 
@@ -223,7 +257,10 @@ def azure_check(
     check_assert(cred, "Azure Python SDK credential created")
     from azure.identity import DefaultAzureCredential
 
-    check_assert(isinstance(cred, DefaultAzureCredential), "Azure Python SDK credential is DefaultAzureCredential")
+    check_assert(
+        isinstance(cred, DefaultAzureCredential),
+        "Azure Python SDK credential is DefaultAzureCredential",
+    )
     token = auth.get_token("https://storage.azure.com/.default")
     check_assert(token, "Azure Python SDK token created")
 
@@ -235,7 +272,10 @@ def azure_check(
     check_assert(storage_client, "Azure Python SDK storage client created")
     from azure.mgmt.storage import StorageManagementClient
 
-    check_assert(isinstance(storage_client, StorageManagementClient), "Azure Python SDK storage client is StorageManagementClient")
+    check_assert(
+        isinstance(storage_client, StorageManagementClient),
+        "Azure Python SDK storage client is StorageManagementClient",
+    )
     storage_accounts = list(storage_client.storage_accounts.list())
     if debug:
         rprint(f"[bright_black]Azure Python SDK storage accounts: {[account.name for account in storage_accounts]}[/bright_black]")
@@ -262,8 +302,14 @@ def azure_check(
     check_assert(len(role_idx) >= 1, "Skyplane storage account role assigned to UMI")
     role_names = [roles[i]["roleDefinitionName"] for i in role_idx]
     rprint(f"[bright_black]Skyplane storage account roles: {role_names}[/bright_black]")
-    check_assert("Storage Blob Data Contributor" in role_names, "Skyplane storage account has Blob Data Contributor role assigned to UMI")
-    check_assert("Storage Account Contributor" in role_names, "Skyplane storage account has Account Contributor role assigned to UMI")
+    check_assert(
+        "Storage Blob Data Contributor" in role_names,
+        "Skyplane storage account has Blob Data Contributor role assigned to UMI",
+    )
+    check_assert(
+        "Storage Account Contributor" in role_names,
+        "Skyplane storage account has Account Contributor role assigned to UMI",
+    )
 
     # check access to container via Python SDK
     rprint(f"\n{hline}\n[bold]Checking Azure container access[/bold]\n{hline}")
@@ -273,7 +319,10 @@ def azure_check(
     check_assert(container_client, "Azure Python SDK container client created")
     from azure.storage.blob import ContainerClient
 
-    check_assert(isinstance(container_client, ContainerClient), "Azure Python SDK container client is ContainerClient")
+    check_assert(
+        isinstance(container_client, ContainerClient),
+        "Azure Python SDK container client is ContainerClient",
+    )
 
     # check skyplane AzureBlobInterface
     rprint(f"\n{hline}\n[bold]Checking Skyplane AzureBlobInterface[/bold]\n{hline}")

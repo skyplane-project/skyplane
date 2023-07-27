@@ -1,9 +1,17 @@
 from typing import List, Optional
 from collections import defaultdict
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
+    DownloadColumn,
+    TransferSpeedColumn,
+    TimeRemainingColumn,
+)
 from skyplane import exceptions
 from skyplane.chunk import Chunk
-from skyplane.cli.impl.common import console, print_stats_completed
+from skyplane.cli.impl.common import console
 from skyplane.utils.definitions import format_bytes
 from skyplane.api.tracker import TransferHook
 
@@ -41,7 +49,8 @@ class ProgressBarTransferHook(TransferHook):
             self.chunks_dispatched += len(chunks)
         # rerender spinners with updated text "Dispatching chunks (~{format_bytes(self.bytes_dispatched)} dispatched)"
         self.spinner.update(
-            self.dispatch_task, description=f" {self.chunks_dispatched} chunks (~{format_bytes(self.bytes_dispatched)} dispatched)"
+            self.dispatch_task,
+            description=f" {self.chunks_dispatched} chunks (~{format_bytes(self.bytes_dispatched)} dispatched)",
         )
 
     def on_dispatch_end(self):

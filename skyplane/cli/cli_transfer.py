@@ -9,7 +9,13 @@ import typer
 from rich.progress import Progress, TextColumn, SpinnerColumn
 
 import skyplane
-from skyplane.api.config import TransferConfig, AWSConfig, GCPConfig, AzureConfig, IBMCloudConfig
+from skyplane.api.config import (
+    TransferConfig,
+    AWSConfig,
+    GCPConfig,
+    AzureConfig,
+    IBMCloudConfig,
+)
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.cli.impl.cp_replicate_fallback import (
     replicate_onprem_cp_cmd,
@@ -17,12 +23,18 @@ from skyplane.cli.impl.cp_replicate_fallback import (
     replicate_small_cp_cmd,
     replicate_small_sync_cmd,
 )
-from skyplane.cli.impl.common import print_header, console, print_stats_completed, register_exception_handler
+from skyplane.cli.impl.common import (
+    print_header,
+    console,
+    print_stats_completed,
+    register_exception_handler,
+)
 from skyplane.api.usage import UsageClient
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import cloud_config, config_path
-from skyplane.obj_store.object_store_interface import ObjectStoreInterface, StorageInterface
-from skyplane.obj_store.file_system_interface import FileSystemInterface
+from skyplane.obj_store.object_store_interface import (
+    StorageInterface,
+)
 from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 from skyplane.utils import logger
 from skyplane.utils.definitions import GB, format_bytes
@@ -50,10 +62,21 @@ class TransferStats:
 
 
 class SkyplaneCLI:
-    def __init__(self, src_region_tag: str, dst_region_tag: str, args: Dict[str, Any], skyplane_config: Optional[SkyplaneConfig] = None):
+    def __init__(
+        self,
+        src_region_tag: str,
+        dst_region_tag: str,
+        args: Dict[str, Any],
+        skyplane_config: Optional[SkyplaneConfig] = None,
+    ):
         self.src_region_tag, self.dst_region_tag = src_region_tag, dst_region_tag
         self.args = args
-        self.aws_config, self.azure_config, self.gcp_config, self.ibmcloud_config = self.to_api_config(skyplane_config or cloud_config)
+        (
+            self.aws_config,
+            self.azure_config,
+            self.gcp_config,
+            self.ibmcloud_config,
+        ) = self.to_api_config(skyplane_config or cloud_config)
 
         # update config
         # TODO: set remaining config params
@@ -131,7 +154,13 @@ class SkyplaneCLI:
             return True
         except skyplane.exceptions.BadConfigException as e:
             logger.exception(e)
-            UsageClient.log_exception("cli_check_config", e, self.args, self.src_region_tag, [self.dst_region_tag])
+            UsageClient.log_exception(
+                "cli_check_config",
+                e,
+                self.args,
+                self.src_region_tag,
+                [self.dst_region_tag],
+            )
             return False
 
     def transfer_cp_onprem(self, src: str, dst: str, recursive: bool) -> bool:
@@ -143,8 +172,17 @@ class SkyplaneCLI:
             request_time = time.perf_counter() - start
             if rc == 0:
                 print_stats_completed(request_time, None)
-                transfer_stats = TransferStats(monitor_status="completed", total_runtime_s=request_time, throughput_gbits=0)
-                UsageClient.log_transfer(transfer_stats.to_dict(), self.args, self.src_region_tag, [self.dst_region_tag])
+                transfer_stats = TransferStats(
+                    monitor_status="completed",
+                    total_runtime_s=request_time,
+                    throughput_gbits=0,
+                )
+                UsageClient.log_transfer(
+                    transfer_stats.to_dict(),
+                    self.args,
+                    self.src_region_tag,
+                    [self.dst_region_tag],
+                )
             return True
         else:
             typer.secho("Transfer not supported", fg="red")
@@ -159,8 +197,17 @@ class SkyplaneCLI:
             request_time = time.perf_counter() - start
             if rc == 0:
                 print_stats_completed(request_time, None)
-                transfer_stats = TransferStats(monitor_status="completed", total_runtime_s=request_time, throughput_gbits=0)
-                UsageClient.log_transfer(transfer_stats.to_dict(), self.args, self.src_region_tag, [self.dst_region_tag])
+                transfer_stats = TransferStats(
+                    monitor_status="completed",
+                    total_runtime_s=request_time,
+                    throughput_gbits=0,
+                )
+                UsageClient.log_transfer(
+                    transfer_stats.to_dict(),
+                    self.args,
+                    self.src_region_tag,
+                    [self.dst_region_tag],
+                )
             return True
         else:
             typer.secho("Transfer not supported", fg="red")
@@ -169,8 +216,14 @@ class SkyplaneCLI:
     def transfer_cp_small(self, src: str, dst: str, recursive: bool) -> bool:
         small_transfer_cmd = replicate_small_cp_cmd(src, dst, recursive)
         if small_transfer_cmd:
-            typer.secho(f"Transfer is small enough to delegate to native tools. Delegating to: {small_transfer_cmd}", fg="yellow")
-            typer.secho(f"You can disable this with `skyplane config set native_cmd_enabled false`", fg="bright_black")
+            typer.secho(
+                f"Transfer is small enough to delegate to native tools. Delegating to: {small_transfer_cmd}",
+                fg="yellow",
+            )
+            typer.secho(
+                f"You can disable this with `skyplane config set native_cmd_enabled false`",
+                fg="bright_black",
+            )
             os.system(small_transfer_cmd)
             return True
         else:
@@ -179,8 +232,14 @@ class SkyplaneCLI:
     def transfer_sync_small(self, src: str, dst: str) -> bool:
         small_transfer_cmd = replicate_small_sync_cmd(src, dst)
         if small_transfer_cmd:
-            typer.secho(f"Transfer is small enough to delegate to native tools. Delegating to: {small_transfer_cmd}", fg="yellow")
-            typer.secho(f"You can disable this with `skyplane config set native_cmd_enabled false`", fg="bright_black")
+            typer.secho(
+                f"Transfer is small enough to delegate to native tools. Delegating to: {small_transfer_cmd}",
+                fg="yellow",
+            )
+            typer.secho(
+                f"You can disable this with `skyplane config set native_cmd_enabled false`",
+                fg="bright_black",
+            )
             os.system(small_transfer_cmd)
             return True
         else:
@@ -199,7 +258,12 @@ class SkyplaneCLI:
         return pipeline
 
     def confirm_transfer(
-        self, pipeline: skyplane.Pipeline, src_region_tag: str, dest_region_tags: List[str], query_n: int = 5, ask_to_confirm_transfer=True
+        self,
+        pipeline: skyplane.Pipeline,
+        src_region_tag: str,
+        dest_region_tags: List[str],
+        query_n: int = 5,
+        ask_to_confirm_transfer=True,
     ) -> bool:
         """Prompts the user to confirm their transfer by querying the first query_n files from the TransferJob"""
         if not len(pipeline.jobs_to_dispatch) > 0:
@@ -314,19 +378,28 @@ def run_transfer(
         register_exception_handler()
     print_header()
 
-    provider_src, bucket_src, path_src = parse_path(src)
-    provider_dst, bucket_dst, path_dst = parse_path(dst)
+    provider_src, transfer_src, path_src = parse_path(src)
+    provider_dst, transfer_dst, path_dst = parse_path(dst)
 
     # update planner for one-sided transfer
     # somet process for other cloud providers with no VM support
-    assert provider_src != "cloudflare" or provider_dst != "cloudflare", "Cannot transfer between two Cloudflare buckets"
-    if provider_src == "cloudflare":
-        solver = "dst_one_sided"
-    elif provider_dst == "cloudflare":
-        solver = "src_one_sided"
+    if provider_src == "vm" and provider_dst == "vm":
+        solver = "vm_to_vm"
+    elif provider_src == "vm":
+        solver = "vm_source"
+    elif provider_dst == "vm":
+        solver = "vm_dest"
+    else:
+        # the previous handling for non-VM transfers
+        assert provider_src != "cloudflare" or provider_dst != "cloudflare", "Cannot transfer between two Cloudflare buckets"
+        if provider_src == "cloudflare":
+            solver = "dst_one_sided"
+        elif provider_dst == "cloudflare":
+            solver = "src_one_sided"
 
-    src_region_tag = StorageInterface.create(f"{provider_src}:infer", bucket_src).region_tag()
-    dst_region_tag = StorageInterface.create(f"{provider_dst}:infer", bucket_dst).region_tag()
+    src_region_tag = StorageInterface.create(f"{provider_src}:infer", transfer_src).region_tag()
+    dst_region_tag = StorageInterface.create(f"{provider_dst}:infer", transfer_dst).region_tag()
+
     args = {
         "cmd": cmd,
         "recursive": True,
@@ -355,7 +428,13 @@ def run_transfer(
         pipeline.queue_sync(src, dst)
 
     # confirm transfer
-    if not cli.confirm_transfer(pipeline, src_region_tag, [dst_region_tag], 5, ask_to_confirm_transfer=not confirm):
+    if not cli.confirm_transfer(
+        pipeline,
+        src_region_tag,
+        [dst_region_tag],
+        5,
+        ask_to_confirm_transfer=not confirm,
+    ):
         return 1
 
     # local->local transfers not supported (yet)
@@ -372,7 +451,8 @@ def run_transfer(
         # fallback option: transfer is too small
         if cli.args["cmd"] == "cp":
             job = CopyJob(src, [dst], recursive=recursive)  # TODO: rever to using pipeline
-            if cli.estimate_small_transfer(job, cloud_config.get_flag("native_cmd_threshold_gb") * GB):
+            # if cli.estimate_small_transfer(job, 0.01 * GB): # Test small transfer
+            if cli.estimate_small_transfer(job, 0.01 * GB):  # cloud_config.get_flag("native_cmd_threshold_gb") * GB):
                 small_transfer_status = cli.transfer_cp_small(src, dst, recursive)
                 return 0 if small_transfer_status else 1
         else:
@@ -386,7 +466,10 @@ def run_transfer(
     with dp.auto_deprovision():
         try:
             dp.provision(spinner=True)
-            dp.run(pipeline.jobs_to_dispatch, hooks=ProgressBarTransferHook(dp.topology.dest_region_tags))
+            dp.run(
+                pipeline.jobs_to_dispatch,
+                hooks=ProgressBarTransferHook(dp.topology.dest_region_tags),
+            )
         except KeyboardInterrupt:
             logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt).")
             console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")
@@ -417,14 +500,35 @@ def run_transfer(
 def cp(
     src: str,
     dst: str,
-    recursive: bool = typer.Option(False, "--recursive", "-r", help="If true, will copy objects at folder prefix recursively"),
+    recursive: bool = typer.Option(
+        False,
+        "--recursive",
+        "-r",
+        help="If true, will copy objects at folder prefix recursively",
+    ),
     debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
-    multipart: bool = typer.Option(cloud_config.get_flag("multipart_enabled"), help="If true, will use multipart uploads."),
+    multipart: bool = typer.Option(
+        cloud_config.get_flag("multipart_enabled"),
+        help="If true, will use multipart uploads.",
+    ),
     # transfer flags
-    confirm: bool = typer.Option(cloud_config.get_flag("autoconfirm"), "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
-    max_instances: int = typer.Option(cloud_config.get_flag("max_instances"), "--max-instances", "-n", help="Number of gateways"),
+    confirm: bool = typer.Option(
+        cloud_config.get_flag("autoconfirm"),
+        "--confirm",
+        "-y",
+        "-f",
+        help="Confirm all transfer prompts",
+    ),
+    max_instances: int = typer.Option(
+        cloud_config.get_flag("max_instances"),
+        "--max-instances",
+        "-n",
+        help="Number of gateways",
+    ),
     max_connections: int = typer.Option(
-        cloud_config.get_flag("num_connections"), "--max-connections", help="Number of connections per gateway"
+        cloud_config.get_flag("num_connections"),
+        "--max-connections",
+        help="Number of connections per gateway",
     ),
     # todo - add solver params once API supports it
     # solver
@@ -459,19 +563,46 @@ def cp(
     :param solver: The solver to use for the transfer (default: direct)
     :type solver: str
     """
-    return run_transfer(src, dst, recursive, debug, multipart, confirm, max_instances, max_connections, solver, "cp")
+    return run_transfer(
+        src,
+        dst,
+        recursive,
+        debug,
+        multipart,
+        confirm,
+        max_instances,
+        max_connections,
+        solver,
+        "cp",
+    )
 
 
 def sync(
     src: str,
     dst: str,
     debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
-    multipart: bool = typer.Option(cloud_config.get_flag("multipart_enabled"), help="If true, will use multipart uploads."),
+    multipart: bool = typer.Option(
+        cloud_config.get_flag("multipart_enabled"),
+        help="If true, will use multipart uploads.",
+    ),
     # transfer flags
-    confirm: bool = typer.Option(cloud_config.get_flag("autoconfirm"), "--confirm", "-y", "-f", help="Confirm all transfer prompts"),
-    max_instances: int = typer.Option(cloud_config.get_flag("max_instances"), "--max-instances", "-n", help="Number of gateways"),
+    confirm: bool = typer.Option(
+        cloud_config.get_flag("autoconfirm"),
+        "--confirm",
+        "-y",
+        "-f",
+        help="Confirm all transfer prompts",
+    ),
+    max_instances: int = typer.Option(
+        cloud_config.get_flag("max_instances"),
+        "--max-instances",
+        "-n",
+        help="Number of gateways",
+    ),
     max_connections: int = typer.Option(
-        cloud_config.get_flag("num_connections"), "--max-connections", help="Number of connections per gateway"
+        cloud_config.get_flag("num_connections"),
+        "--max-connections",
+        help="Number of connections per gateway",
     ),
     # todo - add solver params once API supports it
     # solver
@@ -508,4 +639,15 @@ def sync(
     :param solver: The solver to use for the transfer (default: direct)
     :type solver: str
     """
-    return run_transfer(src, dst, False, debug, multipart, confirm, max_instances, max_connections, solver, "sync")
+    return run_transfer(
+        src,
+        dst,
+        False,
+        debug,
+        multipart,
+        confirm,
+        max_instances,
+        max_connections,
+        solver,
+        "sync",
+    )

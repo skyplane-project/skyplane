@@ -18,7 +18,14 @@ class GCPNetwork:
             if e.resp.status == 404:  # create network
                 op = (
                     compute.networks()
-                    .insert(project=self.auth.project_id, body={"name": self.vpc_name, "subnetMode": "auto", "autoCreateSubnetworks": True})
+                    .insert(
+                        project=self.auth.project_id,
+                        body={
+                            "name": self.vpc_name,
+                            "subnetMode": "auto",
+                            "autoCreateSubnetworks": True,
+                        },
+                    )
                     .execute()
                 )
                 self.auth.wait_for_operation_to_complete("global", op["name"])
@@ -87,7 +94,13 @@ class GCPNetwork:
 
     @imports.inject("googleapiclient.errors", pip_extra="gcp")
     def create_firewall_rule(
-        errors, self, rule_name: str, ip_ranges: List[str], ports: List[str], protocols: List[str], priority: int = 1000
+        errors,
+        self,
+        rule_name: str,
+        ip_ranges: List[str],
+        ports: List[str],
+        protocols: List[str],
+        priority: int = 1000,
     ):
         compute = self.auth.get_gcp_client()
         existing_rule = self.get_firewall_rule(rule_name)

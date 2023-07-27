@@ -1,6 +1,10 @@
 import numpy as np
 
-from skyplane.planner.solver import ThroughputSolver, ThroughputProblem, ThroughputSolution
+from skyplane.planner.solver import (
+    ThroughputSolver,
+    ThroughputProblem,
+    ThroughputSolution,
+)
 
 
 class ThroughputSolverRON(ThroughputSolver):
@@ -11,7 +15,10 @@ class ThroughputSolverRON(ThroughputSolver):
         for inter in regions:
             if inter == p.src or inter == p.dst:
                 continue
-            throughput = min(self.get_path_throughput(p.src, inter), self.get_path_throughput(inter, p.dst))
+            throughput = min(
+                self.get_path_throughput(p.src, inter),
+                self.get_path_throughput(inter, p.dst),
+            )
             if throughput > best_throughput:
                 best_throughput = throughput
                 best_path = [p.src, inter, p.dst]

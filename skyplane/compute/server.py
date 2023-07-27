@@ -1,6 +1,5 @@
 import json
 import logging
-from pprint import pprint
 import os
 import socket
 from contextlib import closing
@@ -12,14 +11,16 @@ import urllib3
 from typing import Dict, Optional, Tuple
 
 from skyplane import compute
-from skyplane.compute.const_cmds import make_autoshutdown_script, make_dozzle_command, make_sysctl_tcp_tuning_command
+from skyplane.compute.const_cmds import (
+    make_autoshutdown_script,
+    make_dozzle_command,
+    make_sysctl_tcp_tuning_command,
+)
 from skyplane.config_paths import config_path, cloud_config, __config_root__
-from skyplane.gateway.gateway_program import GatewayProgram
 from skyplane.utils import logger
 from skyplane.utils.fn import PathLike, wait_for
 from skyplane.utils.retry import retry_backoff
 from skyplane.utils.timer import Timer
-from skyplane.planner.topology import TopologyPlanGateway
 
 tmp_log_dir = Path("/tmp/skyplane")
 
@@ -88,7 +89,12 @@ class ServerState(Enum):
 class Server:
     """Abstract server class to support basic SSH operations"""
 
-    def __init__(self, region_tag, log_dir=None, auto_shutdown_timeout_minutes: Optional[int] = None):
+    def __init__(
+        self,
+        region_tag,
+        log_dir=None,
+        auto_shutdown_timeout_minutes: Optional[int] = None,
+    ):
         self.region_tag = region_tag  # format provider:region
         self.auto_shutdown_timeout_minutes = auto_shutdown_timeout_minutes
         self.command_log = []
@@ -210,7 +216,12 @@ class Server:
             return False
 
         try:
-            wait_for(is_up, timeout=timeout, interval=interval, desc=f"Waiting for {self.uuid()} to be ready")
+            wait_for(
+                is_up,
+                timeout=timeout,
+                interval=interval,
+                desc=f"Waiting for {self.uuid()} to be ready",
+            )
         except TimeoutError:
             logger.error(f"Gateway {self.uuid()} is not ready after {timeout} seconds, run `skyplane deprovision` to clean up resources")
             raise TimeoutError(f"{self.uuid()} is not ready after {timeout} seconds")
@@ -239,7 +250,10 @@ class Server:
             if self.auto_shutdown_timeout_minutes:
                 command = f"(nohup /tmp/autoshutdown.sh {self.auto_shutdown_timeout_minutes} &> /dev/null < /dev/null); {command}"
             _, stdout, stderr = client.exec_command(command)
-            stdout, stderr = (stdout.read().decode("utf-8"), stderr.read().decode("utf-8"))
+            stdout, stderr = (
+                stdout.read().decode("utf-8"),
+                stderr.read().decode("utf-8"),
+            )
         self.add_command_log(command=command, stdout=stdout, stderr=stderr, runtime=t.elapsed)
         return stdout, stderr
 
@@ -295,6 +309,7 @@ class Server:
         use_compression=False,
         e2ee_key_bytes=None,
         use_socket_tls=False,
+        instance_path=None,
     ):
         def check_stderr(tup):
             assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
@@ -321,7 +336,10 @@ class Server:
 
         # pull docker image and start container
         with Timer() as t:
-            retry_backoff(partial(self.pull_docker, gateway_docker_image), exception_class=RuntimeError)
+            retry_backoff(
+                partial(self.pull_docker, gateway_docker_image),
+                exception_class=RuntimeError,
+            )
 
         logger.fs.debug(f"{desc_prefix} docker pull in {t.elapsed}")
         logger.fs.debug(f"{desc_prefix}: Starting gateway container")
@@ -357,6 +375,11 @@ class Server:
         docker_envs["GATEWAY_INFO_FILE"] = f"/pkg/data/gateway_info.json"
         docker_run_flags += f" -v /tmp/{gateway_program_file}:/pkg/data/gateway_program.json"
         docker_run_flags += f" -v /tmp/{gateway_info_file}:/pkg/data/gateway_info.json"
+
+        # Instance path to mount if the source / destination is an instance
+        if instance_path is not None:
+            docker_run_flags += f" -v {instance_path}:{instance_path}"
+
         gateway_daemon_cmd = f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
 
         # update docker flags
@@ -394,7 +417,12 @@ class Server:
 
         try:
             logging.disable(logging.CRITICAL)
-            wait_for(is_api_ready, timeout=30, interval=0.1, desc=f"Waiting for gateway {self.uuid()} to start")
+            wait_for(
+                is_api_ready,
+                timeout=30,
+                interval=0.1,
+                desc=f"Waiting for gateway {self.uuid()} to start",
+            )
         except TimeoutError as e:
             logger.fs.error(f"Gateway {self.instance_name()} is not ready {e}")
             logger.fs.warning(desc_prefix + " gateway launch command: " + docker_launch_cmd)

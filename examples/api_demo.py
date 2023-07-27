@@ -9,7 +9,9 @@ if __name__ == "__main__":
     with dp.auto_deprovision():
         dp.provision(spinner=True)
         dp.queue_copy(
-            "s3://skycamp-demo-src/synset_labels.txt", "s3://skycamp-demo-us-east-2/imagenet-bucket/synset_labels.txt", recursive=False
+            "s3://skycamp-demo-src/synset_labels.txt",
+            "s3://skycamp-demo-us-east-2/imagenet-bucket/synset_labels.txt",
+            recursive=False,
         )
         tracker = dp.run_async()
 

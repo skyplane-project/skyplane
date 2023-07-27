@@ -1,13 +1,18 @@
 import json
 import os
 import subprocess
-import re
 
 from typing import Dict, List, Optional
 
 from skyplane.compute.const_cmds import query_which_cloud
 from skyplane.config import SkyplaneConfig
-from skyplane.config_paths import config_path, azure_config_path, azure_sku_path, azure_quota_path, azure_standardDv5_quota_path
+from skyplane.config_paths import (
+    config_path,
+    azure_config_path,
+    azure_sku_path,
+    azure_quota_path,
+    azure_standardDv5_quota_path,
+)
 from skyplane.utils import imports, logger
 from skyplane.utils.definitions import is_gateway_env
 from skyplane.utils.fn import do_parallel

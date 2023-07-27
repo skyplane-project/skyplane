@@ -15,7 +15,14 @@ from skyplane.utils.fn import PathLike
 
 
 class GCPServer(Server):
-    def __init__(self, region_tag: str, instance_name: str, key_root: PathLike = key_root / "gcp", log_dir=None, ssh_private_key=None):
+    def __init__(
+        self,
+        region_tag: str,
+        instance_name: str,
+        key_root: PathLike = key_root / "gcp",
+        log_dir=None,
+        ssh_private_key=None,
+    ):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "gcp", f"Region name doesn't match pattern gcp:<region> {self.region_tag}"
         self.gcp_region = self.region_tag.split(":")[1]
@@ -80,7 +87,9 @@ class GCPServer(Server):
 
     def terminate_instance_impl(self):
         self.auth.get_gcp_client().instances().delete(
-            project=self.auth.project_id, zone=self.gcp_region, instance=self.instance_name()
+            project=self.auth.project_id,
+            zone=self.gcp_region,
+            instance=self.instance_name(),
         ).execute()
 
     def get_ssh_client_impl(self, uname="skyplane", ssh_key_password="skyplane"):

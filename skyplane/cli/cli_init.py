@@ -16,7 +16,12 @@ from skyplane import compute
 from skyplane.cli.impl.common import print_header
 from skyplane.api.usage import UsageClient, UsageStatsStatus
 from skyplane.config import SkyplaneConfig
-from skyplane.config_paths import aws_config_path, gcp_config_path, config_path, ibmcloud_config_path
+from skyplane.config_paths import (
+    aws_config_path,
+    gcp_config_path,
+    config_path,
+    ibmcloud_config_path,
+)
 from skyplane.utils import logger
 
 
@@ -25,7 +30,11 @@ def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> Sk
         import boto3
     except ImportError:
         config.aws_enabled = False
-        typer.secho("    AWS support disabled because boto3 is not installed. Run `pip install 'skyplane[aws]'`.", fg="red", err=True)
+        typer.secho(
+            "    AWS support disabled because boto3 is not installed. Run `pip install 'skyplane[aws]'`.",
+            fg="red",
+            err=True,
+        )
         return config
     if non_interactive or typer.confirm("    Do you want to configure AWS support in Skyplane?", default=True):
         session = boto3.Session()
@@ -42,7 +51,8 @@ def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> Sk
         auth = compute.AWSAuthentication(config=config)
         if config.aws_enabled:
             typer.secho(
-                f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials_frozen.access_key[-6:]}]", fg="blue"
+                f"    Loaded AWS credentials from the AWS CLI [IAM access key ID: ...{credentials_frozen.access_key[-6:]}]",
+                fg="blue",
             )
             config.aws_enabled = True
             auth.save_region_config(config)
@@ -50,9 +60,15 @@ def load_aws_config(config: SkyplaneConfig, non_interactive: bool = False) -> Sk
             return config
         else:
             typer.secho(
-                "    AWS credentials not found in boto3 session, please use the AWS CLI to set them via `aws configure`", fg="red", err=True
+                "    AWS credentials not found in boto3 session, please use the AWS CLI to set them via `aws configure`",
+                fg="red",
+                err=True,
             )
-            typer.secho("    https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html", fg="red", err=True)
+            typer.secho(
+                "    https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html",
+                fg="red",
+                err=True,
+            )
             typer.secho("    Disabling AWS support", fg="blue")
             if auth is not None:
                 auth.clear_region_config()
@@ -89,7 +105,11 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         return config
 
     def make_role_cmds(principal_id, subscription_id):
-        roles = ["Contributor", "Storage Blob Data Contributor", "Storage Account Contributor"]
+        roles = [
+            "Contributor",
+            "Storage Blob Data Contributor",
+            "Storage Account Contributor",
+        ]
         return [
             "az role assignment create --role".split(" ")
             + [role]
@@ -113,7 +133,10 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             typer.secho("    Azure credentials will be re-initialized", fg="red", err=True)
             clear_azure_config(config, verbose=False)
         if config.azure_enabled and config.azure_subscription_id and config.azure_principal_id and config.azure_client_id:
-            typer.secho("    Azure credentials already configured! To reconfigure Azure, run `skyplane init --reinit-azure`.", fg="blue")
+            typer.secho(
+                "    Azure credentials already configured! To reconfigure Azure, run `skyplane init --reinit-azure`.",
+                fg="blue",
+            )
             return config
 
         # check if az cli is installed
@@ -155,7 +178,12 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             if sub["state"] == "Enabled":
                 subscriptions[sub["name"]] = sub["id"]
         defaults["subscription_name"] = (
-            next((n for n, i in subscriptions.items() if i == defaults["subscription_id"]), None) if defaults["subscription_id"] else None
+            next(
+                (n for n, i in subscriptions.items() if i == defaults["subscription_id"]),
+                None,
+            )
+            if defaults["subscription_id"]
+            else None
         )
 
         # select subscription to launch Skyplane VMs in
@@ -226,14 +254,20 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
         change_subscription_cmd = f"az account set --subscription {config.azure_subscription_id}"
         create_rg_cmd = f"az group create -l westus2 -n {config.azure_resource_group}"
         create_umi_cmd = f"az identity create -g {config.azure_resource_group} -n {config.azure_umi_name}"
-        typer.secho(f"    I will run the following commands to create an Azure managed identity:", fg="blue")
+        typer.secho(
+            f"    I will run the following commands to create an Azure managed identity:",
+            fg="blue",
+        )
         typer.secho(f"        $ {enable_quota_provider_cmd}", fg="yellow")
         typer.secho(f"        $ {change_subscription_cmd}", fg="yellow")
         typer.secho(f"        $ {create_rg_cmd}", fg="yellow")
         typer.secho(f"        $ {create_umi_cmd}", fg="yellow")
 
         with Progress(
-            TextColumn("    "), SpinnerColumn(), TextColumn("Creating Skyplane managed identity{task.description}"), transient=True
+            TextColumn("    "),
+            SpinnerColumn(),
+            TextColumn("Creating Skyplane managed identity{task.description}"),
+            transient=True,
         ) as progress:
             progress.add_task("", total=None)
             # NOTE: we want to run this command early on because it takes time to register the quota provider
@@ -260,7 +294,11 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
             or not config.azure_umi_name
             or not config.azure_resource_group
         ):
-            typer.secho("    Azure credentials not configured correctly, disabling Azure support.", fg="red", err=True)
+            typer.secho(
+                "    Azure credentials not configured correctly, disabling Azure support.",
+                fg="red",
+                err=True,
+            )
             return clear_azure_config(config)
 
         # authorize new managed identity with Storage Blob Data Contributor and Storage Account Contributor roles to the subscription
@@ -308,7 +346,12 @@ def load_azure_config(config: SkyplaneConfig, force_init: bool = False, non_inte
 
 
 def check_gcp_service(gcp_auth: compute.GCPAuthentication, non_interactive: bool = False):
-    services = {"iam": "IAM", "compute": "Compute Engine", "storage": "Storage", "cloudresourcemanager": "Cloud Resource Manager"}
+    services = {
+        "iam": "IAM",
+        "compute": "Compute Engine",
+        "storage": "Storage",
+        "cloudresourcemanager": "Cloud Resource Manager",
+    }
     for service, name in services.items():
         if not gcp_auth.check_api_enabled(service):
             typer.secho(f"    GCP {name} API not enabled", fg="red", err=True)
@@ -333,19 +376,34 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
             typer.secho("    GCP credentials will be re-initialized", fg="red", err=True)
             config.gcp_project_id = None
         elif not Path(gcp_config_path).is_file():
-            typer.secho("    GCP region config missing! GCP will be reconfigured.", fg="red", err=True)
+            typer.secho(
+                "    GCP region config missing! GCP will be reconfigured.",
+                fg="red",
+                err=True,
+            )
             config.gcp_project_id = None
 
         if config.gcp_project_id is not None:
-            typer.secho("    GCP already configured! To reconfigure GCP, run `skyplane init --reinit-gcp`.", fg="blue")
+            typer.secho(
+                "    GCP already configured! To reconfigure GCP, run `skyplane init --reinit-gcp`.",
+                fg="blue",
+            )
             config.gcp_enabled = True
             return config
 
         # check if GCP is enabled
         inferred_cred, inferred_project = compute.GCPAuthentication.get_adc_credential()
         if inferred_cred is None:  # or inferred_project is None:
-            typer.secho("    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.", fg="red", err=True)
-            typer.secho("    https://cloud.google.com/docs/authentication/getting-started", fg="red", err=True)
+            typer.secho(
+                "    Default GCP credentials are not set up yet. Run `gcloud auth application-default login`.",
+                fg="red",
+                err=True,
+            )
+            typer.secho(
+                "    https://cloud.google.com/docs/authentication/getting-started",
+                fg="red",
+                err=True,
+            )
             return disable_gcp_support()
         else:
             typer.secho("    GCP credentials found in GCP CLI", fg="blue")
@@ -358,7 +416,10 @@ def load_gcp_config(config: SkyplaneConfig, force_init: bool = False, non_intera
                 assert config.gcp_project_id is not None, "GCP project ID must not be None"
                 config.gcp_enabled = True
                 auth = compute.GCPAuthentication(config=config)
-                typer.secho(f"    Using GCP service account {auth.service_account_name}", fg="blue")
+                typer.secho(
+                    f"    Using GCP service account {auth.service_account_name}",
+                    fg="blue",
+                )
                 if not check_gcp_service(auth, non_interactive):
                     return disable_gcp_support()
                 try:
@@ -425,7 +486,9 @@ def load_ibmcloud_config(config: SkyplaneConfig, force_init: bool = False, non_i
     except ImportError:
         config.ibmcloud_enabled = False
         typer.secho(
-            "    IBM Cloud support disabled because ibm_boto3 is not installed. Run `pip install skyplane[ibmcloud].`", fg="red", err=True
+            "    IBM Cloud support disabled because ibm_boto3 is not installed. Run `pip install skyplane[ibmcloud].`",
+            fg="red",
+            err=True,
         )
         return config
     if non_interactive or typer.confirm("    Do you want to configure IBM Cloud support in Skyplane?", default=True):
@@ -460,7 +523,11 @@ def load_ibmcloud_config(config: SkyplaneConfig, force_init: bool = False, non_i
             typer.secho(f"    IBM Cloud  config file saved to {ibmcloud_config_path}", fg="blue")
             return config
         else:
-            typer.secho(f"    COS credentials not found {get_default_config_filename()}", fg="red", err=True)
+            typer.secho(
+                f"    COS credentials not found {get_default_config_filename()}",
+                fg="red",
+                err=True,
+            )
             typer.secho("    Disabling IBM Cloud support", fg="blue")
             if auth is not None:
                 auth.clear_region_config()
@@ -559,7 +626,10 @@ def init(
     usage_stats_var = UsageClient.usage_stats_status()
     if usage_stats_var is UsageStatsStatus.DISABLED_EXPLICITLY:
         rprint(skyplane.api.usage.USAGE_STATS_DISABLED_MESSAGE)
-    elif usage_stats_var in [UsageStatsStatus.ENABLED_BY_DEFAULT, UsageStatsStatus.ENABLED_EXPLICITLY]:
+    elif usage_stats_var in [
+        UsageStatsStatus.ENABLED_BY_DEFAULT,
+        UsageStatsStatus.ENABLED_EXPLICITLY,
+    ]:
         rprint(skyplane.api.usage.USAGE_STATS_ENABLED_MESSAGE)
     else:
         raise Exception("Prompt message unknown.")

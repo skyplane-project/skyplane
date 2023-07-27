@@ -1,27 +1,26 @@
-import json
-import time
-import os
 import threading
-from collections import defaultdict, Counter
 from datetime import datetime
-from functools import partial
 from datetime import datetime
 
-import nacl.secret
-import nacl.utils
 import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 from skyplane import compute
-from skyplane.api.tracker import TransferProgressTracker, TransferHook
+from skyplane.api.tracker import TransferProgressTracker
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
 
-from skyplane.planner.planner import MulticastDirectPlanner, DirectPlannerSourceOneSided, DirectPlannerDestOneSided
+from skyplane.planner.planner import (
+    MulticastDirectPlanner,
+    DirectPlannerSourceOneSided,
+    DirectPlannerDestOneSided,
+    DirectPlannerVMSource,
+    DirectPlannerVMDest,
+    DirectPlannerVMSourceDest,
+)
 from skyplane.planner.topology import TopologyPlanGateway
 from skyplane.utils import logger
-from skyplane.utils.definitions import gateway_docker_image, tmp_log_dir
-from skyplane.utils.fn import PathLike, do_parallel
+from skyplane.utils.definitions import tmp_log_dir
 
 from skyplane.api.dataplane import Dataplane
 
@@ -75,6 +74,12 @@ class Pipeline:
             self.planner = DirectPlannerSourceOneSided(self.max_instances, self.n_connections, self.transfer_config)
         elif self.planning_algorithm == "dst_one_sided":
             self.planner = DirectPlannerDestOneSided(self.max_instances, self.n_connections, self.transfer_config)
+        elif self.planning_algorithm == "vm_source":
+            self.planner = DirectPlannerVMSource(self.max_instances, 64, self.transfer_config)
+        elif self.planning_algorithm == "vm_dest":
+            self.planner = DirectPlannerVMDest(self.max_instances, 64, self.transfer_config)
+        elif self.planning_algorithm == "vm_to_vm":
+            self.planner = DirectPlannerVMSourceDest(self.max_instances, 64, self.transfer_config)
         else:
             raise ValueError(f"No such planning algorithm {planning_algorithm}")
 
@@ -93,7 +98,14 @@ class Pipeline:
         topo = self.planner.plan(self.jobs_to_dispatch)
 
         # create dataplane from plan
-        dp = Dataplane(self.clientid, topo, self.provisioner, self.transfer_config, str(self.transfer_dir), debug=debug)
+        dp = Dataplane(
+            self.clientid,
+            topo,
+            self.provisioner,
+            self.transfer_config,
+            str(self.transfer_dir),
+            debug=debug,
+        )
         return dp
 
     def start(self, debug=False, progress=False):
@@ -108,7 +120,10 @@ class Pipeline:
             if progress:
                 from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 
-                tracker = dp.run_async(self.jobs_to_dispatch, hooks=ProgressBarTransferHook(dp.topology.dest_region_tags))
+                tracker = dp.run_async(
+                    self.jobs_to_dispatch,
+                    hooks=ProgressBarTransferHook(dp.topology.dest_region_tags),
+                )
             else:
                 tracker = dp.run_async(self.jobs_to_dispatch)
 
@@ -118,7 +133,7 @@ class Pipeline:
             # copy gateway logs
             if debug:
                 dp.copy_gateway_logs()
-        except Exception as e:
+        except Exception:
             dp.copy_gateway_logs()
         dp.deprovision(spinner=True)
         return dp
@@ -131,7 +146,7 @@ class Pipeline:
             if debug:
                 dp.copy_gateway_logs()
             return tracker
-        except Exception as e:
+        except Exception:
             dp.copy_gateway_logs()
             return
 

@@ -57,7 +57,14 @@ class IBMCloudAuthentication:
                     zones = ibm_vpc_client.list_region_zones(region["name"])
                     for zone in zones.result["zones"]:
                         if zone["status"] == "available":
-                            region_list.append("{},{},{},{}".format(zone["region"]["name"], region["href"], zone["name"], zone["href"]))
+                            region_list.append(
+                                "{},{},{},{}".format(
+                                    zone["region"]["name"],
+                                    region["href"],
+                                    zone["name"],
+                                    zone["href"],
+                                )
+                            )
             f.write("\n".join(region_list))
 
     def clear_region_config(self):
@@ -124,4 +131,8 @@ class IBMCloudAuthentication:
         if cos_region is None:
             return self.get_boto3_session().client(service_name, config=client_config)
         else:
-            return self.get_boto3_session().client(service_name, endpoint_url=self.get_ibmcloud_endpoint(cos_region), config=client_config)
+            return self.get_boto3_session().client(
+                service_name,
+                endpoint_url=self.get_ibmcloud_endpoint(cos_region),
+                config=client_config,
+            )

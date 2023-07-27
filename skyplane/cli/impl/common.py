@@ -58,7 +58,12 @@ def query_instances():
         query_jobs.append(catch_error(lambda: compute.GCPCloudProvider().get_matching_instances()))
     # query in parallel
     for instance_list in do_parallel(
-        lambda f: f(), query_jobs, n=-1, return_args=False, spinner=True, desc="Querying clouds for instances"
+        lambda f: f(),
+        query_jobs,
+        n=-1,
+        return_args=False,
+        spinner=True,
+        desc="Querying clouds for instances",
     ):
         instances.extend(instance_list)
     return instances
@@ -70,7 +75,10 @@ def register_exception_handler():
         # write full traceback infomation with locals to log file
         logger.fs.error(f"Uncaught exception: {exception_type.__name__}: {exception}")
         logger.fs.error("Traceback:\n" + "".join(tb.format_exception(exception_type, exception, traceback)))
-        rprint(f"[red][bold]Uncaught exception:[/bold] ({exception_type.__name__}) {exception}[/red]", file=sys.stderr)
+        rprint(
+            f"[red][bold]Uncaught exception:[/bold] ({exception_type.__name__}) {exception}[/red]",
+            file=sys.stderr,
+        )
         typer.secho(
             "Please check the log file for more information, and ensure to include it if reporting an issue on Github.",
             fg=typer.colors.YELLOW,

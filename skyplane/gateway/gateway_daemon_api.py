@@ -7,8 +7,7 @@ from multiprocessing import Queue
 from multiprocessing.managers import DictProxy
 from queue import Empty
 from traceback import TracebackException
-from typing import Dict, List, Tuple, Optional
-import json
+from typing import Dict, List, Tuple
 from flask import Flask, jsonify, request
 from werkzeug.serving import make_server
 
@@ -341,7 +340,10 @@ class GatewayDaemonAPI(threading.Thread):
         @app.route("/api/v1/profile/compression", methods=["GET"])
         def get_receiver_compression_profile():
             total_size_compressed_bytes, total_size_uncompressed_bytes = 0, 0
-            for _, (compressed_size, uncompressed_size) in self.sender_compressed_sizes.items():
+            for _, (
+                compressed_size,
+                uncompressed_size,
+            ) in self.sender_compressed_sizes.items():
                 total_size_compressed_bytes += compressed_size
                 total_size_uncompressed_bytes += uncompressed_size
             return jsonify(

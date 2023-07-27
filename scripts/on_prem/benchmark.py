@@ -85,7 +85,12 @@ if __name__ == "__main__":
     parser.add_argument("--threads", type=bool, default=True)
     args = parser.parse_args()
 
-    hdfs = fs.HadoopFileSystem(host=args.HDFS, port=8020, user="hadoop", extra_conf={"dfs.client.use.datanode.hostname": "false"})
+    hdfs = fs.HadoopFileSystem(
+        host=args.HDFS,
+        port=8020,
+        user="hadoop",
+        extra_conf={"dfs.client.use.datanode.hostname": "false"},
+    )
     local = fs.LocalFileSystem()
     thread = args.threads
     # setup_files_and_dirs(args.outdir, hdfs)

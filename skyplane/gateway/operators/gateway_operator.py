@@ -1,4 +1,5 @@
 import json
+import mmap
 from pathlib import Path
 import os
 from typing import List
@@ -88,13 +89,23 @@ class GatewayOperator(ABC):
                     continue
 
                 # TODO: status logging
-                self.chunk_store.log_chunk_state(chunk_req, ChunkState.in_progress, operator_handle=self.handle, worker_id=worker_id)
+                self.chunk_store.log_chunk_state(
+                    chunk_req,
+                    ChunkState.in_progress,
+                    operator_handle=self.handle,
+                    worker_id=worker_id,
+                )
                 # process chunk
                 succ = self.process(chunk_req, *args)
 
                 # place in output queue
                 if succ:
-                    self.chunk_store.log_chunk_state(chunk_req, ChunkState.complete, operator_handle=self.handle, worker_id=worker_id)
+                    self.chunk_store.log_chunk_state(
+                        chunk_req,
+                        ChunkState.complete,
+                        operator_handle=self.handle,
+                        worker_id=worker_id,
+                    )
                     if self.output_queue is not None:
                         self.output_queue.put(chunk_req)
                     else:
@@ -166,7 +177,16 @@ class GatewaySender(GatewayOperator):
         e2ee_key_bytes: Optional[bytes] = None,
         n_processes: Optional[int] = 32,
     ):
-        super().__init__(handle, region, input_queue, output_queue, error_event, error_queue, chunk_store, n_processes)
+        super().__init__(
+            handle,
+            region,
+            input_queue,
+            output_queue,
+            error_event,
+            error_queue,
+            chunk_store,
+            n_processes,
+        )
         self.ip_addr = ip_addr
         self.use_tls = use_tls
         self.use_compression = use_compression
@@ -311,7 +331,9 @@ class GatewaySender(GatewayOperator):
         if self.destination_ports.get(dst_host) is None:
             print(f"[sender-{self.worker_id}]:{chunk_ids} creating new socket")
             self.destination_sockets[dst_host] = retry_backoff(
-                partial(self.make_socket, dst_host), max_retries=3, exception_class=socket.timeout
+                partial(self.make_socket, dst_host),
+                max_retries=3,
+                exception_class=socket.timeout,
             )
             print(f"[sender-{self.worker_id}]:{chunk_ids} created new socket")
         sock = self.destination_sockets[dst_host]
@@ -382,7 +404,16 @@ class GatewayRandomDataGen(GatewayOperator):
         size_mb: int,
         n_processes: Optional[int] = 1,
     ):
-        super().__init__(handle, region, input_queue, output_queue, error_event, error_queue, chunk_store, n_processes)
+        super().__init__(
+            handle,
+            region,
+            input_queue,
+            output_queue,
+            error_event,
+            error_queue,
+            chunk_store,
+            n_processes,
+        )
         self.size_mb = size_mb
 
     def process(self, chunk_req: ChunkRequest):
@@ -412,6 +443,7 @@ class GatewayRandomDataGen(GatewayOperator):
 class GatewayWriteLocal(GatewayOperator):
     def __init__(
         self,
+        path: str,
         handle: str,
         region: str,
         input_queue: GatewayQueue,
@@ -421,10 +453,39 @@ class GatewayWriteLocal(GatewayOperator):
         chunk_store: ChunkStore,
         n_processes: int = 1,
     ):
-        super().__init__(handle, region, input_queue, output_queue, error_event, error_queue, chunk_store, n_processes)
+        super().__init__(
+            handle,
+            region,
+            input_queue,
+            output_queue,
+            error_event,
+            error_queue,
+            chunk_store,
+            n_processes,
+        )
+        self.path = path
 
     def process(self, chunk_req: ChunkRequest):
         # do nothing (already written locally)
+        # TODO: sort and reassemble chunks
+        # Generate the chunk file path
+        fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
+
+        # If the final file does not exist, create it
+        if not os.path.exists(self.path):
+            open(self.path, "a").close()
+
+        # Open the final file in read-write mode, seek to the correct position, and write the chunk data
+        with open(self.path, "r+b") as final_file:
+            # Read the chunk data
+            with open(fpath, "rb") as chunk_file:
+                chunk_data = chunk_file.read()
+
+            # Seek to the chunk's offset in the final file and write the chunk data
+            offset_bytes = chunk_req.chunk.file_offset_bytes if chunk_req.chunk.file_offset_bytes is not None else 0
+            final_file.seek(offset_bytes)
+            final_file.write(chunk_data)
+
         return True
 
 
@@ -442,7 +503,16 @@ class GatewayObjStoreOperator(GatewayOperator):
         n_processes: Optional[int] = 1,
         chunk_store: Optional[ChunkStore] = None,
     ):
-        super().__init__(handle, region, input_queue, output_queue, error_event, error_queue, chunk_store, n_processes)
+        super().__init__(
+            handle,
+            region,
+            input_queue,
+            output_queue,
+            error_event,
+            error_queue,
+            chunk_store,
+            n_processes,
+        )
         self.bucket_name = bucket_name
         self.bucket_region = bucket_region
         self.src_requester_pays = cloud_config.get_flag("requester_pays")
@@ -463,6 +533,54 @@ class GatewayObjStoreOperator(GatewayOperator):
         return self.obj_store_interfaces[key]
 
 
+class GatewayLocalReadOperator(GatewayOperator):
+    def __init__(
+        self,
+        path: str,
+        handle: str,
+        region: str,
+        input_queue: GatewayQueue,
+        output_queue: GatewayQueue,
+        error_event,
+        error_queue: Queue,
+        n_processes: int = 32,
+        chunk_store: Optional[ChunkStore] = None,
+    ):
+        super().__init__(
+            handle,
+            region,
+            input_queue,
+            output_queue,
+            error_event,
+            error_queue,
+            chunk_store,
+            n_processes,
+        )
+        self.path = path
+
+    def process(self, chunk_req: ChunkRequest, **args):
+        # Determine the start and end position of the chunk in the file
+        chunk_start = chunk_req.chunk.file_offset_bytes if chunk_req.chunk.file_offset_bytes is not None else 0
+        chunk_end = chunk_start + chunk_req.chunk.chunk_length_bytes
+
+        # Read the specified part of the file and write the chunk
+        with open(self.path, "rb") as f:
+            mmapped_file = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)  # memory-mapped file for efficient large file handling
+
+            # Generate the chunk file path
+            fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
+
+            # Write the chunk to a new file
+            with open(fpath, "wb") as chunk_file:
+                chunk_file.write(mmapped_file[chunk_start:chunk_end])
+
+            logger.debug(f"[{self.handle}:{self.worker_id}] Local read: Wrote chunk {chunk_req.chunk.chunk_id} to {fpath}")
+
+        mmapped_file.close()  # Make sure to close the memory-mapped file
+
+        return True
+
+
 class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
     def __init__(
         self,
@@ -478,7 +596,16 @@ class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
         chunk_store: Optional[ChunkStore] = None,
     ):
         super().__init__(
-            handle, region, bucket_name, bucket_region, input_queue, output_queue, error_event, error_queue, n_processes, chunk_store
+            handle,
+            region,
+            bucket_name,
+            bucket_region,
+            input_queue,
+            output_queue,
+            error_event,
+            error_queue,
+            n_processes,
+            chunk_store,
         )
 
     def process(self, chunk_req: ChunkRequest, **args):
@@ -561,13 +688,23 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         prefix: Optional[str] = "",
     ):
         super().__init__(
-            handle, region, bucket_name, bucket_region, input_queue, output_queue, error_event, error_queue, n_processes, chunk_store
+            handle,
+            region,
+            bucket_name,
+            bucket_region,
+            input_queue,
+            output_queue,
+            error_event,
+            error_queue,
+            n_processes,
+            chunk_store,
         )
         self.chunk_store = chunk_store
         self.upload_id_map = upload_id_map
         self.prefix = prefix
 
     def process(self, chunk_req: ChunkRequest):
+        print(f"Chunk request: {chunk_req}")
         fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
         logger.debug(
             f"[{self.handle}:{self.worker_id}] Start upload {chunk_req.chunk.chunk_id} to {self.bucket_name}, key {chunk_req.chunk.dest_key}"

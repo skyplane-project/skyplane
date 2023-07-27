@@ -5,7 +5,10 @@ from pyarrow import fs
 from dataclasses import dataclass
 from typing import Any, Iterator, List, Optional
 from skyplane.exceptions import NoSuchObjectException
-from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
+from skyplane.obj_store.object_store_interface import (
+    ObjectStoreInterface,
+    ObjectStoreObject,
+)
 from skyplane.utils import logger
 import mimetypes
 
@@ -74,9 +77,21 @@ class HDFSInterface(ObjectStoreInterface):
         logger.info(f"Response: {response}")
         if hasattr(response, "__len__") and (not isinstance(response, str)):
             for file in response:
-                yield HDFSFile(provider="hdfs", bucket=self.host, key=file.path, size=file.size, last_modified=file.mtime)
+                yield HDFSFile(
+                    provider="hdfs",
+                    bucket=self.host,
+                    key=file.path,
+                    size=file.size,
+                    last_modified=file.mtime,
+                )
         else:
-            yield HDFSFile(provider="hdfs", bucket=self.host, key=response.path, size=response.size, last_modified=response.mtime)
+            yield HDFSFile(
+                provider="hdfs",
+                bucket=self.host,
+                key=response.path,
+                size=response.size,
+                last_modified=response.mtime,
+            )
 
     def exists(self, obj_name: str):
         try:
@@ -115,7 +130,13 @@ class HDFSInterface(ObjectStoreInterface):
         return True
 
     def download_object(
-        self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5: bool = False
+        self,
+        src_object_name,
+        dst_file_path,
+        offset_bytes=None,
+        size_bytes=None,
+        write_at_offset=False,
+        generate_md5: bool = False,
     ):
         with self.hdfs.open_input_stream(f"{src_object_name}") as f1:
             with open(dst_file_path, "wb+" if write_at_offset else "wb") as f2:

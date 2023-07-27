@@ -3,7 +3,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from rich import print as rprint
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, MofNCompleteColumn, TimeElapsedColumn
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
+    MofNCompleteColumn,
+    TimeElapsedColumn,
+)
 from typing import Callable, Iterable, List, Optional, Tuple, Union, TypeVar
 
 from skyplane.utils import logger
@@ -26,7 +33,14 @@ def wait_for(fn: Callable[[], bool], timeout=60, interval=0.25, desc="Waiting", 
 
 
 def do_parallel(
-    func: Callable[[T], R], args_list: Iterable[T], n=-1, desc=None, arg_fmt=None, return_args=True, spinner=False, spinner_persist=False
+    func: Callable[[T], R],
+    args_list: Iterable[T],
+    n=-1,
+    desc=None,
+    arg_fmt=None,
+    return_args=True,
+    spinner=False,
+    spinner_persist=False,
 ) -> List[Union[Tuple[T, R], R]]:
     args_list = list(args_list)
     if len(args_list) == 0:
@@ -47,7 +61,13 @@ def do_parallel(
 
     results = []
     with Progress(
-        SpinnerColumn(), TextColumn(desc), BarColumn(), MofNCompleteColumn(), TimeElapsedColumn(), disable=not spinner, transient=True
+        SpinnerColumn(),
+        TextColumn(desc),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        disable=not spinner,
+        transient=True,
     ) as progress:
         progress_task = progress.add_task("", total=len(args_list))
         with Timer() as t:

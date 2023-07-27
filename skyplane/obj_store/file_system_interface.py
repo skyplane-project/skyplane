@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import Any, Iterator, List, Optional
 from skyplane.obj_store.storage_interface import StorageInterface
-import os
 
 
 @dataclass

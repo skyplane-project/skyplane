@@ -26,4 +26,10 @@ if __name__ == "__main__":
 
     files = [f"{outdir}/{i:08d}.bin" for i in range(args.nfiles)]
     data = np.arange(args.size // 4, dtype=np.int32).tobytes()
-    do_parallel(partial(make_file, data), files, desc="Generating files", spinner=True, spinner_persist=True)
+    do_parallel(
+        partial(make_file, data),
+        files,
+        desc="Generating files",
+        spinner=True,
+        spinner_persist=True,
+    )

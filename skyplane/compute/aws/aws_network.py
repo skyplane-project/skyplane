@@ -128,7 +128,9 @@ class AWSNetwork:
             def make_subnet(az):
                 subnet_cidr_id = ord(az[-1]) - ord("a")
                 subnet = self.auth.get_boto3_resource("ec2", region).create_subnet(
-                    CidrBlock=f"10.0.{subnet_cidr_id}.0/24", VpcId=matching_vpc.id, AvailabilityZone=az
+                    CidrBlock=f"10.0.{subnet_cidr_id}.0/24",
+                    VpcId=matching_vpc.id,
+                    AvailabilityZone=az,
                 )
                 subnet.meta.client.modify_subnet_attribute(SubnetId=subnet.id, MapPublicIpOnLaunch={"Value": True})
                 return subnet.id
@@ -141,12 +143,21 @@ class AWSNetwork:
             public_route_table = list(matching_vpc.route_tables.all())[0]
 
             # add a default route, for Public Subnet, pointing to Internet Gateway
-            ec2client.create_route(RouteTableId=public_route_table.id, DestinationCidrBlock="0.0.0.0/0", GatewayId=igw.id)
+            ec2client.create_route(
+                RouteTableId=public_route_table.id,
+                DestinationCidrBlock="0.0.0.0/0",
+                GatewayId=igw.id,
+            )
             for subnet_id in subnet_ids:
                 public_route_table.associate_with_subnet(SubnetId=subnet_id)
 
             # make security group named "skyplane"
-            tagSpecifications = [{"Tags": [{"Key": "skyplane", "Value": "true"}], "ResourceType": "security-group"}]
+            tagSpecifications = [
+                {
+                    "Tags": [{"Key": "skyplane", "Value": "true"}],
+                    "ResourceType": "security-group",
+                }
+            ]
             ec2.create_security_group(
                 GroupName="skyplane",
                 Description="Default security group for Skyplane VPC",
@@ -163,12 +174,24 @@ class AWSNetwork:
             logger.fs.debug(f"[aws_network]:{aws_region} Adding IPs {ips} to security group {sg.group_name}")
             if ips is None:
                 sg.authorize_ingress(
-                    IpPermissions=[{"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": f"0.0.0.0/0"}]}]
+                    IpPermissions=[
+                        {
+                            "IpProtocol": "-1",
+                            "FromPort": -1,
+                            "ToPort": -1,
+                            "IpRanges": [{"CidrIp": f"0.0.0.0/0"}],
+                        }
+                    ]
                 )
             else:
                 sg.authorize_ingress(
                     IpPermissions=[
-                        {"IpProtocol": "-1", "FromPort": -1, "ToPort": -1, "IpRanges": [{"CidrIp": f"{ip}/32" if ip else "0.0.0.0/0"}]}
+                        {
+                            "IpProtocol": "-1",
+                            "FromPort": -1,
+                            "ToPort": -1,
+                            "IpRanges": [{"CidrIp": f"{ip}/32" if ip else "0.0.0.0/0"}],
+                        }
                         for ip in ips
                     ]
                 )
@@ -211,7 +234,16 @@ class AWSNetwork:
                             )
                             return
             logger.fs.debug(f"[aws_network]:{aws_region} Authorizing SSH {ip}:{port} in {sg.group_name}")
-            sg.authorize_ingress(IpPermissions=[{"IpProtocol": "tcp", "FromPort": port, "ToPort": port, "IpRanges": [{"CidrIp": ip}]}])
+            sg.authorize_ingress(
+                IpPermissions=[
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": port,
+                        "ToPort": port,
+                        "IpRanges": [{"CidrIp": ip}],
+                    }
+                ]
+            )
         except exceptions.ClientError as e:
             if str(e).endswith("already exists") or str(e).endswith("already exist"):
                 logger.warn(f"[aws_network]:{aws_region} Error adding IPs to security group, since it already exits: {e}")

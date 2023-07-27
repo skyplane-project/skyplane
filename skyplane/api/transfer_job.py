@@ -13,10 +13,19 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from queue import Queue
 
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple, TypeVar, Dict
+from abc import ABC
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Generator,
+    List,
+    Optional,
+    Tuple,
+    TypeVar,
+    Dict,
+)
 
-from abc import ABC, abstractmethod
+from abc import ABC
 
 import urllib3
 from rich import print as rprint
@@ -24,9 +33,13 @@ from functools import partial
 
 from skyplane import exceptions
 from skyplane.api.config import TransferConfig
-from skyplane.chunk import Chunk, ChunkRequest
+from skyplane.chunk import Chunk
 from skyplane.obj_store.storage_interface import StorageInterface
-from skyplane.obj_store.object_store_interface import ObjectStoreObject, ObjectStoreInterface
+from skyplane.obj_store.object_store_interface import (
+    ObjectStoreObject,
+    ObjectStoreInterface,
+)
+from skyplane.obj_store.vm_interface import VMInterface
 from skyplane.utils import logger
 from skyplane.utils.definitions import MB
 from skyplane.utils.fn import do_parallel
@@ -43,7 +56,12 @@ T = TypeVar("T")
 class TransferPair:
     "Represents transfer pair between source and destination"
 
-    def __init__(self, src_obj: ObjectStoreObject, dst_objs: Dict[str, ObjectStoreObject], dst_key: str):
+    def __init__(
+        self,
+        src_obj: ObjectStoreObject,
+        dst_objs: Dict[str, ObjectStoreObject],
+        dst_key: str,
+    ):
         self.src_obj = src_obj
         self.dst_objs = dst_objs
         self.dst_key = dst_key  # shared destination key across all chunks (differnt prefixes)
@@ -51,7 +69,11 @@ class TransferPair:
 
 @dataclass
 class GatewayMessage:
-    def __init__(self, chunk: Optional[Chunk] = None, upload_id_mapping: Optional[Dict[str, Tuple[str, str]]] = None):
+    def __init__(
+        self,
+        chunk: Optional[Chunk] = None,
+        upload_id_mapping: Optional[Dict[str, Tuple[str, str]]] = None,
+    ):
         self.chunk = chunk
         # TODO: currently, the mapping ID is per-region, however this should be per-bucket, as there may be multiple
         # target buckets in the same region
@@ -108,10 +130,15 @@ class Chunker:
                 upload_id_mapping = {}
                 for dest_iface in self.dst_ifaces:
                     dest_object = dest_objects[dest_iface.region_tag()]
+
                     upload_id = dest_iface.initiate_multipart_upload(dest_object.key, mime_type=mime_type)
                     # print(f"Created upload id for key {dest_object.key} with upload id {upload_id} for bucket {dest_iface.bucket_name}")
                     # store mapping between key and upload id for each region
-                    upload_id_mapping[dest_iface.region_tag()] = (src_object.key, upload_id)
+                    upload_id_mapping[dest_iface.region_tag()] = (
+                        src_object.key,
+                        upload_id,
+                    )
+
                 out_queue_chunks.put(GatewayMessage(upload_id_mapping=upload_id_mapping))  # send to output queue
 
                 # get source and destination object and then compute number of chunks
@@ -158,13 +185,27 @@ class Chunker:
                     metadata = None
                     # Convert parts to base64 and store mime_type if destination interface is AzureBlobInterface
                     if dest_iface.provider == "azure":
-                        from skyplane.obj_store.azure_blob_interface import AzureBlobInterface
+                        from skyplane.obj_store.azure_blob_interface import (
+                            AzureBlobInterface,
+                        )
 
-                        block_ids = list(map(lambda part_num: AzureBlobInterface.id_to_base64_encoding(part_num, dest_object.key), parts))
+                        block_ids = list(
+                            map(
+                                lambda part_num: AzureBlobInterface.id_to_base64_encoding(part_num, dest_object.key),
+                                parts,
+                            )
+                        )
                         metadata = (block_ids, mime_type)
 
                     self.multipart_upload_requests.append(
-                        dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket, metadata=metadata)
+                        dict(
+                            upload_id=upload_id,
+                            key=dest_object.key,
+                            parts=parts,
+                            region=region,
+                            bucket=bucket,
+                            metadata=metadata,
+                        )
                     )
             else:
                 mime_type = None
@@ -291,24 +332,51 @@ class Chunker:
                         logger.fs.exception(e)
                         raise e from None
 
-                    if dest_provider == "aws":
-                        from skyplane.obj_store.s3_interface import S3Object
+                    if isinstance(dst_iface, VMInterface):
+                        # VM destination
+                        from skyplane.obj_store.vm_interface import VMFile
 
-                        dest_obj = S3Object(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
-                    elif dest_provider == "azure":
-                        from skyplane.obj_store.azure_blob_interface import AzureBlobObject
+                        dest_obj = VMFile(provider=dest_provider, key=dest_key)
 
-                        dest_obj = AzureBlobObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
-                    elif dest_provider == "gcp":
-                        from skyplane.obj_store.gcs_interface import GCSObject
-
-                        dest_obj = GCSObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
-                    elif dest_provider == "cloudflare":
-                        from skyplane.obj_store.r2_interface import R2Object
-
-                        dest_obj = R2Object(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
                     else:
-                        raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
+                        # Bucket destination
+                        if dest_provider == "aws":
+                            from skyplane.obj_store.s3_interface import S3Object
+
+                            dest_obj = S3Object(
+                                provider=dest_provider,
+                                bucket=dst_iface.bucket(),
+                                key=dest_key,
+                            )
+                        elif dest_provider == "azure":
+                            from skyplane.obj_store.azure_blob_interface import (
+                                AzureBlobObject,
+                            )
+
+                            dest_obj = AzureBlobObject(
+                                provider=dest_provider,
+                                bucket=dst_iface.bucket(),
+                                key=dest_key,
+                            )
+                        elif dest_provider == "gcp":
+                            from skyplane.obj_store.gcs_interface import GCSObject
+
+                            dest_obj = GCSObject(
+                                provider=dest_provider,
+                                bucket=dst_iface.bucket(),
+                                key=dest_key,
+                            )
+                        elif dest_provider == "cloudflare":
+                            from skyplane.obj_store.r2_interface import R2Object
+
+                            dest_obj = R2Object(
+                                provider=dest_provider,
+                                bucket=dst_iface.bucket(),
+                                key=dest_key,
+                            )
+
+                        else:
+                            raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
                     dest_objs[dst_iface.region_tag()] = dest_obj
 
                 # assert that all destinations share the same post-fix key
@@ -332,11 +400,15 @@ class Chunker:
         multipart_chunk_threads = []
 
         # start chunking threads
-        if self.transfer_config.multipart_enabled:
+        if self.transfer_config.multipart_enabled and not isinstance(self.dst_ifaces[0], VMInterface):
             for _ in range(self.concurrent_multipart_chunk_threads):
                 t = threading.Thread(
                     target=self._run_multipart_chunk_thread,
-                    args=(multipart_exit_event, multipart_send_queue, multipart_chunk_queue),
+                    args=(
+                        multipart_exit_event,
+                        multipart_send_queue,
+                        multipart_chunk_queue,
+                    ),
                     daemon=False,
                 )
                 t.start()
@@ -346,7 +418,11 @@ class Chunker:
         for transfer_pair in transfer_pair_generator:
             # print("transfer_pair", transfer_pair.src_obj.key, transfer_pair.dst_objs)
             src_obj = transfer_pair.src_obj
-            if self.transfer_config.multipart_enabled and src_obj.size > self.transfer_config.multipart_threshold_mb * MB:
+            if (
+                self.transfer_config.multipart_enabled
+                and not isinstance(self.dst_ifaces[0], VMInterface)
+                and src_obj.size > self.transfer_config.multipart_threshold_mb * MB
+            ):
                 multipart_send_queue.put(transfer_pair)
             else:
                 if transfer_pair.src_obj.size == 0:
@@ -362,12 +438,12 @@ class Chunker:
                     )
                 )
 
-            if self.transfer_config.multipart_enabled:
+            if self.transfer_config.multipart_enabled and not isinstance(self.dst_ifaces[0], VMInterface):
                 # drain multipart chunk queue and yield with updated chunk IDs
                 while not multipart_chunk_queue.empty():
                     yield multipart_chunk_queue.get()
 
-        if self.transfer_config.multipart_enabled:
+        if self.transfer_config.multipart_enabled and not isinstance(self.dst_ifaces[0], VMInterface):
             # wait for processing multipart requests to finish
             logger.fs.debug("Waiting for multipart threads to finish")
             # while not multipart_send_queue.empty():
@@ -617,14 +693,15 @@ class CopyJob(TransferJob):
         gen_transfer_list = chunker.tail_generator(transfer_pair_generator, self.transfer_list)
         chunks = chunker.chunk(gen_transfer_list)
         batches = chunker.batch_generator(
-            chunker.prefetch_generator(chunks, buffer_size=dispatch_batch_size * 32), batch_size=dispatch_batch_size
+            chunker.prefetch_generator(chunks, buffer_size=dispatch_batch_size * 32),
+            batch_size=dispatch_batch_size,
         )
 
         # dispatch chunk requests
         src_gateways = dataplane.source_gateways()
         queue_size = [0] * len(src_gateways)
         n_multiparts = 0
-        start = time.time()
+        time.time()
 
         for batch in batches:
             # send upload_id mappings to sink gateways
@@ -708,7 +785,12 @@ class CopyJob(TransferJob):
                 for req in batch:
                     logger.fs.debug(f"Finalize upload id {req['upload_id']} for key {req['key']}")
                     retry_backoff(
-                        partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"], req["metadata"]),
+                        partial(
+                            obj_store_interface.complete_multipart_upload,
+                            req["key"],
+                            req["upload_id"],
+                            req["metadata"],
+                        ),
                         initial_backoff=0.5,
                     )
 
@@ -766,7 +848,13 @@ class CopyJob(TransferJob):
 class SyncJob(CopyJob):
     """sync job that copies the source objects that does not exist in the destination bucket to the destination"""
 
-    def __init__(self, src_path: str, dst_paths: List[str] or str, requester_pays: bool = False, job_id: Optional[str] = None):
+    def __init__(
+        self,
+        src_path: str,
+        dst_paths: List[str] or str,
+        requester_pays: bool = False,
+        job_id: Optional[str] = None,
+    ):
         super().__init__(src_path, dst_paths, True, requester_pays, job_id)
         self.transfer_list = []
         self.multipart_transfer_list = []
@@ -803,7 +891,9 @@ class SyncJob(CopyJob):
                 )
 
     def _enrich_dest_objs(
-        self, transfer_pairs: Generator[TransferPair, None, None], dest_prefixes: List[str]
+        self,
+        transfer_pairs: Generator[TransferPair, None, None],
+        dest_prefixes: List[str],
     ) -> Generator[Tuple[ObjectStoreObject, ObjectStoreObject], None, None]:
         """
         For skyplane sync, we enrich dest obj metadata with our existing dest obj metadata from the dest bucket following a query.

@@ -145,5 +145,11 @@ if __name__ == "__main__":
     parser.add_argument("--multipart", action="store_true")
     args = parser.parse_args()
 
-    return_code = run(args.src, args.dest, n_files=args.n_files, file_size_mb=args.file_size_mb, multipart=args.multipart)
+    return_code = run(
+        args.src,
+        args.dest,
+        n_files=args.n_files,
+        file_size_mb=args.file_size_mb,
+        multipart=args.multipart,
+    )
     exit(return_code)

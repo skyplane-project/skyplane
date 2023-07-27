@@ -1,5 +1,3 @@
-import functools
-from pprint import pprint
 import json
 import time
 from abc import ABC
@@ -81,7 +79,13 @@ class EmptyTransferHook(TransferHook):
 class TransferProgressTracker(Thread):
     """Tracks transfer progress in one tranfer session"""
 
-    def __init__(self, dataplane, jobs: List["TransferJob"], transfer_config: TransferConfig, hooks: TransferHook):
+    def __init__(
+        self,
+        dataplane,
+        jobs: List["TransferJob"],
+        transfer_config: TransferConfig,
+        hooks: TransferHook,
+    ):
         """
         :param dataplane: dataplane that starts the transfer
         :type dataplane: Dataplane
@@ -192,7 +196,12 @@ class TransferProgressTracker(Thread):
                     raise err
                 except Exception as e:
                     UsageClient.log_exception(
-                        "monitor transfer", e, args, self.dataplane.topology.src_region_tag, dst_region, session_start_timestamp_ms
+                        "monitor transfer",
+                        e,
+                        args,
+                        self.dataplane.topology.src_region_tag,
+                        dst_region,
+                        session_start_timestamp_ms,
                     )
                     raise e
                 end_time = time.time()
@@ -221,7 +230,7 @@ class TransferProgressTracker(Thread):
             }
             self.hooks.on_transfer_end()
 
-            start_time = int(time.time())
+            int(time.time())
             try:
                 for job in self.jobs.values():
                     logger.fs.debug(f"[TransferProgressTracker] Finalizing job {job.uuid}")
@@ -236,7 +245,7 @@ class TransferProgressTracker(Thread):
                     session_start_timestamp_ms,
                 )
                 raise e
-            end_time = int(time.time())
+            int(time.time())
 
             # verify transfer
             try:
@@ -262,7 +271,10 @@ class TransferProgressTracker(Thread):
                 self.dataplane.topology.dest_region_tags,
                 session_start_timestamp_ms,
             )
-            print_stats_completed(total_runtime_s=transfer_stats["total_runtime_s"], throughput_gbits=transfer_stats["throughput_gbits"])
+            print_stats_completed(
+                total_runtime_s=transfer_stats["total_runtime_s"],
+                throughput_gbits=transfer_stats["throughput_gbits"],
+            )
 
     @imports.inject("pandas")
     def monitor_transfer(pd, self, region_tag):
@@ -275,7 +287,11 @@ class TransferProgressTracker(Thread):
 
         while any([len(self.job_pending_chunk_ids[job_uuid][region_tag]) > 0 for job_uuid in self.job_pending_chunk_ids]):
             # refresh shutdown status by running noop
-            do_parallel(lambda i: i.run_command("echo 1"), self.dataplane.bound_nodes.values(), n=8)
+            do_parallel(
+                lambda i: i.run_command("echo 1"),
+                self.dataplane.bound_nodes.values(),
+                n=8,
+            )
 
             # check for errors and exit if there are any (while setting debug flags)
             errors = self.dataplane.check_error_logs()

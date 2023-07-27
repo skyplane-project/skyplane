@@ -1,6 +1,11 @@
 import cvxpy as cp  # type: ignore
 
-from skyplane.planner.solver import ThroughputSolver, ThroughputProblem, GBIT_PER_GBYTE, ThroughputSolution
+from skyplane.planner.solver import (
+    ThroughputSolver,
+    ThroughputProblem,
+    GBIT_PER_GBYTE,
+    ThroughputSolution,
+)
 
 
 class ThroughputSolverILP(ThroughputSolver):
@@ -12,7 +17,13 @@ class ThroughputSolverILP(ThroughputSolver):
             if package in installed:
                 return getattr(cp, package)
 
-    def solve_min_cost(self, p: ThroughputProblem, solver=cp.GLPK, solver_verbose=False, save_lp_path=None) -> ThroughputSolution:
+    def solve_min_cost(
+        self,
+        p: ThroughputProblem,
+        solver=cp.GLPK,
+        solver_verbose=False,
+        save_lp_path=None,
+    ) -> ThroughputSolution:
         regions = self.get_regions()
         sources = [regions.index(p.src)]
         sinks = [regions.index(p.dst)]
@@ -94,7 +105,13 @@ class ThroughputSolverILP(ThroughputSolver):
                 solver_options["ResultFile"] = str(save_lp_path)
             if not solver_verbose:
                 solver_options["OutputFlag"] = 0
-            prob.solve(verbose=solver_verbose, qcp=True, solver=cp.GUROBI, reoptimize=True, **solver_options)
+            prob.solve(
+                verbose=solver_verbose,
+                qcp=True,
+                solver=cp.GUROBI,
+                reoptimize=True,
+                **solver_options,
+            )
         elif solver == cp.CBC or solver == "cbc":
             solver_options = {}
             solver_options["maximumSeconds"] = 60
@@ -103,7 +120,11 @@ class ThroughputSolverILP(ThroughputSolver):
         else:
             prob.solve(solver=solver, verbose=solver_verbose)
 
-        baseline_throughput, baseline_egress_cost, baseline_instance_cost = self.get_baseline_throughput_and_cost(p)
+        (
+            baseline_throughput,
+            baseline_egress_cost,
+            baseline_instance_cost,
+        ) = self.get_baseline_throughput_and_cost(p)
         if prob.status == "optimal":
             return ThroughputSolution(
                 problem=p,

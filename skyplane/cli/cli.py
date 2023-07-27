@@ -38,7 +38,10 @@ app.add_typer(skyplane.cli.cli_config.app, name="config")
 @app.command()
 def deprovision(
     all: bool = typer.Option(False, "--all", "-a", help="Deprovision all resources including networks."),
-    filter_client_id: Optional[str] = typer.Option(None, help="Only deprovision instances with this client ID under the instance tag."),
+    filter_client_id: Optional[str] = typer.Option(
+        None,
+        help="Only deprovision instances with this client ID under the instance tag.",
+    ),
 ):
     """Deprovision all resources created by skyplane."""
     instances = query_instances()
@@ -47,7 +50,13 @@ def deprovision(
 
     if instances:
         typer.secho(f"Deprovisioning {len(instances)} instances", fg="yellow", bold=True)
-        do_parallel(lambda instance: instance.terminate_instance(), instances, desc="Deprovisioning", spinner=True, spinner_persist=True)
+        do_parallel(
+            lambda instance: instance.terminate_instance(),
+            instances,
+            desc="Deprovisioning",
+            spinner=True,
+            spinner_persist=True,
+        )
     else:
         typer.secho("No instances to deprovision", fg="yellow", bold=True)
 
@@ -78,7 +87,11 @@ def ssh():
     typer.secho("Select an instance:", fg="yellow", bold=True)
     for i, choice in enumerate(choices):
         typer.secho(f"{i+1}) {choice}", fg="yellow")
-    choice = IntPrompt.ask("Enter an instance number", choices=list([str(i) for i in range(1, len(choices) + 1)]), show_choices=False)
+    choice = IntPrompt.ask(
+        "Enter an instance number",
+        choices=list([str(i) for i in range(1, len(choices) + 1)]),
+        show_choices=False,
+    )
     instance = instance_map[choices[choice - 1]]
 
     # ssh

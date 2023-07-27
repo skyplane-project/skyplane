@@ -9,7 +9,7 @@ import sys
 from multiprocessing import Event, Queue
 from os import PathLike
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from skyplane.utils import logger
 
@@ -20,6 +20,7 @@ from skyplane.gateway.operators.gateway_operator import (
     GatewaySender,
     GatewayRandomDataGen,
     GatewayWriteLocal,
+    GatewayLocalReadOperator,
     GatewayObjStoreReadOperator,
     GatewayObjStoreWriteOperator,
     GatewayWaitReceiver,
@@ -112,7 +113,12 @@ class GatewayDaemon:
         def print_operator_graph_helper(partition, queue: GatewayQueue, prefix: str):
             if queue is None:
                 return
-            print(f"{prefix} {partition}: Input queue:", queue, "handles:", queue.get_handles())
+            print(
+                f"{prefix} {partition}: Input queue:",
+                queue,
+                "handles:",
+                queue.get_handles(),
+            )
             for handle in queue.get_handles():
                 print(f"{prefix} {partition}: Operator {handle}")
                 # TODO: causes error sometimes for mux_or
@@ -132,7 +138,11 @@ class GatewayDaemon:
             # create output data queue
             if len(operator["children"]) == 0:
                 return None
-            print("get output queue", operator["op_type"], operator["children"][0]["op_type"])
+            print(
+                "get output queue",
+                operator["op_type"],
+                operator["children"][0]["op_type"],
+            )
             if operator["children"][0]["op_type"] == "mux_and":
                 return GatewayANDQueue()
             return GatewayQueue()
@@ -161,7 +171,11 @@ class GatewayDaemon:
                     ), f"Parent must have been mux_and {handle}, instead was {input_queue} {gateway_program}"
 
                     # recurse to children with single queue
-                    total_p += create_gateway_operators_helper(input_queue.get_handle_queue(handle), child_operators, partition_ids)
+                    total_p += create_gateway_operators_helper(
+                        input_queue.get_handle_queue(handle),
+                        child_operators,
+                        partition_ids,
+                    )
                     continue
 
                 # create output data queue
@@ -192,6 +206,19 @@ class GatewayDaemon:
                         error_queue=self.error_queue,
                     )
                     total_p += 1
+                elif op["op_type"] == "read_local":
+                    # TODO: add support for this
+                    operators[handle] = GatewayLocalReadOperator(
+                        handle=handle,
+                        region=self.region,
+                        input_queue=input_queue,
+                        output_queue=output_queue,
+                        error_queue=self.error_queue,
+                        error_event=self.error_event,
+                        chunk_store=self.chunk_store,
+                        path=op["path"],
+                    )
+                    total_p += 1  # ?
                 elif op["op_type"] == "read_object_store":
                     operators[handle] = GatewayObjStoreReadOperator(
                         handle=handle,
@@ -221,7 +248,12 @@ class GatewayDaemon:
                     # TODO: handle private ips for GCP->GCP
                     target_gateway_info = self.gateway_info[op["target_gateway_id"]]
                     ip_addr = target_gateway_info["private_ip_address"] if op["private_ip"] else target_gateway_info["public_ip_address"]
-                    print("Gateway sender sending to ", ip_addr, "private", op["private_ip"])
+                    print(
+                        "Gateway sender sending to ",
+                        ip_addr,
+                        "private",
+                        op["private_ip"],
+                    )
                     operators[handle] = GatewaySender(
                         handle,
                         region=self.region,
@@ -262,6 +294,7 @@ class GatewayDaemon:
                         error_queue=self.error_queue,
                         error_event=self.error_event,
                         chunk_store=self.chunk_store,
+                        path=op["path"],
                     )
                     total_p += 1
                 else:
@@ -344,7 +377,12 @@ class GatewayDaemon:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Skyplane Gateway Daemon")
     parser.add_argument("--region", type=str, required=True, help="Region tag (provider:region")
-    parser.add_argument("--chunk-dir", type=Path, default="/tmp/skyplane/chunks", help="Directory to store chunks")
+    parser.add_argument(
+        "--chunk-dir",
+        type=Path,
+        default="/tmp/skyplane/chunks",
+        help="Directory to store chunks",
+    )
     parser.add_argument("--disable-tls", action="store_true")
     parser.add_argument("--use-compression", action="store_true")  # TODO: remove
     parser.add_argument("--disable-e2ee", action="store_true")  # TODO: remove
