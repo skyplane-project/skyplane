@@ -18,8 +18,8 @@ project = "Skyplane"
 copyright = "2022, The Skyplane authors"
 author = "The Skyplane authors"
 
-release = "0.2"
-version = "0.2.1"
+release = "0.3"
+version = "0.3.2"
 
 # -- General configuration
 
@@ -60,7 +60,7 @@ autodoc_default_options = {
     # Make sure that any autodoc declarations show the right members
     "members": True,
     "inherited-members": True,
-    "private-members": True,
+    "private-members": False,
     "show-inheritance": True,
 }
 autosummary_generate = True  # Make _autosummary files and include them

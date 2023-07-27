@@ -98,14 +98,7 @@ class Pipeline:
         topo = self.planner.plan(self.jobs_to_dispatch)
 
         # create dataplane from plan
-        dp = Dataplane(
-            self.clientid,
-            topo,
-            self.provisioner,
-            self.transfer_config,
-            str(self.transfer_dir),
-            debug=debug,
-        )
+        dp = Dataplane(self.clientid, topo, self.provisioner, self.transfer_config, str(self.transfer_dir), debug=debug)
         return dp
 
     def start(self, debug=False, progress=False):
@@ -120,10 +113,7 @@ class Pipeline:
             if progress:
                 from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 
-                tracker = dp.run_async(
-                    self.jobs_to_dispatch,
-                    hooks=ProgressBarTransferHook(dp.topology.dest_region_tags),
-                )
+                tracker = dp.run_async(self.jobs_to_dispatch, hooks=ProgressBarTransferHook(dp.topology.dest_region_tags))
             else:
                 tracker = dp.run_async(self.jobs_to_dispatch)
 

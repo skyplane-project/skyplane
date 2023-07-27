@@ -100,10 +100,7 @@ class Dataplane:
         for gateway_id, n_conn in self.topology.get_outgoing_paths(gateway_node.gateway_id).items():
             node = self.topology.get_gateway(gateway_id)
             # use private ips for gcp to gcp connection
-            src_provider, dst_provider = (
-                gateway_node.region.split(":")[0],
-                node.region.split(":")[0],
-            )
+            src_provider, dst_provider = gateway_node.region.split(":")[0], node.region.split(":")[0]
             if src_provider == dst_provider and src_provider == "gcp":
                 setup_args[self.bound_nodes[node].private_ip()] = n_conn
             else:
@@ -183,12 +180,7 @@ class Dataplane:
                     )
 
             # initialize clouds
-            self.provisioner.init_global(
-                aws=is_aws_used,
-                azure=is_azure_used,
-                gcp=is_gcp_used,
-                ibmcloud=is_ibmcloud_used,
-            )
+            self.provisioner.init_global(aws=is_aws_used, azure=is_azure_used, gcp=is_gcp_used, ibmcloud=is_ibmcloud_used)
 
             # provision VMs
             uuids = self.provisioner.provision(
@@ -218,11 +210,7 @@ class Dataplane:
                 self.bound_nodes[node] = instance
 
                 # set ip addresses (for gateway program generation)
-                self.topology.set_ip_addresses(
-                    node.gateway_id,
-                    self.bound_nodes[node].private_ip(),
-                    self.bound_nodes[node].public_ip(),
-                )
+                self.topology.set_ip_addresses(node.gateway_id, self.bound_nodes[node].private_ip(), self.bound_nodes[node].public_ip())
 
             logger.fs.debug(f"[Dataplane.provision] bound_nodes = {self.bound_nodes}")
             gateway_bound_nodes = self.bound_nodes.copy()
@@ -249,26 +237,11 @@ class Dataplane:
         jobs = []
         for node, server in gateway_bound_nodes.items():
             jobs.append(
-                partial(
-                    self._start_gateway,
-                    gateway_docker_image,
-                    node,
-                    server,
-                    gateway_program_dir,
-                    authorize_ssh_pub_key,
-                    e2ee_key_bytes,
-                )
+                partial(self._start_gateway, gateway_docker_image, node, server, gateway_program_dir, authorize_ssh_pub_key, e2ee_key_bytes)
             )
         logger.fs.debug(f"[Dataplane.provision] Starting gateways on {len(jobs)} servers")
         try:
-            do_parallel(
-                lambda fn: fn(),
-                jobs,
-                n=-1,
-                spinner=spinner,
-                spinner_persist=spinner,
-                desc="Starting gateway container on VMs",
-            )
+            do_parallel(lambda fn: fn(), jobs, n=-1, spinner=spinner, spinner_persist=spinner, desc="Starting gateway container on VMs")
         except Exception:
             self.copy_gateway_logs()
             raise GatewayContainerStartException(f"Error starting gateways. Please check gateway logs {self.transfer_dir}")

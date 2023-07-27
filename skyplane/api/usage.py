@@ -354,14 +354,7 @@ class UsageClient:
         prom_labels = {"type": type, "environment": "api"}
         headers = {"Content-type": "application/json"}
         data.sent_time_ms = int(time.time() * 1000)
-        payload = {
-            "streams": [
-                {
-                    "stream": prom_labels,
-                    "values": [[str(_get_current_timestamp_ns()), json.dumps(asdict(data))]],
-                }
-            ]
-        }
+        payload = {"streams": [{"stream": prom_labels, "values": [[str(_get_current_timestamp_ns()), json.dumps(asdict(data))]]}]}
         payload = json.dumps(payload)
         r = requests.post(LOKI_URL, headers=headers, data=payload, timeout=0.5)
 

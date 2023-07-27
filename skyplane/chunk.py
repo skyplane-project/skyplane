@@ -26,13 +26,7 @@ class Chunk:
     part_number: Optional[int] = None
     upload_id: Optional[str] = None  # TODO: for broadcast, this is not used
 
-    def to_wire_header(
-        self,
-        n_chunks_left_on_socket: int,
-        wire_length: int,
-        raw_wire_length: int,
-        is_compressed: bool = False,
-    ):
+    def to_wire_header(self, n_chunks_left_on_socket: int, wire_length: int, raw_wire_length: int, is_compressed: bool = False):
         return WireProtocolHeader(
             chunk_id=self.chunk_id,
             data_len=wire_length,
