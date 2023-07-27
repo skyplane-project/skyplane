@@ -89,12 +89,7 @@ class ServerState(Enum):
 class Server:
     """Abstract server class to support basic SSH operations"""
 
-    def __init__(
-        self,
-        region_tag,
-        log_dir=None,
-        auto_shutdown_timeout_minutes: Optional[int] = None,
-    ):
+    def __init__(self, region_tag, log_dir=None, auto_shutdown_timeout_minutes: Optional[int] = None):
         self.region_tag = region_tag  # format provider:region
         self.auto_shutdown_timeout_minutes = auto_shutdown_timeout_minutes
         self.command_log = []
@@ -216,12 +211,7 @@ class Server:
             return False
 
         try:
-            wait_for(
-                is_up,
-                timeout=timeout,
-                interval=interval,
-                desc=f"Waiting for {self.uuid()} to be ready",
-            )
+            wait_for(is_up, timeout=timeout, interval=interval, desc=f"Waiting for {self.uuid()} to be ready")
         except TimeoutError:
             logger.error(f"Gateway {self.uuid()} is not ready after {timeout} seconds, run `skyplane deprovision` to clean up resources")
             raise TimeoutError(f"{self.uuid()} is not ready after {timeout} seconds")
@@ -250,10 +240,7 @@ class Server:
             if self.auto_shutdown_timeout_minutes:
                 command = f"(nohup /tmp/autoshutdown.sh {self.auto_shutdown_timeout_minutes} &> /dev/null < /dev/null); {command}"
             _, stdout, stderr = client.exec_command(command)
-            stdout, stderr = (
-                stdout.read().decode("utf-8"),
-                stderr.read().decode("utf-8"),
-            )
+            stdout, stderr = (stdout.read().decode("utf-8"), stderr.read().decode("utf-8"))
         self.add_command_log(command=command, stdout=stdout, stderr=stderr, runtime=t.elapsed)
         return stdout, stderr
 
@@ -336,10 +323,7 @@ class Server:
 
         # pull docker image and start container
         with Timer() as t:
-            retry_backoff(
-                partial(self.pull_docker, gateway_docker_image),
-                exception_class=RuntimeError,
-            )
+            retry_backoff(partial(self.pull_docker, gateway_docker_image), exception_class=RuntimeError)
 
         logger.fs.debug(f"{desc_prefix} docker pull in {t.elapsed}")
         logger.fs.debug(f"{desc_prefix}: Starting gateway container")
@@ -417,12 +401,7 @@ class Server:
 
         try:
             logging.disable(logging.CRITICAL)
-            wait_for(
-                is_api_ready,
-                timeout=30,
-                interval=0.1,
-                desc=f"Waiting for gateway {self.uuid()} to start",
-            )
+            wait_for(is_api_ready, timeout=30, interval=0.1, desc=f"Waiting for gateway {self.uuid()} to start")
         except TimeoutError as e:
             logger.fs.error(f"Gateway {self.instance_name()} is not ready {e}")
             logger.fs.warning(desc_prefix + " gateway launch command: " + docker_launch_cmd)

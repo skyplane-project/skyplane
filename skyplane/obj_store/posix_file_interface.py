@@ -4,10 +4,7 @@ import sys
 from dataclasses import dataclass
 from typing import Any, Iterator, List, Optional
 from skyplane.exceptions import NoSuchObjectException
-from skyplane.obj_store.object_store_interface import (
-    ObjectStoreInterface,
-    ObjectStoreObject,
-)
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 import mimetypes
 
 
@@ -97,13 +94,7 @@ class POSIXInterface(ObjectStoreInterface):
         return True
 
     def download_object(
-        self,
-        src_object_name,
-        dst_file_path,
-        offset_bytes=None,
-        size_bytes=None,
-        write_at_offset=False,
-        generate_md5: bool = False,
+        self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5: bool = False
     ):
         """Downloads the object to the destination file path."""
         if not self.exists(src_object_name):

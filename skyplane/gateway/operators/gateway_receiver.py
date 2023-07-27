@@ -175,10 +175,7 @@ class GatewayReceiver:
                     to_write = bytearray(socket_data_len)
                     to_write_view = memoryview(to_write)
                     while socket_data_len > 0:
-                        nbytes = conn.recv_into(
-                            to_write_view[chunk_received_size:],
-                            min(socket_data_len, self.recv_block_size),
-                        )
+                        nbytes = conn.recv_into(to_write_view[chunk_received_size:], min(socket_data_len, self.recv_block_size))
                         socket_data_len -= nbytes
                         chunk_received_size += nbytes
                         self.socket_profiler_event_queue.put(

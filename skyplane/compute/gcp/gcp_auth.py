@@ -205,11 +205,7 @@ class GCPAuthentication:
                 service.projects()
                 .serviceAccounts()
                 .create(
-                    name="projects/" + self.project_id,
-                    body={
-                        "accountId": service_name,
-                        "serviceAccount": {"displayName": service_name},
-                    },
+                    name="projects/" + self.project_id, body={"accountId": service_name, "serviceAccount": {"displayName": service_name}}
                 )
                 .execute()
             )
@@ -254,12 +250,7 @@ class GCPAuthentication:
 
     @imports.inject("googleapiclient.discovery", pip_extra="gcp")
     def get_gcp_client(discovery, self, service_name="compute", version="v1"):
-        return discovery.build(
-            service_name,
-            version,
-            credentials=self.credentials,
-            client_options={"quota_project_id": self.project_id},
-        )
+        return discovery.build(service_name, version, credentials=self.credentials, client_options={"quota_project_id": self.project_id})
 
     @imports.inject("google.cloud.storage", pip_extra="gcp")
     def get_storage_client(storage, self):

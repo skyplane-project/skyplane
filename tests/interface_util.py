@@ -9,13 +9,7 @@ from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils.fn import wait_for
 
 
-def interface_test_framework(
-    region,
-    bucket,
-    multipart: bool,
-    test_delete_bucket: bool = False,
-    file_size_mb: int = 1,
-):
+def interface_test_framework(region, bucket, multipart: bool, test_delete_bucket: bool = False, file_size_mb: int = 1):
     interface = ObjectStoreInterface.create(region, bucket)
     interface.create_bucket(region.split(":")[1])
     time.sleep(5)

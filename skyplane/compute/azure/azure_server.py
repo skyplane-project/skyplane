@@ -19,14 +19,7 @@ class AzureServer(Server):
     resource_group_name = "skyplane"
     resource_group_location = "westus2"
 
-    def __init__(
-        self,
-        name: str,
-        key_root: PathLike = key_root / "azure",
-        log_dir=None,
-        ssh_private_key=None,
-        assume_exists=True,
-    ):
+    def __init__(self, name: str, key_root: PathLike = key_root / "azure", log_dir=None, ssh_private_key=None, assume_exists=True):
         self.auth = AzureAuthentication()
         self.name = name
         self.location = None
@@ -166,9 +159,7 @@ class AzureServer(Server):
         _ = nic_poller.result()
         ip_poller = network_client.public_ip_addresses.begin_delete(AzureServer.resource_group_name, self.ip_name(self.name))
         subnet_poller = network_client.subnets.begin_delete(
-            AzureServer.resource_group_name,
-            self.vnet_name(self.name),
-            self.subnet_name(self.name),
+            AzureServer.resource_group_name, self.vnet_name(self.name), self.subnet_name(self.name)
         )
         _ = ip_poller.result()
         _ = subnet_poller.result()

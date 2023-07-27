@@ -4,31 +4,15 @@ from tests.interface_util import interface_test_framework
 
 
 def test_gcs_singlepart():
-    assert interface_test_framework(
-        "gcp:us-central1-a",
-        f"test-skyplane-{uuid.uuid4()}",
-        False,
-        test_delete_bucket=True,
-    )
+    assert interface_test_framework("gcp:us-central1-a", f"test-skyplane-{uuid.uuid4()}", False, test_delete_bucket=True)
 
 
 def test_gcs_singlepart_zero_bytes():
-    assert interface_test_framework(
-        "gcp:us-central1-a",
-        f"test-skyplane-{uuid.uuid4()}",
-        False,
-        test_delete_bucket=True,
-        file_size_mb=0,
-    )
+    assert interface_test_framework("gcp:us-central1-a", f"test-skyplane-{uuid.uuid4()}", False, test_delete_bucket=True, file_size_mb=0)
 
 
 def test_gcs_multipart():
-    assert interface_test_framework(
-        "gcp:us-central1-a",
-        f"test-skyplane-{uuid.uuid4()}",
-        True,
-        test_delete_bucket=True,
-    )
+    assert interface_test_framework("gcp:us-central1-a", f"test-skyplane-{uuid.uuid4()}", True, test_delete_bucket=True)
 
 
 def test_gcs_bucket_exists():

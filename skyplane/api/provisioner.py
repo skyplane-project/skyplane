@@ -80,20 +80,13 @@ class Provisioner:
 
     def _make_cloud_providers(self):
         self.aws = compute.AWSCloudProvider(
-            key_prefix=f"skyplane{'-'+self.host_uuid.replace('-', '') if self.host_uuid else ''}",
-            auth=self.aws_auth,
+            key_prefix=f"skyplane{'-'+self.host_uuid.replace('-', '') if self.host_uuid else ''}", auth=self.aws_auth
         )
         self.azure = compute.AzureCloudProvider(auth=self.azure_auth)
         self.gcp = compute.GCPCloudProvider(auth=self.gcp_auth)
         self.ibmcloud = compute.IBMCloudProvider(auth=self.ibmcloud_auth)
 
-    def init_global(
-        self,
-        aws: bool = True,
-        azure: bool = True,
-        gcp: bool = True,
-        ibmcloud: bool = True,
-    ):
+    def init_global(self, aws: bool = True, azure: bool = True, gcp: bool = True, ibmcloud: bool = True):
         """
         Initialize the global cloud providers by configuring with credentials
 
@@ -109,12 +102,7 @@ class Provisioner:
         logger.fs.info(f"[Provisioner.init_global] Initializing global resources for aws={aws}, azure={azure}, gcp={gcp}")
         jobs = []
         if aws:
-            jobs.append(
-                partial(
-                    self.aws.setup_global,
-                    attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess",
-                )
-            )
+            jobs.append(partial(self.aws.setup_global, attach_policy_arn="arn:aws:iam::aws:policy/AmazonS3FullAccess"))
         if azure:
             jobs.append(self.azure.create_ssh_key)
             jobs.append(self.azure.set_up_resource_group)
@@ -170,20 +158,10 @@ class Provisioner:
         with Timer() as t:
             if task.cloud_provider == "aws":
                 assert self.aws.auth.enabled(), "AWS credentials not configured"
-                server = self.aws.provision_instance(
-                    task.region,
-                    task.vm_type,
-                    use_spot_instances=task.spot,
-                    tags=task.tags,
-                )
+                server = self.aws.provision_instance(task.region, task.vm_type, use_spot_instances=task.spot, tags=task.tags)
             elif task.cloud_provider == "azure":
                 assert self.azure.auth.enabled(), "Azure credentials not configured"
-                server = self.azure.provision_instance(
-                    task.region,
-                    task.vm_type,
-                    use_spot_instances=task.spot,
-                    tags=task.tags,
-                )
+                server = self.azure.provision_instance(task.region, task.vm_type, use_spot_instances=task.spot, tags=task.tags)
             elif task.cloud_provider == "gcp":
                 assert self.gcp.auth.enabled(), "GCP credentials not configured"
                 server = self.gcp.provision_instance(
@@ -232,11 +210,7 @@ class Provisioner:
         # configure regions
         if aws_provisioned:
             do_parallel(
-                self.aws.setup_region,
-                list(set(aws_regions)),
-                spinner=spinner,
-                spinner_persist=False,
-                desc="Configuring AWS regions",
+                self.aws.setup_region, list(set(aws_regions)), spinner=spinner, spinner_persist=False, desc="Configuring AWS regions"
             )
             logger.fs.info(f"[Provisioner.provision] Configured AWS regions {aws_regions}")
 
@@ -296,12 +270,7 @@ class Provisioner:
 
         return [task.uuid for task in provision_tasks]
 
-    def deprovision(
-        self,
-        deauthorize_firewall: bool = True,
-        max_jobs: int = 64,
-        spinner: bool = False,
-    ):
+    def deprovision(self, deauthorize_firewall: bool = True, max_jobs: int = 64, spinner: bool = False):
         """Deprovision all nodes. Returns UUIDs of deprovisioned VMs.
 
         :param deauthorize_firewall: whether to remove authorization firewall to the remote gateways (default: True)
@@ -359,10 +328,5 @@ class Provisioner:
                 jobs.extend([partial(self.gcp.remove_gateway_rule, rule) for rule in self.gcp_firewall_rules])
                 logger.fs.info(f"[Provisioner.deprovision] Deauthorizing GCP gateways with firewalls: {self.gcp_firewall_rules}")
             do_parallel(
-                lambda fn: fn(),
-                jobs,
-                n=max_jobs,
-                spinner=spinner,
-                spinner_persist=False,
-                desc="Deauthorizing gateways from firewalls",
+                lambda fn: fn(), jobs, n=max_jobs, spinner=spinner, spinner_persist=False, desc="Deauthorizing gateways from firewalls"
             )

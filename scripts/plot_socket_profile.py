@@ -28,9 +28,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("profile_file", help="Path to the profile file")
     parser.add_argument(
-        "--plot_dir",
-        default=__root__ / "data" / "figures" / "socket_profiles",
-        help="Path to the directory where to save the plot",
+        "--plot_dir", default=__root__ / "data" / "figures" / "socket_profiles", help="Path to the directory where to save the plot"
     )
     args = parser.parse_args()
 

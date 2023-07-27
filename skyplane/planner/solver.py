@@ -26,14 +26,8 @@ class ThroughputProblem:
     const_cost_per_gb_grid: Optional[np.ndarray] = None  # if not set, load from profiles
     # provider bandwidth limits (egress, ingress)
     aws_instance_throughput_limit: Tuple[float, float] = (5, 10)
-    gcp_instance_throughput_limit: Tuple[float, float] = (
-        7,
-        16,
-    )  # limited to 12.5 gbps due to CPU limit
-    azure_instance_throughput_limit: Tuple[float, float] = (
-        16,
-        16,
-    )  # limited to 12.5 gbps due to CPU limit
+    gcp_instance_throughput_limit: Tuple[float, float] = (7, 16)  # limited to 12.5 gbps due to CPU limit
+    azure_instance_throughput_limit: Tuple[float, float] = (16, 16)  # limited to 12.5 gbps due to CPU limit
     # benchmarked_throughput_connections is the number of connections that the iperf3 throughput grid was run at,
     # we assume throughput is linear up to this connection limit
     benchmarked_throughput_connections = 64
@@ -180,14 +174,7 @@ class ThroughputSolver:
         for i, row in enumerate(data_grid):
             for j, col in enumerate(row):
                 if i > j:
-                    ax.text(
-                        j,
-                        i,
-                        round(col, 1),
-                        ha="center",
-                        va="center",
-                        color="white" if col < mean_point else "black",
-                    )
+                    ax.text(j, i, round(col, 1), ha="center", va="center", color="white" if col < mean_point else "black")
 
         fig.patch.set_facecolor("white")
         fig.subplots_adjust(hspace=0.6)
@@ -246,16 +233,7 @@ class ThroughputSolver:
 
     def to_replication_topology(self, solution: ThroughputSolution, scale_to_capacity=True) -> Tuple[TopologyPlan, float]:
         regions = self.get_regions()
-        Edge = namedtuple(
-            "Edge",
-            [
-                "src_region",
-                "src_instance_idx",
-                "dst_region",
-                "dst_instance_idx",
-                "connections",
-            ],
-        )
+        Edge = namedtuple("Edge", ["src_region", "src_instance_idx", "dst_region", "dst_instance_idx", "connections"])
 
         # check is feasible
         if not solution.is_feasible:
@@ -311,13 +289,7 @@ class ThroughputSolver:
                     connections_to_allocate = connections_to_allocate - partial_conn
                     if partial_conn > 0:
                         dst_edges.append(
-                            Edge(
-                                e.src_region,
-                                e.src_instance_idx,
-                                e.dst_region,
-                                dsts_instance_idx[e.dst_region],
-                                partial_conn,
-                            )
+                            Edge(e.src_region, e.src_instance_idx, e.dst_region, dsts_instance_idx[e.dst_region], partial_conn)
                         )
                         logger.fs.warning(
                             f"{e.src_region}:{e.src_instance_idx}:{dsts_instance_conn[e.dst_region]}c -> {e.dst_region}:{dsts_instance_idx[e.dst_region]}:{dsts_instance_conn[e.dst_region]}c (partial): {partial_conn}c of {connections_to_allocate}c remaining"
@@ -326,13 +298,7 @@ class ThroughputSolver:
                     dsts_instance_conn[e.dst_region] = 0
                 else:
                     dst_edges.append(
-                        Edge(
-                            e.src_region,
-                            e.src_instance_idx,
-                            e.dst_region,
-                            dsts_instance_idx[e.dst_region],
-                            connections_to_allocate,
-                        )
+                        Edge(e.src_region, e.src_instance_idx, e.dst_region, dsts_instance_idx[e.dst_region], connections_to_allocate)
                     )
                     logger.fs.warning(
                         f"{e.src_region}:{e.src_instance_idx}:{dsts_instance_conn[e.dst_region]}c -> {e.dst_region}:{dsts_instance_idx[e.dst_region]}:{dsts_instance_conn[e.dst_region]}c: {connections_to_allocate}c remaining"
@@ -371,18 +337,14 @@ class ThroughputSolver:
                 # connect source instances to source gateway
                 if e.src_region == solution.problem.src and ("src", e.src_region, e.src_instance_idx) not in obj_store_edges:
                     replication_topology.add_objstore_instance_edge(
-                        src_region=e.src_region,
-                        dest_region=e.src_region,
-                        dest_instance=e.src_instance_idx,
+                        src_region=e.src_region, dest_region=e.src_region, dest_instance=e.src_instance_idx
                     )
                     obj_store_edges.add(("src", e.src_region, e.src_instance_idx))
 
                 # connect destination instances to destination gateway
                 if e.dst_region == solution.problem.dst and ("dst", e.dst_region, e.dst_instance_idx) not in obj_store_edges:
                     replication_topology.add_instance_objstore_edge(
-                        src_region=e.dst_region,
-                        src_instance=e.dst_instance_idx,
-                        dest_region=e.dst_region,
+                        src_region=e.dst_region, src_instance=e.dst_instance_idx, dest_region=e.dst_region
                     )
                     obj_store_edges.add(("dst", e.dst_region, e.dst_instance_idx))
 

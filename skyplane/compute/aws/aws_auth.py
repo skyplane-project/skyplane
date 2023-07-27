@@ -7,12 +7,7 @@ from skyplane.utils import imports, fn, logger
 
 
 class AWSAuthentication:
-    def __init__(
-        self,
-        config: Optional[SkyplaneConfig] = None,
-        access_key: Optional[str] = None,
-        secret_key: Optional[str] = None,
-    ):
+    def __init__(self, config: Optional[SkyplaneConfig] = None, access_key: Optional[str] = None, secret_key: Optional[str] = None):
         """Loads AWS authentication details. If no access key is provided, it will try to load credentials using boto3"""
         if not config is None:
             self.config = config
@@ -42,10 +37,7 @@ class AWSAuthentication:
         quotas_client = self.get_boto3_client("service-quotas", region)
 
         name_to_quota = {}
-        for name, code in [
-            ("on_demand_standard_vcpus", "L-1216C47A"),
-            ("spot_standard_vcpus", "L-34B43A08"),
-        ]:
+        for name, code in [("on_demand_standard_vcpus", "L-1216C47A"), ("spot_standard_vcpus", "L-34B43A08")]:
             try:
                 retrieved_quota = quotas_client.get_service_quota(ServiceCode="ec2", QuotaCode=code)
                 name_to_quota[name] = int(retrieved_quota["Quota"]["Value"])
@@ -73,11 +65,7 @@ class AWSAuthentication:
             f.write("\n".join(region_list))
 
         quota_infos = fn.do_parallel(
-            self._get_ec2_vm_quota,
-            region_list,
-            return_args=False,
-            spinner=True,
-            desc="Retrieving EC2 Quota information",
+            self._get_ec2_vm_quota, region_list, return_args=False, spinner=True, desc="Retrieving EC2 Quota information"
         )
         region_infos = [dict(**info, **{"region_name": name}) for name, info in zip(region_list, quota_infos)]
         with aws_quota_path.open("w") as f:
@@ -113,18 +101,6 @@ class AWSAuthentication:
         return self.config.aws_enabled
 
     @imports.inject("boto3", pip_extra="aws")
-    def get_credentials(boto3, self):
-        cached_credential = None
-
-        if cached_credential is None:
-            session = boto3.Session()
-            credentials = session.get_credentials()
-            if credentials:
-                credentials = credentials.get_frozen_credentials()
-                cached_credential = (credentials.access_key, credentials.secret_key)
-        return cached_credential if cached_credential else (None, None)
-
-    @imports.inject("boto3", pip_extra="aws")
     def infer_credentials(boto3, self):
         # todo load temporary credentials from STS
         cached_credential = getattr(self.__cached_credentials, "boto3_credential", None)
@@ -140,11 +116,7 @@ class AWSAuthentication:
     @imports.inject("boto3", pip_extra="aws")
     def get_boto3_session(boto3, self, aws_region: Optional[str] = None):
         if self.config_mode == "manual":
-            return boto3.Session(
-                aws_access_key_id=self.access_key,
-                aws_secret_access_key=self.secret_key,
-                region_name=aws_region,
-            )
+            return boto3.Session(aws_access_key_id=self.access_key, aws_secret_access_key=self.secret_key, region_name=aws_region)
         else:
             return boto3.Session(region_name=aws_region)
 

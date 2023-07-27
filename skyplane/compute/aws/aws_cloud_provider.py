@@ -58,11 +58,7 @@ class AWSCloudProvider(CloudProvider):
             return []
         return [AWSServer(f"aws:{region}", i) for i in instance_ids]
 
-    def setup_global(
-        self,
-        iam_name: str = "skyplane_gateway",
-        attach_policy_arn: Optional[str] = None,
-    ):
+    def setup_global(self, iam_name: str = "skyplane_gateway", attach_policy_arn: Optional[str] = None):
         # Create IAM role if it doesn't exist and grant managed role if given.
         iam = self.auth.get_boto3_client("iam")
         try:
@@ -70,19 +66,9 @@ class AWSCloudProvider(CloudProvider):
         except iam.exceptions.NoSuchEntityException:
             doc = {
                 "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Principal": {"Service": "ec2.amazonaws.com"},
-                        "Action": "sts:AssumeRole",
-                    }
-                ],
+                "Statement": [{"Effect": "Allow", "Principal": {"Service": "ec2.amazonaws.com"}, "Action": "sts:AssumeRole"}],
             }
-            iam.create_role(
-                RoleName=iam_name,
-                AssumeRolePolicyDocument=json.dumps(doc),
-                Tags=[{"Key": "skyplane", "Value": "true"}],
-            )
+            iam.create_role(RoleName=iam_name, AssumeRolePolicyDocument=json.dumps(doc), Tags=[{"Key": "skyplane", "Value": "true"}])
         if attach_policy_arn:
             iam.attach_role_policy(RoleName=iam_name, PolicyArn=attach_policy_arn)
 
@@ -111,30 +97,12 @@ class AWSCloudProvider(CloudProvider):
             # delete the instance profile
             profile.delete()
 
-        vpcs = do_parallel(
-            self.network.get_vpcs,
-            self.region_list(),
-            desc="Querying VPCs",
-            spinner=True,
-        )
+        vpcs = do_parallel(self.network.get_vpcs, self.region_list(), desc="Querying VPCs", spinner=True)
         args = [(x[0], vpc.id) for x in vpcs for vpc in x[1]]
-        do_parallel(
-            lambda x: self.network.remove_sg_ips(*x),
-            args,
-            desc="Removing IPs from VPCs",
-            spinner=True,
-            spinner_persist=True,
-        )
+        do_parallel(lambda x: self.network.remove_sg_ips(*x), args, desc="Removing IPs from VPCs", spinner=True, spinner_persist=True)
         profiles = list_instance_profiles(prefix="skyplane-aws")
         if profiles:
-            do_parallel(
-                delete_instance_profile,
-                profiles,
-                desc="Deleting instance profiles",
-                spinner=True,
-                spinner_persist=True,
-                n=4,
-            )
+            do_parallel(delete_instance_profile, profiles, desc="Deleting instance profiles", spinner=True, spinner_persist=True, n=4)
 
     def add_ips_to_security_group(self, aws_region: str, ips: Optional[List[str]] = None):
         """Add IPs to security group. If security group ID is None, use group named skyplane (create if not exists). If ip is None, authorize all IPs."""
@@ -182,8 +150,7 @@ class AWSCloudProvider(CloudProvider):
             def instance_class_supported(az):
                 # describe_instance_type_offerings
                 offerings_list = ec2_client.describe_instance_type_offerings(
-                    LocationType="availability-zone",
-                    Filters=[{"Name": "location", "Values": [az]}],
+                    LocationType="availability-zone", Filters=[{"Name": "location", "Values": [az]}]
                 )
                 offerings = [o for o in offerings_list["InstanceTypeOfferings"] if o["InstanceType"] == instance_class]
                 return len(offerings) > 0
@@ -207,10 +174,7 @@ class AWSCloudProvider(CloudProvider):
 
             # wait for iam_role to be created and create instance profile
             wait_for(check_iam_role, timeout=60, interval=0.5)
-            iam.create_instance_profile(
-                InstanceProfileName=iam_instance_profile_name,
-                Tags=[{"Key": "skyplane", "Value": "true"}],
-            )
+            iam.create_instance_profile(InstanceProfileName=iam_instance_profile_name, Tags=[{"Key": "skyplane", "Value": "true"}])
             iam.add_role_to_instance_profile(InstanceProfileName=iam_instance_profile_name, RoleName=aws_iam_name)
             wait_for(check_instance_profile, timeout=60, interval=0.5)
 
@@ -234,11 +198,7 @@ class AWSCloudProvider(CloudProvider):
                     BlockDeviceMappings=[
                         {
                             "DeviceName": "/dev/sda1",
-                            "Ebs": {
-                                "DeleteOnTermination": True,
-                                "VolumeSize": disk_size,
-                                "VolumeType": "gp2",
-                            },
+                            "Ebs": {"DeleteOnTermination": True, "VolumeSize": disk_size, "VolumeType": "gp2"},
                         }
                     ],
                     NetworkInterfaces=[

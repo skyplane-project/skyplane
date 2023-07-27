@@ -24,12 +24,7 @@ def run_quota_tests(tests):
             f.write(json.dumps(quota_limits, indent=2))
 
         transfer_config = TransferConfig()
-        planner = MulticastDirectPlanner(
-            n_instances=8,
-            n_connections=100,
-            transfer_config=transfer_config,
-            quota_limits_file=QUOTA_FILE,
-        )
+        planner = MulticastDirectPlanner(n_instances=8, n_connections=100, transfer_config=transfer_config, quota_limits_file=QUOTA_FILE)
 
         region_tags = [f"{p}:{REGIONS[p]}" for p in REGIONS.keys()]
         for i, src_region_tag in enumerate(region_tags):

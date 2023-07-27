@@ -22,10 +22,7 @@ class GatewayOperator:
         if len(self.children) == 0:
             return {**self.__dict__, **{"children": []}}
 
-        return {
-            **self.__dict__,
-            **{"children": [child.to_dict() for child in self.children]},
-        }
+        return {**self.__dict__, **{"children": [child.to_dict() for child in self.children]}}
 
     def to_json(self):
         return json.dumps(self.to_dict())
@@ -54,12 +51,7 @@ class GatewaySend(GatewayOperator):
 
 
 class GatewayReceive(GatewayOperator):
-    def __init__(
-        self,
-        decompress: bool = False,
-        decrypt: bool = False,
-        max_pending_chunks: int = 1000,
-    ):
+    def __init__(self, decompress: bool = False, decrypt: bool = False, max_pending_chunks: int = 1000):
         super().__init__("receive")
         self.decompress = decompress
         self.decrypt = decrypt
@@ -87,13 +79,7 @@ class GatewayReadLocal(GatewayOperator):
 
 
 class GatewayWriteObjectStore(GatewayOperator):
-    def __init__(
-        self,
-        bucket_name: str,
-        bucket_region: str,
-        num_connections: int = 32,
-        key_prefix: Optional[str] = "",
-    ):
+    def __init__(self, bucket_name: str, bucket_region: str, num_connections: int = 32, key_prefix: Optional[str] = ""):
         super().__init__("write_object_store")
         self.bucket_name = bucket_name
         self.bucket_region = bucket_region
@@ -133,12 +119,7 @@ class GatewayProgram:
     def get_operators(self) -> List[GatewayOperator]:
         return list(self._ops.values())
 
-    def add_operators(
-        self,
-        ops: List[GatewayOperator],
-        parent_handle: Optional[str] = None,
-        partition_id: Optional[str] = "default",
-    ):
+    def add_operators(self, ops: List[GatewayOperator], parent_handle: Optional[str] = None, partition_id: Optional[str] = "default"):
         parent_op = self._ops[parent_handle] if parent_handle else None
         ops_handles = []
         for op in ops:
@@ -146,12 +127,7 @@ class GatewayProgram:
 
         return ops_handles
 
-    def add_operator(
-        self,
-        op: GatewayOperator,
-        parent_handle: Optional[str] = None,
-        partition_id: Optional[str] = "default",
-    ):
+    def add_operator(self, op: GatewayOperator, parent_handle: Optional[str] = None, partition_id: Optional[str] = "default"):
         parent_op = self._ops[parent_handle] if parent_handle else None
         if not parent_op:  # root operation
             self._plan[partition_id].append(op)

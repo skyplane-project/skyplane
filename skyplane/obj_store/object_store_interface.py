@@ -38,13 +38,7 @@ class ObjectStoreInterface(StorageInterface):
         raise NotImplementedError()
 
     def download_object(
-        self,
-        src_object_name,
-        dst_file_path,
-        offset_bytes=None,
-        size_bytes=None,
-        write_at_offset=False,
-        generate_md5: bool = False,
+        self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5: bool = False
     ) -> Tuple[Optional[str], Optional[bytes]]:
         """
         Downloads an object from the bucket to a local file.

@@ -25,12 +25,8 @@ from skyplane.api.transfer_job import TransferJob
 import json
 
 from skyplane.utils.fn import do_parallel
-from skyplane.config_paths import (
-    config_path,
-    azure_standardDv5_quota_path,
-    aws_quota_path,
-    gcp_quota_path,
-)
+from skyplane.config_paths import config_path, azure_standardDv5_quota_path, aws_quota_path, gcp_quota_path
+
 from skyplane.config import SkyplaneConfig
 
 
@@ -123,9 +119,7 @@ class Planner:
 
         # Get the quota limit
         quota_limit = self._get_quota_limits_for(
-            cloud_provider=cloud_provider,
-            region=region,
-            spot=getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances"),
+            cloud_provider=cloud_provider, region=region, spot=getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances")
         )
 
         config_vm_type = getattr(self.transfer_config, f"{cloud_provider}_instance_class")
@@ -161,9 +155,7 @@ class Planner:
         return (vm_type, n_instances)
 
     def _get_vm_type_and_instances(
-        self,
-        src_region_tag: Optional[str] = None,
-        dst_region_tags: Optional[List[str]] = None,
+        self, src_region_tag: Optional[str] = None, dst_region_tags: Optional[List[str]] = None
     ) -> Tuple[Dict[str, str], int]:
         """Dynamically calculates the vm type each region can use (both the source region and all destination regions)
         based on their quota limits and calculates the number of vms to launch in all regions by conservatively
@@ -198,13 +190,7 @@ class Planner:
 
 class UnicastDirectPlanner(Planner):
     # DO NOT USE THIS - broken for single-region transfers
-    def __init__(
-        self,
-        n_instances: int,
-        n_connections: int,
-        transfer_config: TransferConfig,
-        quota_limits_file: Optional[str] = None,
-    ):
+    def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig, quota_limits_file: Optional[str] = None):
         super().__init__(transfer_config, quota_limits_file)
         self.n_instances = n_instances
         self.n_connections = n_connections
@@ -252,8 +238,7 @@ class UnicastDirectPlanner(Planner):
 
             # source region gateway program
             obj_store_read = src_program.add_operator(
-                GatewayReadObjectStore(src_bucket, src_region_tag, self.n_connections),
-                partition_id=partition_id,
+                GatewayReadObjectStore(src_bucket, src_region_tag, self.n_connections), partition_id=partition_id
             )
             mux_or = src_program.add_operator(GatewayMuxOr(), parent_handle=obj_store_read, partition_id=partition_id)
             for i in range(n_instances):
@@ -272,9 +257,7 @@ class UnicastDirectPlanner(Planner):
             # dst region gateway program
             recv_op = dst_program.add_operator(GatewayReceive(decompress=True, decrypt=True), partition_id=partition_id)
             dst_program.add_operator(
-                GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections),
-                parent_handle=recv_op,
-                partition_id=partition_id,
+                GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections), parent_handle=recv_op, partition_id=partition_id
             )
 
             # update cost per GB
@@ -288,13 +271,7 @@ class UnicastDirectPlanner(Planner):
 
 
 class MulticastDirectPlanner(Planner):
-    def __init__(
-        self,
-        n_instances: int,
-        n_connections: int,
-        transfer_config: TransferConfig,
-        quota_limits_file: Optional[str] = None,
-    ):
+    def __init__(self, n_instances: int, n_connections: int, transfer_config: TransferConfig, quota_limits_file: Optional[str] = None):
         super().__init__(transfer_config, quota_limits_file)
         self.n_instances = n_instances
         self.n_connections = n_connections
@@ -338,8 +315,7 @@ class MulticastDirectPlanner(Planner):
 
             # source region gateway program
             obj_store_read = src_program.add_operator(
-                GatewayReadObjectStore(src_bucket, src_region_tag, self.n_connections),
-                partition_id=partition_id,
+                GatewayReadObjectStore(src_bucket, src_region_tag, self.n_connections), partition_id=partition_id
             )
 
             # send to all destination
@@ -355,12 +331,7 @@ class MulticastDirectPlanner(Planner):
                 # special case where destination is same region as source
                 if dst_region_tag == src_region_tag:
                     src_program.add_operator(
-                        GatewayWriteObjectStore(
-                            dst_bucket,
-                            dst_region_tag,
-                            self.n_connections,
-                            key_prefix=dst_prefix,
-                        ),
+                        GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
                         parent_handle=mux_and,
                         partition_id=partition_id,
                     )
@@ -388,19 +359,11 @@ class MulticastDirectPlanner(Planner):
 
                 # each gateway also recieves data from source
                 recv_op = dst_program[dst_region_tag].add_operator(
-                    GatewayReceive(
-                        decompress=self.transfer_config.use_compression,
-                        decrypt=self.transfer_config.use_e2ee,
-                    ),
+                    GatewayReceive(decompress=self.transfer_config.use_compression, decrypt=self.transfer_config.use_e2ee),
                     partition_id=partition_id,
                 )
                 dst_program[dst_region_tag].add_operator(
-                    GatewayWriteObjectStore(
-                        dst_bucket,
-                        dst_region_tag,
-                        self.n_connections,
-                        key_prefix=dst_prefix,
-                    ),
+                    GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
                     parent_handle=recv_op,
                     partition_id=partition_id,
                 )

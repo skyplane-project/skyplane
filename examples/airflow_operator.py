@@ -36,18 +36,8 @@ class SkyplaneOperator(BaseOperator):
         super().__init__(task_id="skyplane_dag", *args, **kwargs)
 
     def execute(self, context):
-        client = SkyplaneClient(
-            aws_config=self.aws_config,
-            gcp_config=self.gcp_config,
-            azure_config=self.azure_config,
-        )
-        dp = client.dataplane(
-            self.src_provider,
-            self.src_region,
-            self.dst_provider,
-            self.dst_region,
-            n_vms=1,
-        )
+        client = SkyplaneClient(aws_config=self.aws_config, gcp_config=self.gcp_config, azure_config=self.azure_config)
+        dp = client.dataplane(self.src_provider, self.src_region, self.dst_provider, self.dst_region, n_vms=1)
         with dp.auto_deprovision():
             dp.provision()
 

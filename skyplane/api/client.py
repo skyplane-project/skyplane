@@ -14,13 +14,7 @@ from skyplane.utils.definitions import tmp_log_dir
 from skyplane.api.pipeline import Pipeline
 
 if TYPE_CHECKING:
-    from skyplane.api.config import (
-        AWSConfig,
-        AzureConfig,
-        GCPConfig,
-        TransferConfig,
-        IBMCloudConfig,
-    )
+    from skyplane.api.config import AWSConfig, AzureConfig, GCPConfig, TransferConfig, IBMCloudConfig
 
 
 class SkyplaneClient:
@@ -74,12 +68,7 @@ class SkyplaneClient:
             ibmcloud_auth=self.ibmcloud_auth,
         )
 
-    def pipeline(
-        self,
-        planning_algorithm: Optional[str] = "direct",
-        max_instances: Optional[int] = 1,
-        debug=False,
-    ):
+    def pipeline(self, planning_algorithm: Optional[str] = "direct", max_instances: Optional[int] = 1, debug=False):
         """Create a pipeline object to queue jobs"""
         return Pipeline(
             planning_algorithm=planning_algorithm,

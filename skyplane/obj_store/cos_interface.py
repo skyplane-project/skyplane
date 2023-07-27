@@ -8,10 +8,7 @@ from typing import Any, Iterator, List, Optional, Tuple
 from skyplane import exceptions
 from skyplane.compute.ibmcloud.ibmcloud_auth import IBMCloudAuthentication
 from skyplane.exceptions import NoSuchObjectException
-from skyplane.obj_store.object_store_interface import (
-    ObjectStoreInterface,
-    ObjectStoreObject,
-)
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.compute.ibmcloud.ibm_gen2.config import REGIONS
 from skyplane.utils import logger, imports
 
@@ -83,10 +80,7 @@ class COSInterface(ObjectStoreInterface):
             if aws_region == "us-east-1":
                 s3_client.create_bucket(Bucket=self.bucket_name)
             else:
-                s3_client.create_bucket(
-                    Bucket=self.bucket_name,
-                    CreateBucketConfiguration={"LocationConstraint": aws_region},
-                )
+                s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": aws_region})
 
     def delete_bucket(self):
         self._cos_client().delete_bucket(Bucket=self.bucket_name)
@@ -97,13 +91,7 @@ class COSInterface(ObjectStoreInterface):
         page_iterator = paginator.paginate(Bucket=self.bucket_name, Prefix=prefix, **requester_pays)
         for page in page_iterator:
             for obj in page.get("Contents", []):
-                yield COSObject(
-                    "cos",
-                    self.bucket_name,
-                    obj["Key"],
-                    obj["Size"],
-                    obj["LastModified"],
-                )
+                yield COSObject("cos", self.bucket_name, obj["Key"], obj["Size"], obj["LastModified"])
 
     def delete_objects(self, keys: List[str]):
         s3_client = self._cos_client()
@@ -178,14 +166,7 @@ class COSInterface(ObjectStoreInterface):
 
     @imports.inject("botocore.exceptions", pip_extra="ibmcloud")
     def upload_object(
-        botocore_exceptions,
-        self,
-        src_file_path,
-        dst_object_name,
-        part_number=None,
-        upload_id=None,
-        check_md5=None,
-        mime_type=None,
+        botocore_exceptions, self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None, mime_type=None
     ):
         dst_object_name, src_file_path = str(dst_object_name), str(src_file_path)
         s3_client = self._cos_client()
@@ -206,13 +187,7 @@ class COSInterface(ObjectStoreInterface):
                     )
                 else:
                     mime_args = dict(ContentType=mime_type) if mime_type else dict()
-                    s3_client.put_object(
-                        Body=f,
-                        Key=dst_object_name,
-                        Bucket=self.bucket_name,
-                        **checksum_args,
-                        **mime_args,
-                    )
+                    s3_client.put_object(Body=f, Key=dst_object_name, Bucket=self.bucket_name, **checksum_args, **mime_args)
         except botocore_exceptions.ClientError as e:
             # catch MD5 mismatch error and raise appropriate exception
             if "Error" in e.response and "Code" in e.response["Error"] and e.response["Error"]["Code"] == "InvalidDigest":
@@ -235,9 +210,7 @@ class COSInterface(ObjectStoreInterface):
         client = self._cos_client()
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
         response = client.create_multipart_upload(
-            Bucket=self.bucket_name,
-            Key=dst_object_name,
-            **(dict(ContentType=mime_type) if mime_type else dict()),
+            Bucket=self.bucket_name, Key=dst_object_name, **(dict(ContentType=mime_type) if mime_type else dict())
         )
         if "UploadId" in response:
             return response["UploadId"]
@@ -250,11 +223,7 @@ class COSInterface(ObjectStoreInterface):
         all_parts = []
         while True:
             response = cos_client.list_parts(
-                Bucket=self.bucket_name,
-                Key=dst_object_name,
-                MaxParts=100,
-                UploadId=upload_id,
-                PartNumberMarker=len(all_parts),
+                Bucket=self.bucket_name, Key=dst_object_name, MaxParts=100, UploadId=upload_id, PartNumberMarker=len(all_parts)
             )
             if "Parts" not in response:
                 break

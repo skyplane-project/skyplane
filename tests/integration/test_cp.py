@@ -102,12 +102,7 @@ def cloudflare_bucket():
 
 
 @pytest.mark.parametrize(  # tests large objects
-    "test_case, recursive",
-    [
-        (test_bucket_medium_file, True),
-        (test_bucket_large_file, False),
-        (test_bucket_small_file, True),
-    ],
+    "test_case, recursive", [(test_bucket_medium_file, True), (test_bucket_large_file, False), (test_bucket_small_file, True)]
 )
 def test_azure(azure_bucket, gcp_bucket, test_case, recursive):
     """
@@ -130,20 +125,11 @@ def test_azure(azure_bucket, gcp_bucket, test_case, recursive):
     assert len(dst_objects) > 0, f"Object {test_case} not copied to {azure_bucket.bucket()}: only container {dst_objects}"
 
     # copy back
-    client.copy(
-        f"{azure_bucket.path()}/{test_case}",
-        f"gs://{gcp_bucket.bucket()}/azure/",
-        recursive=recursive,
-    )
+    client.copy(f"{azure_bucket.path()}/{test_case}", f"gs://{gcp_bucket.bucket()}/azure/", recursive=recursive)
 
 
 @pytest.mark.parametrize(
-    "test_case, recursive",
-    [
-        (test_bucket_medium_file, True),
-        (test_bucket_large_file, False),
-        (test_bucket_small_file, True),
-    ],
+    "test_case, recursive", [(test_bucket_medium_file, True), (test_bucket_large_file, False), (test_bucket_small_file, True)]
 )
 def test_aws(aws_bucket, gcp_bucket, test_case, recursive):
     """
@@ -168,20 +154,11 @@ def test_aws(aws_bucket, gcp_bucket, test_case, recursive):
     assert len(dst_objects) > 0, f"Object {test_case} not copied to {aws_bucket.bucket()}: only container {dst_objects}"
 
     # copy back
-    client.copy(
-        f"{aws_bucket.path()}/{test_case}",
-        f"gs://{gcp_bucket.bucket()}/aws/",
-        recursive=recursive,
-    )
+    client.copy(f"{aws_bucket.path()}/{test_case}", f"gs://{gcp_bucket.bucket()}/aws/", recursive=recursive)
 
 
 @pytest.mark.parametrize(
-    "test_case, recursive",
-    [
-        (test_bucket_medium_file, True),
-        (test_bucket_large_file, False),
-        (test_bucket_small_file, True),
-    ],
+    "test_case, recursive", [(test_bucket_medium_file, True), (test_bucket_large_file, False), (test_bucket_small_file, True)]
 )
 def test_cloudflare(cloudflare_bucket, gcp_bucket, test_case, recursive):
     """
@@ -204,20 +181,11 @@ def test_cloudflare(cloudflare_bucket, gcp_bucket, test_case, recursive):
     assert len(dst_objects) > 0, f"Object {test_case} not copied to {cloudflare_bucket.bucket()}: only container {dst_objects}"
 
     # copy back
-    client.copy(
-        f"{cloudflare_bucket.path()}/{test_case}",
-        f"gs://{gcp_bucket.bucket()}/cloudflare/",
-        recursive=recursive,
-    )
+    client.copy(f"{cloudflare_bucket.path()}/{test_case}", f"gs://{gcp_bucket.bucket()}/cloudflare/", recursive=recursive)
 
 
 @pytest.mark.parametrize(
-    "test_case, recursive",
-    [
-        (test_bucket_medium_file, True),
-        (test_bucket_large_file, False),
-        (test_bucket_small_file, True),
-    ],
+    "test_case, recursive", [(test_bucket_medium_file, True), (test_bucket_large_file, False), (test_bucket_small_file, True)]
 )
 def test_gcp(gcp_bucket, test_case, recursive):
     """
@@ -291,7 +259,4 @@ def test_cp_multicast(aws_bucket, gcp_bucket, same_region_bucket):
     assert (
         len(list(src_iface.list_objects(prefix=test_bucket_large_file.replace(f"{test_bucket}/", "")))) > 0
     ), f"Test case {test_bucket_large_file} does not exist in {test_bucket}"
-    client.copy(
-        test_bucket_large_file,
-        [aws_bucket.path(), gcp_bucket.path(), same_region_bucket.path()],
-    )
+    client.copy(test_bucket_large_file, [aws_bucket.path(), gcp_bucket.path(), same_region_bucket.path()])

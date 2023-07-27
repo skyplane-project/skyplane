@@ -30,25 +30,15 @@ class IBMCloudProvider(CloudProvider):
     def region_list() -> List[str]:
         return REGIONS
 
-    def setup_global(
-        self,
-        iam_name: str = "skyplane_gateway",
-        attach_policy_arn: Optional[str] = None,
-    ):
+    def setup_global(self, iam_name: str = "skyplane_gateway", attach_policy_arn: Optional[str] = None):
         # Not sure this should execute something. We will create VPC per region
         pass
 
     def setup_region(self, region: str):
         # set up VPC per region? With net, subnets, floating ip, etc. ?
         ibm_vpc_config = {
-            "ibm": {
-                "iam_api_key": self.auth.iam_api_key,
-                "user_agent": self.auth.user_agent,
-            },
-            "ibm_gen2": {
-                "region": region,
-                "resource_group_id": self.auth.ibmcloud_resource_group_id,
-            },
+            "ibm": {"iam_api_key": self.auth.iam_api_key, "user_agent": self.auth.user_agent},
+            "ibm_gen2": {"region": region, "resource_group_id": self.auth.ibmcloud_resource_group_id},
         }
         load_config(ibm_vpc_config)
         ibm_vpc_backend = IBMVPCBackend(ibm_vpc_config["ibm_gen2"])

@@ -15,15 +15,7 @@ def open_log_file(filename):
     log_file = open(filename, "a")
 
 
-def log(
-    msg,
-    LEVEL="INFO",
-    color="white",
-    write_to_file=True,
-    write_to_stderr=True,
-    *args,
-    **kwargs,
-):
+def log(msg, LEVEL="INFO", color="white", write_to_file=True, write_to_stderr=True, *args, **kwargs):
     if args or kwargs:
         msg = msg.format(*args, **kwargs)
     level_prefix = ("[" + LEVEL.upper() + "]").ljust(7)
@@ -55,41 +47,11 @@ def exception(msg, print_traceback=True, write_to_file=False, *args, **kwargs):
 
 # define fs object to log to disk log
 fs = SimpleNamespace(
-    debug=partial(
-        log,
-        LEVEL="DEBUG",
-        color="cyan",
-        write_to_file=True,
-        write_to_stderr=is_gateway_env,
-    ),
-    info=partial(
-        log,
-        LEVEL="INFO",
-        color="white",
-        write_to_file=True,
-        write_to_stderr=is_gateway_env,
-    ),
-    warn=partial(
-        log,
-        LEVEL="WARN",
-        color="yellow",
-        write_to_file=True,
-        write_to_stderr=is_gateway_env,
-    ),
-    warning=partial(
-        log,
-        LEVEL="WARN",
-        color="yellow",
-        write_to_file=True,
-        write_to_stderr=is_gateway_env,
-    ),
-    error=partial(
-        log,
-        LEVEL="ERROR",
-        color="red",
-        write_to_file=True,
-        write_to_stderr=is_gateway_env,
-    ),
+    debug=partial(log, LEVEL="DEBUG", color="cyan", write_to_file=True, write_to_stderr=is_gateway_env),
+    info=partial(log, LEVEL="INFO", color="white", write_to_file=True, write_to_stderr=is_gateway_env),
+    warn=partial(log, LEVEL="WARN", color="yellow", write_to_file=True, write_to_stderr=is_gateway_env),
+    warning=partial(log, LEVEL="WARN", color="yellow", write_to_file=True, write_to_stderr=is_gateway_env),
+    error=partial(log, LEVEL="ERROR", color="red", write_to_file=True, write_to_stderr=is_gateway_env),
     exception=partial(exception, write_to_file=True, write_to_stderr=is_gateway_env),
     log=partial(log, write_to_file=True, write_to_stderr=is_gateway_env),
 )

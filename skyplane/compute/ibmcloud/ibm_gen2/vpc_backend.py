@@ -28,11 +28,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from skyplane.compute.ibmcloud.ibm_gen2.ssh_client import SSHClient
 from skyplane.compute.ibmcloud.ibm_gen2.constants import COMPUTE_CLI_MSG, CACHE_DIR
-from skyplane.compute.ibmcloud.ibm_gen2.utils import (
-    load_yaml_config,
-    dump_yaml_config,
-    delete_yaml_config,
-)
+from skyplane.compute.ibmcloud.ibm_gen2.utils import load_yaml_config, dump_yaml_config, delete_yaml_config
 
 from skyplane.utils import imports
 
@@ -222,10 +218,7 @@ class IBMVPCBackend:
                 ssh_key_data = file.read()
             try:
                 key_info = self.vpc_cli.create_key(
-                    public_key=ssh_key_data,
-                    name=keyname,
-                    type="rsa",
-                    resource_group={"id": self.config["resource_group_id"]},
+                    public_key=ssh_key_data, name=keyname, type="rsa", resource_group={"id": self.config["resource_group_id"]}
                 ).get_result()
             except ibm_cloud_sdk_core.ApiException as e:
                 logger.warn(e.message)
@@ -802,11 +795,7 @@ class IBMVPCInstance:
 
         security_group_identity_model = {"id": self.config["security_group_id"]}
         subnet_identity_model = {"id": self.config["subnet_id"]}
-        primary_network_interface = {
-            "name": "eth0",
-            "subnet": subnet_identity_model,
-            "security_groups": [security_group_identity_model],
-        }
+        primary_network_interface = {"name": "eth0", "subnet": subnet_identity_model, "security_groups": [security_group_identity_model]}
 
         boot_volume_data = {
             "capacity": self.config["boot_volume_capacity"],
@@ -814,10 +803,7 @@ class IBMVPCInstance:
             "profile": {"name": self.config["boot_volume_profile"]},
         }
 
-        boot_volume_attachment = {
-            "delete_volume_on_instance_delete": True,
-            "volume": boot_volume_data,
-        }
+        boot_volume_attachment = {"delete_volume_on_instance_delete": True, "volume": boot_volume_data}
 
         key_identity_model = {"id": self.config["ssh_key_id"]}
 
@@ -1059,12 +1045,7 @@ def vpc_retry_on_except(ibm_cloud_sdk_core, func):
     SLEEP_FACTOR = 1.5
     MAX_SLEEP = 30
 
-    IGNORED_404_METHODS = [
-        "delete_instance",
-        "delete_public_gateway",
-        "delete_vpc",
-        "create_instance_action",
-    ]
+    IGNORED_404_METHODS = ["delete_instance", "delete_public_gateway", "delete_vpc", "create_instance_action"]
 
     @functools.wraps(func)
     def wrapper(*args, **kwargs):

@@ -9,13 +9,7 @@ def test_aws_singlepart():
 
 
 def test_aws_singlepart_zero_bytes():
-    assert interface_test_framework(
-        "aws:us-east-1",
-        f"test-skyplane-{uuid.uuid4()}",
-        False,
-        test_delete_bucket=True,
-        file_size_mb=0,
-    )
+    assert interface_test_framework("aws:us-east-1", f"test-skyplane-{uuid.uuid4()}", False, test_delete_bucket=True, file_size_mb=0)
 
 
 def test_aws_multipart():

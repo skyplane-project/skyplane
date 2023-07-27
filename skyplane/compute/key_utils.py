@@ -15,9 +15,7 @@ def generate_keypair(pubkey_path: PathLike, pem_path: PathLike):
         key_size=4096,
     )
     private_key = key.private_bytes(
-        crypto_serialization.Encoding.PEM,
-        crypto_serialization.PrivateFormat.TraditionalOpenSSL,
-        crypto_serialization.NoEncryption(),
+        crypto_serialization.Encoding.PEM, crypto_serialization.PrivateFormat.TraditionalOpenSSL, crypto_serialization.NoEncryption()
     )
     public_key = key.public_key().public_bytes(crypto_serialization.Encoding.OpenSSH, crypto_serialization.PublicFormat.OpenSSH)
     Path(pubkey_path).write_bytes(public_key)

@@ -264,11 +264,7 @@ class SkyplaneConfig:
         if self.ibmcloud_secret_key:
             config.set("ibmcloud", "ibmcloud_secret_key", self.ibmcloud_secret_key)
         if self.ibmcloud_resource_group_id:
-            config.set(
-                "ibmcloud",
-                "ibmcloud_resource_group_id",
-                self.ibmcloud_resource_group_id,
-            )
+            config.set("ibmcloud", "ibmcloud_resource_group_id", self.ibmcloud_resource_group_id)
 
         if "cloudflare" not in config:
             config.add_section("cloudflare")
@@ -276,11 +272,7 @@ class SkyplaneConfig:
         if self.cloudflare_access_key_id:
             config.set("cloudflare", "cloudflare_access_key_id", self.cloudflare_access_key_id)
         if self.cloudflare_secret_access_key:
-            config.set(
-                "cloudflare",
-                "cloudflare_secret_access_key",
-                self.cloudflare_secret_access_key,
-            )
+            config.set("cloudflare", "cloudflare_secret_access_key", self.cloudflare_secret_access_key)
 
         if "azure" not in config:
             config.add_section("azure")
@@ -334,11 +326,7 @@ class SkyplaneConfig:
         if flag_name not in self.valid_flags():
             raise KeyError(f"Invalid flag: {flag_name}")
         if value is not None:
-            setattr(
-                self,
-                f"flag_{flag_name}",
-                _map_type(value, _FLAG_TYPES.get(flag_name, str)),
-            )
+            setattr(self, f"flag_{flag_name}", _map_type(value, _FLAG_TYPES.get(flag_name, str)))
         else:
             setattr(self, f"flag_{flag_name}", None)
 

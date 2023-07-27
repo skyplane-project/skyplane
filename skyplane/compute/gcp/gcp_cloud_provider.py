@@ -81,13 +81,7 @@ class GCPCloudProvider(CloudProvider):
         if "items" in gcp_instance_result:
             instance_list = []
             for i in gcp_instance_result["items"]:
-                instance_list.append(
-                    GCPServer(
-                        f"gcp:{region}",
-                        i["name"],
-                        ssh_private_key=self.key_manager.get_private_key(self.key_name),
-                    )
-                )
+                instance_list.append(GCPServer(f"gcp:{region}", i["name"], ssh_private_key=self.key_manager.get_private_key(self.key_name)))
             return instance_list
         else:
             return []
@@ -165,27 +159,15 @@ class GCPCloudProvider(CloudProvider):
                 {
                     "network": "global/networks/skyplane",
                     "accessConfigs": [
-                        {
-                            "name": "External NAT",
-                            "type": "ONE_TO_ONE_NAT",
-                            "networkTier": "PREMIUM" if gcp_premium_network else "STANDARD",
-                        }
+                        {"name": "External NAT", "type": "ONE_TO_ONE_NAT", "networkTier": "PREMIUM" if gcp_premium_network else "STANDARD"}
                     ],
                 }
             ],
-            "serviceAccounts": [
-                {
-                    "email": "default",
-                    "scopes": ["https://www.googleapis.com/auth/cloud-platform"],
-                }
-            ],
+            "serviceAccounts": [{"email": "default", "scopes": ["https://www.googleapis.com/auth/cloud-platform"]}],
             "metadata": {
                 "items": [
                     {"key": "enable-oslogin", "value": "false"},
-                    {
-                        "key": "ssh-keys",
-                        "value": f"{gcp_vm_uname}:{self.key_manager.get_public_key(self.key_name).read_text()}\n",
-                    },
+                    {"key": "ssh-keys", "value": f"{gcp_vm_uname}:{self.key_manager.get_public_key(self.key_name).read_text()}\n"},
                 ]
             },
             "scheduling": {"onHostMaintenance": "TERMINATE", "automaticRestart": False},
@@ -198,11 +180,7 @@ class GCPCloudProvider(CloudProvider):
         try:
             result = compute.instances().insert(project=self.auth.project_id, zone=region, body=req_body).execute()
             self.auth.wait_for_operation_to_complete(region, result["name"])
-            server = GCPServer(
-                f"gcp:{region}",
-                name,
-                ssh_private_key=self.key_manager.get_private_key(self.key_name),
-            )
+            server = GCPServer(f"gcp:{region}", name, ssh_private_key=self.key_manager.get_private_key(self.key_name))
 
             # wait for server to reach RUNNING state
             try:

@@ -18,8 +18,8 @@ project = "Skyplane"
 copyright = "2022, The Skyplane authors"
 author = "The Skyplane authors"
 
-release = "0.3"
-version = "0.3.2"
+release = "0.2"
+version = "0.2.1"
 
 # -- General configuration
 
@@ -48,10 +48,7 @@ extensions = [
     # 'matplotlib.sphinxext.plot_directive',
 ]
 
-intersphinx_mapping = {
-    "python": ("https://docs.python.org/3/", None),
-    "sphinx": ("https://www.sphinx-doc.org/en/master/", None),
-}
+intersphinx_mapping = {"python": ("https://docs.python.org/3/", None), "sphinx": ("https://www.sphinx-doc.org/en/master/", None)}
 intersphinx_disabled_domains = ["std"]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -63,7 +60,7 @@ autodoc_default_options = {
     # Make sure that any autodoc declarations show the right members
     "members": True,
     "inherited-members": True,
-    "private-members": False,
+    "private-members": True,
     "show-inheritance": True,
 }
 autosummary_generate = True  # Make _autosummary files and include them
@@ -81,11 +78,7 @@ exclude_patterns = ["build", "_build", "Thumbs.db", ".DS_Store", "README.md"]
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 html_theme = "furo"
-html_theme_options = {
-    "light_logo": "logo-light-mode.png",
-    "dark_logo": "logo-dark-mode.png",
-    "sidebar_hide_name": True,
-}
+html_theme_options = {"light_logo": "logo-light-mode.png", "dark_logo": "logo-dark-mode.png", "sidebar_hide_name": True}
 html_favicon = "_static/favicon.ico"
 html_static_path = ["_static"]
 

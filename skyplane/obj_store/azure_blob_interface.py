@@ -7,13 +7,8 @@ from typing import Any, Iterator, List, Optional, Tuple
 
 from skyplane import exceptions, compute
 from skyplane.exceptions import NoSuchObjectException
-from skyplane.obj_store.azure_storage_account_interface import (
-    AzureStorageAccountInterface,
-)
-from skyplane.obj_store.object_store_interface import (
-    ObjectStoreInterface,
-    ObjectStoreObject,
-)
+from skyplane.obj_store.azure_storage_account_interface import AzureStorageAccountInterface
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger, imports
 
 
@@ -73,12 +68,7 @@ class AzureBlobInterface(ObjectStoreInterface):
         except exceptions.ResourceExistsError:
             logger.warning(f"Unable to create container {self.container_name} as it already exists")
 
-    def create_bucket(
-        self,
-        azure_region,
-        resource_group=compute.AzureServer.resource_group_name,
-        premium_tier=True,
-    ):
+    def create_bucket(self, azure_region, resource_group=compute.AzureServer.resource_group_name, premium_tier=True):
         tier = "Premium_LRS" if premium_tier else "Standard_LRS"
         if not self.storage_account_interface.storage_account_exists_in_account():
             logger.debug(f"Creating storage account {self.account_name}")
@@ -141,22 +131,13 @@ class AzureBlobInterface(ObjectStoreInterface):
         return self.get_obj_metadata(obj_name).content_settings.content_type
 
     def download_object(
-        self,
-        src_object_name,
-        dst_file_path,
-        offset_bytes=None,
-        size_bytes=None,
-        write_at_offset=False,
-        generate_md5=False,
+        self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5=False
     ) -> Tuple[Optional[str], Optional[bytes]]:
         src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
         if size_bytes is not None and offset_bytes is None:
             offset_bytes = 0
         downloader = self.container_client.download_blob(
-            src_object_name,
-            offset=offset_bytes,
-            length=size_bytes,
-            max_concurrency=self.max_concurrency,
+            src_object_name, offset=offset_bytes, length=size_bytes, max_concurrency=self.max_concurrency
         )
 
         if not os.path.exists(dst_file_path):
@@ -174,16 +155,7 @@ class AzureBlobInterface(ObjectStoreInterface):
         return mime_type, md5
 
     @imports.inject("azure.storage.blob", pip_extra="azure")
-    def upload_object(
-        azure_blob,
-        self,
-        src_file_path,
-        dst_object_name,
-        part_number=None,
-        upload_id=None,
-        check_md5=None,
-        mime_type=None,
-    ):
+    def upload_object(azure_blob, self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None, mime_type=None):
         """Uses the BlobClient instead of ContainerClient since BlobClient allows for
         block/part level manipulation for multi-part uploads
         """
@@ -238,13 +210,7 @@ class AzureBlobInterface(ObjectStoreInterface):
         return dst_object_name
 
     @imports.inject("azure.storage.blob", pip_extra="azure")
-    def complete_multipart_upload(
-        azure_blob,
-        self,
-        dst_object_name: str,
-        upload_id: str,
-        metadata: Optional[Any] = None,
-    ) -> None:
+    def complete_multipart_upload(azure_blob, self, dst_object_name: str, upload_id: str, metadata: Optional[Any] = None) -> None:
         """After all blocks of a blob are uploaded/staged with their unique block_id,
         in order to complete the multipart upload, we commit them together.
 
@@ -267,10 +233,7 @@ class AzureBlobInterface(ObjectStoreInterface):
         blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=dst_object_name)
         try:
             # The below operation will create the blob from the uploaded blocks.
-            blob_client.commit_block_list(
-                block_list=block_list,
-                content_settings=azure_blob.ContentSettings(content_type=mime_type),
-            )
+            blob_client.commit_block_list(block_list=block_list, content_settings=azure_blob.ContentSettings(content_type=mime_type))
         except Exception as e:
             raise exceptions.SkyplaneException(f"Failed to complete multipart upload for {dst_object_name}: {str(e)}")
 
