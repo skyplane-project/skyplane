@@ -8,7 +8,7 @@ from rich.prompt import IntPrompt
 import skyplane.cli.cli_cloud
 import skyplane.cli.cli_config
 
-import skyplane.cli.experiments # disable experiments
+import skyplane.cli.experiments  # disable experiments
 from skyplane import compute
 
 from skyplane.cli.cli_init import init
@@ -30,7 +30,7 @@ app.command(
     name="init",
     help="Initialize the Skyplane CLI with your cloud credentials",
 )(init)
-app.add_typer(skyplane.cli.experiments.app, name="experiments") # disable experiments
+app.add_typer(skyplane.cli.experiments.app, name="experiments")  # disable experiments
 app.add_typer(skyplane.cli.cli_cloud.app, name="cloud")
 app.add_typer(skyplane.cli.cli_config.app, name="config")
 
