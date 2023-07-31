@@ -1,6 +1,5 @@
 import json
 import logging
-from pprint import pprint
 import os
 import socket
 from contextlib import closing
@@ -14,12 +13,10 @@ from typing import Dict, Optional, Tuple
 from skyplane import compute
 from skyplane.compute.const_cmds import make_autoshutdown_script, make_dozzle_command, make_sysctl_tcp_tuning_command
 from skyplane.config_paths import config_path, cloud_config, __config_root__
-from skyplane.gateway.gateway_program import GatewayProgram
 from skyplane.utils import logger
 from skyplane.utils.fn import PathLike, wait_for
 from skyplane.utils.retry import retry_backoff
 from skyplane.utils.timer import Timer
-from skyplane.planner.topology import TopologyPlanGateway
 
 tmp_log_dir = Path("/tmp/skyplane")
 

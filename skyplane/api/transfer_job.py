@@ -13,10 +13,10 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from queue import Queue
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import TYPE_CHECKING, Callable, Generator, List, Optional, Tuple, TypeVar, Dict
 
-from abc import ABC, abstractmethod
+from abc import ABC
 
 import urllib3
 from rich import print as rprint
@@ -24,7 +24,7 @@ from functools import partial
 
 from skyplane import exceptions
 from skyplane.api.config import TransferConfig
-from skyplane.chunk import Chunk, ChunkRequest
+from skyplane.chunk import Chunk
 from skyplane.obj_store.storage_interface import StorageInterface
 from skyplane.obj_store.object_store_interface import ObjectStoreObject, ObjectStoreInterface
 from skyplane.utils import logger
@@ -624,7 +624,7 @@ class CopyJob(TransferJob):
         src_gateways = dataplane.source_gateways()
         queue_size = [0] * len(src_gateways)
         n_multiparts = 0
-        start = time.time()
+        time.time()
 
         for batch in batches:
             # send upload_id mappings to sink gateways
