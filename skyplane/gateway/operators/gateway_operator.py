@@ -615,7 +615,6 @@ class GatewayCompressor(GatewayOperator):
             
             with open(chunk_file_path, "rb") as f:
                 data = f.read()
-            assert len(data) == chunk.chunk_length_bytes, f"chunk {chunk_id} has size {len(data)} but should be {chunk.chunk_length_bytes}"
             
             data = lz4.frame.compress(data)
             wire_length = len(data)
@@ -659,7 +658,6 @@ class GatewayDecompressor(GatewayOperator):
             
             with open(chunk_file_path, "rb") as f:
                 data = f.read()
-            assert len(data) == chunk.chunk_length_bytes, f"chunk {chunk_id} has size {len(data)} but should be {chunk.chunk_length_bytes}"
             
             data = lz4.frame.decompress(data)
             wire_length = len(data)
@@ -707,7 +705,6 @@ class GatewayEncrypter(GatewayOperator):
             
             with open(chunk_file_path, "rb") as f:
                 data = f.read()
-            assert len(data) == chunk.chunk_length_bytes, f"chunk {chunk_id} has size {len(data)} but should be {chunk.chunk_length_bytes}"
             
             data = self.e2ee_secretbox.encrypt(data)
             wire_length = len(data)
@@ -756,7 +753,6 @@ class GatewayDecrypter(GatewayOperator):
             
             with open(chunk_file_path, "rb") as f:
                 data = f.read()
-            assert len(data) == chunk.chunk_length_bytes, f"chunk {chunk_id} has size {len(data)} but should be {chunk.chunk_length_bytes}"
             
             data = self.e2ee_secretbox.decrypt(data)
             wire_length = len(data)
