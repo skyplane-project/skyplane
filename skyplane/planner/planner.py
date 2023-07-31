@@ -249,7 +249,7 @@ class UnicastDirectPlanner(Planner):
             mux_or = src_program.add_operator(GatewayMuxOr(), parent_handle=obj_store_read, partition_id=partition_id)
             for i in range(n_instances):
                 compress_op = dst_program[dst_region_tag].add_operator(
-                    GatewayCompress(decompress=self.transfer_config.use_compression),
+                    GatewayCompress(compress=self.transfer_config.use_compression),
                     parent_handle=mux_or,
                     partition_id=partition_id,
                 )  
@@ -375,7 +375,7 @@ class MulticastDirectPlanner(Planner):
                         # print("Using private IP for GCP to GCP transfer", src_region_tag, dst_region_tag)
                         private_ip = True
                     compress_op = dst_program[dst_region_tag].add_operator(
-                        GatewayCompress(decompress=self.transfer_config.use_compression),
+                        GatewayCompress(compress=self.transfer_config.use_compression),
                         parent_handle=mux_or,
                         partition_id=partition_id,
                     )  
