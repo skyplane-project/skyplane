@@ -320,14 +320,12 @@ class GatewaySender(GatewayOperator):
 
             wire_length = len(data)
             raw_wire_length = wire_length
-            compressed_length = None
 
             # send chunk header
             header = chunk.to_wire_header(
                 n_chunks_left_on_socket=len(chunk_ids) - idx - 1,
                 wire_length=wire_length,
                 raw_wire_length=raw_wire_length,
-                is_compressed=(compressed_length is not None),
             )
             # print(f"[sender-{self.worker_id}]:{chunk_id} sending chunk header {header}")
             header.to_socket(sock)
@@ -584,7 +582,7 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         return True
 
 
-class GatewayCompress(GatewayOperator):
+class GatewayCompressor(GatewayOperator):
     def __init__(
         self,
         handle: str,
@@ -628,7 +626,7 @@ class GatewayCompress(GatewayOperator):
         return True
 
 
-class GatewayDecompress(GatewayOperator):
+class GatewayDecompressor(GatewayOperator):
     def __init__(
         self,
         handle: str,
@@ -671,7 +669,7 @@ class GatewayDecompress(GatewayOperator):
                 data = f.write()
         return True
 
-class GatewayEncrypt(GatewayOperator):
+class GatewayEncrypter(GatewayOperator):
     def __init__(
         self,
         handle: str,
@@ -720,7 +718,7 @@ class GatewayEncrypt(GatewayOperator):
         return True
 
 
-class GatewayDecrypt(GatewayOperator):
+class GatewayDecrypter(GatewayOperator):
     def __init__(
         self,
         handle: str,

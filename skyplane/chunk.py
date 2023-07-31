@@ -26,12 +26,11 @@ class Chunk:
     part_number: Optional[int] = None
     upload_id: Optional[str] = None  # TODO: for broadcast, this is not used
 
-    def to_wire_header(self, n_chunks_left_on_socket: int, wire_length: int, raw_wire_length: int, is_compressed: bool = False):
+    def to_wire_header(self, n_chunks_left_on_socket: int, wire_length: int, raw_wire_length: int):
         return WireProtocolHeader(
             chunk_id=self.chunk_id,
             data_len=wire_length,
             raw_data_len=raw_wire_length,
-            is_compressed=is_compressed,
             n_chunks_left_on_socket=n_chunks_left_on_socket,
         )
 
@@ -99,7 +98,6 @@ class WireProtocolHeader:
     chunk_id: str  # 128bit UUID
     data_len: int  # long
     raw_data_len: int  # long (uncompressed, unecrypted)
-    is_compressed: bool  # char
     n_chunks_left_on_socket: int  # long
 
     @staticmethod
@@ -115,8 +113,8 @@ class WireProtocolHeader:
 
     @staticmethod
     def length_bytes():
-        # magic (8) + protocol_version (4) + chunk_id (16) + data_len (8) + raw_data_len(8) + is_compressed (1) + n_chunks_left_on_socket (8)
-        return 8 + 4 + 16 + 8 + 8 + 1 + 8
+        # magic (8) + protocol_version (4) + chunk_id (16) + data_len (8) + raw_data_len(8) + n_chunks_left_on_socket (8)
+        return 8 + 4 + 16 + 8 + 8 + 8
 
     @staticmethod
     def from_bytes(data: bytes):
@@ -130,13 +128,11 @@ class WireProtocolHeader:
         chunk_id = data[12:28].hex()
         chunk_len = int.from_bytes(data[28:36], byteorder="big")
         raw_chunk_len = int.from_bytes(data[36:44], byteorder="big")
-        is_compressed = bool(int.from_bytes(data[44:45], byteorder="big"))
         n_chunks_left_on_socket = int.from_bytes(data[45:53], byteorder="big")
         return WireProtocolHeader(
             chunk_id=chunk_id,
             data_len=chunk_len,
             raw_data_len=raw_chunk_len,
-            is_compressed=is_compressed,
             n_chunks_left_on_socket=n_chunks_left_on_socket,
         )
 
@@ -149,7 +145,6 @@ class WireProtocolHeader:
         out_bytes += chunk_id_bytes
         out_bytes += self.data_len.to_bytes(8, byteorder="big")
         out_bytes += self.raw_data_len.to_bytes(8, byteorder="big")
-        out_bytes += self.is_compressed.to_bytes(1, byteorder="big")
         out_bytes += self.n_chunks_left_on_socket.to_bytes(8, byteorder="big")
         assert len(out_bytes) == WireProtocolHeader.length_bytes(), f"{len(out_bytes)} != {WireProtocolHeader.length_bytes()}"
         return out_bytes

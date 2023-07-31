@@ -23,10 +23,10 @@ from skyplane.gateway.operators.gateway_operator import (
     GatewayObjStoreReadOperator,
     GatewayObjStoreWriteOperator,
     GatewayWaitReceiver,
-    GatewayCompress,
-    GatewayDecompress,
-    GatewayEncrypt,
-    GatewayDecrypt,
+    GatewayCompressor,
+    GatewayDecompressor,
+    GatewayEncrypter,
+    GatewayDecrypter,
 )
 from skyplane.gateway.operators.gateway_receiver import GatewayReceiver
 from skyplane.utils import logger
@@ -42,8 +42,6 @@ class GatewayDaemon:
         chunk_dir: PathLike,
         max_incoming_ports=64,
         use_tls=True,
-        use_e2ee=True,  # TODO: read from operator field
-        use_compression=True,  # TODO: read from operator field
     ):
         # read gateway program
         gateway_program_path = Path(os.environ["GATEWAY_PROGRAM_FILE"]).expanduser()
@@ -72,13 +70,6 @@ class GatewayDaemon:
 
         self.error_event = Event()
         self.error_queue = Queue()
-        if use_e2ee:
-            e2ee_key_path = Path(os.environ["E2EE_KEY_FILE"]).expanduser()
-            with open(e2ee_key_path, "rb") as f:
-                self.e2ee_key_bytes = f.read()
-            print("Server side E2EE key loaded: ", self.e2ee_key_bytes)
-        else:
-            self.e2ee_key_bytes = None
 
         # create gateway operators
         self.terminal_operators = defaultdict(list)  # track terminal operators per partition
@@ -265,7 +256,7 @@ class GatewayDaemon:
                     )
                     total_p += 1
                 elif op["op_type"] == "compress":
-                    operators[handle] = GatewayCompress(
+                    operators[handle] = GatewayCompressor(
                         handle=handle,
                         region=self.region,
                         input_queue=input_queue,
@@ -277,7 +268,7 @@ class GatewayDaemon:
                     )
                     total_p += 1
                 elif op["op_type"] == "decompress":
-                    operators[handle] = GatewayDecompress(
+                    operators[handle] = GatewayDecompressor(
                         handle=handle,
                         region=self.region,
                         input_queue=input_queue,
@@ -289,7 +280,7 @@ class GatewayDaemon:
                     )
                     total_p += 1
                 elif op["op_type"] == "encrypt":
-                    operators[handle] = GatewayEncrypt(
+                    operators[handle] = GatewayEncrypter(
                         handle=handle,
                         region=self.region,
                         input_queue=input_queue,
@@ -297,11 +288,11 @@ class GatewayDaemon:
                         error_event=self.error_event,
                         error_queue=self.error_queue,
                         chunk_store=self.chunk_store,
-                        e2ee_key_bytes=self.e2ee_key_bytes,
+                        e2ee_key_bytes=op["e2ee_key_bytes"],
                     )
                     total_p += 1
                 elif op["op_type"] == "decrypt":
-                    operators[handle] = GatewayDecrypt(
+                    operators[handle] = GatewayDecrypter(
                         handle=handle,
                         region=self.region,
                         input_queue=input_queue,
@@ -309,7 +300,7 @@ class GatewayDaemon:
                         error_event=self.error_event,
                         error_queue=self.error_queue,
                         chunk_store=self.chunk_store,
-                        e2ee_key_bytes=self.e2ee_key_bytes,
+                        e2ee_key_bytes=op["e2ee_key_bytes"],
                     )
                     total_p += 1
                 else:
@@ -394,8 +385,6 @@ if __name__ == "__main__":
     parser.add_argument("--region", type=str, required=True, help="Region tag (provider:region")
     parser.add_argument("--chunk-dir", type=Path, default="/tmp/skyplane/chunks", help="Directory to store chunks")
     parser.add_argument("--disable-tls", action="store_true")
-    parser.add_argument("--use-compression", action="store_true")  # TODO: remove
-    parser.add_argument("--disable-e2ee", action="store_true")  # TODO: remove
     args = parser.parse_args()
 
     os.makedirs(args.chunk_dir)

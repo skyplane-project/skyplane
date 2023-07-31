@@ -89,7 +89,6 @@ class Dataplane:
         gateway_server: compute.Server,
         gateway_log_dir: Optional[PathLike],
         authorize_ssh_pub_key: Optional[str] = None,
-        e2ee_key_bytes: Optional[str] = None,
     ):
         # map outgoing ports
         setup_args = {}
@@ -119,9 +118,7 @@ class Dataplane:
             gateway_docker_image=gateway_docker_image,
             gateway_program_path=str(gateway_program_filename),
             gateway_info_path=f"{gateway_log_dir}/gateway_info.json",
-            e2ee_key_bytes=e2ee_key_bytes,  # TODO: remove
             use_bbr=self.transfer_config.use_bbr,  # TODO: remove
-            use_compression=self.transfer_config.use_compression,
             use_socket_tls=self.transfer_config.use_socket_tls,
         )
 
@@ -202,6 +199,10 @@ class Dataplane:
         # todo: move server.py:start_gateway here
         logger.fs.info(f"Using docker image {gateway_docker_image}")
         e2ee_key_bytes = nacl.utils.random(nacl.secret.SecretBox.KEY_SIZE)
+        # save E2EE keys
+        e2ee_key_file = "e2ee_key"
+        with open(f"/tmp/{e2ee_key_file}", 'wb') as f:
+            f.write(e2ee_key_bytes)
 
         # create gateway logging dir
         gateway_program_dir = f"{self.log_dir}/programs"
@@ -218,7 +219,7 @@ class Dataplane:
         jobs = []
         for node, server in gateway_bound_nodes.items():
             jobs.append(
-                partial(self._start_gateway, gateway_docker_image, node, server, gateway_program_dir, authorize_ssh_pub_key, e2ee_key_bytes)
+                partial(self._start_gateway, gateway_docker_image, node, server, gateway_program_dir, authorize_ssh_pub_key)
             )
         logger.fs.debug(f"[Dataplane.provision] Starting gateways on {len(jobs)} servers")
         try:

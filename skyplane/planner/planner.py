@@ -1,5 +1,6 @@
 from collections import defaultdict
 from importlib.resources import path
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Tuple
 import os
 import csv
@@ -230,6 +231,10 @@ class UnicastDirectPlanner(Planner):
         src_program = GatewayProgram()
         dst_program = GatewayProgram()
 
+        e2ee_key_file = "e2ee_key"
+        with open(e2ee_key_file, "rb") as f:
+            self.e2ee_key_bytes = f.read()
+
         for job in jobs:
             src_bucket = job.src_iface.bucket()
             dst_bucket = job.dst_ifaces[0].bucket()
@@ -249,7 +254,7 @@ class UnicastDirectPlanner(Planner):
                     partition_id=partition_id,
                 )  
                 encrypt_op = dst_program[dst_region_tag].add_operator(
-                    GatewayEncrypt(decrypt=self.transfer_config.use_e2ee),
+                    GatewayEncrypt(encrypt=self.transfer_config.use_e2ee, e2ee_key_bytes=self.e2ee_key_bytes),
                     parent_handle=compress_op,
                     partition_id=partition_id,
                 )
@@ -268,7 +273,7 @@ class UnicastDirectPlanner(Planner):
             # dst region gateway program
             recv_op = dst_program.add_operator(GatewayReceive(decompress=True, decrypt=True), partition_id=partition_id)
             decrypt_op = dst_program[dst_region_tag].add_operator(
-                GatewayDecrypt(decrypt=self.transfer_config.use_e2ee),
+                GatewayDecrypt(decrypt=self.transfer_config.use_e2ee, e2ee_key_bytes=self.e2ee_key_bytes),
                 parent_handle=recv_op,
                 partition_id=partition_id,
             )
@@ -325,6 +330,10 @@ class MulticastDirectPlanner(Planner):
         dst_program = {dst_region: GatewayProgram() for dst_region in dst_region_tags}
         src_program = GatewayProgram()
 
+        e2ee_key_file = "e2ee_key"
+        with open(f"/tmp/{e2ee_key_file}", 'rb') as f:
+            self.e2ee_key_bytes = f.read()
+
         # iterate through all jobs
         for job in jobs:
             src_bucket = job.src_iface.bucket()
@@ -366,12 +375,12 @@ class MulticastDirectPlanner(Planner):
                         # print("Using private IP for GCP to GCP transfer", src_region_tag, dst_region_tag)
                         private_ip = True
                     compress_op = dst_program[dst_region_tag].add_operator(
-                        GatewayDecompress(decompress=self.transfer_config.use_compression),
+                        GatewayCompress(decompress=self.transfer_config.use_compression),
                         parent_handle=mux_or,
                         partition_id=partition_id,
                     )  
                     encrypt_op = dst_program[dst_region_tag].add_operator(
-                        GatewayDecrypt(decrypt=self.transfer_config.use_e2ee),
+                        GatewayEncrypt(encrypt=self.transfer_config.use_e2ee, e2ee_key_bytes=self.e2ee_key_bytes),
                         parent_handle=compress_op,
                         partition_id=partition_id,
                     )

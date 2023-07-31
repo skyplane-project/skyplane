@@ -104,15 +104,17 @@ class GatewayDecompress(GatewayOperator):
 
 
 class GatewayEncrypt(GatewayOperator):
-    def __init__(self, encrypt: bool = False):
+    def __init__(self, encrypt: bool = False, e2ee_key_bytes: Optional[str] = None):
         super().__init__("encrypt")
         self.encrypt = encrypt
+        self.e2ee_key_bytes = e2ee_key_bytes
 
 
 class GatewayDecrypt(GatewayOperator):
-    def __init__(self, decrypt: bool = False):
+    def __init__(self, decrypt: bool = False, e2ee_key_bytes: Optional[str] = None):
         super().__init__("decrypt")
         self.decrypt = decrypt
+        self.e2ee_key_bytes = e2ee_key_bytes
 
 
 class GatewayProgram:
