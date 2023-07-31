@@ -23,6 +23,10 @@ from skyplane.gateway.operators.gateway_operator import (
     GatewayObjStoreReadOperator,
     GatewayObjStoreWriteOperator,
     GatewayWaitReceiver,
+    GatewayCompress,
+    GatewayDecompress,
+    GatewayEncrypt,
+    GatewayDecrypt,
 )
 from skyplane.gateway.operators.gateway_receiver import GatewayReceiver
 from skyplane.utils import logger
@@ -90,8 +94,6 @@ class GatewayDaemon:
             error_queue=self.error_queue,
             max_pending_chunks=max_incoming_ports,
             use_tls=self.use_tls,
-            use_compression=use_compression,
-            e2ee_key_bytes=self.e2ee_key_bytes,
         )
 
         # API server
@@ -232,8 +234,6 @@ class GatewayDaemon:
                         error_queue=self.error_queue,
                         chunk_store=self.chunk_store,
                         use_tls=self.use_tls,
-                        use_compression=op["compress"],
-                        e2ee_key_bytes=self.e2ee_key_bytes,
                         n_processes=op["num_connections"],
                     )
                     total_p += op["num_connections"]
@@ -262,6 +262,54 @@ class GatewayDaemon:
                         error_queue=self.error_queue,
                         error_event=self.error_event,
                         chunk_store=self.chunk_store,
+                    )
+                    total_p += 1
+                elif op["op_type"] == "compress":
+                    operators[handle] = GatewayCompress(
+                        handle=handle,
+                        region=self.region,
+                        input_queue=input_queue,
+                        output_queue=output_queue,
+                        error_event=self.error_event,
+                        error_queue=self.error_queue,
+                        chunk_store=self.chunk_store,
+                        use_compression=op["compress"],
+                    )
+                    total_p += 1
+                elif op["op_type"] == "decompress":
+                    operators[handle] = GatewayDecompress(
+                        handle=handle,
+                        region=self.region,
+                        input_queue=input_queue,
+                        output_queue=output_queue,
+                        error_event=self.error_event,
+                        error_queue=self.error_queue,
+                        chunk_store=self.chunk_store,
+                        use_compression=op["compress"],
+                    )
+                    total_p += 1
+                elif op["op_type"] == "encrypt":
+                    operators[handle] = GatewayEncrypt(
+                        handle=handle,
+                        region=self.region,
+                        input_queue=input_queue,
+                        output_queue=output_queue,
+                        error_event=self.error_event,
+                        error_queue=self.error_queue,
+                        chunk_store=self.chunk_store,
+                        e2ee_key_bytes=self.e2ee_key_bytes,
+                    )
+                    total_p += 1
+                elif op["op_type"] == "decrypt":
+                    operators[handle] = GatewayDecrypt(
+                        handle=handle,
+                        region=self.region,
+                        input_queue=input_queue,
+                        output_queue=output_queue,
+                        error_event=self.error_event,
+                        error_queue=self.error_queue,
+                        chunk_store=self.chunk_store,
+                        e2ee_key_bytes=self.e2ee_key_bytes,
                     )
                     total_p += 1
                 else:

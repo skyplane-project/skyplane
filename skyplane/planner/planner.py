@@ -17,6 +17,10 @@ from skyplane.gateway.gateway_program import (
     GatewayWriteObjectStore,
     GatewayReceive,
     GatewaySend,
+    GatewayEncrypt,
+    GatewayDecrypt,
+    GatewayCompress,
+    GatewayDecompress,
 )
 
 from skyplane.api.transfer_job import TransferJob
@@ -239,6 +243,16 @@ class UnicastDirectPlanner(Planner):
             )
             mux_or = src_program.add_operator(GatewayMuxOr(), parent_handle=obj_store_read, partition_id=partition_id)
             for i in range(n_instances):
+                compress_op = dst_program[dst_region_tag].add_operator(
+                    GatewayCompress(decompress=self.transfer_config.use_compression),
+                    parent_handle=mux_or,
+                    partition_id=partition_id,
+                )  
+                encrypt_op = dst_program[dst_region_tag].add_operator(
+                    GatewayEncrypt(decrypt=self.transfer_config.use_e2ee),
+                    parent_handle=compress_op,
+                    partition_id=partition_id,
+                )
                 src_program.add_operator(
                     GatewaySend(
                         target_gateway_id=dst_gateways[i].gateway_id,
@@ -247,14 +261,24 @@ class UnicastDirectPlanner(Planner):
                         compress=True,
                         encrypt=True,
                     ),
-                    parent_handle=mux_or,
+                    parent_handle=encrypt_op,
                     partition_id=partition_id,
                 )
 
             # dst region gateway program
             recv_op = dst_program.add_operator(GatewayReceive(decompress=True, decrypt=True), partition_id=partition_id)
+            decrypt_op = dst_program[dst_region_tag].add_operator(
+                GatewayDecrypt(decrypt=self.transfer_config.use_e2ee),
+                parent_handle=recv_op,
+                partition_id=partition_id,
+            )
+            decompress_op = dst_program[dst_region_tag].add_operator(
+                GatewayDecompress(decompress=self.transfer_config.use_compression),
+                parent_handle=decrypt_op,
+                partition_id=partition_id,
+            )
             dst_program.add_operator(
-                GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections), parent_handle=recv_op, partition_id=partition_id
+                GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections), parent_handle=decompress_op, partition_id=partition_id
             )
 
             # update cost per GB
@@ -341,6 +365,16 @@ class MulticastDirectPlanner(Planner):
                     if dst_gateways[i].provider == "gcp" and src_provider == "gcp":
                         # print("Using private IP for GCP to GCP transfer", src_region_tag, dst_region_tag)
                         private_ip = True
+                    compress_op = dst_program[dst_region_tag].add_operator(
+                        GatewayDecompress(decompress=self.transfer_config.use_compression),
+                        parent_handle=mux_or,
+                        partition_id=partition_id,
+                    )  
+                    encrypt_op = dst_program[dst_region_tag].add_operator(
+                        GatewayDecrypt(decrypt=self.transfer_config.use_e2ee),
+                        parent_handle=compress_op,
+                        partition_id=partition_id,
+                    )
                     src_program.add_operator(
                         GatewaySend(
                             target_gateway_id=dst_gateways[i].gateway_id,
@@ -350,18 +384,28 @@ class MulticastDirectPlanner(Planner):
                             compress=self.transfer_config.use_compression,
                             encrypt=self.transfer_config.use_e2ee,
                         ),
-                        parent_handle=mux_or,
+                        parent_handle=encrypt_op,
                         partition_id=partition_id,
                     )
 
                 # each gateway also recieves data from source
                 recv_op = dst_program[dst_region_tag].add_operator(
-                    GatewayReceive(decompress=self.transfer_config.use_compression, decrypt=self.transfer_config.use_e2ee),
+                    GatewayReceive(),
+                    partition_id=partition_id,
+                )
+                decrypt_op = dst_program[dst_region_tag].add_operator(
+                    GatewayDecrypt(decrypt=self.transfer_config.use_e2ee),
+                    parent_handle=recv_op,
+                    partition_id=partition_id,
+                )
+                decompress_op = dst_program[dst_region_tag].add_operator(
+                    GatewayDecompress(decompress=self.transfer_config.use_compression),
+                    parent_handle=decrypt_op,
                     partition_id=partition_id,
                 )
                 dst_program[dst_region_tag].add_operator(
                     GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
-                    parent_handle=recv_op,
+                    parent_handle=decompress_op,
                     partition_id=partition_id,
                 )
 
