@@ -471,7 +471,7 @@ class Planner:
             decrypt_op = GatewayDecrypt(decrypt=self.transfer_config.use_e2ee, e2ee_key_bytes=e2ee_key_bytes)
             gateway_program.add_operator(op=decrypt_op, parent_handle=receive_op.handle,
                                     partition_id=tuple(partition_ids))
-            decompress_op = GatewayCompress(compress=self.transfer_config.use_compression)
+            decompress_op = GatewayDecompress(compress=self.transfer_config.use_compression)
             gateway_program.add_operator(op=decompress_op, parent_handle=decrypt_op.handle,
                                     partition_id=tuple(partition_ids))
             
