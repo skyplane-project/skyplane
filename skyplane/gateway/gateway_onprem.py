@@ -1,6 +1,3 @@
-import psutil
-from multiprocessing import Process
-
 # TODO: migrate to programmable gateways
 # from skyplane.gateway.gateway_sender import GatewaySender
 #

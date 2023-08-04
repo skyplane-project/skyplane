@@ -33,3 +33,4 @@ numpy
 pandas
 pyarrow
 typer
+networkx

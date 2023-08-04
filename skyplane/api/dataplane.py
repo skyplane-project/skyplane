@@ -1,13 +1,14 @@
 import json
 import os
 import threading
-from collections import defaultdict, Counter
+from collections import defaultdict
 from datetime import datetime
 from functools import partial
 from datetime import datetime
 
 import nacl.secret
 import nacl.utils
+import typer
 import urllib3
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
@@ -15,7 +16,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional
 from skyplane import compute
 from skyplane.exceptions import GatewayContainerStartException
 from skyplane.api.tracker import TransferProgressTracker, TransferHook
-from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
+from skyplane.api.transfer_job import TransferJob
 from skyplane.api.config import TransferConfig
 from skyplane.planner.topology import TopologyPlan, TopologyPlanGateway
 from skyplane.utils import logger

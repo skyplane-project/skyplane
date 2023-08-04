@@ -3,7 +3,7 @@ from collections import defaultdict
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
 from skyplane import exceptions
 from skyplane.chunk import Chunk
-from skyplane.cli.impl.common import console, print_stats_completed
+from skyplane.cli.impl.common import console
 from skyplane.utils.definitions import format_bytes
 from skyplane.api.tracker import TransferHook
 
