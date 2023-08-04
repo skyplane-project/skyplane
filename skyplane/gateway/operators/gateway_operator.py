@@ -90,7 +90,14 @@ class GatewayOperator(ABC):
                 # TODO: status logging
                 self.chunk_store.log_chunk_state(chunk_req, ChunkState.in_progress, operator_handle=self.handle, worker_id=worker_id)
                 # process chunk
-                succ = self.process(chunk_req, *args)
+                succ = retry_backoff(
+                    partial(
+                        self.process,
+                        chunk_req, 
+                        *args
+                    ),
+                    max_retries=1,
+                )
 
                 # place in output queue
                 if succ:
