@@ -5,7 +5,7 @@ import os
 import csv
 
 from skyplane import compute
-from skyplane.api.config import TransferConfig
+from skyplane.api.transfer_config import TransferConfig
 from skyplane.utils import logger
 
 from skyplane.planner.topology import TopologyPlan

@@ -2,7 +2,7 @@ from pathlib import Path
 
 from skyplane import compute, exceptions
 from skyplane.api.client import SkyplaneClient
-from skyplane.api.config import TransferConfig, AWSConfig, AzureConfig, GCPConfig
+from skyplane.api.transfer_config import TransferConfig, AWSConfig, AzureConfig, GCPConfig
 from skyplane.api.dataplane import Dataplane
 from skyplane.api.pipeline import Pipeline
 from skyplane.api.tracker import TransferHook

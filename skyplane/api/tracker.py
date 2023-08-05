@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Set
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from skyplane import exceptions
-from skyplane.api.config import TransferConfig
+from skyplane.api.transfer_config import TransferConfig
 from skyplane.chunk import ChunkState, Chunk
 from skyplane.utils import logger, imports
 from skyplane.utils.fn import do_parallel

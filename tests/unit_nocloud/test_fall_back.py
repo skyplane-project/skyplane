@@ -2,7 +2,7 @@ import json
 import os
 
 import pytest
-from skyplane.api.config import TransferConfig
+from skyplane.api.transfer_config import TransferConfig
 from skyplane.planner.planner import MulticastDirectPlanner
 
 

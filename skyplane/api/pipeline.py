@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional
 from skyplane import compute
 from skyplane.api.tracker import TransferProgressTracker, TransferHook
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
-from skyplane.api.config import TransferConfig
+from skyplane.api.transfer_config import TransferConfig
 
 from skyplane.planner.planner import MulticastDirectPlanner, DirectPlannerSourceOneSided, DirectPlannerDestOneSided
 from skyplane.planner.topology import TopologyPlanGateway

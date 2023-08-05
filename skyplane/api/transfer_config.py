@@ -85,7 +85,7 @@ class TransferConfig:
 
     aws_instance_class: str = "m5.8xlarge"
     azure_instance_class: str = "Standard_D2_v5"
-    gcp_instance_class: str = "n2-standard-16"
+    gcp_instance_class: str = "n2-standard-32"
     ibmcloud_instance_class: str = "bx2-2x8"
     gcp_use_premium_network: bool = True
 
@@ -98,4 +98,4 @@ class TransferConfig:
     multipart_enabled: bool = True
     multipart_threshold_mb: int = 128
     multipart_chunk_size_mb: int = 64
-    multipart_max_chunks: int = 10000
+    multipart_max_chunks: int = 9990
