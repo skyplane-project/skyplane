@@ -36,7 +36,7 @@ Skyplane needs access to cloud credentials to perform transfers. To get started 
    $ pip install gcloud
 
    ---> For Azure:
-   $ pip install azure
+   $ pip install azure-cli
 
 Once you have the CLI tools setup, log into each cloud provider's CLI: 
 
