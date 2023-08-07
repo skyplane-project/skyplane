@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from typing import Optional, List
+from typing import Optional
 
 from skyplane import compute
 

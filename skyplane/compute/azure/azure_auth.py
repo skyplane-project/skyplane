@@ -1,7 +1,6 @@
 import json
 import os
 import subprocess
-import re
 
 from typing import Dict, List, Optional
 

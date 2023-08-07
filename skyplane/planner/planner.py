@@ -420,7 +420,7 @@ class DirectPlannerSourceOneSided(MulticastDirectPlanner):
                 dst_prefix = dst_prefixes[i]
                 dst_region_tag = dst_iface.region_tag()
                 dst_bucket = dst_iface.bucket()
-                dst_gateways = plan.get_region_gateways(dst_region_tag)
+                plan.get_region_gateways(dst_region_tag)
 
                 # special case where destination is same region as source
                 src_program.add_operator(
@@ -476,7 +476,7 @@ class DirectPlannerDestOneSided(MulticastDirectPlanner):
                 dst_prefix = dst_prefixes[i]
                 dst_region_tag = dst_iface.region_tag()
                 dst_bucket = dst_iface.bucket()
-                dst_gateways = plan.get_region_gateways(dst_region_tag)
+                plan.get_region_gateways(dst_region_tag)
 
                 # source region gateway program
                 obj_store_read = dst_program[dst_region_tag].add_operator(

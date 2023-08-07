@@ -9,7 +9,7 @@ import sys
 from multiprocessing import Event, Queue
 from os import PathLike
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from skyplane.utils import logger
 
