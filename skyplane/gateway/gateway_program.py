@@ -37,24 +37,18 @@ class GatewaySend(GatewayOperator):
         target_gateway_id: str,
         region: str,
         num_connections: int = 32,
-        compress: bool = False,
-        encrypt: bool = False,
         private_ip: bool = False,
     ):
         super().__init__("send")
         self.target_gateway_id = target_gateway_id  # gateway to send to
         self.region = region  # region to send to
         self.num_connections = num_connections  # default this for now
-        self.compress = compress
-        self.encrypt = encrypt
         self.private_ip = private_ip  # whether to send to private or public IP (private for GCP->GCP)
 
 
 class GatewayReceive(GatewayOperator):
-    def __init__(self, decompress: bool = False, decrypt: bool = False, max_pending_chunks: int = 1000):
+    def __init__(self, max_pending_chunks: int = 1000):
         super().__init__("receive")
-        self.decompress = decompress
-        self.decrypt = decrypt
         self.max_pending_chunks = max_pending_chunks
 
 
@@ -97,6 +91,32 @@ class GatewayMuxOr(GatewayOperator):
         super().__init__("mux_or")
 
 
+class GatewayCompress(GatewayOperator):
+    def __init__(self, compress: bool = False):
+        super().__init__("compress")
+        self.compress = compress
+
+
+class GatewayDecompress(GatewayOperator):
+    def __init__(self, compress: bool = False):
+        super().__init__("decompress")
+        self.compress = compress
+
+
+class GatewayEncrypt(GatewayOperator):
+    def __init__(self, encrypt: bool = False, e2ee_key_bytes: Optional[str] = None):
+        super().__init__("encrypt")
+        self.encrypt = encrypt
+        self.e2ee_key_bytes = e2ee_key_bytes
+
+
+class GatewayDecrypt(GatewayOperator):
+    def __init__(self, decrypt: bool = False, e2ee_key_bytes: Optional[str] = None):
+        super().__init__("decrypt")
+        self.decrypt = decrypt
+        self.e2ee_key_bytes = e2ee_key_bytes
+
+
 class GatewayProgram:
 
     """
@@ -117,7 +137,7 @@ class GatewayProgram:
         parent_op = self._ops[parent_handle] if parent_handle else None
         ops_handles = []
         for op in ops:
-            ops_handles.append(self.add_operator(op, parent_op, partition_id))
+            ops_handles.append(self.add_operator(op, parent_op.handle, partition_id))
 
         return ops_handles
 
@@ -151,7 +171,7 @@ class GatewayProgram:
                     exists = True
                     break
             if not exists:
-                program_all.append({"value": program, "partitions": [partition_id]})
+                program_all.append({"value": program, "partitions": [partition_id] if isinstance(partition_id, str) else partition_id})
 
         return program_all
 

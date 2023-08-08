@@ -1,18 +1,23 @@
-import cvxpy as cp  # type: ignore
-
 from skyplane.planner.solver import ThroughputSolver, ThroughputProblem, GBIT_PER_GBYTE, ThroughputSolution
 
 
 class ThroughputSolverILP(ThroughputSolver):
     @staticmethod
     def choose_solver():
+        import cvxpy as cp  # type: ignore
+
         installed = cp.installed_solvers()
         order = ["GUROBI", "CBC", "GLPK_MI"]
         for package in order:
             if package in installed:
                 return getattr(cp, package)
 
-    def solve_min_cost(self, p: ThroughputProblem, solver=cp.GLPK, solver_verbose=False, save_lp_path=None) -> ThroughputSolution:
+    def solve_min_cost(self, p: ThroughputProblem, solver=None, solver_verbose=False, save_lp_path=None) -> ThroughputSolution:
+        import cvxpy as cp  # type: ignore
+
+        if solver == None:
+            solver = cp.GLPK  # default
+
         regions = self.get_regions()
         sources = [regions.index(p.src)]
         sinks = [regions.index(p.dst)]

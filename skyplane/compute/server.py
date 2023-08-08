@@ -289,8 +289,6 @@ class Server:
         gateway_info_path: str,
         log_viewer_port=8888,
         use_bbr=False,
-        use_compression=False,
-        e2ee_key_bytes=None,
         use_socket_tls=False,
     ):
         def check_stderr(tup):
@@ -338,13 +336,6 @@ class Server:
         if self.provider == "aws":
             docker_envs["AWS_DEFAULT_REGION"] = self.region_tag.split(":")[1]
 
-        # copy E2EE keys
-        if e2ee_key_bytes is not None:
-            e2ee_key_file = "e2ee_key"
-            self.write_file(e2ee_key_bytes, f"/tmp/{e2ee_key_file}")
-            docker_envs["E2EE_KEY_FILE"] = f"/pkg/data/{e2ee_key_file}"
-            docker_run_flags += f" -v /tmp/{e2ee_key_file}:/pkg/data/{e2ee_key_file}"
-
         # upload gateway programs and gateway info
         gateway_program_file = os.path.basename(gateway_program_path).replace(":", "_")
         gateway_info_file = os.path.basename(gateway_info_path).replace(":", "_")
@@ -359,8 +350,7 @@ class Server:
         # update docker flags
         docker_run_flags += " " + " ".join(f"--env {k}={v}" for k, v in docker_envs.items())
 
-        gateway_daemon_cmd += f" --region {self.region_tag} {'--use-compression' if use_compression else ''}"
-        gateway_daemon_cmd += f" {'--disable-e2ee' if e2ee_key_bytes is None else ''}"
+        gateway_daemon_cmd += f" --region {self.region_tag}"
         gateway_daemon_cmd += f" {'--disable-tls' if not use_socket_tls else ''}"
         escaped_gateway_daemon_cmd = gateway_daemon_cmd.replace('"', '\\"')
         docker_launch_cmd = (
@@ -378,7 +368,7 @@ class Server:
         logger.fs.debug(f"{self.uuid()} gateway_api_url = {self.gateway_api_url}")
 
         # wait for gateways to start (check status API)
-        http_pool = urllib3.PoolManager()
+        http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=10))
 
         def is_api_ready():
             try:

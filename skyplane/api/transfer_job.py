@@ -283,10 +283,10 @@ class Chunker:
                     dest_provider, dest_region = dst_iface.region_tag().split(":")
                     try:
                         dest_key = self.map_object_key_prefix(src_prefix, obj.key, dst_prefix, recursive=recursive)
-                        assert (
-                            dest_key[: len(dst_prefix)] == dst_prefix
-                        ), f"Destination key {dest_key} does not start with destination prefix {dst_prefix}"
-                        dest_keys.append(dest_key[len(dst_prefix) :])
+                        # TODO: why is it changed here?
+                        # dest_keys.append(dest_key[len(dst_prefix) :])
+
+                        dest_keys.append(dest_key)
                     except exceptions.MissingObjectException as e:
                         logger.fs.exception(e)
                         raise e from None
@@ -508,8 +508,12 @@ class TransferJob(ABC):
         if not hasattr(self, "_dst_prefix"):
             if self.transfer_type == "unicast":
                 self._dst_prefix = [str(parse_path(self.dst_paths[0])[2])]
+                print("return dst_prefixes for unicast", self._dst_prefix)
             else:
+                for path in self.dst_paths:
+                    print("Parsing result for multicast", parse_path(path))
                 self._dst_prefix = [str(parse_path(path)[2]) for path in self.dst_paths]
+                print("return dst_prefixes for multicast", self._dst_prefix)
         return self._dst_prefix
 
     @property

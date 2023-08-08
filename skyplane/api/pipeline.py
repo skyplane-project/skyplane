@@ -10,7 +10,12 @@ from skyplane.api.tracker import TransferProgressTracker
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
 
-from skyplane.planner.planner import MulticastDirectPlanner, DirectPlannerSourceOneSided, DirectPlannerDestOneSided
+from skyplane.planner.planner import (
+    MulticastDirectPlanner,
+    DirectPlannerSourceOneSided,
+    DirectPlannerDestOneSided,
+    UnicastILPPlanner,
+)
 from skyplane.planner.topology import TopologyPlanGateway
 from skyplane.utils import logger
 from skyplane.utils.definitions import tmp_log_dir
@@ -62,11 +67,13 @@ class Pipeline:
         # planner
         self.planning_algorithm = planning_algorithm
         if self.planning_algorithm == "direct":
-            self.planner = MulticastDirectPlanner(self.max_instances, self.n_connections, self.transfer_config)
+            self.planner = MulticastDirectPlanner(self.transfer_config, self.max_instances, self.n_connections)
         elif self.planning_algorithm == "src_one_sided":
-            self.planner = DirectPlannerSourceOneSided(self.max_instances, self.n_connections, self.transfer_config)
+            self.planner = DirectPlannerSourceOneSided(self.transfer_config, self.max_instances, self.n_connections)
         elif self.planning_algorithm == "dst_one_sided":
-            self.planner = DirectPlannerDestOneSided(self.max_instances, self.n_connections, self.transfer_config)
+            self.planner = DirectPlannerDestOneSided(self.transfer_config, self.max_instances, self.n_connections)
+        elif self.planning_algorithm == "uni_ilp":
+            self.planning_algorithm = UnicastILPPlanner(self.transfer_config, self.max_instances, self.n_connections)
         else:
             raise ValueError(f"No such planning algorithm {planning_algorithm}")
 
@@ -185,3 +192,4 @@ class Pipeline:
 
         # return size
         return total_size * topo.cost_per_gb
+
