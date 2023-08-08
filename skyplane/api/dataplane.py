@@ -225,7 +225,7 @@ class Dataplane:
         logger.fs.debug(f"[Dataplane.provision] Starting gateways on {len(jobs)} servers")
         try:
             do_parallel(lambda fn: fn(), jobs, n=-1, spinner=spinner, spinner_persist=spinner, desc="Starting gateway container on VMs")
-        except Exception as e:
+        except Exception:
             self.copy_gateway_logs()
             raise GatewayContainerStartException(f"Error starting gateways. Please check gateway logs {self.transfer_dir}")
 

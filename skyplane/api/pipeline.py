@@ -142,7 +142,7 @@ class Pipeline:
             if debug:
                 dp.copy_gateway_logs()
             return tracker
-        except Exception as e:
+        except Exception:
             dp.copy_gateway_logs()
             return
 

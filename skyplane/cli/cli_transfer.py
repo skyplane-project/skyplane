@@ -21,8 +21,7 @@ from skyplane.cli.impl.common import print_header, console, print_stats_complete
 from skyplane.api.usage import UsageClient
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import cloud_config, config_path
-from skyplane.obj_store.object_store_interface import ObjectStoreInterface, StorageInterface
-from skyplane.obj_store.file_system_interface import FileSystemInterface
+from skyplane.obj_store.object_store_interface import StorageInterface
 from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 from skyplane.utils import logger
 from skyplane.utils.definitions import GB, format_bytes

@@ -10,7 +10,6 @@ from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.azure_storage_account_interface import AzureStorageAccountInterface
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 from skyplane.utils import logger, imports
-from azure.storage.blob import ContentSettings
 
 
 MAX_BLOCK_DIGITS = 5

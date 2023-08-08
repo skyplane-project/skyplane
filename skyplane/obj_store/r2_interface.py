@@ -1,17 +1,10 @@
-import base64
-import hashlib
 import os
 import boto3
-from functools import lru_cache
 
-from typing import Iterator, List, Optional, Tuple
+from typing import Iterator
 
-from skyplane import exceptions, compute
-from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.s3_interface import S3Object, S3Interface
-from skyplane.config_paths import cloud_config
 from skyplane.utils import logger, imports
-from skyplane.utils.generator import batch_generator
 
 from skyplane.config_paths import config_path
 from skyplane.config import SkyplaneConfig
@@ -35,7 +28,7 @@ class R2Interface(S3Interface):
                 aws_secret_access_key=self.config.cloudflare_secret_access_key,
                 region_name="auto",  # explicity set region, otherwise may be read from AWS boto3 env
             )
-        except Exception as e:
+        except Exception:
             raise ValueError("Error with connecting to {self.endpoint_url}: {e}")
         self.requester_pays = False
         self.bucket_name = bucket_name

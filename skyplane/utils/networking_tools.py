@@ -23,7 +23,15 @@ def get_cloud_region(ip: str, provider: str = "aws") -> str:
                 if re.match(prefix["ip_prefix"], ip):
                     return prefix["region"]
         elif provider == "azure":
-            region = requests.get(f"https://www.microsoft.com/en-us/download/confirmation.aspx?id=56519").json()
+            user_agent = {
+                "User-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95"
+            }
+            body = requests.get(f"https://www.microsoft.com/en-us/download/confirmation.aspx?id=56519", headers=user_agent).content
+            matches = re.search(b'downloadretry" href="([^"]*)"', body)
+            if matches is None:
+                return default_region[provider]
+            region_url = matches.groups(0)[0]
+            region = requests.get(region_url).json()
             for prefix in region["values"]:
                 if re.match(prefix["properties"]["addressPrefix"], ip):
                     return prefix["properties"]["region"]
