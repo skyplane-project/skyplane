@@ -20,6 +20,7 @@ from skyplane.gateway.operators.gateway_operator import (
     GatewaySender,
     GatewayRandomDataGen,
     GatewayWriteLocal,
+    GatewayDeleteLocal,
     GatewayObjStoreReadOperator,
     GatewayObjStoreWriteOperator,
     GatewayWaitReceiver,
@@ -246,6 +247,17 @@ class GatewayDaemon:
                     total_p += op["num_connections"]
                 elif op["op_type"] == "write_local":
                     operators[handle] = GatewayWriteLocal(
+                        handle=handle,
+                        region=self.region,
+                        input_queue=input_queue,
+                        output_queue=output_queue,
+                        error_queue=self.error_queue,
+                        error_event=self.error_event,
+                        chunk_store=self.chunk_store,
+                    )
+                    total_p += 1
+                elif op["op_type"] == "delete_local":
+                    operators[handle] = GatewayDeleteLocal(
                         handle=handle,
                         region=self.region,
                         input_queue=input_queue,

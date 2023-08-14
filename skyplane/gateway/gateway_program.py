@@ -1,6 +1,7 @@
 from typing import Optional, List
 import json
 from collections import defaultdict
+from pathlib import Path
 
 
 class GatewayOperator:
@@ -78,6 +79,12 @@ class GatewayWriteObjectStore(GatewayOperator):
 class GatewayWriteLocal(GatewayOperator):
     def __init__(self, path: Optional[str] = None):
         super().__init__("write_local")
+        self.path = path
+
+
+class GatewayDeleteLocal(GatewayOperator):
+    def __init__(self, path: Optional[Path] = None):
+        super().__init__("delete_local")
         self.path = path
 
 

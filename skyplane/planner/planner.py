@@ -18,6 +18,7 @@ from skyplane.gateway.gateway_program import (
     GatewayMuxAnd,
     GatewayReadObjectStore,
     GatewayWriteObjectStore,
+    GatewayDeleteLocal,
     GatewayReceive,
     GatewaySend,
     GatewayCompress,
@@ -684,11 +685,12 @@ class MulticastDirectPlanner(Planner):
                     GatewayReceive(decompress=self.transfer_config.use_compression, decrypt=self.transfer_config.use_e2ee),
                     partition_id=partition_id,
                 )
-                dst_program[dst_region_tag].add_operator(
+                write_obj_op = dst_program[dst_region_tag].add_operator(
                     GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
                     parent_handle=recv_op,
                     partition_id=(partition_id,),
                 )
+                src_program.add_operator(GatewayDeleteLocal(), parent_handle=write_obj_op, partition_id=(partition_id,))
 
                 # update cost per GB
                 plan.cost_per_gb += compute.CloudProvider.get_transfer_cost(src_region_tag, dst_region_tag)
@@ -748,11 +750,15 @@ class DirectPlannerSourceOneSided(MulticastDirectPlanner):
                 plan.get_region_gateways(dst_region_tag)
 
                 # special case where destination is same region as source
-                src_program.add_operator(
+                write_obj_op =src_program.add_operator(
                     GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
                     parent_handle=mux_and,
                     partition_id=(partition_id,),
                 )
+                
+                # delete local chunks
+                src_program.add_operator(GatewayDeleteLocal(), parent_handle=write_obj_op, partition_id=(partition_id,))
+                
                 # update cost per GB
                 plan.cost_per_gb += compute.CloudProvider.get_transfer_cost(src_region_tag, dst_region_tag)
 
@@ -805,12 +811,15 @@ class DirectPlannerDestOneSided(MulticastDirectPlanner):
                     GatewayReadObjectStore(src_bucket, src_region_tag, self.n_connections), partition_id=partition_id
                 )
 
-                dst_program[dst_region_tag].add_operator(
+                write_obj_op = dst_program[dst_region_tag].add_operator(
                     GatewayWriteObjectStore(dst_bucket, dst_region_tag, self.n_connections, key_prefix=dst_prefix),
                     parent_handle=obj_store_read,
                     partition_id=partition_id,
                 )
 
+                
+                dst_program[dst_region_tag].add_operator(GatewayDeleteLocal(), parent_handle=write_obj_op, partition_id=(partition_id,))
+                
                 # update cost per GB
                 plan.cost_per_gb += compute.CloudProvider.get_transfer_cost(src_region_tag, dst_region_tag)
 

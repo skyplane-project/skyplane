@@ -408,6 +408,32 @@ class GatewayWriteLocal(GatewayOperator):
         return True
 
 
+class GatewayDeleteLocal(GatewayOperator):
+    def __init__(
+        self,
+        handle: str,
+        region: str,
+        input_queue: GatewayQueue,
+        output_queue: GatewayQueue,
+        error_event,
+        error_queue: Queue,
+        chunk_store: ChunkStore,
+        path: Optional[Path] = None,
+        n_processes: int = 1,
+    ):
+        super().__init__(handle, region, input_queue, output_queue, error_event, error_queue, chunk_store, n_processes)
+        self.path = path
+
+    def process(self, chunk_req: ChunkRequest):
+        chunk_id = chunk_req.chunk.chunk_id
+        chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
+
+        if self.path:
+            self.path.unlink()
+        elif os.path.exists(chunk_file_path):
+            chunk_file_path.unlink()
+
+
 class GatewayObjStoreOperator(GatewayOperator):
     def __init__(
         self,
@@ -666,6 +692,7 @@ class GatewayDecompressor(GatewayOperator):
             with open(chunk_file_path, "wb") as f:
                 data = f.write()
         return True
+
 
 class GatewayEncrypter(GatewayOperator):
     def __init__(
