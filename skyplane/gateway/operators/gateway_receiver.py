@@ -31,8 +31,6 @@ class GatewayReceiver:
         recv_block_size=4 * MB,
         max_pending_chunks=1,
         use_tls: Optional[bool] = True,
-        use_compression: Optional[bool] = True,
-        e2ee_key_bytes: Optional[bytes] = None,
     ):
         self.handle = handle
         self.region = region
@@ -42,11 +40,6 @@ class GatewayReceiver:
         self.recv_block_size = recv_block_size
         self.max_pending_chunks = max_pending_chunks
         print("Max pending chunks", self.max_pending_chunks)
-        self.use_compression = use_compression
-        if e2ee_key_bytes is None:
-            self.e2ee_secretbox = None
-        else:
-            self.e2ee_secretbox = nacl.secret.SecretBox(e2ee_key_bytes)
         self.server_processes = []
         self.server_ports = []
         self.next_gateway_worker_id = 0
@@ -153,9 +146,6 @@ class GatewayReceiver:
             # TODO: this wont work
             # chunk_request = self.chunk_store.get_chunk_request(chunk_header.chunk_id)
 
-            should_decrypt = self.e2ee_secretbox is not None  # and chunk_request.dst_region == self.region
-            should_decompress = chunk_header.is_compressed  # and chunk_request.dst_region == self.region
-
             # wait for space
             # while self.chunk_store.remaining_bytes() < chunk_header.data_len * self.max_pending_chunks:
             #    print(
@@ -171,7 +161,7 @@ class GatewayReceiver:
                 fpath = self.chunk_store.get_chunk_file_path(chunk_header.chunk_id)
                 with fpath.open("wb") as f:
                     socket_data_len = chunk_header.data_len
-                    chunk_received_size, chunk_received_size_decompressed = 0, 0
+                    chunk_received_size = 0
                     to_write = bytearray(socket_data_len)
                     to_write_view = memoryview(to_write)
                     while socket_data_len > 0:
@@ -187,18 +177,6 @@ class GatewayReceiver:
                             )
                         )
                     to_write = bytes(to_write)
-
-                    if should_decrypt:
-                        to_write = self.e2ee_secretbox.decrypt(to_write)
-                        print(f"[receiver:{server_port}]:{chunk_header.chunk_id} Decrypting {len(to_write)} bytes")
-
-                    if should_decompress:
-                        data_batch_decompressed = lz4.frame.decompress(to_write)
-                        chunk_received_size_decompressed += len(data_batch_decompressed)
-                        to_write = data_batch_decompressed
-                        print(
-                            f"[receiver:{server_port}]:{chunk_header.chunk_id} Decompressing {len(to_write)} bytes to {chunk_received_size_decompressed} bytes"
-                        )
 
                     # try to write data until successful
                     while True:

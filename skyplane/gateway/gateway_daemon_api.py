@@ -121,10 +121,6 @@ class GatewayDaemonAPI(threading.Thread):
                     self.chunk_status[chunk_id] = ChunkState.complete.name
 
                     print(f"[gateway_api] chunk {chunk_id}: complete, all operators have uploaded {self.terminal_operators}")
-                    # remove chunk file
-                    if os.path.exists(chunk_file_path):
-                        logging.info(f"[gateway_api] Removing chunk file {chunk_file_path}")
-                        chunk_file_path.unlink()
 
                     # record compressed size
                     if "metadata" in elem and "compressed_size_bytes" in elem["metadata"] and "uncompressed_size_bytes" in elem["metadata"]:

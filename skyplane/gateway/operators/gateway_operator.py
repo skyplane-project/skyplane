@@ -162,15 +162,11 @@ class GatewaySender(GatewayOperator):
         chunk_store: ChunkStore,
         ip_addr: str,
         use_tls: Optional[bool] = True,
-        use_compression: Optional[bool] = True,
-        e2ee_key_bytes: Optional[bytes] = None,
         n_processes: Optional[int] = 32,
     ):
         super().__init__(handle, region, input_queue, output_queue, error_event, error_queue, chunk_store, n_processes)
         self.ip_addr = ip_addr
         self.use_tls = use_tls
-        self.use_compression = use_compression
-        self.e2ee_key_bytes = e2ee_key_bytes
         self.args = (ip_addr,)
 
         # provider = region.split(":")[0]
@@ -178,12 +174,6 @@ class GatewaySender(GatewayOperator):
         #    self.n_processes = 32
         # elif provider == "azure":
         #    self.n_processes = 24  # due to throttling limits from authentication
-
-        # encryption
-        if e2ee_key_bytes is None:
-            self.e2ee_secretbox = None
-        else:
-            self.e2ee_secretbox = nacl.secret.SecretBox(e2ee_key_bytes)
 
         # SSL context
         if use_tls:
@@ -330,22 +320,12 @@ class GatewaySender(GatewayOperator):
 
             wire_length = len(data)
             raw_wire_length = wire_length
-            compressed_length = None
-
-            if self.use_compression:
-                data = lz4.frame.compress(data)
-                wire_length = len(data)
-                compressed_length = wire_length
-            if self.e2ee_secretbox is not None:
-                data = self.e2ee_secretbox.encrypt(data)
-                wire_length = len(data)
 
             # send chunk header
             header = chunk.to_wire_header(
                 n_chunks_left_on_socket=len(chunk_ids) - idx - 1,
                 wire_length=wire_length,
                 raw_wire_length=raw_wire_length,
-                is_compressed=(compressed_length is not None),
             )
             # print(f"[sender-{self.worker_id}]:{chunk_id} sending chunk header {header}")
             header.to_socket(sock)
@@ -426,6 +406,32 @@ class GatewayWriteLocal(GatewayOperator):
     def process(self, chunk_req: ChunkRequest):
         # do nothing (already written locally)
         return True
+
+
+class GatewayDeleteLocal(GatewayOperator):
+    def __init__(
+        self,
+        handle: str,
+        region: str,
+        input_queue: GatewayQueue,
+        output_queue: GatewayQueue,
+        error_event,
+        error_queue: Queue,
+        chunk_store: ChunkStore,
+        path: Optional[Path] = None,
+        n_processes: int = 1,
+    ):
+        super().__init__(handle, region, input_queue, output_queue, error_event, error_queue, chunk_store, n_processes)
+        self.path = path
+
+    def process(self, chunk_req: ChunkRequest):
+        chunk_id = chunk_req.chunk.chunk_id
+        chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
+
+        if self.path:
+            self.path.unlink()
+        elif os.path.exists(chunk_file_path):
+            chunk_file_path.unlink()
 
 
 class GatewayObjStoreOperator(GatewayOperator):
@@ -599,4 +605,186 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         logger.debug(
             f"[obj_store:{self.worker_id}] Uploaded {chunk_req.chunk.chunk_id} partition {chunk_req.chunk.part_number} to {self.bucket_name}"
         )
+        return True
+
+
+class GatewayCompressor(GatewayOperator):
+    def __init__(
+        self,
+        handle: str,
+        region: str,
+        input_queue: GatewayQueue,
+        output_queue: GatewayQueue,
+        error_event,
+        error_queue: Queue,
+        chunk_store: Optional[ChunkStore] = None,
+        use_compression: Optional[bool] = True,
+        prefix: Optional[str] = "",
+    ):
+        super().__init__(
+            handle, region, input_queue, output_queue, error_event, error_queue, chunk_store
+        )
+        self.chunk_store = chunk_store
+        self.use_compression = use_compression
+        self.prefix = prefix
+
+    def process(self, chunk_req: ChunkRequest):
+        if not self.use_compression: return True
+        logger.debug(
+            f"[{self.handle}:{self.worker_id}] Start upload {chunk_req.chunk.chunk_id} to {self.bucket_name}, key {chunk_req.chunk.dest_key}"
+        )
+        chunk_reqs = [chunk_req]
+        for idx, chunk_req in enumerate(chunk_reqs):
+            chunk_id = chunk_req.chunk.chunk_id
+            chunk = chunk_req.chunk
+            chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
+            
+            with open(chunk_file_path, "rb") as f:
+                data = f.read()
+            
+            data = lz4.frame.compress(data)
+            wire_length = len(data)
+            compressed_length = wire_length
+            
+            with open(chunk_file_path, "wb") as f:
+                data = f.write()
+        return True
+
+
+class GatewayDecompressor(GatewayOperator):
+    def __init__(
+        self,
+        handle: str,
+        region: str,
+        input_queue: GatewayQueue,
+        output_queue: GatewayQueue,
+        error_event,
+        error_queue: Queue,
+        chunk_store: Optional[ChunkStore] = None,
+        use_compression: Optional[bool] = True,
+        prefix: Optional[str] = "",
+    ):
+        super().__init__(
+            handle, region, input_queue, output_queue, error_event, error_queue, chunk_store
+        )
+        self.chunk_store = chunk_store
+        self.use_compression = use_compression
+        self.prefix = prefix
+
+    def process(self, chunk_req: ChunkRequest):
+        if not self.use_compression: return True
+        logger.debug(
+            f"[{self.handle}:{self.worker_id}] Start upload {chunk_req.chunk.chunk_id} to {self.bucket_name}, key {chunk_req.chunk.dest_key}"
+        )
+        chunk_reqs = [chunk_req]
+        for idx, chunk_req in enumerate(chunk_reqs):
+            chunk_id = chunk_req.chunk.chunk_id
+            chunk = chunk_req.chunk
+            chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
+            
+            with open(chunk_file_path, "rb") as f:
+                data = f.read()
+            
+            data = lz4.frame.decompress(data)
+            wire_length = len(data)
+            compressed_length = wire_length
+            
+            with open(chunk_file_path, "wb") as f:
+                data = f.write()
+        return True
+
+
+class GatewayEncrypter(GatewayOperator):
+    def __init__(
+        self,
+        handle: str,
+        region: str,
+        input_queue: GatewayQueue,
+        output_queue: GatewayQueue,
+        error_event,
+        error_queue: Queue,
+        chunk_store: Optional[ChunkStore] = None,
+        e2ee_key_bytes: Optional[bytes] = None,
+        prefix: Optional[str] = "",
+    ):
+        super().__init__(
+            handle, region, input_queue, output_queue, error_event, error_queue, chunk_store
+        )
+        self.chunk_store = chunk_store
+        self.prefix = prefix
+        
+        # encryption
+        if e2ee_key_bytes is None:
+            self.e2ee_secretbox = None
+        else:
+            self.e2ee_secretbox = nacl.secret.SecretBox(e2ee_key_bytes)
+
+    def process(self, chunk_req: ChunkRequest):
+        if not self.e2ee_secretbox: return
+        logger.debug(
+            f"[{self.handle}:{self.worker_id}] Start upload {chunk_req.chunk.chunk_id} to {self.bucket_name}, key {chunk_req.chunk.dest_key}"
+        )
+        chunk_reqs = [chunk_req]
+        for idx, chunk_req in enumerate(chunk_reqs):
+            chunk_id = chunk_req.chunk.chunk_id
+            chunk = chunk_req.chunk
+            chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
+            
+            with open(chunk_file_path, "rb") as f:
+                data = f.read()
+            
+            data = self.e2ee_secretbox.encrypt(data)
+            wire_length = len(data)
+            encrypted_length = wire_length
+            
+            with open(chunk_file_path, "wb") as f:
+                data = f.write()
+        return True
+
+
+class GatewayDecrypter(GatewayOperator):
+    def __init__(
+        self,
+        handle: str,
+        region: str,
+        input_queue: GatewayQueue,
+        output_queue: GatewayQueue,
+        error_event,
+        error_queue: Queue,
+        chunk_store: Optional[ChunkStore] = None,
+        e2ee_key_bytes: Optional[bytes] = None,
+        prefix: Optional[str] = "",
+    ):
+        super().__init__(
+            handle, region, input_queue, output_queue, error_event, error_queue, chunk_store
+        )
+        self.chunk_store = chunk_store
+        self.prefix = prefix
+        
+        # encryption
+        if e2ee_key_bytes is None:
+            self.e2ee_secretbox = None
+        else:
+            self.e2ee_secretbox = nacl.secret.SecretBox(e2ee_key_bytes)
+
+    def process(self, chunk_req: ChunkRequest):
+        if not self.e2ee_secretbox: return
+        logger.debug(
+            f"[{self.handle}:{self.worker_id}] Start upload {chunk_req.chunk.chunk_id} to {self.bucket_name}, key {chunk_req.chunk.dest_key}"
+        )
+        chunk_reqs = [chunk_req]
+        for idx, chunk_req in enumerate(chunk_reqs):
+            chunk_id = chunk_req.chunk.chunk_id
+            chunk = chunk_req.chunk
+            chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_id)
+            
+            with open(chunk_file_path, "rb") as f:
+                data = f.read()
+            
+            data = self.e2ee_secretbox.decrypt(data)
+            wire_length = len(data)
+            encrypted_length = wire_length
+            
+            with open(chunk_file_path, "wb") as f:
+                data = f.write()
         return True
