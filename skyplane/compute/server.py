@@ -378,7 +378,7 @@ class Server:
         logger.fs.debug(f"{self.uuid()} gateway_api_url = {self.gateway_api_url}")
 
         # wait for gateways to start (check status API)
-        http_pool = urllib3.PoolManager()
+        http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=10))
 
         def is_api_ready():
             try:

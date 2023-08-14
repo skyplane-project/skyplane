@@ -261,6 +261,23 @@ class GatewaySender(GatewayOperator):
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         return sock
 
+    def send_data(self, dst_host, header, data):
+        # contact server to set up socket connection
+        if self.destination_ports.get(dst_host) is None:
+            self.destination_sockets[dst_host] = self.make_socket(dst_host)
+        sock = self.destination_sockets[dst_host]
+        
+        try:
+            header.to_socket(sock)
+            sock.sendall(data)
+        except socket.error as e:
+            print(e)
+            del self.destination_ports[dst_host]
+            return False
+        # if successful, return True
+        return True
+        
+
     # send chunks to other instances
     def process(self, chunk_req: ChunkRequest, dst_host: str):
         """Send list of chunks to gateway server, pipelining small chunks together into a single socket stream."""
@@ -307,15 +324,6 @@ class GatewaySender(GatewayOperator):
             print(f"[{self.handle}:{self.worker_id}] Error registering chunks {chunk_ids} to {dst_host}: {e}")
             raise e
 
-        # contact server to set up socket connection
-        if self.destination_ports.get(dst_host) is None:
-            print(f"[sender-{self.worker_id}]:{chunk_ids} creating new socket")
-            self.destination_sockets[dst_host] = retry_backoff(
-                partial(self.make_socket, dst_host), max_retries=3, exception_class=socket.timeout
-            )
-            print(f"[sender-{self.worker_id}]:{chunk_ids} created new socket")
-        sock = self.destination_sockets[dst_host]
-
         # TODO: cleanup so this isn't a loop
         for idx, chunk_req in enumerate(chunk_reqs):
             # self.chunk_store.state_start_upload(chunk_id, f"sender:{self.worker_id}")
@@ -347,16 +355,13 @@ class GatewaySender(GatewayOperator):
                 raw_wire_length=raw_wire_length,
                 is_compressed=(compressed_length is not None),
             )
-            # print(f"[sender-{self.worker_id}]:{chunk_id} sending chunk header {header}")
-            header.to_socket(sock)
-            # print(f"[sender-{self.worker_id}]:{chunk_id} sent chunk header")
-
             # send chunk data
             assert chunk_file_path.exists(), f"chunk file {chunk_file_path} does not exist"
-            # file_size = os.path.getsize(chunk_file_path)
-
-            with Timer() as t:
-                sock.sendall(data)
+            
+            while True:
+                with Timer() as t:
+                    is_suc = self.send_data(dst_host=dst_host, header=header, data=data)
+                if is_suc: break
 
             # logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent at {chunk.chunk_length_bytes * 8 / t.elapsed / MB:.2f}Mbps")
             print(f"[sender:{self.worker_id}]:{chunk_id} sent at {wire_length * 8 / t.elapsed / MB:.2f}Mbps")
