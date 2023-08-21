@@ -1,19 +1,27 @@
+import json
+import time
+import os
 import threading
+from collections import defaultdict, Counter
 from datetime import datetime
+from functools import partial
 from datetime import datetime
 
+import nacl.secret
+import nacl.utils
 import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 from skyplane import compute
-from skyplane.api.tracker import TransferProgressTracker
+from skyplane.api.tracker import TransferProgressTracker, TransferHook
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
 
 from skyplane.planner.planner import MulticastDirectPlanner, DirectPlannerSourceOneSided, DirectPlannerDestOneSided
 from skyplane.planner.topology import TopologyPlanGateway
 from skyplane.utils import logger
-from skyplane.utils.definitions import tmp_log_dir
+from skyplane.utils.definitions import gateway_docker_image, tmp_log_dir
+from skyplane.utils.fn import PathLike, do_parallel
 
 from skyplane.api.dataplane import Dataplane
 
@@ -92,6 +100,8 @@ class Pipeline:
         ## create plan from set of jobs scheduled
         # topo = self.planner.plan(self.jobs_to_dispatch)
 
+        # TODO: provision and start the tracker gateway
+
         ## create dataplane from plan
         # dp = Dataplane(self.clientid, topo, self.provisioner, self.transfer_config, self.transfer_dir, debug=debug)
         dp = self.create_dataplane(debug)
@@ -110,7 +120,7 @@ class Pipeline:
             # copy gateway logs
             if debug:
                 dp.copy_gateway_logs()
-        except Exception:
+        except Exception as e:
             dp.copy_gateway_logs()
         dp.deprovision(spinner=True)
         return dp
@@ -123,7 +133,7 @@ class Pipeline:
             if debug:
                 dp.copy_gateway_logs()
             return tracker
-        except Exception:
+        except Exception as e:
             dp.copy_gateway_logs()
             return
 

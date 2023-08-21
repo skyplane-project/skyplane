@@ -11,7 +11,7 @@ from pathlib import Path
 
 import requests
 from rich import print as rprint
-from typing import Optional, Dict, List
+from typing import Any, Optional, Dict, List
 
 import skyplane
 from skyplane.utils.definitions import tmp_log_dir
@@ -339,6 +339,23 @@ class UsageClient:
         with open(destination, "w+") as json_file:
             json_file.write(json.dumps(asdict(data)))
         return destination
+
+    @classmethod
+    def read_usage_data(cls, path: Optional[Path] = None) -> dict[str, Any]:
+        """Read the usage data from the directory.
+
+        :param path: the path to the directory to write usage data
+        :type path: Path
+        :return: the absolute path of the usage data json file
+        :rtype: Path
+        """
+        client = cls()
+        if path is None:
+            client_id_path = client.client_id if client.client_id else "unknown"
+            path = tmp_log_dir / "usage" / client_id_path / str(client.session_id) / USAGE_STATS_FILE
+        with open(path, "r") as json_file:
+            data = json.load(json_file)
+        return data
 
     def report_usage_data(self, type: str, data: UsageStatsToReport, path: Path) -> None:
         """Report the usage data to the usage server.

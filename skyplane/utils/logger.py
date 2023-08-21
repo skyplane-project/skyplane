@@ -1,6 +1,7 @@
 import sys
 from datetime import datetime
 from functools import partial
+import threading
 from types import SimpleNamespace
 
 from rich import print as rprint
@@ -9,6 +10,8 @@ from skyplane.utils.definitions import is_gateway_env
 
 log_file = None
 
+file_lock = threading.Lock()
+
 
 def open_log_file(filename):
     global log_file
@@ -16,15 +19,16 @@ def open_log_file(filename):
 
 
 def log(msg, LEVEL="INFO", color="white", write_to_file=True, write_to_stderr=True, *args, **kwargs):
-    if args or kwargs:
-        msg = msg.format(*args, **kwargs)
-    level_prefix = ("[" + LEVEL.upper() + "]").ljust(7)
-    time = datetime.now().strftime("%H:%M:%S")
-    if write_to_file and log_file:
-        log_file.write(f"{time} {level_prefix} {msg}\n")
-        log_file.flush()
-    if write_to_stderr:
-        rprint(f"{time} {level_prefix} [{color}]{msg}[/]", flush=True, file=sys.stderr)
+    with file_lock:
+        if args or kwargs:
+            msg = msg.format(*args, **kwargs)
+        level_prefix = ("[" + LEVEL.upper() + "]").ljust(7)
+        time = datetime.now().strftime("%H:%M:%S")
+        if write_to_file and log_file:
+            log_file.write(f"{time} {level_prefix} {msg}\n")
+            log_file.flush()
+        if write_to_stderr:
+            rprint(f"{time} {level_prefix} [{color}]{msg}[/]", flush=True, file=sys.stderr)
 
 
 debug = partial(log, LEVEL="DEBUG", color="cyan")
@@ -55,3 +59,15 @@ fs = SimpleNamespace(
     exception=partial(exception, write_to_file=True, write_to_stderr=is_gateway_env),
     log=partial(log, write_to_file=True, write_to_stderr=is_gateway_env),
 )
+
+
+def get_logs():
+    global log_file
+    with file_lock:
+        if log_file:
+            log_file.seek(0)
+            logs = log_file.read()
+            log_file.seek(0, 2)
+            return logs
+        else:
+            return None

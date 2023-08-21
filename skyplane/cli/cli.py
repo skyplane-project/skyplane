@@ -12,6 +12,7 @@ import skyplane.cli.cli_config
 from skyplane import compute
 
 from skyplane.cli.cli_init import init
+from skyplane.cli.cli_tracker import TrackerCLI
 from skyplane.cli.cli_transfer import cp, sync
 from skyplane.cli.impl.common import query_instances
 from skyplane.utils import logger
@@ -44,7 +45,7 @@ def deprovision(
     instances = query_instances()
     if filter_client_id:
         instances = [instance for instance in instances if instance.tags().get("skyplaneclientid") == filter_client_id]
-
+    print(instances)
     if instances:
         typer.secho(f"Deprovisioning {len(instances)} instances", fg="yellow", bold=True)
         do_parallel(lambda instance: instance.terminate_instance(), instances, desc="Deprovisioning", spinner=True, spinner_persist=True)
@@ -87,6 +88,32 @@ def ssh():
     logger.info("It may ask for a private key password, try `skyplane`.")
     proc = subprocess.Popen(split(cmd))
     proc.wait()
+
+
+@app.command()
+def cancel(
+    transfer_id: str = typer.Option(None, "--transfer-id", "-id", help="Transfer ID of the transfer. Must have started the transfer first.")
+):
+    """Cancel transfer with transfer_id"""
+    if transfer_id is None:
+        typer.secho("Must specify transfer_id", fg="red", err=True)
+        raise typer.Abort()
+
+    TrackerCLI.cancel_transfer(transfer_id)
+    typer.secho(f"Transfer {transfer_id} is cancelled.", fg="blue")
+
+
+@app.command()
+def status(
+    transfer_id: str = typer.Option(None, "--transfer-id", "-id", help="Transfer ID of the transfer. Must have started the transfer first.")
+):
+    """Get status of the transfer"""
+    if transfer_id is None:
+        typer.secho("Must specify transfer_id", fg="red", err=True)
+        raise typer.Abort()
+
+    status = TrackerCLI.transfer_status(transfer_id)
+    typer.secho(f"Transfer status\n{status}", fg="green")
 
 
 typer_click_object = typer.main.get_command(app)
