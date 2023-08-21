@@ -1,9 +1,6 @@
 from http import HTTPStatus
 import os
 import signal
-import traceback
-from typing import Any
-import uuid
 from fastapi import FastAPI, BackgroundTasks, Response
 from pydantic import BaseModel
 from skyplane.api.usage import UsageClient
@@ -11,8 +8,6 @@ from skyplane.cli.cli_transfer import SkyplaneCLI
 from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 from skyplane.obj_store.storage_interface import StorageInterface
 from skyplane.utils.path import parse_path
-from rich import print as rprint
-from typing import Optional
 from skyplane.utils import logger
 
 app = FastAPI()
@@ -116,7 +111,6 @@ def _shutdown():
 
 def _force_deprovision():
     assert dp is not None, "Must initialize dataplane before deprovisioning"
-    rprint(f"\n:x: [bold red]Force deprovisioning dataplane[/bold red]")
     s = signal.signal(signal.SIGINT, signal.SIG_IGN)
     dp.deprovision(spinner=True)
     signal.signal(signal.SIGINT, s)
