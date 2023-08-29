@@ -224,6 +224,10 @@ class GCPAuthentication:
                 # role does not exist
                 policy["bindings"].append({"role": target_role, "members": [account_handle]})
                 modified = True
+            target_role = "roles/bigquery.admin"
+            if target_role not in roles: 
+                policy["bindings"].append({"role": target_role, "members": [account_handle]})
+                modified = True
             else:
                 for role in policy["bindings"]:
                     if role["role"] == target_role:
@@ -256,7 +260,18 @@ class GCPAuthentication:
     def get_storage_client(storage, self):
         # TODO: cache storage account clinet
         # check that storage account works
+        print("This is storage", storage)
         return storage.Client.from_service_account_json(self.service_account_credentials)
+
+    @imports.inject("google.cloud.bigquery", pip_extra="gcp")
+    def get_bigquery_object(bigquery, self):
+        print("This is bigquery", bigquery)
+        return bigquery
+
+    @imports.inject("google.cloud.bigquery", pip_extra="gcp")
+    def get_bigquery_client(bigquery, self):
+        print("This is bigquery", bigquery)
+        return bigquery.Client.from_service_account_json(self.service_account_credentials)
 
     def get_gcp_instances(self, gcp_region: str):
         return self.get_gcp_client().instances().list(project=self.project_id, zone=gcp_region).execute()
