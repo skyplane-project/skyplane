@@ -25,6 +25,7 @@ class BQIInterface(ObjectStoreInterface):
     def __init__(self, bucket_name: str):
         self.bucket_name = bucket_name
         self.auth = compute.GCPAuthentication()
+        self.full_name = self.auth.project_id + "." + bucket_name
         self._bigquery_object = self.auth.get_bigquery_object()
         self._bigquery_client = self.auth.get_bigquery_client()
         self._requests_session = requests.Session()
@@ -58,12 +59,12 @@ class BQIInterface(ObjectStoreInterface):
         bucket = None
         default_region = cloud_config.get_flag("gcp_default_region")
         try:
-            bucket = self._bigquery_client.get_dataset(self.bucket_name)
+            bucket = self._bigquery_client.get_dataset(self.full_name)
         except Exception as e:
             # does not have storage.buckets.get access to the Google Cloud Storage bucket
             if "access to the Google Cloud Storage bucket" in str(e):
                 logger.warning(
-                    f"No access to the Google Cloud BigQuery Dataset '{self.bucket_name}', assuming bucket is in the '{default_region}' zone"
+                    f"No access to the Google Cloud BigQuery Dataset '{self.full_name}', assuming bucket is in the '{default_region}' zone"
                 )
                 return default_region
             raise
@@ -83,7 +84,7 @@ class BQIInterface(ObjectStoreInterface):
 
     def bucket_exists(self):
         try:
-            self._bigquery_client.get_dataset(self.bucket_name)
+            self._bigquery_client.get_dataset(self.full_name)
             return True
         except Exception as e:
             if "Not found:" in str(e) or "Request couldn't be served" in str(e):     
@@ -101,17 +102,17 @@ class BQIInterface(ObjectStoreInterface):
     #Creates Dataset for BigQuery
     def create_bucket(self, gcp_region, premium_tier=True):
         if not self.bucket_exists():
-            dataset = self._bigquery_object.Dataset(self.bucket_name)
+            dataset = self._bigquery_object.Dataset(self.full_name)
             region_without_zone = "-".join(gcp_region.split("-")[:2])
             dataset.location = region_without_zone
             self._bigquery_client.create_dataset(dataset, timeout=30) 
 
     #Deletes a dataset
     def delete_bucket(self):
-        self._bigquery_client.delete_dataset(self.bucket_name, delete_contents=True, not_found_ok=True)
+        self._bigquery_client.delete_dataset(self.full_name, delete_contents=True, not_found_ok=True)
 
     def list_objects(self, prefix="", region=None) -> Iterator[BQIObject]:
-        tables = self._bigquery_client.list_tables(self.bucket_name)
+        tables = self._bigquery_client.list_tables(self.full_name)
         for table in tables:
             if (not prefix or table.table_id.startswith(prefix)):
                 tableobj = self._bigquery_client.get_table(table)
@@ -126,14 +127,18 @@ class BQIInterface(ObjectStoreInterface):
     #Deletes a table inside a dataset
     def delete_objects(self, keys: List[str]):
         for key in keys:
-            table_id = self.bucket_name + "." +key
+            table_id = self.full_name + "." +key
             self._bigquery_client.delete_table(table_id, not_found_ok=True)
 
     # Returns reference of a table inside of a dataset
     @lru_cache(maxsize=1024)
     def get_obj_metadata(self, obj_name):
-        dataset_ref = self._bigquery_client.get_dataset(self.bucket_name)
+        dataset_ref = self._bigquery_client.get_dataset(self.full_name)
         table_ref = dataset_ref.table(obj_name)
+        print("printing dataset_reference")
+        print(dataset_ref)
+        print("printing table_reference")
+        print(table_ref)
         table = None
         try: 
             table = self._bigquery_client.get_table(table_ref)
@@ -198,7 +203,7 @@ class BQIInterface(ObjectStoreInterface):
         headers["Authorization"] = f"Bearer {self.auth._credentials.token}"
         print(headers)
         # generate BigQuery multipart upload URL
-        project_name = self.bucket_name.split(".")[0]
+        project_name = self.full_name.split(".")[0]
         print(project_name)
         url = f"https://www.googleapis.com/upload/bigquery/v2/projects/{project_name}/jobs?uploadType=multipart"
 
@@ -224,7 +229,8 @@ class BQIInterface(ObjectStoreInterface):
 
         table = self.get_obj_metadata(src_object_name)
         blob = self._bigquery_client.list_rows(table).to_dataframe()
-        dst_file_path = os.path.join(dst_file_path, src_object_name + '.csv')
+        if not os.path.exists(dst_file_path):
+            open(dst_file_path, "a").close()
         blob.to_csv(dst_file_path, index=False, header=True)
         mime_type = "text/csv"
         return mime_type, None 
@@ -239,13 +245,16 @@ class BQIInterface(ObjectStoreInterface):
             source_format = self._bigquery_object.SourceFormat.CSV,
             autodetect = True,
         )
-        dataset_ref = self._bigquery_client.dataset(self.bucket_name.split(".")[1])
+        dataset_ref = self._bigquery_client.dataset(self.bucket_name)
         table_ref = dataset_ref.table(dst_object_name)
-        table_id = self.bucket_name
-        if part_number is None:
+        table_id = self.full_name
+        if part_number is None: #NOT Multipart Upload
             with open(src_file_path, "rb") as source_file: 
-                job = self._bigquery_client.load_table_from_file(source_file, table_ref, job_config = job_config)
-                job.result()
+                try: 
+                    job = self._bigquery_client.load_table_from_file(source_file, table_ref, job_config = job_config)
+                    job.result()
+                except Exception as e:
+                    raise; 
             return
 
 

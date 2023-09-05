@@ -8,15 +8,16 @@ from skyplane.utils.definitions import MB
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.utils.fn import wait_for
 
-def bigquery_test_framework(region, bucket, multipart: bool, test_delete_bucket: bool = False, file_size_mb: int = 1):
+def bigquery_test_framework(region, bucket, content, multipart: bool, test_delete_bucket: bool = False):
     interface = ObjectStoreInterface.create(region, bucket)
     interface.create_bucket(region.split(":")[1])
     time.sleep(5)
-    obj_name = f"test_{uuid.uuid4()}.csv"
+    obj_name = f"test_{uuid.uuid4()}"
+    #upload object
     with tempfile.NamedTemporaryFile() as tmp:
         fpath = tmp.name
         with open(fpath, "rb+") as f:
-            f.write(b'Title,Genre,Premiere,Runtime,IMDB Score,Language \n Discuss According Model,Horror,"February 09, 2020",107,2.6,Japanese \n People Conference Be,Comedy,"April 25, 2020",84,1.8,Chinese')
+            f.write(bytes(content, 'utf-8'))
             f.seek(0)
             file_md5 = hashlib.md5(f.read()).hexdigest()
         if multipart:
@@ -27,7 +28,23 @@ def bigquery_test_framework(region, bucket, multipart: bool, test_delete_bucket:
             # interface.complete_multipart_upload(obj_name, upload_id)
             # time.sleep(5)
         else:
-            interface.upload_object(fpath, obj_name.split(".")[0])
+            interface.upload_object(fpath, obj_name)
             time.sleep(5)
     assert not interface.exists("random_nonexistent_file"), "Object should not exist"
+
+    # download object
+    with tempfile.NamedTemporaryFile() as tmp:
+        fpath = tmp.name
+        if os.path.exists(fpath):
+            os.remove(fpath)
+        if multipart:
+            mime_type, md5 = interface.download_object(obj_name, fpath, 0, file_size_mb * MB)
+            time.sleep(5)
+        else:
+            mime_type, md5 = interface.download_object(obj_name, fpath)
+            time.sleep(5)
+        local_size = os.path.getsize(fpath)
+        assert file_size_mb * MB == local_size, f"Object size mismatch: {file_size_mb * MB} != {local_size}"
+        assert md5 is None or file_md5 == md5, f"Object md5 mismatch: {file_md5} != {md5}"
+        assert mime_type == "text/plain", f"Object mime type mismatch: {mime_type} != text/plain"
     return True
