@@ -39,6 +39,8 @@ class ObjectStore:
             return f"s3://{bucket_name}"
         elif provider == "gcp":
             return f"gs://{bucket_name}"
+        elif provider == "bqi":
+            return f"bqi://{bucket_name}"
         else:
             raise NotImplementedError(f"Provider {provider} not implemented")
 

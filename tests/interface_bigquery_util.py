@@ -1,6 +1,7 @@
 import hashlib
 import time
 import os
+import sys
 import tempfile
 import uuid
 from skyplane.utils.definitions import MB
@@ -13,6 +14,7 @@ def bigquery_test_framework(region, bucket, content, multipart: bool, test_delet
     interface.create_bucket(region.split(":")[1])
     time.sleep(5)
     obj_name = f"test_{uuid.uuid4()}"
+    file_size_mb = sys.getsizeof(content)
     #upload object
     with tempfile.NamedTemporaryFile() as tmp:
         fpath = tmp.name
@@ -44,6 +46,8 @@ def bigquery_test_framework(region, bucket, content, multipart: bool, test_delet
             mime_type, md5 = interface.download_object(obj_name, fpath)
             time.sleep(5)
         local_size = os.path.getsize(fpath)
+        print(file_size_mb * MB)
+        print(local_size)
         assert file_size_mb * MB == local_size, f"Object size mismatch: {file_size_mb * MB} != {local_size}"
         assert md5 is None or file_md5 == md5, f"Object md5 mismatch: {file_md5} != {md5}"
         assert mime_type == "text/plain", f"Object mime type mismatch: {mime_type} != text/plain"
