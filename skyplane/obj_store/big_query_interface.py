@@ -4,7 +4,9 @@ import hashlib
 import os
 from functools import lru_cache
 from xml.etree import ElementTree
-
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from urllib3.filepost import encode_multipart_formdata, choose_boundary
 
 import requests
 from typing import Any, Iterator, List, Optional, Tuple
@@ -135,10 +137,6 @@ class BQIInterface(ObjectStoreInterface):
     def get_obj_metadata(self, obj_name):
         dataset_ref = self._bigquery_client.get_dataset(self.full_name)
         table_ref = dataset_ref.table(obj_name)
-        print("printing dataset_reference")
-        print(dataset_ref)
-        print("printing table_reference")
-        print(table_ref)
         table = None
         try: 
             table = self._bigquery_client.get_table(table_ref)
@@ -156,7 +154,7 @@ class BQIInterface(ObjectStoreInterface):
 
     def get_obj_last_modified(self, obj_name):
         return self.get_obj_metadata(obj_name).modified
-
+"""
     def send_xml_request(
         self,
         blob_name: str,
@@ -169,7 +167,6 @@ class BQIInterface(ObjectStoreInterface):
         dummy_data = '''
         --foo_bar_baz
         Content-Type: application/json; charset=UTF-8
-
         {
         "configuration": {
             "load": {
@@ -181,45 +178,43 @@ class BQIInterface(ObjectStoreInterface):
                 ]
             },
             "destinationTable": {
-                "projectId": "projectId",
-                "datasetId": "datasetId",
-                "tableId": "tableId"
-            }
+                "projectId": "skyplane-test-bq",
+                "datasetId": "skyplane-test-bq.5cd815ddc2af47428734443610ea062c",
+                "tableId": "f3f0c3dbec9043c4bcbc239c0d497b38_copy"
             }
             }
         }
-
-        --foo_bar_baz
-        Content-Type: */*
-        CSV, JSON, AVRO, PARQUET, or ORC data
+        }
         --foo_bar_baz--
         '''
-        print(self.auth._credentials)
-        print(dummy_data)
+        def pretty_print_POST(req):
+            print('{}\n{}\r\n{}\r\n\r\n{}'.format(
+                '-----------START-----------',
+                req.method + ' ' + req.url,
+                '\r\n'.join('{}: {}'.format(k, v) for k, v in req.headers.items()),
+                req.body,
+            ))
         headers = headers or {}
         headers["Host"] = 'www.googleapis.com'
-        headers["Content-Type"] = 'multipart/related; boundary=foo_bar_baz'
+        headers["Content-Type"] = "multipart/related; boundary=foo-bar-baz"
         headers["Content-Length"] = str(len(dummy_data.encode('utf-8')))
         headers["Authorization"] = f"Bearer {self.auth._credentials.token}"
-        print(headers)
         # generate BigQuery multipart upload URL
         project_name = self.full_name.split(".")[0]
-        print(project_name)
         url = f"https://www.googleapis.com/upload/bigquery/v2/projects/{project_name}/jobs?uploadType=multipart"
-
+        print("THE HEADERS")
+        #headers = dict(related.items())
         # prepare request
         if data:
             req = requests.Request(method, url, headers=headers, data=dummy_data)
         else:
             req = requests.Request(method, url, headers=headers, data=dummy_data)
-
         prepared = req.prepare()
         response = self._requests_session.send(prepared)
-
         if not response.ok:
             raise ValueError(f"Invalid status code {response.status_code}: {response.text}")
-
         return response
+"""
 
     def download_object(
         self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5=False
@@ -260,6 +255,4 @@ class BQIInterface(ObjectStoreInterface):
 
     def initiate_multipart_upload(self, dst_object_name: str, mime_type: Optional[str] = None) -> str:
         assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
-        response = self.send_xml_request(dst_object_name, "POST", content_type=mime_type)
-        return ElementTree.fromstring(response.content)[2].text
-
+        return 

@@ -24,6 +24,7 @@ def bigquery_test_framework(region, bucket, content, multipart: bool, test_delet
             file_md5 = hashlib.md5(f.read()).hexdigest()
         if multipart:
             upload_id = interface.initiate_multipart_upload(obj_name, mime_type="multipart/related")
+            print(upload_id)
             time.sleep(5)
             # interface.upload_object(fpath, obj_name, 1, upload_id)
             # time.sleep(5)
