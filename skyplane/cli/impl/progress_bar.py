@@ -63,7 +63,7 @@ class ProgressBarTransferHook(TransferHook):
         assert region_tag is not None, f"Must specify region tag for progress bar"
         self.chunks_completed[region_tag] += len(chunks)
         self.bytes_completed[region_tag] += sum([chunk.chunk_length_bytes for chunk in chunks])
-        self.pbar.update(self.transfer_task[region_tag], completed=self.bytes_completed[region_tag])
+        self.pbar.update(self.transfer_task[region_tag], completed=self.bytes_completed[region_tag], refresh=True)
 
     def on_transfer_end(self):
         self.pbar.stop()
