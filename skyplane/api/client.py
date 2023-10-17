@@ -79,7 +79,7 @@ class SkyplaneClient:
             debug=debug,
         )
 
-    def copy(self, src: str, dst: str, recursive: bool = False):
+    def copy(self, src: str, dst: str, recursive: bool = False, max_instances: Optional[int] = 1, debug=False):
         """
         A simple version of Skyplane copy. It automatically waits for transfer to complete
         (the main thread is blocked) and deprovisions VMs at the end.
@@ -90,11 +90,11 @@ class SkyplaneClient:
         :type dst: str
         :param recursive: If true, will copy objects at folder prefix recursively (default: False)
         :type recursive: bool
-        :param num_vms: The maximum number of instances to use per region (default: 1)
-        :type num_vms: int
+        :param max_instances: The maximum number of instances to use per region (default: 1)
+        :type max_instances: int
         """
 
-        pipeline = self.pipeline()
+        pipeline = self.pipeline(max_instances=max_instances, debug=debug)
         pipeline.queue_copy(src, dst, recursive=recursive)
         pipeline.start(progress=True)
 
