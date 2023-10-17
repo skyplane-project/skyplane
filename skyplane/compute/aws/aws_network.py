@@ -175,7 +175,7 @@ class AWSNetwork:
 
         except exceptions.ClientError as e:
             if str(e).endswith("already exists") or str(e).endswith("already exist"):
-                logger.warn(f"[aws_network]:{aws_region} Error adding IPs to security group, since it already exits: {e}")
+                logger.info(f"[aws_network]:{aws_region} Error adding IPs to security group, since it already exits: {e}")
             else:
                 logger.error(f"[aws_network]:{aws_region} Error adding IPs {ips} to security group {sg.group_name}")
                 logger.fs.exception(e)
