@@ -53,7 +53,7 @@ class ProgressBarTransferHook(TransferHook):
             DownloadColumn(binary_units=True),
             TransferSpeedColumn(),
             TimeRemainingColumn(),
-            transient=True,
+            transient=False,
         )
         for region_tag in self.dest_region_tags:
             self.transfer_task[region_tag] = self.pbar.add_task(region_tag, total=self.bytes_dispatched)
