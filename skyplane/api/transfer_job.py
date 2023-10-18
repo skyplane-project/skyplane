@@ -698,21 +698,28 @@ class CopyJob(TransferJob):
             if "region" not in req or "bucket" not in req:
                 raise Exception(f"Invalid multipart upload request: {req}")
             groups[(req["region"], req["bucket"])].append(req)
+
+        tasks = []
         for key, group in groups.items():
             region, bucket = key
             batch_len = max(1, len(group) // 128)
             batches = [group[i : i + batch_len] for i in range(0, len(group), batch_len)]
+            #obj_store_interface = StorageInterface.create(region, bucket)
+            tasks.append += [(region, bucket, batch) for batch in batches]
+
+        def complete_fn(args):
+            region = args[0]
+            bucket = args[1]
+            batch = args[2]
             obj_store_interface = StorageInterface.create(region, bucket)
+            for req in batch:
+                logger.fs.debug(f"Finalize upload id {req['upload_id']} for key {req['key']}")
+                retry_backoff(
+                    partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"], req["metadata"]),
+                    initial_backoff=0.5,
+                )
 
-            def complete_fn(batch):
-                for req in batch:
-                    logger.fs.debug(f"Finalize upload id {req['upload_id']} for key {req['key']}")
-                    retry_backoff(
-                        partial(obj_store_interface.complete_multipart_upload, req["key"], req["upload_id"], req["metadata"]),
-                        initial_backoff=0.5,
-                    )
-
-            do_parallel(complete_fn, batches, n=8)
+        do_parallel(complete_fn, tasks, n=8, spinner=True, spinner_persists=True)
 
         # TODO: Do NOT do this if we are pipelining multiple transfers - remove just what was completed
         self.multipart_transfer_list = []
