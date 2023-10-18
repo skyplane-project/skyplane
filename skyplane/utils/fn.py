@@ -46,16 +46,19 @@ def do_parallel(
             raise
 
     results = []
-    with Progress(
-        SpinnerColumn(), TextColumn(desc), BarColumn(), MofNCompleteColumn(), TimeElapsedColumn(), disable=not spinner, transient=True
-    ) as progress:
+    if spinner:
+        # only create if spinner
+        progress = Progress(
+           SpinnerColumn(), TextColumn(desc), BarColumn(), MofNCompleteColumn(), TimeElapsedColumn(), disable=not spinner, transient=True
+        ) 
         progress_task = progress.add_task("", total=len(args_list))
-        with Timer() as t:
-            with ThreadPoolExecutor(max_workers=n) as executor:
-                future_list = [executor.submit(wrapped_fn, args) for args in args_list]
-                for future in as_completed(future_list):
-                    args, result = future.result()
-                    results.append((args, result))
+    with Timer() as t:
+        with ThreadPoolExecutor(max_workers=n) as executor:
+            future_list = [executor.submit(wrapped_fn, args) for args in args_list]
+            for future in as_completed(future_list):
+                args, result = future.result()
+                results.append((args, result))
+                if spinner: 
                     progress.update(progress_task, advance=1)
     if spinner_persist:
         rprint(f"[bold green]✓[/] [bright_black]{desc} ({len(results)}/{len(args_list)}) in {t.elapsed:.2f}s[/]")
