@@ -705,7 +705,7 @@ class CopyJob(TransferJob):
             batch_len = max(1, len(group) // 128)
             batches = [group[i : i + batch_len] for i in range(0, len(group), batch_len)]
             #obj_store_interface = StorageInterface.create(region, bucket)
-            tasks.append += [(region, bucket, batch) for batch in batches]
+            tasks += [(region, bucket, batch) for batch in batches]
 
         def complete_fn(args):
             region = args[0]

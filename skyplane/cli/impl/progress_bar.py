@@ -20,7 +20,7 @@ class ProgressBarTransferHook(TransferHook):
             TextColumn("Dispatching chunks...{task.description}"),
             BarColumn(),
             DownloadColumn(binary_units=True),
-            transient=False,
+            transient=True,
         )
         self.dest_region_tags = dest_region_tags
         self.pbar = None  # map between region_tag and progress bar
