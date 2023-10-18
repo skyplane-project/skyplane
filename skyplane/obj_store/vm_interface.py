@@ -16,7 +16,10 @@ from skyplane import exceptions
 @dataclass
 class VMFile(ObjectStoreObject):
     def full_path(self):
-        return f"vm://{self.key}"
+        if self.key.startswith("/"):
+            return f"vm://{self.bucket}{self.key}"
+        else:
+            return f"vm://{self.bucket}/{self.key}"
 
 
 class VMInterface(ObjectStoreInterface):
@@ -77,8 +80,14 @@ class VMInterface(ObjectStoreInterface):
     def path(self) -> str:
         return self.local_path
 
+    def key_path(self) -> str:
+        return str(self.private_key_path)
+
     def bucket(self) -> str:
         return self.local_path
+
+    def host_ip(self) -> str:
+        return self.host
 
     def list_objects(self, prefix="") -> Iterator[VMFile]:
         # List files in directory, recursively

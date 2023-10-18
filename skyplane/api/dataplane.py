@@ -198,7 +198,7 @@ class Dataplane:
             for node in self.topology.get_gateways():
                 if node.region_tag not in servers_by_region:
                     if node.region_tag.startswith("aws"):
-                        instance = AWSServer(node.region_tag, node.gateway_instance_id)
+                        instance = AWSServer(node.region_tag, node.gateway_instance_id, key_path=node.gateway_key_path)
                     elif node.region_tag.startswith("azure"):
                         instance = AzureServer(node.gateway_instance_id)
                     elif node.region_tag.startswith("gcp"):

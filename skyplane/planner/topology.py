@@ -23,6 +23,7 @@ class TopologyPlanGateway:
         gateway_vm: Optional[str],
         gateway_instance_id: Optional[str] = None,
         gateway_instance_path: Optional[str] = None,
+        gateway_key_path: Optional[str] = None
     ):
         self.region_tag = region_tag
         self.gateway_id = gateway_id
@@ -32,6 +33,7 @@ class TopologyPlanGateway:
         # TODO: hard code instance id and path for now for initializing Server
         self.gateway_instance_id = gateway_instance_id
         self.gateway_instance_path = gateway_instance_path
+        self.gateway_key_path = gateway_key_path
 
         # ip addresses
         self.private_ip_address = None
@@ -97,11 +99,12 @@ class TopologyPlan:
         vm_type: Optional[str] = None,
         instance_id: Optional[str] = None,
         instance_path: Optional[str] = None,
+        instance_key_path: Optional[str] = None
     ):
         """Create gateway in specified region"""
         gateway_id = region_tag + str(len([gateway for gateway in self.gateways.values() if gateway.region_tag == region_tag]))
         assert gateway_id not in self.gateways, f"Gateway id {gateway_id} in {self.gateways}"
-        gateway = TopologyPlanGateway(region_tag, gateway_id, vm_type, instance_id, instance_path)
+        gateway = TopologyPlanGateway(region_tag, gateway_id, vm_type, instance_id, instance_path, instance_key_path)
         self.gateways[gateway_id] = gateway
         return gateway
 

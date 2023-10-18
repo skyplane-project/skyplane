@@ -306,8 +306,9 @@ class Chunker:
                     if isinstance(dst_iface, VMInterface):
                         # VM destination
                         from skyplane.obj_store.vm_interface import VMFile
+                        host_ip = dst_iface.host_ip()
 
-                        dest_obj = VMFile(provider=dest_provider, key=dest_key)
+                        dest_obj = VMFile(provider=dest_provider, bucket=host_ip, key=dest_key)
 
                     else:
                         # Bucket destination
