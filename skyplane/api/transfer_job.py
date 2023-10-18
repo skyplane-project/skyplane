@@ -719,7 +719,7 @@ class CopyJob(TransferJob):
                     initial_backoff=0.5,
                 )
 
-        do_parallel(complete_fn, tasks, n=8, spinner=True, spinner_persists=True)
+        do_parallel(complete_fn, tasks, desc="Completing multipart uploads", n=8, spinner=True, spinner_persist=True)
 
         # TODO: Do NOT do this if we are pipelining multiple transfers - remove just what was completed
         self.multipart_transfer_list = []
