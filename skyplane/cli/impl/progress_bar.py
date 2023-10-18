@@ -48,7 +48,7 @@ class ProgressBarTransferHook(TransferHook):
         self.spinner.stop()
         self.pbar = Progress(
             SpinnerColumn(),
-            TextColumn("Transfer progress{task.description}"),
+            TextColumn("Transfer progress {task.description}"),
             BarColumn(),
             DownloadColumn(binary_units=True),
             TransferSpeedColumn(),

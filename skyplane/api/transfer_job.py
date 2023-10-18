@@ -692,7 +692,6 @@ class CopyJob(TransferJob):
 
     def finalize(self):
         """Complete the multipart upload requests"""
-        typer.secho(f"Finalizing multipart uploads...", fg="bright_black")
         groups = defaultdict(list)
         for req in self.multipart_transfer_list:
             if "region" not in req or "bucket" not in req:
