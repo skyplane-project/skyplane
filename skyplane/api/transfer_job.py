@@ -649,7 +649,7 @@ class CopyJob(TransferJob):
         src_gateways = dataplane.source_gateways()
         queue_size = [0] * len(src_gateways)
         n_multiparts = 0
-        start = time.time()
+        time.time()
 
         for batch in batches:
             # send upload_id mappings to sink gateways
