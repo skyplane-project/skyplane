@@ -20,7 +20,7 @@ class AWSConfig(AuthenticationConfig):
     aws_enabled: bool = True
 
     def make_auth_provider(self) -> compute.AWSAuthentication:
-        return compute.AWSAuthentication(config=self)  # type: ignore
+        return compute.AWSAuthentication(config=self, access_key=self.aws_access_key, secret_key=self.aws_secret_key) # type: ignore
 
 
 @dataclass
