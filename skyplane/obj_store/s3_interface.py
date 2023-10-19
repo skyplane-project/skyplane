@@ -19,8 +19,9 @@ class S3Object(ObjectStoreObject):
 
 
 class S3Interface(ObjectStoreInterface):
-    def __init__(self, bucket_name: str):
-        self.auth = compute.AWSAuthentication()
+    def __init__(self, bucket_name: str, auth: Optional[compute.AWSAuthentication] = None):
+        print("PASSED AUTH", auth)
+        self.auth = compute.AWSAuthentication() if auth is None else auth
         self.requester_pays = False
         self.bucket_name = bucket_name
         self._cached_s3_clients = {}

@@ -99,4 +99,13 @@ class SkyplaneClient:
         pipeline.start(progress=True)
 
     def object_store(self):
-        return ObjectStore()
+        """
+        Returns an object store interface
+        """
+        return ObjectStore(
+            host_uuid=self.clientid,
+            aws_auth=self.aws_auth,
+            azure_auth=self.azure_auth,
+            gcp_auth=self.gcp_auth,
+            ibmcloud_auth=self.ibmcloud_auth
+        )

@@ -1,5 +1,6 @@
+from skyplane import compute
 from skyplane.utils import logger
-from typing import Iterator, Any
+from typing import Iterator, Any, Optional
 
 
 class StorageInterface:
@@ -35,12 +36,21 @@ class StorageInterface:
         raise NotImplementedError()
 
     @staticmethod
-    def create(region_tag: str, bucket: str):
+    def create(
+        region_tag: str, 
+        bucket: str,
+        aws_auth: Optional[compute.AWSAuthentication] = None,
+        azure_auth: Optional[compute.AzureAuthentication] = None,
+        gcp_auth: Optional[compute.GCPAuthentication] = None,
+        host_uuid: Optional[str] = None,
+        ibmcloud_auth: Optional[compute.IBMCloudAuthentication] = None
+    ):
+        # TODO: plug in manual setting for all other authentications 
         # TODO: modify this to also support local file
         if region_tag.startswith("aws"):
             from skyplane.obj_store.s3_interface import S3Interface
 
-            return S3Interface(bucket)
+            return S3Interface(bucket, aws_auth)
         elif region_tag.startswith("gcp"):
             from skyplane.obj_store.gcs_interface import GCSInterface
 
