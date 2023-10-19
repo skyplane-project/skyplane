@@ -353,7 +353,7 @@ class Chunker:
         multipart_chunk_threads = []
 
         # start chunking threads
-        if self.transfer_config.multipart_enabled and not isinstance(self.dst_ifaces[0], VMInterface):
+        if self.transfer_config.multipart_enabled: # and not isinstance(self.dst_ifaces[0], VMInterface):
             for _ in range(self.concurrent_multipart_chunk_threads):
                 t = threading.Thread(
                     target=self._run_multipart_chunk_thread,
@@ -369,7 +369,7 @@ class Chunker:
             src_obj = transfer_pair.src_obj
             if (
                 self.transfer_config.multipart_enabled
-                and not isinstance(self.dst_ifaces[0], VMInterface)
+                # and not isinstance(self.dst_ifaces[0], VMInterface)
                 and src_obj.size > self.transfer_config.multipart_threshold_mb * MB
             ):
                 multipart_send_queue.put(transfer_pair)
@@ -387,12 +387,12 @@ class Chunker:
                     )
                 )
 
-            if self.transfer_config.multipart_enabled and not isinstance(self.dst_ifaces[0], VMInterface):
+            if self.transfer_config.multipart_enabled: # and not isinstance(self.dst_ifaces[0], VMInterface):
                 # drain multipart chunk queue and yield with updated chunk IDs
                 while not multipart_chunk_queue.empty():
                     yield multipart_chunk_queue.get()
 
-        if self.transfer_config.multipart_enabled and not isinstance(self.dst_ifaces[0], VMInterface):
+        if self.transfer_config.multipart_enabled: # and not isinstance(self.dst_ifaces[0], VMInterface):
             # wait for processing multipart requests to finish
             logger.fs.debug("Waiting for multipart threads to finish")
             # while not multipart_send_queue.empty():

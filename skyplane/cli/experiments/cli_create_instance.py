@@ -50,7 +50,7 @@ def create_instance(
 
     # aws_region_list = ["us-east-1", "us-west-1"]
     # gcp_region_list = ['me-west1-a','europe-north1-a',]
-    aws_region_list = ["us-west-1"]
+    aws_region_list = ["us-east-1"]
     # gcp_region_list = ["me-west1-a"]
 
     # validate AWS regions

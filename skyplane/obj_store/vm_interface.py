@@ -2,7 +2,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 import mimetypes
+import os
 from typing import Iterator, List, Optional
+import uuid
 from dateutil.parser import parse
 import paramiko
 import pytz
@@ -37,7 +39,8 @@ class VMInterface(ObjectStoreInterface):
         self.region = region
         self.private_key_path = private_key_path
         self.local_path = local_path
-
+        self.temp_dir = "/tmp/multipart_uploads/" # directory on the VMs 
+        
         # Set up SSH
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -71,6 +74,10 @@ class VMInterface(ObjectStoreInterface):
         else:
             raise exceptions.BadConfigException(f"Invalid region tag: {self.region}")
 
+    @property
+    def provider(self) -> str:
+        return "VM"
+    
     def region_tag(self) -> str:
         return self.region
 
@@ -133,9 +140,13 @@ class VMInterface(ObjectStoreInterface):
         sftp = self.client.open_sftp()
         sftp.get(f"{self.path}/{src_object_name}", dst_file_path)
 
-    def upload_object(self, src_file_path, dst_object_name):
+    def upload_object(self, src_file_path, dst_object_name,  part_number=None, upload_id=None):
         sftp = self.client.open_sftp()
-        sftp.put(src_file_path, f"{self.path}/{dst_object_name}")
+        if part_number and upload_id:
+            remote_part_path = f"{self.temp_dir}/{upload_id}/{part_number}"
+            sftp.put(src_file_path, remote_part_path)
+        else:
+            sftp.put(src_file_path, f"{self.path}/{dst_object_name}")
 
     def delete_objects(self, keys: List[str]):
         for key in keys:
@@ -160,4 +171,23 @@ class VMInterface(ObjectStoreInterface):
         return mimetypes.guess_type(obj_name)[0]
 
     def initiate_multipart_upload(self, dst_object_name: str, mime_type: Optional[str] = None) -> str:
-        raise NotImplementedError(f"Multipart upload is not supported for the VM File System.")
+        upload_id = str(uuid.uuid4())
+        _, stderr, _ = self.client.exec_command(f"mkdir -p {self.temp_dir}/{upload_id}")
+        error_message = stderr.read().decode().strip()
+        if error_message:
+            raise exceptions.BadConfigException(f"Failed to create directory on VM: {error_message}")
+        return upload_id
+    
+    def complete_multipart_upload(self, dst_object_name, upload_id):
+        _, stdout, _ = self.client.exec_command(f"ls {self.temp_dir}/{upload_id}")
+        parts = [f"{self.temp_dir}/{upload_id}/{part}" for part in sorted(stdout.read().decode().split(), key=int)]
+        
+        # Concatenate all parts together
+        concatenated_parts = " ".join(parts)
+        _, stderr, _ = self.client.exec_command(f"cat {concatenated_parts} > {self.path}/{dst_object_name}")
+        error_message = stderr.read().decode().strip()
+        if error_message:
+            raise exceptions.BadConfigException(f"Failed to complete multipart upload on VM: {error_message}")
+
+        # Cleanup 
+        _, _, _ = self.client.exec_command(f"rm -r {self.temp_dir}/{upload_id}")
