@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Optional
 from skyplane.api.config import TransferConfig
 from skyplane.api.provisioner import Provisioner
 from skyplane.api.obj_store import ObjectStore
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface
+from skyplane.obj_store.storage_interface import StorageInterface
 from skyplane.api.usage import get_clientid
 from skyplane.utils import logger
 from skyplane.utils.definitions import tmp_log_dir
