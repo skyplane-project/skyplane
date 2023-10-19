@@ -56,7 +56,7 @@ class AWSCloudProvider(CloudProvider):
         except exceptions.ClientError as e:
             logger.error(f"error provisioning in {region}: {e}")
             return []
-        return [AWSServer(f"aws:{region}", i) for i in instance_ids]
+        return [AWSServer(f"aws:{region}", i, auth=self.auth) for i in instance_ids]
 
     def setup_global(self, iam_name: str = "skyplane_gateway", attach_policy_arn: Optional[str] = None):
         # Create IAM role if it doesn't exist and grant managed role if given.
@@ -246,4 +246,4 @@ class AWSCloudProvider(CloudProvider):
                 logger.fs.warning(f"Terminating instance {instance[0].id} due to keyboard interrupt")
                 instance[0].terminate()
                 raise
-            return AWSServer(f"aws:{region}", instance[0].id)
+            return AWSServer(f"aws:{region}", instance[0].id, auth=self.auth)
