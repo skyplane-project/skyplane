@@ -22,16 +22,16 @@ class SkyplaneClient:
 
     def __init__(
         self,
+        disable_aws: False,
+        disable_azure: False,
+        disable_gcp: False,
+        disable_ibm: False,
         aws_config: Optional["AWSConfig"] = None,
         azure_config: Optional["AzureConfig"] = None,
         gcp_config: Optional["GCPConfig"] = None,
         ibmcloud_config: Optional["IBMCloudConfig"] = None,
         transfer_config: Optional[TransferConfig] = None,
-        log_dir: Optional[str] = None,
-        disable_aws: False,
-        disable_azure: False,
-        disable_gcp: False,
-        disable_ibm: False
+        log_dir: Optional[str] = None
     ):
         """
         :param aws_config: aws cloud configurations
