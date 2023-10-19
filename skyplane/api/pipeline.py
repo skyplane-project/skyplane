@@ -10,6 +10,7 @@ from skyplane.api.tracker import TransferProgressTracker
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
 
+from skyplane.obj_store.obj_store import ObjectStore
 from skyplane.planner.planner import MulticastDirectPlanner, DirectPlannerSourceOneSided, DirectPlannerDestOneSided
 from skyplane.planner.topology import TopologyPlanGateway
 from skyplane.utils import logger
