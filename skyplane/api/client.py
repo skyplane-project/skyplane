@@ -28,6 +28,10 @@ class SkyplaneClient:
         ibmcloud_config: Optional["IBMCloudConfig"] = None,
         transfer_config: Optional[TransferConfig] = None,
         log_dir: Optional[str] = None,
+        disable_aws: False,
+        disable_azure: False,
+        disable_gcp: False,
+        disable_ibm: False
     ):
         """
         :param aws_config: aws cloud configurations
@@ -66,6 +70,10 @@ class SkyplaneClient:
             azure_auth=self.azure_auth,
             gcp_auth=self.gcp_auth,
             ibmcloud_auth=self.ibmcloud_auth,
+            disable_aws=disable_aws,
+            disable_azure=disable_azure,
+            disable_gcp=disable_gcp,
+            disable_ibm=disable_ibm
         )
 
     def pipeline(self, planning_algorithm: Optional[str] = "direct", max_instances: Optional[int] = 1, debug=False):
