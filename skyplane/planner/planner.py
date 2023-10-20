@@ -510,7 +510,7 @@ class DirectPlannerVMDest(MulticastDirectPlanner):
                     vm_types[dst_region_tag] if vm_types else None,
                     instance_id=dst_vm_instance_id,
                     instance_path=dst_vm_instance_path,
-                    instance_key_path=dst_vm_key_path
+                    instance_key_path=dst_vm_key_path,
                 )
 
         # initialize gateway programs per region

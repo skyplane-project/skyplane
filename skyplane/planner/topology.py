@@ -23,7 +23,7 @@ class TopologyPlanGateway:
         gateway_vm: Optional[str],
         gateway_instance_id: Optional[str] = None,
         gateway_instance_path: Optional[str] = None,
-        gateway_key_path: Optional[str] = None
+        gateway_key_path: Optional[str] = None,
     ):
         self.region_tag = region_tag
         self.gateway_id = gateway_id
@@ -99,7 +99,7 @@ class TopologyPlan:
         vm_type: Optional[str] = None,
         instance_id: Optional[str] = None,
         instance_path: Optional[str] = None,
-        instance_key_path: Optional[str] = None
+        instance_key_path: Optional[str] = None,
     ):
         """Create gateway in specified region"""
         gateway_id = region_tag + str(len([gateway for gateway in self.gateways.values() if gateway.region_tag == region_tag]))

@@ -176,7 +176,15 @@ class Chunker:
                         metadata = (block_ids, mime_type)
 
                     self.multipart_upload_requests.append(
-                        dict(upload_id=upload_id, key=dest_object.key, parts=parts, region=region, bucket=bucket, metadata=metadata)
+                        dict(
+                            upload_id=upload_id,
+                            key=dest_object.key,
+                            parts=parts,
+                            region=region,
+                            bucket=bucket,
+                            metadata=metadata,
+                            vm=True if dest_iface.provider == "vm" else False,
+                        )
                     )
             else:
                 mime_type = None
@@ -306,6 +314,7 @@ class Chunker:
                     if isinstance(dst_iface, VMInterface):
                         # VM destination
                         from skyplane.obj_store.vm_interface import VMFile
+
                         host_ip = dst_iface.host_ip()
 
                         dest_obj = VMFile(provider=dest_provider, bucket=host_ip, key=dest_key)
@@ -353,7 +362,7 @@ class Chunker:
         multipart_chunk_threads = []
 
         # start chunking threads
-        if self.transfer_config.multipart_enabled: # and not isinstance(self.dst_ifaces[0], VMInterface):
+        if self.transfer_config.multipart_enabled:  # and not isinstance(self.dst_ifaces[0], VMInterface):
             for _ in range(self.concurrent_multipart_chunk_threads):
                 t = threading.Thread(
                     target=self._run_multipart_chunk_thread,
@@ -387,12 +396,12 @@ class Chunker:
                     )
                 )
 
-            if self.transfer_config.multipart_enabled: # and not isinstance(self.dst_ifaces[0], VMInterface):
+            if self.transfer_config.multipart_enabled:  # and not isinstance(self.dst_ifaces[0], VMInterface):
                 # drain multipart chunk queue and yield with updated chunk IDs
                 while not multipart_chunk_queue.empty():
                     yield multipart_chunk_queue.get()
 
-        if self.transfer_config.multipart_enabled: # and not isinstance(self.dst_ifaces[0], VMInterface):
+        if self.transfer_config.multipart_enabled:  # and not isinstance(self.dst_ifaces[0], VMInterface):
             # wait for processing multipart requests to finish
             logger.fs.debug("Waiting for multipart threads to finish")
             # while not multipart_send_queue.empty():
@@ -722,11 +731,14 @@ class CopyJob(TransferJob):
         for req in self.multipart_transfer_list:
             if "region" not in req or "bucket" not in req:
                 raise Exception(f"Invalid multipart upload request: {req}")
-            groups[(req["region"], req["bucket"])].append(req)
+            groups[(req["region"], req["bucket"], req["vm"])].append(req)
         for key, group in groups.items():
-            region, bucket = key
+            region, bucket, vm = key
             batch_len = max(1, len(group) // 128)
             batches = [group[i : i + batch_len] for i in range(0, len(group), batch_len)]
+            print(f"region: {region}, bucket: {bucket}")
+            if vm:
+                region = "vm:" + region
             obj_store_interface = StorageInterface.create(region, bucket)
 
             def complete_fn(batch):
@@ -748,14 +760,19 @@ class CopyJob(TransferJob):
         def verify_region(i):
             dst_iface = self.dst_ifaces[i]
             dst_prefix = self.dst_prefixes[i]
+            print("Dst prefix: ", dst_prefix)
 
             # gather destination key mapping for this region
             dst_keys = {pair.dst_objs[dst_iface.region_tag()].key: pair.src_obj for pair in self.transfer_list}
+            print(f"Destination key mappings: {dst_keys}")
 
             # list and check destination prefix
             for obj in dst_iface.list_objects(dst_prefix):
+                print(f"Object listed: {obj.key}")
                 # check metadata (src.size == dst.size) && (src.modified <= dst.modified)
                 src_obj = dst_keys.get(obj.key)
+                print(f"src_obj: {src_obj}")
+                print(f"Object: {obj}")
                 if src_obj and src_obj.size == obj.size and src_obj.last_modified <= obj.last_modified:
                     del dst_keys[obj.key]
 

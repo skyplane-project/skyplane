@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import json
 import mimetypes
 import os
-from typing import Iterator, List, Optional
+from typing import Any, Iterator, List, Optional
 import uuid
 from dateutil.parser import parse
 import paramiko
@@ -39,8 +39,8 @@ class VMInterface(ObjectStoreInterface):
         self.region = region
         self.private_key_path = private_key_path
         self.local_path = local_path
-        self.temp_dir = "/tmp/multipart_uploads/" # directory on the VMs 
-        
+        self.temp_dir = "/tmp/multipart_uploads/"  # directory on the VMs
+
         # Set up SSH
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -76,8 +76,8 @@ class VMInterface(ObjectStoreInterface):
 
     @property
     def provider(self) -> str:
-        return "VM"
-    
+        return "vm"
+
     def region_tag(self) -> str:
         return self.region
 
@@ -91,7 +91,7 @@ class VMInterface(ObjectStoreInterface):
         return str(self.private_key_path)
 
     def bucket(self) -> str:
-        return self.local_path
+        return f"{self.region}@{self.username}@{self.host}:{self.local_path}?private_key_path={self.private_key_path}"
 
     def host_ip(self) -> str:
         return self.host
@@ -140,7 +140,7 @@ class VMInterface(ObjectStoreInterface):
         sftp = self.client.open_sftp()
         sftp.get(f"{self.path}/{src_object_name}", dst_file_path)
 
-    def upload_object(self, src_file_path, dst_object_name,  part_number=None, upload_id=None):
+    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None):
         sftp = self.client.open_sftp()
         if part_number and upload_id:
             remote_part_path = f"{self.temp_dir}/{upload_id}/{part_number}"
@@ -177,17 +177,17 @@ class VMInterface(ObjectStoreInterface):
         if error_message:
             raise exceptions.BadConfigException(f"Failed to create directory on VM: {error_message}")
         return upload_id
-    
-    def complete_multipart_upload(self, dst_object_name, upload_id):
+
+    def complete_multipart_upload(self, dst_object_name, upload_id, metadata: Optional[Any] = None):
         _, stdout, _ = self.client.exec_command(f"ls {self.temp_dir}/{upload_id}")
         parts = [f"{self.temp_dir}/{upload_id}/{part}" for part in sorted(stdout.read().decode().split(), key=int)]
-        
+
         # Concatenate all parts together
         concatenated_parts = " ".join(parts)
-        _, stderr, _ = self.client.exec_command(f"cat {concatenated_parts} > {self.path}/{dst_object_name}")
+        _, stderr, _ = self.client.exec_command(f"cat {concatenated_parts} > {dst_object_name}")
         error_message = stderr.read().decode().strip()
         if error_message:
             raise exceptions.BadConfigException(f"Failed to complete multipart upload on VM: {error_message}")
 
-        # Cleanup 
-        _, _, _ = self.client.exec_command(f"rm -r {self.temp_dir}/{upload_id}")
+        # Cleanup
+        # _, _, _ = self.client.exec_command(f"rm -r {self.temp_dir}/{upload_id}")
