@@ -290,6 +290,7 @@ class Provisioner:
         :type spinner: bool
         """
         if not self.provisioned_vms and not self.temp_nodes:
+            typer.secho("No instances to deprovision", fg="yellow", bold=True)
             return []
 
         def deprovision_gateway_instance(server: compute.Server):
