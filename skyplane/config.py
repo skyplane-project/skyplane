@@ -156,7 +156,7 @@ class SkyplaneConfig:
             if "aws_access_key" in config["aws"]:
                 aws_access_key = config.get("aws", "aws_access_key")
             if "aws_secret_key" in config["aws"]:
-                aws_secret_key = config.getboolean("aws", "aws_secret_key")
+                aws_secret_key = config.get("aws", "aws_secret_key")
 
         azure_enabled = False
         azure_subscription_id = None
