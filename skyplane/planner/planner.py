@@ -126,9 +126,9 @@ class Planner:
 
         # No quota limits (quota limits weren't initialized properly during skyplane init)
         if quota_limit is None:
-            logger.warning(
-                f"Quota limit file not found for {region_tag}. Try running `skyplane init --reinit-{cloud_provider}` to load the quota information"
-            )
+            #logger.warning(
+            #    f"Quota limit file not found for {region_tag}. Try running `skyplane init --reinit-{cloud_provider}` to load the quota information"
+            #)
             # return default instance type and number of instances
             return config_vm_type, self.n_instances
 
