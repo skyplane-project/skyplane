@@ -12,6 +12,7 @@ from skyplane.obj_store.storage_interface import StorageInterface
 from skyplane.api.usage import get_clientid
 from skyplane.utils import logger
 from skyplane.utils.definitions import tmp_log_dir
+from skyplane.utils.path import parse_path
 
 from skyplane.api.pipeline import Pipeline
 
