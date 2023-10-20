@@ -18,7 +18,10 @@ class GCPAuthentication:
         if not config == None:
             self.config = config
         else:
-            self.config = SkyplaneConfig.load_config(config_path)
+            if config_path.exists():
+                self.config = SkyplaneConfig.load_config(config_path)
+            else:
+                self.config = SkyplaneConfig.default_config()
         self._credentials = None
         self._service_credentials_file = None
 

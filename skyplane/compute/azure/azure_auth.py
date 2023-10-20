@@ -14,7 +14,13 @@ from skyplane.utils.fn import do_parallel
 
 class AzureAuthentication:
     def __init__(self, config: Optional[SkyplaneConfig] = None):
-        self.config = config if config is not None else SkyplaneConfig.load_config(config_path)
+        if config:
+            self.config = config
+        else:
+            if config_path.exists():
+                self.config = SkyplaneConfig.load_config(config_path)
+            else:
+                self.config = SkyplaneConfig.default_config()
         self._credential = None
 
     @property

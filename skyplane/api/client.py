@@ -52,35 +52,6 @@ class SkyplaneClient:
         :param log_dir: path to store transfer logs
         :type log_dir: str (optional)
         """
-        self.clientid = get_clientid()
-        self.aws_auth = aws_config.make_auth_provider() if aws_config else None
-        self.azure_auth = azure_config.make_auth_provider() if azure_config else None
-        self.gcp_auth = gcp_config.make_auth_provider() if gcp_config else None
-        self.ibmcloud_auth = ibmcloud_config.make_auth_provider() if ibmcloud_config else None
-        self.transfer_config = transfer_config if transfer_config else TransferConfig()
-        self.log_dir = (
-            tmp_log_dir / "transfer_logs" / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}-{uuid.uuid4().hex[:8]}"
-            if log_dir is None
-            else Path(log_dir)
-        )
-
-        # set up logging
-        self.log_dir.mkdir(parents=True, exist_ok=True)
-        logger.open_log_file(self.log_dir / "client.log")
-        typer.secho(f"Logging to: {self.log_dir / 'client.log'}", fg="bright_black")
-
-        self.provisioner = Provisioner(
-            host_uuid=self.clientid,
-            aws_auth=self.aws_auth,
-            azure_auth=self.azure_auth,
-            gcp_auth=self.gcp_auth,
-            ibmcloud_auth=self.ibmcloud_auth,
-            disable_aws=disable_aws,
-            disable_azure=disable_azure,
-            disable_gcp=disable_gcp,
-            disable_ibm=disable_ibm
-        )
-
         self.config = SkyplaneConfig.default_config()
         if not disable_aws:
             self.config.aws_enabled = True
@@ -111,6 +82,35 @@ class SkyplaneClient:
 
         self.config.to_config_file(config_path)
         typer.secho(f"\nConfig file saved to {config_path}", fg="green")
+        
+        self.clientid = get_clientid()
+        self.aws_auth = aws_config.make_auth_provider() if aws_config else None
+        self.azure_auth = azure_config.make_auth_provider() if azure_config else None
+        self.gcp_auth = gcp_config.make_auth_provider() if gcp_config else None
+        self.ibmcloud_auth = ibmcloud_config.make_auth_provider() if ibmcloud_config else None
+        self.transfer_config = transfer_config if transfer_config else TransferConfig()
+        self.log_dir = (
+            tmp_log_dir / "transfer_logs" / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}-{uuid.uuid4().hex[:8]}"
+            if log_dir is None
+            else Path(log_dir)
+        )
+
+        # set up logging
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        logger.open_log_file(self.log_dir / "client.log")
+        typer.secho(f"Logging to: {self.log_dir / 'client.log'}", fg="bright_black")
+
+        self.provisioner = Provisioner(
+            host_uuid=self.clientid,
+            aws_auth=self.aws_auth,
+            azure_auth=self.azure_auth,
+            gcp_auth=self.gcp_auth,
+            ibmcloud_auth=self.ibmcloud_auth,
+            disable_aws=disable_aws,
+            disable_azure=disable_azure,
+            disable_gcp=disable_gcp,
+            disable_ibm=disable_ibm
+        )
 
     def pipeline(self, planning_algorithm: Optional[str] = "direct", max_instances: Optional[int] = 1, src_iface: Optional[ObjectStoreInterface] = None, dst_ifaces: Optional[List[ObjectStoreInterface]] = None, debug=False):
         """Create a pipeline object to queue jobs"""
