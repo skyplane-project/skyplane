@@ -47,15 +47,15 @@ class Provisioner:
 
     def __init__(
         self,
-        disable_aws: False,
-        disable_azure: False,
-        disable_gcp: False,
-        disable_ibm: False,
         aws_auth: Optional[compute.AWSAuthentication] = None,
         azure_auth: Optional[compute.AzureAuthentication] = None,
         gcp_auth: Optional[compute.GCPAuthentication] = None,
         host_uuid: Optional[str] = None,
         ibmcloud_auth: Optional[compute.IBMCloudAuthentication] = None,
+        disable_aws=False,
+        disable_azure=False,
+        disable_gcp=False,
+        disable_ibm=False
     ):
         """
         :param aws_auth: authentication information for aws
