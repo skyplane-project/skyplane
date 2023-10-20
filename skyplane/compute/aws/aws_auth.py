@@ -12,10 +12,7 @@ class AWSAuthentication:
         if not config is None:
             self.config = config
         else:
-            if config_path.exists():
-                self.config = SkyplaneConfig.load_config(config_path)
-            else:
-                self.config = SkyplaneConfig.default_config()
+            self.config = SkyplaneConfig.load_config(config_path)
 
         if access_key and secret_key:
             self.config_mode = "manual"
