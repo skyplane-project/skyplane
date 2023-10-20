@@ -468,6 +468,8 @@ class TransferJob(ABC):
         recursive: bool = False,
         requester_pays: bool = False,
         job_id: Optional[str] = None,
+        src_iface: Optional[ObjectStoreInterface] = None,
+        dst_ifaces: Optional[List[ObjectStoreInterface]] = None
     ):
         self.src_path = src_path
         self.dst_paths = dst_paths
@@ -477,6 +479,8 @@ class TransferJob(ABC):
             self.uuid = str(uuid.uuid4())
         else:
             self.uuid = job_id
+        self._src_iface = src_iface
+        self._dst_ifaces = dst_ifaces
 
     @property
     def transfer_type(self) -> str:
@@ -495,7 +499,7 @@ class TransferJob(ABC):
     @property
     def src_iface(self) -> StorageInterface:
         """Return the source object store interface"""
-        if not hasattr(self, "_src_iface"):
+        if not self._src_iface:
             provider_src, bucket_src, _ = parse_path(self.src_path)
             self._src_iface = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src)
             if self.requester_pays:
@@ -515,7 +519,7 @@ class TransferJob(ABC):
     @property
     def dst_ifaces(self) -> List[StorageInterface]:
         """Return the destination object store interface"""
-        if not hasattr(self, "_dst_iface"):
+        if not self._dst_ifaces:
             if self.transfer_type == "unicast":
                 provider_dst, bucket_dst, _ = parse_path(self.dst_paths[0])
                 self._dst_ifaces = [StorageInterface.create(f"{provider_dst}:infer", bucket_dst)]
@@ -570,8 +574,10 @@ class CopyJob(TransferJob):
         recursive: bool = False,
         requester_pays: bool = False,
         job_id: Optional[str] = None,
+        src_iface: Optional[ObjectStoreInterface] = None,
+        dst_ifaces: Optional[List[ObjectStoreInterface]] = None
     ):
-        super().__init__(src_path, dst_paths, recursive, requester_pays, job_id)
+        super().__init__(src_path, dst_paths, recursive, requester_pays, job_id, src_iface, dst_ifaces)
         self.transfer_list = []
         self.multipart_transfer_list = []
 
@@ -772,8 +778,8 @@ class CopyJob(TransferJob):
 class SyncJob(CopyJob):
     """sync job that copies the source objects that does not exist in the destination bucket to the destination"""
 
-    def __init__(self, src_path: str, dst_paths: List[str] or str, requester_pays: bool = False, job_id: Optional[str] = None):
-        super().__init__(src_path, dst_paths, True, requester_pays, job_id)
+    def __init__(self, src_path: str, dst_paths: List[str] or str, requester_pays: bool = False, job_id: Optional[str] = None, src_iface: Optional[ObjectStoreInterface] = None, dst_ifaces: Optional[List[ObjectStoreInterface]] = None):
+        super().__init__(src_path, dst_paths, True, requester_pays, job_id, src_iface, dst_ifaces)
         self.transfer_list = []
         self.multipart_transfer_list = []
 

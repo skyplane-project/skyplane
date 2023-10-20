@@ -10,6 +10,7 @@ from skyplane.api.tracker import TransferProgressTracker
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
 
+from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.planner.planner import MulticastDirectPlanner, DirectPlannerSourceOneSided, DirectPlannerDestOneSided
 from skyplane.planner.topology import TopologyPlanGateway
 from skyplane.utils import logger
@@ -33,6 +34,8 @@ class Pipeline:
         max_instances: Optional[int] = 1,
         n_connections: Optional[int] = 64,
         planning_algorithm: Optional[str] = "direct",
+        src_iface: Optional[ObjectStoreInterface] = None,
+        dst_ifaces: Optional[List[ObjectStoreInterface]] = None,
         debug: Optional[bool] = False,
     ):
         """
@@ -69,6 +72,10 @@ class Pipeline:
             self.planner = DirectPlannerDestOneSided(self.max_instances, self.n_connections, self.transfer_config)
         else:
             raise ValueError(f"No such planning algorithm {planning_algorithm}")
+
+        # obj store interfaces
+        self.src_iface = src_iface
+        self.dst_ifaces = dst_ifaces
 
         # transfer logs
         self.transfer_dir = tmp_log_dir / "transfer_logs" / datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -146,7 +153,7 @@ class Pipeline:
         """
         if isinstance(dst, str):
             dst = [dst]
-        job = CopyJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays)
+        job = CopyJob(src, dst, recursive, requester_pays=self.transfer_config.requester_pays, src_iface=self.src_iface, dst_ifaces=self.dst_ifaces)
         logger.fs.debug(f"[SkyplaneClient] Queued copy job {job}")
         self.jobs_to_dispatch.append(job)
         return job.uuid
@@ -169,7 +176,7 @@ class Pipeline:
         """
         if isinstance(dst, str):
             dst = [dst]
-        job = SyncJob(src, dst, requester_pays=self.transfer_config.requester_pays)
+        job = SyncJob(src, dst, requester_pays=self.transfer_config.requester_pays, src_iface=self.src_iface, dst_ifaces=self.dst_ifaces)
         logger.fs.debug(f"[SkyplaneClient] Queued sync job {job}")
         self.jobs_to_dispatch.append(job)
         return job.uuid

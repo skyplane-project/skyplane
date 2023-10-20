@@ -52,6 +52,10 @@ class Provisioner:
         gcp_auth: Optional[compute.GCPAuthentication] = None,
         host_uuid: Optional[str] = None,
         ibmcloud_auth: Optional[compute.IBMCloudAuthentication] = None,
+        disable_aws: bool = False,
+        disable_azure: bool = False,
+        disable_gcp: bool = False,
+        disable_ibm: bool = False
     ):
         """
         :param aws_auth: authentication information for aws
@@ -70,7 +74,7 @@ class Provisioner:
         self.gcp_auth = gcp_auth
         self.host_uuid = host_uuid
         self.ibmcloud_auth = ibmcloud_auth
-        self._make_cloud_providers()
+        self._make_cloud_providers(disable_aws, disable_azure, disable_gcp, disable_ibm)
         self.temp_nodes: Set[compute.Server] = set()  # temporary area to store nodes that should be terminated upon exit
         self.pending_provisioner_tasks: List[ProvisionerTask] = []
         self.provisioned_vms: Dict[str, compute.Server] = {}
@@ -78,13 +82,17 @@ class Provisioner:
         # store GCP firewall rules to be deleted upon exit
         self.gcp_firewall_rules: Set[str] = set()
 
-    def _make_cloud_providers(self):
-        self.aws = compute.AWSCloudProvider(
-            key_prefix=f"skyplane{'-'+self.host_uuid.replace('-', '') if self.host_uuid else ''}", auth=self.aws_auth
-        )
-        self.azure = compute.AzureCloudProvider(auth=self.azure_auth)
-        self.gcp = compute.GCPCloudProvider(auth=self.gcp_auth)
-        self.ibmcloud = compute.IBMCloudProvider(auth=self.ibmcloud_auth)
+    def _make_cloud_providers(self, disable_aws, disable_azure, disable_gcp, disable_ibm):
+        if not disable_aws:
+            self.aws = compute.AWSCloudProvider(
+                key_prefix=f"skyplane{'-'+self.host_uuid.replace('-', '') if self.host_uuid else ''}", auth=self.aws_auth
+            )
+        if not disable_azure:
+            self.azure = compute.AzureCloudProvider(auth=self.azure_auth)
+        if not disable_gcp:
+            self.gcp = compute.GCPCloudProvider(auth=self.gcp_auth)
+        if not disable_ibm:
+            self.ibmcloud = compute.IBMCloudProvider(auth=self.ibmcloud_auth)
 
     def init_global(self, aws: bool = True, azure: bool = True, gcp: bool = True, ibmcloud: bool = True):
         """

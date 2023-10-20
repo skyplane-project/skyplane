@@ -21,10 +21,10 @@ from skyplane.utils.cache import ignore_lru_cache
 class AWSServer(Server):
     """AWS Server class to support basic SSH operations"""
 
-    def __init__(self, region_tag, instance_id, log_dir=None):
+    def __init__(self, region_tag, instance_id, log_dir=None, auth: Optional[AWSAuthentication] = None):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "aws"
-        self.auth = AWSAuthentication()
+        self.auth = AWSAuthentication() if auth is None else auth
         self.key_manager = AWSKeyManager(self.auth)
         self.aws_region = self.region_tag.split(":")[1]
         self.instance_id = instance_id
