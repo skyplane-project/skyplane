@@ -12,7 +12,6 @@ from skyplane.obj_store.storage_interface import StorageInterface
 from skyplane.api.usage import get_clientid
 from skyplane.utils import logger
 from skyplane.utils.definitions import tmp_log_dir
-from skyplane.utils.path import parse_path
 
 from skyplane.api.pipeline import Pipeline
 
@@ -104,6 +103,8 @@ class SkyplaneClient:
         :param max_instances: The maximum number of instances to use per region (default: 1)
         :type max_instances: int
         """
+        from skyplane.utils.path import parse_path
+        
         provider_src, bucket_src, _ = parse_path(src)
         src_iface = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src, aws_auth=self.aws_auth, azure_auth=self.azure_auth, gcp_auth=self.gcp_auth)
 
