@@ -28,9 +28,12 @@ from skyplane.config import SkyplaneConfig
 
 
 class Planner:
-    def __init__(self, transfer_config: TransferConfig, quota_limits_file: Optional[str] = None):
+    def __init__(self, transfer_config: TransferConfig, config: Optional[SkyplaneConfig] = None, quota_limits_file: Optional[str] = None):
         self.transfer_config = transfer_config
-        self.config = SkyplaneConfig.load_config(config_path)
+        if config_path.exists():
+            self.config = SkyplaneConfig.load_config(config_path)
+        else:
+            self.config = SkyplaneConfig.default_config()
         self.n_instances = self.config.get_flag("max_instances")
 
         # Loading the quota information, add ibm cloud when it is supported
