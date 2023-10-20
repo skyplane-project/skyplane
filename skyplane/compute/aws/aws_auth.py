@@ -18,6 +18,10 @@ class AWSAuthentication:
             self.config_mode = "manual"
             self._access_key = access_key
             self._secret_key = secret_key
+        elif self.config.aws_access_key and self.config.aws_secret_key:
+            self.config_mode = "manual"
+            self._access_key = access_key
+            self._secret_key = secret_key
         else:
             self.config_mode = "iam_inferred"
             self._access_key = None
