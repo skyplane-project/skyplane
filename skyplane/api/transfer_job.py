@@ -574,8 +574,10 @@ class CopyJob(TransferJob):
         recursive: bool = False,
         requester_pays: bool = False,
         job_id: Optional[str] = None,
+        src_iface: Optional[ObjectStoreInterface] = None,
+        dst_ifaces: Optional[List[ObjectStoreInterface]] = None
     ):
-        super().__init__(src_path, dst_paths, recursive, requester_pays, job_id)
+        super().__init__(src_path, dst_paths, recursive, requester_pays, job_id, src_iface, dst_ifaces)
         self.transfer_list = []
         self.multipart_transfer_list = []
 
@@ -776,8 +778,8 @@ class CopyJob(TransferJob):
 class SyncJob(CopyJob):
     """sync job that copies the source objects that does not exist in the destination bucket to the destination"""
 
-    def __init__(self, src_path: str, dst_paths: List[str] or str, requester_pays: bool = False, job_id: Optional[str] = None):
-        super().__init__(src_path, dst_paths, True, requester_pays, job_id)
+    def __init__(self, src_path: str, dst_paths: List[str] or str, requester_pays: bool = False, job_id: Optional[str] = None, src_iface: Optional[ObjectStoreInterface] = None, dst_ifaces: Optional[List[ObjectStoreInterface]] = None):
+        super().__init__(src_path, dst_paths, True, requester_pays, job_id, src_iface, dst_ifaces)
         self.transfer_list = []
         self.multipart_transfer_list = []
 

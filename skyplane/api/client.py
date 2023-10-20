@@ -79,7 +79,7 @@ class SkyplaneClient:
             disable_ibm=disable_ibm
         )
 
-    def pipeline(self, planning_algorithm: Optional[str] = "direct", max_instances: Optional[int] = 1, debug=False):
+    def pipeline(self, planning_algorithm: Optional[str] = "direct", max_instances: Optional[int] = 1, src_iface: Optional[ObjectStoreInterface] = None, dst_ifaces: Optional[List[ObjectStoreInterface]] = None, debug=False):
         """Create a pipeline object to queue jobs"""
         return Pipeline(
             planning_algorithm=planning_algorithm,
@@ -87,6 +87,8 @@ class SkyplaneClient:
             clientid=self.clientid,
             provisioner=self.provisioner,
             transfer_config=self.transfer_config,
+            src_iface=src_iface,
+            dst_ifaces=dst_ifaces,
             debug=debug,
         )
 
