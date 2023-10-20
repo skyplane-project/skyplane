@@ -52,10 +52,10 @@ class Provisioner:
         gcp_auth: Optional[compute.GCPAuthentication] = None,
         host_uuid: Optional[str] = None,
         ibmcloud_auth: Optional[compute.IBMCloudAuthentication] = None,
-        disable_aws=False,
-        disable_azure=False,
-        disable_gcp=False,
-        disable_ibm=False
+        disable_aws: bool = False,
+        disable_azure: bool = False,
+        disable_gcp: bool = False,
+        disable_ibm: bool = False
     ):
         """
         :param aws_auth: authentication information for aws

@@ -30,10 +30,10 @@ class SkyplaneClient:
         ibmcloud_config: Optional["IBMCloudConfig"] = None,
         transfer_config: Optional[TransferConfig] = None,
         log_dir: Optional[str] = None,
-        disable_aws=False,
-        disable_azure=False,
-        disable_gcp=False,
-        disable_ibm=False
+        disable_aws: bool = False,
+        disable_azure: bool = False,
+        disable_gcp:  bool = False,
+        disable_ibm: bool = False
     ):
         """
         :param aws_config: aws cloud configurations
