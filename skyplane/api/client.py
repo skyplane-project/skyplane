@@ -72,17 +72,17 @@ class SkyplaneClient:
                 self.config.gcp_project_id=gcp_config.gcp_project_id
         if not disable_ibm:
             self.config.ibm_enabled = True
-            if ibm_config:
-                self.config.ibmcloud_access_id=ibm_config.ibmcloud_access_id
-                self.config.ibmcloud_secret_key=ibm_config.ibmcloud_secret_key
-                self.config.ibmcloud_iam_key=ibm_config.ibmcloud_iam_key
-                self.config.ibmcloud_iam_endpoint=ibm_config.ibmcloud_iam_endpoint
-                self.config.ibmcloud_useragent=ibm_config.ibmcloud_useragent
-                self.config.ibmcloud_resource_group_id=ibm_config.ibmcloud_resource_group_id
+            if ibmcloud_config:
+                self.config.ibmcloud_access_id=ibmcloud_config.ibmcloud_access_id
+                self.config.ibmcloud_secret_key=ibmcloud_config.ibmcloud_secret_key
+                self.config.ibmcloud_iam_key=ibmcloud_config.ibmcloud_iam_key
+                self.config.ibmcloud_iam_endpoint=ibmcloud_config.ibmcloud_iam_endpoint
+                self.config.ibmcloud_useragent=ibmcloud_config.ibmcloud_useragent
+                self.config.ibmcloud_resource_group_id=ibmcloud_config.ibmcloud_resource_group_id
 
         self.config.to_config_file(config_path)
         typer.secho(f"\nConfig file saved to {config_path}", fg="green")
-        
+
         self.clientid = get_clientid()
         self.aws_auth = aws_config.make_auth_provider() if aws_config else None
         self.azure_auth = azure_config.make_auth_provider() if azure_config else None
