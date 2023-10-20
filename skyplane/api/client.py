@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, List, Optional
 from skyplane.api.config import TransferConfig
 from skyplane.api.provisioner import Provisioner
 from skyplane.api.obj_store import ObjectStore
+from skyplane.config_paths import config_path
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.obj_store.storage_interface import StorageInterface
 from skyplane.api.usage import get_clientid
@@ -78,6 +79,37 @@ class SkyplaneClient:
             disable_gcp=disable_gcp,
             disable_ibm=disable_ibm
         )
+
+        self.config = SkyplaneConfig()
+        if not disable_aws:
+            self.config.aws_enabled = True
+            if aws_config:
+                self.config.aws_access_key = aws_config.aws_access_key
+                self.config.aws_secret_key = aws_config.aws_secret_key
+        if not disable_azure:
+            self.config.azure_enabled = True
+            if azure_config:
+                self.config.azure_subscription_id=azure_config.azure_subscription_id
+                self.config.azure_resource_group=azure_config.azure_resource_group
+                self.config.azure_principal_id=azure_config.azure_umi_id
+                self.config.azure_umi_name=azure_config.azure_umi_name
+                self.config.azure_client_id=azure_config.azure_umi_client_id
+        if not disable_gcp:
+            self.config.gcp_enabled = True
+            if gcp_config:
+                self.config.gcp_project_id=gcp_config.gcp_project_id
+        if not disable_ibm:
+            self.config.ibm_enabled = True
+            if ibm_config:
+                self.config.ibmcloud_access_id=ibm_config.ibmcloud_access_id
+                self.config.ibmcloud_secret_key=ibm_config.ibmcloud_secret_key
+                self.config.ibmcloud_iam_key=ibm_config.ibmcloud_iam_key
+                self.config.ibmcloud_iam_endpoint=ibm_config.ibmcloud_iam_endpoint
+                self.config.ibmcloud_useragent=ibm_config.ibmcloud_useragent
+                self.config.ibmcloud_resource_group_id=ibm_config.ibmcloud_resource_group_id
+
+        self.config.to_config_file(config_path)
+        typer.secho(f"\nConfig file saved to {config_path}", fg="green")
 
     def pipeline(self, planning_algorithm: Optional[str] = "direct", max_instances: Optional[int] = 1, src_iface: Optional[ObjectStoreInterface] = None, dst_ifaces: Optional[List[ObjectStoreInterface]] = None, debug=False):
         """Create a pipeline object to queue jobs"""

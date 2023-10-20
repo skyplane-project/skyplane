@@ -104,6 +104,8 @@ class SkyplaneConfig:
     cloudflare_enabled: bool
     ibmcloud_enabled: bool
     anon_clientid: str
+    aws_access_key: Optional[str] = None
+    aws_secret_key: Optional[str] = None
     azure_principal_id: Optional[str] = None
     azure_subscription_id: Optional[str] = None
     azure_resource_group: Optional[str] = None
@@ -151,6 +153,10 @@ class SkyplaneConfig:
         if "aws" in config:
             if "aws_enabled" in config["aws"]:
                 aws_enabled = config.getboolean("aws", "aws_enabled")
+            if "aws_access_key" in config["aws"]:
+                aws_access_key = config.get("aws", "aws_access_key")
+            if "aws_secret_key" in config["aws"]:
+                aws_secret_key = config.getboolean("aws", "aws_secret_key")
 
         azure_enabled = False
         azure_subscription_id = None
@@ -215,6 +221,8 @@ class SkyplaneConfig:
             gcp_enabled=gcp_enabled,
             ibmcloud_enabled=ibmcloud_enabled,
             cloudflare_enabled=cloudflare_enabled,
+            aws_access_key=aws_access_key,
+            aws_secret_key=aws_secret_key,
             anon_clientid=anon_clientid,
             azure_principal_id=azure_principal_id,
             azure_subscription_id=azure_subscription_id,
@@ -248,6 +256,10 @@ class SkyplaneConfig:
         if "aws" not in config:
             config.add_section("aws")
         config.set("aws", "aws_enabled", str(self.aws_enabled))
+        if self.aws_access_key:
+            config.set("aws", "aws_access_key", self.aws_access_key)
+        if self.aws_secret_key:
+            config.set("aws", "aws_secret_key", self.aws_secret_key)
 
         if "ibmcloud" not in config:
             config.add_section("ibmcloud")
