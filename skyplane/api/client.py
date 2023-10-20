@@ -2,7 +2,7 @@ import uuid
 import typer
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from skyplane.api.config import TransferConfig
 from skyplane.api.provisioner import Provisioner
