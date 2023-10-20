@@ -104,15 +104,15 @@ class SkyplaneClient:
         :param max_instances: The maximum number of instances to use per region (default: 1)
         :type max_instances: int
         """
-        provider_src, bucket_src, _ = parse_path(self.src)
+        provider_src, bucket_src, _ = parse_path(src)
         src_iface = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src, aws_auth=self.aws_auth, azure_auth=self.azure_auth, gcp_auth=self.gcp_auth)
 
         if isinstance(dst, str):
-            provider_dst, bucket_dst, _ = parse_path(self.dst)
+            provider_dst, bucket_dst, _ = parse_path(dst)
             dst_ifaces = [StorageInterface.create(f"{provider_dst}:infer", bucket_dst, aws_auth=self.aws_auth, azure_auth=self.azure_auth, gcp_auth=self.gcp_auth)]
         else:
             dst_ifaces = []
-            for path in self.dst:
+            for path in dst:
                 provider_dst, bucket_dst, _ = parse_path(path)
                 dst_ifaces.append(StorageInterface.create(f"{provider_dst}:infer", bucket_dst, aws_auth=self.aws_auth, azure_auth=self.azure_auth, gcp_auth=self.gcp_auth))
 
