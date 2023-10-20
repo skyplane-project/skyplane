@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, List, Optional
 from skyplane.api.config import TransferConfig
 from skyplane.api.provisioner import Provisioner
 from skyplane.api.obj_store import ObjectStore
+from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import config_path
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface
 from skyplane.obj_store.storage_interface import StorageInterface
@@ -80,7 +81,7 @@ class SkyplaneClient:
             disable_ibm=disable_ibm
         )
 
-        self.config = SkyplaneConfig()
+        self.config = SkyplaneConfig.default_config()
         if not disable_aws:
             self.config.aws_enabled = True
             if aws_config:
