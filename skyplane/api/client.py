@@ -12,6 +12,7 @@ from skyplane.obj_store.storage_interface import StorageInterface
 from skyplane.api.usage import get_clientid
 from skyplane.utils import logger
 from skyplane.utils.definitions import tmp_log_dir
+from skyplane.utils.path import parse_path
 
 from skyplane.api.pipeline import Pipeline
 
@@ -103,23 +104,17 @@ class SkyplaneClient:
         :param max_instances: The maximum number of instances to use per region (default: 1)
         :type max_instances: int
         """
-        def parse(path):
-            provider, parsed = path[:2], path[5:]
-            bucket, *keys = parsed.split("/", 1)
-            provider = "aws" if provider == "s3" else "gcp"
-            return provider, bucket, key
-
-        provider_src, bucket_src, _ = parse(src)
+        provider_src, bucket_src, _ = parse_path(src)
 
         src_iface = ObjectStoreInterface.create(f"{provider_src}:infer", bucket_src, aws_auth=self.aws_auth, azure_auth=self.azure_auth, gcp_auth=self.gcp_auth)
 
         if isinstance(dst, str):
-            provider_dst, bucket_dst, _ = parse(dst)
+            provider_dst, bucket_dst, _ = parse_path(dst)
             dst_ifaces = [StorageInterface.create(f"{provider_dst}:infer", bucket_dst, aws_auth=self.aws_auth, azure_auth=self.azure_auth, gcp_auth=self.gcp_auth)]
         else:
             dst_ifaces = []
             for dst_path in dst:
-                provider_dst, bucket_dst, _ = parse(dst_path)
+                provider_dst, bucket_dst, _ = parse_path(dst_path)
                 dst_ifaces.append(StorageInterface.create(f"{provider_dst}:infer", bucket_dst, aws_auth=self.aws_auth, azure_auth=self.azure_auth, gcp_auth=self.gcp_auth))
 
         pipeline = self.pipeline(max_instances=max_instances, debug=debug, src_iface = src_iface, dst_ifaces=dst_ifaces)
