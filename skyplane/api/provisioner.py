@@ -1,4 +1,5 @@
 import uuid
+import typer
 from dataclasses import dataclass, field
 from functools import partial
 
