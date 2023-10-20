@@ -150,6 +150,8 @@ class SkyplaneConfig:
             anon_clientid = cls.generate_machine_id()
 
         aws_enabled = False
+        aws_access_key = None
+        aws_secret_access_key = None
         if "aws" in config:
             if "aws_enabled" in config["aws"]:
                 aws_enabled = config.getboolean("aws", "aws_enabled")
