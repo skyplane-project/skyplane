@@ -156,6 +156,9 @@ class SkyplaneClient:
         pipeline.queue_copy(src, dst, recursive=recursive)
         pipeline.start(progress=True)
 
+    def deprovision(self):
+        self.provisioner.deprovision()
+
     def object_store(self):
         """
         Returns an object store interface
