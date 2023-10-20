@@ -234,6 +234,7 @@ class Provisioner:
 
         # provision VMs
         logger.fs.info(f"[Provisioner.provision] Provisioning {len(provision_tasks)} VMs")
+        logger.info(f"[Provisioner.provision] Provisioning {len(provision_tasks)} VMs")
         results: List[Tuple[ProvisionerTask, compute.Server]] = do_parallel(
             self._provision_task,
             provision_tasks,
