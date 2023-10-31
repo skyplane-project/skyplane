@@ -45,9 +45,9 @@ class StorageInterface:
             from skyplane.obj_store.gcs_interface import GCSInterface
 
             return GCSInterface(bucket)
-        elif region_tag.startswith("bqi"):
+        elif region_tag.startswith("bq"):
             from skyplane.obj_store.big_query_interface import BQIInterface
-
+            print(bucket)
             return BQIInterface(bucket)
         elif region_tag.startswith("azure"):
             from skyplane.obj_store.azure_blob_interface import AzureBlobInterface

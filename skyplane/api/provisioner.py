@@ -162,7 +162,7 @@ class Provisioner:
             elif task.cloud_provider == "azure":
                 assert self.azure.auth.enabled(), "Azure credentials not configured"
                 server = self.azure.provision_instance(task.region, task.vm_type, use_spot_instances=task.spot, tags=task.tags)
-            elif task.cloud_provider == "gcp":
+            elif task.cloud_provider == "gcp" or task.cloud_provider == "bq":
                 assert self.gcp.auth.enabled(), "GCP credentials not configured"
                 server = self.gcp.provision_instance(
                     task.region,

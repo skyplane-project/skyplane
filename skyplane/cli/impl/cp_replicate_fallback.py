@@ -36,6 +36,24 @@ def fallback_cmd_azure_cp(src_path: str, dest_path: str, recursive: bool) -> str
 def fallback_cmd_azure_sync(src_path, dest_path):
     return f"azcopy sync {src_path} {dest_path}"
 
+def fallback_cmd_bq_extract(src_path, dest_path):
+    ### BQ -> Local
+    print(parse_bq_url(src_path))
+    print(dest_path)
+    return f"bq extract {parse_bq_url(src_path)} {dest_path}"
+
+def fallback_cmd_bq_upload(src_path, dest_path): 
+    ### Local -> BQ
+    print(src_path)
+    print(dest_path)
+    return f"bq cp {src_path} {dest_path}"
+def parse_bq_url(src): 
+    src = src[5:]
+    if (src[len(src)-1] == "/"):
+        src = src[0:len(src)-1]
+    src = src.replace("/", ".")
+    return src
+
 
 def replicate_onprem_cp_cmd(src, dst, recursive=True) -> Optional[str]:
     provider_src, _, _ = parse_path(src)
@@ -53,6 +71,11 @@ def replicate_onprem_cp_cmd(src, dst, recursive=True) -> Optional[str]:
     # local -> azure or azure -> local
     elif (provider_src == "local" and provider_dst == "azure") or (provider_src == "azure" and provider_dst == "local"):
         return fallback_cmd_azure_cp(src, dst, recursive)
+    elif (provider_src == "local" and provider_dst == "bq") or (provider_src == "bq" and provider_dst == "local"):
+        if provider_src == "bq":
+            return fallback_cmd_bq_extract(src, dst)
+        else:
+            return fallback_cmd_bq_upload(src, dst)
     # unsupported fallback
     else:
         return None

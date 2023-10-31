@@ -31,7 +31,7 @@ class CloudProvider:
             from skyplane.compute.aws.aws_cloud_provider import AWSCloudProvider
 
             return AWSCloudProvider.get_transfer_cost(src_key, dst_key, premium_tier)
-        elif src_provider == "gcp":
+        elif src_provider == "gcp" or src_provider == "bq":
             from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 
             return GCPCloudProvider.get_transfer_cost(src_key, dst_key, premium_tier)

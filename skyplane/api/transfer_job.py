@@ -209,6 +209,8 @@ class Chunker:
         join = lambda prefix, fname: prefix + fname if prefix.endswith("/") else prefix + "/" + fname
         src_fname = source_key.split("/")[-1] if "/" in source_key and not source_key.endswith("/") else source_key
         if not recursive:
+            print(source_key)
+            print(source_prefix)
             if source_key == source_prefix:
                 if dest_prefix == "" or dest_prefix == "/":
                     return src_fname

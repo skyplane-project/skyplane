@@ -265,12 +265,10 @@ class GCPAuthentication:
 
     @imports.inject("google.cloud.bigquery", pip_extra="gcp")
     def get_bigquery_object(bigquery, self):
-        print("This is bigquery", bigquery)
         return bigquery
 
     @imports.inject("google.cloud.bigquery", pip_extra="gcp")
     def get_bigquery_client(bigquery, self):
-        print("This is bigquery", bigquery)
         return bigquery.Client.from_service_account_json(self.service_account_credentials)
 
     def get_gcp_instances(self, gcp_region: str):

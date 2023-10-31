@@ -60,6 +60,7 @@ _DEFAULT_FLAGS = {
     "aws_use_spot_instances": False,
     "azure_use_spot_instances": False,
     "gcp_use_spot_instances": False,
+    "bq_use_spot_instances": False,
     "ibmcloud_use_spot_instances": False,
     "aws_instance_class": "m5.8xlarge",
     "azure_instance_class": "Standard_D32_v5",

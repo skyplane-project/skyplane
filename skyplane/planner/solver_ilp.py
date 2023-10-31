@@ -65,7 +65,7 @@ class ThroughputSolverILP(ThroughputSolver):
             provider = r.split(":")[0]
             if provider == "aws":
                 egress_limit, ingress_limit = p.aws_instance_throughput_limit
-            elif provider == "gcp":
+            elif provider == "gcp" or provider == "bq":
                 egress_limit, ingress_limit = p.gcp_instance_throughput_limit
             elif provider == "azure":
                 egress_limit, ingress_limit = p.azure_instance_throughput_limit

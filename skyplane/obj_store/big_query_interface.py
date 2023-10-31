@@ -28,6 +28,7 @@ class BQIInterface(ObjectStoreInterface):
         self.bucket_name = bucket_name
         self.auth = compute.GCPAuthentication()
         self.full_name = self.auth.project_id + "." + bucket_name
+        print(self.full_name)
         self._bigquery_object = self.auth.get_bigquery_object()
         self._bigquery_client = self.auth.get_bigquery_client()
         self._requests_session = requests.Session()
@@ -116,12 +117,14 @@ class BQIInterface(ObjectStoreInterface):
     def list_objects(self, prefix="", region=None) -> Iterator[BQIObject]:
         tables = self._bigquery_client.list_tables(self.full_name)
         for table in tables:
+            print(prefix)
             if (not prefix or table.table_id.startswith(prefix)):
                 tableobj = self._bigquery_client.get_table(table)
                 yield BQIObject(
-                    tableobj.dataset_id,
+                    table.table_id,
                     provider="bq",
                     bucket=self.bucket_name,
+                    size=100,
                     last_modified=tableobj.modified,
                     mime_type=getattr(table, "content_type", None),
                 )
@@ -154,6 +157,49 @@ class BQIInterface(ObjectStoreInterface):
 
     def get_obj_last_modified(self, obj_name):
         return self.get_obj_metadata(obj_name).modified
+
+    def download_object(
+        self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5=False
+    ) -> Tuple[Optional[str], Optional[bytes]]:
+        src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
+        src_object_name = src_object_name if src_object_name[0] != "/" else src_object_name
+        table = self.get_obj_metadata(src_object_name)
+        blob = self._bigquery_client.list_rows(table).to_dataframe()
+        if not os.path.exists(dst_file_path):
+            open(dst_file_path, "a").close()
+        blob.to_csv(dst_file_path, index=False, header=True)
+        mime_type = "text/csv"
+        return mime_type, None 
+
+
+    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None, mime_type=None):
+        src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
+        dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
+        os.path.getsize(src_file_path)
+
+        job_config = self._bigquery_object.LoadJobConfig(
+            source_format = self._bigquery_object.SourceFormat.CSV,
+            autodetect = True,
+        )
+        dataset_ref = self._bigquery_client.dataset(self.bucket_name)
+        table_ref = dataset_ref.table(dst_object_name)
+        table_id = self.full_name
+        if part_number is None: #NOT Multipart Upload
+            with open(src_file_path, "rb") as source_file: 
+                try: 
+                    job = self._bigquery_client.load_table_from_file(source_file, table_ref, job_config = job_config)
+                    job.result()
+                except Exception as e:
+                    raise; 
+            return
+
+
+    def initiate_multipart_upload(self, dst_object_name: str, mime_type: Optional[str] = None) -> str:
+        assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
+        return 
+
+
+
 """
     def send_xml_request(
         self,
@@ -215,44 +261,3 @@ class BQIInterface(ObjectStoreInterface):
             raise ValueError(f"Invalid status code {response.status_code}: {response.text}")
         return response
 """
-
-    def download_object(
-        self, src_object_name, dst_file_path, offset_bytes=None, size_bytes=None, write_at_offset=False, generate_md5=False
-    ) -> Tuple[Optional[str], Optional[bytes]]:
-        src_object_name, dst_file_path = str(src_object_name), str(dst_file_path)
-        src_object_name = src_object_name if src_object_name[0] != "/" else src_object_name
-
-        table = self.get_obj_metadata(src_object_name)
-        blob = self._bigquery_client.list_rows(table).to_dataframe()
-        if not os.path.exists(dst_file_path):
-            open(dst_file_path, "a").close()
-        blob.to_csv(dst_file_path, index=False, header=True)
-        mime_type = "text/csv"
-        return mime_type, None 
-
-
-    def upload_object(self, src_file_path, dst_object_name, part_number=None, upload_id=None, check_md5=None, mime_type=None):
-        src_file_path, dst_object_name = str(src_file_path), str(dst_object_name)
-        dst_object_name = dst_object_name if dst_object_name[0] != "/" else dst_object_name
-        os.path.getsize(src_file_path)
-
-        job_config = self._bigquery_object.LoadJobConfig(
-            source_format = self._bigquery_object.SourceFormat.CSV,
-            autodetect = True,
-        )
-        dataset_ref = self._bigquery_client.dataset(self.bucket_name)
-        table_ref = dataset_ref.table(dst_object_name)
-        table_id = self.full_name
-        if part_number is None: #NOT Multipart Upload
-            with open(src_file_path, "rb") as source_file: 
-                try: 
-                    job = self._bigquery_client.load_table_from_file(source_file, table_ref, job_config = job_config)
-                    job.result()
-                except Exception as e:
-                    raise; 
-            return
-
-
-    def initiate_multipart_upload(self, dst_object_name: str, mime_type: Optional[str] = None) -> str:
-        assert len(dst_object_name) > 0, f"Destination object name must be non-empty: '{dst_object_name}'"
-        return 

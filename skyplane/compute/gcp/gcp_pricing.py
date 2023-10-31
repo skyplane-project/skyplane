@@ -3,7 +3,7 @@ class GCPPricing:
     def get_transfer_cost(src_key, dst_key, premium_tier=True):
         src_provider, src = src_key.split(":")
         dst_provider, dst = dst_key.split(":")
-        assert src_provider == "gcp"
+        assert src_provider == "gcp" or src_provider == "bq"
         src_continent, src_region, src_zone = src.split("-")
         if dst_provider == "gcp":
             dst_continent, dst_region, dst_zone = dst.split("-")
