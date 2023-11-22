@@ -16,7 +16,7 @@ from skyplane import compute
 from skyplane.cli.impl.common import print_header
 from skyplane.api.usage import UsageClient, UsageStatsStatus
 from skyplane.config import SkyplaneConfig
-from skyplane.config_paths import aws_config_path, gcp_config_path, config_path, ibmcloud_config_path
+from skyplane.config_paths import aws_config_path, gcp_config_path, config_path, ibmcloud_config_path, scp_config_path
 from skyplane.utils import logger
 
 
@@ -471,17 +471,80 @@ def load_ibmcloud_config(config: SkyplaneConfig, force_init: bool = False, non_i
         return config
 
 
+def load_scp_config(config: SkyplaneConfig, force_init: bool = False, non_interactive: bool = False) -> SkyplaneConfig:
+    def disable_scp_support():
+        typer.secho("    Disabling SCP support", fg="blue")
+        config.scp_enabled = False
+        config.scp_access_key = None
+        config.scp_secret_key = None
+        compute.SCPAuthentication.clear_region_config()
+        return config
+
+    if non_interactive or typer.confirm("    Do you want to configure SCP support in Skyplane?", default=True):
+        # SCP credentials check
+        auth = compute.SCPAuthentication(config=config)
+        credentials_path = auth.scp_credential_path
+
+        if not os.path.exists(os.path.expanduser(credentials_path)):
+            config.scp_enabled = False
+        else:
+            with open(os.path.expanduser(credentials_path), "r") as f:
+                lines = [line.strip() for line in f.readlines() if " = " in line]
+                credentials_scp = {}
+                for line in lines:
+                    key, value = line.split(" = ")
+                    credentials_scp[key] = value.strip()
+
+            if (
+                "scp_access_key" not in credentials_scp
+                or "scp_secret_key" not in credentials_scp
+                or credentials_scp["scp_access_key"] is None
+                or credentials_scp["scp_secret_key"] is None
+            ):
+                config.scp_enabled = False
+            else:
+                config.scp_enabled = True
+
+        # auth = compute.SCPAuthentication(config=config)
+
+        if force_init:
+            typer.secho("    SCP configurations will be re-initialized", fg="red", err=True)
+            compute.SCPAuthentication.clear_region_config()
+
+        if config.scp_enabled:
+            typer.secho(
+                f"    Loaded SCP credentials from the scp_credential [scp_access key: ...{credentials_scp['scp_access_key'][-6:]}]",
+                fg="blue",
+            )
+            auth.save_region_config(config)
+            typer.secho(f"    SCP region config file saved to {scp_config_path}", fg="blue")
+            config.scp_enabled = True
+            return config
+        else:
+            typer.secho(
+                "    SCP credentials not found in scp_credential, please check the scp_credential via scp credential guide",
+                fg="red",
+                err=True,
+            )
+            return disable_scp_support()
+
+    else:
+        return disable_scp_support()
+
+
 def init(
     non_interactive: bool = typer.Option(False, "--non-interactive", "-y", help="Run non-interactively"),
     reinit_azure: bool = False,
     reinit_gcp: bool = False,
     reinit_ibm: bool = False,
     reinit_cloudflare: bool = False,
+    reinit_scp: bool = False,
     disable_config_aws: bool = False,
     disable_config_azure: bool = False,
     disable_config_gcp: bool = False,
     disable_config_ibm: bool = True,  # TODO: eventuall enable IBM
     disable_config_cloudflare: bool = False,
+    disable_config_scp: bool = False,
 ):
     """
     It loads the configuration file, and if it doesn't exist, it creates a default one. Then it creates
@@ -493,6 +556,8 @@ def init(
     :type reinit_gcp: bool
     :param reinit_ibm: If true, will reinitialize the IBM Cloud region list and credentials
     :type reinit_ibm: bool
+    :param reinit_scp: If true, will reinitialize the SCP region list and credentials
+    :type reinit_scp: bool
     :param disable_config_aws: If true, will disable AWS configuration (may still be enabled if environment variables are set)
     :type disable_config_aws: bool
     :param disable_config_azure: If true, will disable Azure configuration (may still be enabled if environment variables are set)
@@ -503,6 +568,8 @@ def init(
     :type disable_config_ibm: bool
     :param disable_config_cloudflare: If true, will disable Cloudflare configuration (may still be enabled if environment variables are set)
     :type disable_config_cloudflare: bool
+    :param disable_config_scp: If true, will disable SCP configuration (may still be enabled if environment variables are set)
+    :type disable_config_scp: bool
     """
     print_header()
 
@@ -516,13 +583,13 @@ def init(
         cloud_config = SkyplaneConfig.default_config()
 
     # load AWS config
-    if not (reinit_azure or reinit_gcp or reinit_ibm):
+    if not (reinit_azure or reinit_gcp or reinit_ibm or reinit_cloudflare or reinit_scp):
         typer.secho("\n(1) Configuring AWS:", fg="yellow", bold=True)
         if not disable_config_aws:
             cloud_config = load_aws_config(cloud_config, non_interactive=non_interactive)
 
     # load Azure config
-    if not (reinit_gcp or reinit_ibm):
+    if not (reinit_gcp or reinit_ibm or reinit_cloudflare or reinit_scp):
         if reinit_azure:
             typer.secho("\nConfiguring Azure:", fg="yellow", bold=True)
         else:
@@ -531,7 +598,7 @@ def init(
             cloud_config = load_azure_config(cloud_config, force_init=reinit_azure, non_interactive=non_interactive)
 
     # load GCP config
-    if not reinit_azure:
+    if not (reinit_azure or reinit_ibm or reinit_cloudflare or reinit_scp):
         if reinit_gcp:
             typer.secho("\nConfiguring GCP:", fg="yellow", bold=True)
         else:
@@ -540,17 +607,26 @@ def init(
             cloud_config = load_gcp_config(cloud_config, force_init=reinit_gcp, non_interactive=non_interactive)
 
     # load cloudflare config
-    if not reinit_cloudflare and not disable_config_cloudflare:  # TODO: fix reinit logic
+    if not (reinit_gcp or reinit_cloudflare or reinit_scp) and not disable_config_cloudflare:  # TODO: fix reinit logic
         typer.secho("\n(4) Configuring Cloudflare R2:", fg="yellow", bold=True)
         if not disable_config_cloudflare:
             cloud_config = load_cloudflare_config(cloud_config, non_interactive=non_interactive)
 
     # load IBMCloud config
-    if not disable_config_ibm and not reinit_ibm:
+    if not disable_config_ibm and not (reinit_ibm or reinit_scp):
         # TODO: fix IBM configuration to not fail on file finding
         typer.secho("\n(4) Configuring IBM Cloud:", fg="yellow", bold=True)
         if not disable_config_ibm:
             cloud_config = load_ibmcloud_config(cloud_config, force_init=reinit_ibm, non_interactive=non_interactive)
+
+    # load SCP config
+    if not (reinit_azure or reinit_gcp or reinit_ibm or reinit_cloudflare):
+        if reinit_scp:
+            typer.secho("\nConfiguring SCP:", fg="yellow", bold=True)
+        else:
+            typer.secho("\n(5) Configuring SCP:", fg="yellow", bold=True)
+        if not disable_config_scp:
+            cloud_config = load_scp_config(cloud_config, force_init=reinit_scp, non_interactive=non_interactive)
 
     cloud_config.to_config_file(config_path)
     typer.secho(f"\nConfig file saved to {config_path}", fg="green")

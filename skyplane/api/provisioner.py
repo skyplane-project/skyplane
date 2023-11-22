@@ -52,6 +52,7 @@ class Provisioner:
         gcp_auth: Optional[compute.GCPAuthentication] = None,
         host_uuid: Optional[str] = None,
         ibmcloud_auth: Optional[compute.IBMCloudAuthentication] = None,
+        scp_auth: Optional[compute.SCPAuthentication] = None,
     ):
         """
         :param aws_auth: authentication information for aws
@@ -64,12 +65,15 @@ class Provisioner:
         :type host_uuid: string
         :param ibmcloud_auth: authentication information for aws
         :type ibmcloud_auth: compute.IBMCloudAuthentication
+        :param scp_auth: authentication information for scp
+        :type scp_auth: compute.SCPAuthentication
         """
         self.aws_auth = aws_auth
         self.azure_auth = azure_auth
         self.gcp_auth = gcp_auth
         self.host_uuid = host_uuid
         self.ibmcloud_auth = ibmcloud_auth
+        self.scp_auth = scp_auth
         self._make_cloud_providers()
         self.temp_nodes: Set[compute.Server] = set()  # temporary area to store nodes that should be terminated upon exit
         self.pending_provisioner_tasks: List[ProvisionerTask] = []
@@ -85,8 +89,9 @@ class Provisioner:
         self.azure = compute.AzureCloudProvider(auth=self.azure_auth)
         self.gcp = compute.GCPCloudProvider(auth=self.gcp_auth)
         self.ibmcloud = compute.IBMCloudProvider(auth=self.ibmcloud_auth)
+        self.scp = compute.SCPCloudProvider(auth=self.scp_auth)
 
-    def init_global(self, aws: bool = True, azure: bool = True, gcp: bool = True, ibmcloud: bool = True):
+    def init_global(self, aws: bool = True, azure: bool = True, gcp: bool = True, ibmcloud: bool = True, scp: bool = True):
         """
         Initialize the global cloud providers by configuring with credentials
 
@@ -110,6 +115,9 @@ class Provisioner:
             jobs.append(self.gcp.setup_global)
         if ibmcloud:
             jobs.append(self.ibmcloud.setup_global)
+        if scp:
+            jobs.append(self.scp.create_ssh_key)
+            jobs.append(self.scp.setup_global)
 
         do_parallel(lambda fn: fn(), jobs, spinner=False)
 
@@ -174,6 +182,10 @@ class Provisioner:
             elif task.cloud_provider == "ibmcloud":
                 assert self.ibmcloud.auth.enabled(), "IBM Cloud credentials not configured"
                 server = self.ibmcloud.provision_instance(task.region, task.vm_type, tags=task.tags)
+            elif task.cloud_provider == "scp":
+                assert self.scp.auth.enabled(), "SCP credentials not configured"
+                # print('def _provision_task : ', task.region, task.vm_type, task.tags)
+                server = self.scp.provision_instance(task.region, task.vm_type, tags=task.tags)
             else:
                 raise NotImplementedError(f"Unknown provider {task.cloud_provider}")
         logger.fs.debug(f"[Provisioner._provision_task] Provisioned {server} in {t.elapsed:.2f}s")
@@ -206,6 +218,8 @@ class Provisioner:
         azure_provisioned = any([task.cloud_provider == "azure" for task in provision_tasks])
         gcp_provisioned = any([task.cloud_provider == "gcp" for task in provision_tasks])
         ibmcloud_provisioned = any([task.cloud_provider == "ibmcloud" for task in provision_tasks])
+        scp_regions = set([task.region for task in provision_tasks if task.cloud_provider == "scp"])
+        scp_provisioned = any([task.cloud_provider == "scp" for task in provision_tasks])
 
         # configure regions
         if aws_provisioned:
@@ -223,6 +237,25 @@ class Provisioner:
                 desc="Configuring IBM Cloud regions",
             )
             logger.fs.info(f"[Provisioner.provision] Configured IBM Cloud regions {ibmcloud_regions}")
+
+        if scp_provisioned:
+            logger.fs.info("SCP provisioning may sometimes take several minutes. Please be patient.")
+            do_parallel(
+                self.scp.setup_region,
+                list(set(scp_regions)),
+                spinner=spinner,
+                spinner_persist=False,
+                desc="Configuring SCP regions",
+            )
+            # server group create, add provision_tasks on tags(region)
+            for r in set(scp_regions):
+                servergroup = self.scp.network.create_server_group(r)
+                for task in provision_tasks:
+                    if task.cloud_provider == "scp" and task.region == r:
+                        task.tags["servergroup"] = servergroup
+                        # print('provisioner.py - task.tags : ', task.tags)
+
+            logger.fs.info(f"[Provisioner.provision] Configured SCP regions {scp_regions}")
 
         # provision VMs
         logger.fs.info(f"[Provisioner.provision] Provisioning {len(provision_tasks)} VMs")
@@ -253,6 +286,14 @@ class Provisioner:
                     self.gcp_firewall_rules.add(self.gcp.authorize_gateways(public_ips + private_ips))
 
                 authorize_ip_jobs.append(authorize_gcp_gateways)
+            if scp_provisioned:
+                # configure firewall for each scp region
+                for r in set(scp_regions):
+                    scp_ips = [s.private_ip() for t, s in results if t.cloud_provider == "scp" and t.region == r]
+                    # vpcids = [s.vpc_id for t, s in results if t.cloud_provider == "scp" and t.region == r]   # pytype: disable=bad-return-type
+                    vpcids = [s.vpc_id if isinstance(s, compute.SCPServer) else None for t, s in results if t.cloud_provider == "scp" and t.region == r]
+                    # print('provisioner.py - scp_ips : ', scp_ips, ', vpcids : ', vpcids)
+                    authorize_ip_jobs.extend([partial(self.scp.add_firewall_rule_all, r, scp_ips, vpcids)])
 
             do_parallel(
                 lambda fn: fn(),
@@ -303,6 +344,7 @@ class Provisioner:
         azure_deprovisioned = any([s.provider == "azure" for s in servers])
         gcp_deprovisioned = any([s.provider == "gcp" for s in servers])
         ibmcloud_deprovisioned = any([s.provider == "ibmcloud" for s in servers])
+        scp_deprovisioned = any([s.provider == "scp" for s in servers])
         if azure_deprovisioned:
             logger.warning("Azure deprovisioning is very slow. Please be patient.")
         logger.fs.info(f"[Provisioner.deprovision] Deprovisioning {len(servers)} VMs")
@@ -327,6 +369,14 @@ class Provisioner:
             if gcp_deprovisioned:
                 jobs.extend([partial(self.gcp.remove_gateway_rule, rule) for rule in self.gcp_firewall_rules])
                 logger.fs.info(f"[Provisioner.deprovision] Deauthorizing GCP gateways with firewalls: {self.gcp_firewall_rules}")
+            if scp_deprovisioned:
+                scp_regions = set([s.region() for s in servers if s.provider == "scp"])
+                for r in set(scp_regions):
+                    scp_servers = [s for s in servers if s.provider == "scp" and s.region() == r]
+                    scp_ips = [s.private_ip() for s in scp_servers]
+                    vpcids = [s.vpc_id for s in scp_servers]
+                    jobs.extend([partial(self.scp.remove_gateway_rule_region, r, scp_ips, vpcids)])
+                logger.fs.info(f"[Provisioner.deprovision] Deauthorizing SCP gateways with firewalls: {scp_ips}")
             do_parallel(
                 lambda fn: fn(), jobs, n=max_jobs, spinner=spinner, spinner_persist=False, desc="Deauthorizing gateways from firewalls"
             )

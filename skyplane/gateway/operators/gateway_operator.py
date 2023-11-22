@@ -272,6 +272,16 @@ class GatewaySender(GatewayOperator):
 
         chunk_ids = [chunk_req.chunk.chunk_id]
         chunk_reqs = [chunk_req]
+
+        # retry http_pool.request
+        def http_pool_request(register_body):
+            return self.http_pool.request(
+                "POST",
+                f"https://{dst_host}:8080/api/v1/chunk_requests",
+                body=register_body,
+                headers={"Content-Type": "application/json"},
+            )
+
         try:
             with Timer(f"pre-register chunks {chunk_ids} to {dst_host}"):
                 # TODO: remove chunk request wrapper
@@ -288,12 +298,13 @@ class GatewaySender(GatewayOperator):
                 while n_added < len(chunk_reqs):
                     register_body = json.dumps([c.chunk.as_dict() for c in chunk_reqs[n_added:]]).encode("utf-8")
                     # print(f"[sender-{self.worker_id}]:{chunk_ids} register body {register_body}")
-                    response = self.http_pool.request(
-                        "POST",
-                        f"https://{dst_host}:8080/api/v1/chunk_requests",
-                        body=register_body,
-                        headers={"Content-Type": "application/json"},
-                    )
+                    # response = self.http_pool.request(
+                    #     "POST",
+                    #     f"https://{dst_host}:8080/api/v1/chunk_requests",
+                    #     body=register_body,
+                    #     headers={"Content-Type": "application/json"},
+                    # )
+                    response = retry_backoff(partial(http_pool_request, register_body))
                     reply_json = json.loads(response.data.decode("utf-8"))
                     print(f"[sender-{self.worker_id}]", n_added, reply_json, dst_host)
                     n_added += reply_json["n_added"]
@@ -308,11 +319,23 @@ class GatewaySender(GatewayOperator):
             raise e
 
         # contact server to set up socket connection
+        def socket_connection():
+            self.destination_sockets[dst_host] = retry_backoff(
+                # all exceptions are retried
+                # partial(self.make_socket, dst_host), max_retries=3, exception_class=socket.timeout
+                partial(self.make_socket, dst_host),
+                max_retries=3,
+                exception_class=Exception,
+            )
+
         if self.destination_ports.get(dst_host) is None:
             print(f"[sender-{self.worker_id}]:{chunk_ids} creating new socket")
-            self.destination_sockets[dst_host] = retry_backoff(
-                partial(self.make_socket, dst_host), max_retries=3, exception_class=socket.timeout
-            )
+            # self.destination_sockets[dst_host] = retry_backoff(
+            #     # all exceptions are retried
+            #     # partial(self.make_socket, dst_host), max_retries=3, exception_class=socket.timeout
+            #     partial(self.make_socket, dst_host), max_retries=3, exception_class=Exception
+            # )
+            socket_connection()
             print(f"[sender-{self.worker_id}]:{chunk_ids} created new socket")
         sock = self.destination_sockets[dst_host]
 
@@ -348,18 +371,39 @@ class GatewaySender(GatewayOperator):
                 is_compressed=(compressed_length is not None),
             )
             # print(f"[sender-{self.worker_id}]:{chunk_id} sending chunk header {header}")
-            header.to_socket(sock)
-            # print(f"[sender-{self.worker_id}]:{chunk_id} sent chunk header")
+            # fix socket timeouterror case - we need to create a new socket, so retry_backoff is not easy to use.
+            retry_count = 0
+            max_retries = 3
+            while retry_count < max_retries:
+                try:
+                    header.to_socket(sock)
+                    # print(f"[sender-{self.worker_id}]:{chunk_id} sent chunk header")
 
-            # send chunk data
-            assert chunk_file_path.exists(), f"chunk file {chunk_file_path} does not exist"
-            # file_size = os.path.getsize(chunk_file_path)
+                    # send chunk data
+                    assert chunk_file_path.exists(), f"chunk file {chunk_file_path} does not exist"
+                    # file_size = os.path.getsize(chunk_file_path)
 
-            with Timer() as t:
-                sock.sendall(data)
+                    with Timer() as t:
+                        sock.sendall(data)
+                except Exception as e:
+                    print(f"[sender-{self.worker_id}]:{chunk_id} error sending chunk {e}")
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        print(f"SCP DEV - Retrying (attempt {retry_count} of {max_retries})...")
+                        # 이 위치에 에러 파일 만들기
+                        with open(f"/skyplane/header.to_socket_{retry_count}_{dst_host}_error.txt", "w") as f:
+                            f.write(str(e))
+                        time.sleep(0.5)
+                        socket_connection()
+                        sock = self.destination_sockets[dst_host]
+                    else:
+                        print(f"SCP DEV - Max retries ({max_retries}) reached. Giving up.")
+                        raise e
+                else:
+                    break
 
             # logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent at {chunk.chunk_length_bytes * 8 / t.elapsed / MB:.2f}Mbps")
-            print(f"[sender:{self.worker_id}]:{chunk_id} sent at {wire_length * 8 / t.elapsed / MB:.2f}Mbps")
+            print(f"[sender:{self.worker_id}]:{chunk_id} sent at {wire_length * 8 / t.elapsed / MB:.2f}Mbps - {dst_host} : {self.destination_ports[dst_host]}")
 
             if dst_host not in self.sent_chunk_ids:
                 self.sent_chunk_ids[dst_host] = []

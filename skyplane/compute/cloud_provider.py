@@ -46,6 +46,12 @@ class CloudProvider:
             from skyplane.compute.gcp.gcp_cloud_provider import GCPCloudProvider
 
             return GCPCloudProvider.get_transfer_cost(f"gcp:{_}", dst_key, premium_tier)
+        elif src_provider == "scp":
+            from skyplane.compute.scp.scp_cloud_provider import SCPCloudProvider
+
+            return SCPCloudProvider.get_transfer_cost(src_key, dst_key, premium_tier)
+        elif src_provider == "test":
+            return 0
         else:
             raise ValueError(f"Unknown provider {src_provider}")
 

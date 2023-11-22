@@ -25,3 +25,11 @@ Standard_D16_v5,azure,16
 Standard_D8_v5,azure,8
 Standard_D4_v5,azure,4
 Standard_D2_v5,azure,2
+h1v96m384,scp,96
+h1v64m256,scp,64
+h1v48m192,scp,48
+h1v32m128,scp,32
+s1v16m64,scp,16
+s1v8m32,scp,8
+s1v4m16,scp,4
+s1v2m8,scp,2

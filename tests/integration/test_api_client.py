@@ -57,3 +57,8 @@ def test_aws_interface():
 def test_gcp_interface():
     test_region("gcp:us-central1-a")
     return True
+
+
+def test_scp_interface():
+    test_region("scp:KOREA-WEST-1-SCP-B001")
+    return True

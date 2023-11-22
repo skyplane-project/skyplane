@@ -9,7 +9,7 @@ import typer
 from rich.progress import Progress, TextColumn, SpinnerColumn
 
 import skyplane
-from skyplane.api.config import TransferConfig, AWSConfig, GCPConfig, AzureConfig, IBMCloudConfig
+from skyplane.api.config import TransferConfig, AWSConfig, GCPConfig, AzureConfig, IBMCloudConfig, SCPConfig
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.cli.impl.cp_replicate_fallback import (
     replicate_onprem_cp_cmd,
@@ -52,7 +52,9 @@ class SkyplaneCLI:
     def __init__(self, src_region_tag: str, dst_region_tag: str, args: Dict[str, Any], skyplane_config: Optional[SkyplaneConfig] = None):
         self.src_region_tag, self.dst_region_tag = src_region_tag, dst_region_tag
         self.args = args
-        self.aws_config, self.azure_config, self.gcp_config, self.ibmcloud_config = self.to_api_config(skyplane_config or cloud_config)
+        self.aws_config, self.azure_config, self.gcp_config, self.ibmcloud_config, self.scp_config = self.to_api_config(
+            skyplane_config or cloud_config
+        )
 
         # update config
         # TODO: set remaining config params
@@ -68,6 +70,7 @@ class SkyplaneCLI:
             gcp_config=self.gcp_config,
             transfer_config=self.transfer_config,
             ibmcloud_config=self.ibmcloud_config,
+            scp_config=self.scp_config,
         )
         typer.secho(f"Using Skyplane version {skyplane.__version__}", fg="bright_black")
 
@@ -84,13 +87,19 @@ class SkyplaneCLI:
             ibmcloud_resource_group_id=config.ibmcloud_resource_group_id,
             ibmcloud_enabled=config.ibmcloud_enabled,
         )
+        scp_config = SCPConfig(
+            scp_access_key=config.scp_access_key,
+            scp_secret_key=config.scp_secret_key,
+            scp_project_id=config.scp_project_id,
+            scp_enabled=config.scp_enabled,
+        )
         if not config.azure_resource_group or not config.azure_umi_name:
             typer.secho(
                 "Azure resource group and UMI name not configured correctly. Please reinit Azure with `skyplane init --reinit-azure`.",
                 fg=typer.colors.RED,
                 err=True,
             )
-            return aws_config, None, gcp_config, ibmcloud_config
+            return aws_config, None, gcp_config, ibmcloud_config, scp_config
         azure_config = AzureConfig(
             config.azure_subscription_id,
             config.azure_resource_group,
@@ -99,7 +108,7 @@ class SkyplaneCLI:
             config.azure_client_id,
             config.azure_enabled,
         )
-        return aws_config, azure_config, gcp_config, ibmcloud_config
+        return aws_config, azure_config, gcp_config, ibmcloud_config, scp_config
 
     def make_transfer_config(self, config: SkyplaneConfig) -> TransferConfig:
         intraregion = self.src_region_tag == self.dst_region_tag
@@ -118,6 +127,7 @@ class SkyplaneCLI:
             gcp_instance_class=config.get_flag("gcp_instance_class"),
             ibmcloud_instance_class=config.get_flag("ibmcloud_instance_class"),
             gcp_use_premium_network=config.get_flag("gcp_use_premium_network"),
+            scp_instance_class=config.get_flag("scp_instance_class"),
             multipart_enabled=config.get_flag("multipart_enabled"),
             multipart_threshold_mb=config.get_flag("multipart_min_threshold_mb"),
             multipart_chunk_size_mb=config.get_flag("multipart_chunk_size_mb"),

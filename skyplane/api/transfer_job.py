@@ -307,6 +307,10 @@ class Chunker:
                         from skyplane.obj_store.r2_interface import R2Object
 
                         dest_obj = R2Object(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
+                    elif dest_provider == "scp":
+                        from skyplane.obj_store.scp_interface import SCPObject
+
+                        dest_obj = SCPObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
                     else:
                         raise ValueError(f"Invalid dest_region {dest_region}, unknown provider")
                     dest_objs[dst_iface.region_tag()] = dest_obj
@@ -626,6 +630,25 @@ class CopyJob(TransferJob):
         n_multiparts = 0
         time.time()
 
+        # rare case where we need to retry
+        def mapping_request(dst_gateway, mappings):
+            reply = self.http_pool.request(
+                "POST",
+                f"{dst_gateway.gateway_api_url}/api/v1/upload_id_maps",
+                body=json.dumps(mappings).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+            )
+            return reply
+
+        def chunk_request(server, chunk_batch, n_added):
+            reply = self.http_pool.request(
+                "POST",
+                f"{server.gateway_api_url}/api/v1/chunk_requests",
+                body=json.dumps([chunk.as_dict() for chunk in chunk_batch[n_added:]]).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+            )
+            return reply
+
         for batch in batches:
             # send upload_id mappings to sink gateways
             upload_id_batch = [cr for cr in batch if cr.upload_id_mapping is not None]
@@ -641,12 +664,14 @@ class CopyJob(TransferJob):
                             mappings[region_tag][key] = id
 
                     # send mapping to gateway
-                    reply = self.http_pool.request(
-                        "POST",
-                        f"{dst_gateway.gateway_api_url}/api/v1/upload_id_maps",
-                        body=json.dumps(mappings).encode("utf-8"),
-                        headers={"Content-Type": "application/json"},
-                    )
+                    # reply = self.http_pool.request(
+                    #     "POST",
+                    #     f"{dst_gateway.gateway_api_url}/api/v1/upload_id_maps",
+                    #     body=json.dumps(mappings).encode("utf-8"),
+                    #     headers={"Content-Type": "application/json"},
+                    # )
+                    reply = retry_backoff(partial(mapping_request, dst_gateway, mappings), initial_backoff=0.5)
+                    
                     # TODO: assume that only destination nodes would write to the obj store
                     if reply.status != 200:
                         raise Exception(
@@ -667,12 +692,13 @@ class CopyJob(TransferJob):
 
                 # TODO: make async
                 st = time.time()
-                reply = self.http_pool.request(
-                    "POST",
-                    f"{server.gateway_api_url}/api/v1/chunk_requests",
-                    body=json.dumps([chunk.as_dict() for chunk in chunk_batch[n_added:]]).encode("utf-8"),
-                    headers={"Content-Type": "application/json"},
-                )
+                # reply = self.http_pool.request(
+                #     "POST",
+                #     f"{server.gateway_api_url}/api/v1/chunk_requests",
+                #     body=json.dumps([chunk.as_dict() for chunk in chunk_batch[n_added:]]).encode("utf-8"),
+                #     headers={"Content-Type": "application/json"},
+                # )
+                reply = retry_backoff(partial(chunk_request, server, chunk_batch, n_added), initial_backoff=0.5)
                 if reply.status != 200:
                     raise Exception(f"Failed to dispatch chunk requests {server.instance_name()}: {reply.data.decode('utf-8')}")
                 et = time.time()
