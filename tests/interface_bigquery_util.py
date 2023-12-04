@@ -16,11 +16,9 @@ def bigquery_test_framework(region, bucket, content, multipart: bool, test_delet
     obj_name = f"test_{uuid.uuid4()}"
     file_size_mb = sys.getsizeof(content)
     #upload object
-    print("one")
     with tempfile.NamedTemporaryFile() as tmp:
         fpath = tmp.name
         with open(fpath, "rb+") as f:
-            print("uploading")
             f.write(bytes(content, 'utf-8'))
             f.seek(0)
             file_md5 = hashlib.md5(f.read()).hexdigest()
@@ -33,7 +31,6 @@ def bigquery_test_framework(region, bucket, content, multipart: bool, test_delet
             # interface.complete_multipart_upload(obj_name, upload_id)
             # time.sleep(5)
         else:
-            print("I'm here")
             interface.upload_object(fpath, obj_name)
             time.sleep(5)
     assert not interface.exists("random_nonexistent_file"), "Object should not exist"
@@ -42,7 +39,6 @@ def bigquery_test_framework(region, bucket, content, multipart: bool, test_delet
     interface.download_object(obj_name, "/Users/briankim/desktop/asdf", 0, file_size_mb * MB)
     with tempfile.NamedTemporaryFile() as tmp:
         fpath = tmp.name
-        print(fpath)
         if os.path.exists(fpath):
             os.remove(fpath)
         if multipart:
@@ -52,8 +48,6 @@ def bigquery_test_framework(region, bucket, content, multipart: bool, test_delet
             mime_type, md5 = interface.download_object(obj_name, fpath)
             time.sleep(5)
         local_size = os.path.getsize(fpath)
-        print(file_size_mb * MB)
-        print(local_size)
         assert file_size_mb * MB == local_size, f"Object size mismatch: {file_size_mb} != {local_size}"
         assert md5 is None or file_md5 == md5, f"Object md5 mismatch: {file_md5} != {md5}"
         assert mime_type == "text/plain", f"Object mime type mismatch: {mime_type} != text/plain"

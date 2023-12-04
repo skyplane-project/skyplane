@@ -28,7 +28,6 @@ class BQIInterface(ObjectStoreInterface):
         self.bucket_name = bucket_name
         self.auth = compute.GCPAuthentication()
         self.full_name = self.auth.project_id + "." + bucket_name
-        print(self.full_name)
         self._bigquery_object = self.auth.get_bigquery_object()
         self._bigquery_client = self.auth.get_bigquery_client()
         self._requests_session = requests.Session()
@@ -117,14 +116,13 @@ class BQIInterface(ObjectStoreInterface):
     def list_objects(self, prefix="", region=None) -> Iterator[BQIObject]:
         tables = self._bigquery_client.list_tables(self.full_name)
         for table in tables:
-            print(prefix)
             if (not prefix or table.table_id.startswith(prefix)):
                 tableobj = self._bigquery_client.get_table(table)
                 yield BQIObject(
                     table.table_id,
                     provider="bq",
                     bucket=self.bucket_name,
-                    size=100,
+                    size=tableobj.num_bytes,
                     last_modified=tableobj.modified,
                     mime_type=getattr(table, "content_type", None),
                 )
@@ -248,7 +246,6 @@ class BQIInterface(ObjectStoreInterface):
         # generate BigQuery multipart upload URL
         project_name = self.full_name.split(".")[0]
         url = f"https://www.googleapis.com/upload/bigquery/v2/projects/{project_name}/jobs?uploadType=multipart"
-        print("THE HEADERS")
         #headers = dict(related.items())
         # prepare request
         if data:

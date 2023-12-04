@@ -209,8 +209,6 @@ class Chunker:
         join = lambda prefix, fname: prefix + fname if prefix.endswith("/") else prefix + "/" + fname
         src_fname = source_key.split("/")[-1] if "/" in source_key and not source_key.endswith("/") else source_key
         if not recursive:
-            print(source_key)
-            print(source_prefix)
             if source_key == source_prefix:
                 if dest_prefix == "" or dest_prefix == "/":
                     return src_fname
@@ -305,6 +303,10 @@ class Chunker:
                         from skyplane.obj_store.gcs_interface import GCSObject
 
                         dest_obj = GCSObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
+                    elif dest_provider == "bq": 
+                        from skyplane.obj_store.big_query_interface import BQIObject
+
+                        dest_obj = BQIObject(provider=dest_provider, bucket=dst_iface.bucket(), key=dest_key)
                     elif dest_provider == "cloudflare":
                         from skyplane.obj_store.r2_interface import R2Object
 
@@ -332,7 +334,6 @@ class Chunker:
         multipart_chunk_queue: Queue[GatewayMessage] = Queue()
         multipart_exit_event = threading.Event()
         multipart_chunk_threads = []
-
         # start chunking threads
         if self.transfer_config.multipart_enabled:
             for _ in range(self.concurrent_multipart_chunk_threads):
@@ -343,7 +344,6 @@ class Chunker:
                 )
                 t.start()
                 multipart_chunk_threads.append(t)
-
         # begin chunking loop
         for transfer_pair in transfer_pair_generator:
             # print("transfer_pair", transfer_pair.src_obj.key, transfer_pair.dst_objs)

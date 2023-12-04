@@ -360,7 +360,6 @@ def run_transfer(
     # local->local transfers not supported (yet)
     if provider_src == "local" and provider_dst == "local":
         raise NotImplementedError("Local->local transfers not supported (yet)")
-
     # fall back options: local->cloud, cloud->local, small cloud->cloud transfers
     if provider_src == "local" or provider_dst == "local":
         if cli.args["cmd"] == "cp":

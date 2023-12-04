@@ -1,0 +1,6 @@
+Error in query string: Error processing job 'skyplane-test-
+bq:bqjob_r2e77675ea964bee0_0000018bed719fc9_1': Encountered " "FROM" "from "" at
+line 1, column 10.
+Was expecting:
+<EOF>
+

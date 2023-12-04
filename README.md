@@ -43,6 +43,7 @@ Skyplane currently supports the following source and destination endpoints (any 
 |--------------------|--------------------|--------------------|
 | AWS S3             | :white_check_mark: | :white_check_mark: |
 | Google Storage     | :white_check_mark: | :white_check_mark: |
+| Google BigQuery    | :white_check_mark: | :white_check_mark: |
 | Azure Blob Storage | :white_check_mark: | :white_check_mark: |
 | IBM Cloud Object Storage | :white_check_mark: | :white_check_mark: |
 | Local Disk         | :white_check_mark: | (in progress)      |
