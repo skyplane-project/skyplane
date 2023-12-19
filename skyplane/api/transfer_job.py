@@ -671,7 +671,7 @@ class CopyJob(TransferJob):
                     #     headers={"Content-Type": "application/json"},
                     # )
                     reply = retry_backoff(partial(mapping_request, dst_gateway, mappings), initial_backoff=0.5)
-                    
+
                     # TODO: assume that only destination nodes would write to the obj store
                     if reply.status != 200:
                         raise Exception(

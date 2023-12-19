@@ -60,7 +60,7 @@ class SCPServer(Server):
         self.auth = SCPAuthentication()
         self.network = SCPNetwork(self.auth)
         self.scp_client = SCPClient()
-        
+
         assert self.region_tag.split(":")[0] == "scp", f"Region name doesn't match pattern scp:<region> {self.region_tag}"
         self.scp_region = self.region_tag.split(":")[1]
         self.virtualserver_name = virtualServerName

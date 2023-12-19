@@ -403,7 +403,9 @@ class GatewaySender(GatewayOperator):
                     break
 
             # logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent at {chunk.chunk_length_bytes * 8 / t.elapsed / MB:.2f}Mbps")
-            print(f"[sender:{self.worker_id}]:{chunk_id} sent at {wire_length * 8 / t.elapsed / MB:.2f}Mbps - {dst_host} : {self.destination_ports[dst_host]}")
+            print(
+                f"[sender:{self.worker_id}]:{chunk_id} sent at {wire_length * 8 / t.elapsed / MB:.2f}Mbps - {dst_host} : {self.destination_ports[dst_host]}"
+            )
 
             if dst_host not in self.sent_chunk_ids:
                 self.sent_chunk_ids[dst_host] = []

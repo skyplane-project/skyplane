@@ -30,7 +30,7 @@ import time
 import boto3
 
 from functools import lru_cache, wraps
-from typing import Dict, Iterator, Any, List, Optional, Tuple
+from typing import Iterator, Any, List, Optional, Tuple
 
 from skyplane import exceptions, compute
 from skyplane.exceptions import NoSuchObjectException
@@ -39,6 +39,7 @@ from skyplane.config_paths import cloud_config
 from skyplane.utils import logger, imports
 from skyplane.compute.scp.scp_network import SCPNetwork
 import skyplane.compute.scp.scp_utils as sc
+
 
 def _retry(method, max_tries=60, backoff_s=1):
     @wraps(method)
@@ -58,6 +59,7 @@ def _retry(method, max_tries=60, backoff_s=1):
                     raise e
 
     return method_with_retries
+
 
 class SCPObject(ObjectStoreObject):
     def full_path(self):
@@ -169,7 +171,7 @@ class SCPInterface(ObjectStoreInterface):
             obsBuckets = self.bucket_lists()
             # pytype: disable=unsupported-operands
             for bucket in obsBuckets:
-                if bucket["obsBucketName"] == self.bucket_name: 
+                if bucket["obsBucketName"] == self.bucket_name:
                     return True
             return False
             # pytype: enable=unsupported-operands
@@ -309,8 +311,8 @@ class SCPInterface(ObjectStoreInterface):
         # self._set_s3_credentials()
         max_retries = 10
         retries = 0
-        md5 = None  
-        mime_type = None  
+        md5 = None
+        mime_type = None
         while retries < max_retries:
             s3_client = self._s3_client()
             try:

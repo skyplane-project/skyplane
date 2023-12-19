@@ -291,7 +291,11 @@ class Provisioner:
                 for r in set(scp_regions):
                     scp_ips = [s.private_ip() for t, s in results if t.cloud_provider == "scp" and t.region == r]
                     # vpcids = [s.vpc_id for t, s in results if t.cloud_provider == "scp" and t.region == r]   # pytype: disable=bad-return-type
-                    vpcids = [s.vpc_id if isinstance(s, compute.SCPServer) else None for t, s in results if t.cloud_provider == "scp" and t.region == r]
+                    vpcids = [
+                        s.vpc_id if isinstance(s, compute.SCPServer) else None
+                        for t, s in results
+                        if t.cloud_provider == "scp" and t.region == r
+                    ]
                     # print('provisioner.py - scp_ips : ', scp_ips, ', vpcids : ', vpcids)
                     authorize_ip_jobs.extend([partial(self.scp.add_firewall_rule_all, r, scp_ips, vpcids)])
 

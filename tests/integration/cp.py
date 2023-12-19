@@ -13,13 +13,13 @@ def setup_buckets(src_region, dest_region, n_files=1, file_size_mb=1):
     dest_provider, dest_zone = dest_region.split(":")
     if src_provider == "azure":
         src_bucket_name = f"integration{src_zone}/{str(uuid.uuid4()).replace('-', '')}"
-    elif src_provider == "scp":     # object storage name must be lowercase
+    elif src_provider == "scp":  # object storage name must be lowercase
         src_bucket_name = f"integration-{src_zone.lower()}-{str(uuid.uuid4())[:8]}"
     else:
         src_bucket_name = f"integration{src_zone}-{str(uuid.uuid4())[:8]}"
     if dest_provider == "azure":
         dest_bucket_name = f"integration{dest_zone}/{str(uuid.uuid4()).replace('-', '')}"
-    elif dest_provider == "scp":    # object storage name must be lowercase
+    elif dest_provider == "scp":  # object storage name must be lowercase
         dest_bucket_name = f"skyplane-integration-{dest_zone.lower()}-{str(uuid.uuid4())[:8]}"
     else:
         dest_bucket_name = f"skyplane-integration-{dest_zone}-{str(uuid.uuid4())[:8]}"

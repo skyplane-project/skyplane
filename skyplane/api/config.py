@@ -69,7 +69,7 @@ class SCPConfig(AuthenticationConfig):
     scp_enabled: bool = False
 
     def make_auth_provider(self) -> compute.SCPAuthentication:
-        return compute.SCPAuthentication(config=self)   # type: ignore
+        return compute.SCPAuthentication(config=self)  # type: ignore
 
 
 @dataclass(frozen=True)
