@@ -50,8 +50,9 @@ def _retry(method, max_tries=60, backoff_s=1):
                 return method(self, *args, **kwargs)
             except Exception as e:
                 try_count += 1
-                with open(f"/skyplane/scp_interface_{method.__name__}_{try_count}_error.txt", "w") as f:
-                    f.write(str(e))
+                # print(e)
+                # with open(f"/skyplane/scp_interface_{method.__name__}_{try_count}_error.txt", "w") as f:
+                #     f.write(str(e))
                 logger.fs.debug(f"retries: {method.__name__} - {e}, try_count : {try_count}")
                 if try_count < max_tries:
                     time.sleep(backoff_s)
@@ -96,14 +97,17 @@ class SCPInterface(ObjectStoreInterface):
             time.sleep(0.25)
         # scp_client = self.scp_client
         if self.obs_access_key == "":
-            uri_path = f"/object-storage/v3/buckets/{self.obsBucketId}/api-info"
+            # uri_path = f"/object-storage/v3/buckets/{self.obsBucketId}/api-info"
+            uri_path = f"/object-storage/v4/buckets/{self.obsBucketId}/access-info"
             response = self.scp_client._get(uri_path, None)
-
+            # print(response)
             try:
-                self.obs_access_key = response["obsAccessKey"]
-                self.obs_secret_key = response["obsSecretKey"]
-                self.obs_ednpoint = response["obsRestEndpoint"]
-                self.obs_region = response["region"]
+                self.obs_access_key = response["objectStorageBucketAccessKey"]
+                self.obs_secret_key = response["objectStorageBucketSecretKey"]
+                self.obs_ednpoint = response["objectStorageBucketPublicEndpointUrl"]
+                # self.obs_region = response["serviceZoneId"]
+                network = SCPNetwork(self.auth)
+                self.obs_region = network.get_service_zoneName(response["serviceZoneId"])
             except Exception as e:
                 if "An error occurred (AccessDenied) when calling the GetBucketLocation operation" in str(e):
                     logger.warning(f"Bucket location {self.bucket_name} is not public.")
@@ -152,11 +156,12 @@ class SCPInterface(ObjectStoreInterface):
             raise exceptions.MissingBucketException(f"SCP bucket {self.bucket_name} does not exist")
 
         default_region = cloud_config.get_flag("scp_default_region")
-        uri_path = f"/object-storage/v3/buckets/{self.obsBucketId}/api-info"
+        # uri_path = f"/object-storage/v3/buckets/{self.obsBucketId}/api-info"
+        uri_path = f"/object-storage/v4/buckets/{self.obsBucketId}/access-info"
         try:
             response = self.scp_client._get(uri_path, None)  # No value
-
-            region = response["zoneName"]
+            network = SCPNetwork(self.auth)
+            region = network.get_service_zoneName(response["serviceZoneId"])
             return region if region is not None else default_region
         except Exception as e:
             if "An error occurred (AccessDenied) when calling the GetBucketLocation operation" in str(e):
@@ -171,7 +176,7 @@ class SCPInterface(ObjectStoreInterface):
             obsBuckets = self.bucket_lists()
             # pytype: disable=unsupported-operands
             for bucket in obsBuckets:
-                if bucket["obsBucketName"] == self.bucket_name:
+                if bucket["objectStorageBucketName"] == self.bucket_name:
                     return True
             return False
             # pytype: enable=unsupported-operands
@@ -182,7 +187,8 @@ class SCPInterface(ObjectStoreInterface):
 
     def bucket_lists(self) -> List[str]:
         # scp_client = self.scp_client
-        uri_path = "/object-storage/v3/buckets?size=999"
+        # uri_path = "/object-storage/v3/buckets?size=999"
+        uri_path = "/object-storage/v4/buckets?size=999"
         response = self.scp_client._get(uri_path)
         return response
 
@@ -190,13 +196,15 @@ class SCPInterface(ObjectStoreInterface):
         return SCPObject(provider=self.provider, bucket=self.bucket(), key=key)
 
     def _get_bucket_id(self) -> Optional[str]:
-        url = f"/object-storage/v3/buckets?obsBucketName={self.bucket_name}"
+        # url = f"/object-storage/v3/buckets?obsBucketName={self.bucket_name}"
+        url = f"/object-storage/v4/buckets?objectStorageBucketName={self.bucket_name}"
         try:
             response = self.scp_client._get(url)
+            # print(response)
             if len(response) == 0:
                 return None
             else:
-                return response[0]["obsBucketId"]
+                return response[0]["objectStorageBucketId"]
         except Exception as e:
             logger.warning(f"Specified bucket {self.bucket_name} does not exist, got error: {e}")
             # print("Error getting bucket id : ", e)
@@ -205,10 +213,11 @@ class SCPInterface(ObjectStoreInterface):
     def get_objectstorage_id(self, zone_id=None):
         # scp_client = self.scp_client
         zone_id = zone_id if zone_id is not None else None
-        uri_path = f"/object-storage/v3/object-storages?zoneId={zone_id}"
+        # uri_path = f"/object-storage/v3/object-storages?zoneId={zone_id}"
+        uri_path = f"/object-storage/v4/object-storages?serviceZoneId={zone_id}"
 
         response = self.scp_client._get(uri_path)
-        return response[0]["obsId"]
+        return response[0]["objectStorageId"]
 
     def create_bucket(self, scp_region):
         if not self.bucket_exists():
@@ -216,15 +225,17 @@ class SCPInterface(ObjectStoreInterface):
             zone_id = network.get_service_zone_id(scp_region)
             obs_id = self.get_objectstorage_id(zone_id)
 
-            uri_path = "/object-storage/v3/buckets"
+            # uri_path = "/object-storage/v3/buckets"
+            uri_path = "/object-storage/v4/buckets"
             req_body = {
-                "isObsBucketIpAddressFilterEnabled": "false",
-                "obsBucketFileEncryptionEnabled": "false",
-                "obsBucketName": self.bucket_name,
-                "obsBucketVersionEnabled": "false",
-                "obsId": obs_id,
-                "tags": [{"tagKey": "skycomputing", "tagValue": "skyplane"}],
-                "zoneId": zone_id,
+                "objectStorageBucketAccessControlEnabled": "false",
+                "objectStorageBucketFileEncryptionEnabled": "false",
+                "objectStorageBucketName": self.bucket_name,
+                "objectStorageBucketVersionEnabled": "false",
+                "objectStorageId": obs_id,
+                "productNames" : ["Object Storage"],
+                "serviceZoneId": zone_id,
+                "tags": [{"tagKey": "skycomputing", "tagValue": "skyplane"}]
             }
             self.scp_client._post(uri_path, req_body)
             time.sleep(3)
@@ -235,7 +246,8 @@ class SCPInterface(ObjectStoreInterface):
         if self.bucket_exists():
             # obsBucketId = self._get_bucket_id()
             # scp_client = self.scp_client
-            uri_path = f"/object-storage/v3/buckets/{self.obsBucketId}"
+            # uri_path = f"/object-storage/v3/buckets/{self.obsBucketId}"
+            uri_path = f"/object-storage/v4/buckets/{self.obsBucketId}"
 
             self.scp_client._delete(uri_path)
         else:

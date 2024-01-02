@@ -207,4 +207,4 @@ class SCPServer(Server):
                     logger.fs.debug(f"metricbeat on {self.region_tag}:{self.instance_name()}, {self.public_ip()}")
                     time.sleep(5)
                 raise RuntimeError(f"Failed to install Docker on {self.region_tag}, {self.public_ip()}: error {e}")
-            # raise RuntimeError(f"Failed to install Docker on {self.region_tag}, {self.public_ip()}: error {e}")
+            raise RuntimeError(f"Failed to install Docker on {self.region_tag}, {self.public_ip()}: error {e}")

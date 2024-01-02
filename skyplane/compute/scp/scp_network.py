@@ -44,6 +44,13 @@ class SCPNetwork:
                 return zone["serviceZoneId"]
         raise ValueError(f"Region {region} not found in SCP")
 
+    def get_service_zoneName(self, zoneId: str) -> str:
+        zones = SCPAuthentication.get_zones()
+        for zone in zones:
+            if zone["serviceZoneId"] == zoneId:
+                return zone["serviceZoneName"]
+        raise ValueError(f"ZoneId {zoneId} not found in SCP")
+
     def get_vpc_info(self, vpcId):
         url = f"/vpc/v2/vpcs?vpcId={vpcId}"
         response = self.scp_client._get(url)
