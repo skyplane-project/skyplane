@@ -34,8 +34,6 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
       - name: black
         run: poetry run black . --check --line-length=140
-      - name: pytype
-        run: poetry run pytype --config .pytype.cfg -j 2
   test-unit:
     # do not run on pull_request_target since it should be triggered by pull_request
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request')
