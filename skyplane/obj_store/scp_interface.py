@@ -233,9 +233,9 @@ class SCPInterface(ObjectStoreInterface):
                 "objectStorageBucketName": self.bucket_name,
                 "objectStorageBucketVersionEnabled": "false",
                 "objectStorageId": obs_id,
-                "productNames" : ["Object Storage"],
+                "productNames": ["Object Storage"],
                 "serviceZoneId": zone_id,
-                "tags": [{"tagKey": "skycomputing", "tagValue": "skyplane"}]
+                "tags": [{"tagKey": "skycomputing", "tagValue": "skyplane"}],
             }
             self.scp_client._post(uri_path, req_body)
             time.sleep(3)
