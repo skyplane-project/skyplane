@@ -101,6 +101,18 @@ class AWSAuthentication:
         return self.config.aws_enabled
 
     @imports.inject("boto3", pip_extra="aws")
+    def get_credentials(boto3, self):
+        cached_credential = None
+
+        if cached_credential is None:
+            session = boto3.Session()
+            credentials = session.get_credentials()
+            if credentials:
+                credentials = credentials.get_frozen_credentials()
+                cached_credential = (credentials.access_key, credentials.secret_key)
+        return cached_credential if cached_credential else (None, None)
+
+    @imports.inject("boto3", pip_extra="aws")
     def infer_credentials(boto3, self):
         # todo load temporary credentials from STS
         cached_credential = getattr(self.__cached_credentials, "boto3_credential", None)

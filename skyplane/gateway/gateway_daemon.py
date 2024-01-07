@@ -20,6 +20,7 @@ from skyplane.gateway.operators.gateway_operator import (
     GatewaySender,
     GatewayRandomDataGen,
     GatewayWriteLocal,
+    GatewayLocalReadOperator,
     GatewayObjStoreReadOperator,
     GatewayObjStoreWriteOperator,
     GatewayWaitReceiver,
@@ -192,6 +193,19 @@ class GatewayDaemon:
                         error_queue=self.error_queue,
                     )
                     total_p += 1
+                elif op["op_type"] == "read_local":
+                    # TODO: add support for this
+                    operators[handle] = GatewayLocalReadOperator(
+                        handle=handle,
+                        region=self.region,
+                        input_queue=input_queue,
+                        output_queue=output_queue,
+                        error_queue=self.error_queue,
+                        error_event=self.error_event,
+                        chunk_store=self.chunk_store,
+                        path=op["path"],
+                    )
+                    total_p += 1  # ?
                 elif op["op_type"] == "read_object_store":
                     operators[handle] = GatewayObjStoreReadOperator(
                         handle=handle,
@@ -262,6 +276,7 @@ class GatewayDaemon:
                         error_queue=self.error_queue,
                         error_event=self.error_event,
                         chunk_store=self.chunk_store,
+                        path=op["path"],
                     )
                     total_p += 1
                 else:

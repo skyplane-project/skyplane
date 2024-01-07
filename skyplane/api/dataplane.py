@@ -22,6 +22,10 @@ from skyplane.utils import logger
 from skyplane.utils.definitions import gateway_docker_image, tmp_log_dir
 from skyplane.utils.fn import PathLike, do_parallel
 
+from skyplane.compute.aws.aws_server import AWSServer
+from skyplane.compute.gcp.gcp_server import GCPServer
+from skyplane.compute.azure.azure_server import AzureServer
+
 if TYPE_CHECKING:
     from skyplane.api.provisioner import Provisioner
 
@@ -123,6 +127,7 @@ class Dataplane:
             use_bbr=self.transfer_config.use_bbr,  # TODO: remove
             use_compression=self.transfer_config.use_compression,
             use_socket_tls=self.transfer_config.use_socket_tls,
+            instance_path=gateway_node.gateway_instance_path,  # TODO: better way of mapping the path of VM src/dst
         )
 
     def provision(
@@ -163,13 +168,16 @@ class Dataplane:
                 assert (
                     cloud_provider != "cloudflare"
                 ), f"Cannot create VMs in certain cloud providers: check planner output {self.topology.to_dict()}"
-                self.provisioner.add_task(
-                    cloud_provider=cloud_provider,
-                    region=region,
-                    vm_type=node.vm_type or getattr(self.transfer_config, f"{cloud_provider}_instance_class"),
-                    spot=getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances"),
-                    autoterminate_minutes=self.transfer_config.autoterminate_minutes,
-                )
+
+                # Only provision if it is not VM source or destination
+                if node.gateway_instance_id is None:
+                    self.provisioner.add_task(
+                        cloud_provider=cloud_provider,
+                        region=region,
+                        vm_type=node.vm_type or getattr(self.transfer_config, f"{cloud_provider}_instance_class"),
+                        spot=getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances"),
+                        autoterminate_minutes=self.transfer_config.autoterminate_minutes,
+                    )
 
             # initialize clouds
             self.provisioner.init_global(aws=is_aws_used, azure=is_azure_used, gcp=is_gcp_used, ibmcloud=is_ibmcloud_used)
@@ -186,8 +194,19 @@ class Dataplane:
             servers_by_region = defaultdict(list)
             for s in servers:
                 servers_by_region[s.region_tag].append(s)
+
             for node in self.topology.get_gateways():
-                instance = servers_by_region[node.region_tag].pop()
+                if node.region_tag not in servers_by_region:
+                    if node.region_tag.startswith("aws"):
+                        instance = AWSServer(node.region_tag, node.gateway_instance_id, key_path=node.gateway_key_path)
+                    elif node.region_tag.startswith("azure"):
+                        instance = AzureServer(node.gateway_instance_id)
+                    elif node.region_tag.startswith("gcp"):
+                        instance = GCPServer(node.region_tag, node.gateway_instance_id)
+                    else:
+                        raise Exception(f"Invalid region tag: {node.region_tag}")
+                else:
+                    instance = servers_by_region[node.region_tag].pop()
                 self.bound_nodes[node] = instance
 
                 # set ip addresses (for gateway program generation)

@@ -49,6 +49,18 @@ def parse_path(path: str) -> Tuple[str, Optional[str], Optional[str]]:
             raise ValueError(f"Invalid Azure path: {path}")
         account, container, blob_path = match.groups()
         return "azure", f"{account}/{container}", blob_path
+    elif path.startswith("vm://"):
+        # VM URL with private key path
+        regex = re.compile(r"vm://([^@]+)@([^@]+)@([^:/]+):([^?]+)\?private_key_path=(.*)")
+        match = regex.match(path)
+        if match is None:
+            raise ValueError(f"Invalid VM path: {path}")
+        cloud_region, username, host, path, private_key_path = match.groups()
+        return (
+            "vm",
+            f"{cloud_region}@{username}@{host}:{path}?private_key_path={private_key_path}",
+            path,
+        )
     elif path.startswith("azure://"):
         regex = re.compile(r"azure://([^/]+)/([^/]+)/?(.*)")
         match = regex.match(path)

@@ -1,4 +1,5 @@
 import json
+import mmap
 from pathlib import Path
 import os
 from typing import List
@@ -412,6 +413,7 @@ class GatewayRandomDataGen(GatewayOperator):
 class GatewayWriteLocal(GatewayOperator):
     def __init__(
         self,
+        path: str,
         handle: str,
         region: str,
         input_queue: GatewayQueue,
@@ -422,9 +424,29 @@ class GatewayWriteLocal(GatewayOperator):
         n_processes: int = 1,
     ):
         super().__init__(handle, region, input_queue, output_queue, error_event, error_queue, chunk_store, n_processes)
+        self.path = path
 
     def process(self, chunk_req: ChunkRequest):
         # do nothing (already written locally)
+        # TODO: sort and reassemble chunks
+        # Generate the chunk file path
+        fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
+
+        # If the final file does not exist, create it
+        if not os.path.exists(self.path):
+            open(self.path, "a").close()
+
+        # Open the final file in read-write mode, seek to the correct position, and write the chunk data
+        with open(self.path, "r+b") as final_file:
+            # Read the chunk data
+            with open(fpath, "rb") as chunk_file:
+                chunk_data = chunk_file.read()
+
+            # Seek to the chunk's offset in the final file and write the chunk data
+            offset_bytes = chunk_req.chunk.file_offset_bytes if chunk_req.chunk.file_offset_bytes is not None else 0
+            final_file.seek(offset_bytes)
+            final_file.write(chunk_data)
+
         return True
 
 
@@ -461,6 +483,54 @@ class GatewayObjStoreOperator(GatewayOperator):
             except Exception as e:
                 raise ValueError(f"Failed to create obj store interface {str(e)}")
         return self.obj_store_interfaces[key]
+
+
+class GatewayLocalReadOperator(GatewayOperator):
+    def __init__(
+        self,
+        path: str,
+        handle: str,
+        region: str,
+        input_queue: GatewayQueue,
+        output_queue: GatewayQueue,
+        error_event,
+        error_queue: Queue,
+        n_processes: int = 32,
+        chunk_store: Optional[ChunkStore] = None,
+    ):
+        super().__init__(
+            handle,
+            region,
+            input_queue,
+            output_queue,
+            error_event,
+            error_queue,
+            chunk_store,
+            n_processes,
+        )
+        self.path = path
+
+    def process(self, chunk_req: ChunkRequest, **args):
+        # Determine the start and end position of the chunk in the file
+        chunk_start = chunk_req.chunk.file_offset_bytes if chunk_req.chunk.file_offset_bytes is not None else 0
+        chunk_end = chunk_start + chunk_req.chunk.chunk_length_bytes
+
+        # Read the specified part of the file and write the chunk
+        with open(self.path, "rb") as f:
+            mmapped_file = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)  # memory-mapped file for efficient large file handling
+
+            # Generate the chunk file path
+            fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
+
+            # Write the chunk to a new file
+            with open(fpath, "wb") as chunk_file:
+                chunk_file.write(mmapped_file[chunk_start:chunk_end])
+
+            logger.debug(f"[{self.handle}:{self.worker_id}] Local read: Wrote chunk {chunk_req.chunk.chunk_id} to {fpath}")
+
+        mmapped_file.close()  # Make sure to close the memory-mapped file
+
+        return True
 
 
 class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
@@ -568,6 +638,7 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         self.prefix = prefix
 
     def process(self, chunk_req: ChunkRequest):
+        print(f"Chunk request: {chunk_req}")
         fpath = str(self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).absolute())
         logger.debug(
             f"[{self.handle}:{self.worker_id}] Start upload {chunk_req.chunk.chunk_id} to {self.bucket_name}, key {chunk_req.chunk.dest_key}"

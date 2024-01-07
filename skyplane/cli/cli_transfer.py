@@ -313,19 +313,28 @@ def run_transfer(
         register_exception_handler()
     print_header()
 
-    provider_src, bucket_src, path_src = parse_path(src)
-    provider_dst, bucket_dst, path_dst = parse_path(dst)
+    provider_src, transfer_src, path_src = parse_path(src)
+    provider_dst, transfer_dst, path_dst = parse_path(dst)
 
     # update planner for one-sided transfer
     # somet process for other cloud providers with no VM support
-    assert provider_src != "cloudflare" or provider_dst != "cloudflare", "Cannot transfer between two Cloudflare buckets"
-    if provider_src == "cloudflare":
-        solver = "dst_one_sided"
-    elif provider_dst == "cloudflare":
-        solver = "src_one_sided"
+    if provider_src == "vm" and provider_dst == "vm":
+        solver = "vm_to_vm"
+    elif provider_src == "vm":
+        solver = "vm_source"
+    elif provider_dst == "vm":
+        solver = "vm_dest"
+    else:
+        # the previous handling for non-VM transfers
+        assert provider_src != "cloudflare" or provider_dst != "cloudflare", "Cannot transfer between two Cloudflare buckets"
+        if provider_src == "cloudflare":
+            solver = "dst_one_sided"
+        elif provider_dst == "cloudflare":
+            solver = "src_one_sided"
 
-    src_region_tag = StorageInterface.create(f"{provider_src}:infer", bucket_src).region_tag()
-    dst_region_tag = StorageInterface.create(f"{provider_dst}:infer", bucket_dst).region_tag()
+    src_region_tag = StorageInterface.create(f"{provider_src}:infer", transfer_src).region_tag()
+    dst_region_tag = StorageInterface.create(f"{provider_dst}:infer", transfer_dst).region_tag()
+
     args = {
         "cmd": cmd,
         "recursive": True,
@@ -371,7 +380,8 @@ def run_transfer(
         # fallback option: transfer is too small
         if cli.args["cmd"] == "cp":
             job = CopyJob(src, [dst], recursive=recursive)  # TODO: rever to using pipeline
-            if cli.estimate_small_transfer(job, cloud_config.get_flag("native_cmd_threshold_gb") * GB):
+            if cli.estimate_small_transfer(job, 0.01 * GB):  # Test small transfer
+                # if cli.estimate_small_transfer(job, cloud_config.get_flag("native_cmd_threshold_gb") * GB):
                 small_transfer_status = cli.transfer_cp_small(src, dst, recursive)
                 return 0 if small_transfer_status else 1
         else:

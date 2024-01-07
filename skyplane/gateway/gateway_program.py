@@ -72,6 +72,12 @@ class GatewayReadObjectStore(GatewayOperator):
         self.num_connections = num_connections
 
 
+class GatewayReadLocal(GatewayOperator):
+    def __init__(self, path: Optional[str] = None):
+        super().__init__("read_local")
+        self.path = path
+
+
 class GatewayWriteObjectStore(GatewayOperator):
     def __init__(self, bucket_name: str, bucket_region: str, num_connections: int = 32, key_prefix: Optional[str] = ""):
         super().__init__("write_object_store")

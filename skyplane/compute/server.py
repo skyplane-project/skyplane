@@ -292,6 +292,7 @@ class Server:
         use_compression=False,
         e2ee_key_bytes=None,
         use_socket_tls=False,
+        instance_path=None,
     ):
         def check_stderr(tup):
             assert tup[1].strip() == "", f"Command failed, err: {tup[1]}"
@@ -354,6 +355,11 @@ class Server:
         docker_envs["GATEWAY_INFO_FILE"] = f"/pkg/data/gateway_info.json"
         docker_run_flags += f" -v /tmp/{gateway_program_file}:/pkg/data/gateway_program.json"
         docker_run_flags += f" -v /tmp/{gateway_info_file}:/pkg/data/gateway_info.json"
+
+        # Instance path to mount if the source / destination is an instance
+        if instance_path is not None:
+            docker_run_flags += f" -v {instance_path}:{instance_path}"
+
         gateway_daemon_cmd = f"/etc/init.d/stunnel4 start && python -u /pkg/skyplane/gateway/gateway_daemon.py --chunk-dir /skyplane/chunks"
 
         # update docker flags

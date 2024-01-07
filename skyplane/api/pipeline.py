@@ -10,7 +10,14 @@ from skyplane.api.tracker import TransferProgressTracker
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
 from skyplane.api.config import TransferConfig
 
-from skyplane.planner.planner import MulticastDirectPlanner, DirectPlannerSourceOneSided, DirectPlannerDestOneSided
+from skyplane.planner.planner import (
+    MulticastDirectPlanner,
+    DirectPlannerSourceOneSided,
+    DirectPlannerDestOneSided,
+    DirectPlannerVMSource,
+    DirectPlannerVMDest,
+    DirectPlannerVMSourceDest,
+)
 from skyplane.planner.topology import TopologyPlanGateway
 from skyplane.utils import logger
 from skyplane.utils.definitions import tmp_log_dir
@@ -67,6 +74,12 @@ class Pipeline:
             self.planner = DirectPlannerSourceOneSided(self.max_instances, self.n_connections, self.transfer_config)
         elif self.planning_algorithm == "dst_one_sided":
             self.planner = DirectPlannerDestOneSided(self.max_instances, self.n_connections, self.transfer_config)
+        elif self.planning_algorithm == "vm_source":
+            self.planner = DirectPlannerVMSource(self.max_instances, 64, self.transfer_config)
+        elif self.planning_algorithm == "vm_dest":
+            self.planner = DirectPlannerVMDest(self.max_instances, 64, self.transfer_config)
+        elif self.planning_algorithm == "vm_to_vm":
+            self.planner = DirectPlannerVMSourceDest(self.max_instances, 64, self.transfer_config)
         else:
             raise ValueError(f"No such planning algorithm {planning_algorithm}")
 

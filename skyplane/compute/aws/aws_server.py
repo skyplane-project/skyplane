@@ -21,13 +21,14 @@ from skyplane.utils.cache import ignore_lru_cache
 class AWSServer(Server):
     """AWS Server class to support basic SSH operations"""
 
-    def __init__(self, region_tag, instance_id, log_dir=None):
+    def __init__(self, region_tag, instance_id, key_path=None, log_dir=None):
         super().__init__(region_tag, log_dir=log_dir)
         assert self.region_tag.split(":")[0] == "aws"
         self.auth = AWSAuthentication()
         self.key_manager = AWSKeyManager(self.auth)
         self.aws_region = self.region_tag.split(":")[1]
         self.instance_id = instance_id
+        self.key_path = key_path
 
     @property
     @functools.lru_cache(maxsize=None)
@@ -89,6 +90,9 @@ class AWSServer(Server):
     @property
     @ignore_lru_cache()
     def local_keyfile(self):
+        if self.key_path:
+            return self.key_path
+
         key_name = self.get_boto3_instance_resource().key_name
         if self.key_manager.key_exists_local(key_name):
             return self.key_manager.get_key(key_name)
