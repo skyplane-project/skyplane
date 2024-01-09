@@ -24,7 +24,10 @@ def test_region(region):
 
     # upload object
     with open(src_filename, "wb") as fout:
-        fout.write(os.urandom(file_size))
+        if provider == "bqi":
+            fout.write(bytes("alpha bravo charlie delta echo foxtrot", 'utf-8'))
+        else:
+            fout.write(os.urandom(file_size))
     client.upload_object(src_filename, bucket_name, provider, key)
     assert client.exists(bucket_name, provider, key), f"Object {key} does not exist in bucket {bucket_name}"
 
@@ -57,3 +60,7 @@ def test_aws_interface():
 def test_gcp_interface():
     test_region("gcp:us-central1-a")
     return True
+
+def test_bigquery_itnerface():
+    test_region("bqi:us-central1-a")
+    return true

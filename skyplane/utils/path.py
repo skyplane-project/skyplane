@@ -32,14 +32,19 @@ def parse_path(path: str) -> Tuple[str, Optional[str], Optional[str]]:
         key = keys[0] if len(keys) > 0 else ""
         provider = "ibmcloud"
         return provider, bucket, key
-    elif path.startswith("s3://") or path.startswith("gs://"):
+    elif path.startswith("s3://") or path.startswith("gs://") or path.startswith("bq://"):
         provider, parsed = path[:2], path[5:]
         if len(parsed) == 0:
             logger.error(f"Invalid S3 path: '{path}'", fg="red", err=True)
             raise ValueError(f"Invalid S3 path: '{path}'")
         bucket, *keys = parsed.split("/", 1)
+        if provider == "s3": 
+            provider = "aws"
+        elif provider == "gs":
+            provider = "gcp"
+        else:
+            provider = "bq"
         key = keys[0] if len(keys) > 0 else ""
-        provider = "aws" if provider == "s3" else "gcp"
         return provider, bucket, key
     elif (path.startswith("https://") or path.startswith("http://")) and "blob.core.windows.net" in path:
         # Azure blob storage
