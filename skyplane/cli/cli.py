@@ -48,6 +48,12 @@ def deprovision(
     if instances:
         typer.secho(f"Deprovisioning {len(instances)} instances", fg="yellow", bold=True)
         do_parallel(lambda instance: instance.terminate_instance(), instances, desc="Deprovisioning", spinner=True, spinner_persist=True)
+        # if compute.SCPAuthentication().enabled():
+        if any([instance.region_tag.split(":")[0] == "scp" for instance in instances]):
+            typer.secho(f"Removing SCP Gateway Rules", fg="yellow", bold=True)
+            scp_instances = [instance for instance in instances if instance.region_tag.split(":")[0] == "scp"]
+            scp = compute.SCPCloudProvider()
+            scp.remove_gateway_rule_all(scp_instances)
     else:
         typer.secho("No instances to deprovision", fg="yellow", bold=True)
 
@@ -61,6 +67,9 @@ def deprovision(
         if compute.AzureAuthentication().enabled():
             azure = compute.AzureCloudProvider()
             azure.teardown_global()
+        if compute.SCPAuthentication().enabled():
+            scp = compute.SCPCloudProvider()
+            scp.teardown_global()
 
 
 @app.command()

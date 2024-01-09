@@ -23,5 +23,6 @@ __all__ = [
     "AWSConfig",
     "AzureConfig",
     "GCPConfig",
+    "SCPConfig",
     "TransferHook",
 ]

@@ -3,6 +3,7 @@ import time
 from abc import ABC
 from datetime import datetime
 from threading import Thread
+from functools import partial
 
 import urllib3
 from typing import TYPE_CHECKING, Dict, List, Optional, Set
@@ -16,6 +17,7 @@ from skyplane.utils import logger, imports
 from skyplane.utils.fn import do_parallel
 from skyplane.api.usage import UsageClient
 from skyplane.utils.definitions import GB
+from skyplane.utils.retry import retry_backoff
 
 from skyplane.cli.impl.common import print_stats_completed
 
@@ -335,10 +337,14 @@ class TransferProgressTracker(Thread):
     def _chunk_to_job_map(self):
         return {chunk_id: job_uuid for job_uuid, cr_dict in self.job_chunk_requests.items() for chunk_id in cr_dict.keys()}
 
+    def http_pool_request(self, instance):
+        return self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/chunk_status_log")
+
     def _query_chunk_status(self):
         def get_chunk_status(args):
             node, instance = args
-            reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/chunk_status_log")
+            # reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/chunk_status_log")
+            reply = retry_backoff(partial(self.http_pool_request, instance))
             if reply.status != 200:
                 raise Exception(
                     f"Failed to get chunk status from gateway instance {instance.instance_name()}: {reply.data.decode('utf-8')}"

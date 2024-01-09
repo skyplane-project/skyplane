@@ -23,7 +23,7 @@ from skyplane.api.transfer_job import TransferJob
 import json
 
 from skyplane.utils.fn import do_parallel
-from skyplane.config_paths import config_path, azure_standardDv5_quota_path, aws_quota_path, gcp_quota_path
+from skyplane.config_paths import config_path, azure_standardDv5_quota_path, aws_quota_path, gcp_quota_path, scp_quota_path
 from skyplane.config import SkyplaneConfig
 
 
@@ -48,6 +48,9 @@ class Planner:
             if os.path.exists(gcp_quota_path):
                 with gcp_quota_path.open("r") as f:
                     quota_limits["gcp"] = json.load(f)
+            if os.path.exists(scp_quota_path):
+                with scp_quota_path.open("r") as f:
+                    quota_limits["scp"] = json.load(f)
         self.quota_limits = quota_limits
 
         # Loading the vcpu information - a dictionary of dictionaries
@@ -102,6 +105,10 @@ class Planner:
             for quota in quota_limits:
                 if quota["region_name"] == region:
                     return quota["spot_standard_vcpus"] if spot else quota["on_demand_standard_vcpus"]
+        elif cloud_provider == "scp":
+            for quota in quota_limits:
+                if quota["service_zone_name"] == region:
+                    return quota["on_demand_standard_vcpus"]
         return None
 
     def _calculate_vm_types(self, region_tag: str) -> Optional[Tuple[str, int]]:

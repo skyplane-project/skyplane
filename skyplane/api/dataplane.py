@@ -21,6 +21,7 @@ from skyplane.planner.topology import TopologyPlan, TopologyPlanGateway
 from skyplane.utils import logger
 from skyplane.utils.definitions import gateway_docker_image, tmp_log_dir
 from skyplane.utils.fn import PathLike, do_parallel
+from skyplane.utils.retry import retry_backoff
 
 if TYPE_CHECKING:
     from skyplane.api.provisioner import Provisioner
@@ -156,6 +157,7 @@ class Dataplane:
             is_azure_used = any(n.region_tag.startswith("azure:") for n in self.topology.get_gateways())
             is_gcp_used = any(n.region_tag.startswith("gcp:") for n in self.topology.get_gateways())
             is_ibmcloud_used = any(n.region_tag.startswith("ibmcloud:") for n in self.topology.get_gateways())
+            is_scp_used = any(n.region_tag.startswith("scp:") for n in self.topology.get_gateways())
 
             # create VMs from the topology
             for node in self.topology.get_gateways():
@@ -172,7 +174,7 @@ class Dataplane:
                 )
 
             # initialize clouds
-            self.provisioner.init_global(aws=is_aws_used, azure=is_azure_used, gcp=is_gcp_used, ibmcloud=is_ibmcloud_used)
+            self.provisioner.init_global(aws=is_aws_used, azure=is_azure_used, gcp=is_gcp_used, ibmcloud=is_ibmcloud_used, scp=is_scp_used)
 
             # provision VMs
             uuids = self.provisioner.provision(
@@ -273,9 +275,13 @@ class Dataplane:
     def check_error_logs(self) -> Dict[str, List[str]]:
         """Get the error log from remote gateways if there is any error."""
 
+        def http_pool_request(instance):
+            return self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/errors")
+
         def get_error_logs(args):
             _, instance = args
-            reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/errors")
+            # reply = self.http_pool.request("GET", f"{instance.gateway_api_url}/api/v1/errors")
+            reply = retry_backoff(partial(http_pool_request, instance))
             if reply.status != 200:
                 raise Exception(f"Failed to get error logs from gateway instance {instance.instance_name()}: {reply.data.decode('utf-8')}")
             return json.loads(reply.data.decode("utf-8"))["errors"]

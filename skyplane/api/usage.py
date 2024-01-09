@@ -300,6 +300,8 @@ class UsageClient:
         if dest_region_tags is None:
             dest_provider, dest_region = None, None
         else:
+            if isinstance(dest_region_tags, str):
+                dest_region_tags = [dest_region_tags]
             dest_providers = [tag.split(":")[0] for tag in dest_region_tags]
             dest_regions = [tag.split(":")[1] for tag in dest_region_tags]
 

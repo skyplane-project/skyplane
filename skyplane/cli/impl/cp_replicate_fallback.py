@@ -37,6 +37,14 @@ def fallback_cmd_azure_sync(src_path, dest_path):
     return f"azcopy sync {src_path} {dest_path}"
 
 
+def fallback_cmd_scp_cp(src_path: str, dest_path: str, recursive: bool) -> str:
+    return f"cp {src_path} {dest_path}" if not recursive else f"cp -r {src_path} {dest_path}"
+
+
+def fallback_cmd_scp_sync(src_path, dest_path):
+    return f"rsync -av {src_path} {dest_path}"
+
+
 def replicate_onprem_cp_cmd(src, dst, recursive=True) -> Optional[str]:
     provider_src, _, _ = parse_path(src)
     provider_dst, _, _ = parse_path(dst)
@@ -92,6 +100,9 @@ def replicate_small_cp_cmd(src, dst, recursive=True) -> Optional[str]:
     # azure -> azure
     elif provider_src == "azure" and provider_dst == "azure":
         return fallback_cmd_azure_cp(src, dst, recursive)
+    # scp -> scp
+    elif provider_src == "scp" and provider_dst == "scp":
+        return fallback_cmd_scp_cp(src, dst, recursive)
     # unsupported fallback
     else:
         return None
@@ -110,6 +121,9 @@ def replicate_small_sync_cmd(src, dst) -> Optional[str]:
     # azure -> azure
     elif provider_src == "azure" and provider_dst == "azure":
         return fallback_cmd_azure_sync(src, dst)
+    # scp -> scp
+    elif provider_src == "scp" and provider_dst == "scp":
+        return fallback_cmd_scp_sync(src, dst)
     # unsupported fallback
     else:
         return None

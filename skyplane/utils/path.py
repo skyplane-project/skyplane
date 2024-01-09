@@ -63,6 +63,15 @@ def parse_path(path: str) -> Tuple[str, Optional[str], Optional[str]]:
             raise ValueError(f"Invalid HDFS path: {path}")
         host, path = match.groups()
         return "hdfs", host, path
+    elif path.startswith("scp://"):
+        provider, parsed = path[:3], path[6:]
+        if len(parsed) == 0:
+            logger.error(f"Invalid SCP path: '{path}'", fg="red", err=True)
+            raise ValueError(f"Invalid SCP path: '{path}'")
+        bucket, *keys = parsed.split("/", 1)
+        key = keys[0] if len(keys) > 0 else ""
+        provider = "scp"
+        return provider, bucket, key
     else:
         if not is_plausible_local_path(path):
             logger.warning(f"Local path '{path}' does not exist")

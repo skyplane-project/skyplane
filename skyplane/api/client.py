@@ -14,7 +14,7 @@ from skyplane.utils.definitions import tmp_log_dir
 from skyplane.api.pipeline import Pipeline
 
 if TYPE_CHECKING:
-    from skyplane.api.config import AWSConfig, AzureConfig, GCPConfig, TransferConfig, IBMCloudConfig
+    from skyplane.api.config import AWSConfig, AzureConfig, GCPConfig, TransferConfig, IBMCloudConfig, SCPConfig
 
 
 class SkyplaneClient:
@@ -26,6 +26,7 @@ class SkyplaneClient:
         azure_config: Optional["AzureConfig"] = None,
         gcp_config: Optional["GCPConfig"] = None,
         ibmcloud_config: Optional["IBMCloudConfig"] = None,
+        scp_config: Optional["SCPConfig"] = None,
         transfer_config: Optional[TransferConfig] = None,
         log_dir: Optional[str] = None,
     ):
@@ -48,6 +49,7 @@ class SkyplaneClient:
         self.azure_auth = azure_config.make_auth_provider() if azure_config else None
         self.gcp_auth = gcp_config.make_auth_provider() if gcp_config else None
         self.ibmcloud_auth = ibmcloud_config.make_auth_provider() if ibmcloud_config else None
+        self.scp_auth = scp_config.make_auth_provider() if scp_config else None
         self.transfer_config = transfer_config if transfer_config else TransferConfig()
         self.log_dir = (
             tmp_log_dir / "transfer_logs" / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}-{uuid.uuid4().hex[:8]}"
@@ -66,6 +68,7 @@ class SkyplaneClient:
             azure_auth=self.azure_auth,
             gcp_auth=self.gcp_auth,
             ibmcloud_auth=self.ibmcloud_auth,
+            scp_auth=self.scp_auth,
         )
 
     def pipeline(self, planning_algorithm: Optional[str] = "direct", max_instances: Optional[int] = 1, debug=False):
