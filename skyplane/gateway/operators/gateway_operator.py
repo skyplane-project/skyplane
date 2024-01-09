@@ -389,15 +389,14 @@ class GatewaySender(GatewayOperator):
                     print(f"[sender-{self.worker_id}]:{chunk_id} error sending chunk {e}")
                     retry_count += 1
                     if retry_count < max_retries:
-                        print(f"SCP DEV - Retrying (attempt {retry_count} of {max_retries})...")
-                        # 이 위치에 에러 파일 만들기
-                        with open(f"/skyplane/header.to_socket_{retry_count}_{dst_host}_error.txt", "w") as f:
-                            f.write(str(e))
+                        # print(f"SCP DEV - Retrying (attempt {retry_count} of {max_retries})...")
+                        # with open(f"/skyplane/header.to_socket_{retry_count}_{dst_host}_error.txt", "w") as f:
+                        #    f.write(str(e))
                         time.sleep(0.5)
                         socket_connection()
                         sock = self.destination_sockets[dst_host]
                     else:
-                        print(f"SCP DEV - Max retries ({max_retries}) reached. Giving up.")
+                        # print(f"SCP DEV - Max retries ({max_retries}) reached. Giving up.")
                         raise e
                 else:
                     break
