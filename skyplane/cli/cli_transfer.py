@@ -7,10 +7,12 @@ from typing import Dict, Any, Optional, List
 
 import typer
 from rich.progress import Progress, TextColumn, SpinnerColumn
+from rich import print as rprint
 
 import skyplane
 from skyplane.api.config import TransferConfig, AWSConfig, GCPConfig, AzureConfig, IBMCloudConfig, SCPConfig
 from skyplane.api.transfer_job import CopyJob, SyncJob, TransferJob
+from skyplane.cli.cli_tracker import TrackerCLI
 from skyplane.cli.impl.cp_replicate_fallback import (
     replicate_onprem_cp_cmd,
     replicate_onprem_sync_cmd,
@@ -21,6 +23,8 @@ from skyplane.cli.impl.common import print_header, console, print_stats_complete
 from skyplane.api.usage import UsageClient
 from skyplane.config import SkyplaneConfig
 from skyplane.config_paths import cloud_config, config_path
+from skyplane.gateway.gateway_tracker import TransferBody
+
 from skyplane.obj_store.object_store_interface import StorageInterface
 from skyplane.cli.impl.progress_bar import ProgressBarTransferHook
 from skyplane.utils import logger
@@ -225,14 +229,14 @@ class SkyplaneCLI:
             console.print(f"[yellow]Note: local transfers are not monitored by Skyplane[yellow]")
             return True
 
-        topology = pipeline.planner.plan(pipeline.jobs_to_dispatch)
-        sorted_counts = sorted(topology.per_region_count().items(), key=lambda x: x[0])
+        self.topology = pipeline.planner.plan(pipeline.jobs_to_dispatch)
+        sorted_counts = sorted(self.topology.per_region_count().items(), key=lambda x: x[0])
         console.print(
             f"  [bold][blue]VMs to provision:[/blue][/bold] [bright_black]{', '.join(f'{c}x {r}' for r, c in sorted_counts)}[/bright_black]"
         )
-        if topology.cost_per_gb:
+        if self.topology.cost_per_gb:
             console.print(
-                f"  [bold][blue]Estimated egress cost:[/blue][/bold] [bright_black]${topology.cost_per_gb:,.2f}/GB[/bright_black]"
+                f"  [bold][blue]Estimated egress cost:[/blue][/bold] [bright_black]${self.topology.cost_per_gb:,.2f}/GB[/bright_black]"
             )
         # show spinner
         with Progress(
@@ -389,6 +393,18 @@ def run_transfer(
             if cli.estimate_small_transfer(job, cloud_config.get_flag("native_cmd_threshold_gb") * GB):
                 small_transfer_status = cli.transfer_sync_small(src, dst)
                 return 0 if small_transfer_status else 1
+
+    # Provision tracker VM and start the transfer
+    rprint(f"\n:rocket: [bold green]Provisioning tracker VM[/bold green]")
+    tracker_vm = TrackerCLI(cloud_provider=provider_src, region=src_region_tag, skyplane_cli=cli)
+    body = {**args, "src": src, "dst": dst, "transfer_id": cli.client.log_dir.name}
+    transfer_body = TransferBody(**body)
+    transfer_id = tracker_vm.provision_and_start_transfer(transfer_body=transfer_body, spinner=True)
+    rprint(
+        f"\n:rocket: [bold green]Tracker VM provisioned and transfer {transfer_id} has been started."
+        f"Use `skyplane status --transfer-id {transfer_id}` to inspect the transfer status. [/bold green]"
+    )
+    return
 
     # dataplane must be created after transfers are queued
     dp = pipeline.create_dataplane(debug=debug)

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 from skyplane import compute
+from skyplane.api.tracker import TransferProgressTracker
 from skyplane.exceptions import GatewayContainerStartException
 from skyplane.api.tracker import TransferProgressTracker, TransferHook
 from skyplane.api.transfer_job import TransferJob
@@ -240,6 +241,15 @@ class Dataplane:
             instance.download_file("/tmp/gateway.stderr", err_file)
 
         do_parallel(copy_log, self.bound_nodes.values(), n=-1)
+
+    def get_all_logs(self):
+        """Gets all the files inside self.transfer_dir and returns a serialized version of them"""
+        files = []
+        for file in self.transfer_dir.iterdir():
+            if file.is_file():
+                with open(file, "rb") as f:
+                    files.append((file.name, f.read()))
+        return files
 
     def deprovision(self, max_jobs: int = 64, spinner: bool = False):
         """

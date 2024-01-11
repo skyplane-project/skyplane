@@ -1,6 +1,3 @@
-from typing import Dict, List
-
-
 class SkyplaneException(Exception):
     def pretty_print_str(self):
         err = f"[bold][red]SkyplaneException: {str(self)}[/red][/bold]"
@@ -8,7 +5,7 @@ class SkyplaneException(Exception):
 
 
 class SkyplaneGatewayException(SkyplaneException):
-    def __init__(self, message, errors: Dict[str, List[str]]):
+    def __init__(self, message, errors: dict[str, list[str]]):
         super().__init__(message)
         self.errors = errors
 
@@ -73,6 +70,12 @@ class TransferFailedException(SkyplaneException):
             err += "\n[bold][red]Transfer failed. The following objects were not found at the destination:[/red][/bold] " + str(
                 self.failed_objects
             )
+        return err
+
+
+class TrackerVMException(SkyplaneException):
+    def pretty_print_str(self):
+        err = f"[red][bold]:x: TrackerVMException:[/bold] {str(self)}[/red]"
         return err
 
 

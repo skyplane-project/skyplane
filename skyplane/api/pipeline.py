@@ -92,6 +92,8 @@ class Pipeline:
         ## create plan from set of jobs scheduled
         # topo = self.planner.plan(self.jobs_to_dispatch)
 
+        # TODO: provision and start the tracker gateway
+
         ## create dataplane from plan
         # dp = Dataplane(self.clientid, topo, self.provisioner, self.transfer_config, self.transfer_dir, debug=debug)
         dp = self.create_dataplane(debug)
