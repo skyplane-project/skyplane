@@ -38,5 +38,8 @@ While GCP VPCs are Global, in AWS for every region that is involved in a transfe
 
 Firewall support for Azure is in the roadmap. 
 
+### SCP
+Similar to AWS, in SCP(Samsung Cloud Platform) for every location(region) that is involved in a transfer, Skyplane creates a `skyplane` [VPC](https://github.com/skyplane-project/skyplane/blob/main/skyplane/compute/scp/scp_network.py#L267), subnet, security group(SG). When the Gateway instance is created, port 22 is initially [registered](https://github.com/skyplane-project/skyplane/blob/main/skyplane/compute/scp/scp_cloud_provider.py#L194), and subsequently, firewall rules for all IPs are [registered](https://github.com/skyplane-project/skyplane/blob/main/skyplane/compute/scp/scp_cloud_provider.py#L225) for data relay. After the transfer, the firewalls are [deleted](https://github.com/skyplane-project/skyplane/blob/main/skyplane/compute/scp/scp_cloud_provider.py#L228).
+
 ## Large Objects
 Skyplane breaks large objects into smaller sub-parts (currently AWS and GCP only) to improve transfer parallelism (also known as [striping](https://ieeexplore.ieee.org/document/1560006)).

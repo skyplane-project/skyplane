@@ -55,7 +55,8 @@ By default, Skyplane will use a maximum of 1 VM in each region. This limit is co
 * `ibmcloud_use_spot_instances`: If set, IBM will use spot instances instead of on-demand instances. (default False) 
 * `ibmcloud_default_region`: IBM region to use for provisioning. (default us-east) 
 * `ibmcloud_instance_class`: IBM instance class to use for provisioning. (default bx2-2x8) 
-
+* `scp_instance_class`: SCP instance class to use for provisioning. (default h1v32m128)
+* `scp_default_region`: SCP region to use for provisioning. (default KR-WEST-1)
 
 <!-- ### Transfer Chunk Sizes 
 * Skyplane will break up large objects into smaller chunk sizes to parallelize transfers more efficiently (AWS and GCP only). 
