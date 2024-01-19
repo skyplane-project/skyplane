@@ -22,6 +22,7 @@
       AzureConfig
       GCPConfig
       IBMCloudConfig
+      SCPConfig
       TransferConfig
    
    

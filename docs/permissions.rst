@@ -40,4 +40,12 @@ Your Azure account must have the following roles:
    Within Azure, it is not sufficient to have just the :code:`Owner` role to be able to access and write to containers in storage. The VMs that Skyplane provisions are assigned the sufficient storage permissions, but to be able to interact with Azure storage locally, check to make sure your personal Azure account has the roles listed above.
 
 
+SCP 
+-----------------------------
+To ensure smooth authentication key usage and access to Object Storage, please verify the following permissions:
+
+- :code:`Access allowance IP for Your SCP account: Disabled`
+- :code:`Object Storage access control feature: Disabled`
+
+Configure the newly created Gateway instances to enable authentication and Object Storage access.
 

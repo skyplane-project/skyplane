@@ -12,6 +12,7 @@ We're ready to install Skyplane. It's as easy as:
    # install support for other clouds as needed:
    #   $ pip install "skyplane[azure]"
    #   $ pip install "skyplane[gcp]"
+   #   $ pip install "skyplane[scp]"
    #   $ pip install "skyplane[all]"
 
 .. dropdown for M1 Macbook users
@@ -51,6 +52,14 @@ Once you have the CLI tools setup, log into each cloud provider's CLI:
    ---> For Azure:
    $ az login
 
+   ---> For SCP:
+   $ # Create directory if required
+   $ mkdir -p ~/.scp
+   $ # Add the lines for "scp_access_key", "scp_secret_key", and "scp_project_id" to scp_credential file
+   $ echo "scp_access_key = <your_access_key>" >> ~/.scp/scp_credential
+   $ echo "scp_secret_key = <your_secret_key>" >> ~/.scp/scp_credential
+   $ echo "scp_project_id = <your_project_id>" >> ~/.scp/scp_credential
+   
 Now, you can initialize Skyplane with your desired cloud providers. Skyplane autodetects cloud credentials and valid regions from your CLI environment.
 
 .. code-block:: bash
