@@ -124,6 +124,9 @@ class AzureServer(Server):
         assert public_ip.name == AzureServer.ip_name(self.name)
         return public_ip.ip_address
 
+    def private_ip(self):
+        return None
+
     @ignore_lru_cache()
     def instance_class(self):
         vm = self.get_virtual_machine()
@@ -198,6 +201,7 @@ class AzureServer(Server):
             ssh_username=uname,
             ssh_pkey=str(self.ssh_private_key),
             ssh_private_key_password=ssh_key_password,
+            host_pkey_directories=[],
             local_bind_address=("127.0.0.1", 0),
             remote_bind_address=("127.0.0.1", remote_port),
         )

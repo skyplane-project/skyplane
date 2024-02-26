@@ -6,6 +6,10 @@ class StorageInterface:
     def bucket(self) -> str:
         return self.bucket_name
 
+    @property
+    def provider(self) -> str:
+        raise NotImplementedError()
+
     def region_tag(self) -> str:
         raise NotImplementedError()
 
@@ -56,5 +60,19 @@ class StorageInterface:
 
             logger.fs.debug(f"attempting to create hdfs bucket {bucket}")
             return HDFSInterface(host=bucket)
+        elif region_tag.startswith("scp"):
+            from skyplane.obj_store.scp_interface import SCPInterface
+
+            return SCPInterface(bucket)
+        elif region_tag.startswith("local"):
+            # from skyplane.obj_store.file_system_interface import FileSystemInterface
+            from skyplane.obj_store.posix_file_interface import POSIXInterface
+
+            return POSIXInterface(bucket)
+        elif region_tag.startswith("cloudflare"):
+            from skyplane.obj_store.r2_interface import R2Interface
+
+            account, bucket = bucket.split("/", 1)  # <storage_account>/<container>
+            return R2Interface(account, bucket)
         else:
             raise ValueError(f"Invalid region_tag {region_tag} - could not create interface")

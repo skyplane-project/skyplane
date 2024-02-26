@@ -1,13 +1,15 @@
 import json
+from pathlib import Path
 import os
 from typing import List
 import queue
 import socket
 import ssl
 import time
+import lz4.frame
 import traceback
 from functools import partial
-from multiprocessing import Event, Process
+from multiprocessing import Event, Process, Queue
 from multiprocessing.managers import DictProxy
 from typing import Dict, List, Optional
 
@@ -35,7 +37,7 @@ class GatewayOperator(ABC):
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
-        error_queue: GatewayQueue,
+        error_queue: Queue,
         chunk_store: ChunkStore,
         n_processes: Optional[int] = 1,
     ):
@@ -85,29 +87,22 @@ class GatewayOperator(ABC):
                 except queue.Empty:
                     continue
 
-                # print(f"[{self.handle}:{self.worker_id}] Got chunk {chunk_req.chunk.chunk_id}")
-
                 # TODO: status logging
                 self.chunk_store.log_chunk_state(chunk_req, ChunkState.in_progress, operator_handle=self.handle, worker_id=worker_id)
-                # print(f"[{self.handle}:{self.worker_id}] Updated chunk state {chunk_req.chunk.chunk_id}")
-
                 # process chunk
                 succ = self.process(chunk_req, *args)
 
                 # place in output queue
                 if succ:
-                    # print(f"[{self.handle}:{self.worker_id}] Placing chunk {chunk_req.chunk.chunk_id} in downstream queue")
-                    # print(self.handle)
                     self.chunk_store.log_chunk_state(chunk_req, ChunkState.complete, operator_handle=self.handle, worker_id=worker_id)
                     if self.output_queue is not None:
-                        # print(f"[{self.handle}:{self.worker_id}] Output queue is not None - not a terminal operator")
                         self.output_queue.put(chunk_req)
                     else:
                         print(f"[{self.handle}:{self.worker_id}] Output queue is None - terminal operator")
+                    time.sleep(0.1)  # yield ?
                 else:
                     # failed to process - re-queue
                     time.sleep(0.1)
-                    # print(f"[{self.handle}:{self.worker_id}] Failed to process - re-queueing {chunk_req.chunk.chunk_id}")
                     self.input_queue.put(chunk_req)
 
             except Exception as e:
@@ -127,11 +122,11 @@ class GatewayOperator(ABC):
         pass
 
 
-class GatewayWaitReciever(GatewayOperator):
+class GatewayWaitReceiver(GatewayOperator):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    # TODO: alternative (potentially better performnace) implementation: connect via queue with GatewayReciever to listen
+    # TODO: alternative (potentially better performnace) implementation: connect via queue with GatewayReceiver to listen
     # for download completition events - join with chunk request queue from ChunkStore
     def process(self, chunk_req: ChunkRequest):
         chunk_file_path = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id)
@@ -140,7 +135,7 @@ class GatewayWaitReciever(GatewayOperator):
             return False
 
         # check to see if file is completed downloading
-        # Successfully recieved chunk 38400a29812142a486eaefcdebedf371, 161867776    0, 67108864
+        # Successfully received chunk 38400a29812142a486eaefcdebedf371, 161867776    0, 67108864
         with open(chunk_file_path, "rb") as f:
             data = f.read()
             if len(data) < chunk_req.chunk.chunk_length_bytes:
@@ -150,7 +145,7 @@ class GatewayWaitReciever(GatewayOperator):
                 len(data) == chunk_req.chunk.chunk_length_bytes
             ), f"Downloaded chunk length does not match expected length: {len(data)}, {chunk_req.chunk.chunk_length_bytes}"
         print(
-            f"[{self.handle}:{self.worker_id}] Successfully recieved chunk {chunk_req.chunk.chunk_id}, {len(data)}, {chunk_req.chunk.chunk_length_bytes}"
+            f"[{self.handle}:{self.worker_id}] Successfully received chunk {chunk_req.chunk.chunk_id}, {len(data)}, {chunk_req.chunk.chunk_length_bytes}"
         )
         return True
 
@@ -163,7 +158,7 @@ class GatewaySender(GatewayOperator):
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
-        error_queue: GatewayQueue,
+        error_queue: Queue,
         chunk_store: ChunkStore,
         ip_addr: str,
         use_tls: Optional[bool] = True,
@@ -204,7 +199,10 @@ class GatewaySender(GatewayOperator):
         self.destination_ports: Dict[str, int] = {}  # ip_address -> int
         self.destination_sockets: Dict[str, socket.socket] = {}  # ip_address -> socket
         self.sent_chunk_ids: Dict[str, List[int]] = {}  # ip_address -> list of chunk_ids
-        self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3), cert_reqs="CERT_NONE")
+
+        # http pool
+        timeout = urllib3.util.Timeout(connect=10.0, read=None)  # no read timeout
+        self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3), cert_reqs="CERT_NONE", timeout=timeout)
 
     def worker_exit(self, worker_id: int):
         # close destination sockets
@@ -268,39 +266,76 @@ class GatewaySender(GatewayOperator):
         """Send list of chunks to gateway server, pipelining small chunks together into a single socket stream."""
         # notify server of upcoming ChunkRequests
 
-        print(f"[sender:{self.worker_id}] Sending chunk ID {chunk_req.chunk.chunk_id} to IP {dst_host}")
+        # print(f"[{self.handle}:{self.worker_id}] Sending chunk ID {chunk_req.chunk.chunk_id} to IP {dst_host}")
 
         # TODO: does this function need to be implemented to work for a list of chunks?
 
         chunk_ids = [chunk_req.chunk.chunk_id]
         chunk_reqs = [chunk_req]
-        with Timer(f"pre-register chunks {chunk_ids} to {dst_host}"):
-            # TODO: remove chunk request wrapper
-            register_body = json.dumps([c.chunk.as_dict() for c in chunk_reqs]).encode("utf-8")
-            print(f"[sender-{self.worker_id}]:{chunk_ids} register body {register_body}")
-            # while True:
-            #   try:
-            #       response = self.http_pool.request(
-            #           "POST", f"https://{dst_host}:8080/api/v1/chunk_requests", body=register_body, headers={"Content-Type": "application/json"}
-            #       )
-            #       break
-            #   except Exception as e:
-            #       print("sender post error", e)
-            #       time.sleep(1)
 
-            response = self.http_pool.request(
-                "POST", f"https://{dst_host}:8080/api/v1/chunk_requests", body=register_body, headers={"Content-Type": "application/json"}
+        # retry http_pool.request
+        def http_pool_request(register_body):
+            return self.http_pool.request(
+                "POST",
+                f"https://{dst_host}:8080/api/v1/chunk_requests",
+                body=register_body,
+                headers={"Content-Type": "application/json"},
             )
 
-            assert response.status == 200 and json.loads(response.data.decode("utf-8")).get("status") == "ok"
-            print(f"[sender-{self.worker_id}]:{chunk_ids} registered chunks")
+        try:
+            with Timer(f"pre-register chunks {chunk_ids} to {dst_host}"):
+                # TODO: remove chunk request wrapper
+                # while True:
+                #   try:
+                #       response = self.http_pool.request(
+                #           "POST", f"https://{dst_host}:8080/api/v1/chunk_requests", body=register_body, headers={"Content-Type": "application/json"}
+                #       )
+                #       break
+                #   except Exception as e:
+                #       print("sender post error", e)
+                #       time.sleep(1)
+                n_added = 0
+                while n_added < len(chunk_reqs):
+                    register_body = json.dumps([c.chunk.as_dict() for c in chunk_reqs[n_added:]]).encode("utf-8")
+                    # print(f"[sender-{self.worker_id}]:{chunk_ids} register body {register_body}")
+                    # response = self.http_pool.request(
+                    #     "POST",
+                    #     f"https://{dst_host}:8080/api/v1/chunk_requests",
+                    #     body=register_body,
+                    #     headers={"Content-Type": "application/json"},
+                    # )
+                    response = retry_backoff(partial(http_pool_request, register_body))
+                    reply_json = json.loads(response.data.decode("utf-8"))
+                    print(f"[sender-{self.worker_id}]", n_added, reply_json, dst_host)
+                    n_added += reply_json["n_added"]
+                    assert response.status == 200, f"Wrong response status {response.status}"
+                    # json.loads(response.data.decode("utf-8")).get("status") == "ok"
+                    if n_added == len(chunk_reqs):
+                        print(f"[sender-{self.worker_id}]:{chunk_ids} registered chunks")
+                    else:
+                        time.sleep(1)
+        except Exception as e:
+            print(f"[{self.handle}:{self.worker_id}] Error registering chunks {chunk_ids} to {dst_host}: {e}")
+            raise e
 
         # contact server to set up socket connection
+        def socket_connection():
+            self.destination_sockets[dst_host] = retry_backoff(
+                # all exceptions are retried
+                # partial(self.make_socket, dst_host), max_retries=3, exception_class=socket.timeout
+                partial(self.make_socket, dst_host),
+                max_retries=3,
+                exception_class=Exception,
+            )
+
         if self.destination_ports.get(dst_host) is None:
             print(f"[sender-{self.worker_id}]:{chunk_ids} creating new socket")
-            self.destination_sockets[dst_host] = retry_backoff(
-                partial(self.make_socket, dst_host), max_retries=3, exception_class=socket.timeout
-            )
+            # self.destination_sockets[dst_host] = retry_backoff(
+            #     # all exceptions are retried
+            #     # partial(self.make_socket, dst_host), max_retries=3, exception_class=socket.timeout
+            #     partial(self.make_socket, dst_host), max_retries=3, exception_class=Exception
+            # )
+            socket_connection()
             print(f"[sender-{self.worker_id}]:{chunk_ids} created new socket")
         sock = self.destination_sockets[dst_host]
 
@@ -317,30 +352,59 @@ class GatewaySender(GatewayOperator):
             assert len(data) == chunk.chunk_length_bytes, f"chunk {chunk_id} has size {len(data)} but should be {chunk.chunk_length_bytes}"
 
             wire_length = len(data)
-            # compressed_length = None
-            # if self.use_compression and self.region == chunk_req.src_region:
-            #    data = lz4.frame.compress(data)
-            #    wire_length = len(data)
-            #    compressed_length = wire_length
-            # if self.e2ee_secretbox is not None and self.region == chunk_req.src_region:
-            #    data = self.e2ee_secretbox.encrypt(data)
-            #    wire_length = len(data)
+            raw_wire_length = wire_length
+            compressed_length = None
+
+            if self.use_compression:
+                data = lz4.frame.compress(data)
+                wire_length = len(data)
+                compressed_length = wire_length
+            if self.e2ee_secretbox is not None:
+                data = self.e2ee_secretbox.encrypt(data)
+                wire_length = len(data)
 
             # send chunk header
-            header = chunk.to_wire_header(n_chunks_left_on_socket=len(chunk_ids) - idx - 1, wire_length=wire_length, is_compressed=False)
-            print(f"[sender-{self.worker_id}]:{chunk_id} sending chunk header {header}")
-            header.to_socket(sock)
-            print(f"[sender-{self.worker_id}]:{chunk_id} sent chunk header")
+            header = chunk.to_wire_header(
+                n_chunks_left_on_socket=len(chunk_ids) - idx - 1,
+                wire_length=wire_length,
+                raw_wire_length=raw_wire_length,
+                is_compressed=(compressed_length is not None),
+            )
+            # print(f"[sender-{self.worker_id}]:{chunk_id} sending chunk header {header}")
+            # fix socket timeouterror case - we need to create a new socket, so retry_backoff is not easy to use.
+            retry_count = 0
+            max_retries = 3
+            while retry_count < max_retries:
+                try:
+                    header.to_socket(sock)
+                    # print(f"[sender-{self.worker_id}]:{chunk_id} sent chunk header")
 
-            # send chunk data
-            assert chunk_file_path.exists(), f"chunk file {chunk_file_path} does not exist"
-            # file_size = os.path.getsize(chunk_file_path)
+                    # send chunk data
+                    assert chunk_file_path.exists(), f"chunk file {chunk_file_path} does not exist"
+                    # file_size = os.path.getsize(chunk_file_path)
 
-            with Timer() as t:
-                sock.sendall(data)
+                    with Timer() as t:
+                        sock.sendall(data)
+                except Exception as e:
+                    print(f"[sender-{self.worker_id}]:{chunk_id} error sending chunk {e}")
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        # print(f"SCP DEV - Retrying (attempt {retry_count} of {max_retries})...")
+                        # with open(f"/skyplane/header.to_socket_{retry_count}_{dst_host}_error.txt", "w") as f:
+                        #    f.write(str(e))
+                        time.sleep(0.5)
+                        socket_connection()
+                        sock = self.destination_sockets[dst_host]
+                    else:
+                        # print(f"SCP DEV - Max retries ({max_retries}) reached. Giving up.")
+                        raise e
+                else:
+                    break
 
             # logger.debug(f"[sender:{self.worker_id}]:{chunk_id} sent at {chunk.chunk_length_bytes * 8 / t.elapsed / MB:.2f}Mbps")
-            print(f"[sender:{self.worker_id}]:{chunk_id} sent at {wire_length * 8 / t.elapsed / MB:.2f}Mbps")
+            print(
+                f"[sender:{self.worker_id}]:{chunk_id} sent at {wire_length * 8 / t.elapsed / MB:.2f}Mbps - {dst_host} : {self.destination_ports[dst_host]}"
+            )
 
             if dst_host not in self.sent_chunk_ids:
                 self.sent_chunk_ids[dst_host] = []
@@ -358,7 +422,7 @@ class GatewayRandomDataGen(GatewayOperator):
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
-        error_queue: GatewayQueue,
+        error_queue: Queue,
         chunk_store: ChunkStore,
         size_mb: int,
         n_processes: Optional[int] = 1,
@@ -398,7 +462,7 @@ class GatewayWriteLocal(GatewayOperator):
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
-        error_queue: GatewayQueue,
+        error_queue: Queue,
         chunk_store: ChunkStore,
         n_processes: int = 1,
     ):
@@ -414,14 +478,14 @@ class GatewayObjStoreOperator(GatewayOperator):
         self,
         handle: str,
         region: str,
+        bucket_name: str,
+        bucket_region: str,
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
-        error_queue: GatewayQueue,
+        error_queue: Queue,
         n_processes: Optional[int] = 1,
         chunk_store: Optional[ChunkStore] = None,
-        bucket_name: Optional[str] = None,
-        bucket_region: Optional[str] = None,
     ):
         super().__init__(handle, region, input_queue, output_queue, error_event, error_queue, chunk_store, n_processes)
         self.bucket_name = bucket_name
@@ -449,17 +513,17 @@ class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
         self,
         handle: str,
         region: str,
+        bucket_name: str,
+        bucket_region: str,
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
-        error_queue: GatewayQueue,
+        error_queue: Queue,
         n_processes: int = 32,
         chunk_store: Optional[ChunkStore] = None,
-        bucket_name: Optional[str] = None,
-        bucket_region: Optional[str] = None,
     ):
         super().__init__(
-            handle, region, input_queue, output_queue, error_event, error_queue, n_processes, chunk_store, bucket_name, bucket_region
+            handle, region, bucket_name, bucket_region, input_queue, output_queue, error_event, error_queue, n_processes, chunk_store
         )
 
     def process(self, chunk_req: ChunkRequest, **args):
@@ -475,7 +539,14 @@ class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
         # while self.chunk_store.remaining_bytes() < chunk_req.chunk.chunk_length_bytes * self.n_processes:
         #    time.sleep(0.1)
 
-        assert chunk_req.chunk.chunk_length_bytes > 0, f"Cannot have size 0 chunk {chunk_req.chunk}"
+        # assert chunk_req.chunk.chunk_length_bytes > 0, f"Cannot have size 0 chunk {chunk_req.chunk}" # actually ok
+
+        if chunk_req.chunk.chunk_length_bytes == 0:
+            # nothing to do
+            # create empty file
+            Path(fpath).touch()
+            return True
+
         while True:
             # if self.chunk_store.remaining_bytes() < chunk_req.chunk.chunk_length_bytes * self.n_processes:
             #    time.sleep(0.1)
@@ -499,7 +570,8 @@ class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
                     break
 
             except Exception as e:
-                logger.error(f"[obj_store:{self.worker_id}] {str(e)}")
+                logger.error(f"[obj_store:{self.worker_id}] Error reading key {chunk_req.chunk.src_key}: {str(e)}")
+                print(f"[obj_store:{self.worker_id}] Error reading key {chunk_req.chunk.src_key}: {str(e)}")
                 time.sleep(1)
 
         # update md5sum for chunk requests
@@ -509,10 +581,10 @@ class GatewayObjStoreReadOperator(GatewayObjStoreOperator):
         # else:
         #    self.chunk_store.update_chunk_checksum(chunk_req.chunk.chunk_id, md5sum)
 
-        recieved_chunk_size = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).stat().st_size
+        received_chunk_size = self.chunk_store.get_chunk_file_path(chunk_req.chunk.chunk_id).stat().st_size
         assert (
-            recieved_chunk_size == chunk_req.chunk.chunk_length_bytes
-        ), f"Downloaded chunk {chunk_req.chunk.chunk_id} to {fpath} has incorrect size (expected {chunk_req.chunk.chunk_length_bytes} but got {recieved_chunk_size}, {chunk_req.chunk.chunk_length_bytes})"
+            received_chunk_size == chunk_req.chunk.chunk_length_bytes
+        ), f"Downloaded chunk {chunk_req.chunk.chunk_id} to {fpath} has incorrect size (expected {chunk_req.chunk.chunk_length_bytes} but got {received_chunk_size}, {chunk_req.chunk.chunk_length_bytes})"
         logger.debug(f"[obj_store:{self.worker_id}] Downloaded {chunk_req.chunk.chunk_id} from {self.bucket_name}")
         return True
 
@@ -522,19 +594,19 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         self,
         handle: str,
         region: str,
+        bucket_name: str,
+        bucket_region: str,
         input_queue: GatewayQueue,
         output_queue: GatewayQueue,
         error_event,
-        error_queue: GatewayQueue,
+        error_queue: Queue,
         upload_id_map: DictProxy,  # map of upload_id mappings from client
         n_processes: Optional[int] = 32,
         chunk_store: Optional[ChunkStore] = None,
-        bucket_name: Optional[str] = None,
-        bucket_region: Optional[str] = None,
         prefix: Optional[str] = "",
     ):
         super().__init__(
-            handle, region, input_queue, output_queue, error_event, error_queue, n_processes, chunk_store, bucket_name, bucket_region
+            handle, region, bucket_name, bucket_region, input_queue, output_queue, error_event, error_queue, n_processes, chunk_store
         )
         self.chunk_store = chunk_store
         self.upload_id_map = upload_id_map
@@ -550,8 +622,9 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
         obj_store_interface = self.get_obj_store_interface(self.bucket_region, self.bucket_name)
 
         if chunk_req.chunk.multi_part:
-            assert chunk_req.chunk.src_key in self.upload_id_map, f"Upload id for {chunk_req.chunk.src_key} not found {self.upload_id_map}"
-            upload_id = self.upload_id_map[chunk_req.chunk.src_key]
+            upload_id_key = self.bucket_region + chunk_req.chunk.src_key  # format for upload id key
+            assert upload_id_key in self.upload_id_map, f"Upload id for {upload_id_key} not found {self.upload_id_map}"
+            upload_id = self.upload_id_map[upload_id_key]
         else:
             upload_id = None
 
@@ -568,5 +641,7 @@ class GatewayObjStoreWriteOperator(GatewayObjStoreOperator):
             ),
             max_retries=1,
         )
-        logger.debug(f"[obj_store:{self.worker_id}] Uploaded {chunk_req.chunk.chunk_id} to {self.bucket_name}")
+        logger.debug(
+            f"[obj_store:{self.worker_id}] Uploaded {chunk_req.chunk.chunk_id} partition {chunk_req.chunk.part_number} to {self.bucket_name}"
+        )
         return True

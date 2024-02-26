@@ -40,6 +40,9 @@ _FLAG_TYPES = {
     "requester_pays": bool,
     "native_cmd_enabled": bool,
     "native_cmd_threshold_gb": int,
+    "scp_use_spot_instances": bool,
+    "scp_instance_class": str,
+    "scp_default_region": str,
 }
 
 _DEFAULT_FLAGS = {
@@ -75,6 +78,9 @@ _DEFAULT_FLAGS = {
     "requester_pays": False,
     "native_cmd_enabled": True,
     "native_cmd_threshold_gb": 2,
+    "scp_use_spot_instances": False,
+    "scp_instance_class": "h1v32m128",
+    "scp_default_region": "KR-WEST-1",
 }
 
 
@@ -101,13 +107,17 @@ class SkyplaneConfig:
     aws_enabled: bool
     azure_enabled: bool
     gcp_enabled: bool
+    cloudflare_enabled: bool
     ibmcloud_enabled: bool
+    scp_enabled: bool
     anon_clientid: str
     azure_principal_id: Optional[str] = None
     azure_subscription_id: Optional[str] = None
     azure_resource_group: Optional[str] = None
     azure_umi_name: Optional[str] = None
     azure_client_id: Optional[str] = None
+    cloudflare_access_key_id: Optional[str] = None
+    cloudflare_secret_access_key: Optional[str] = None
     gcp_project_id: Optional[str] = None
     ibmcloud_access_id: Optional[str] = None
     ibmcloud_secret_key: Optional[str] = None
@@ -115,6 +125,9 @@ class SkyplaneConfig:
     ibmcloud_iam_endpoint: Optional[str] = None
     ibmcloud_useragent: Optional[str] = None
     ibmcloud_resource_group_id: Optional[str] = None
+    scp_access_key: Optional[str] = None
+    scp_secret_key: Optional[str] = None
+    scp_project_id: Optional[str] = None
 
     @staticmethod
     def generate_machine_id() -> str:
@@ -123,7 +136,13 @@ class SkyplaneConfig:
     @classmethod
     def default_config(cls) -> "SkyplaneConfig":
         return cls(
-            aws_enabled=False, azure_enabled=False, gcp_enabled=False, ibmcloud_enabled=False, anon_clientid=cls.generate_machine_id()
+            aws_enabled=False,
+            azure_enabled=False,
+            gcp_enabled=False,
+            ibmcloud_enabled=False,
+            cloudflare_enabled=False,
+            scp_enabled=False,
+            anon_clientid=cls.generate_machine_id(),
         )
 
     @classmethod
@@ -164,6 +183,31 @@ class SkyplaneConfig:
             if "umi_name" in config["azure"]:
                 azure_umi_name = config.get("azure", "umi_name")
 
+        cloudflare_enabled = False
+        cloudflare_access_key_id = None
+        cloudflare_secret_access_key = None
+        if "cloudflare" in config:
+            if "cloudflare_enabled" in config["cloudflare"]:
+                cloudflare_enabled = config.getboolean("cloudflare", "cloudflare_enabled")
+            if "cloudflare_access_key_id" in config["cloudflare"]:
+                cloudflare_access_key_id = config.get("cloudflare", "cloudflare_access_key_id")
+            if "cloudflare_secret_access_key" in config["cloudflare"]:
+                cloudflare_secret_access_key = config.get("cloudflare", "cloudflare_secret_access_key")
+
+        scp_enabled = False
+        scp_access_key = None
+        scp_secret_key = None
+        scp_project_id = None
+        if "scp" in config:
+            if "scp_enabled" in config["scp"]:
+                scp_enabled = config.getboolean("scp", "scp_enabled")
+            if "scp_access_key" in config["scp"]:
+                scp_access_key = config.get("scp", "scp_access_key")
+            if "scp_secret_key" in config["scp"]:
+                scp_secret_key = config.get("scp", "scp_secret_key")
+            if "scp_project_id" in config["scp"]:
+                scp_project_id = config.get("scp", "scp_project_id")
+
         gcp_enabled = False
         gcp_project_id = None
         if "gcp" in config:
@@ -195,12 +239,15 @@ class SkyplaneConfig:
             azure_enabled=azure_enabled,
             gcp_enabled=gcp_enabled,
             ibmcloud_enabled=ibmcloud_enabled,
+            cloudflare_enabled=cloudflare_enabled,
             anon_clientid=anon_clientid,
             azure_principal_id=azure_principal_id,
             azure_subscription_id=azure_subscription_id,
             azure_client_id=azure_client_id,
             azure_resource_group=azure_resource_group,
             azure_umi_name=azure_umi_name,
+            cloudflare_access_key_id=cloudflare_access_key_id,
+            cloudflare_secret_access_key=cloudflare_secret_access_key,
             gcp_project_id=gcp_project_id,
             ibmcloud_access_id=ibmcloud_access_id,
             ibmcloud_secret_key=ibmcloud_secret_key,
@@ -208,6 +255,10 @@ class SkyplaneConfig:
             ibmcloud_iam_endpoint=ibmcloud_iam_endpoint,
             ibmcloud_useragent=ibmcloud_useragent,
             ibmcloud_resource_group_id=ibmcloud_resource_group_id,
+            scp_enabled=scp_enabled,
+            scp_access_key=scp_access_key,
+            scp_secret_key=scp_secret_key,
+            scp_project_id=scp_project_id,
         )
 
         if "flags" in config:
@@ -243,6 +294,24 @@ class SkyplaneConfig:
             config.set("ibmcloud", "ibmcloud_secret_key", self.ibmcloud_secret_key)
         if self.ibmcloud_resource_group_id:
             config.set("ibmcloud", "ibmcloud_resource_group_id", self.ibmcloud_resource_group_id)
+
+        if "cloudflare" not in config:
+            config.add_section("cloudflare")
+        config.set("cloudflare", "cloudflare_enabled", str(self.cloudflare_enabled))
+        if self.cloudflare_access_key_id:
+            config.set("cloudflare", "cloudflare_access_key_id", self.cloudflare_access_key_id)
+        if self.cloudflare_secret_access_key:
+            config.set("cloudflare", "cloudflare_secret_access_key", self.cloudflare_secret_access_key)
+
+        if "scp" not in config:
+            config.add_section("scp")
+        config.set("scp", "scp_enabled", str(self.scp_enabled))
+        if self.scp_access_key:
+            config.set("scp", "scp_access_key", self.scp_access_key)
+        if self.scp_secret_key:
+            config.set("scp", "scp_secret_key", self.scp_secret_key)
+        if self.scp_project_id:
+            config.set("scp", "scp_project_id", self.scp_project_id)
 
         if "azure" not in config:
             config.add_section("azure")

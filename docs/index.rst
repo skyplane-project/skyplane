@@ -24,9 +24,9 @@ Contents
    quickstart
    configure
    architecture
-   performance_stats_collection
-   on-prem_setup
+   permissions
    faq
+   increase_vcpus
 
 .. toctree::
    :maxdepth: 2
@@ -56,6 +56,7 @@ Contents
 
    benchmark
    performance_stats_collection
+   on-prem_setup
    roadmap
 
 .. toctree::

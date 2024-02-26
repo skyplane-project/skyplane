@@ -40,7 +40,9 @@ class ProgressBarTransferHook(TransferHook):
             self.bytes_dispatched += sum([chunk.chunk_length_bytes for chunk in chunks])
             self.chunks_dispatched += len(chunks)
         # rerender spinners with updated text "Dispatching chunks (~{format_bytes(self.bytes_dispatched)} dispatched)"
-        self.spinner.update(self.dispatch_task, description=f" (~{format_bytes(self.bytes_dispatched)} dispatched)")
+        self.spinner.update(
+            self.dispatch_task, description=f" {self.chunks_dispatched} chunks (~{format_bytes(self.bytes_dispatched)} dispatched)"
+        )
 
     def on_dispatch_end(self):
         self.spinner.stop()

@@ -1,4 +1,4 @@
-from typing import Optional, List, Tuple
+from typing import Optional, List
 import json
 from collections import defaultdict
 
@@ -32,13 +32,22 @@ class GatewayOperator:
 
 
 class GatewaySend(GatewayOperator):
-    def __init__(self, target_gateway_id: str, region: str, num_connections: int = 32, compress: bool = False, encrypt: bool = False):
+    def __init__(
+        self,
+        target_gateway_id: str,
+        region: str,
+        num_connections: int = 32,
+        compress: bool = False,
+        encrypt: bool = False,
+        private_ip: bool = False,
+    ):
         super().__init__("send")
         self.target_gateway_id = target_gateway_id  # gateway to send to
         self.region = region  # region to send to
         self.num_connections = num_connections  # default this for now
         self.compress = compress
         self.encrypt = encrypt
+        self.private_ip = private_ip  # whether to send to private or public IP (private for GCP->GCP)
 
 
 class GatewayReceive(GatewayOperator):
@@ -104,7 +113,7 @@ class GatewayProgram:
     def get_operators(self) -> List[GatewayOperator]:
         return list(self._ops.values())
 
-    def add_operators(self, ops: List[GatewayOperator], parent_handle: Optional[str] = None, partition_id: Optional[Tuple] = None):
+    def add_operators(self, ops: List[GatewayOperator], parent_handle: Optional[str] = None, partition_id: Optional[str] = "default"):
         parent_op = self._ops[parent_handle] if parent_handle else None
         ops_handles = []
         for op in ops:
@@ -112,7 +121,7 @@ class GatewayProgram:
 
         return ops_handles
 
-    def add_operator(self, op: GatewayOperator, parent_handle: Optional[str] = None, partition_id: Optional[Tuple] = None):
+    def add_operator(self, op: GatewayOperator, parent_handle: Optional[str] = None, partition_id: Optional[str] = "default"):
         parent_op = self._ops[parent_handle] if parent_handle else None
         if not parent_op:  # root operation
             self._plan[partition_id].append(op)

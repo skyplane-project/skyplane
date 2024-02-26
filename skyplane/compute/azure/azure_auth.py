@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 
 from skyplane.compute.const_cmds import query_which_cloud
 from skyplane.config import SkyplaneConfig
-from skyplane.config_paths import config_path, azure_config_path, azure_sku_path, azure_quota_path
+from skyplane.config_paths import config_path, azure_config_path, azure_sku_path, azure_quota_path, azure_standardDv5_quota_path
 from skyplane.utils import imports, logger
 from skyplane.utils.definitions import is_gateway_env
 from skyplane.utils.fn import do_parallel
@@ -77,7 +77,7 @@ class AzureAuthentication:
                 )
                 return [item.as_dict() for item in quota]
             except HttpResponseError as e:
-                if "NoRegisteredProviderFound" in e.message:
+                if "NoRegisteredProviderFound" in e.message or "BadRequest" in e.message:
                     logger.warning(
                         f"Microsoft.Quota API provider has not been registered in region {region}. "
                         "Skyplane will use a conversative quota configuration. "
@@ -86,7 +86,8 @@ class AzureAuthentication:
                     )
                     return []
                 else:
-                    raise e
+                    logger.warning(f"Getting quota for Azure Cloud has failed: {e}. Falling back to default.")
+                    return []
 
         result = do_parallel(
             get_quota,
@@ -98,6 +99,18 @@ class AzureAuthentication:
         )
         with open(azure_quota_path, "w") as f:
             json.dump(dict(result), f)
+
+        # Since we are dealing with "Standard_Dv5" family instances initially
+        # we are also saving the quota limits on "Standard_Dv5" instances
+        # TODO: in the future, might support other family types
+        result = dict(result)
+        with open(azure_standardDv5_quota_path, "w") as f:
+            all_region_vcpus_azure = {}
+            for region in region_list:
+                azure_target = [item for item in result[region] if item["properties"]["name"]["value"] == "standardDv5Family"]
+                if azure_target:
+                    all_region_vcpus_azure[region] = azure_target[0]["properties"]["limit"]["value"]
+            f.write(json.dumps(all_region_vcpus_azure, indent=2))
 
         # Get SKUs
         client = self.get_compute_client()

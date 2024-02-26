@@ -1,0 +1,95 @@
+name: pytest-integration
+on: 
+  workflow_dispatch:
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  SKYPLANE_USAGE_STATS_ENABLED: 0
+jobs:
+  pytest-integration:
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 8
+    timeout-minutes: 40
+    env:
+      STRATEGY_UUID: itest-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
+    steps:
+      - uses: actions/checkout@v1
+      - name: Install poetry
+        run: pipx install poetry
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+          cache: "poetry"
+      - name: Set Poetry config
+        run: |
+          poetry config virtualenvs.in-project false
+          poetry config virtualenvs.path ~/.virtualenvs
+      - name: Install Dependencies
+        run: |
+          poetry install -E gateway -E solver -E aws -E azure -E gcp -E ibm
+          poetry run pip install -r requirements-dev.txt
+        if: steps.cache.outputs.cache-hit != 'true'
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v1'
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS_JSON }}'
+      - name: Log into Azure
+        uses: azure/login@v1
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+      - name: Skyplane init
+        run: |
+          poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
+          poetry run skyplane config set native_cmd_enabled false
+          cat ~/.skyplane/config
+          poetry run skyplane init -y --disable-config-cloudflare
+          poetry run skyplane config set usage_stats false
+      - name: Run integration tests
+        run: poetry run pytest -s tests/integration/test_cp.py
+      - name: Cleanup GCP service account
+        if: always()
+        run: gcloud iam service-accounts delete ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+  deprovision:
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs: [pytest-integration]
+    env:
+      STRATEGY_UUID: itest-d-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v1
+      - name: Install poetry
+        run: pipx install poetry
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+          cache: "poetry"
+      - name: Set Poetry config
+        run: |
+          poetry config virtualenvs.in-project false
+          poetry config virtualenvs.path ~/.virtualenvs
+      - name: Install dependencies
+        run: poetry install -E aws -E azure -E gcp
+        if: steps.cache.outputs.cache-hit != 'true'
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v1'
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS_JSON }}'
+      - name: Skyplane init
+        run: |
+          poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
+          poetry run skyplane init -y --disable-config-azure --disable-config-cloudflare
+          poetry run skyplane config set usage_stats false
+      - name: Deprovision
+        run: poetry run skyplane deprovision --all
+      - name: Delete matching S3 buckets
+        run: |
+          for pattern in "test-skyplane-" "skyplane-integration-" "integrationus-east-1-"; do
+            aws s3api list-buckets --query "Buckets[?starts_with(Name, \`${pattern}\`) == \`true\`].Name" --output text | tr '\t' '\n' | while read bucket; do aws s3 rb "s3://$bucket" --force; done
+          done
+      - name: Cleanup GCP service account
+        if: always()
+        run: gcloud iam service-accounts delete --quiet ${{ env.STRATEGY_UUID }}@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com

@@ -1,4 +1,4 @@
-# Increasing cloud vCPU limits
+# VCPU Limits
 
 Skyplane utilizes parallel VMs to transfer data at high rates. However, if you do not have sufficient vCPU limits to support the number of VMs you need, you can increase the number of VMs you can use by requesting a quota increase from each respective cloud.
 

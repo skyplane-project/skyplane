@@ -3,7 +3,7 @@ import hashlib
 import os
 from functools import lru_cache
 
-from typing import Iterator, List, Optional, Tuple
+from typing import Any, Iterator, List, Optional, Tuple
 
 from skyplane import exceptions, compute
 from skyplane.exceptions import NoSuchObjectException
@@ -24,7 +24,10 @@ class S3Interface(ObjectStoreInterface):
         self.requester_pays = False
         self.bucket_name = bucket_name
         self._cached_s3_clients = {}
-        self.provider = "aws"
+
+    @property
+    def provider(self):
+        return "aws"
 
     def path(self):
         return f"s3://{self.bucket_name}"
@@ -42,8 +45,12 @@ class S3Interface(ObjectStoreInterface):
             if "An error occurred (AccessDenied) when calling the GetBucketLocation operation" in str(e):
                 logger.warning(f"Bucket location {self.bucket_name} is not public. Assuming region is {default_region}")
                 return default_region
-            logger.warning(f"Specified bucket {self.bucket_name} does not exist, got AWS error: {e}")
-            raise exceptions.MissingBucketException(f"S3 bucket {self.bucket_name} does not exist") from e
+            elif "An error occurred (InvalidAccessKeyId) when calling" in str(e):
+                logger.warning(f"Invalid AWS credentials. Check to make sure credentials configured properly.")
+                raise exceptions.PermissionsException(f"Invalid AWS credentials for accessing bucket {self.bucket_name}")
+            else:
+                logger.warning(f"Specified bucket {self.bucket_name} does not exist, got AWS error: {e}")
+                raise exceptions.MissingBucketException(f"S3 bucket {self.bucket_name} does not exist") from e
 
     def region_tag(self):
         return "aws:" + self.aws_region
@@ -86,14 +93,13 @@ class S3Interface(ObjectStoreInterface):
             else:
                 s3_client.create_bucket(Bucket=self.bucket_name, CreateBucketConfiguration={"LocationConstraint": aws_region})
         else:
-            print("bucket already exists", aws_region, self.bucket_name)
+            logger.warning(f"Bucket {self.bucket} in region {aws_region} already exists")
 
     def delete_bucket(self):
         # delete 1000 keys at a time
         for batch in batch_generator(self.list_objects(), 1000):
             self.delete_objects([obj.key for obj in batch])
         assert len(list(self.list_objects())) == 0, f"Bucket not empty after deleting all keys {list(self.list_objects())}"
-
         # delete bucket
         self._s3_client().delete_bucket(Bucket=self.bucket_name)
 
@@ -107,8 +113,8 @@ class S3Interface(ObjectStoreInterface):
                 objs.append(
                     S3Object(
                         obj["Key"],
-                        provider="aws",
-                        bucket=self.bucket_name,
+                        provider=self.provider,
+                        bucket=self.bucket(),
                         size=obj["Size"],
                         last_modified=obj["LastModified"],
                         mime_type=obj.get("ContentType"),
@@ -230,7 +236,7 @@ class S3Interface(ObjectStoreInterface):
         else:
             raise exceptions.SkyplaneException(f"Failed to initiate multipart upload for {dst_object_name}: {response}")
 
-    def complete_multipart_upload(self, dst_object_name, upload_id):
+    def complete_multipart_upload(self, dst_object_name, upload_id, metadata: Optional[Any] = None):
         s3_client = self._s3_client()
         all_parts = []
         while True:

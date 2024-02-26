@@ -2,7 +2,7 @@ from functools import lru_cache
 import os
 import sys
 from dataclasses import dataclass
-from typing import Iterator, List, Optional
+from typing import Any, Iterator, List, Optional
 from skyplane.exceptions import NoSuchObjectException
 from skyplane.obj_store.object_store_interface import ObjectStoreInterface, ObjectStoreObject
 import mimetypes
@@ -54,10 +54,10 @@ class POSIXInterface(ObjectStoreInterface):
         return os.path.exists(obj_name)
 
     def region_tag(self) -> str:
-        return "gcp:us-central1-a"
+        return f"local:{self.path()}"
 
     def bucket(self) -> str:
-        return ""
+        return self.dir_path
 
     def create_bucket(self, region_tag: str):
         return None
@@ -139,7 +139,7 @@ class POSIXInterface(ObjectStoreInterface):
     def initiate_multipart_upload(self, dst_object_name: str, mime_type: Optional[str] = None) -> str:
         raise NotImplementedError(f"Multipart upload is not supported for the POSIX file system.")
 
-    def complete_multipart_upload(self, dst_object_name: str, upload_id: str) -> None:
+    def complete_multipart_upload(self, dst_object_name: str, upload_id: str, metadata: Optional[Any] = None) -> None:
         raise NotImplementedError(f"Multipart upload is not supported for the POSIX file system.")
 
     @lru_cache(maxsize=1024)

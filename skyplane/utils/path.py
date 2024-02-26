@@ -16,7 +16,14 @@ def parse_path(path: str) -> Tuple[str, Optional[str], Optional[str]]:
             return True
         return False
 
-    if path.startswith("cos://"):
+    if (path.startswith("https://") or path.startswith("http://")) and "r2.cloudflarestorage.com" in path:
+        regex = re.compile(r"https?://([^/]+).r2.cloudflarestorage.com/([^/]+)/?(.*)")
+        match = regex.match(path)
+        if match is None:
+            raise ValueError(f"Invalid Cloudflare path: {path}")
+        account, bucket, blob_path = match.groups()
+        return "cloudflare", f"{account}/{bucket}", blob_path
+    elif path.startswith("cos://"):
         provider, parsed = path[:3], path[6:]
         if len(parsed) == 0:
             logger.error(f"Invalid path: '{path}'", fg="red", err=True)
@@ -56,7 +63,20 @@ def parse_path(path: str) -> Tuple[str, Optional[str], Optional[str]]:
             raise ValueError(f"Invalid HDFS path: {path}")
         host, path = match.groups()
         return "hdfs", host, path
+    elif path.startswith("scp://"):
+        provider, parsed = path[:3], path[6:]
+        if len(parsed) == 0:
+            logger.error(f"Invalid SCP path: '{path}'", fg="red", err=True)
+            raise ValueError(f"Invalid SCP path: '{path}'")
+        bucket, *keys = parsed.split("/", 1)
+        key = keys[0] if len(keys) > 0 else ""
+        provider = "scp"
+        return provider, bucket, key
     else:
         if not is_plausible_local_path(path):
             logger.warning(f"Local path '{path}' does not exist")
-        return "local", None, path
+        if path.startswith("az://"):
+            logger.warning(f"Did you mean azure://...? If not, assuming local path.")
+
+        # path is subsitutute for bucket
+        return "local", path, path

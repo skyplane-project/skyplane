@@ -13,10 +13,14 @@ def setup_buckets(src_region, dest_region, n_files=1, file_size_mb=1):
     dest_provider, dest_zone = dest_region.split(":")
     if src_provider == "azure":
         src_bucket_name = f"integration{src_zone}/{str(uuid.uuid4()).replace('-', '')}"
+    elif src_provider == "scp":  # object storage name must be lowercase
+        src_bucket_name = f"integration-{src_zone.lower()}-{str(uuid.uuid4())[:8]}"
     else:
         src_bucket_name = f"integration{src_zone}-{str(uuid.uuid4())[:8]}"
     if dest_provider == "azure":
         dest_bucket_name = f"integration{dest_zone}/{str(uuid.uuid4()).replace('-', '')}"
+    elif dest_provider == "scp":  # object storage name must be lowercase
+        dest_bucket_name = f"skyplane-integration-{dest_zone.lower()}-{str(uuid.uuid4())[:8]}"
     else:
         dest_bucket_name = f"skyplane-integration-{dest_zone}-{str(uuid.uuid4())[:8]}"
     logger.debug(f"creating buckets {src_bucket_name} and {dest_bucket_name}")
@@ -37,7 +41,7 @@ def setup_buckets(src_region, dest_region, n_files=1, file_size_mb=1):
     return src_bucket_name, dest_bucket_name, src_prefix, dest_prefix
 
 
-def run(src_region, dest_region, n_files=1, file_size_mb=1, multipart=True):
+def run(src_region, dest_region, n_files=1, file_size_mb=1, multipart=False):
     logger.info(
         f"Running skyplane cp integration test with config "
         + f"src_region={src_region}, "
@@ -59,6 +63,8 @@ def run(src_region, dest_region, n_files=1, file_size_mb=1, multipart=True):
             return f"https://{storage_account}.blob.core.windows.net/{container}/{prefix}"
         elif provider == "gcp":
             return f"gs://{bucket}/{prefix}"
+        elif provider == "scp":
+            return f"scp://{bucket}/{prefix}"
         else:
             raise Exception(f"Unknown provider {provider}")
 

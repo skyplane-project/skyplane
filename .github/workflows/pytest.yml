@@ -34,8 +34,6 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
       - name: black
         run: poetry run black . --check --line-length=140
-      - name: pytype
-        run: poetry run pytype --config .pytype.cfg -j 2
   test-unit:
     # do not run on pull_request_target since it should be triggered by pull_request
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request')
@@ -63,7 +61,7 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
       - name: Run unit tests
         run: |
-          poetry run skyplane init -y --disable-config-aws --disable-config-azure --disable-config-gcp --disable-config-ibm
+          poetry run skyplane init -y --disable-config-aws --disable-config-azure --disable-config-gcp --disable-config-ibm --disable-config-cloudflare
           poetry run skyplane config set usage_stats false
           poetry run pytest -s tests/unit_nocloud
   test-aws:
@@ -87,8 +85,6 @@ jobs:
         run: |
           poetry install -E gateway -E solver -E aws -E azure -E gcp -E ibm
           poetry run pip install -r requirements-dev.txt
-          poetry run sudo apt install default-jdk
-          poetry run wget https://archive.apache.org/dist/hadoop/core/hadoop-3.3.0/hadoop-3.3.0.tar.gz -P /tmp && tar -xzf /tmp/hadoop-3.3.0.tar.gz -C /tmp && sudo mv /tmp/hadoop-3.3.0 /usr/local/hadoop && rm /tmp/hadoop-3.3.0.tar.gz
         if: steps.cache.outputs.cache-hit != 'true'
       - name: Run cloud tests
         env:
@@ -96,7 +92,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
         run: |
-          poetry run skyplane init -y --disable-config-azure --disable-config-gcp --disable-config-ibm
+          poetry run skyplane init -y --disable-config-azure --disable-config-gcp --disable-config-ibm --disable-config-cloudflare
           poetry run skyplane config set usage_stats false
           poetry run pytest -s tests/unit_aws
   test-azure:
@@ -128,7 +124,7 @@ jobs:
       - name: Run cloud tests
         run: |
           poetry run pip freeze
-          poetry run skyplane init -y --disable-config-aws --disable-config-gcp --disable-config-ibm
+          poetry run skyplane init -y --disable-config-aws --disable-config-gcp --disable-config-ibm --disable-config-cloudflare
           poetry run skyplane config set usage_stats false
           poetry run pytest -s tests/unit_azure
   test-gcp:
@@ -156,7 +152,6 @@ jobs:
           poetry install -E gateway -E solver -E aws -E azure -E gcp -E ibm
           poetry run pip install -r requirements-dev.txt
           poetry run sudo apt install default-jdk
-          poetry run wget https://archive.apache.org/dist/hadoop/core/hadoop-3.3.0/hadoop-3.3.0.tar.gz -P /tmp && tar -xzf /tmp/hadoop-3.3.0.tar.gz -C /tmp && sudo mv /tmp/hadoop-3.3.0 /usr/local/hadoop && rm /tmp/hadoop-3.3.0.tar.gz
         if: steps.cache.outputs.cache-hit != 'true'
       - id: 'auth'
         uses: 'google-github-actions/auth@v0'
@@ -170,7 +165,7 @@ jobs:
       - name: Run cloud tests
         run: |
           poetry run skyplane config set gcp_service_account_name ${{ env.STRATEGY_UUID }}
-          poetry run skyplane init -y --disable-config-aws --disable-config-azure --disable-config-ibm
+          poetry run skyplane init -y --disable-config-aws --disable-config-azure --disable-config-ibm --disable-config-cloudflare
           poetry run skyplane config set usage_stats false
           poetry run pytest -s tests/unit_gcs
       - name: Cleanup GCP service account

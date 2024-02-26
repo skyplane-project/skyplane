@@ -6,7 +6,7 @@ from skyplane.gateway.gateway_program import (
     GatewayGenData,
     GatewayReadObjectStore,
 )
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 
 class TopologyPlanGateway:
@@ -15,9 +15,10 @@ class TopologyPlanGateway:
     Represents a gateway in the topology plan.
     """
 
-    def __init__(self, region_tag: str, gateway_id: str):
+    def __init__(self, region_tag: str, gateway_id: str, gateway_vm: Optional[str]):
         self.region_tag = region_tag
         self.gateway_id = gateway_id
+        self.gateway_vm = gateway_vm
         self.gateway_program = None
 
         # ip addresses
@@ -34,6 +35,11 @@ class TopologyPlanGateway:
         """Get the region of the gateway"""
         return self.region_tag.split(":")[1]
 
+    @property
+    def vm_type(self):
+        """Get the vm type of the gateway"""
+        return self.gateway_vm
+
     def set_private_ip_address(self, private_ip_address: str):
         """Set the IP address of the gateway (not determined until provisioning is complete)"""
         self.private_ip_address = private_ip_address
@@ -45,6 +51,11 @@ class TopologyPlanGateway:
     def set_gateway_program(self, gateway_program: GatewayProgram):
         """Set the gateway program for the gateway"""
         self.gateway_program = gateway_program
+
+    def write_operators(self) -> List[GatewayWriteObjectStore]:
+        """Get all write operators in the gateway program"""
+        # TODO: include other write operator types
+        return [op for op in self.gateway_program.get_operators() if isinstance(op, GatewayWriteObjectStore)]
 
 
 class TopologyPlan:
@@ -64,11 +75,16 @@ class TopologyPlan:
         """Get all regions in the topology plan"""
         return list(set([gateway.region for gateway in self.gateways.values()]))
 
-    def add_gateway(self, region_tag: str):
+    @property
+    def region_tags(self) -> List[str]:
+        """Get all region tags in the topology plan"""
+        return list(set([gateway.region_tag for gateway in self.gateways.values()]))
+
+    def add_gateway(self, region_tag: str, vm_type: Optional[str] = None):
         """Create gateway in specified region"""
-        gateway_id = region_tag + str(len([gateway for gateway in self.gateways.values() if gateway.region == region_tag]))
-        assert gateway_id not in self.gateways
-        gateway = TopologyPlanGateway(region_tag, gateway_id)
+        gateway_id = region_tag + str(len([gateway for gateway in self.gateways.values() if gateway.region_tag == region_tag]))
+        assert gateway_id not in self.gateways, f"Gateway id {gateway_id} in {self.gateways}"
+        gateway = TopologyPlanGateway(region_tag, gateway_id, vm_type)
         self.gateways[gateway_id] = gateway
         return gateway
 
@@ -97,7 +113,8 @@ class TopologyPlan:
         """Generate gateway program for all gateways in a region"""
         # TODO: eventually let gateways in same region have different programs
         for gateway in self.get_region_gateways(region_tag):
-            return gateway.generate_gateway_program()
+            assert gateway.gateway_program is not None, f"Gateway program for {region_tag} has not been set"
+            return gateway.gateway_program.to_json()
 
     def get_outgoing_paths(self, gateway_id: str):
         """Get all outgoing paths from a gateway"""
@@ -127,11 +144,19 @@ class TopologyPlan:
             }
         return gateway_info
 
-    def sink_instances(self) -> Dict[str, List[TopologyPlanGateway]]:
+    def sink_instances(self, region_tag: Optional[str] = None) -> Dict[str, List[TopologyPlanGateway]]:
         """Return list of gateways that have a sink operator (GatewayWriteObjectStore, GatewayWriteLocal)"""
         nodes = {}
         for gateway in self.gateways.values():
             for operator in gateway.gateway_program.get_operators():
+                # dont include if wrong region
+                if isinstance(operator, GatewayWriteObjectStore):
+                    if region_tag is not None and operator.bucket_region != region_tag:
+                        continue
+                if isinstance(operator, GatewayWriteLocal):
+                    if region_tag is not None and gateway.region_tag != region_tag:
+                        continue
+
                 if isinstance(operator, GatewayWriteObjectStore) or isinstance(operator, GatewayWriteLocal):
                     if gateway.region_tag not in nodes:
                         nodes[gateway.region_tag] = []
@@ -147,6 +172,7 @@ class TopologyPlan:
                 if isinstance(operator, GatewayReadObjectStore) or isinstance(operator, GatewayGenData):
                     nodes.append(gateway)
                     break
+
         return nodes
 
     def per_region_count(self) -> Dict[str, int]:
@@ -155,3 +181,6 @@ class TopologyPlan:
         for node in self.get_gateways():
             counts[node.region_tag] = counts.get(node.region_tag, 0) + 1
         return counts
+
+    def to_dict(self):
+        return {gateway_id: gateway.gateway_program.to_dict() for gateway_id, gateway in self.gateways.items()}

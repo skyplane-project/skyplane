@@ -34,3 +34,8 @@ skyplane ssh
 which will list available gateways that you can select to ssh into. 
 
 Once you've ssh-ed into a gateway instance, you can interact with the Skyplane docker image (??).
+
+## Running transfers locally
+Skyplane supports testing the gateway containers locally without cloud VM instances. You can run Skyplane in local mode using the `--local` flag. This will run docker containers on your current machine. 
+
+(TODO: finish writing)

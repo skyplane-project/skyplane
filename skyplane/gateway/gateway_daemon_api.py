@@ -143,7 +143,16 @@ class GatewayDaemonAPI(threading.Thread):
 
                     # else:
                     #    print(f"[gateway_api] chunk {chunk_id}: after {handle} state = {elem['state']}")
-                self.chunk_status_log.append(elem)
+
+                # only update chunk status log with terminal operators
+                # otherwise, the client needs to filter chunk updates depending on whether the operator is terminal or not
+                # this would require us to inform the client about the terminal operators, whcih seems annoying (though doable)
+                # we can change this if we need to profile the chunk status progression through the DAG in detail
+                if elem["state"] == ChunkState.complete.name:
+                    if handle in self.terminal_operators[elem["partition"]]:
+                        self.chunk_status_log.append(elem)
+                else:
+                    self.chunk_status_log.append(elem)
 
     def run(self):
         self.server.serve_forever()
@@ -212,14 +221,21 @@ class GatewayDaemonAPI(threading.Thread):
             if isinstance(body, dict):
                 chunk_req = ChunkRequest.from_dict(body)
                 self.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
-                self.chunk_store.add_chunk_request(chunk_req, state)
-                return 1
-            elif isinstance(body, list):
+                qsize, succ = self.chunk_store.add_chunk_request(chunk_req, state)
+                if not succ:
+                    return 0, qsize, False
+                return 1, qsize, True
+            else:
+                assert isinstance(body, list), f"Body must be list, got {type(body)}"
+                added = 0
                 for row in body:
                     chunk_req = ChunkRequest.from_dict(row)
                     self.chunk_requests[chunk_req.chunk.chunk_id] = chunk_req
-                    self.chunk_store.add_chunk_request(chunk_req, state)
-                return len(body)
+                    qsize, succ = self.chunk_store.add_chunk_request(chunk_req, state)
+                    if not succ:
+                        return added, qsize, False
+                    added += 1
+                return added, qsize, True
 
         @app.route("/api/v1/chunk_requests", methods=["GET"])
         def get_chunk_requests():
@@ -251,9 +267,10 @@ class GatewayDaemonAPI(threading.Thread):
         def add_chunk_request():
             print(f"[gateway_api] Recieved chunk request {request.json}")
             state_param = request.args.get("state", "registered")
-            n_added = add_chunk_req(request.json, ChunkState.from_str(state_param))
+            n_added, qsize, succ = add_chunk_req(request.json, ChunkState.from_str(state_param))
             # TODO: Add to chunk manager queue
-            return jsonify({"status": "ok", "n_added": n_added})
+            print(f"[gateway_api] Added {n_added} chunk requests to queue, size {qsize} success {succ}")
+            return jsonify({"status": succ, "n_added": n_added, "qsize": qsize})
 
         # update chunk request
         @app.route("/api/v1/chunk_requests/<chunk_id>", methods=["PUT"])
@@ -287,19 +304,11 @@ class GatewayDaemonAPI(threading.Thread):
             # TODO: beware that this assumes that only a single thread on the client is making requests
             # if concurrent calls are made, this needs to be processed as chunk requests are
             logging.debug(f"[gateway_api] Recieved id mapping request {request.json}")
-            # upload_id_file_path = self.chunk_store.get_upload_id_map_path()
-
-            # with upload_id_file_path.open("w") as f:
-            #    f.write(json.dumps(request.json))
-
             # update upload id mapping
-            print(request.json)
             upload_ids = request.json
-            for key, id in upload_ids.items():
-                self.upload_id_map[key] = id
-
-            print(f"Added upload id mappings {upload_ids}")
-
+            for region_tag in upload_ids.keys():
+                for key, upload_id in upload_ids[region_tag].items():
+                    self.upload_id_map[region_tag + key] = upload_id
             return jsonify({"status": "ok"})
 
     def register_error_routes(self, app):

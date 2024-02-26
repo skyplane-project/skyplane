@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Iterator, List, Optional
+from typing import Any, Iterator, List, Optional
 from skyplane.obj_store.storage_interface import StorageInterface
 
 
@@ -24,6 +24,9 @@ class LocalFile:
 
 
 class FileSystemInterface(StorageInterface):
+    def region_tag(self) -> str:
+        return "local"
+
     def path(self) -> str:
         raise NotImplementedError()
 
@@ -49,7 +52,7 @@ class FileSystemInterface(StorageInterface):
     def initiate_multipart_upload(self, dst_object_name: str) -> str:
         raise ValueError("Multipart uploads not supported")
 
-    def complete_multipart_upload(self, dst_object_name: str, upload_id: str) -> None:
+    def complete_multipart_upload(self, dst_object_name: str, upload_id: str, metadata: Optional[Any] = None) -> None:
         raise ValueError("Multipart uploads not supported")
 
     @staticmethod

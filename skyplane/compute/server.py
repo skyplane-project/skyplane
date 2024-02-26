@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import socket
+import time
 from contextlib import closing
 from enum import Enum, auto
 from functools import partial
@@ -81,6 +82,19 @@ class ServerState(Enum):
         }
         return mapping.get(ibmcloud_state, ServerState.UNKNOWN)
 
+    @staticmethod
+    def from_scp_state(scp_state):
+        mapping = {
+            "CTREATING": ServerState.PENDING,
+            "EDITING": ServerState.PENDING,
+            "RUNNING": ServerState.RUNNING,
+            "STARTING": ServerState.SUSPENDED,
+            "STOPPING": ServerState.SUSPENDED,
+            "STOPPED": ServerState.SUSPENDED,
+            "TERMINATING": ServerState.TERMINATED,
+        }
+        return mapping.get(scp_state, ServerState.UNKNOWN)
+
 
 class Server:
     """Abstract server class to support basic SSH operations"""
@@ -127,7 +141,8 @@ class Server:
     def ssh_client(self):
         """Create SSH client and cache."""
         if not hasattr(self, "_ssh_client"):
-            self._ssh_client = self.get_ssh_client_impl()
+            # retry for aws & gcp ubuntu instances
+            self._ssh_client = retry_backoff(partial(self.get_ssh_client_impl))
         return self._ssh_client
 
     def tunnel_port(self, remote_port: int) -> int:
@@ -338,6 +353,13 @@ class Server:
         if self.provider == "aws":
             docker_envs["AWS_DEFAULT_REGION"] = self.region_tag.split(":")[1]
 
+        if self.provider == "scp":
+            credentail_path = Path(self.auth.scp_credential_path).expanduser()
+            credentail_file = os.path.basename(credentail_path)
+            self.upload_file(credentail_path, f"/tmp/{credentail_file}")
+            docker_envs["SCP_CREDENTIAL_FILE"] = f"/pkg/data/{credentail_file}"
+            docker_run_flags += f" -v /tmp/{credentail_file}:/pkg/data/{credentail_file}"
+
         # copy E2EE keys
         if e2ee_key_bytes is not None:
             e2ee_key_file = "e2ee_key"
@@ -386,10 +408,13 @@ class Server:
                 status_val = json.loads(http_pool.request("GET", api_url).data.decode("utf-8"))
                 is_up = status_val.get("status") == "ok"
                 return is_up
-            except Exception:
+            except Exception as e:
+                logger.fs.error(f"Gateway {self.instance_name()} : {e}")
                 return False
 
         try:
+            # avoid console ssh error log
+            time.sleep(0.5)
             logging.disable(logging.CRITICAL)
             wait_for(is_api_ready, timeout=30, interval=0.1, desc=f"Waiting for gateway {self.uuid()} to start")
         except TimeoutError as e:
