@@ -8,6 +8,7 @@ from datetime import datetime
 
 import nacl.secret
 import nacl.utils
+import typer
 import urllib3
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
@@ -111,6 +112,7 @@ class Dataplane:
 
         # write gateway programs
         gateway_program_filename = Path(f"{gateway_log_dir}/gateway_program_{gateway_node.gateway_id}.json")
+        print(gateway_program_filename)
         with open(gateway_program_filename, "w") as f:
             f.write(gateway_node.gateway_program.to_json())
 
@@ -232,9 +234,11 @@ class Dataplane:
     def copy_gateway_logs(self):
         # copy logs from all gateways in parallel
         def copy_log(instance):
-            out_file = self.transfer_dir / f"gateway_{instance.uuid()}.stdout"
-            err_file = self.transfer_dir / f"gateway_{instance.uuid()}.stderr"
-            logger.fs.info(f"[Dataplane.copy_gateway_logs] Copying logs from {instance.uuid()}: {out_file}")
+            out_file = f"{self.transfer_dir}/gateway_{instance.uuid()}.stdout"
+            err_file = f"{self.transfer_dir}/gateway_{instance.uuid()}.stderr"
+            typer.secho(f"Downloading log: {self.transfer_dir}/gateway_{instance.uuid()}.stdout", fg="bright_black")
+            typer.secho(f"Downloading log: {self.transfer_dir}/gateway_{instance.uuid()}.stderr", fg="bright_black")
+
             instance.run_command("sudo docker logs -t skyplane_gateway 2> /tmp/gateway.stderr > /tmp/gateway.stdout")
             instance.download_file("/tmp/gateway.stdout", out_file)
             instance.download_file("/tmp/gateway.stderr", err_file)

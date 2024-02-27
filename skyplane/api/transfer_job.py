@@ -25,6 +25,8 @@ from functools import partial
 from skyplane import exceptions
 from skyplane.api.config import TransferConfig
 from skyplane.chunk import Chunk
+from skyplane.obj_store.azure_blob_interface import AzureBlobObject
+from skyplane.obj_store.gcs_interface import GCSObject
 from skyplane.obj_store.storage_interface import StorageInterface
 from skyplane.obj_store.object_store_interface import ObjectStoreObject, ObjectStoreInterface
 from skyplane.utils import logger
@@ -102,6 +104,7 @@ class Chunker:
             src_object = transfer_pair.src_obj
             dest_objects = transfer_pair.dst_objs
             dest_key = transfer_pair.dst_key
+            print("dest_key: ", dest_key)
             if isinstance(self.src_iface, ObjectStoreInterface):
                 mime_type = self.src_iface.get_obj_mime_type(src_object.key)
                 # create multipart upload request per destination
@@ -130,6 +133,7 @@ class Chunker:
                 for _ in range(num_chunks):
                     file_size_bytes = min(chunk_size_bytes, src_object.size - offset)
                     assert file_size_bytes > 0, f"file size <= 0 {file_size_bytes}"
+                    print("partition", part_num, self.num_partitions)
                     chunk = Chunk(
                         src_key=src_object.key,
                         dest_key=dest_key,  # dest_object.key, # TODO: upload basename (no prefix)
@@ -283,10 +287,10 @@ class Chunker:
                     dest_provider, dest_region = dst_iface.region_tag().split(":")
                     try:
                         dest_key = self.map_object_key_prefix(src_prefix, obj.key, dst_prefix, recursive=recursive)
-                        assert (
-                            dest_key[: len(dst_prefix)] == dst_prefix
-                        ), f"Destination key {dest_key} does not start with destination prefix {dst_prefix}"
-                        dest_keys.append(dest_key[len(dst_prefix) :])
+                        # TODO: why is it changed here?
+                        # dest_keys.append(dest_key[len(dst_prefix) :])
+
+                        dest_keys.append(dest_key)
                     except exceptions.MissingObjectException as e:
                         logger.fs.exception(e)
                         raise e from None
@@ -347,6 +351,7 @@ class Chunker:
                 multipart_chunk_threads.append(t)
 
         # begin chunking loop
+        part_num = 0
         for transfer_pair in transfer_pair_generator:
             # print("transfer_pair", transfer_pair.src_obj.key, transfer_pair.dst_objs)
             src_obj = transfer_pair.src_obj
@@ -362,9 +367,11 @@ class Chunker:
                         dest_key=transfer_pair.dst_key,  # TODO: get rid of dest_key, and have write object have info on prefix  (or have a map here)
                         chunk_id=uuid.uuid4().hex,
                         chunk_length_bytes=transfer_pair.src_obj.size,
-                        partition_id=str(0),  # TODO: fix this to distribute across multiple partitions
+                        #partition_id=str(0),  # TODO: fix this to distribute across multiple partitions
+                        partition_id=str(part_num % self.num_partitions),
                     )
                 )
+                part_num += 1
 
             if self.transfer_config.multipart_enabled:
                 # drain multipart chunk queue and yield with updated chunk IDs
@@ -512,8 +519,12 @@ class TransferJob(ABC):
         if not hasattr(self, "_dst_prefix"):
             if self.transfer_type == "unicast":
                 self._dst_prefix = [str(parse_path(self.dst_paths[0])[2])]
+                print("return dst_prefixes for unicast", self._dst_prefix)
             else:
+                for path in self.dst_paths:
+                    print("Parsing result for multicast", parse_path(path))
                 self._dst_prefix = [str(parse_path(path)[2]) for path in self.dst_paths]
+                print("return dst_prefixes for multicast", self._dst_prefix)
         return self._dst_prefix
 
     @property
@@ -681,9 +692,10 @@ class CopyJob(TransferJob):
             # send chunk requests to source gateways
             chunk_batch = [cr.chunk for cr in batch if cr.chunk is not None]
             # TODO: allow multiple partition ids per chunk
-            for chunk in chunk_batch:  # assign job UUID as partition ID
-                chunk.partition_id = self.uuid
+            #for chunk in chunk_batch:  # assign job UUID as partition ID
+            #    chunk.partition_id = self.uuid
             min_idx = queue_size.index(min(queue_size))
+            print([b.chunk.partition_id for b in batch if b.chunk])
             n_added = 0
             while n_added < len(chunk_batch):
                 # TODO: should update every source instance queue size
