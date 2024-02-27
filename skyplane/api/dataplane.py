@@ -112,6 +112,7 @@ class Dataplane:
 
         # write gateway programs
         gateway_program_filename = Path(f"{gateway_log_dir}/gateway_program_{gateway_node.gateway_id}.json")
+        print(gateway_program_filename)
         with open(gateway_program_filename, "w") as f:
             f.write(gateway_node.gateway_program.to_json())
 
@@ -233,6 +234,8 @@ class Dataplane:
     def copy_gateway_logs(self):
         # copy logs from all gateways in parallel
         def copy_log(instance):
+            out_file = f"{self.transfer_dir}/gateway_{instance.uuid()}.stdout"
+            err_file = f"{self.transfer_dir}/gateway_{instance.uuid()}.stderr"
             typer.secho(f"Downloading log: {self.transfer_dir}/gateway_{instance.uuid()}.stdout", fg="bright_black")
             typer.secho(f"Downloading log: {self.transfer_dir}/gateway_{instance.uuid()}.stderr", fg="bright_black")
 

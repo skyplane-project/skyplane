@@ -12,15 +12,15 @@ set +e
 
 >&2 echo -e "${BGreen}Building docker image${NC}"
 set -e
->&2 sudo DOCKER_BUILDKIT=1 docker build -t skyplane --platform linux/x86_64 .
+>&2 DOCKER_BUILDKIT=1 docker build -t skyplane --platform linux/x86_64 .
 set +e
 
 DOCKER_URL="ghcr.io/$1/skyplane:local-$(openssl rand -hex 16)"
 >&2 echo -e "${BGreen}Uploading docker image to $DOCKER_URL${NC}"
 set -e
->&2 sudo docker tag skyplane $DOCKER_URL
->&2 sudo docker push $DOCKER_URL
->&2 sudo docker system prune -f
+>&2 docker tag skyplane $DOCKER_URL
+>&2 docker push $DOCKER_URL
+>&2 docker system prune -f
 set +e
 
 >&2 echo -e "${BGreen}SKYPLANE_DOCKER_IMAGE=$DOCKER_URL${NC}"

@@ -133,6 +133,7 @@ class Chunker:
                 for _ in range(num_chunks):
                     file_size_bytes = min(chunk_size_bytes, src_object.size - offset)
                     assert file_size_bytes > 0, f"file size <= 0 {file_size_bytes}"
+                    print("partition", part_num, self.num_partitions)
                     chunk = Chunk(
                         src_key=src_object.key,
                         dest_key=dest_key,  # dest_object.key, # TODO: upload basename (no prefix)
@@ -350,6 +351,7 @@ class Chunker:
                 multipart_chunk_threads.append(t)
 
         # begin chunking loop
+        part_num = 0
         for transfer_pair in transfer_pair_generator:
             # print("transfer_pair", transfer_pair.src_obj.key, transfer_pair.dst_objs)
             src_obj = transfer_pair.src_obj
@@ -365,9 +367,11 @@ class Chunker:
                         dest_key=transfer_pair.dst_key,  # TODO: get rid of dest_key, and have write object have info on prefix  (or have a map here)
                         chunk_id=uuid.uuid4().hex,
                         chunk_length_bytes=transfer_pair.src_obj.size,
-                        partition_id=str(0),  # TODO: fix this to distribute across multiple partitions
+                        #partition_id=str(0),  # TODO: fix this to distribute across multiple partitions
+                        partition_id=str(part_num % self.num_partitions),
                     )
                 )
+                part_num += 1
 
             if self.transfer_config.multipart_enabled:
                 # drain multipart chunk queue and yield with updated chunk IDs
@@ -688,9 +692,10 @@ class CopyJob(TransferJob):
             # send chunk requests to source gateways
             chunk_batch = [cr.chunk for cr in batch if cr.chunk is not None]
             # TODO: allow multiple partition ids per chunk
-            for chunk in chunk_batch:  # assign job UUID as partition ID
-                chunk.partition_id = self.uuid
+            #for chunk in chunk_batch:  # assign job UUID as partition ID
+            #    chunk.partition_id = self.uuid
             min_idx = queue_size.index(min(queue_size))
+            print([b.chunk.partition_id for b in batch if b.chunk])
             n_added = 0
             while n_added < len(chunk_batch):
                 # TODO: should update every source instance queue size

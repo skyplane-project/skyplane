@@ -11,7 +11,7 @@ from pathlib import Path
 
 import requests
 from rich import print as rprint
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
 import skyplane
 from skyplane.utils.definitions import tmp_log_dir

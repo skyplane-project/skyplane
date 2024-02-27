@@ -64,7 +64,7 @@ class Planner:
         return src_region_tag, dst_region_tags
 
     @functools.lru_cache(maxsize=None)
-    def make_nx_graph(self, tp_grid_path: Optional[Path] = files("skyplane.data") / "throughput.csv") -> nx.DiGraph:
+    def make_nx_graph(self, tp_grid_path: Optional[Path] = files("data") / "throughput.csv") -> nx.DiGraph:
         # create throughput / cost graph for all regions for planner
         G = nx.DiGraph()
         throughput = pd.read_csv(tp_grid_path)
@@ -101,6 +101,7 @@ class Planner:
         :param bucket_info: tuple of (bucket_name, bucket_region) for object store
         :param dst_op: if None, then this is either the source node or a overlay node; otherwise, this is the destination overlay node
         """
+        g = solution_graph
         # partition_ids are set of ids that follow the same path from the out edges of the region
         any_id = partition_ids[0] - partition_offset
         next_regions = set([edge[1] for edge in g.out_edges(region, data=True) if str(any_id) in edge[-1]["partitions"]])
@@ -127,7 +128,7 @@ class Planner:
             receive_op = dst_op
 
         # find set of regions to send to for all partitions in partition_ids
-        g = solution_graph
+        
         region_to_id_map = {}
         for next_region in next_regions:
             region_to_id_map[next_region] = []
@@ -268,7 +269,7 @@ class Planner:
                             partitions,
                             partition_offset=i,
                             plan=plan,
-                            obj_store=(src_bucket, node),
+                            bucket_info=(src_bucket, node),
                         )
 
                     # dst receive data, write to object store, forward data if needed
@@ -287,7 +288,7 @@ class Planner:
                     # overlay node only forward data
                     else:
                         self.add_src_or_overlay_operator(
-                            solution_graph, node_gateway_program, node, partitions, partition_offset=i, plan=plan, obj_store=None
+                            solution_graph, node_gateway_program, node, partitions, partition_offset=i, plan=plan, bucket_info=None
                         )
             region_to_gateway_program[node] = node_gateway_program
             assert len(region_to_gateway_program) > 0, f"Empty gateway program {node}"
@@ -381,6 +382,7 @@ class MulticastILPPlanner(Planner):
         filter_edge: bool = False,
         solver_verbose: bool = False,
         save_lp_path: Optional[str] = None,
+        solver: Optional[str] = None,
     ) -> nx.DiGraph:
         import cvxpy as cp
 

@@ -53,7 +53,7 @@ class Pipeline:
         # self.cloud_regions = cloud_regions
         # TODO: set max instances with VM CPU limits and/or config
         self.max_instances = max_instances
-        self.n_connections = n_connections
+        self.n_connections = num_connections 
         self.provisioner = provisioner
         self.transfer_config = transfer_config
         self.http_pool = urllib3.PoolManager(retries=urllib3.Retry(total=3))
@@ -71,19 +71,20 @@ class Pipeline:
         if self.planning_algorithm == "direct":
             # TODO: should find some ways to merge direct / Ndirect
             #self.planner = UnicastDirectPlanner(self.max_instances, num_connections)
-            self.planner = MulticastDirectPlanner(self.max_instances, self.n_connections, self.transfer_config)
+            #self.planner = MulticastDirectPlanner(self.max_instances, self.n_connections, self.transfer_config)
+            self.planner = MulticastDirectPlanner(self.max_instances, self.n_connections)
         #elif self.planning_algorithm == "Ndirect":
         #    self.planner = MulticastDirectPlanner(self.max_instances, num_connections)
         elif self.planning_algorithm == "MDST":
             self.planner = MulticastMDSTPlanner(self.max_instances, num_connections)
         elif self.planning_algorithm == "ILP":
-            self.planning_algorithm = MulticastILPPlanner(self.max_instances, num_connections)
+            self.planner = MulticastILPPlanner(self.max_instances, num_connections)
         elif self.planning_algorithm == "UnicastILP":
-            self.planning_algorithm = UnicastILPPlanner(self.max_instances, num_connections)
-        elif self.planning_algorithm == "src_one_sided":
-            self.planner = DirectPlannerSourceOneSided(self.max_instances, self.n_connections, self.transfer_config)
-        elif self.planning_algorithm == "dst_one_sided":
-            self.planner = DirectPlannerDestOneSided(self.max_instances, self.n_connections, self.transfer_config)
+            self.planner = UnicastILPPlanner(self.max_instances, num_connections)
+        #elif self.planning_algorithm == "src_one_sided":
+        #    self.planner = DirectPlannerSourceOneSided(self.max_instances, self.n_connections, self.transfer_config)
+        #elif self.planning_algorithm == "dst_one_sided":
+        #    self.planner = DirectPlannerDestOneSided(self.max_instances, self.n_connections, self.transfer_config)
         else:
             raise ValueError(f"No such planning algorithm {planning_algorithm}")
 

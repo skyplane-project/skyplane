@@ -150,11 +150,11 @@ class GatewayProgram:
             for p in program_all:
                 if p["value"] == program:  # equivalent partition exists
                     for pid in partition_id:
-                        p["partitions"].append(pid)
+                        p["partitions"].append(str(pid))
                     exists = True
                     break
             if not exists:
-                program_all.append({"value": program, "partitions": partition_id})
+                program_all.append({"value": program, "partitions": str(partition_id)})
 
         return program_all
 
