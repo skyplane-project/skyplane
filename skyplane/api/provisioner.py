@@ -161,7 +161,12 @@ class Provisioner:
         :type uuid: str
         """
         return self.provisioned_vms[uuid]
-
+    
+    def add_node(self, server) -> str:
+        uid = uuid.uuid4().int
+        self.provisioned_vms[uid] = server
+        return uid
+    
     def _provision_task(self, task: ProvisionerTask):
         with Timer() as t:
             if task.cloud_provider == "aws":

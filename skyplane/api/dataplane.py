@@ -28,13 +28,15 @@ if TYPE_CHECKING:
 
 
 class DataplaneAutoDeprovision:
-    def __init__(self, dataplane: "Dataplane"):
+    def __init__(self, dataplane: "Dataplane", reuse_instances: bool = False):
         self.dataplane = dataplane
+        self.reuse_instances = reuse_instances
 
     def __enter__(self):
         return self.dataplane
 
     def __exit__(self, exc_type, exc_value, exc_tb):
+        if self.reuse_instances: return
         logger.fs.warning("Deprovisioning dataplane")
         self.dataplane.deprovision()
 
@@ -129,6 +131,7 @@ class Dataplane:
     def provision(
         self,
         allow_firewall: bool = True,
+        reuse_instances: bool = False, 
         gateway_docker_image: str = os.environ.get("SKYPLANE_DOCKER_IMAGE", gateway_docker_image()),
         authorize_ssh_pub_key: Optional[str] = None,
         max_jobs: int = 16,
@@ -160,28 +163,54 @@ class Dataplane:
             is_scp_used = any(n.region_tag.startswith("scp:") for n in self.topology.get_gateways())
 
             # create VMs from the topology
+            uuids = []
+            reuse_nodes_tmp = {}
+            if reuse_instances:
+                for node in self.topology.get_gateways():
+                    cloud_provider, region = node.region_tag.split(":")
+                    if reuse_nodes_tmp.get(f"{cloud_provider} {region}", []): continue
+                    if cloud_provider == "gcp": 
+                        reuse_nodes_tmp[f"{cloud_provider} {region}"] = self.provisioner.gcp.get_instance_list(region=region)
+                    if cloud_provider == "azure": 
+                        reuse_nodes_tmp[f"{cloud_provider} {region}"] = self.provisioner.azure.get_instance_list(region=region)
+                    if cloud_provider == "aws": 
+                        reuse_nodes_tmp[f"{cloud_provider} {region}"] = self.provisioner.aws.get_instance_list(region=region)
+                    if cloud_provider == "ibmcloud": 
+                        reuse_nodes_tmp[f"{cloud_provider} {region}"] = self.provisioner.ibmcloud.get_instance_list(region=region)
+                    if cloud_provider == "scp": 
+                        reuse_nodes_tmp[f"{cloud_provider} {region}"] = self.provisioner.scp.get_instance_list(region=region)
             for node in self.topology.get_gateways():
                 cloud_provider, region = node.region_tag.split(":")
-                assert (
-                    cloud_provider != "cloudflare"
-                ), f"Cannot create VMs in certain cloud providers: check planner output {self.topology.to_dict()}"
-                self.provisioner.add_task(
-                    cloud_provider=cloud_provider,
-                    region=region,
-                    vm_type=node.vm_type or getattr(self.transfer_config, f"{cloud_provider}_instance_class"),
-                    spot=getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances"),
-                    autoterminate_minutes=self.transfer_config.autoterminate_minutes,
-                )
+                if reuse_instances:
+                    reuse_nodes = reuse_nodes_tmp.get(f"{cloud_provider} {region}", [])
+                
+                if reuse_instances and reuse_nodes:
+                    reuse_server = reuse_nodes[0]
+                    reuse_nodes.remove(reuse_server)
+                    uid = self.provisioner.add_node(reuse_server)
+                    uuids.append(uid)
+                else:   
+                    assert (
+                        cloud_provider != "cloudflare"
+                    ), f"Cannot create VMs in certain cloud providers: check planner output {self.topology.to_dict()}"
+                    self.provisioner.add_task(
+                        cloud_provider=cloud_provider,
+                        region=region,
+                        vm_type=node.vm_type or getattr(self.transfer_config, f"{cloud_provider}_instance_class"),
+                        spot=getattr(self.transfer_config, f"{cloud_provider}_use_spot_instances"),
+                        autoterminate_minutes=self.transfer_config.autoterminate_minutes,
+                    )
 
             # initialize clouds
             self.provisioner.init_global(aws=is_aws_used, azure=is_azure_used, gcp=is_gcp_used, ibmcloud=is_ibmcloud_used, scp=is_scp_used)
 
             # provision VMs
-            uuids = self.provisioner.provision(
+            uuids_tmp = self.provisioner.provision(
                 authorize_firewall=allow_firewall,
                 max_jobs=max_jobs,
                 spinner=spinner,
             )
+            uuids.extend(uuids_tmp)
 
             # bind VMs to nodes
             servers = [self.provisioner.get_node(u) for u in uuids]
@@ -291,9 +320,9 @@ class Dataplane:
             errors[instance] = result
         return errors
 
-    def auto_deprovision(self) -> DataplaneAutoDeprovision:
+    def auto_deprovision(self, reuse_instances: bool = False) -> DataplaneAutoDeprovision:
         """Returns a context manager that will automatically call deprovision upon exit."""
-        return DataplaneAutoDeprovision(self)
+        return DataplaneAutoDeprovision(self, reuse_instances)
 
     def source_gateways(self) -> List[compute.Server]:
         """Returns a list of source gateway nodes"""

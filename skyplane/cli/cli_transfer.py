@@ -310,6 +310,7 @@ def run_transfer(
     src: str,
     dst: str,
     recursive: bool,
+    reuse_gateways: bool,
     debug: bool,
     multipart: bool,
     confirm: bool,
@@ -392,15 +393,17 @@ def run_transfer(
 
     # dataplane must be created after transfers are queued
     dp = pipeline.create_dataplane(debug=debug)
-    with dp.auto_deprovision():
+    with dp.auto_deprovision(reuse_instances=reuse_gateways):
         try:
-            dp.provision(spinner=True)
+            dp.provision(reuse_instances=reuse_gateways, spinner=True)
             dp.run(pipeline.jobs_to_dispatch, hooks=ProgressBarTransferHook(dp.topology.dest_region_tags))
+            if reuse_gateways: return 0
         except KeyboardInterrupt:
             logger.fs.warning("Transfer cancelled by user (KeyboardInterrupt).")
             console.print("\n[red]Transfer cancelled by user. Copying gateway logs and exiting.[/red]")
             try:
                 dp.copy_gateway_logs()
+                if reuse_gateways: return 0
                 force_deprovision(dp)
             except Exception as e:
                 logger.fs.exception(e)
@@ -414,12 +417,14 @@ def run_transfer(
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
             console.print(e.pretty_print_str())
             UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, [cli.dst_region_tag])
+            if reuse_gateways: return 0
             force_deprovision(dp)
         except Exception as e:
             logger.fs.exception(e)
             console.print(f"[bright_black]{traceback.format_exc()}[/bright_black]")
             console.print(e)
             UsageClient.log_exception("cli_query_objstore", e, args, cli.src_region_tag, [cli.dst_region_tag])
+            if reuse_gateways: return 0
             force_deprovision(dp)
 
 
@@ -427,6 +432,7 @@ def cp(
     src: str,
     dst: str,
     recursive: bool = typer.Option(False, "--recursive", "-r", help="If true, will copy objects at folder prefix recursively"),
+    reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
     multipart: bool = typer.Option(cloud_config.get_flag("multipart_enabled"), help="If true, will use multipart uploads."),
     # transfer flags
@@ -468,12 +474,13 @@ def cp(
     :param solver: The solver to use for the transfer (default: direct)
     :type solver: str
     """
-    return run_transfer(src, dst, recursive, debug, multipart, confirm, max_instances, max_connections, solver, "cp")
+    return run_transfer(src, dst, recursive, reuse_gateways, debug, multipart, confirm, max_instances, max_connections, solver, "cp")
 
 
 def sync(
     src: str,
     dst: str,
+    reuse_gateways: bool = typer.Option(False, help="If true, will leave provisioned instances running to be reused"),
     debug: bool = typer.Option(False, help="If true, will write debug information to debug directory."),
     multipart: bool = typer.Option(cloud_config.get_flag("multipart_enabled"), help="If true, will use multipart uploads."),
     # transfer flags
@@ -517,4 +524,4 @@ def sync(
     :param solver: The solver to use for the transfer (default: direct)
     :type solver: str
     """
-    return run_transfer(src, dst, False, debug, multipart, confirm, max_instances, max_connections, solver, "sync")
+    return run_transfer(src, dst, False, debug, reuse_gateways, multipart, confirm, max_instances, max_connections, solver, "sync")
